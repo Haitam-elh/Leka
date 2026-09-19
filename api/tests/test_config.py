@@ -21,10 +21,39 @@ VALID = {
 }
 
 
-def test_valid_environment_builds_settings() -> None:
+def test_optional_settings_fall_back_to_safe_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With only the required variables set, the rest must be usable.
+
+    The optional variables are deleted explicitly: this test asserts what the
+    DEFAULTS are, so it must not read whatever the surrounding shell happens
+    to export. CI sets LEKA_ENVIRONMENT=ci, and an earlier version of this
+    test failed there for exactly that reason.
+    """
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    for name in ("LEKA_ENVIRONMENT", "LEKA_DEBUG", "LEKA_LOG_LEVEL", "LEKA_LOG_FORMAT"):
+        monkeypatch.delenv(name, raising=False)
+
     config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
+
     assert config.environment == "local"
     assert config.api_v1_prefix == "/api/v1"
+    assert config.debug is False
+    assert config.is_production is False
+
+
+def test_environment_variable_overrides_the_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Settings must actually read the environment, not just hold defaults."""
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    monkeypatch.setenv("LEKA_ENVIRONMENT", "production")
+
+    config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
+
+    assert config.environment == "production"
+    assert config.is_production is True
 
 
 def test_missing_required_variables_are_all_reported(
