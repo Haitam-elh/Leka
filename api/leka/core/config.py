@@ -36,7 +36,12 @@ class Settings(BaseSettings):
         env_prefix="LEKA_",
         env_file=(REPO_ROOT / ".env"),
         env_file_encoding="utf-8",
-        extra="forbid",
+        # extra="ignore", not "forbid": .env is shared with docker-compose,
+        # which reads POSTGRES_* and REDIS_PORT from the same file, and with
+        # the web app, which reads NEXT_PUBLIC_API_URL. Forbidding extras
+        # means `cp .env.example .env` produces an API that refuses to start —
+        # which is exactly what it did before this line was written.
+        extra="ignore",
         frozen=True,
     )
 

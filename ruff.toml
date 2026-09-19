@@ -1,0 +1,12 @@
+# Repository-wide Ruff configuration.
+#
+# api/ carries the real configuration in its pyproject.toml. Anything outside
+# it — scripts/ today — would otherwise be linted with Ruff's defaults, or,
+# worse, not linted at all because CI only ever entered api/. This file
+# extends the API's rules so one set covers the whole repository.
+
+extend = "api/pyproject.toml"
+
+[lint.per-file-ignores]
+# A developer script writes to a terminal. That is what it is for.
+"scripts/*.py" = ["T201"]

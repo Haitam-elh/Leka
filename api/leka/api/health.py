@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel
 
-from leka.core.health import check_backing_services
+from leka.platform import check_backing_services
 
 router = APIRouter(tags=["health"])
 

@@ -19,6 +19,6 @@ async def test_health_reports_every_backing_service(client: AsyncClient, api_pre
 
 async def test_health_probes_are_bounded(client: AsyncClient, api_prefix: str) -> None:
     """An unreachable dependency must read as "down", never as a hung request."""
-    from leka.core import health
+    from leka.platform import health
 
     assert health.PROBE_TIMEOUT_SECONDS <= 5
