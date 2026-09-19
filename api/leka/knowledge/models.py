@@ -39,7 +39,15 @@ def _values(enum_class: type[enum.StrEnum]) -> list[str]:
 
 
 class EntityType(enum.StrEnum):
-    """What an entity is. Extended by a migration, never in place."""
+    """What an entity is.
+
+    Stored as text with a CHECK constraint rather than a PostgreSQL ENUM.
+    An ENUM cannot drop a value — PostgreSQL has no DROP VALUE — and a
+    migration that adds one cannot use it in the same transaction. Every new
+    connector would add types, so that cost lands on us repeatedly. A CHECK
+    constraint is dropped and recreated in one ordinary, transactional
+    statement. See docs/adr/006-enum-storage.md.
+    """
 
     SERVICE = "service"
     REPOSITORY = "repository"
@@ -87,11 +95,18 @@ class Entity(Base, WorkspaceScopedMixin):
         Index("ix_entities_workspace_type", "workspace_id", "type"),
         # Queries filter on attributes -> GIN, not btree.
         Index("ix_entities_attributes", "attributes", postgresql_using="gin"),
-        CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_entities_confidence_range"),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
     )
 
     type: Mapped[EntityType] = mapped_column(
-        Enum(EntityType, name="entity_type", values_callable=_values), nullable=False
+        Enum(
+            EntityType,
+            name="type",
+            native_enum=False,
+            length=50,
+            values_callable=_values,
+        ),
+        nullable=False,
     )
     # The identifier the source itself uses: a GitHub node id, a Jira key, an
     # ARN. Opaque to LEKA, stable across syncs.
@@ -149,15 +164,20 @@ class Relationship(Base, WorkspaceScopedMixin):
         # questions, so both get an index.
         Index("ix_relationships_from", "workspace_id", "from_entity_id", "type"),
         Index("ix_relationships_to", "workspace_id", "to_entity_id", "type"),
-        CheckConstraint(
-            "confidence >= 0 AND confidence <= 1", name="ck_relationships_confidence_range"
-        ),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
     )
 
     from_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     to_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     type: Mapped[RelationshipType] = mapped_column(
-        Enum(RelationshipType, name="relationship_type", values_callable=_values), nullable=False
+        Enum(
+            RelationshipType,
+            name="type",
+            native_enum=False,
+            length=50,
+            values_callable=_values,
+        ),
+        nullable=False,
     )
     confidence: Mapped[float] = mapped_column(Float, nullable=False, server_default="1.0")
     source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)

@@ -84,3 +84,60 @@ def test_secret_is_not_printable() -> None:
     config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
     assert "not-a-real-secret" not in repr(config)
     assert config.secret_key.get_secret_value() == "not-a-real-secret"
+
+
+# ── Model access ─────────────────────────────────────────────────────────────
+
+
+def test_no_model_is_configured_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The platform boots and serves without a model. Rule 7 says only
+    leka.capabilities may care."""
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    for name in ("LEKA_LLM_PROVIDER", "LEKA_ANTHROPIC_API_KEY", "LEKA_MISTRAL_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+
+    config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
+
+    assert config.llm_provider == "anthropic"
+    assert config.has_model_access is False
+    assert config.llm_api_key is None
+
+
+@pytest.mark.parametrize(
+    ("provider", "variable"),
+    [("anthropic", "LEKA_ANTHROPIC_API_KEY"), ("mistral", "LEKA_MISTRAL_API_KEY")],
+)
+def test_the_selected_provider_key_is_the_one_returned(
+    monkeypatch: pytest.MonkeyPatch, provider: str, variable: str
+) -> None:
+    """Two providers from the start: an abstraction validated against one
+    implementation only fits that one."""
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    monkeypatch.setenv("LEKA_LLM_PROVIDER", provider)
+    monkeypatch.setenv(variable, "a-real-looking-key")
+
+    config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
+
+    assert config.has_model_access is True
+    assert config.llm_api_key is not None
+    assert config.llm_api_key.get_secret_value() == "a-real-looking-key"
+
+
+def test_an_empty_key_counts_as_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """.env.example ships these blank, so a copied .env yields "" rather than
+    an absent variable. Without this, a key nobody filled in reads as
+    configured and the failure moves to the first model call."""
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    monkeypatch.setenv("LEKA_ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("LEKA_MISTRAL_API_KEY", "   ")
+
+    config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
+
+    assert config.anthropic_api_key is None
+    assert config.mistral_api_key is None
+    assert config.has_model_access is False
+
+
+def test_an_unknown_provider_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **{**VALID, "llm_provider": "openai"})  # type: ignore[arg-type]

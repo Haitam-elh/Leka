@@ -10,7 +10,6 @@ not made in passing — see docs/conventions.md.
 
 from __future__ import annotations
 
-from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
@@ -78,9 +77,18 @@ class Settings(BaseSettings):
     # Where the agent markdown files live. Content, not code — see agents/README.md.
     agents_dir: Path = REPO_ROOT / "agents"
 
-    # The only consumer of this is leka.capabilities (architecture rule 7).
-    # Optional: the platform boots and serves without a model configured.
+    # ── Model access. Consumed by leka.capabilities and nowhere else
+    # (architecture rule 7). Both keys are optional: the platform boots and
+    # serves without a model configured.
+    #
+    # Two providers from the start, on purpose. An abstraction validated
+    # against a single implementation is an abstraction that fits one
+    # implementation; the second provider is what proves the gateway holds.
+    # Mistral also answers the question a customer's security officer asks
+    # first: where does our data go.
+    llm_provider: Literal["anthropic", "mistral"] = "anthropic"
     anthropic_api_key: SecretStr | None = None
+    mistral_api_key: SecretStr | None = None
 
     @field_validator("database_url")
     @classmethod
@@ -99,9 +107,42 @@ class Settings(BaseSettings):
             raise ValueError(msg)
         return value
 
+    @field_validator("anthropic_api_key", "mistral_api_key", mode="before")
+    @classmethod
+    def _empty_key_is_no_key(cls, value: object) -> object:
+        """An empty string is not a credential.
+
+        .env.example ships these commented-in but blank, so a copied .env
+        yields "" rather than an absent variable. Without this, a key nobody
+        filled in reads as configured, and the failure moves from startup to
+        the first model call — which is the failure mode this whole file
+        exists to prevent.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def llm_api_key(self) -> SecretStr | None:
+        """The key for the selected provider, if it is configured.
+
+        None means no model is reachable. leka.capabilities is the only
+        module that reads this, and the only one entitled to fail on it —
+        the rest of the platform works without a model.
+        """
+        keys: dict[str, SecretStr | None] = {
+            "anthropic": self.anthropic_api_key,
+            "mistral": self.mistral_api_key,
+        }
+        return keys[self.llm_provider]
+
+    @property
+    def has_model_access(self) -> bool:
+        return self.llm_api_key is not None
 
 
 def _load_settings() -> Settings:
@@ -123,15 +164,14 @@ def _load_settings() -> Settings:
         raise ConfigurationError("\n".join(lines)) from exc
 
 
-@lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    """FastAPI dependency and general accessor.
-
-    Cached: the environment is read once per process.
-    """
-    return _load_settings()
-
-
-# Imported at module level so that an incomplete environment stops the process
-# on startup rather than on the first request that happens to need a setting.
+# ONE way to reach the settings: this module-level instance.
+#
+# There was also a cached get_settings() accessor. Two paths to the same
+# object is one too many — the second one drifts. The environment is read
+# here, at import, so an incomplete environment stops the process on startup
+# rather than on the first request that happens to need a setting.
+#
+# The consequence is deliberate and worth stating: importing ANY leka module
+# without a valid environment fails, including from a one-off script. That is
+# the same guarantee, applied consistently.
 settings: Settings = _load_settings()

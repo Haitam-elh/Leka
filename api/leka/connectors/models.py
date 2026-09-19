@@ -19,10 +19,10 @@ from leka.db import Base, WorkspaceScopedMixin
 
 
 def _values(enum_class: type[enum.StrEnum]) -> list[str]:
-    """Store the enum VALUE in PostgreSQL, not the member name.
+    """Store the enum VALUE, not the member name.
 
     SQLAlchemy defaults to the name, which would put "GITHUB" in a column
-    whose type declares 'github'. The mismatch only surfaces at the first
+    whose constraint allows 'github'. The mismatch only surfaces at the first
     insert.
     """
     return [member.value for member in enum_class]
@@ -58,12 +58,24 @@ class Source(Base, WorkspaceScopedMixin):
     )
 
     kind: Mapped[SourceKind] = mapped_column(
-        Enum(SourceKind, name="source_kind", values_callable=_values),
+        Enum(
+            SourceKind,
+            name="kind",
+            native_enum=False,
+            length=50,
+            values_callable=_values,
+        ),
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     status: Mapped[SourceStatus] = mapped_column(
-        Enum(SourceStatus, name="source_status", values_callable=_values),
+        Enum(
+            SourceStatus,
+            name="status",
+            native_enum=False,
+            length=50,
+            values_callable=_values,
+        ),
         nullable=False,
         server_default=SourceStatus.PENDING.value,
     )
