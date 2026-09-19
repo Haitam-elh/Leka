@@ -97,16 +97,16 @@ written.
 | --- | --- | --- | --- |
 | `core` | settings, exceptions, FastAPI dependencies, logging | nothing | built |
 | `db` | engine, session, declarative base, column mixins | `core` | built |
-| `platform` | tenancy (workspaces), events, task queues, secrets, object storage | `core`, `db` | tenancy built, rest planned |
+| `platform` | tenancy (workspaces), events, task queues, secrets, object storage | `core`, `db` | tenancy and health probes built, rest skeleton |
 | `identity` | who someone is, and which workspaces they may enter | `core`, `db`, `platform` | **LEKA-330** |
 | `connectors` | talking to customer systems; one subpackage per system | `core`, `db`, `platform` | `sources` built, no connector yet |
-| `ingestion` | collect → extract → parse → normalise | ← `connectors` | planned |
+| `ingestion` | collect → extract → parse → normalise | ← `connectors` | skeleton |
 | `knowledge` | the entity graph: entities, relationships, traversal | ← `ingestion` | tables built, traversal planned |
-| `context` | retrieval, ranking, assembly of what an answer needs | ← `knowledge` | planned |
-| `intentions` | intention → decision → action, with approval | ← `context` | planned |
-| `capabilities` | **the only module that calls a language model**; loads and runs agents | `knowledge`, `context` | planned |
-| `governance` | permissions and audit | `platform`, `identity` | planned |
-| `api` | HTTP routes, one file per module | all of the above | `/health` only |
+| `context` | retrieval, ranking, assembly of what an answer needs | ← `knowledge` | skeleton |
+| `intentions` | intention → decision → action, with approval | ← `context` | skeleton |
+| `capabilities` | **the only module that calls a language model**; loads and runs agents | `knowledge`, `context` | agent loader built, model gateway skeleton |
+| `governance` | permissions and audit | `platform`, `identity` | skeleton |
+| `api` | HTTP routes, one file per module | all of the above | `/health` only; one empty router per module, mounted |
 
 ### The dependency rule
 
@@ -147,8 +147,10 @@ module is entitled to change without telling you.
 
 > This rule is not enforceable by a linter. We tried: Ruff's banned-import
 > check is per-file, so exempting a module's own directory also exempts it
-> when it reaches into everyone else's. It will be enforced by a test over the
-> import graph, which can also check the direction.
+> when it reaches into everyone else's. It is enforced instead by
+> `api/tests/test_module_boundaries.py`, which reads the import graph and
+> checks the direction as well as the depth. It caught two violations in this
+> document's own foundation on the day it was written.
 
 ---
 
