@@ -9,8 +9,10 @@ connection — it can simply never answer, and an unbounded probe turns a
 health check into a hung request that a load balancer reads as a timeout
 instead of as "this dependency is down".
 
-The Redis client lives here for now. When leka.platform grows its queue, the
-client moves there and this module calls it.
+It lives in leka.platform rather than leka.core because probing means
+touching the database, and core is the one module that depends on nothing.
+The Redis client lives here for now; when this module grows a real queue,
+the client moves next to it.
 """
 
 from __future__ import annotations

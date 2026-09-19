@@ -1,0 +1,32 @@
+# Index of LEKA agents.
+#
+# The loader discovers agents by walking this directory, so an agent missing
+# from this file still loads. What this file adds is a place to see every
+# agent at once, and a place to record status — which a scattered set of
+# markdown files cannot give you.
+#
+# status:
+#   draft     written, not ready to trigger
+#   active    live
+#   review    vendor skill awaiting the line-by-line review
+#   retired   kept for history, must not trigger
+#
+# Keep entries sorted by path.
+
+version: 1
+
+agents:
+  - path: codebase/map-service-ownership/SKILL.md
+    name: map-service-ownership
+    version: 0.1.0
+    status: draft
+
+  - path: drift/detect-undocumented-dependency/SKILL.md
+    name: detect-undocumented-dependency
+    version: 0.1.0
+    status: draft
+
+  - path: incident/correlate-deploy-with-latency/SKILL.md
+    name: correlate-deploy-with-latency
+    version: 0.1.0
+    status: draft

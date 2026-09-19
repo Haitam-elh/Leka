@@ -159,6 +159,24 @@ Interactive documentation: <http://127.0.0.1:8000/api/v1/docs>
 
 ---
 
+## 4b. Demo data
+
+Optional, and the first thing most people want:
+
+```bash
+api/.venv/bin/python scripts/seed.py
+```
+
+This recreates the **Acme Corp** workspace — three services, a production
+database, twelve connected sources, three people, and a latency incident that
+followed a deployment. It is what lets the frontend be built before a single
+real connector exists.
+
+Re-running it rebuilds the workspace from scratch, so it is safe to run as
+often as you like. It touches nothing else in your database.
+
+---
+
 ## 5. The frontend
 
 In a second terminal, with the API still running:
@@ -186,6 +204,9 @@ Run what CI runs. Nothing merges on a red pipeline.
 ```bash
 # api/
 ruff check . && ruff format --check . && mypy leka/ && alembic check && pytest
+
+# repository root — scripts/ is outside api/ and needs asking for by name
+ruff check scripts/ && ruff format --check scripts/
 
 # web/
 npm run lint && npm run typecheck && npm run build

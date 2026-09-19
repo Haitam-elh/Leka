@@ -70,6 +70,14 @@ jobs:
       - name: Ruff — format
         run: ruff format --check .
 
+      - name: Ruff — scripts/
+        # scripts/ lives outside api/, so it needs asking for by name. Left
+        # out, it is the one directory in the repository nothing checks.
+        working-directory: .
+        run: |
+          ruff check scripts/
+          ruff format --check scripts/
+
       - name: mypy
         run: mypy leka/
 

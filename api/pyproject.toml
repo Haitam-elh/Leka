@@ -86,6 +86,9 @@ ignore = [
 # Migrations are generated, and Alembic's template shadows builtins.
 "alembic/**" = ["N999", "A002", "E501"]
 "tests/**" = ["S105", "S106"]
+# Developer scripts talk to a terminal; that is what they are for.
+# The glob is path-independent so it holds however ruff is invoked.
+"**/scripts/*.py" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["leka"]

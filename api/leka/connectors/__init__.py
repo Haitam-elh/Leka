@@ -3,8 +3,22 @@
 Bottom of the dependency chain. Depends on leka.core, leka.db and
 leka.platform — never on ingestion, knowledge, context or intentions
 (architecture rule 1).
+
+A connector's job stops at fetching. It does not interpret, normalise or
+store: that is leka.ingestion.
 """
 
 from leka.connectors.models import Source, SourceKind, SourceStatus
+from leka.connectors.repository import SourceRepository
+from leka.connectors.schemas import RawRecord, SyncResult
+from leka.connectors.service import SourceService
 
-__all__ = ["Source", "SourceKind", "SourceStatus"]
+__all__ = [
+    "RawRecord",
+    "Source",
+    "SourceKind",
+    "SourceRepository",
+    "SourceService",
+    "SourceStatus",
+    "SyncResult",
+]

@@ -1,17 +1,42 @@
 """HTTP layer: one router file per module, assembled here.
 
+This file is the only place that decides what LEKA exposes over HTTP. A
+module without a line here is a module the outside world cannot reach —
+which is the intended default.
+
 Routes validate, call a single service, and return (architecture rule 6).
 They hold no business logic and no database queries.
-
-Module routers are added as the modules land; this file is the only place
-that decides what is exposed over HTTP.
 """
 
 from fastapi import APIRouter
 
-from leka.api import health
+from leka.api import (
+    capabilities,
+    connectors,
+    context,
+    governance,
+    health,
+    identity,
+    ingestion,
+    intentions,
+    knowledge,
+    platform,
+)
 
 api_router = APIRouter()
+
 api_router.include_router(health.router)
+
+# Ordered the way the system is layered, not alphabetically: someone reading
+# this should see the shape of the product.
+api_router.include_router(identity.router)
+api_router.include_router(platform.router)
+api_router.include_router(governance.router)
+api_router.include_router(connectors.router)
+api_router.include_router(ingestion.router)
+api_router.include_router(knowledge.router)
+api_router.include_router(context.router)
+api_router.include_router(capabilities.router)
+api_router.include_router(intentions.router)
 
 __all__ = ["api_router"]
