@@ -58,6 +58,16 @@ class Settings(BaseSettings):
             "configuration lives in one place."
         ),
     )
+    encryption_keys: tuple[SecretStr, ...] = Field(
+        min_length=1,
+        description=(
+            "Fernet keys for credentials at rest. The FIRST encrypts; all of "
+            "them are tried when decrypting, which is what makes rotation "
+            "possible without a flag day. Generate one with: python -c "
+            '"from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())"'
+        ),
+    )
 
     # ── Optional, with defaults that are safe in every environment. ──────────
     environment: Literal["local", "ci", "staging", "production"] = "local"
@@ -105,6 +115,28 @@ class Settings(BaseSettings):
                 f"(postgresql+asyncpg://...), got scheme {value.scheme!r}."
             )
             raise ValueError(msg)
+        return value
+
+    @field_validator("encryption_keys")
+    @classmethod
+    def _keys_are_usable(cls, value: tuple[SecretStr, ...]) -> tuple[SecretStr, ...]:
+        """Reject a malformed Fernet key at startup.
+
+        Fernet only complains when it is first used, which would be the first
+        sync of the first connector — long after deploy, and in a worker log
+        nobody is watching.
+        """
+        from cryptography.fernet import Fernet
+
+        for index, key in enumerate(value):
+            try:
+                Fernet(key.get_secret_value().encode())
+            except (ValueError, TypeError) as exc:
+                msg = (
+                    f"LEKA_ENCRYPTION_KEYS[{index}] is not a valid Fernet key "
+                    "(32 url-safe base64-encoded bytes)"
+                )
+                raise ValueError(msg) from exc
         return value
 
     @field_validator("anthropic_api_key", "mistral_api_key", mode="before")

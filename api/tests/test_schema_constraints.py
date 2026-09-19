@@ -63,8 +63,8 @@ async def test_defaults_are_applied_by_the_database(session: AsyncSession) -> No
     assert source.config == {}
     # Timestamps come from PostgreSQL, so the API, the worker and psql agree.
     assert source.created_at.tzinfo is not None
-    # A secret is never stored here, only a pointer to one (rule 12).
-    assert source.credentials_ref is None
+    # Credentials are encrypted before they reach this column (rule 12).
+    assert source.credentials_encrypted is None
 
 
 async def test_entity_cannot_reference_another_workspace_source(session: AsyncSession) -> None:
