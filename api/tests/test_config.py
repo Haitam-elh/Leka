@@ -12,12 +12,18 @@ from pydantic import ValidationError
 
 from leka.core.config import ConfigurationError, Settings, _load_settings
 
-REQUIRED = ("LEKA_DATABASE_URL", "LEKA_REDIS_URL", "LEKA_SECRET_KEY")
+REQUIRED = (
+    "LEKA_DATABASE_URL",
+    "LEKA_REDIS_URL",
+    "LEKA_SECRET_KEY",
+    "LEKA_ENCRYPTION_KEYS",
+)
 
 VALID = {
     "database_url": "postgresql+asyncpg://leka:leka@127.0.0.1:5432/leka",
     "redis_url": "redis://127.0.0.1:6379/0",
     "secret_key": "not-a-real-secret",
+    "encryption_keys": ["MN3nrX7VP5Mj0SRB4G-pIPOrvlCyT-CQoBZvsQFYHss="],
 }
 
 
@@ -141,3 +147,18 @@ def test_an_empty_key_counts_as_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_an_unknown_provider_is_refused() -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, **{**VALID, "llm_provider": "openai"})  # type: ignore[arg-type]
+
+
+# ── Credential encryption keys ───────────────────────────────────────────────
+
+
+def test_a_malformed_encryption_key_stops_startup() -> None:
+    """Fernet only objects when first used — which would be the first sync of
+    the first connector, hours after deploy, in a worker log nobody watches."""
+    with pytest.raises(ValidationError, match="Fernet"):
+        Settings(_env_file=None, **{**VALID, "encryption_keys": ["not-a-fernet-key"]})  # type: ignore[arg-type]
+
+
+def test_at_least_one_encryption_key_is_required() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **{**VALID, "encryption_keys": []})  # type: ignore[arg-type]

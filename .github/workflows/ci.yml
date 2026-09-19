@@ -46,6 +46,9 @@ jobs:
       LEKA_DATABASE_URL: postgresql+asyncpg://leka:leka@127.0.0.1:5432/leka_test
       LEKA_REDIS_URL: redis://127.0.0.1:6379/0
       LEKA_SECRET_KEY: ci-only-not-a-real-secret
+      # A throwaway Fernet key. Without it every job fails at import, which is
+      # the configuration doing its job.
+      LEKA_ENCRYPTION_KEYS: '["MN3nrX7VP5Mj0SRB4G-pIPOrvlCyT-CQoBZvsQFYHss="]'
       LEKA_ENVIRONMENT: ci
 
     defaults:

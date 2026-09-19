@@ -328,7 +328,7 @@ Two rules, without exception:
 | PostgreSQL 16 with pgvector | one database for relational, JSONB and vectors — [ADR 001](adr/001-postgresql.md) |
 | Async everywhere in the API | the workload is IO-bound: databases and HTTP |
 | Redis + RQ for the background loop | a queue we can reason about with two part-time developers |
-| No secret in Git, ever | `sources.credentials_ref` points at a secret store, it never holds the secret |
+| No secret in Git, ever | credentials are Fernet-encrypted before they reach the database; the key lives in the environment — [ADR 005](adr/005-credential-storage.md) |
 
 ### Human
 

@@ -142,8 +142,9 @@ database has already run it.
 **11. Every third-party import is recorded in
 [THIRD_PARTY_LICENSES.md](../THIRD_PARTY_LICENSES.md).** See below.
 
-**12. Never a secret in Git.** `sources.credentials_ref` points at a secret
-store; it never holds the secret.
+**12. Never a secret in Git.** A customer's credentials are encrypted with
+Fernet before they reach the database; the keys live in `LEKA_ENCRYPTION_KEYS`,
+in the environment. Neither the plaintext nor the key is ever committed.
 
 ---
 

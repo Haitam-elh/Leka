@@ -11,7 +11,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, String, UniqueConstraint
+from sqlalchemy import DateTime, Enum, LargeBinary, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -83,9 +83,13 @@ class Source(Base, WorkspaceScopedMixin):
     # Non-sensitive connection settings: base URL, organisation, repo filters.
     config: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
 
-    # A POINTER to the credential in the secret store — never the credential
-    # itself. Architecture rule 12: no secret in the database we back up and
-    # no secret in Git.
-    credentials_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # The customer's token, encrypted with Fernet before it ever reaches the
+    # database (leka.platform.secret_box). Never written or read in plaintext
+    # from here: the encrypted bytes are what this column holds, and the key
+    # lives in the environment, never in the database and never in Git
+    # (architecture rule 12).
+    #
+    # bytea rather than text so nothing about it invites being read.
+    credentials_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
 
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
