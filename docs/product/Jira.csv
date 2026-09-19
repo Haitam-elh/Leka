@@ -1,0 +1,2332 @@
+Résumé,Clé de ticket,ID de ticket,Type de ticket,État,Clé de projet,Nom du projet,Type de projet,Chef de projet,ID de responsable de projet,Description du projet,Priorité,Résolution,Personne assignée,ID de la personne assignée,Rapporteur,ID de rapporteur,Créateur,ID de créateur,Création,Mise à jour,Dernier affichage,Résolu,Date d'échéance,Votes,Description,Environnement,Observateurs,ID des observateurs,Estimation originale,Estimation restante,Temps consacré,Ratio du travail réel comparé à l'estimation,Σ Estimation originale,Σ Estimation restante,Σ Temps consacré,Niveau de sécurité,Champs personnalisés (Classement),Champs personnalisés (Couleur du ticket),Champs personnalisés (Date de début),Sprint,Champs personnalisés (Story point estimate),Champs personnalisés (Team),Champs personnalisés (Vulnérabilité),Champs personnalisés (development),Catégorie d'état,Catégorie d'état modifiée,Parent,Clé parent,Parent summary
+Platform Foundation,LEKA-1,12815,Epic,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 5:40 PM,16/sept./26 5:40 PM,,,,0,"Socle technique et applicatif de LEKA : architecture, API, authentification, workspace, multi-tenant, stockage, événements, jobs et services communs.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i001e7:,dark_teal,,,,,,{},A faire,16/sept./26 5:40 PM,,,
+App Shell & Design System,LEKA-2,12816,Epic,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 5:41 PM,16/sept./26 5:41 PM,,,,0,"Interface SaaS globale de LEKA : navigation, sidebar, header, composants UI, états, responsive, accessibilité et langage visuel.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i001ef:,dark_teal,,,,,,{},A faire,16/sept./26 5:41 PM,,,
+Connectors & Sources,LEKA-3,12817,Epic,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 5:42 PM,16/sept./26 5:42 PM,,,,0,"Framework et connecteurs permettant à LEKA d'accéder aux systèmes de l'entreprise : GitHub, Jira, Confluence, cloud, monitoring, bases de données, APIs, etc.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i001en:,blue,,,,,,{},A faire,16/sept./26 5:42 PM,,,
+Data Collection & Processing,LEKA-4,12818,Epic,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 5:42 PM,16/sept./26 5:42 PM,,,,0,"Collecte, extraction, parsing, normalisation, déduplication, validation et préparation des données issues des différentes sources.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i001ev:,blue,,,,,,{},A faire,16/sept./26 5:42 PM,,,
+Knowledge Graph & Company Model,LEKA-5,12819,Epic,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 5:42 PM,16/sept./26 5:42 PM,,,,0,"Construction du modèle de l'entreprise : applications, services, infrastructure, données, équipes, documentation, processus, incidents, changements, dépendances et relations.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i001f3:,yellow,,,,,,{},A faire,16/sept./26 5:42 PM,,,
+Context Engine,LEKA-6,12820,Epic,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 5:43 PM,16/sept./26 5:43 PM,,,,0,"Moteur permettant à LEKA d'identifier, sélectionner et construire le contexte pertinent pour chaque intention, en combinant contexte technique, métier, historique et contraintes.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i001fb:,dark_green,,,,,,{},A faire,16/sept./26 5:43 PM,,,
+Knowledge Intelligence,LEKA-7,12821,Epic,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 5:43 PM,16/sept./26 5:43 PM,,,,0,"Maintien et amélioration continue de la connaissance : qualité, fraîcheur, cohérence, enrichissement, détection des changements, nouvelles relations et niveau de confiance.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i001fj:,blue,,,,,,{},A faire,16/sept./26 5:43 PM,,,
+Intentions & Actions,LEKA-8,12822,Epic,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 5:44 PM,16/sept./26 5:44 PM,,,,0,Expérience centrale LEKA : intention utilisateur → compréhension → analyse → résultat → recommandation → décision → action → vérification → historique.,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i001fr:,dark_orange,,,,,,{},A faire,16/sept./26 5:44 PM,,,
+"Capabilities/Agents, Skills & Workflows",LEKA-9,12823,Epic,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 5:44 PM,16/sept./26 5:45 PM,,,,0,"Couche de capacités permettant à LEKA de mobiliser les bons agents, skills et workflows selon l'intention et le contexte de l'entreprise.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i001fz:,yellow,,,,,,{},A faire,16/sept./26 5:44 PM,,,
+"Security, Governance & Observability",LEKA-10,12824,Epic,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 5:45 PM,16/sept./26 5:45 PM,,,,0,"Sécurité et contrôle de la plateforme : permissions, rôles, politiques, validation humaine, secrets, isolation des données, audit, traçabilité, monitoring et observabilité.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i001g7:,blue,,,,,,{},A faire,16/sept./26 5:45 PM,,,
+Identity & Authentication,LEKA-330,13144,Story,En cours,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,mbilalelhalimi,712020:96d545d5-d12d-4cff-85db-15e2121a8d6b,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:52 PM,18/sept./26 10:07 PM,,,,0,"h2. Objective
+
+Provide secure user identity and authentication capabilities for LEKA.
+
+h2. User Story
+
+As a user, I want to securely access my LEKA account so that my workspace and data are protected.
+
+h2. Scope
+
+* User registration and login.
+* Session management and logout.
+* Email verification and password recovery.
+* Authentication security controls.
+* Authentication-related UI states and errors.
+
+h2. Acceptance Criteria
+
+* A user can register, verify the account, log in, log out, and recover access.
+* Sessions are securely created, maintained, and invalidated.
+* Authentication failures return safe, understandable feedback.
+* Credentials and session data are protected according to platform security requirements.
+
+h2. Definition of Done
+
+* End-to-end authentication flow implemented and tested.
+* Security-sensitive flows covered by automated tests.
+* Documentation updated.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i001v3:,,,LEKA Sprint 1,,,,{},En cours,18/sept./26 10:07 PM,12815,LEKA-1,Platform Foundation
+Platform Architecture,LEKA-329,13143,Story,En cours,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,Haïtam El halimi,712020:89f6f7cc-ff37-49c5-84d9-e241c90e4018,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:52 PM,19/sept./26 3:54 PM,19/sept./26 3:53 PM,,,0,"h2. Objective
+
+Define the foundational architecture of LEKA so the platform has clear service, module, data-flow, and integration boundaries.
+
+h2. User Story
+
+As a platform engineer, I want a coherent LEKA architecture so that the product can evolve without creating unnecessary coupling.
+
+h2. Scope
+
+* Define core platform components and responsibilities.
+* Define service/module boundaries and communication patterns.
+* Define synchronous and asynchronous flows.
+* Define core architectural principles and technical standards.
+* Document key architectural decisions and constraints.
+
+h2. Acceptance Criteria
+
+* The main LEKA components and responsibilities are documented.
+* Service/module boundaries are explicit.
+* Major data and execution flows are documented.
+* Architectural dependencies and constraints are identified.
+* The architecture is versioned and accessible to the engineering team.
+
+h2. Definition of Done
+
+* Architecture documentation reviewed.
+* Key decisions recorded.
+* No unresolved critical boundary ambiguity remains.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i0029z:,,,LEKA Sprint 1,,,,{},En cours,18/sept./26 10:03 PM,12815,LEKA-1,Platform Foundation
+Workspace & Multi-Tenancy,LEKA-331,13145,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:52 PM,16/sept./26 10:21 PM,,,,0,"h2. Objective
+
+Establish workspace and tenant boundaries so each organization can operate securely and independently in LEKA.
+
+h2. User Story
+
+As a workspace administrator, I want to configure members, roles, and tenant settings so that my organization can use LEKA safely.
+
+h2. Scope
+
+* Workspace creation and configuration.
+* Membership and role management.
+* Workspace switching.
+* Tenant isolation and lifecycle.
+* Workspace-level configuration and context.
+
+h2. Acceptance Criteria
+
+* Workspaces can be created and configured.
+* Users can be invited, removed, and assigned roles.
+* A user can switch between authorized workspaces.
+* Tenant data and permissions are isolated.
+* Workspace lifecycle states are handled consistently.
+
+h2. Definition of Done
+
+* Multi-tenant behavior is tested.
+* Authorization boundaries are documented.
+* Cross-tenant data access is prevented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002af:,,,LEKA Sprint 1,,,,{},A faire,16/sept./26 9:52 PM,12815,LEKA-1,Platform Foundation
+Core Data Foundation,LEKA-332,13146,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:53 PM,16/sept./26 10:21 PM,,,,0,"h2. Objective
+
+Establish the core data foundation used by LEKA services, knowledge, context, and execution layers.
+
+h2. User Story
+
+As a platform engineer, I want a stable core data model and storage layer so that LEKA can persist and evolve its data safely.
+
+h2. Scope
+
+* Core entities and schemas.
+* Database/storage infrastructure.
+* Versioning and schema evolution.
+* Raw and object storage foundations.
+* Data lifecycle and retention hooks.
+
+h2. Acceptance Criteria
+
+* Core data entities and relationships are defined.
+* Persistent storage is available to platform services.
+* Schema changes can be versioned and migrated safely.
+* Raw/object data can be stored with ownership and lifecycle metadata.
+* Retention and deletion rules can be applied.
+
+h2. Definition of Done
+
+* Data foundation is documented and tested.
+* Migration strategy is operational.
+* Backup/recovery expectations are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002an:,,,LEKA Sprint 1,,,,{},A faire,16/sept./26 9:53 PM,12815,LEKA-1,Platform Foundation
+API Platform,LEKA-333,13147,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:53 PM,16/sept./26 10:21 PM,,,,0,"h2. Objective
+
+Provide a consistent API foundation for LEKA services and clients.
+
+h2. User Story
+
+As a developer, I want standardized APIs so that LEKA components can communicate predictably and securely.
+
+h2. Scope
+
+* API gateway and routing.
+* Authentication and authorization hooks.
+* Request validation.
+* Response and error standards.
+* Versioning, filtering, pagination, and API documentation.
+
+h2. Acceptance Criteria
+
+* API requests are routed consistently.
+* Authentication and authorization are enforced through a common mechanism.
+* Invalid requests produce standardized validation errors.
+* Responses and errors follow documented conventions.
+* APIs support versioning and common query patterns.
+* Developer-facing API documentation is available.
+
+h2. Definition of Done
+
+* Core API conventions are documented.
+* Representative endpoints are covered by automated tests.
+* Security and error-handling behavior is verified.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002av:,,,LEKA Sprint 1,,,,{},A faire,16/sept./26 9:53 PM,12815,LEKA-1,Platform Foundation
+Event & Job Processing,LEKA-334,13148,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:53 PM,16/sept./26 10:21 PM,,,,0,"h2. Objective
+
+Provide reliable asynchronous execution for collection, processing, intelligence, and action workloads.
+
+h2. User Story
+
+As a platform engineer, I want jobs and events to execute reliably in the background so that long-running LEKA processes do not block users.
+
+h2. Scope
+
+* Event model and event bus.
+* Queues and background workers.
+* Job states and execution history.
+* Retry, failure, priority, and scheduling behavior.
+* Idempotency and concurrency controls.
+
+h2. Acceptance Criteria
+
+* Events can be published and consumed reliably.
+* Jobs can be queued, executed, monitored, retried, and failed safely.
+* Long-running work is decoupled from synchronous requests.
+* Duplicate execution is controlled through idempotency/concurrency rules.
+* Execution status and history are queryable.
+
+h2. Definition of Done
+
+* Representative async workflows tested end to end.
+* Failure/retry scenarios tested.
+* Operational documentation is available.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002b3:,,,LEKA Sprint 1,,,,{},A faire,16/sept./26 9:53 PM,12815,LEKA-1,Platform Foundation
+Configuration & Secrets,LEKA-335,13149,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:53 PM,16/sept./26 10:21 PM,,,,0,"h2. Objective
+
+Provide centralized configuration and secure secret management for LEKA environments and services.
+
+h2. User Story
+
+As a platform engineer, I want configuration and credentials managed consistently so that environments remain secure and reproducible.
+
+h2. Scope
+
+* Environment configuration.
+* Secure secrets and credentials storage.
+* Access control for secrets.
+* Rotation and expiration hooks.
+* Configuration validation and safe defaults.
+
+h2. Acceptance Criteria
+
+* Environment configuration is centrally defined and documented.
+* Secrets are never stored in application source code.
+* Services can access only the credentials they are authorized to use.
+* Secret rotation and expiration can be managed.
+* Invalid or missing configuration is detected clearly.
+
+h2. Definition of Done
+
+* Configuration and secrets flows are tested.
+* Access rules are documented.
+* No sensitive values are exposed in logs.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002bb:,,,LEKA Sprint 1,,,,{},A faire,16/sept./26 9:53 PM,12815,LEKA-1,Platform Foundation
+Platform Operations,LEKA-336,13150,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:53 PM,16/sept./26 10:21 PM,,,,0,"h2. Objective
+
+Establish the operational foundation required to build, deploy, monitor, and maintain LEKA reliably.
+
+h2. User Story
+
+As an engineering team, we want reproducible environments and releases so that LEKA can be delivered and operated safely.
+
+h2. Scope
+
+* Environment management.
+* CI/CD pipeline.
+* Build, deployment, and rollback processes.
+* Platform health checks and monitoring.
+* Release and operational management.
+
+h2. Acceptance Criteria
+
+* Code can move through validated build and deployment pipelines.
+* Releases are repeatable and traceable.
+* Failed deployments can be rolled back safely.
+* Platform health is observable through standard checks and metrics.
+* Operational procedures are documented.
+
+h2. Definition of Done
+
+* CI/CD pipeline operational.
+* Deployment and rollback tested.
+* Basic platform monitoring active.
+* Runbook documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002bj:,,,LEKA Sprint 1,,,,{},A faire,16/sept./26 9:53 PM,12815,LEKA-1,Platform Foundation
+Application Shell,LEKA-337,13151,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:53 PM,16/sept./26 10:21 PM,,,,0,"h2. Objective
+
+Build the shared application shell that provides the consistent frame for all LEKA product experiences.
+
+h2. User Story
+
+As a LEKA user, I want a consistent application shell so that I can navigate and work across the product without relearning the interface.
+
+h2. Scope
+
+* Global header and workspace context.
+* Persistent sidebar/navigation frame.
+* User/account area.
+* Page container and layout rules.
+* Shared responsive shell behavior.
+
+h2. Acceptance Criteria
+
+* The main LEKA application uses a consistent shell.
+* Header and sidebar are available where required by the IA.
+* Workspace/user context is visible and accessible.
+* Shell adapts to supported desktop/laptop sizes.
+* Shell behavior is consistent across major product areas.
+
+h2. Definition of Done
+
+* Shell components are reusable.
+* Responsive states are implemented.
+* Accessibility basics are covered.
+* Visual behavior follows the LEKA design system.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002br:,,,LEKA Sprint 1,,,,{},A faire,16/sept./26 9:53 PM,12816,LEKA-2,App Shell & Design System
+Navigation & Information Architecture,LEKA-338,13152,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:53 PM,16/sept./26 10:21 PM,,,,0,"h2. Objective
+
+Define and implement the primary navigation and information architecture of LEKA.
+
+h2. User Story
+
+As a user, I want to understand where I am and where to find each LEKA capability so that I can move through the product efficiently.
+
+h2. Scope
+
+* Primary sidebar structure.
+* Section hierarchy and labels.
+* Active/inactive navigation states.
+* Global search entry in the header.
+* Navigation rules for core areas such as Company, Intentions, Activity, and Capabilities.
+
+h2. Acceptance Criteria
+
+* Navigation reflects the approved LEKA information architecture.
+* The primary user entry point for creating an intention is clearly surfaced.
+* Current location is always understandable.
+* Navigation labels are consistent across the product.
+* Search is available globally without competing with the primary intention workflow.
+
+h2. Definition of Done
+
+* Navigation structure is documented.
+* All core routes are wired.
+* Empty, unavailable, and permission states are defined.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002bz:,,,LEKA Sprint 1,,,,{},A faire,16/sept./26 9:53 PM,12816,LEKA-2,App Shell & Design System
+Core UI Design System,LEKA-339,13153,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:53 PM,16/sept./26 10:21 PM,,,,0,"h2. Objective
+
+Create the reusable visual and interaction foundation for the LEKA application.
+
+h2. User Story
+
+As a product team, we want reusable UI components so that all LEKA screens remain consistent, fast to build, and easy to evolve.
+
+h2. Scope
+
+* Typography, spacing, radius, borders, iconography, and visual tokens.
+* Buttons, inputs, cards, tables, tabs, menus, badges, tooltips, dialogs, drawers, and pagination.
+* Component interaction states and variants.
+* Reusable component documentation.
+
+h2. Acceptance Criteria
+
+* Core components exist as reusable building blocks.
+* Components expose consistent variants and states.
+* Visual tokens are centralized.
+* Components support keyboard and focus states where applicable.
+* New screens can be composed without creating ad-hoc UI patterns.
+
+h2. Definition of Done
+
+* Component library documented.
+* Representative components tested in the application.
+* Visual consistency verified across core screens.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002c7:,,,LEKA Sprint 1,,,,{},A faire,16/sept./26 9:53 PM,12816,LEKA-2,App Shell & Design System
+"Forms, Inputs & User Interactions",LEKA-342,13156,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:54 PM,16/sept./26 10:32 PM,,,,0,"h2. Objective
+
+Provide reusable form and interaction patterns for configuring LEKA, entering intentions, selecting context, and confirming actions.
+
+h2. User Story
+
+As a user, I want intuitive inputs and interaction patterns so that I can provide information to LEKA and act on results efficiently.
+
+h2. Scope
+
+* Text inputs, selectors, multi-selects, date/time inputs, and search inputs.
+* Intention composer inputs.
+* Confirmation, cancellation, and destructive-action patterns.
+* Validation and inline feedback.
+* Keyboard and focus interactions.
+
+h2. Acceptance Criteria
+
+* Common input types use standardized components.
+* Validation behavior is consistent.
+* User actions have clear confirmation or cancellation paths where needed.
+* Error and success feedback is understandable.
+* Interaction patterns are reusable across product areas.
+
+h2. Definition of Done
+
+* Components are documented and reusable.
+* Representative forms and intention flows use them.
+* Keyboard accessibility is covered.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002c9:,,,LEKA Sprint 1,,,,{},A faire,16/sept./26 9:54 PM,12816,LEKA-2,App Shell & Design System
+"System States, Responsive & Accessibility",LEKA-343,13157,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:54 PM,16/sept./26 10:32 PM,,,,0,"h2. Objective
+
+Standardize system states and ensure LEKA remains usable across supported screen sizes and accessibility contexts.
+
+h2. User Story
+
+As a LEKA user, I want clear feedback and a consistent experience across devices so that I can understand system state and continue working without confusion.
+
+h2. Scope
+
+* Loading, empty, error, success, disabled, permission, and offline states.
+* Responsive behavior for supported desktop and laptop sizes.
+* Keyboard navigation, focus management, semantic structure, and accessible labels.
+* Consistent feedback patterns across the application.
+
+h2. Acceptance Criteria
+
+* Core screens define all relevant system states.
+* Responsive layouts remain usable at supported breakpoints.
+* Keyboard navigation works for primary interactions.
+* Focus states and accessible labels are implemented where required.
+* Errors and empty states explain what the user can do next.
+
+h2. Definition of Done
+
+* Core states are covered in the component system.
+* Representative screens pass accessibility review.
+* Responsive behavior is validated across supported viewport sizes.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002ca:,,,LEKA Sprint 1,,,,{},A faire,16/sept./26 9:54 PM,12816,LEKA-2,App Shell & Design System
+Connector Framework,LEKA-344,13158,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:54 PM,16/sept./26 10:21 PM,,,,0,"h2. Objective
+
+Provide a common connector framework that allows LEKA to securely connect, authenticate, configure, and operate external sources through a consistent model.
+
+h2. User Story
+
+As an administrator, I want connectors to behave consistently so that new enterprise sources can be onboarded without changing the core platform.
+
+h2. Scope
+
+* Common connector lifecycle and configuration.
+* Authentication and credential handling.
+* Source metadata and capability discovery.
+* Connection test and health status.
+* Standard connector events and errors.
+
+h2. Acceptance Criteria
+
+* Connectors follow a common lifecycle and contract.
+* Credentials are stored and accessed securely.
+* A connection can be tested before activation.
+* Connector health and synchronization status are available.
+* Failures use standardized diagnostics.
+
+h2. Definition of Done
+
+* Framework documented.
+* At least one connector implemented end to end on the framework.
+* Connection and failure scenarios are tested.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002cb:,,,LEKA Sprint 1,,,,{},A faire,16/sept./26 9:54 PM,12817,LEKA-3,Connectors & Sources
+Data & Knowledge Components,LEKA-340,13154,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:53 PM,16/sept./26 10:24 PM,18/sept./26 10:04 PM,,,0,"h2. Objective
+
+Provide reusable UI patterns for representing company data, knowledge entities, relationships, sources, provenance, and quality.
+
+h2. User Story
+
+As a LEKA user, I want complex technical and business information presented consistently so that I can inspect and understand it quickly.
+
+h2. Scope
+
+* Entity cards and detail views.
+* Relationship/dependency displays.
+* Source and provenance indicators.
+* Confidence, quality, freshness, and status indicators.
+* Data tables, metadata panels, and knowledge visualizations.
+
+h2. Acceptance Criteria
+
+* Knowledge entities can be represented consistently across screens.
+* Relationships and dependencies have reusable presentation patterns.
+* Source/provenance information can be surfaced without ambiguity.
+* Quality/confidence/freshness states are represented consistently.
+* Components work with empty, partial, and large datasets.
+
+h2. Definition of Done
+
+* Components are reusable and documented.
+* Major Knowledge Graph and Company Model views use the shared components.
+* Usability and accessibility are verified.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002cy:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:53 PM,12816,LEKA-2,App Shell & Design System
+Code & Development Connectors,LEKA-345,13159,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:54 PM,16/sept./26 10:23 PM,,,,0,"h2. Objective
+
+Connect LEKA to source-code platforms so it can understand repositories, branches, commits, pull requests, issues, and related development metadata.
+
+h2. User Story
+
+As a LEKA workspace administrator, I want to connect our development platforms so that LEKA can build an accurate view of our software estate.
+
+h2. Scope
+
+* GitHub, GitLab, and Bitbucket support through the connector framework.
+* Repository discovery and selection.
+* Code/development metadata ingestion.
+* Authentication and scope configuration.
+* Synchronization status and failure handling.
+
+h2. Acceptance Criteria
+
+* A supported development platform can be connected securely.
+* Repositories can be discovered and scoped for ingestion.
+* Relevant metadata is collected according to configured permissions.
+* Initial and incremental synchronization are supported.
+* Connector status and errors are visible.
+
+h2. Definition of Done
+
+* At least one major code platform works end to end.
+* Additional supported platforms use the same framework.
+* Permissions and synchronization behavior are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002dj:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:54 PM,12817,LEKA-3,Connectors & Sources
+Project & Documentation Connectors,LEKA-346,13160,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:54 PM,16/sept./26 10:23 PM,,,,0,"h2. Objective
+
+Connect LEKA to project-management and documentation systems so it can understand work, knowledge, decisions, and operational context.
+
+h2. User Story
+
+As a workspace administrator, I want to connect our project and documentation tools so that LEKA can correlate technical information with project and business knowledge.
+
+h2. Scope
+
+* Jira, Confluence, Linear, Notion, and equivalent sources through the common connector framework.
+* Workspace/project/space discovery.
+* Scope and permission configuration.
+* Synchronization and status handling.
+
+h2. Acceptance Criteria
+
+* Supported project/documentation systems can be connected securely.
+* Relevant workspaces, projects, spaces, or databases can be selected.
+* Documents, issues, metadata, and relationships are ingested according to permissions.
+* Initial and incremental synchronization are supported.
+* Connection health and ingestion errors are visible.
+
+h2. Definition of Done
+
+* At least one project system and one documentation system work end to end.
+* Connector configuration is documented.
+* Permission boundaries are tested.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002dr:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:54 PM,12817,LEKA-3,Connectors & Sources
+Cloud & Infrastructure Connectors,LEKA-347,13161,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:54 PM,16/sept./26 10:23 PM,,,,0,"h2. Objective
+
+Connect LEKA to cloud and infrastructure platforms so it can build and maintain an accurate infrastructure view.
+
+h2. User Story
+
+As a workspace administrator, I want to connect our cloud platforms so that LEKA can understand infrastructure resources, ownership, dependencies, and configuration context.
+
+h2. Scope
+
+* AWS, Azure, and GCP connectivity through the common framework.
+* Resource discovery and scope selection.
+* Infrastructure metadata ingestion.
+* Secure authentication and permissions.
+* Synchronization and connection health.
+
+h2. Acceptance Criteria
+
+* A supported cloud platform can be connected securely.
+* Relevant accounts, subscriptions, projects, or resources can be scoped.
+* Infrastructure metadata is collected according to granted permissions.
+* Initial and incremental synchronization are supported.
+* Connection health and permission failures are visible.
+
+h2. Definition of Done
+
+* At least one major cloud provider works end to end.
+* Additional providers follow the same connector contract.
+* Permissions and scopes are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002dz:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:54 PM,12817,LEKA-3,Connectors & Sources
+Observability & Operations Connectors,LEKA-348,13162,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:54 PM,16/sept./26 10:23 PM,,,,0,"h2. Objective
+
+Connect LEKA to observability and operations platforms so it can correlate system health, incidents, logs, metrics, and operational changes.
+
+h2. User Story
+
+As an operations user, I want LEKA to access observability data so that analyses can use real operational evidence.
+
+h2. Scope
+
+* Datadog, Grafana, logs, monitoring and incident sources.
+* Metrics, events, incidents, alerts, and operational metadata.
+* Scope and retention configuration.
+* Secure authentication and synchronization.
+
+h2. Acceptance Criteria
+
+* Supported observability systems can be connected securely.
+* Relevant metrics, events, incidents, and alerts can be scoped and ingested.
+* Source timestamps and identifiers are preserved.
+* Initial and incremental synchronization are supported.
+* Connection and ingestion health are visible.
+
+h2. Definition of Done
+
+* At least one observability source works end to end.
+* Operational metadata is available to downstream processing.
+* Permissions and supported data types are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002e7:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:54 PM,12817,LEKA-3,Connectors & Sources
+Database & Data Connectors,LEKA-349,13163,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:54 PM,16/sept./26 10:23 PM,,,,0,"h2. Objective
+
+Connect LEKA to databases and data platforms so it can understand schemas, data objects, ownership, and technical dependencies.
+
+h2. User Story
+
+As a data or platform administrator, I want LEKA to connect to our data systems so that technical and business context can be correlated.
+
+h2. Scope
+
+* PostgreSQL, MySQL, and compatible database sources.
+* Metadata/schema discovery.
+* Data object and dependency metadata where permitted.
+* Secure credentials and access scopes.
+* Synchronization and source health.
+
+h2. Acceptance Criteria
+
+* Supported database sources can be connected securely.
+* Schemas and relevant metadata can be discovered and scoped.
+* Access respects configured permissions.
+* Initial and incremental metadata synchronization are supported.
+* Connection and ingestion status are visible.
+
+h2. Definition of Done
+
+* At least one major relational database is supported end to end.
+* Security and permissions are documented.
+* Representative schemas are correctly ingested.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002ef:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:54 PM,12817,LEKA-3,Connectors & Sources
+API & Custom Connectors,LEKA-350,13164,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:55 PM,16/sept./26 10:23 PM,,,,0,"h2. Objective
+
+Allow LEKA to integrate systems that are not covered by native connectors through generic APIs and custom integrations.
+
+h2. User Story
+
+As an administrator, I want to connect custom systems so that LEKA can incorporate our proprietary or less common enterprise sources.
+
+h2. Scope
+
+* REST and GraphQL connectors.
+* Webhook ingestion.
+* Authentication variants supported by the generic framework.
+* Field mapping and schema configuration.
+* Connection testing and monitoring.
+
+h2. Acceptance Criteria
+
+* A generic REST or GraphQL source can be configured without code changes to core services.
+* Webhook payloads can enter the ingestion pipeline.
+* Authentication and secrets use the platform security model.
+* Source fields can be mapped to LEKA's normalized structures.
+* Generic connector failures are observable.
+
+h2. Definition of Done
+
+* Generic integration path demonstrated with a non-native source.
+* Configuration and mapping are documented.
+* Security and failure cases are tested.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002en:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:55 PM,12817,LEKA-3,Connectors & Sources
+Source Scope & Mapping,LEKA-351,13165,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:55 PM,16/sept./26 10:23 PM,,,,0,"h2. Objective
+
+Control exactly what each connected source contributes to LEKA and how source data maps into the company model.
+
+h2. User Story
+
+As a workspace administrator, I want to define source scope and mappings so that LEKA only ingests relevant information and interprets it correctly.
+
+h2. Scope
+
+* Resource/project/repository scope selection.
+* Include/exclude rules.
+* Source-to-model mapping.
+* Field and entity mapping configuration.
+* Permission-aware scope validation.
+
+h2. Acceptance Criteria
+
+* Administrators can define source scope before or during activation.
+* Include/exclude rules are applied consistently.
+* Mapping configuration is persisted and versioned.
+* Invalid or conflicting mappings are identified.
+* Scope changes affect subsequent synchronization safely.
+
+h2. Definition of Done
+
+* Scope and mapping behavior is tested with representative connectors.
+* Configuration changes are auditable.
+* Documentation explains supported mappings.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002ev:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:55 PM,12817,LEKA-3,Connectors & Sources
+Synchronization & Source Monitoring,LEKA-352,13166,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:55 PM,16/sept./26 10:23 PM,,,,0,"h2. Objective
+
+Provide reliable initial and incremental synchronization plus monitoring for all connected sources.
+
+h2. User Story
+
+As a workspace administrator, I want LEKA to keep source data current and tell me when synchronization fails so that the company model remains trustworthy.
+
+h2. Scope
+
+* Initial synchronization.
+* Incremental synchronization and change detection.
+* Scheduling and synchronization status.
+* Retry and failure handling.
+* Source health and monitoring.
+
+h2. Acceptance Criteria
+
+* A newly connected source can be synchronized end to end.
+* Subsequent changes can be synchronized incrementally where supported.
+* Synchronization state and last successful run are visible.
+* Recoverable failures can be retried safely.
+* Persistent connector problems generate actionable diagnostics.
+
+h2. Definition of Done
+
+* Sync behavior is tested across representative source types.
+* Failure and retry behavior is verified.
+* Monitoring data is available to operations.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002f3:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:55 PM,12817,LEKA-3,Connectors & Sources
+Collection Pipeline,LEKA-353,13167,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:55 PM,16/sept./26 10:23 PM,,,,0,"h2. Objective
+
+Build the pipeline that receives data from connected sources and moves it reliably into LEKA processing.
+
+h2. User Story
+
+As the LEKA platform, I want a reliable collection pipeline so that source data reaches processing without loss or uncontrolled duplication.
+
+h2. Scope
+
+* Intake from connectors.
+* Collection jobs and execution status.
+* Batching, checkpointing, and backpressure.
+* Raw payload persistence and provenance.
+* Failure and retry handling.
+
+h2. Acceptance Criteria
+
+* Connector data can enter a standardized collection pipeline.
+* Collection jobs expose status and execution metadata.
+* Raw source payloads can be persisted with source and timestamp metadata.
+* Failures can be retried without uncontrolled duplication.
+* Collection progress is observable.
+
+h2. Definition of Done
+
+* Representative connector data flows end to end.
+* Failure and retry scenarios are tested.
+* Collection contracts are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002fb:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:55 PM,12818,LEKA-4,Data Collection & Processing
+Data Extraction,LEKA-354,13168,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:55 PM,16/sept./26 10:23 PM,,,,0,"h2. Objective
+
+Extract useful structured information from raw source payloads so downstream LEKA processing can operate on meaningful content.
+
+h2. User Story
+
+As the LEKA platform, I want to extract entities, metadata, content, and technical signals from connected sources so that the company model can be built reliably.
+
+h2. Scope
+
+* Extraction from code, documents, APIs, tickets, metrics, and metadata.
+* Source-specific extraction strategies.
+* Metadata preservation.
+* Extraction status, errors, and provenance.
+
+h2. Acceptance Criteria
+
+* Supported source types produce structured extracted records.
+* Source identifiers and provenance are preserved.
+* Extraction failures are isolated and observable.
+* Extraction results can be passed to parsing and normalization stages.
+
+h2. Definition of Done
+
+* Representative source payloads are successfully extracted.
+* Error cases are tested.
+* Extraction contracts are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002fj:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:55 PM,12818,LEKA-4,Data Collection & Processing
+Parsing & Interpretation,LEKA-355,13169,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:55 PM,16/sept./26 10:23 PM,,,,0,"h2. Objective
+
+Interpret extracted source content into structures and signals that LEKA can reason over consistently.
+
+h2. User Story
+
+As the LEKA platform, I want heterogeneous extracted content interpreted into meaningful structures so that downstream models can correlate it.
+
+h2. Scope
+
+* Parsing of structured and semi-structured content.
+* Code, document, ticket, configuration, and metadata interpretation.
+* Semantic interpretation where required.
+* Parsing confidence, errors, and provenance.
+
+h2. Acceptance Criteria
+
+* Supported extracted content is transformed into structured representations.
+* Parsing preserves source identifiers and provenance.
+* Unsupported or malformed content is handled without blocking unrelated processing.
+* Interpretation results expose confidence or quality information where applicable.
+
+h2. Definition of Done
+
+* Representative source types are parsed successfully.
+* Failure cases are covered by tests.
+* Output contracts are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002fr:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:55 PM,12818,LEKA-4,Data Collection & Processing
+Data Normalization,LEKA-356,13170,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:55 PM,16/sept./26 10:23 PM,,,,0,"h2. Objective
+
+Normalize heterogeneous processed data into common LEKA structures so that information from different sources can be correlated consistently.
+
+h2. User Story
+
+As the LEKA platform, I want data normalized into common structures so that equivalent concepts from different systems can be compared and connected.
+
+h2. Scope
+
+* Common schemas and canonical representations.
+* Attribute normalization and type conversion.
+* Identifier normalization.
+* Timestamp, naming, and format normalization.
+* Provenance preservation.
+
+h2. Acceptance Criteria
+
+* Equivalent data from different sources can be represented consistently.
+* Canonical identifiers and attributes are applied where defined.
+* Source provenance is retained after normalization.
+* Invalid or unsupported records are isolated with diagnostics.
+
+h2. Definition of Done
+
+* Representative multi-source datasets normalize correctly.
+* Mapping rules are documented.
+* Automated validation covers key normalization rules.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002fz:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:55 PM,12818,LEKA-4,Data Collection & Processing
+Processing Orchestration & Data Lifecycle,LEKA-360,13174,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:56 PM,16/sept./26 10:24 PM,,,,0,"h2. Objective
+
+Orchestrate the full processing lifecycle from collected data to processed, managed datasets.
+
+h2. User Story
+
+As the LEKA platform, I want processing stages to execute in the right order with clear state and recovery so that data can move reliably toward knowledge creation.
+
+h2. Scope
+
+* Processing pipeline orchestration.
+* Stage dependencies and execution state.
+* Parallelism where safe.
+* Retry and recovery behavior.
+* Processed data storage, versioning, and lifecycle management.
+* Execution history and provenance.
+
+h2. Acceptance Criteria
+
+* Processing stages execute according to defined dependencies.
+* Processing state can be inspected and resumed where supported.
+* Failures can be retried without corrupting downstream data.
+* Processed data is versioned and traceable to source inputs and processing runs.
+* Lifecycle policies can govern processed data retention and replacement.
+
+h2. Definition of Done
+
+* End-to-end processing is demonstrated with representative sources.
+* Recovery and retry scenarios are tested.
+* Processing lifecycle and contracts are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002g2:,,,LEKA Sprint 2,,,,{},A faire,16/sept./26 9:56 PM,12818,LEKA-4,Data Collection & Processing
+Deduplication & Entity Resolution,LEKA-357,13171,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:55 PM,16/sept./26 10:25 PM,,,,0,"h2. Objective
+
+Identify duplicate records and determine when records from different sources refer to the same real-world entity.
+
+h2. User Story
+
+As the LEKA platform, I want to resolve duplicate and equivalent entities so that the company model does not contain fragmented or misleading representations.
+
+h2. Scope
+
+* Duplicate detection.
+* Cross-source entity matching.
+* Identity confidence.
+* Merge/link decisions.
+* Provenance preservation and conflict handling.
+
+h2. Acceptance Criteria
+
+* Candidate duplicates can be identified across supported sources.
+* Matching uses deterministic and, where appropriate, semantic signals.
+* Resolution decisions expose confidence and provenance.
+* Conflicts are not silently overwritten.
+* Resolved identities are available to downstream modeling.
+
+h2. Definition of Done
+
+* Representative cross-source entity cases are resolved correctly.
+* False-positive and false-negative scenarios are tested.
+* Resolution rules are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002gn:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:55 PM,12818,LEKA-4,Data Collection & Processing
+Data Validation & Quality,LEKA-358,13172,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:56 PM,16/sept./26 10:25 PM,,,,0,"h2. Objective
+
+Validate processed data and expose quality signals before it becomes trusted company knowledge.
+
+h2. User Story
+
+As the LEKA platform, I want data validated for completeness, consistency, freshness, and reliability so that downstream knowledge remains trustworthy.
+
+h2. Scope
+
+* Schema and business-rule validation.
+* Completeness and consistency checks.
+* Freshness checks.
+* Confidence and quality scoring.
+* Validation errors, quarantine, and remediation signals.
+
+h2. Acceptance Criteria
+
+* Processed records are validated against applicable schemas and rules.
+* Quality issues are detected and surfaced.
+* Invalid records can be isolated without blocking valid data.
+* Quality metadata is retained for downstream use.
+* Validation results are traceable to the source and processing run.
+
+h2. Definition of Done
+
+* Representative datasets pass validation workflows.
+* Invalid data scenarios are tested.
+* Quality rules and outputs are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002gv:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:56 PM,12818,LEKA-4,Data Collection & Processing
+Data Enrichment,LEKA-359,13173,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:56 PM,16/sept./26 10:25 PM,,,,0,"h2. Objective
+
+Enrich processed data with additional context, inferred metadata, and relationships before it enters the company knowledge model.
+
+h2. User Story
+
+As the LEKA platform, I want processed records enriched with relevant context so that downstream analysis can operate on richer information.
+
+h2. Scope
+
+* Metadata enrichment.
+* Cross-source relationship enrichment.
+* Semantic enrichment where useful.
+* Ownership and organizational enrichment.
+* Enrichment provenance and confidence.
+
+h2. Acceptance Criteria
+
+* Enrichment can add information without losing source provenance.
+* Enriched attributes and relationships expose confidence where applicable.
+* Enrichment failures do not corrupt the base record.
+* Enrichment outputs can feed Company Model and Knowledge Graph processing.
+
+h2. Definition of Done
+
+* Representative datasets are enriched successfully.
+* Provenance and confidence are preserved.
+* Enrichment behavior is tested and documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002gz:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:56 PM,12818,LEKA-4,Data Collection & Processing
+Company Model,LEKA-361,13175,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:56 PM,16/sept./26 10:25 PM,,,,0,"h2. Objective
+
+Establish the canonical model representing the structure and state of the customer's company inside LEKA.
+
+h2. User Story
+
+As LEKA, I want a coherent company model so that information from different systems can be understood as one enterprise context.
+
+h2. Scope
+
+* Canonical entity model and registry.
+* Entity schemas and metadata.
+* Entity identity and lifecycle.
+* Core company entities and relationships.
+* Versioning and provenance.
+
+h2. Acceptance Criteria
+
+* Core entity types are defined and versioned.
+* Entities have stable identities and lifecycle states.
+* Source provenance is retained.
+* The model can be extended without breaking existing entities.
+* Company model entities can be consumed by downstream graph and context services.
+
+h2. Definition of Done
+
+* Canonical model documented.
+* Representative entities are created from processed source data.
+* Versioning and provenance behavior tested.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002h3:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:56 PM,12819,LEKA-5,Knowledge Graph & Company Model
+Applications & Services Model,LEKA-362,13176,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:56 PM,16/sept./26 10:25 PM,,,,0,"h2. Objective
+
+Represent applications, services, environments, ownership, criticality, lifecycle, and technical dependencies in the Company Model.
+
+h2. User Story
+
+As a technology user, I want LEKA to understand our applications and services so that it can reason about their role and dependencies.
+
+h2. Scope
+
+* Application and service entities.
+* Environments and lifecycle states.
+* Ownership and criticality.
+* Application/service dependencies.
+* Provenance and source reconciliation.
+
+h2. Acceptance Criteria
+
+* Applications and services can be represented canonically.
+* Ownership, criticality, and lifecycle are available where known.
+* Environment-specific relationships are preserved.
+* Technical dependencies can be represented and queried.
+* Source provenance and confidence are retained.
+
+h2. Definition of Done
+
+* Representative application landscapes are modeled.
+* Cross-source reconciliation is tested.
+* Model contracts are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002hb:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:56 PM,12819,LEKA-5,Knowledge Graph & Company Model
+Infrastructure & Cloud Model,LEKA-363,13177,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:56 PM,16/sept./26 10:25 PM,,,,0,"h2. Objective
+
+Represent infrastructure and cloud resources in the Company Model so LEKA can reason about the technical environment and its dependencies.
+
+h2. User Story
+
+As a platform or operations user, I want LEKA to understand infrastructure resources so that analyses can connect applications to the systems that support them.
+
+h2. Scope
+
+* Compute, network, storage, and cloud resources.
+* Resource ownership and lifecycle.
+* Environment and account/subscription/project context.
+* Infrastructure dependencies.
+* Provenance and source reconciliation.
+
+h2. Acceptance Criteria
+
+* Supported infrastructure entities can be represented canonically.
+* Resource ownership and lifecycle are modeled where available.
+* Cloud hierarchy and environment context are preserved.
+* Dependencies between infrastructure resources and higher-level entities can be represented.
+* Provenance and confidence are retained.
+
+h2. Definition of Done
+
+* Representative infrastructure landscapes are modeled.
+* Cross-source reconciliation is tested.
+* Model contracts are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002hj:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:56 PM,12819,LEKA-5,Knowledge Graph & Company Model
+Data & Database Model,LEKA-364,13178,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:56 PM,16/sept./26 10:25 PM,,,,0,"h2. Objective
+
+Represent databases, schemas, data objects, ownership, classification, and technical dependencies in the Company Model.
+
+h2. User Story
+
+As a data or platform user, I want LEKA to understand our data landscape so that analyses can connect applications, infrastructure, and business information.
+
+h2. Scope
+
+* Database and schema entities.
+* Data object representation.
+* Ownership and classification.
+* Data dependencies.
+* Provenance and source reconciliation.
+
+h2. Acceptance Criteria
+
+* Supported database structures can be represented canonically.
+* Ownership and classification are captured where available.
+* Dependencies between data objects and technical entities can be modeled.
+* Source provenance and confidence are retained.
+* Model data is available to downstream graph and context services.
+
+h2. Definition of Done
+
+* Representative database landscapes are modeled.
+* Cross-source reconciliation is tested.
+* Data model contracts are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002hr:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:56 PM,12819,LEKA-5,Knowledge Graph & Company Model
+People & Organization Model,LEKA-365,13179,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:56 PM,16/sept./26 10:25 PM,,,,0,"h2. Objective
+
+Represent users, teams, organizational structure, ownership, responsibilities, and expertise in the Company Model.
+
+h2. User Story
+
+As a LEKA user, I want LEKA to understand who owns and operates systems so that recommendations and analysis can account for organizational context.
+
+h2. Scope
+
+* User and contributor entities.
+* Teams and organizational structure.
+* Ownership and responsibility mappings.
+* Expertise signals.
+* Provenance and confidence.
+
+h2. Acceptance Criteria
+
+* Users and teams can be represented consistently.
+* Ownership and responsibility relationships can be queried.
+* Organizational hierarchy can be represented where available.
+* Expertise signals are sourced and attributed rather than invented.
+* Provenance is retained.
+
+h2. Definition of Done
+
+* Representative organizational data is modeled.
+* Ownership relationships are tested.
+* Model limitations and source coverage are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002hz:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:57 PM,12819,LEKA-5,Knowledge Graph & Company Model
+Documentation & Business Knowledge Model,LEKA-366,13180,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:57 PM,16/sept./26 10:25 PM,,,,0,"h2. Objective
+
+Represent documentation, knowledge sources, business processes, capabilities, and business-to-technology mappings in the Company Model.
+
+h2. User Story
+
+As a business or technology user, I want LEKA to understand our documentation and business context so that technical analysis can be grounded in how the company operates.
+
+h2. Scope
+
+* Documentation and knowledge source entities.
+* Document relationships, ownership, freshness, and coverage.
+* Business processes and activities.
+* Business capabilities and application/data mappings.
+* Business ownership and provenance.
+
+h2. Acceptance Criteria
+
+* Documents and knowledge sources can be represented and linked to relevant entities.
+* Freshness and ownership information is retained where available.
+* Business processes and capabilities can be modeled.
+* Business-to-application and business-to-data relationships can be represented.
+* All modelled business knowledge retains source provenance.
+
+h2. Definition of Done
+
+* Representative documentation and business context are modeled.
+* Relationships are queryable.
+* Coverage and limitations are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002i7:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:57 PM,12819,LEKA-5,Knowledge Graph & Company Model
+"Incidents, Changes & Deployments Model",LEKA-367,13181,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:57 PM,16/sept./26 10:25 PM,,,,0,"h2. Objective
+
+Represent incidents, changes, deployments, and historical states so LEKA can relate operational events to the rest of the company model.
+
+h2. User Story
+
+As an operations user, I want LEKA to understand incidents, changes, and deployments so that it can explain what changed and assess impact.
+
+h2. Scope
+
+* Incident entities and relationships.
+* Change entities and relationships.
+* Deployment entities and relationships.
+* Historical state and timeline information.
+* Source provenance and confidence.
+
+h2. Acceptance Criteria
+
+* Incidents, changes, and deployments can be represented canonically.
+* Relationships to applications, services, infrastructure, people, and other entities can be stored.
+* Historical state information is preserved where available.
+* Event timestamps and source identifiers are retained.
+* Data is available to downstream context and intelligence services.
+
+h2. Definition of Done
+
+* Representative incident/change/deployment scenarios are modeled.
+* Relationships and historical timelines are queryable.
+* Model behavior is documented and tested.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002if:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:57 PM,12819,LEKA-5,Knowledge Graph & Company Model
+Relationships & Dependency Engine,LEKA-368,13182,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:57 PM,16/sept./26 10:25 PM,,,,0,"h2. Objective
+
+Provide a reliable engine for representing, creating, validating, and evolving relationships between Company Model entities.
+
+h2. User Story
+
+As LEKA, I want to understand how entities depend on one another so that context and analysis can follow meaningful relationships through the company.
+
+h2. Scope
+
+* Canonical relationship types.
+* Relationship creation and validation.
+* Confidence and provenance.
+* Dependency representation.
+* Relationship lifecycle and change handling.
+
+h2. Acceptance Criteria
+
+* Supported relationship types are defined and versioned.
+* Relationships can be created from processed evidence.
+* Each relationship has provenance and confidence where applicable.
+* Invalid or conflicting relationships are identified.
+* Relationship changes are versioned and available to downstream services.
+
+h2. Definition of Done
+
+* Representative dependency graphs are built successfully.
+* Relationship validation is tested.
+* Relationship contracts are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002in:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:57 PM,12819,LEKA-5,Knowledge Graph & Company Model
+Knowledge Graph & Company Views,LEKA-369,13183,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:57 PM,16/sept./26 10:26 PM,,,,0,"h2. Objective
+
+Provide the graph foundation and user-facing views needed to explore the Company's knowledge and dependencies.
+
+h2. User Story
+
+As a LEKA user, I want to explore my company model as connected knowledge so that I can understand landscapes, dependencies, and coverage.
+
+h2. Scope
+
+* Knowledge Graph storage and indexing.
+* Graph queries and traversal.
+* Knowledge search.
+* Application, infrastructure, data, dependency, and organization views.
+* Provenance and knowledge coverage indicators.
+
+h2. Acceptance Criteria
+
+* Company Model entities and relationships are persisted in a graph-capable representation.
+* Users and services can query and traverse relationships.
+* Search can locate relevant entities and relationships.
+* Major company landscapes can be presented through reusable views.
+* Source provenance and coverage are visible where relevant.
+
+h2. Definition of Done
+
+* Representative graph queries work end to end.
+* Core landscape views are accessible in the application.
+* Performance and access expectations are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002iv:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:57 PM,12819,LEKA-5,Knowledge Graph & Company Model
+Context Engine Architecture,LEKA-370,13184,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:57 PM,16/sept./26 10:26 PM,,,,0,"h2. Objective
+
+Establish the context engine that assembles the information LEKA needs to understand a request in its company context.
+
+h2. User Story
+
+As LEKA, I want a dedicated context engine so that each intention is processed with the most relevant company information rather than isolated source data.
+
+h2. Scope
+
+* Context model and lifecycle.
+* Context storage and versioning.
+* Provenance and traceability.
+* Context assembly contracts for downstream services.
+
+h2. Acceptance Criteria
+
+* A context object can be created, versioned, and inspected.
+* Context elements retain source/provenance metadata.
+* Context can be assembled for downstream analysis.
+* Historical context can be retrieved where required.
+
+h2. Definition of Done
+
+* Context architecture documented.
+* Core context contracts implemented and tested.
+* Provenance behavior verified.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002j3:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:57 PM,12820,LEKA-6,Context Engine
+Context Retrieval,LEKA-371,13185,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:57 PM,16/sept./26 10:26 PM,,,,0,"h2. Objective
+
+Retrieve relevant company knowledge for a given context request using multiple retrieval strategies.
+
+h2. User Story
+
+As LEKA, I want to retrieve relevant entities, relationships, semantic information, temporal signals, and events so that an intention is grounded in the right evidence.
+
+h2. Scope
+
+* Entity and relationship retrieval.
+* Semantic retrieval.
+* Temporal and event-based retrieval.
+* Hybrid retrieval across graph and indexed content.
+* Retrieval provenance.
+
+h2. Acceptance Criteria
+
+* Context requests can retrieve relevant information from supported knowledge stores.
+* Retrieval can combine different strategies.
+* Retrieved items retain source and relevance metadata.
+* Retrieval failures degrade safely and remain observable.
+
+h2. Definition of Done
+
+* Representative intention contexts retrieve relevant evidence end to end.
+* Retrieval quality is evaluated on test cases.
+* Retrieval contracts are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002jb:,,,LEKA Sprint 3,,,,{},A faire,16/sept./26 9:57 PM,12820,LEKA-6,Context Engine
+LEKA Intelligence Components,LEKA-341,13155,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:54 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Create reusable UI patterns for LEKA's intelligence outputs: context, findings, confidence, impact, recommendations, actions, and evidence.
+
+h2. User Story
+
+As a user, I want LEKA's reasoning results presented clearly so that I can understand the situation and make a decision.
+
+h2. Scope
+
+* Context used panels.
+* Findings and probable-cause cards.
+* Evidence and source references.
+* Impact and risk presentations.
+* Recommendation and action panels.
+* Confidence and uncertainty states.
+
+h2. Acceptance Criteria
+
+* Intelligence outputs have consistent visual hierarchy.
+* Evidence can be inspected from the result.
+* Confidence and uncertainty are explicit.
+* Recommendations and actions are visually distinct from facts.
+* Components support partial, inconclusive, and failed analysis states.
+
+h2. Definition of Done
+
+* Reusable components are documented.
+* Representative intention screens use them.
+* Accessibility and responsive behavior are verified.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002jf:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:54 PM,12816,LEKA-2,App Shell & Design System
+Context Relevance & Ranking,LEKA-372,13186,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:58 PM,16/sept./26 10:26 PM,,,,0,"h2. Objective
+
+Rank and filter retrieved information so LEKA prioritizes the context most relevant to the current intention.
+
+h2. User Story
+
+As LEKA, I want relevant context prioritized so that analyses focus on the information that matters most.
+
+h2. Scope
+
+* Relevance scoring.
+* Ranking and prioritization.
+* Filtering and deduplication.
+* Confidence and source-quality signals.
+* Context conflict handling.
+
+h2. Acceptance Criteria
+
+* Retrieved context can be scored and ranked.
+* Low-relevance and duplicate context can be filtered.
+* Source quality and confidence can influence prioritization.
+* Conflicting context is identified rather than silently merged.
+* Ranking decisions are traceable enough to be inspected.
+
+h2. Definition of Done
+
+* Representative ranking cases are tested.
+* Relevance behavior is documented.
+* Context inspection exposes ranking metadata where appropriate.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002jj:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:58 PM,12820,LEKA-6,Context Engine
+Intent Context Assembly,LEKA-373,13187,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:58 PM,16/sept./26 10:26 PM,,,,0,"h2. Objective
+
+Assemble the specific technical, business, temporal, and organizational context required to process an intention.
+
+h2. User Story
+
+As LEKA, I want to construct an intention-specific context so that every request is interpreted against the right company scope and constraints.
+
+h2. Scope
+
+* Intent scope detection.
+* Entity and relationship resolution.
+* Technical and business context.
+* Temporal context.
+* Constraint and relevance application.
+
+h2. Acceptance Criteria
+
+* An intention can produce a structured context request.
+* Relevant entities, relationships, constraints, and time windows are included.
+* Technical and business context can be combined.
+* Context assembly is traceable to the intention and sources.
+* Missing critical context is surfaced rather than silently ignored.
+
+h2. Definition of Done
+
+* Representative intentions assemble usable context end to end.
+* Missing-context cases are tested.
+* Assembly contract is documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002jr:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:58 PM,12820,LEKA-6,Context Engine
+Dynamic Context,LEKA-374,13188,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:58 PM,16/sept./26 10:26 PM,,,,0,"h2. Objective
+
+Keep the assembled context aligned with changes in the company environment and the evolving intention.
+
+h2. User Story
+
+As LEKA, I want context to refresh and adapt as new information appears so that analyses remain grounded in the current state of the company.
+
+h2. Scope
+
+* Context expansion and compression.
+* Adaptive context refresh.
+* Change detection affecting context.
+* Context recalculation.
+* Versioning of refreshed context.
+
+h2. Acceptance Criteria
+
+* Context can be refreshed when relevant source or knowledge changes occur.
+* Context can expand or compress according to processing needs.
+* A refreshed context is distinguishable from its previous version.
+* Changes triggering recalculation are traceable.
+* Stale context can be identified.
+
+h2. Definition of Done
+
+* Representative change-driven refresh scenarios are tested.
+* Context versions remain traceable.
+* Refresh behavior is documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002jz:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:58 PM,12820,LEKA-6,Context Engine
+Context Quality & Confidence,LEKA-375,13189,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:58 PM,16/sept./26 10:26 PM,,,,0,"h2. Objective
+
+Measure the quality and confidence of assembled context and make gaps or contradictions visible.
+
+h2. User Story
+
+As LEKA, I want context quality assessed so that analyses can distinguish strong evidence from incomplete or uncertain context.
+
+h2. Scope
+
+* Completeness, freshness, and confidence measures.
+* Context quality scoring.
+* Missing context and knowledge gaps.
+* Conflict detection at context level.
+* Feedback signals for improving future retrieval.
+
+h2. Acceptance Criteria
+
+* Context quality can be evaluated consistently.
+* Missing or stale context is identified.
+* Confidence information is available to downstream processing.
+* Critical conflicts are surfaced.
+* Quality metadata is traceable to underlying evidence.
+
+h2. Definition of Done
+
+* Representative quality scenarios are tested.
+* Quality signals are available through context inspection.
+* Scoring and gap rules are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002k7:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:58 PM,12820,LEKA-6,Context Engine
+Context API & Inspection,LEKA-376,13190,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:58 PM,16/sept./26 10:26 PM,,,,0,"h2. Objective
+
+Expose context assembly, inspection, history, and security through stable APIs for LEKA services and product surfaces.
+
+h2. User Story
+
+As a LEKA service or UI, I want consistent context APIs so that I can request and inspect the context used in analysis.
+
+h2. Scope
+
+* Context query API.
+* Context assembly API.
+* Context inspection and evidence retrieval.
+* Context history and version access.
+* Streaming/update support where required.
+* API authentication and authorization.
+
+h2. Acceptance Criteria
+
+* Authorized clients can request and inspect context.
+* Context responses include relevant provenance and quality metadata.
+* Historical versions can be retrieved where supported.
+* Unauthorized access is rejected.
+* API contracts are versioned and documented.
+
+h2. Definition of Done
+
+* Representative context flows work end to end through the APIs.
+* API security is tested.
+* Documentation is published.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002kf:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:58 PM,12820,LEKA-6,Context Engine
+Knowledge Intelligence Engine,LEKA-377,13191,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:58 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Establish the intelligence layer that analyzes company knowledge and produces reusable findings for downstream intentions and product surfaces.
+
+h2. User Story
+
+As LEKA, I want an intelligence layer that can analyze knowledge continuously and on demand so that the company model becomes more useful over time.
+
+h2. Scope
+
+* Intelligence processing framework and jobs.
+* Rule- and model-assisted analysis.
+* Execution history.
+* Reusable intelligence outputs.
+
+h2. Acceptance Criteria
+
+* Intelligence jobs can be created and executed.
+* Processing can use current Company Model and Context data.
+* Outputs are persisted with provenance and execution metadata.
+* Failures are isolated and observable.
+* Intelligence executions are traceable.
+
+h2. Definition of Done
+
+* Representative analysis jobs execute end to end.
+* Outputs can be consumed by downstream services.
+* Execution and error behavior is documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002kn:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:58 PM,12821,LEKA-7,Knowledge Intelligence
+Change & Impact Intelligence,LEKA-378,13192,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:58 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Detect meaningful changes and determine their likely impact across the company model.
+
+h2. User Story
+
+As a LEKA user, I want LEKA to correlate changes with affected systems and dependencies so that I can understand consequences quickly.
+
+h2. Scope
+
+* Significant change detection.
+* Change correlation and classification.
+* Dependency-aware impact analysis.
+* Change timelines.
+
+h2. Acceptance Criteria
+
+* Relevant changes can be detected from available sources.
+* Changes can be correlated with modeled entities and dependencies.
+* Potential impacts can be identified and ranked.
+* Change evidence and source provenance are retained.
+* Results can be consumed by intentions and insights.
+
+h2. Definition of Done
+
+* Representative change scenarios produce useful impact results.
+* Historical and current changes can be distinguished.
+* Analysis behavior is tested and documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002kv:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:58 PM,12821,LEKA-7,Knowledge Intelligence
+Knowledge Gap Detection,LEKA-379,13193,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:58 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Identify missing, stale, or insufficient knowledge that limits LEKA's ability to understand the company.
+
+h2. User Story
+
+As a LEKA user, I want LEKA to identify important knowledge gaps so that missing context can be addressed before it impacts analysis.
+
+h2. Scope
+
+* Missing entity and relationship detection.
+* Missing or stale documentation detection.
+* Knowledge coverage analysis.
+* Gap prioritization by relevance and impact.
+
+h2. Acceptance Criteria
+
+* Knowledge gaps can be detected from the Company Model and source coverage.
+* Missing entities, relationships, and documentation can be distinguished.
+* Stale knowledge can be identified.
+* Gaps can be prioritized using defined signals.
+* Gap findings retain evidence and provenance.
+
+h2. Definition of Done
+
+* Representative gaps are detected correctly.
+* Prioritization is documented.
+* Findings can be consumed by intelligence and product surfaces.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002l3:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:58 PM,12821,LEKA-7,Knowledge Intelligence
+Knowledge Enrichment Intelligence,LEKA-380,13194,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:59 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Continuously enrich the Company Model by discovering useful relationships, semantic context, organizational context, and business context from available evidence.
+
+h2. User Story
+
+As LEKA, I want to enrich company knowledge automatically so that future intentions can be answered with greater context.
+
+h2. Scope
+
+* Relationship discovery.
+* Semantic enrichment.
+* Organizational enrichment.
+* Business-context enrichment.
+* AI-assisted enrichment with provenance and confidence.
+
+h2. Acceptance Criteria
+
+* New enrichment candidates can be generated from available evidence.
+* Enrichment does not overwrite trusted information without controlled validation.
+* Each enrichment retains evidence, confidence, and provenance.
+* Enrichment can be accepted, rejected, or reprocessed where required.
+
+h2. Definition of Done
+
+* Representative enrichment scenarios work end to end.
+* Provenance and confidence are visible to downstream consumers.
+* Failure and rollback behavior is tested.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002lb:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:59 PM,12821,LEKA-7,Knowledge Intelligence
+Knowledge Quality Intelligence,LEKA-381,13195,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:59 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Provide continuous intelligence on the quality of LEKA's knowledge so that users can distinguish complete, fresh, consistent information from weak knowledge.
+
+h2. User Story
+
+As LEKA, I want to measure knowledge quality continuously so that the company model remains trustworthy.
+
+h2. Scope
+
+* Completeness analysis.
+* Freshness analysis.
+* Consistency analysis.
+* Confidence analysis.
+* Knowledge quality scoring.
+
+h2. Acceptance Criteria
+
+* Knowledge quality is measured using defined dimensions.
+* Quality scores can be calculated for relevant entities and broader areas.
+* Low-quality knowledge can be identified and surfaced.
+* Quality signals retain underlying evidence and provenance.
+* Quality changes over time can be tracked.
+
+h2. Definition of Done
+
+* Representative quality scenarios are validated.
+* Quality metrics are available to downstream context and product layers.
+* Scoring methodology is documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002lj:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:59 PM,12821,LEKA-7,Knowledge Intelligence
+Knowledge Conflict Resolution,LEKA-382,13196,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:59 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Detect conflicting knowledge and provide controlled ways to assess source authority and resolve contradictions.
+
+h2. User Story
+
+As a LEKA user, I want conflicting information identified and explained so that decisions are not based on silently contradictory knowledge.
+
+h2. Scope
+
+* Conflict detection across sources and model entities.
+* Source authority signals.
+* Resolution recommendations.
+* Conflict history and provenance.
+
+h2. Acceptance Criteria
+
+* Contradictory facts or relationships can be detected.
+* Relevant source evidence is shown with the conflict.
+* Source authority rules can influence resolution recommendations.
+* Conflicts are not silently overwritten.
+* Resolution history is retained.
+
+h2. Definition of Done
+
+* Representative conflict cases are tested.
+* Resolution behavior is documented.
+* Provenance and auditability are preserved.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002lr:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:59 PM,12821,LEKA-7,Knowledge Intelligence
+Knowledge Evolution & Insights,LEKA-383,13197,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:59 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Track the evolution of company knowledge and expose higher-level insights derived from it.
+
+h2. User Story
+
+As a LEKA user, I want to understand how our company knowledge changes over time and what those changes reveal so that I can make better-informed decisions.
+
+h2. Scope
+
+* Knowledge versioning and history.
+* Knowledge snapshots and timelines.
+* Rollback/reprocessing support where required.
+* Dependency, architecture, operational, organizational, and risk insights.
+* Knowledge recommendations.
+
+h2. Acceptance Criteria
+
+* Relevant knowledge changes can be inspected over time.
+* Historical snapshots can be retrieved where supported.
+* Reprocessing or rollback behavior is controlled and traceable.
+* Insights retain evidence and provenance.
+* Insights can be consumed by the application and intention workflows.
+
+h2. Definition of Done
+
+* Representative history and insight scenarios are tested.
+* Insight provenance is visible.
+* Evolution and insight behavior is documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002lz:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:59 PM,12821,LEKA-7,Knowledge Intelligence
+Intention Model & Lifecycle,LEKA-384,13198,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:59 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Establish the canonical intention object and lifecycle used from user request through completion.
+
+h2. User Story
+
+As a LEKA user, I want my intention tracked through a clear lifecycle so that I can understand what LEKA is doing and where my request stands.
+
+h2. Scope
+
+* Intention entity and metadata.
+* Creation, status, scope, and history.
+* Lifecycle states from creation through verification.
+* Links to context, decisions, actions, and outcomes.
+
+h2. Acceptance Criteria
+
+* An intention can be created with the required metadata.
+* Its lifecycle state is persisted and queryable.
+* Related context, findings, decisions, actions, and outcomes can be linked.
+* History is retained and auditable.
+
+h2. Definition of Done
+
+* Intention model documented.
+* Lifecycle implemented and tested.
+* Core transitions covered by automated tests.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002m7:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:59 PM,12822,LEKA-8,Intentions & Actions
+Intent Understanding,LEKA-385,13199,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:59 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Understand what the user wants to accomplish from a natural-language intention.
+
+h2. User Story
+
+As a LEKA user, I want to express what I want to achieve naturally so that LEKA can determine the intended goal without requiring me to know the underlying technical steps.
+
+h2. Scope
+
+* Intent parsing and classification.
+* Goal detection.
+* Entity and action extraction.
+* Ambiguity detection.
+* Structured intent representation.
+
+h2. Acceptance Criteria
+
+* Natural-language intentions are transformed into a structured representation.
+* The intended goal is identified when sufficient information is available.
+* Relevant entities and actions are extracted.
+* Ambiguous requests are flagged for clarification.
+* Original user wording remains linked to the structured intent.
+
+h2. Definition of Done
+
+* Representative intention examples are processed successfully.
+* Ambiguous cases are tested.
+* Structured intent contract is documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002mf:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:59 PM,12822,LEKA-8,Intentions & Actions
+"Intent Scope, Entities & Constraints",LEKA-386,13200,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:59 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Determine the entities, scope, constraints, and ambiguities that define how an intention must be processed.
+
+h2. User Story
+
+As LEKA, I want to identify exactly what and which constraints the user refers to so that the analysis stays within the intended boundaries.
+
+h2. Scope
+
+* Entity resolution for intentions.
+* Scope detection.
+* Constraint extraction.
+* Temporal boundaries.
+* Ambiguity and missing-information detection.
+
+h2. Acceptance Criteria
+
+* Relevant entities are resolved against the Company Model where possible.
+* The intended scope is represented explicitly.
+* Constraints and temporal boundaries are captured.
+* Missing critical information is identified.
+* Ambiguities can be routed to clarification before analysis proceeds.
+
+h2. Definition of Done
+
+* Representative scoped and constrained intentions are handled correctly.
+* Ambiguous and incomplete requests are tested.
+* Intent scope contract is documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002mn:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:59 PM,12822,LEKA-8,Intentions & Actions
+Context Assembly for Intentions,LEKA-387,13201,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 9:59 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Build the intention-specific context required to analyze a request using the Context Engine and Company Model.
+
+h2. User Story
+
+As LEKA, I want each intention to receive the right context so that analysis is grounded in the customer's actual environment.
+
+h2. Scope
+
+* Context retrieval for an intention.
+* Relevant entity and relationship selection.
+* Technical, business, organizational, and temporal context.
+* Context quality and confidence signals.
+* Evidence and provenance linking.
+
+h2. Acceptance Criteria
+
+* An intention can trigger context assembly using its structured scope.
+* Relevant context is retrieved and ranked.
+* Context includes provenance and quality/confidence metadata.
+* Critical gaps or conflicts are surfaced before analysis.
+* The assembled context can be inspected and reused by downstream capabilities.
+
+h2. Definition of Done
+
+* Representative intentions produce usable context end to end.
+* Context gaps and conflicts are tested.
+* Integration with the Context Engine is documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002mv:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 9:59 PM,12822,LEKA-8,Intentions & Actions
+Intention Processing & Analysis,LEKA-388,13202,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:00 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Execute the analysis required to answer an intention using its assembled context and the appropriate LEKA capabilities.
+
+h2. User Story
+
+As a LEKA user, I want LEKA to analyze my intention in the context of my company so that I receive a useful, evidence-based result.
+
+h2. Scope
+
+* Intention processing pipeline.
+* Capability selection handoff.
+* Analysis execution.
+* Evidence collection.
+* Result generation.
+
+h2. Acceptance Criteria
+
+* An intention can progress from assembled context to analysis execution.
+* Required capabilities receive the relevant context.
+* Evidence used by analysis is collected and linked to sources.
+* Analysis status and failures are visible.
+* A structured result can be produced for the decision interface.
+
+h2. Definition of Done
+
+* Representative intentions execute end to end.
+* Evidence provenance is preserved.
+* Failure and timeout behavior is tested.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002n3:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 10:00 PM,12822,LEKA-8,Intentions & Actions
+"Findings, Evidence & Recommendations",LEKA-389,13203,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:00 PM,16/sept./26 10:27 PM,,,,0,"h2. Objective
+
+Present analysis results as clear findings supported by evidence, impact, risk, confidence, and recommendations.
+
+h2. User Story
+
+As a LEKA user, I want to understand why LEKA reached a conclusion and what it recommends so that I can make an informed decision.
+
+h2. Scope
+
+* Findings and probable causes.
+* Evidence and source references.
+* Impact analysis.
+* Risk and confidence presentation.
+* Recommendations and proposed next steps.
+
+h2. Acceptance Criteria
+
+* Findings are clearly separated from recommendations.
+* Evidence can be inspected from each relevant finding.
+* Impact, risk, and confidence are visible where available.
+* Recommendations are explicitly identified as recommendations rather than facts.
+* Inconclusive results and uncertainty are presented clearly.
+
+h2. Definition of Done
+
+* Representative analysis outputs use the decision interface.
+* Evidence traceability is verified.
+* UI states for uncertainty and incomplete evidence are tested.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002nb:,,,LEKA Sprint 4,,,,{},A faire,16/sept./26 10:00 PM,12822,LEKA-8,Intentions & Actions
+Human Decision & Approval,LEKA-390,13204,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:00 PM,16/sept./26 10:28 PM,,,,0,"h2. Objective
+
+Give users explicit control over decisions before consequential actions are executed.
+
+h2. User Story
+
+As a LEKA user, I want to review, confirm, modify, or reject a recommendation so that I remain in control of consequential decisions.
+
+h2. Scope
+
+* Decision model and state.
+* Approval workflow.
+* Confirm, reject, and modify actions.
+* Approval history.
+* Risk-aware approval requirements.
+
+h2. Acceptance Criteria
+
+* Recommendations requiring approval are clearly identified.
+* A user can approve, reject, or modify a proposed action.
+* Approval decisions are recorded with user, timestamp, and relevant context.
+* Rejected decisions do not execute the associated action.
+* Higher-risk actions can require additional approval according to policy.
+
+h2. Definition of Done
+
+* Representative approval flows work end to end.
+* Decision history is auditable.
+* Permission and policy checks are tested.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002nj:,,,LEKA Sprint 5,,,,{},A faire,16/sept./26 10:00 PM,12822,LEKA-8,Intentions & Actions
+Action Planning & Execution,LEKA-391,13205,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:00 PM,16/sept./26 10:28 PM,,,,0,"h2. Objective
+
+Translate an approved decision into a controlled action plan and execute it against authorized systems.
+
+h2. User Story
+
+As a LEKA user, I want approved actions executed in a controlled and traceable way so that LEKA can move from analysis to outcome.
+
+h2. Scope
+
+* Action model and planning.
+* Pre-execution validation.
+* Authorized execution.
+* Progress and status.
+* Cancellation and failure handling.
+
+h2. Acceptance Criteria
+
+* Approved decisions can generate an action plan.
+* Actions are validated against permissions and policies before execution.
+* Execution progress and status are visible.
+* Failures are handled without silently reporting success.
+* Authorized users can cancel eligible actions.
+* Execution evidence is retained.
+
+h2. Definition of Done
+
+* Representative actions execute end to end.
+* Failure and cancellation scenarios are tested.
+* Execution history is auditable.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002nr:,,,LEKA Sprint 5,,,,{},A faire,16/sept./26 10:00 PM,12822,LEKA-8,Intentions & Actions
+Outcome Verification & Intention History,LEKA-392,13206,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:00 PM,16/sept./26 10:28 PM,,,,0,"h2. Objective
+
+Verify whether an executed action achieved its expected outcome and maintain the complete history of the intention.
+
+h2. User Story
+
+As a LEKA user, I want to know whether the action succeeded and what changed so that I can close the loop and improve future decisions.
+
+h2. Scope
+
+* Expected outcome definition.
+* Outcome verification.
+* Metric-based verification where applicable.
+* Partial and failed outcomes.
+* Context update after action.
+* Intention timeline, history, and filtering.
+
+h2. Acceptance Criteria
+
+* An intention can define expected outcomes before execution where appropriate.
+* Actual outcomes can be checked against expected outcomes.
+* Partial or failed outcomes are explicitly represented.
+* Successful actions can update relevant company context.
+* The complete intention timeline includes analysis, decision, action, and outcome events.
+
+h2. Definition of Done
+
+* Representative outcome scenarios are tested.
+* Context updates are traceable.
+* Intention history is queryable and auditable.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002nz:,,,LEKA Sprint 5,,,,{},A faire,16/sept./26 10:00 PM,12822,LEKA-8,Intentions & Actions
+Capability Architecture & Registry,LEKA-393,13207,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:00 PM,16/sept./26 10:28 PM,,,,0,"h2. Objective
+
+Define the canonical capability model and registry used by LEKA to expose what the platform can do.
+
+h2. User Story
+
+As the LEKA platform, I want capabilities represented consistently so that intentions can be routed to the right executable functionality.
+
+h2. Scope
+
+* Capability model and metadata.
+* Capability registry.
+* Lifecycle and versioning.
+* Permissions and availability.
+* Capability discovery metadata.
+
+h2. Acceptance Criteria
+
+* Capabilities can be registered with defined metadata and contracts.
+* Capability versions and lifecycle states are managed.
+* Availability and permissions can be evaluated.
+* Capabilities are discoverable by downstream routing services.
+
+h2. Definition of Done
+
+* Registry and model documented.
+* Representative capabilities registered end to end.
+* Lifecycle and permission scenarios tested.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002o7:,,,LEKA Sprint 5,,,,{},A faire,16/sept./26 10:00 PM,12823,LEKA-9,"Capabilities/Agents, Skills & Workflows"
+Model Gateway & Model Router,LEKA-394,13208,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:00 PM,16/sept./26 10:28 PM,,,,0,"h2. Objective
+
+Provide an abstraction layer for integrating and routing requests across supported language models without coupling LEKA to a single provider.
+
+h2. User Story
+
+As the LEKA platform, I want interchangeable model providers and routing policies so that capabilities can use the most appropriate model for each task.
+
+h2. Scope
+
+* Model provider registry.
+* Provider configuration.
+* Model capability matching.
+* Routing by quality, cost, latency, and task requirements.
+* Fallback behavior.
+* Usage and configuration tracking.
+
+h2. Acceptance Criteria
+
+* Supported model providers can be registered through a common contract.
+* Requests can be routed according to defined policies.
+* Capability requirements can influence model selection.
+* Provider failures can trigger configured fallbacks.
+* Usage, latency, and cost metrics are recorded where available.
+
+h2. Definition of Done
+
+* At least two model providers can be integrated through the gateway.
+* Representative routing and fallback scenarios are tested.
+* Provider abstraction and routing rules are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002of:,,,LEKA Sprint 5,,,,{},A faire,16/sept./26 10:00 PM,12823,LEKA-9,"Capabilities/Agents, Skills & Workflows"
+Agent Runtime,LEKA-395,13209,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:00 PM,16/sept./26 10:28 PM,,,,0,"h2. Objective
+
+Provide the runtime required to execute LEKA agents with the right context, tools, state, and controls.
+
+h2. User Story
+
+As LEKA, I want agents to execute within a controlled runtime so that complex capabilities can perform work using trusted context and authorized tools.
+
+h2. Scope
+
+* Agent model and registry integration.
+* Context injection.
+* Tool access and permission checks.
+* Execution state and lifecycle.
+* Failure handling and execution history.
+
+h2. Acceptance Criteria
+
+* Registered agents can be executed through a common runtime.
+* Relevant context can be injected into execution.
+* Tool access is authorization-aware.
+* Execution state and errors are observable.
+* Agent execution history is retained.
+
+h2. Definition of Done
+
+* Representative agent executions run end to end.
+* Permission and failure scenarios are tested.
+* Runtime contract is documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002on:,,,LEKA Sprint 5,,,,{},A faire,16/sept./26 10:00 PM,12823,LEKA-9,"Capabilities/Agents, Skills & Workflows"
+Skill Framework,LEKA-396,13210,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:01 PM,16/sept./26 10:28 PM,,,,0,"h2. Objective
+
+Provide a standardized framework for defining and executing reusable Skills used by LEKA capabilities.
+
+h2. User Story
+
+As a capability engineer, I want reusable skills with clear contracts so that agents and workflows can compose reliable operations.
+
+h2. Scope
+
+* Skill model and registry.
+* Skill definitions and metadata.
+* Input/output contracts.
+* Skill execution.
+* Versioning and permissions.
+
+h2. Acceptance Criteria
+
+* Skills can be registered with explicit contracts.
+* Input and output schemas are validated.
+* Skills can be executed through a common runtime.
+* Version and permission controls are applied.
+* Skill execution is traceable.
+
+h2. Definition of Done
+
+* Representative skills execute end to end.
+* Contract validation is tested.
+* Skill lifecycle and permissions are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002ov:,,,LEKA Sprint 5,,,,{},A faire,16/sept./26 10:01 PM,12823,LEKA-9,"Capabilities/Agents, Skills & Workflows"
+Workflow Engine,LEKA-397,13211,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:01 PM,16/sept./26 10:28 PM,,,,0,"h2. Objective
+
+Provide a workflow engine for composing multiple capabilities into controlled multi-step executions.
+
+h2. User Story
+
+As a capability engineer, I want to define workflows with steps, conditions, dependencies, and execution history so that complex tasks can run consistently.
+
+h2. Scope
+
+* Workflow model and builder.
+* Workflow steps and dependencies.
+* Conditions and branching.
+* Execution and failure handling.
+* Versioning and history.
+
+h2. Acceptance Criteria
+
+* Workflows can be defined with ordered steps and dependencies.
+* Conditions can determine subsequent execution paths.
+* Workflow execution state is observable.
+* Failures are handled explicitly and can be retried where appropriate.
+* Workflow versions and history are retained.
+
+h2. Definition of Done
+
+* Representative multi-step workflows execute end to end.
+* Branching and failure cases are tested.
+* Workflow contracts are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002p3:,,,LEKA Sprint 5,,,,{},A faire,16/sept./26 10:01 PM,12823,LEKA-9,"Capabilities/Agents, Skills & Workflows"
+Capability Router,LEKA-398,13212,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:01 PM,16/sept./26 10:28 PM,,,,0,"h2. Objective
+
+Select the most appropriate LEKA capability for an intention using the user's goal, company context, available capabilities, and execution policies.
+
+h2. User Story
+
+As LEKA, I want to route an intention to the right capability so that users can express outcomes without having to choose agents or skills themselves.
+
+h2. Scope
+
+* Intent-to-capability matching.
+* Context-aware matching.
+* Capability ranking.
+* Availability and permission checks.
+* Fallback selection.
+
+h2. Acceptance Criteria
+
+* An intention can be matched to one or more eligible capabilities.
+* Context can influence capability selection.
+* Capabilities are ranked using defined signals.
+* Unauthorized or unavailable capabilities are excluded.
+* A safe fallback or clarification path exists when no suitable capability is found.
+
+h2. Definition of Done
+
+* Representative routing scenarios are tested.
+* Routing decisions are observable and explainable at the capability level.
+* Routing contracts are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002pb:,,,LEKA Sprint 5,,,,{},A faire,16/sept./26 10:01 PM,12823,LEKA-9,"Capabilities/Agents, Skills & Workflows"
+Capability Orchestration,LEKA-399,13213,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:01 PM,16/sept./26 10:28 PM,,,,0,"h2. Objective
+
+Coordinate multiple capabilities when a single intention requires several specialized operations.
+
+h2. User Story
+
+As LEKA, I want multiple capabilities orchestrated coherently so that complex intentions can be processed without requiring the user to manage the execution chain.
+
+h2. Scope
+
+* Multi-capability planning.
+* Capability dependencies.
+* Sequential and parallel execution.
+* Shared context and handoffs.
+* Failure and fallback coordination.
+
+h2. Acceptance Criteria
+
+* A complex intention can invoke multiple eligible capabilities.
+* Capability dependencies determine execution order.
+* Shared context is passed safely between capabilities.
+* Partial failures are represented explicitly.
+* Orchestration history is traceable.
+
+h2. Definition of Done
+
+* Representative multi-capability scenarios work end to end.
+* Dependency and failure cases are tested.
+* Orchestration behavior is documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002pj:,,,LEKA Sprint 5,,,,{},A faire,16/sept./26 10:01 PM,12823,LEKA-9,"Capabilities/Agents, Skills & Workflows"
+Enterprise Agent Library,LEKA-400,13214,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:01 PM,16/sept./26 10:28 PM,,,,0,"h2. Objective
+
+Provide the initial reusable library of enterprise-oriented agents that expose meaningful capabilities through the LEKA runtime.
+
+h2. User Story
+
+As a LEKA user, I want specialized capabilities available behind LEKA so that I can request outcomes without selecting individual agents.
+
+h2. Scope
+
+* Architecture Agent.
+* Code Review Agent.
+* Security Review Agent.
+* Test Agent.
+* Debug Agent.
+* Documentation Agent.
+* Incident Investigation Agent.
+* Infrastructure Analysis Agent.
+* Data Analysis Agent.
+* Release Analysis Agent.
+* Build Fixer Agent where applicable.
+
+h2. Acceptance Criteria
+
+* Each included agent follows the common runtime and capability contracts.
+* Agents receive company context through the approved context injection mechanism.
+* Tool access is governed by permissions and policies.
+* Agent execution, findings, and failures are traceable.
+* Agents can be invoked through the Capability Router without exposing implementation details to end users.
+
+h2. Definition of Done
+
+* Initial agent set is registered and executable.
+* Representative agents are validated against realistic scenarios.
+* Agent contracts and limitations are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002pr:,,,LEKA Sprint 5,,,,{},A faire,16/sept./26 10:01 PM,12823,LEKA-9,"Capabilities/Agents, Skills & Workflows"
+Enterprise Skill Library,LEKA-401,13215,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,Medium,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:01 PM,16/sept./26 10:28 PM,,,,0,"h2. Objective
+
+Provide the initial reusable library of enterprise Skills used by agents and workflows.
+
+h2. User Story
+
+As a capability engineer, I want a curated library of reusable skills so that agents can perform specialized operations consistently.
+
+h2. Scope
+
+* Repository analysis skills.
+* Code review skills.
+* Testing skills.
+* Security skills.
+* Documentation skills.
+* Architecture skills.
+* Incident investigation skills.
+* Infrastructure skills.
+* Data analysis skills.
+* Release and deployment skills.
+
+h2. Acceptance Criteria
+
+* Initial skills are implemented against the common Skill contract.
+* Inputs and outputs are explicitly defined.
+* Skills can be invoked by agents and workflows through approved interfaces.
+* Permissions and execution history are applied consistently.
+* Skills expose limitations and required prerequisites where relevant.
+
+h2. Definition of Done
+
+* Initial skill library is registered and executable.
+* Representative skills are validated in agent/workflow scenarios.
+* Skill catalog and contracts are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002pz:,,,LEKA Sprint 5,,,,{},A faire,16/sept./26 10:01 PM,12823,LEKA-9,"Capabilities/Agents, Skills & Workflows"
+Authorization & Permission Model,LEKA-402,13216,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:01 PM,16/sept./26 10:29 PM,,,,0,"h2. Objective
+
+Define the authorization model that controls who can access data, entities, capabilities, and actions in LEKA.
+
+h2. User Story
+
+As a workspace administrator, I want permissions enforced consistently so that users can only access and perform what they are authorized to do.
+
+h2. Scope
+
+* Authorization architecture.
+* Resource and entity permissions.
+* Action and capability permissions.
+* Permission evaluation.
+* Integration with workspace and identity context.
+
+h2. Acceptance Criteria
+
+* Permissions can be defined for relevant LEKA resources.
+* Entity-level access can be enforced where required.
+* Action and capability permissions are evaluated before execution.
+* Unauthorized access is denied consistently.
+* Permission decisions are traceable.
+
+h2. Definition of Done
+
+* Representative authorization scenarios are tested.
+* Cross-workspace access is prevented.
+* Permission rules are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002q7:,,,LEKA Sprint 6,,,,{},A faire,16/sept./26 10:01 PM,12824,LEKA-10,"Security, Governance & Observability"
+"Roles, Policies & Enforcement",LEKA-403,13217,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:02 PM,16/sept./26 10:29 PM,,,,0,"h2. Objective
+
+Provide role and policy management that governs access and behavior across LEKA.
+
+h2. User Story
+
+As an administrator, I want roles and policies applied consistently so that organizational rules are enforced across the product.
+
+h2. Scope
+
+* Role model and management.
+* Policy model and policy management.
+* Policy evaluation and enforcement.
+* Permission inheritance and precedence.
+* Policy change history.
+
+h2. Acceptance Criteria
+
+* Roles can be created and assigned according to workspace rules.
+* Policies can be defined, evaluated, and enforced.
+* Conflicting policies have deterministic handling.
+* Policy changes are traceable.
+* Enforcement applies to relevant product and execution paths.
+
+h2. Definition of Done
+
+* Representative role/policy scenarios are tested.
+* Enforcement is integrated with authorization.
+* Policy behavior is documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002qf:,,,LEKA Sprint 6,,,,{},A faire,16/sept./26 10:02 PM,12824,LEKA-10,"Security, Governance & Observability"
+Human Governance & Approval Policies,LEKA-404,13218,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:02 PM,16/sept./26 10:29 PM,,,,0,"h2. Objective
+
+Define governance controls for consequential LEKA decisions and actions, including risk classification and human approval requirements.
+
+h2. User Story
+
+As a workspace administrator, I want governance policies to determine when human approval is required so that higher-risk actions remain under explicit human control.
+
+h2. Scope
+
+* Action risk classification.
+* Approval requirements and policies.
+* Escalation and delegation.
+* Governance exceptions.
+* Approval policy evaluation.
+
+h2. Acceptance Criteria
+
+* Actions can be classified according to defined risk levels.
+* Approval requirements can be configured by policy.
+* Higher-risk actions can require appropriate approval or escalation.
+* Delegation and exceptions are controlled and auditable.
+* Policy decisions are available to the action execution layer.
+
+h2. Definition of Done
+
+* Representative risk and approval scenarios are tested.
+* Governance rules are documented.
+* Integration with intention/action workflows is verified.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002qn:,,,LEKA Sprint 6,,,,{},A faire,16/sept./26 10:02 PM,12824,LEKA-10,"Security, Governance & Observability"
+"Secrets, Credentials & Data Security",LEKA-405,13219,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:02 PM,16/sept./26 10:29 PM,,,,0,"h2. Objective
+
+Protect secrets, credentials, tenant data, and sensitive information throughout LEKA.
+
+h2. User Story
+
+As a workspace administrator, I want sensitive data and credentials protected consistently so that LEKA can operate securely across enterprise environments.
+
+h2. Scope
+
+* Secret and credential storage/access.
+* Encryption in transit and at rest.
+* Tenant data isolation.
+* Sensitive data detection/classification.
+* Access controls and retention enforcement.
+
+h2. Acceptance Criteria
+
+* Secrets and credentials are stored and accessed through controlled mechanisms.
+* Sensitive data is protected in transit and at rest according to platform requirements.
+* Tenant isolation is enforced.
+* Sensitive data access is permission-controlled and auditable.
+* Retention rules can be applied to protected data.
+
+h2. Definition of Done
+
+* Security controls are tested.
+* Sensitive data paths are documented.
+* No uncontrolled secret or sensitive-data exposure remains in supported flows.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002qv:,,,LEKA Sprint 6,,,,{},A faire,16/sept./26 10:02 PM,12824,LEKA-10,"Security, Governance & Observability"
+AI Governance & Execution Controls,LEKA-406,13220,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:02 PM,16/sept./26 10:29 PM,,,,0,"h2. Objective
+
+Govern model access and AI-driven execution so that LEKA uses models and AI capabilities within explicit enterprise controls.
+
+h2. User Story
+
+As a workspace administrator, I want AI usage and execution constrained by policy so that model outputs and AI actions remain controlled and auditable.
+
+h2. Scope
+
+* Model access policies.
+* Usage controls and limits.
+* AI output validation.
+* AI risk controls.
+* Execution policies.
+* AI auditability.
+
+h2. Acceptance Criteria
+
+* Model access can be restricted by workspace, role, capability, or policy.
+* Usage controls can limit or govern model execution where required.
+* AI outputs can pass through configured validation controls.
+* High-risk AI executions can require additional controls or approval.
+* AI execution metadata is retained for audit.
+
+h2. Definition of Done
+
+* Representative AI governance scenarios are tested.
+* Control points are integrated with model and capability runtimes.
+* AI governance rules are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002r3:,,,LEKA Sprint 6,,,,{},A faire,16/sept./26 10:02 PM,12824,LEKA-10,"Security, Governance & Observability"
+Audit & Traceability,LEKA-407,13221,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:02 PM,16/sept./26 10:29 PM,,,,0,"h2. Objective
+
+Provide a complete audit trail for important user, data, decision, action, and AI execution events.
+
+h2. User Story
+
+As a workspace administrator, I want LEKA activity to be traceable so that important operations can be investigated and governed.
+
+h2. Scope
+
+* Audit event model and collection.
+* User activity audit.
+* Data access audit.
+* Decision and action audit.
+* AI execution audit.
+* Search and retention.
+
+h2. Acceptance Criteria
+
+* Relevant security and product events generate audit records.
+* Audit records include actor, timestamp, action, target, outcome, and relevant context.
+* Authorized users can search and inspect audit history.
+* Audit retention follows configured policies.
+* Audit records cannot be modified through normal product flows.
+
+h2. Definition of Done
+
+* Representative audit scenarios are verified end to end.
+* Audit records are searchable.
+* Retention and access rules are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002rb:,,,LEKA Sprint 6,,,,{},A faire,16/sept./26 10:02 PM,12824,LEKA-10,"Security, Governance & Observability"
+"Observability, Reliability & Disaster Recovery",LEKA-408,13222,Story,À faire,LEKA,LEKA,software,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,High,,,,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,16/sept./26 10:02 PM,16/sept./26 10:29 PM,,,,0,"h2. Objective
+
+Provide the operational visibility and resilience needed to run LEKA reliably at enterprise scale.
+
+h2. User Story
+
+As an operator, I want LEKA's infrastructure, connectors, processing, AI executions, and actions to be observable and recoverable so that failures can be detected and handled safely.
+
+h2. Scope
+
+* Application and infrastructure metrics.
+* Connector, processing, AI, and action execution metrics.
+* Health checks and alerting.
+* Failure detection, retry, circuit breakers, and service degradation.
+* Backup, restore, and disaster recovery.
+
+h2. Acceptance Criteria
+
+* Core LEKA components expose health and operational metrics.
+* Important failure conditions generate actionable alerts.
+* Retry and degradation policies are applied consistently where appropriate.
+* Backups can be restored through a documented procedure.
+* Recovery expectations and critical dependencies are documented.
+
+h2. Definition of Done
+
+* Representative failure scenarios are tested.
+* Monitoring and alerting are operational.
+* Backup/restore is validated.
+* Operational runbooks are documented.",,Karim El Halimi,712020:9684cdda-62d3-481e-8297-46900ce8b6fb,,,,,,,,,0|i002rj:,,,LEKA Sprint 6,,,,{},A faire,16/sept./26 10:02 PM,12824,LEKA-10,"Security, Governance & Observability"
