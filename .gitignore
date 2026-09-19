@@ -1,0 +1,45 @@
+# ─── Secrets ───────────────────────────────────────────────────────────────
+# Architecture rule 12: never a secret in Git.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ─── Python / api ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+
+# ─── Node / web ────────────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.pnpm-store/
+npm-debug.log*
+yarn-error.log*
+
+# NOTE: web/lib/api-types.ts is generated from the OpenAPI schema but IS
+# committed — CI type-checks the web app without a running API. It is never
+# edited by hand; regenerate it with `npm run gen:api`.
+
+# ─── Docker ────────────────────────────────────────────────────────────────
+.docker-data/
+
+# ─── OS / editors ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
