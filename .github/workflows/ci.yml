@@ -1,0 +1,114 @@
+name: CI
+
+# Runs on every pull request. main is protected by review, not by this file —
+# but nothing merges with a red pipeline.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to a branch cancels the run still going for the previous one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: api — lint, types, migrations, tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Same image as docker-compose.yml. CI must not discover that pgvector
+        # is missing on a Postgres the developers never run.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: leka
+          POSTGRES_PASSWORD: leka
+          POSTGRES_DB: leka_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U leka -d leka_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+
+    env:
+      LEKA_DATABASE_URL: postgresql+asyncpg://leka:leka@127.0.0.1:5432/leka_test
+      LEKA_REDIS_URL: redis://127.0.0.1:6379/0
+      LEKA_SECRET_KEY: ci-only-not-a-real-secret
+      LEKA_ENVIRONMENT: ci
+
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Ruff — lint
+        run: ruff check .
+
+      - name: Ruff — format
+        run: ruff format --check .
+
+      - name: mypy
+        run: mypy leka/
+
+      - name: Alembic — migrations apply to an empty database
+        run: alembic upgrade head
+
+      - name: Alembic — models and migrations agree
+        # Catches the classic mistake: a column changed on the model with no
+        # migration written for it.
+        run: alembic check
+
+      - name: pytest
+        run: pytest --cov-fail-under=60
+
+  web:
+    name: web — lint, types, build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build

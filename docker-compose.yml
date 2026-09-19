@@ -1,0 +1,67 @@
+# LEKA local development infrastructure.
+#
+# This file provides BACKING SERVICES ONLY. The API and the web app run on the
+# host, so that reloads are instant and debuggers attach normally. See
+# docs/setup.md.
+#
+#   docker compose up -d
+#
+# Every value below has a working default: `docker compose up` succeeds on a
+# clean machine with no .env file. Override any of them in .env when a port is
+# already taken locally.
+
+name: leka
+
+services:
+  postgres:
+    # pgvector's own image, built on the official postgres:16. The `vector`
+    # extension ships with the image but is NOT enabled in the database —
+    # Alembic migration 001 runs CREATE EXTENSION, so a database created by
+    # any other means (RDS, Cloud SQL) goes through the exact same path.
+    image: pgvector/pgvector:pg16
+    container_name: leka-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-leka}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leka}
+      POSTGRES_DB: ${POSTGRES_DB:-leka}
+      # Fail fast on a corrupted volume instead of starting degraded.
+      POSTGRES_INITDB_ARGS: --data-checksums
+    ports:
+      # Bound to the loopback interface on purpose: this database has a
+      # throwaway password and must not be reachable from the local network.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # `docker compose up` is only "enough" if the API can tell when Postgres
+      # is actually accepting connections — the process is up several seconds
+      # before that. /api/v1/health and CI both rely on this.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-leka} -d ${POSTGRES_DB:-leka} -h 127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    # Queue backend for RQ (background loop) and short-lived caches.
+    image: redis:7-alpine
+    container_name: leka-redis
+    # appendonly: a queue that loses jobs on restart wastes a developer's
+    # afternoon looking for a bug that is not in the code.
+    command: ["redis-server", "--appendonly", "yes", "--loglevel", "warning"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
