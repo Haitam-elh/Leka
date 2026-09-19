@@ -1,0 +1,14 @@
+#!/bin/sh
+# Refuses any direct push to main. Enable once per clone:
+#     git config core.hooksPath .githooks
+# Emergency bypass: git push --no-verify
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+    case "$remote_ref" in
+        refs/heads/main)
+            echo "✗ Direct push to main is refused."
+            echo "  Open a pull request:  git push -u origin \$(git branch --show-current)"
+            exit 1
+            ;;
+    esac
+done
+exit 0
