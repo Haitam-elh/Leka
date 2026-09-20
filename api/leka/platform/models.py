@@ -28,36 +28,6 @@ def _values(enum_class: type[enum.StrEnum]) -> list[str]:
     return [member.value for member in enum_class]
 
 
-class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """A person. MINIMAL STUB — LEKA-330 owns this table.
-
-    ┌────────────────────────────────────────────────────────────────────┐
-    │ LEKA-330: replace this class with the real User model in           │
-    │ leka/identity/models.py, and delete it from here. SQLAlchemy will  │
-    │ tell you loudly if both exist ("Table 'users' is already defined")│
-    │ — that error is the handover, not a problem.                       │
-    └────────────────────────────────────────────────────────────────────┘
-
-    It exists only so that the foreign keys from memberships and invitations
-    resolve. Without a users table in the metadata, `alembic check` sees two
-    constraints in the database with no counterpart and proposes dropping
-    them on every run — which would quietly remove what stops a membership
-    pointing at a deleted person.
-
-    Four columns, exactly what migration 001 created. No password_hash, no
-    session, no MFA: authentication is LEKA-330's, and adding a column here
-    would be writing that ticket.
-
-    Deliberately NOT workspace-scoped — one of the two exceptions to
-    architecture rule 2. A consultant working for two customers signs in
-    once; which workspaces they may enter is recorded in Membership below.
-    """
-
-    __tablename__ = "users"
-
-    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
-
-
 class Role(enum.StrEnum):
     """What a member may do in a workspace.
 

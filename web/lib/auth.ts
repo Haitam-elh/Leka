@@ -1,0 +1,66 @@
+/**
+ * The authentication calls, in one place.
+ *
+ * Thin wrappers over apiFetch. They exist so that a screen never builds a
+ * path by hand, and so that a route rename is one edit rather than five.
+ */
+
+import { apiFetch } from "@/lib/api";
+
+export interface WorkspaceMembership {
+  id: string;
+  name: string;
+  slug: string;
+  role: string;
+}
+
+export interface CurrentUser {
+  user: {
+    id: string;
+    email: string;
+    email_verified_at: string | null;
+    last_login_at: string | null;
+  };
+  workspaces: WorkspaceMembership[];
+  active_workspace_id: string | null;
+}
+
+export const auth = {
+  register: (email: string, password: string) =>
+    apiFetch<{ detail: string }>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
+  verify: (token: string) =>
+    apiFetch<unknown>(`/auth/verify/${encodeURIComponent(token)}`, { method: "POST" }),
+
+  resendVerification: (email: string) =>
+    apiFetch<{ detail: string }>("/auth/verify/resend", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  login: (email: string, password: string) =>
+    apiFetch<CurrentUser>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
+  logout: () => apiFetch<void>("/auth/logout", { method: "POST" }),
+
+  me: (init: { redirectOn401?: boolean } = {}) =>
+    apiFetch<CurrentUser>("/auth/me", init),
+
+  forgotPassword: (email: string) =>
+    apiFetch<{ detail: string }>("/auth/password/forgot", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (token: string, password: string) =>
+    apiFetch<void>("/auth/password/reset", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    }),
+};

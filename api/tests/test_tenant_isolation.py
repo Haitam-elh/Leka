@@ -42,7 +42,18 @@ pytestmark = pytest.mark.integration
 #   workspaces  — it IS the tenant
 #   users       — a person may belong to several workspaces; membership is
 #                 the authority (see migration 001)
-TENANT_FREE_TABLES = frozenset({"workspaces", "users", "alembic_version"})
+#   workspaces     it IS the tenant
+#   users          a person may belong to several workspaces; membership is
+#                  the authority (migration 001)
+#   sessions       a session belongs to a person, not to a tenant. It CARRIES
+#                  an active workspace, which is a different thing: where this
+#                  browser currently is, changed by switching.
+#   email_tokens   belong to a person, and exist before any workspace does —
+#                  a verification link is sent before the account has entered
+#                  anywhere.
+TENANT_FREE_TABLES = frozenset(
+    {"workspaces", "users", "sessions", "email_tokens", "alembic_version"}
+)
 
 PUBLIC_PATHS = frozenset({"/api/v1/health"})
 

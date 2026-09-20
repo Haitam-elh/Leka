@@ -1,1 +1,188 @@
-"""LEKA-330."""
+"""Types the identity module exposes over its boundary.
+
+Two things to notice, both security rather than style:
+
+No response model anywhere carries a password, a hash, or a token. The
+session token exists in exactly one place outside this process — the cookie
+— and nothing serialises it.
+
+Error codes are machine-readable so the interface can react, while the
+messages stay deliberately uninformative to anyone probing. "Invalid email or
+password" is the same sentence whether the address exists or not.
+"""
+
+from __future__ import annotations
+
+import enum
+import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from leka.core.security import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH
+
+
+class AuthErrorCode(enum.StrEnum):
+    """What the interface needs to tell apart.
+
+    A human-readable sentence is not enough for a UI that must show a
+    "resend verification" button in one case and a countdown in another.
+    These codes carry no information an attacker lacks: they are returned
+    only for states the caller can already observe.
+    """
+
+    # The noqa markers below silence bandit's S105: it sees "TOKEN" and
+    # "PASSWORD" in a name assigned a string literal and assumes a hardcoded
+    # secret. These are error codes the API returns to a browser.
+    INVALID_CREDENTIALS = "invalid_credentials"
+    ACCOUNT_UNVERIFIED = "account_unverified"
+    RATE_LIMITED = "rate_limited"
+    TOKEN_INVALID = "token_invalid"  # noqa: S105
+    TOKEN_EXPIRED = "token_expired"  # noqa: S105
+    PASSWORD_TOO_SHORT = "password_too_short"  # noqa: S105
+    PASSWORD_BREACHED = "password_breached"  # noqa: S105
+    NOT_AUTHENTICATED = "not_authenticated"
+    SESSION_EXPIRED = "session_expired"
+
+
+class AuthErrorResponse(BaseModel):
+    """The body of every 4xx this module returns.
+
+    A superset of FastAPI's default {"detail": ...}, so it does not change
+    the shape LEKA-331's routes already return.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    detail: str
+    code: AuthErrorCode
+
+
+def _normalise_email(value: str) -> str:
+    """Lower-case and trim.
+
+    Without this, Nora@acme.com and nora@acme.com become two accounts, and
+    the second person to register finds the address mysteriously taken.
+    """
+    candidate = value.strip().lower()
+    local, separator, domain = candidate.partition("@")
+    if not separator or not local or "." not in domain or domain.startswith("."):
+        msg = f"{value!r} is not an email address"
+        raise ValueError(msg)
+    return candidate
+
+
+class _EmailField(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, value: str) -> str:
+        return _normalise_email(value)
+
+
+class _PasswordField(BaseModel):
+    """Length only, per NIST SP 800-63B.
+
+    No composition rules: demanding an uppercase and a digit produces
+    Password1! and nothing stronger. The maximum exists only so that nobody
+    can make us hash a megabyte, and we never truncate below it.
+    """
+
+    password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
+
+
+class RegisterRequest(_EmailField, _PasswordField):
+    pass
+
+
+class LoginRequest(_EmailField):
+    # Not length-validated: a wrong password of any length must be rejected
+    # by the same path with the same message, never by a 422 that tells the
+    # caller their guess was the wrong shape.
+    password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+
+
+class ForgotPasswordRequest(_EmailField):
+    pass
+
+
+class ResetPasswordRequest(_PasswordField):
+    token: str = Field(min_length=20, max_length=256)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+    new_password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
+
+
+class UserRead(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    email: str
+    email_verified_at: datetime | None
+    last_login_at: datetime | None
+
+
+class SessionRead(BaseModel):
+    """A session as its owner sees it, on the "your devices" screen.
+
+    No token, not even hashed. Enough to recognise a device and revoke it,
+    nothing that helps anyone impersonate it.
+    """
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    created_at: datetime
+    last_seen_at: datetime
+    expires_at: datetime
+    user_agent: str | None
+    ip_prefix: str | None
+    is_current: bool = False
+
+
+class WorkspaceMembershipRead(BaseModel):
+    """A workspace this person may enter, and as what."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    role: str
+
+
+class MeResponse(BaseModel):
+    """Everything the interface needs after signing in.
+
+    One call: who I am, where I may go, and where I currently am. Three
+    round-trips for that would show as a flicker on every page load.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    user: UserRead
+    workspaces: list[WorkspaceMembershipRead]
+    active_workspace_id: uuid.UUID | None
+
+
+class RegistrationAccepted(BaseModel):
+    """The answer to registering, whether or not the address was free.
+
+    Identical in both cases on purpose: a different response would turn the
+    registration form into a way to ask "does this person have an account?".
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    detail: str = "If that address can be registered, a verification email is on its way."
+
+
+class RecoveryAccepted(BaseModel):
+    """The answer to a forgotten-password request. Always the same."""
+
+    model_config = ConfigDict(frozen=True)
+
+    detail: str = "If an account exists for that address, a reset link is on its way."

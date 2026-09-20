@@ -28,12 +28,18 @@ from typing import Any
 from sqlalchemy import delete, select
 
 from leka.connectors import Source, SourceKind, SourceStatus
+from leka.core.security import hash_password
 from leka.db import session_factory, system_scope
+from leka.identity import User as Account
 from leka.knowledge import Entity, EntityType, Relationship, RelationshipType
-from leka.platform import Workspace
+from leka.platform import Membership, Role, Workspace
 
 WORKSPACE_SLUG = "acme"
 WORKSPACE_NAME = "Acme Corp"
+
+# The demo login. Local only — see the note where the account is created.
+DEMO_EMAIL = "nora@acme.example"
+DEMO_PASSWORD = "leka-demo-password"  # noqa: S105
 
 NOW = datetime.now(UTC)
 
@@ -57,8 +63,13 @@ SOURCES: tuple[tuple[SourceKind, str, SourceStatus], ...] = (
 
 
 async def _reset(session: Any) -> None:
-    """Remove the demo workspace. Everything else cascades from it."""
+    """Remove the demo workspace and its account.
+
+    Everything else cascades from the workspace; the account is separate
+    because a person is not owned by a tenant.
+    """
     await session.execute(delete(Workspace).where(Workspace.slug == WORKSPACE_SLUG))
+    await session.execute(delete(Account).where(Account.email == DEMO_EMAIL))
     await session.commit()
 
 
@@ -80,6 +91,23 @@ async def _build_demo_workspace() -> None:
 
         workspace = Workspace(name=WORKSPACE_NAME, slug=WORKSPACE_SLUG)
         session.add(workspace)
+        await session.flush()
+
+        # A sign-in-able account, already verified. Without one the demo data
+        # exists and nobody can look at it: since LEKA-330 every screen is
+        # behind authentication, and a seed you cannot open is half a seed.
+        #
+        # The password is in this file and in docs/setup.md. That is fine and
+        # deliberate — this account only ever exists in a developer's local
+        # database, next to a workspace called Acme Corp.
+        account = Account(
+            email=DEMO_EMAIL,
+            password_hash=hash_password(DEMO_PASSWORD),
+            email_verified_at=NOW,
+        )
+        session.add(account)
+        await session.flush()
+        session.add(Membership(workspace_id=workspace.id, user_id=account.id, role=Role.OWNER))
         await session.flush()
 
         sources: dict[str, Source] = {}
@@ -319,6 +347,7 @@ async def _build_demo_workspace() -> None:
     print(f"Seeded workspace {WORKSPACE_NAME!r} ({WORKSPACE_SLUG})")
     for label, count in counts.items():
         print(f"  {count:3} {label}")
+    print(f"\nSign in at /login with {DEMO_EMAIL} / {DEMO_PASSWORD}")
     print("\nThe story it tells: payment-api v2.8.4 shipped 26h ago, p99 went")
     print("from 180ms to 2.1s, and auth-service turns out to share the database.")
 

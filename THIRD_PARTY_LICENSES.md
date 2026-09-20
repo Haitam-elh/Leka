@@ -9,6 +9,20 @@ additionally requires that modified files carry a notice saying they were
 changed. We cannot meet either requirement retroactively, once nobody
 remembers where a file came from.
 
+## What belongs here, and what does not
+
+**Here**: code, content or a skill copied into this repository — a vendored
+file, an adapted agent, a snippet lifted from a blog post. Anything a reader
+of our source would mistake for ours.
+
+**Not here**: packages installed by a manifest. `api/pyproject.toml` and
+`web/package.json` already name every dependency and its version, and the
+licence of each is resolvable from that. Duplicating fifteen entries by hand
+would give us a second list that drifts from the first, and a drifting
+licence list is worse than none.
+
+The distinction is whether the code lives in our tree or in a lockfile.
+
 ## The rule
 
 **Any pull request that imports third-party code or a skill adds its row

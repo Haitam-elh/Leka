@@ -145,7 +145,7 @@ which variables are missing. That is deliberate — see
 Check it is alive:
 
 ```bash
-curl http://127.0.0.1:8000/api/v1/health
+curl http://localhost:8000/api/v1/health
 ```
 
 ```json
@@ -155,7 +155,7 @@ curl http://127.0.0.1:8000/api/v1/health
 `"status": "degraded"` with a 503 means the API is running but a backing
 service is not — the JSON names which one.
 
-Interactive documentation: <http://127.0.0.1:8000/api/v1/docs>
+Interactive documentation: <http://localhost:8000/api/v1/docs>
 
 ---
 
@@ -171,6 +171,16 @@ This recreates the **Acme Corp** workspace — three services, a production
 database, twelve connected sources, three people, and a latency incident that
 followed a deployment. It is what lets the frontend be built before a single
 real connector exists.
+
+It also creates an account you can sign in with, already verified:
+
+```
+nora@acme.example / leka-demo-password
+```
+
+Without one the demo data would exist and nobody could look at it — every
+screen is behind authentication. This account only ever exists in a local
+database, next to a workspace called Acme Corp.
 
 Re-running it rebuilds the workspace from scratch, so it is safe to run as
 often as you like. It touches nothing else in your database.
@@ -188,8 +198,27 @@ npm run gen:api     # regenerates lib/api-types.ts from the running API
 npm run dev
 ```
 
-<http://localhost:3000> — an intentionally empty page. The application shell
-is LEKA-330.
+To drive the whole thing in a real browser — which is the only way to check
+cookie behaviour, since those rules are enforced by the browser and by
+nothing else:
+
+```bash
+npx playwright install chromium   # once
+npm run e2e
+```
+
+<http://localhost:3000> — you will be sent to the sign-in page. Use the demo
+account from step 4b, or create one: with no email provider configured, the
+confirmation link is printed in the API's log.
+
+The application shell — sidebar, header, workspace switcher — is LEKA-337 and
+does not exist yet, so signing in lands on a deliberately thin page.
+
+**Note the URL the frontend calls**: `http://localhost:8000`, not
+`http://127.0.0.1:8000`. A browser treats those as different *sites*, so a
+SameSite=Lax session cookie set by one is never sent to the other — sign-in
+would appear to work and every request after it would be anonymous. See
+[adr/009-cookie-strategy.md](adr/009-cookie-strategy.md).
 
 `npm run gen:api` needs the API up: the TypeScript types are generated from
 its OpenAPI schema, never written by hand. Re-run it whenever a backend
@@ -210,10 +239,24 @@ ruff check scripts/ && ruff format --check scripts/
 
 # web/
 npm run lint && npm run typecheck && npm run build
+
+# web/ — the browser journey. Needs the API's virtualenv and a running
+# database; it starts both servers itself.
+npm run e2e
 ```
 
 `alembic check` is the one people forget: it fails when a model was changed
 without a migration to match.
+
+**The tests use their own database.** `pytest` redirects itself to
+`<your database>_test`, creating and migrating it on the first run. It has
+to: the suite deletes every row in `users` and `workspaces` between cases,
+and it used to do that in the development database — which silently erased
+the demo data and showed up as "I cannot sign in any more". Nothing you run
+in `api/tests` touches what you are working with.
+
+The browser tests are different on purpose: `npm run e2e` drives the real
+application against the development database, and re-seeds it first.
 
 Conventions for branches, commits and pull requests are in
 [conventions.md](conventions.md).

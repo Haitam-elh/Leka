@@ -29,6 +29,8 @@ dependencies = [
     "structlog>=24.4.0",
     # Credential encryption at rest (Fernet) — see docs/adr/005-credential-storage.md
     "cryptography>=43.0.0",
+    # Password hashing (argon2id) — see docs/adr/008-opaque-sessions.md
+    "argon2-cffi>=23.1.0",
     # Agent front matter
     "pyyaml>=6.0.2",
 ]
@@ -87,6 +89,9 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Migrations are generated, and Alembic's template shadows builtins.
 "alembic/**" = ["N999", "A002", "E501"]
+# E402: conftest redirects LEKA_DATABASE_URL before importing leka, which
+# necessarily happens after a statement. The reason is documented there.
+"tests/conftest.py" = ["S105", "S106", "E402"]
 "tests/**" = ["S105", "S106"]
 # Developer scripts talk to a terminal; that is what they are for.
 # The glob is path-independent so it holds however ruff is invoked.
@@ -115,7 +120,7 @@ module = ["alembic.*"]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["rq.*", "pgvector.*"]
+module = ["rq.*", "pgvector.*", "asyncpg.*"]
 ignore_missing_imports = true
 
 # ─────────────────────────────────────────────────────────────────────────────

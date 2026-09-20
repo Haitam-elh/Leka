@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 # imported through their __init__.py, never through their internals
 # (architecture rule 1).
 import leka.connectors
+import leka.identity
 import leka.knowledge
 import leka.platform  # noqa: F401
 from alembic import context
