@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "gen:api": "openapi-typescript http://localhost:8000/api/v1/openapi.json -o lib/api-types.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "lock": "docker run --rm --platform linux/amd64 -v \"$PWD\":/app -w /app node:22 npm install --no-audit --no-fund"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
