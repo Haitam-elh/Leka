@@ -13,7 +13,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn, SecretStr, ValidationError, field_validator
+from pydantic import (
+    Field,
+    PostgresDsn,
+    RedisDsn,
+    SecretStr,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Repository root: api/leka/core/config.py -> api/leka/core -> api/leka -> api -> .
@@ -87,6 +95,55 @@ class Settings(BaseSettings):
     # Where the agent markdown files live. Content, not code — see agents/README.md.
     agents_dir: Path = REPO_ROOT / "agents"
 
+    # ── Authentication (LEKA-330) ───────────────────────────────────────────
+
+    # Two limits, not one. A session dies at the absolute maximum whatever
+    # happens, and at the idle timeout if unused. Both matter: the first
+    # bounds a stolen cookie's usefulness, the second closes the laptop
+    # someone left in a cafe.
+    session_absolute_lifetime_days: int = Field(default=30, ge=1, le=365)
+    session_idle_lifetime_days: int = Field(default=7, ge=1, le=90)
+
+    verification_token_lifetime_hours: int = Field(default=24, ge=1, le=168)
+    # Deliberately short. A reset link sits in an inbox, which is the least
+    # trustworthy place a credential can wait.
+    reset_token_lifetime_hours: int = Field(default=1, ge=1, le=24)
+
+    session_cookie_name: str = "leka_session"
+    # Sent over HTTPS only. False is for local development and nothing else —
+    # the startup check below refuses it in production.
+    session_cookie_secure: bool = True
+    # "lax" gives CSRF protection for free, because every mutation we serve
+    # is POST, PATCH or DELETE. "none" gives that up and is only needed when
+    # the frontend and the API do not share a parent domain. See
+    # docs/adr/009-cookie-strategy.md.
+    session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+
+    # ── Email delivery ──────────────────────────────────────────────────────
+    # With no API key the console sender is used: messages go to the log.
+    # That is what makes the verification and recovery flows testable without
+    # an account anywhere.
+    email_from: str = "LEKA <no-reply@leka.example>"
+
+    # SMTP, for a mailbox we already pay for. Preferred over an API provider
+    # when both are configured: one fewer account, one fewer bill.
+    #
+    # OVH: ssl0.ovh.net, port 465, SSL/TLS, username = the full address.
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=465, ge=1, le=65535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    # True for port 465 (implicit TLS), False for 587 (STARTTLS).
+    smtp_use_ssl: bool = True
+
+    resend_api_key: SecretStr | None = None
+
+    # Check new passwords against known breaches via HaveIBeenPwned, using
+    # k-anonymity — only the first five characters of the hash are sent, and
+    # the password never leaves this process. Off by default: it is a network
+    # call, and tests must not depend on one.
+    check_passwords_against_breaches: bool = False
+
     # ── Model access. Consumed by leka.capabilities and nowhere else
     # (architecture rule 7). Both keys are optional: the platform boots and
     # serves without a model configured.
@@ -144,24 +201,76 @@ class Settings(BaseSettings):
                 raise ValueError(msg) from exc
         return value
 
-    @field_validator("anthropic_api_key", "mistral_api_key", mode="before")
+    @field_validator(
+        "anthropic_api_key",
+        "mistral_api_key",
+        "resend_api_key",
+        "smtp_password",
+        "smtp_host",
+        "smtp_username",
+        mode="before",
+    )
     @classmethod
     def _empty_key_is_no_key(cls, value: object) -> object:
-        """An empty string is not a credential.
+        """An empty string is not a value.
 
-        .env.example ships these commented-in but blank, so a copied .env
-        yields "" rather than an absent variable. Without this, a key nobody
+        Applies to credentials and to the SMTP connection details alike: a
+        blank LEKA_SMTP_HOST must read as "no SMTP configured", not as a host
+        called "". Otherwise the sender selection picks SMTP and every email
+        fails against an empty address.
+
+        .env.example ships these present but blank, so a copied .env yields
+        "" rather than an absent variable. Without this, a setting nobody
         filled in reads as configured, and the failure moves from startup to
-        the first model call — which is the failure mode this whole file
-        exists to prevent.
+        the first time it is used — the failure mode this whole file exists
+        to prevent.
         """
         if isinstance(value, str) and not value.strip():
             return None
         return value
 
+    @model_validator(mode="after")
+    def _refuse_unsafe_cookies_in_production(self) -> Settings:
+        """A cookie misconfiguration does not fail loudly on its own.
+
+        It works perfectly in every test and quietly stops protecting anyone
+        in production, which is why this is checked at startup rather than
+        left to a code review.
+        """
+        if self.environment != "production":
+            return self
+
+        if not self.session_cookie_secure:
+            msg = (
+                "LEKA_SESSION_COOKIE_SECURE=false in production: the session "
+                "cookie would travel over plain HTTP."
+            )
+            raise ValueError(msg)
+
+        if self.session_cookie_samesite == "none":
+            msg = (
+                "LEKA_SESSION_COOKIE_SAMESITE=none in production. This gives up "
+                "the CSRF protection SameSite=Lax provides for free, and is only "
+                "needed when the frontend and the API do not share a parent "
+                "domain. Put them under one (app.leka.xx and api.leka.xx) and "
+                "use lax. If you genuinely must use none, remove this check "
+                "deliberately and read docs/adr/009-cookie-strategy.md first."
+            )
+            raise ValueError(msg)
+
+        return self
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def smtp_configured(self) -> bool:
+        return self.smtp_host is not None and self.smtp_password is not None
+
+    @property
+    def sends_real_email(self) -> bool:
+        return self.smtp_configured or self.resend_api_key is not None
 
     @property
     def llm_api_key(self) -> SecretStr | None:

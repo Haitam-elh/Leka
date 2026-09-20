@@ -178,7 +178,13 @@ ruff check . && ruff format --check . && mypy leka/ && alembic check && pytest
 
 # web/
 npm run lint && npm run typecheck && npm run build
+npm run e2e
 ```
+
+`npm run e2e` drives a real browser. It is the only thing that can check
+cookie behaviour — `Secure`, `SameSite`, and what counts as "the same site"
+are enforced by the browser and by nothing else. Three of the defects found
+in LEKA-330 compiled cleanly and passed every other check.
 
 `alembic check` is the one people forget: it fails when a model changed
 without a migration to match.

@@ -19,6 +19,8 @@ from leka.api import api_router
 from leka.core.config import settings
 from leka.core.logging import configure_logging
 from leka.db import engine
+from leka.identity import configure_identity
+from leka.identity.csrf import csrf_middleware
 
 logger = structlog.get_logger(__name__)
 
@@ -42,6 +44,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Defence in depth behind SameSite=Lax. Middleware rather than a dependency
+# on each route, so a route added later is covered without its author knowing
+# the check exists. See docs/adr/009-cookie-strategy.md.
+app.middleware("http")(csrf_middleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.cors_origins),
@@ -51,3 +58,8 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)
+
+# Fill the seam LEKA-331 left open. Until this call, every route needing a
+# user raises — which is what kept the platform honest while identity was
+# unimplemented. Tests replace these overrides with their own.
+configure_identity(app)

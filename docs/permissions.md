@@ -82,6 +82,25 @@ deletion is requested; the data goes at the end of the grace period.
 the database on every request, never cached in the session. No sign-out, no
 token refresh, no waiting.
 
+## How a Principal is built, end to end
+
+Since LEKA-330 the chain is complete and has no stub in it:
+
+1. The browser sends its session cookie.
+2. `leka.identity` hashes the token, finds the session row, and checks
+   revocation, absolute expiry and idle timeout.
+3. The seam returns the user id, and the active workspace — read from the
+   session **row**, never from a header or a URL.
+4. `leka.governance` reads the membership **from the database, on this
+   request**, and attaches the role and the workspace's lifecycle state.
+5. The route's permission dependency decides.
+
+Step 4 is why removing a membership takes effect immediately. Caching the
+role in the session is the obvious optimisation and would turn a revocation
+into a delay — there is a test that fails if anyone tries it.
+
+See [security.md](security.md) for what steps 1 to 3 protect against.
+
 ## How this is enforced
 
 Permissions are FastAPI dependencies, never an `if` in a route body

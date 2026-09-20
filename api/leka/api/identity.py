@@ -1,17 +1,395 @@
-"""Sign-in, sign-out, the current user. LEKA-330 fills this.
+"""Authentication routes.
 
-No routes yet. Mounted so that adding one is a single file to open, and so
-the OpenAPI schema grows without the mounting ever being the thing someone
-forgot.
+Sign-in, sign-out, verification, recovery and session management.
 
-A route validates, calls one service, and returns (architecture rule 6).
-Permissions come from a FastAPI dependency, never an `if` in the body
-(rule 5). The workspace is read from the session, never from the path or the
-payload (rule 3).
+Two rules run through every handler:
+
+**One refusal, many causes.** An unknown address, a wrong password and an
+account with no password all return the same body. A difference of any kind
+turns a public form into a way to ask "does this person have an account
+here?".
+
+**Every message is safe AND useful.** "Invalid email or password" tells an
+attacker nothing and tells a legitimate user exactly what to try. Where the
+caller has already proved they own the account — a correct password on an
+unverified address — we say more, because at that point we are not revealing
+anything they do not know.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+import uuid
+from typing import Annotated
 
-router = APIRouter(prefix="/identity", tags=["identity"])
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from leka.core import ratelimit
+from leka.db import get_session
+from leka.identity import (
+    AccountUnverifiedError,
+    AuthenticationError,
+    AuthErrorCode,
+    AuthService,
+    ChangePasswordRequest,
+    EmailTokenRepository,
+    ForgotPasswordRequest,
+    LoginRequest,
+    MeResponse,
+    PasswordRejectedError,
+    RecoveryAccepted,
+    RegisterRequest,
+    RegistrationAccepted,
+    ResetPasswordRequest,
+    Session,
+    SessionRead,
+    SessionRepository,
+    User,
+    UserRead,
+    UserRepository,
+    WorkspaceMembershipRead,
+    build_email_sender,
+    load_session,
+    truncate_ip,
+)
+from leka.identity.cookies import clear_session_cookie, set_session_cookie
+from leka.platform import MembershipResolver
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+CurrentSession = Annotated[Session | None, Depends(load_session)]
+
+
+def get_membership_resolver(db: SessionDep) -> MembershipResolver:
+    """Where this person may go. Built here because leka.platform cannot
+    depend on the API layer."""
+    return MembershipResolver(db)
+
+
+ResolverDep = Annotated[MembershipResolver, Depends(get_membership_resolver)]
+
+
+def get_auth_service(db: SessionDep) -> AuthService:
+    return AuthService(
+        UserRepository(db),
+        SessionRepository(db),
+        EmailTokenRepository(db),
+        build_email_sender(),
+    )
+
+
+AuthDep = Annotated[AuthService, Depends(get_auth_service)]
+
+
+def _refuse(code: AuthErrorCode, detail: str, status_code: int = 401) -> HTTPException:
+    """A 4xx carrying a machine code alongside the human sentence.
+
+    A superset of FastAPI's default {"detail": ...}, so it does not change
+    the shape LEKA-331's routes already return. The code is what lets the
+    interface show a "resend verification" button in one case and a countdown
+    in another.
+    """
+    return HTTPException(status_code=status_code, detail={"detail": detail, "code": code.value})
+
+
+def client_ip(request: Request) -> str:
+    """The caller's address, for rate limiting only.
+
+    Never stored as given — leka.identity.truncate_ip reduces it to a network
+    prefix before it reaches the database.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+async def _enforce(scope: str, identifier: str, limit: ratelimit.Limit) -> None:
+    verdict = await ratelimit.consume(scope, identifier, limit)
+    if not verdict.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "detail": (
+                    f"Too many attempts. Wait {verdict.retry_after_seconds} seconds and try again."
+                ),
+                "code": AuthErrorCode.RATE_LIMITED.value,
+            },
+            headers={"Retry-After": str(verdict.retry_after_seconds)},
+        )
+
+
+def _require_session(session: Session | None) -> Session:
+    if session is None:
+        raise _refuse(AuthErrorCode.NOT_AUTHENTICATED, "You are not signed in.")
+    return session
+
+
+# ── Registration and verification ────────────────────────────────────────────
+
+
+@router.post("/register", response_model=RegistrationAccepted, status_code=202)
+async def register(
+    payload: RegisterRequest, request: Request, auth: AuthDep
+) -> RegistrationAccepted:
+    """Create an account. Answers the same whether the address was free."""
+    await _enforce("register:ip", client_ip(request), ratelimit.REGISTER_PER_IP)
+    try:
+        await auth.register(payload.email, payload.password)
+    except PasswordRejectedError as error:
+        raise _refuse(AuthErrorCode.PASSWORD_BREACHED, error.reason, 422) from error
+    return RegistrationAccepted()
+
+
+@router.post("/verify/{token}", response_model=UserRead)
+async def verify_email(token: str, auth: AuthDep) -> UserRead:
+    """Confirm an address. Single use, and time limited."""
+    try:
+        user = await auth.verify_email(token)
+    except AuthenticationError as error:
+        raise _refuse(
+            AuthErrorCode.TOKEN_INVALID,
+            "This confirmation link is no longer valid. Ask for a new one.",
+            status.HTTP_400_BAD_REQUEST,
+        ) from error
+    return UserRead.model_validate(user)
+
+
+@router.post("/verify/resend", response_model=RegistrationAccepted, status_code=202)
+async def resend_verification(
+    payload: ForgotPasswordRequest, request: Request, auth: AuthDep
+) -> RegistrationAccepted:
+    await _enforce("verify:email", payload.email, ratelimit.VERIFICATION_RESEND_PER_ACCOUNT)
+    await auth.resend_verification(payload.email)
+    return RegistrationAccepted()
+
+
+# ── Signing in and out ───────────────────────────────────────────────────────
+
+
+@router.post("/login", response_model=MeResponse)
+async def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    auth: AuthDep,
+    memberships: Annotated[
+        MembershipResolver, Depends(lambda db=Depends(get_session): MembershipResolver(db))
+    ],
+) -> MeResponse:
+    """Sign in and open a NEW session.
+
+    Always new: reusing an identifier that existed before authentication is
+    session fixation, and an attacker who can set a cookie beforehand then
+    holds one that is valid after.
+    """
+    ip = client_ip(request)
+    await _enforce("login:ip", ip, ratelimit.LOGIN_PER_IP)
+    await _enforce("login:email", payload.email, ratelimit.LOGIN_PER_ACCOUNT)
+
+    try:
+        result = await auth.login(
+            payload.email,
+            payload.password,
+            user_agent=request.headers.get("user-agent"),
+            ip=ip,
+        )
+    except AccountUnverifiedError as error:
+        raise _refuse(
+            AuthErrorCode.ACCOUNT_UNVERIFIED,
+            "Confirm your email address before signing in. Check your inbox, "
+            "or ask for a new link.",
+            status.HTTP_403_FORBIDDEN,
+        ) from error
+    except AuthenticationError as error:
+        # One sentence for every cause. The reason is logged, not returned.
+        raise _refuse(AuthErrorCode.INVALID_CREDENTIALS, "Invalid email or password.") from error
+
+    await ratelimit.reset("login:ip", ip, ratelimit.LOGIN_PER_IP)
+    await ratelimit.reset("login:email", payload.email, ratelimit.LOGIN_PER_ACCOUNT)
+
+    # Land them somewhere. Someone who belongs to exactly one workspace is
+    # put in it: asking them to choose between one option is friction with
+    # nothing on the other side of it, and until the workspace switcher
+    # exists (LEKA-337) there is no way to choose at all.
+    #
+    # Several memberships means no automatic choice — picking for them would
+    # be guessing, and the interface asks.
+    #
+    # This does not weaken architecture rule 3: the server reads the
+    # memberships from the database and decides. Nothing is taken from the
+    # request.
+    pairs = await memberships.list_workspaces_for_user(result.user.id)
+    if len(pairs) == 1:
+        result.session.active_workspace_id = pairs[0][0].id
+
+    set_session_cookie(response, result.token)
+    return await _me(result.user, result.session, memberships)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response, session: CurrentSession, auth: AuthDep) -> Response:
+    """End this session. The old cookie stops working immediately."""
+    if session is not None:
+        await auth.logout(session)
+    clear_session_cookie(response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
+async def logout_everywhere(
+    response: Response, session: CurrentSession, auth: AuthDep, db: SessionDep
+) -> Response:
+    """Sign out of every device, including this one."""
+    current = _require_session(session)
+    user = await UserRepository(db).get(current.user_id)
+    if user is not None:
+        await auth.logout_everywhere(user)
+    clear_session_cookie(response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/me", response_model=MeResponse)
+async def read_me(
+    session: CurrentSession,
+    db: SessionDep,
+) -> MeResponse:
+    """Who I am, where I may go, and where I currently am.
+
+    One call: three round-trips for this would show as a flicker on every
+    page load.
+    """
+    current = _require_session(session)
+    user = await UserRepository(db).get(current.user_id)
+    if user is None:  # pragma: no cover - cascade makes this unreachable
+        raise _refuse(AuthErrorCode.SESSION_EXPIRED, "Your session has expired.")
+    return await _me(user, current, MembershipResolver(db))
+
+
+async def _me(user: User, session: Session, memberships: MembershipResolver) -> MeResponse:
+    pairs = await memberships.list_workspaces_for_user(user.id)
+    return MeResponse(
+        user=UserRead.model_validate(user),
+        workspaces=[
+            WorkspaceMembershipRead(
+                id=workspace.id,
+                name=workspace.name,
+                slug=workspace.slug,
+                role=membership.role.value,
+            )
+            for workspace, membership in pairs
+        ],
+        active_workspace_id=session.active_workspace_id,
+    )
+
+
+# ── Passwords ────────────────────────────────────────────────────────────────
+
+
+@router.post("/password/forgot", response_model=RecoveryAccepted, status_code=202)
+async def forgot_password(
+    payload: ForgotPasswordRequest, request: Request, auth: AuthDep
+) -> RecoveryAccepted:
+    """Ask for a reset link. The answer never says whether the account exists."""
+    await _enforce("reset:ip", client_ip(request), ratelimit.PASSWORD_RESET_PER_IP)
+    await _enforce("reset:email", payload.email, ratelimit.PASSWORD_RESET_PER_EMAIL)
+    await auth.request_password_reset(payload.email)
+    return RecoveryAccepted()
+
+
+@router.post("/password/reset", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_password(
+    payload: ResetPasswordRequest, response: Response, auth: AuthDep
+) -> Response:
+    """Set a new password from a link.
+
+    Every session is revoked, including any the attacker may hold: if the
+    reason for the reset was that someone else knew the old password,
+    leaving their sessions alive makes the reset pointless.
+    """
+    try:
+        await auth.reset_password(payload.token, payload.password)
+    except PasswordRejectedError as error:
+        raise _refuse(AuthErrorCode.PASSWORD_BREACHED, error.reason, 422) from error
+    except AuthenticationError as error:
+        raise _refuse(
+            AuthErrorCode.TOKEN_INVALID,
+            "This reset link is no longer valid. Ask for a new one.",
+            status.HTTP_400_BAD_REQUEST,
+        ) from error
+    clear_session_cookie(response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/password/change", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    payload: ChangePasswordRequest,
+    session: CurrentSession,
+    auth: AuthDep,
+    db: SessionDep,
+) -> Response:
+    """Change a password while signed in.
+
+    Keeps this session and revokes the others: signing someone out of the
+    browser they are using, as a reward for improving their security,
+    teaches them not to.
+    """
+    current = _require_session(session)
+    user = await UserRepository(db).get(current.user_id)
+    if user is None:  # pragma: no cover
+        raise _refuse(AuthErrorCode.SESSION_EXPIRED, "Your session has expired.")
+    try:
+        await auth.change_password(
+            user, payload.current_password, payload.new_password, keep=current.id
+        )
+    except PasswordRejectedError as error:
+        raise _refuse(AuthErrorCode.PASSWORD_BREACHED, error.reason, 422) from error
+    except AuthenticationError as error:
+        raise _refuse(
+            AuthErrorCode.INVALID_CREDENTIALS, "Your current password is not correct."
+        ) from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── Sessions ─────────────────────────────────────────────────────────────────
+
+
+@router.get("/sessions", response_model=list[SessionRead])
+async def list_my_sessions(session: CurrentSession, db: SessionDep) -> list[SessionRead]:
+    """My signed-in devices."""
+    current = _require_session(session)
+    rows = await SessionRepository(db).list_for_user(current.user_id)
+    return [
+        SessionRead(
+            id=row.id,
+            created_at=row.created_at,
+            last_seen_at=row.last_seen_at,
+            expires_at=row.expires_at,
+            user_agent=row.user_agent,
+            ip_prefix=row.ip_prefix,
+            is_current=row.id == current.id,
+        )
+        for row in rows
+    ]
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_session(
+    session_id: uuid.UUID, session: CurrentSession, db: SessionDep, auth: AuthDep
+) -> Response:
+    """Sign out one device.
+
+    Scoped to my own sessions: revoking someone else's by guessing an id is
+    not reachable from here.
+    """
+    current = _require_session(session)
+    sessions = SessionRepository(db)
+    target = await sessions.get_for_user(current.user_id, session_id)
+    if target is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such session.")
+    await auth.logout(target)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+__all__ = ["client_ip", "router", "truncate_ip"]

@@ -27,10 +27,496 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register
+         * @description Create an account. Answers the same whether the address was free.
+         */
+        post: operations["register_api_v1_auth_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/verify/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Email
+         * @description Confirm an address. Single use, and time limited.
+         */
+        post: operations["verify_email_api_v1_auth_verify__token__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/verify/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resend Verification */
+        post: operations["resend_verification_api_v1_auth_verify_resend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login
+         * @description Sign in and open a NEW session.
+         *
+         *     Always new: reusing an identifier that existed before authentication is
+         *     session fixation, and an attacker who can set a cookie beforehand then
+         *     holds one that is valid after.
+         */
+        post: operations["login_api_v1_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description End this session. The old cookie stops working immediately.
+         */
+        post: operations["logout_api_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout Everywhere
+         * @description Sign out of every device, including this one.
+         */
+        post: operations["logout_everywhere_api_v1_auth_logout_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Me
+         * @description Who I am, where I may go, and where I currently am.
+         *
+         *     One call: three round-trips for this would show as a flicker on every
+         *     page load.
+         */
+        get: operations["read_me_api_v1_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password/forgot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Forgot Password
+         * @description Ask for a reset link. The answer never says whether the account exists.
+         */
+        post: operations["forgot_password_api_v1_auth_password_forgot_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Password
+         * @description Set a new password from a link.
+         *
+         *     Every session is revoked, including any the attacker may hold: if the
+         *     reason for the reset was that someone else knew the old password,
+         *     leaving their sessions alive makes the reset pointless.
+         */
+        post: operations["reset_password_api_v1_auth_password_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Password
+         * @description Change a password while signed in.
+         *
+         *     Keeps this session and revokes the others: signing someone out of the
+         *     browser they are using, as a reward for improving their security,
+         *     teaches them not to.
+         */
+        post: operations["change_password_api_v1_auth_password_change_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Sessions
+         * @description My signed-in devices.
+         */
+        get: operations["list_my_sessions_api_v1_auth_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Session
+         * @description Sign out one device.
+         *
+         *     Scoped to my own sessions: revoking someone else's by guessing an id is
+         *     not reachable from here.
+         */
+        delete: operations["revoke_session_api_v1_auth_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Workspaces
+         * @description Every workspace I may enter. What fills the switcher.
+         */
+        get: operations["list_my_workspaces_api_v1_workspaces_get"];
+        put?: never;
+        /**
+         * Create Workspace
+         * @description Create a workspace and become its owner.
+         *
+         *     No principal: this is the one tenancy action performed by someone who is
+         *     not yet in any workspace.
+         */
+        post: operations["create_workspace_api_v1_workspaces_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Current Workspace
+         * @description The active workspace, my role in it, and what that role allows.
+         */
+        get: operations["read_current_workspace_api_v1_workspaces_current_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Request Workspace Deletion
+         * @description Ask for the workspace to be erased. Owner only.
+         *
+         *     Starts a grace period rather than deleting: access stops now, the data
+         *     goes later. A customer who changes their mind inside it loses nothing,
+         *     and one who does not gets a real erasure.
+         */
+        delete: operations["request_workspace_deletion_api_v1_workspaces_current_delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Configure Current Workspace
+         * @description Rename or reconfigure. Admin or above.
+         */
+        patch: operations["configure_current_workspace_api_v1_workspaces_current_patch"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Switch Workspace
+         * @description Move to another workspace I am a member of.
+         *
+         *     The membership is verified BEFORE anything is written to the session. A
+         *     caller who is not a member is refused and their session is untouched —
+         *     the id in the path is a request, never a statement of fact.
+         */
+        post: operations["switch_workspace_api_v1_workspaces__workspace_id__switch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Members
+         * @description Everyone with a seat in the active workspace.
+         */
+        get: operations["list_members_api_v1_members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invite Member
+         * @description Invite someone by email. Admin or above.
+         *
+         *     The response carries the clear token exactly once, so it can be emailed.
+         *     It is never stored and no other route will return it again.
+         */
+        post: operations["invite_member_api_v1_members_invite_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/{membership_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Member
+         * @description Remove a seat. Admin or above.
+         *
+         *     Takes effect on that person's next request: the principal is resolved
+         *     from this table every time, never cached at sign-in.
+         */
+        delete: operations["remove_member_api_v1_members__membership_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change Member Role
+         * @description Change someone's role. Admin or above.
+         */
+        patch: operations["change_member_role_api_v1_members__membership_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/invitations/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Invitation
+         * @description Turn an invitation into a seat.
+         *
+         *     No Principal, deliberately. The invitee is by definition not yet a member
+         *     of the workspace they are joining; requiring a principal would mean
+         *     having to be inside in order to be let in. The token is the credential.
+         *
+         *     LEKA-330 owns creating the account: by the time this runs the caller is
+         *     authenticated, and this route does only the workspace half.
+         *
+         *     Single use and time limited. One refusal covers "never existed",
+         *     "already used" and "expired", so a caller cannot probe for live tokens.
+         */
+        post: operations["accept_invitation_api_v1_invitations__token__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ChangePasswordRequest */
+        ChangePasswordRequest: {
+            /** Current Password */
+            current_password: string;
+            /** New Password */
+            new_password: string;
+        };
+        /**
+         * CurrentWorkspace
+         * @description The active workspace and the caller's standing in it.
+         */
+        CurrentWorkspace: {
+            workspace: components["schemas"]["WorkspaceRead"];
+            role: components["schemas"]["Role"];
+            /** Permissions */
+            permissions: string[];
+        };
+        /**
+         * DeletionScheduled
+         * @description What a customer gets back when they ask to be erased.
+         */
+        DeletionScheduled: {
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /**
+             * Deletion Requested At
+             * Format: date-time
+             */
+            deletion_requested_at: string;
+            /**
+             * Erasure Due At
+             * Format: date-time
+             */
+            erasure_due_at: string;
+        };
+        /** ForgotPasswordRequest */
+        ForgotPasswordRequest: {
+            /** Email */
+            email: string;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
         /** HealthResponse */
         HealthResponse: {
             /** Status */
@@ -39,6 +525,327 @@ export interface components {
             services: {
                 [key: string]: boolean;
             };
+        };
+        /**
+         * InvitationCreate
+         * @description An invitation request.
+         *
+         *     The address is checked shallowly on purpose. Pydantic's EmailStr would
+         *     need the email-validator package, and RFC-correct validation buys little
+         *     here: the real test of an address is whether the invitation arrives, and
+         *     an invitation nobody receives is visibly pending. What this rejects is
+         *     the typo that is obviously not an address.
+         */
+        InvitationCreate: {
+            /** Email */
+            email: string;
+            /** @default member */
+            role: components["schemas"]["Role"];
+        };
+        /**
+         * InvitationCreated
+         * @description The one response that carries the clear token.
+         *
+         *     It exists so the caller can send the email. Nothing persists it, and no
+         *     other route will ever return it again.
+         */
+        InvitationCreated: {
+            invitation: components["schemas"]["InvitationRead"];
+            /** Token */
+            token: string;
+        };
+        /**
+         * InvitationRead
+         * @description An invitation as anyone but the invitee sees it.
+         *
+         *     No token, not even hashed. The clear value is returned exactly once, by
+         *     the route that creates it, so it can be emailed.
+         */
+        InvitationRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            role: components["schemas"]["Role"];
+            status: components["schemas"]["InvitationStatus"];
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * InvitationStatus
+         * @enum {string}
+         */
+        InvitationStatus: "pending" | "accepted" | "revoked";
+        /** LoginRequest */
+        LoginRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /**
+         * MeResponse
+         * @description Everything the interface needs after signing in.
+         *
+         *     One call: who I am, where I may go, and where I currently am. Three
+         *     round-trips for that would show as a flicker on every page load.
+         */
+        MeResponse: {
+            user: components["schemas"]["UserRead"];
+            /** Workspaces */
+            workspaces: components["schemas"]["WorkspaceMembershipRead"][];
+            /** Active Workspace Id */
+            active_workspace_id: string | null;
+        };
+        /** MemberRead */
+        MemberRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            role: components["schemas"]["Role"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** MemberRoleUpdate */
+        MemberRoleUpdate: {
+            role: components["schemas"]["Role"];
+        };
+        /**
+         * RecoveryAccepted
+         * @description The answer to a forgotten-password request. Always the same.
+         */
+        RecoveryAccepted: {
+            /**
+             * Detail
+             * @default If an account exists for that address, a reset link is on its way.
+             */
+            detail: string;
+        };
+        /** RegisterRequest */
+        RegisterRequest: {
+            /** Password */
+            password: string;
+            /** Email */
+            email: string;
+        };
+        /**
+         * RegistrationAccepted
+         * @description The answer to registering, whether or not the address was free.
+         *
+         *     Identical in both cases on purpose: a different response would turn the
+         *     registration form into a way to ask "does this person have an account?".
+         */
+        RegistrationAccepted: {
+            /**
+             * Detail
+             * @default If that address can be registered, a verification email is on its way.
+             */
+            detail: string;
+        };
+        /** ResetPasswordRequest */
+        ResetPasswordRequest: {
+            /** Password */
+            password: string;
+            /** Token */
+            token: string;
+        };
+        /**
+         * Role
+         * @description What a member may do in a workspace.
+         *
+         *     Three, deliberately. The mockups show seven labels — Tech Lead, Ops,
+         *     Security and so on — but those are job titles, not authorisation
+         *     boundaries: they all need the same thing from LEKA.
+         *
+         *     No `viewer`. `member` already means "read, and create intentions", and
+         *     creating intentions is most of the product's value; a role that cannot is
+         *     a role with almost nothing. Adding one later costs a CHECK constraint;
+         *     removing one costs migrating every existing membership. The asymmetry
+         *     says wait for evidence.
+         *
+         *     See docs/permissions.md for the full matrix.
+         * @enum {string}
+         */
+        Role: "owner" | "admin" | "member";
+        /**
+         * SessionRead
+         * @description A session as its owner sees it, on the "your devices" screen.
+         *
+         *     No token, not even hashed. Enough to recognise a device and revoke it,
+         *     nothing that helps anyone impersonate it.
+         */
+        SessionRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** User Agent */
+            user_agent: string | null;
+            /** Ip Prefix */
+            ip_prefix: string | null;
+            /**
+             * Is Current
+             * @default false
+             */
+            is_current: boolean;
+        };
+        /** UserRead */
+        UserRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /** Email Verified At */
+            email_verified_at: string | null;
+            /** Last Login At */
+            last_login_at: string | null;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
+        };
+        /**
+         * WorkspaceCreate
+         * @description What a client may say when creating a workspace.
+         *
+         *     A name, and nothing else. The slug is derived, the status is `active` by
+         *     definition, and the owner is whoever is making the request — a field for
+         *     any of those would be a field a client could get wrong or abuse.
+         */
+        WorkspaceCreate: {
+            /** Name */
+            name: string;
+        };
+        /**
+         * WorkspaceMembershipRead
+         * @description A workspace this person may enter, and as what.
+         */
+        WorkspaceMembershipRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Role */
+            role: string;
+        };
+        /** WorkspaceRead */
+        WorkspaceRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            status: components["schemas"]["WorkspaceStatus"];
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * WorkspaceStatus
+         * @description Where a workspace is in its life.
+         *
+         *     Handled in exactly one place — the dependency that resolves the request
+         *     principal — never route by route. A status check repeated in forty routes
+         *     is a status check missing from one of them.
+         * @enum {string}
+         */
+        WorkspaceStatus: "active" | "suspended" | "pending_deletion";
+        /**
+         * WorkspaceSummary
+         * @description A workspace as it appears in the switcher: where I may go, and as what.
+         */
+        WorkspaceSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            status: components["schemas"]["WorkspaceStatus"];
+            role: components["schemas"]["Role"];
+        };
+        /**
+         * WorkspaceUpdate
+         * @description What may be changed later.
+         *
+         *     Not the slug: it is already in links, bookmarks and other people's
+         *     documentation. Not the status: lifecycle transitions have their own
+         *     routes, with their own permissions.
+         */
+        WorkspaceUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Settings */
+            settings?: {
+                [key: string]: unknown;
+            } | null;
         };
     };
     responses: never;
@@ -65,6 +872,641 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    register_api_v1_auth_register_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_email_api_v1_auth_verify__token__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resend_verification_api_v1_auth_verify_resend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    login_api_v1_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_api_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    logout_everywhere_api_v1_auth_logout_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    read_me_api_v1_auth_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+        };
+    };
+    forgot_password_api_v1_auth_password_forgot_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_password_api_v1_auth_password_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_password_api_v1_auth_password_change_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_sessions_api_v1_auth_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRead"][];
+                };
+            };
+        };
+    };
+    revoke_session_api_v1_auth_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_workspaces_api_v1_workspaces_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSummary"][];
+                };
+            };
+        };
+    };
+    create_workspace_api_v1_workspaces_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_current_workspace_api_v1_workspaces_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentWorkspace"];
+                };
+            };
+        };
+    };
+    request_workspace_deletion_api_v1_workspaces_current_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionScheduled"];
+                };
+            };
+        };
+    };
+    configure_current_workspace_api_v1_workspaces_current_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    switch_workspace_api_v1_workspaces__workspace_id__switch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_members_api_v1_members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberRead"][];
+                };
+            };
+        };
+    };
+    invite_member_api_v1_members_invite_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_member_api_v1_members__membership_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_member_role_api_v1_members__membership_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberRoleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_invitation_api_v1_invitations__token__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -1,25 +1,99 @@
 """Shared fixtures.
 
-Importing leka.main reads the environment, so these tests need
-LEKA_DATABASE_URL, LEKA_REDIS_URL and LEKA_SECRET_KEY set — exactly like the
-application does. That is the point: a test suite that runs without a valid
-environment would not be testing what production runs.
+THE TESTS RUN AGAINST THEIR OWN DATABASE, and the redirection happens at the
+top of this file — before anything imports leka, because leka.core.config
+reads the environment once, at import. That is why the leka imports below
+sit after a statement instead of with the others, and why this file carries
+an E402 exemption.
+
+This is not tidiness. These tests delete every row in `users` and
+`workspaces` between cases, and they used to do it in whatever database
+LEKA_DATABASE_URL pointed at — which, on a developer's machine, is the one
+holding their demo data. Running the suite silently destroyed it, and the
+symptom was "I cannot sign in any more" with no obvious cause.
+
+The test database is created and migrated automatically on first run.
 """
 
 from __future__ import annotations
 
+import asyncio
+import os
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
+from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
+import asyncpg
 import pytest
+from alembic.config import Config
 from fastapi import Request
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from alembic import command
+
+
+def _redirect_to_a_test_database() -> str:
+    """Point this process at <database>_test, creating the name if needed.
+
+    Runs at import, before leka.core.config is loaded. CI already sets a
+    dedicated database, so a name that already ends in _test is left alone.
+    """
+    url = os.environ.get("LEKA_DATABASE_URL")
+    if url is None:
+        msg = "LEKA_DATABASE_URL must be set to run the tests"
+        raise RuntimeError(msg)
+
+    parsed = urlparse(url)
+    name = parsed.path.lstrip("/")
+    if name.endswith("_test"):
+        return url
+
+    redirected = urlunparse(parsed._replace(path=f"/{name}_test"))
+    os.environ["LEKA_DATABASE_URL"] = redirected
+    return redirected
+
+
+TEST_DATABASE_URL = _redirect_to_a_test_database()
+
 from leka.core.config import settings
 from leka.main import app
 from leka.platform import UserId, WorkspaceId, get_current_user_id, get_session_store
+
+
+@pytest.fixture(scope="session", autouse=True)
+def test_database() -> None:
+    """Create and migrate the test database, once per run.
+
+    Created here rather than by a setup step a developer has to remember:
+    `pytest` should work on a machine where only `docker compose up` has been
+    run, and a test suite with a manual prerequisite is a test suite someone
+    eventually skips.
+    """
+
+    parsed = urlparse(TEST_DATABASE_URL)
+    name = parsed.path.lstrip("/")
+    admin = urlunparse(parsed._replace(path="/postgres")).replace(
+        "postgresql+asyncpg://", "postgresql://"
+    )
+
+    async def ensure() -> None:
+        connection = await asyncpg.connect(admin)
+        try:
+            exists = await connection.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", name)
+            if not exists:
+                await connection.execute(f'CREATE DATABASE "{name}"')
+        finally:
+            await connection.close()
+
+    asyncio.run(ensure())
+
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "alembic"))
+    command.upgrade(config, "head")
+
 
 # ── LEKA-330's seam, implemented for tests ───────────────────────────────────
 #
@@ -76,21 +150,67 @@ def identity() -> Iterator[FakeIdentity]:
     NotImplementedError rather than the previous test's user.
     """
     fake = FakeIdentity()
+
+    # Save whatever was there. Since LEKA-330, leka.main installs the REAL
+    # implementations at import — popping instead of restoring would leave
+    # the application unauthenticated for every test that ran afterwards,
+    # and the failure would depend on test order.
+    previous = {
+        dependency: app.dependency_overrides.get(dependency)
+        for dependency in (get_current_user_id, get_session_store)
+    }
+
     app.dependency_overrides[get_current_user_id] = fake.current_user_id
     app.dependency_overrides[get_session_store] = lambda: fake
 
     yield fake
 
-    app.dependency_overrides.pop(get_current_user_id, None)
-    app.dependency_overrides.pop(get_session_store, None)
+    for dependency, original in previous.items():
+        if original is None:
+            app.dependency_overrides.pop(dependency, None)
+        else:
+            app.dependency_overrides[dependency] = original
 
 
 @pytest.fixture
 async def client() -> AsyncIterator[AsyncClient]:
-    """An HTTP client wired straight to the ASGI app — no network, no port."""
+    """An HTTP client wired straight to the ASGI app — no network, no port.
+
+    base_url is https, and that matters: the session cookie is issued with
+    Secure, so httpx correctly refuses to send it back over http. Testing
+    against http would have meant turning Secure off for tests — that is,
+    testing a cookie configuration we never ship.
+    """
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as http_client:
+    async with AsyncClient(transport=transport, base_url="https://test") as http_client:
         yield http_client
+
+
+@pytest.fixture(autouse=True)
+async def clear_rate_limits() -> AsyncIterator[None]:
+    """Forget throttling counters between tests.
+
+    Rate limiting is real state in Redis, shared by every test in the run:
+    they all come from the same "address", so three registrations would
+    exhaust the hourly allowance and every later test would fail with a 429
+    that has nothing to do with what it is checking.
+
+    Cleared before rather than after, so a run interrupted halfway does not
+    leave the next one throttled.
+    """
+    import redis.asyncio as redis
+
+    from leka.core.config import settings
+
+    client = redis.from_url(str(settings.redis_url))
+    try:
+        keys = [key async for key in client.scan_iter("leka:ratelimit:*")]
+        if keys:
+            await client.delete(*keys)
+    finally:
+        await client.aclose()
+
+    yield
 
 
 @pytest.fixture
