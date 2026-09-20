@@ -8,14 +8,81 @@ environment would not be testing what production runs.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import uuid
+from collections.abc import AsyncIterator, Iterator
+from dataclasses import dataclass, field
 
 import pytest
+from fastapi import Request
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.core.config import settings
 from leka.main import app
+from leka.platform import UserId, WorkspaceId, get_current_user_id, get_session_store
+
+# ── LEKA-330's seam, implemented for tests ───────────────────────────────────
+#
+# LEKA-331's routes need to know who is calling and which workspace is
+# active. Both come from LEKA-330, which does not exist yet. Rather than wait
+# — or, worse, build a second authentication — the tests satisfy the seam's
+# contract with the simplest thing that can.
+#
+# This is what the seam is for. When LEKA-330 lands, its real implementations
+# replace these overrides and not one line of LEKA-331 changes. If that turns
+# out not to be true, the contract was wrong, and better to find out here.
+
+
+@dataclass
+class FakeIdentity:
+    """Who the next request comes from, and where it is.
+
+    A test mutates these between calls the way a real session would change
+    between sign-ins and switches.
+    """
+
+    user_id: uuid.UUID | None = None
+    active_workspace: uuid.UUID | None = None
+    # What set_active_workspace was asked to do, in order. Lets a test assert
+    # that a refused switch left the session untouched.
+    switches: list[uuid.UUID] = field(default_factory=list)
+
+    async def current_user_id(self, request: Request) -> UserId:
+        if self.user_id is None:
+            msg = "no signed-in user in this test"
+            raise RuntimeError(msg)
+        return UserId(self.user_id)
+
+    async def get_active_workspace(self, request: Request) -> WorkspaceId | None:
+        if self.active_workspace is None:
+            return None
+        return WorkspaceId(self.active_workspace)
+
+    async def set_active_workspace(self, request: Request, workspace_id: WorkspaceId) -> None:
+        self.switches.append(workspace_id)
+        self.active_workspace = workspace_id
+
+    def sign_in(self, user_id: uuid.UUID, workspace_id: uuid.UUID | None = None) -> None:
+        self.user_id = user_id
+        self.active_workspace = workspace_id
+
+
+@pytest.fixture
+def identity() -> Iterator[FakeIdentity]:
+    """LEKA-330's seam, implemented for tests.
+
+    Overrides the two dependencies LEKA-331 consumes. Removed afterwards, so
+    a test that forgets to sign in gets the real dependency and its
+    NotImplementedError rather than the previous test's user.
+    """
+    fake = FakeIdentity()
+    app.dependency_overrides[get_current_user_id] = fake.current_user_id
+    app.dependency_overrides[get_session_store] = lambda: fake
+
+    yield fake
+
+    app.dependency_overrides.pop(get_current_user_id, None)
+    app.dependency_overrides.pop(get_session_store, None)
 
 
 @pytest.fixture

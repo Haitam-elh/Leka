@@ -152,7 +152,7 @@ async def test_deleting_a_workspace_removes_its_data_and_only_its_data(
 ) -> None:
     from sqlalchemy import select
 
-    from leka.db import session_factory
+    from leka.db import session_factory, system_scope
 
     mine = await _workspace(session, "leaving")
     theirs = await _workspace(session, "staying")
@@ -168,7 +168,12 @@ async def test_deleting_a_workspace_removes_its_data_and_only_its_data(
         await other.delete(workspace)
         await other.commit()
 
-    async with session_factory() as check:
-        remaining = (await check.execute(select(Entity))).scalars().all()
-        assert survivor.id in {entity.id for entity in remaining}
-        assert all(entity.workspace_id != mine.id for entity in remaining)
+    # system_scope: this assertion is deliberately cross-tenant — it checks
+    # that one workspace's rows went and another's stayed. Reading both is
+    # the whole point, so it says so. Without it the scope guard refuses,
+    # which is how we know the guard is doing its job.
+    with system_scope():
+        async with session_factory() as check:
+            remaining = (await check.execute(select(Entity))).scalars().all()
+            assert survivor.id in {entity.id for entity in remaining}
+            assert all(entity.workspace_id != mine.id for entity in remaining)

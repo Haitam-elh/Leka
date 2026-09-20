@@ -96,8 +96,8 @@ written.
 | Module | Responsibility | Depends on | State |
 | --- | --- | --- | --- |
 | `core` | settings, exceptions, FastAPI dependencies, logging | nothing | built |
-| `db` | engine, session, declarative base, column mixins | `core` | built |
-| `platform` | tenancy (workspaces), events, task queues, secrets, object storage | `core`, `db` | tenancy and health probes built, rest skeleton |
+| `db` | engine, session, declarative base, column mixins, tenant scope guard | `core` | built |
+| `platform` | tenancy (workspaces, memberships, invitations), the LEKA-330 seam, secrets, health | `core`, `db` | tenancy, seam and secrets built; events and queues skeleton |
 | `identity` | who someone is, and which workspaces they may enter | `core`, `db`, `platform` | **LEKA-330** |
 | `connectors` | talking to customer systems; one subpackage per system | `core`, `db`, `platform` | `sources` built, no connector yet |
 | `ingestion` | collect → extract → parse → normalise | ← `connectors` | skeleton |
@@ -105,8 +105,8 @@ written.
 | `context` | retrieval, ranking, assembly of what an answer needs | ← `knowledge` | skeleton |
 | `intentions` | intention → decision → action, with approval | ← `context` | skeleton |
 | `capabilities` | **the only module that calls a language model**; loads and runs agents | `knowledge`, `context` | agent loader built, model gateway skeleton |
-| `governance` | permissions and audit | `platform`, `identity` | skeleton |
-| `api` | HTTP routes, one file per module | all of the above | `/health` only; one empty router per module, mounted |
+| `governance` | permissions, the request principal, audit | `platform`, `identity` | permissions built, audit skeleton |
+| `api` | HTTP routes, one file per module | all of the above | health + 11 tenancy routes; other routers mounted and empty |
 
 ### The dependency rule
 
@@ -195,9 +195,14 @@ Two tables are exceptions, both deliberate:
 
 **The workspace never comes from a URL or a request body.** It is read from
 the session, server side. A client that can name its own workspace is a client
-that can name someone else's.
+that can name someone else's. `POST /workspaces/{id}/switch` is the single
+exception and is not really one: it verifies a membership and then writes the
+id into the server's own session — a client may ASK to move, never ASSERT
+where it is. See [ADR 007](adr/007-tenant-isolation-strategy.md).
 
-That rule is a discipline, so we do not rely on it alone. Cross-tenant
+That rule is a discipline, so we do not rely on it alone. Reads are filtered
+by a session-level scope guard that refuses any query touching a
+workspace-scoped table with no workspace declared, and cross-tenant
 references are made **structurally impossible** by composite foreign keys:
 
 ```sql

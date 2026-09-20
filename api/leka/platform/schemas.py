@@ -1,17 +1,149 @@
-"""Types the platform module exposes."""
+"""Types the platform module exposes over its boundary.
+
+Request and response shapes for tenancy. Deliberately not mirrors of the
+tables: `Workspace` carries a deletion timestamp and a settings blob that no
+client needs to see, and a client must never be able to set a status by
+sending one.
+"""
 
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from leka.platform.models import InvitationStatus, Role, WorkspaceStatus
+
+
+class WorkspaceCreate(BaseModel):
+    """What a client may say when creating a workspace.
+
+    A name, and nothing else. The slug is derived, the status is `active` by
+    definition, and the owner is whoever is making the request — a field for
+    any of those would be a field a client could get wrong or abuse.
+    """
+
+    name: str = Field(min_length=1, max_length=200)
+
+
+class WorkspaceUpdate(BaseModel):
+    """What may be changed later.
+
+    Not the slug: it is already in links, bookmarks and other people's
+    documentation. Not the status: lifecycle transitions have their own
+    routes, with their own permissions.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    settings: dict[str, object] | None = None
 
 
 class WorkspaceRead(BaseModel):
-    """A workspace as it leaves the module."""
-
     model_config = ConfigDict(frozen=True, from_attributes=True)
 
     id: uuid.UUID
     name: str
     slug: str
+    status: WorkspaceStatus
+    settings: dict[str, object]
+    created_at: datetime
+
+
+class WorkspaceSummary(BaseModel):
+    """A workspace as it appears in the switcher: where I may go, and as what."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    status: WorkspaceStatus
+    role: Role
+
+
+class CurrentWorkspace(BaseModel):
+    """The active workspace and the caller's standing in it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    workspace: WorkspaceRead
+    role: Role
+    permissions: list[str]
+
+
+class MemberRead(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    user_id: uuid.UUID
+    role: Role
+    created_at: datetime
+
+
+class MemberRoleUpdate(BaseModel):
+    role: Role
+
+
+class InvitationCreate(BaseModel):
+    """An invitation request.
+
+    The address is checked shallowly on purpose. Pydantic's EmailStr would
+    need the email-validator package, and RFC-correct validation buys little
+    here: the real test of an address is whether the invitation arrives, and
+    an invitation nobody receives is visibly pending. What this rejects is
+    the typo that is obviously not an address.
+    """
+
+    email: str = Field(min_length=3, max_length=320)
+    role: Role = Role.MEMBER
+
+    @field_validator("email")
+    @classmethod
+    def _looks_like_an_address(cls, value: str) -> str:
+        candidate = value.strip().lower()
+        local, separator, domain = candidate.partition("@")
+        if not separator or not local or "." not in domain or domain.startswith("."):
+            msg = f"{value!r} is not an email address"
+            raise ValueError(msg)
+        return candidate
+
+
+class InvitationRead(BaseModel):
+    """An invitation as anyone but the invitee sees it.
+
+    No token, not even hashed. The clear value is returned exactly once, by
+    the route that creates it, so it can be emailed.
+    """
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    email: str
+    role: Role
+    status: InvitationStatus
+    expires_at: datetime
+    created_at: datetime
+
+
+class InvitationCreated(BaseModel):
+    """The one response that carries the clear token.
+
+    It exists so the caller can send the email. Nothing persists it, and no
+    other route will ever return it again.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    invitation: InvitationRead
+    token: str
+
+
+class DeletionScheduled(BaseModel):
+    """What a customer gets back when they ask to be erased."""
+
+    model_config = ConfigDict(frozen=True)
+
+    workspace_id: uuid.UUID
+    deletion_requested_at: datetime
+    erasure_due_at: datetime

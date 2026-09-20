@@ -36,14 +36,25 @@ session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
-    """FastAPI dependency yielding one session per request.
+    """One transaction per request.
 
-    The session is rolled back and closed whatever happens, so a failed
-    request never leaves a transaction open holding locks.
+    The session commits when the handler returns, and rolls back on any
+    exception — including an HTTPException. A request refused with 403 must
+    not leave behind the rows it had written before deciding to refuse.
+
+    This is why routes contain no commit(): a route validates, calls one
+    service and returns (architecture rule 6). Scattering commits through
+    forty handlers means the one that forgets writes nothing and reports
+    success, which is the worst of both.
+
+    Work that must be durable regardless of what happens afterwards — an
+    audit entry for a refused action, say — commits explicitly inside its own
+    service and does not rely on this.
     """
     async with session_factory() as session:
         try:
             yield session
+            await session.commit()
         except Exception:
             await session.rollback()
             raise
