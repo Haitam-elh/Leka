@@ -86,6 +86,21 @@ clutter. GitHub keeps a *Restore branch* button if you need it back.
 | `web/lib/api-types.ts` | **generated** by `npm run gen:api`. Never edited by hand |
 | `docker-compose.yml` | both of us, in a dedicated PR |
 | `pyproject.toml`, `package.json` | whoever adds the dependency |
+| `web/package-lock.json` | **regenerate with `npm run lock`, never `npm install`** — see below |
+
+### Never regenerate the web lockfile on macOS
+
+Run `npm run lock`, which regenerates it inside a `linux/amd64` container.
+
+npm writes a lockfile for the platform it runs on and **omits optional
+dependencies belonging to other platforms**. A lockfile produced on a Mac is
+missing the Linux-only packages that `@tailwindcss/oxide` and friends pull
+in, so `npm ci` succeeds on both our laptops and fails on every CI runner
+with `Missing: @emnapi/runtime from lock file`.
+
+This has now happened twice: once when the project was created, and again
+when Playwright was added with a plain `npm install`. The macOS check passes
+both times, which is exactly why it is worth a rule rather than care.
 
 ## Territories
 
