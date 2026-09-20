@@ -1,7 +1,11 @@
-"""Types governance exposes.
+"""Authorisation vocabulary: who is asking, and what they may do.
 
-Permissions are expressed as a role plus an action, resolved server side.
-The caller never states its own workspace — rule 3.
+Roles and memberships are tenancy and live in leka.platform. What a role is
+ALLOWED to do is policy, and lives here.
+
+The matrix below is the single source of truth for docs/permissions.md. A
+permission table that exists only in prose drifts from the code within a
+month; this one cannot, because the tests read it.
 """
 
 from __future__ import annotations
@@ -11,24 +15,104 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
+from leka.platform import Role, WorkspaceStatus
 
-class Role(enum.StrEnum):
-    """Matches the membership_role enum in migration 001.
 
-    LEKA-330 may extend this list; it does so in a migration and here, in the
-    same pull request.
+class Permission(enum.StrEnum):
+    """One thing a member may attempt.
+
+    Named after the action, not after the route: routes get renamed, and a
+    permission called `patch_workspace_current` would have to be renamed with
+    them.
     """
 
-    OWNER = "owner"
-    ADMIN = "admin"
-    MEMBER = "member"
+    WORKSPACE_READ = "workspace:read"
+    WORKSPACE_UPDATE = "workspace:update"
+    WORKSPACE_DELETE = "workspace:delete"
+    WORKSPACE_TRANSFER = "workspace:transfer"
+
+    MEMBER_READ = "member:read"
+    MEMBER_INVITE = "member:invite"
+    MEMBER_UPDATE_ROLE = "member:update_role"
+    MEMBER_REMOVE = "member:remove"
+
+    SOURCE_READ = "source:read"
+    SOURCE_MANAGE = "source:manage"
+
+    INTENTION_READ = "intention:read"
+    INTENTION_CREATE = "intention:create"
+    INTENTION_APPROVE = "intention:approve"
+
+
+# Roles are a chain: an owner can do everything an admin can, an admin
+# everything a member can. Expressed as ranks so that require_role(ADMIN)
+# means "admin or above" and nobody has to remember to list OWNER too — the
+# forgotten OWNER in the fourteenth route is exactly the bug this avoids.
+ROLE_RANK: dict[Role, int] = {
+    Role.MEMBER: 0,
+    Role.ADMIN: 1,
+    Role.OWNER: 2,
+}
+
+_MEMBER_PERMISSIONS = frozenset(
+    {
+        Permission.WORKSPACE_READ,
+        Permission.MEMBER_READ,
+        Permission.SOURCE_READ,
+        Permission.INTENTION_READ,
+        Permission.INTENTION_CREATE,
+    }
+)
+
+_ADMIN_PERMISSIONS = _MEMBER_PERMISSIONS | {
+    Permission.WORKSPACE_UPDATE,
+    Permission.MEMBER_INVITE,
+    Permission.MEMBER_UPDATE_ROLE,
+    Permission.MEMBER_REMOVE,
+    Permission.SOURCE_MANAGE,
+    Permission.INTENTION_APPROVE,
+}
+
+# Only an owner deletes the workspace or hands it over. An admin managing
+# members must not be able to end the company's account.
+_OWNER_PERMISSIONS = _ADMIN_PERMISSIONS | {
+    Permission.WORKSPACE_DELETE,
+    Permission.WORKSPACE_TRANSFER,
+}
+
+ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
+    Role.MEMBER: _MEMBER_PERMISSIONS,
+    Role.ADMIN: _ADMIN_PERMISSIONS,
+    Role.OWNER: _OWNER_PERMISSIONS,
+}
+
+# Permissions that change something. A suspended workspace refuses these and
+# allows the rest: an unpaid invoice should not look like data loss.
+WRITE_PERMISSIONS: frozenset[Permission] = frozenset(
+    {
+        Permission.WORKSPACE_UPDATE,
+        Permission.WORKSPACE_DELETE,
+        Permission.WORKSPACE_TRANSFER,
+        Permission.MEMBER_INVITE,
+        Permission.MEMBER_UPDATE_ROLE,
+        Permission.MEMBER_REMOVE,
+        Permission.SOURCE_MANAGE,
+        Permission.INTENTION_CREATE,
+        Permission.INTENTION_APPROVE,
+    }
+)
 
 
 class Principal(BaseModel):
-    """Who is making this request, and in which workspace.
+    """Who is making this request, in which workspace, with what role.
 
-    Built server side from the session. Never from a URL or a request body —
-    a client that can name its own workspace can name someone else's.
+    Built server side on every request: the user from LEKA-330's seam, the
+    workspace from the server-side session, the role from a live read of the
+    memberships table.
+
+    The role is NOT carried in the session. Freezing it at sign-in would mean
+    that removing someone from a workspace leaves them in until they happen
+    to log out — which is not a revocation, it is a delay.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -36,3 +120,14 @@ class Principal(BaseModel):
     user_id: uuid.UUID
     workspace_id: uuid.UUID
     role: Role
+    workspace_status: WorkspaceStatus
+
+    @property
+    def permissions(self) -> frozenset[Permission]:
+        return ROLE_PERMISSIONS[self.role]
+
+    def has(self, permission: Permission) -> bool:
+        return permission in self.permissions
+
+    def outranks_or_equals(self, role: Role) -> bool:
+        return ROLE_RANK[self.role] >= ROLE_RANK[role]

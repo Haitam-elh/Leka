@@ -96,7 +96,12 @@ class Settings(BaseSettings):
     # implementation; the second provider is what proves the gateway holds.
     # Mistral also answers the question a customer's security officer asks
     # first: where does our data go.
-    llm_provider: Literal["anthropic", "mistral"] = "anthropic"
+    # Mistral is the default, not Anthropic. The architecture puts Mistral
+    # first with Claude as the fallback, and the commercial argument is "your
+    # data stays in Europe" — which only holds if the European path is the
+    # one exercised every day, rather than an option discovered broken in
+    # front of a customer's security officer.
+    llm_provider: Literal["mistral", "anthropic"] = "mistral"
     anthropic_api_key: SecretStr | None = None
     mistral_api_key: SecretStr | None = None
 

@@ -30,10 +30,11 @@ from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.connectors import Source, SourceKind
-from leka.db import Base, engine, session_factory
+from leka.db import Base, engine, session_factory, system_scope
 from leka.knowledge import Entity, EntityType
 from leka.main import app
-from leka.platform import Workspace
+from leka.platform import Membership, Role, Workspace
+from tests.conftest import FakeIdentity
 
 pytestmark = pytest.mark.integration
 
@@ -47,12 +48,19 @@ PUBLIC_PATHS = frozenset({"/api/v1/health"})
 
 
 class Tenant:
-    """One workspace and a marker only it should ever be able to see."""
+    """One workspace, a member of it, and a marker only it should ever see."""
 
-    def __init__(self, workspace: Workspace, source: Source, entity: Entity) -> None:
+    def __init__(
+        self,
+        workspace: Workspace,
+        source: Source,
+        entity: Entity,
+        user_id: uuid.UUID,
+    ) -> None:
         self.workspace = workspace
         self.source = source
         self.entity = entity
+        self.user_id = user_id
         self.secret = entity.name
 
     def identifiers(self) -> set[str]:
@@ -70,6 +78,17 @@ async def _make_tenant(session: AsyncSession, label: str) -> Tenant:
     session.add(workspace)
     await session.flush()
 
+    # A member, so the request principal resolves. The users table belongs to
+    # LEKA-330, so the row goes in as SQL rather than through a model this
+    # ticket does not own.
+    created = await session.execute(
+        text("INSERT INTO users (email) VALUES (:email) RETURNING id"),
+        {"email": f"{marker}@example.test"},
+    )
+    user_id: uuid.UUID = created.scalar_one()
+    session.add(Membership(workspace_id=workspace.id, user_id=user_id, role=Role.OWNER))
+    await session.flush()
+
     source = Source(workspace_id=workspace.id, kind=SourceKind.GITHUB, name=marker)
     session.add(source)
     await session.flush()
@@ -84,24 +103,29 @@ async def _make_tenant(session: AsyncSession, label: str) -> Tenant:
     session.add(entity)
     await session.flush()
     await session.commit()
-    return Tenant(workspace, source, entity)
+    return Tenant(workspace, source, entity, user_id)
 
 
 @pytest.fixture
 async def tenants() -> AsyncIterator[tuple[Tenant, Tenant]]:
     """Two workspaces with data, removed afterwards."""
-    async with session_factory() as session:
-        first = await _make_tenant(session, "alpha")
-        second = await _make_tenant(session, "beta")
+    with system_scope():
+        async with session_factory() as session:
+            first = await _make_tenant(session, "alpha")
+            second = await _make_tenant(session, "beta")
 
     yield first, second
 
-    async with session_factory() as cleanup:
-        for tenant in (first, second):
-            workspace = await cleanup.get(Workspace, tenant.workspace.id)
-            if workspace is not None:
-                await cleanup.delete(workspace)
-        await cleanup.commit()
+    with system_scope():
+        async with session_factory() as cleanup:
+            for tenant in (first, second):
+                stored = await cleanup.get(Workspace, tenant.workspace.id)
+                if stored is not None:
+                    await cleanup.delete(stored)
+                await cleanup.execute(
+                    text("DELETE FROM users WHERE id = :uid"), {"uid": tenant.user_id}
+                )
+            await cleanup.commit()
 
 
 # ── Structural: what the schema guarantees regardless of any code ────────────
@@ -200,26 +224,42 @@ def _readable_paths() -> list[str]:
     ]
 
 
+# The one route allowed to name a workspace, and why.
+#
+# Switching is a REQUEST to move, not an assertion of where you are. It
+# verifies a membership and then writes the id into the server-side session;
+# everything afterwards reads it from there. Without this route the workspace
+# could never change at all.
+#
+# Any other route appearing here is a rule 3 violation.
+WORKSPACE_ID_ALLOWED_ON = frozenset({"/api/v1/workspaces/{workspace_id}/switch"})
+
+
 def test_no_route_takes_a_workspace_identifier() -> None:
     """Rule 3: the workspace is read from the session, never from the request.
 
     A route accepting a workspace id trusts the client to name its own tenant
-    — and therefore to name someone else's.
+    — and therefore to name someone else's. The switch route is the single,
+    deliberate exception; it is listed above rather than pattern-matched, so
+    adding a second one is a decision somebody has to write down.
     """
     offenders = [
         path
         for path in _paths()
         if any(token in path for token in ("{workspace_id}", "{workspace}"))
+        and path not in WORKSPACE_ID_ALLOWED_ON
     ]
     assert not offenders, f"routes taking a workspace identifier: {offenders}"
 
 
 async def test_no_route_leaks_another_workspace(
-    client: AsyncClient, tenants: tuple[Tenant, Tenant]
+    client: AsyncClient, identity: FakeIdentity, tenants: tuple[Tenant, Tenant]
 ) -> None:
-    """Call every readable route and look for the other tenant's markers.
+    """Call every readable route as one tenant, looking for the other's data.
 
-    Skips while no such route exists. It stops skipping by itself.
+    Driven by the OpenAPI schema, so a route added tomorrow is covered the
+    day it is mounted and nobody has to remember this file. It skipped until
+    LEKA-331 mounted the first routes; it stopped skipping by itself.
     """
     paths = _readable_paths()
     if not paths:
@@ -227,7 +267,8 @@ async def test_no_route_leaks_another_workspace(
             "no readable route mounted yet — this check activates itself with the first one"
         )
 
-    _alpha, beta = tenants
+    alpha, beta = tenants
+    identity.sign_in(alpha.user_id, alpha.workspace.id)
     leaks: list[str] = []
 
     for path in paths:

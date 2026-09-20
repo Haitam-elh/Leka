@@ -104,7 +104,10 @@ def test_no_model_is_configured_by_default(monkeypatch: pytest.MonkeyPatch) -> N
 
     config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
 
-    assert config.llm_provider == "anthropic"
+    # Mistral by default: the commercial argument is "your data stays in
+    # Europe", and that only holds if the European path is the one exercised
+    # every day rather than an option nobody runs.
+    assert config.llm_provider == "mistral"
     assert config.has_model_access is False
     assert config.llm_api_key is None
 

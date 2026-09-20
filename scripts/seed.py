@@ -28,7 +28,7 @@ from typing import Any
 from sqlalchemy import delete, select
 
 from leka.connectors import Source, SourceKind, SourceStatus
-from leka.db import session_factory
+from leka.db import session_factory, system_scope
 from leka.knowledge import Entity, EntityType, Relationship, RelationshipType
 from leka.platform import Workspace
 
@@ -63,6 +63,18 @@ async def _reset(session: Any) -> None:
 
 
 async def seed() -> None:
+    """Build the demo workspace, declaring that this crosses tenants.
+
+    system_scope() is required, not decorative: this script creates a
+    workspace and then reads the whole database to report what it wrote.
+    Without it the scope guard in leka.db refuses the reads — which is the
+    point. A request never legitimately does this; a seed script always does.
+    """
+    with system_scope():
+        await _build_demo_workspace()
+
+
+async def _build_demo_workspace() -> None:
     async with session_factory() as session:
         await _reset(session)
 

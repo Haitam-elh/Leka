@@ -29,15 +29,10 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# Tables that exist in the database but have no SQLAlchemy model yet.
-#
-# Migration 001 creates users and memberships with the bare minimum, because
-# other tables must be able to reference them. Their models belong to
-# leka.identity (LEKA-330). Until that lands, autogenerate would compare an
-# empty metadata against real tables and cheerfully propose dropping them.
-#
-# LEKA-330: delete these two entries in the same commit that adds the models.
-UNMODELLED_TABLES = frozenset({"users", "memberships"})
+# Tables in the database with no SQLAlchemy model. Empty since LEKA-331:
+# memberships gained a model in leka.platform, and `users` is described by
+# the minimal stub in leka/platform/models.py that LEKA-330 replaces.
+UNMODELLED_TABLES: frozenset[str] = frozenset()
 
 
 def include_object(
