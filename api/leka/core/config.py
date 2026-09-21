@@ -187,6 +187,17 @@ class Settings(BaseSettings):
     s3_access_key_id: str | None = None
     s3_secret_access_key: SecretStr | None = None
 
+    # ── Retention ───────────────────────────────────────────────────────────
+    # How long a raw payload is ours to keep, in days, per source kind. The
+    # policy itself lives in leka.ingestion.retention, which is where the
+    # source vocabulary belongs; this is only the override, so that a
+    # customer contract or a regulator can move a number without a deploy.
+    #
+    # A dict keyed by source kind, as JSON:
+    #   LEKA_RAW_PAYLOAD_RETENTION_DAYS={"datadog": 14, "github": 180}
+    # Kinds left out keep the default written in that module.
+    raw_payload_retention_days: dict[str, int] = Field(default_factory=dict)
+
     @field_validator("database_url")
     @classmethod
     def _require_async_driver(cls, value: PostgresDsn) -> PostgresDsn:
@@ -202,6 +213,25 @@ class Settings(BaseSettings):
                 f"(postgresql+asyncpg://...), got scheme {value.scheme!r}."
             )
             raise ValueError(msg)
+        return value
+
+    @field_validator("raw_payload_retention_days")
+    @classmethod
+    def _retention_is_within_reason(cls, value: dict[str, int]) -> dict[str, int]:
+        """Refuse a retention that is obviously wrong, at startup.
+
+        0 deletes a payload the moment it lands, which reads as "disabled"
+        to whoever typed it and means "delete everything" to the sweep. A
+        number in the thousands is a typo that nobody notices until the
+        storage bill does. Both must stop the process, not the sweep.
+        """
+        for kind, days in value.items():
+            if not 1 <= days <= 3650:
+                msg = (
+                    f"LEKA_RAW_PAYLOAD_RETENTION_DAYS[{kind!r}] is {days}. "
+                    "Retention is in DAYS and must be between 1 and 3650."
+                )
+                raise ValueError(msg)
         return value
 
     @field_validator("encryption_keys")

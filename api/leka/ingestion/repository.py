@@ -10,12 +10,23 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any, cast
 
-from sqlalchemy import Select
+from sqlalchemy import CursorResult, Result, Select, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.db import WorkspaceScopedRepository
 from leka.ingestion.models import RawPayload
+
+
+def _affected_rows(result: Result[Any]) -> int:
+    """How many rows a DELETE touched.
+
+    SQLAlchemy returns a CursorResult, which carries rowcount, but the
+    declared return type of execute() is the narrower Result. One cast beats
+    a scattered type: ignore — the same shape leka.identity.repository uses.
+    """
+    return int(cast("CursorResult[Any]", result).rowcount or 0)
 
 
 class IngestionRunRepository:
@@ -125,3 +136,61 @@ class RawPayloadRepository(WorkspaceScopedRepository):
         """
         payload.deleted_at = now or datetime.now(UTC)
         return payload
+
+
+class RawPayloadSweeper:
+    """Retention work, across every workspace at once.
+
+    Separate from RawPayloadRepository, and deliberately NOT workspace-scoped.
+    That is what it is for: a sweep that stopped at one tenant would need a
+    caller looping over every workspace, and a workspace created between two
+    iterations would be skipped. It must run inside system_scope(), which
+    says out loud in one reviewable line that this crosses tenants on
+    purpose.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def due_for_deletion(
+        self, *, now: datetime | None = None, limit: int = 500
+    ) -> Sequence[RawPayload]:
+        """Payloads past their expiry, or withdrawn. Oldest first.
+
+        Batched, and that is not premature. The first sweep after a retention
+        change can match millions of rows; loading them all would take the
+        worker out of memory instead of letting it make steady progress. The
+        caller runs again until this returns nothing.
+        """
+        moment = now or datetime.now(UTC)
+        result = await self._session.execute(
+            select(RawPayload)
+            .where((RawPayload.expires_at <= moment) | (RawPayload.deleted_at.is_not(None)))
+            .order_by(RawPayload.expires_at)
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+    async def delete_rows(self, payload_ids: Sequence[uuid.UUID]) -> int:
+        """Remove rows whose objects the caller has already dealt with."""
+        if not payload_ids:
+            return 0
+        result = await self._session.execute(
+            delete(RawPayload).where(RawPayload.id.in_(payload_ids))
+        )
+        return _affected_rows(result)
+
+    async def every_object_key(self) -> set[str]:
+        """Every key any row still claims, across every workspace.
+
+        What reconciliation compares the store against: a key in the store
+        and not in this set belongs to nobody.
+
+        Held in memory, which is a choice with a limit. One key is roughly
+        120 bytes, so a million payloads is around 120 MB and the point at
+        which this becomes a streaming comparison per workspace prefix
+        instead. That threshold is written down in
+        docs/adr/010-object-storage.md rather than left to be discovered.
+        """
+        result = await self._session.execute(select(RawPayload.object_key))
+        return set(result.scalars().all())
