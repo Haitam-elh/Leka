@@ -63,6 +63,17 @@ narrower one would mean rewriting this module the day we move.
 orphaned objects means walking the store, and without it that sweep cannot be
 written at all.
 
+**The S3 implementation is verified against a real server**, not only against
+our own stand-in. MinIO runs in `docker compose` and in CI, and
+`tests/test_s3_against_minio.py` exercises the adapter through it. This is not
+belt and braces: a stand-in we wrote proves the adapter agrees with what WE
+believe S3 does, which is circular precisely where it matters. Injecting a
+plausible bug — collecting every key and issuing one `delete_objects` call —
+leaves all 26 stand-in tests green and fails immediately against MinIO, which
+refuses more than 1000 keys per request. That bug would have left a deleted
+customer's objects in the bucket while reporting success, with the rows
+already gone.
+
 ### The adapter streams
 
 `put` consumes an async iterator and `get` produces one. A connector

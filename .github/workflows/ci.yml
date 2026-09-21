@@ -50,6 +50,10 @@ jobs:
       # the configuration doing its job.
       LEKA_ENCRYPTION_KEYS: '["MN3nrX7VP5Mj0SRB4G-pIPOrvlCyT-CQoBZvsQFYHss="]'
       LEKA_ENVIRONMENT: ci
+      # Turns a skipped S3 test into a failure. Those tests skip when no
+      # server answers, which is right on a laptop and wrong in a pipeline
+      # that reports the adapter as verified.
+      LEKA_REQUIRE_S3_TESTS: "1"
 
     defaults:
       run:
@@ -93,6 +97,28 @@ jobs:
         # Catches the classic mistake: a column changed on the model with no
         # migration written for it.
         run: alembic check
+
+      - name: Start MinIO
+        # Not a service container: those cannot pass a command, and MinIO
+        # needs `server /data`. A step is explicit and works.
+        #
+        # This is what stops tests/test_s3_against_minio.py from skipping.
+        # It is the only thing exercising S3ObjectStore against a server we
+        # did not write ourselves — and the difference is not academic: a
+        # stand-in accepts a delete of more than 1000 keys, real S3 refuses.
+        working-directory: .
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            quay.io/minio/minio server /data
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live > /dev/null; then
+              echo "MinIO is up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO did not become healthy in 30s"; docker logs minio; exit 1
 
       - name: pytest
         # 80, not 60. Coverage used to lose SQLAlchemy's greenlet frames and
