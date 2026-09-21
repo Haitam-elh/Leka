@@ -143,6 +143,12 @@ markers = [
 [tool.coverage.run]
 source = ["leka"]
 omit = ["leka/__init__.py"]
+# SQLAlchemy async runs its queries inside greenlets. Without this line
+# coverage loses those frames and under-reports everything that touches the
+# database: 50% instead of 82% on leka/identity/service.py, the most
+# security-sensitive module we have. The threshold then guards a number that
+# does not mean what it says.
+concurrency = ["greenlet", "thread"]
 
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]

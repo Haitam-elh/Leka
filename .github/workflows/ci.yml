@@ -95,7 +95,10 @@ jobs:
         run: alembic check
 
       - name: pytest
-        run: pytest --cov-fail-under=60
+        # 80, not 60. Coverage used to lose SQLAlchemy's greenlet frames and
+        # report 79% for a suite that really covers 87%; at that reading a
+        # 60% floor protected nothing. See concurrency in pyproject.toml.
+        run: pytest --cov-fail-under=80
 
   web:
     name: web — lint, types, build
