@@ -16,6 +16,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
+from leka.core import ratelimit
 from leka.core.config import settings
 from leka.core.ratelimit import LOGIN_PER_IP, REGISTER_PER_IP
 from leka.db import session_factory, system_scope
@@ -130,6 +131,73 @@ async def test_a_successful_login_forgives_earlier_typos(
 
     assert good.status_code == 200
     assert again.status_code == 200
+
+
+async def test_counting_an_attempt_always_leaves_an_expiry() -> None:
+    """A counter with no expiry never decays, and locks someone out for good.
+
+    INCR and EXPIRE used to be two calls. A Redis restart or a dropped
+    connection between them left a key with no TTL at all: every later
+    attempt incremented a counter that would never reset, the person could
+    not sign in again, and nothing in the logs said why. The fix puts both
+    in one transactional pipeline; this is what proves the expiry is
+    actually there afterwards.
+    """
+    import redis.asyncio as redis
+
+    from leka.core.config import settings
+
+    limit = ratelimit.Limit(attempts=5, window_seconds=60)
+    identifier = f"ttl-{uuid.uuid4().hex}"
+
+    verdict = await ratelimit.consume("test", identifier, limit)
+
+    client = redis.from_url(str(settings.redis_url))
+    try:
+        ttl = await client.ttl(limit.key("test", identifier))
+    finally:
+        await client.delete(limit.key("test", identifier))
+        await client.aclose()
+
+    assert verdict.allowed
+    assert 0 < ttl <= limit.window_seconds, (
+        f"the counter has no usable expiry (TTL {ttl}) - a key without one "
+        "never decays and throttles that person for ever"
+    )
+    assert verdict.retry_after_seconds > 0
+
+
+async def test_a_counter_that_lost_its_expiry_gets_one_back() -> None:
+    """Self-repair, not just prevention.
+
+    EXPIRE ... NX sets the window whenever the key has none, so a counter
+    left over from the old two-call version — or from any future mishap —
+    starts decaying again at the next attempt instead of staying stuck.
+    """
+    import redis.asyncio as redis
+
+    from leka.core.config import settings
+
+    limit = ratelimit.Limit(attempts=5, window_seconds=60)
+    identifier = f"stuck-{uuid.uuid4().hex}"
+    key = limit.key("test", identifier)
+
+    client = redis.from_url(str(settings.redis_url))
+    try:
+        # Exactly the state the old code could leave behind: a counter, no TTL.
+        await client.set(key, 1)
+        assert await client.ttl(key) == -1
+
+        await ratelimit.consume("test", identifier, limit)
+
+        repaired = await client.ttl(key)
+    finally:
+        await client.delete(key)
+        await client.aclose()
+
+    assert 0 < repaired <= limit.window_seconds, (
+        f"a counter with no expiry stayed stuck (TTL {repaired})"
+    )
 
 
 # ── CSRF ─────────────────────────────────────────────────────────────────────

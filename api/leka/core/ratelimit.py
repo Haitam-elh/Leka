@@ -72,17 +72,30 @@ async def consume(scope: str, identifier: str, limit: Limit) -> LimitVerdict:
     allowance across a window boundary, which matters for a billing quota and
     not for slowing down a password guesser.
 
+    The counter and its expiry go out in ONE atomic round trip. They used to
+    be separate calls, and a Redis restart or a dropped connection between
+    the two left a counter with no expiry at all — a key that never decays,
+    and a person locked out for good with nothing in the logs to say why. The
+    symptom would reach us as "I can't sign in any more", which is the worst
+    kind of bug to receive.
+
+    A transactional pipeline rather than a Lua script: MULTI/EXEC is enough
+    to make the three commands indivisible, and it needs no script to keep,
+    load or version. EXPIRE ... NX sets the window only when the key has none
+    — the same thing the old `if used == 1` meant, and it also repairs a key
+    that somehow lost its expiry instead of leaving it stuck forever.
+
     Fails OPEN if Redis is unreachable, and says so loudly. The alternative
     is that a Redis hiccup locks every customer out of their account, which
     is a worse outcome than a few minutes of unthrottled attempts.
     """
     key = limit.key(scope, identifier)
     try:
-        client = _redis()
-        used = await client.incr(key)
-        if used == 1:
-            await client.expire(key, limit.window_seconds)
-        ttl = await client.ttl(key)
+        async with _redis().pipeline(transaction=True) as pipeline:
+            pipeline.incr(key)
+            pipeline.expire(key, limit.window_seconds, nx=True)
+            pipeline.ttl(key)
+            used, _, ttl = await pipeline.execute()
     except Exception as error:
         logger.error("rate_limit_unavailable", scope=scope, error=str(error))
         return LimitVerdict(allowed=True, remaining=limit.attempts, retry_after_seconds=0)
