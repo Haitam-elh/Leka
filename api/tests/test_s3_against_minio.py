@@ -46,9 +46,37 @@ from leka.platform.storage import (
 
 pytestmark = pytest.mark.integration
 
-ENDPOINT = os.environ.get("LEKA_S3_TEST_ENDPOINT", "http://127.0.0.1:9000")
-ACCESS_KEY = os.environ.get("LEKA_S3_TEST_ACCESS_KEY", "minioadmin")
-SECRET_KEY = os.environ.get("LEKA_S3_TEST_SECRET_KEY", "minioadmin")
+# Which server these tests run against.
+#
+# MinIO by default: it is what docker compose starts, what CI starts, and it
+# costs nothing. Set LEKA_S3_TEST_TARGET=aws to point them at the real bucket
+# in the application's own settings instead.
+#
+# OPT-IN ON PURPOSE. A fallback to whatever LEKA_S3_* happens to hold would
+# mean a developer with a filled .env silently running the suite against a
+# paid bucket — writing a thousand objects into it to test pagination. The
+# switch is a separate variable, and it carries no secret.
+TARGET = os.environ.get("LEKA_S3_TEST_TARGET", "minio").lower()
+AGAINST_AWS = TARGET == "aws"
+
+if AGAINST_AWS:
+    # Read from the application's configuration rather than from test-only
+    # variables: the credential lives in .env once, and nowhere else.
+    from leka.core.config import settings as _settings
+
+    ENDPOINT = _settings.s3_endpoint_url  # None means AWS's own endpoints
+    REGION = _settings.s3_region
+    ACCESS_KEY = _settings.s3_access_key_id or ""
+    SECRET_KEY = (
+        _settings.s3_secret_access_key.get_secret_value() if _settings.s3_secret_access_key else ""
+    )
+    CONFIGURED_BUCKET = _settings.s3_bucket
+else:
+    ENDPOINT = os.environ.get("LEKA_S3_TEST_ENDPOINT", "http://127.0.0.1:9000")
+    REGION = "us-east-1"
+    ACCESS_KEY = os.environ.get("LEKA_S3_TEST_ACCESS_KEY", "minioadmin")
+    SECRET_KEY = os.environ.get("LEKA_S3_TEST_SECRET_KEY", "minioadmin")
+    CONFIGURED_BUCKET = None
 
 # CI sets this. Locally it is unset, so a developer with no MinIO running
 # gets skips rather than a wall of failures — but the pipeline never does.
@@ -70,7 +98,7 @@ def _client() -> object:
     return boto3.client(
         "s3",
         endpoint_url=ENDPOINT,
-        region_name="us-east-1",
+        region_name=REGION,
         aws_access_key_id=ACCESS_KEY,
         aws_secret_access_key=SECRET_KEY,
     )
@@ -78,15 +106,40 @@ def _client() -> object:
 
 @pytest.fixture(scope="session")
 def bucket() -> Iterator[str]:
-    """A bucket of our own, removed afterwards.
+    """A bucket to work in, whether we may create one or not.
 
-    Named uniquely so two runs on the same server — a developer and a
-    rerun, or two CI jobs — cannot see each other's objects.
+    Against MinIO we make a disposable bucket and delete it afterwards.
+
+    Against AWS we do neither, and that is the IAM policy being right rather
+    than a limitation: `leka-payloads-readwrite` grants no CreateBucket and
+    no DeleteBucket, so a leaked key cannot make resources or destroy the
+    bucket. A test suite is not a reason to widen it. We borrow the existing
+    bucket and stay inside a prefix of our own — see the `prefix` fixture.
     """
     import botocore.exceptions
 
-    name = f"leka-test-{uuid.uuid4().hex[:12]}"
     client = _client()
+
+    if AGAINST_AWS:
+        if not CONFIGURED_BUCKET:
+            pytest.fail(
+                "LEKA_S3_TEST_TARGET=aws but LEKA_S3_BUCKET is not set in .env. "
+                "The bucket, region and credentials come from the application's "
+                "own settings when running against AWS."
+            )
+        try:
+            client.head_bucket(Bucket=CONFIGURED_BUCKET)  # type: ignore[attr-defined]
+        except botocore.exceptions.EndpointConnectionError:
+            pytest.fail(f"cannot reach AWS S3 at {ENDPOINT or 'the default endpoint'}")
+        except botocore.exceptions.ClientError as error:
+            pytest.fail(
+                f"cannot reach bucket {CONFIGURED_BUCKET!r}: {error}. Check "
+                "LEKA_S3_ACCESS_KEY_ID, LEKA_S3_SECRET_ACCESS_KEY and the region."
+            )
+        yield CONFIGURED_BUCKET
+        return
+
+    name = f"leka-test-{uuid.uuid4().hex[:12]}"
     try:
         client.create_bucket(Bucket=name)  # type: ignore[attr-defined]
     except botocore.exceptions.EndpointConnectionError:
@@ -106,6 +159,35 @@ def bucket() -> Iterator[str]:
         if keys:
             client.delete_objects(Bucket=name, Delete={"Objects": keys})  # type: ignore[attr-defined]
     client.delete_bucket(Bucket=name)  # type: ignore[attr-defined]
+
+
+@pytest.fixture(scope="session")
+def prefix(bucket: str) -> Iterator[str]:
+    """Every key this suite writes lives under one prefix, removed afterwards.
+
+    Against MinIO the bucket is disposable and this changes nothing. Against
+    a real bucket it is what makes the suite safe to run: it cannot see or
+    delete anything it did not write, whatever else is in there, and the
+    teardown is one prefix rather than "everything".
+
+    Unique per run, so two runs at once — a developer and CI, or a rerun
+    after a timeout — cannot delete each other's objects halfway through.
+    """
+    path = f"validation/{uuid.uuid4().hex}/"
+
+    yield path
+
+    client = _client()
+    paginator = client.get_paginator("list_objects_v2")  # type: ignore[attr-defined]
+    removed = 0
+    for page in paginator.paginate(Bucket=bucket, Prefix=path):
+        keys = [{"Key": item["Key"]} for item in page.get("Contents", [])]
+        if keys:
+            client.delete_objects(Bucket=bucket, Delete={"Objects": keys})  # type: ignore[attr-defined]
+            removed += len(keys)
+    # Printed, not logged: the point is that a human reading the test output
+    # can see the bucket was left clean. noqa because this is that exception.
+    print(f"\nprefix {path} cleaned: {removed} objects removed")  # noqa: T201
 
 
 @pytest.fixture
@@ -136,9 +218,9 @@ async def _drain(chunks: AsyncIterator[bytes]) -> bytes:
     ],
 )
 async def test_a_real_bucket_returns_exactly_what_it_was_given(
-    store: S3ObjectStore, label: str, payload: bytes
+    store: S3ObjectStore, prefix: str, label: str, payload: bytes
 ) -> None:
-    key = f"round-trip/{uuid.uuid4()}/{label}"
+    key = f"{prefix}round-trip/{uuid.uuid4()}/{label}"
 
     written = await store.put(key, from_bytes(payload), content_type="application/octet-stream")
     read_back = await _drain(store.get(key))
@@ -149,26 +231,26 @@ async def test_a_real_bucket_returns_exactly_what_it_was_given(
 
 
 async def test_a_real_bucket_tells_an_empty_object_from_a_missing_one(
-    store: S3ObjectStore,
+    store: S3ObjectStore, prefix: str
 ) -> None:
     """ "Nothing" is a real answer from an API, and it is not the same as
     "we never stored this"."""
-    key = f"empty/{uuid.uuid4()}"
+    key = f"{prefix}empty/{uuid.uuid4()}"
     await store.put(key, from_bytes(b""), content_type="text/plain")
 
     assert await _drain(store.get(key)) == b""
     assert await store.exists(key) is True
-    assert await store.exists(f"never-written/{uuid.uuid4()}") is False
+    assert await store.exists(f"{prefix}never-written/{uuid.uuid4()}") is False
     with pytest.raises(ObjectNotFoundError):
-        await _drain(store.get(f"never-written/{uuid.uuid4()}"))
+        await _drain(store.get(f"{prefix}never-written/{uuid.uuid4()}"))
 
 
 async def test_a_real_bucket_says_whether_a_delete_removed_anything(
-    store: S3ObjectStore,
+    store: S3ObjectStore, prefix: str
 ) -> None:
     """S3 deletes are idempotent and report success either way, so the
     adapter has to check first. This is where that gets verified."""
-    key = f"doomed/{uuid.uuid4()}"
+    key = f"{prefix}doomed/{uuid.uuid4()}"
     await store.put(key, from_bytes(b"x"), content_type="text/plain")
 
     assert await store.delete(key) is True
@@ -178,7 +260,7 @@ async def test_a_real_bucket_says_whether_a_delete_removed_anything(
 # ── Past S3's page limit ─────────────────────────────────────────────────────
 
 
-async def test_listing_and_purging_go_past_one_page(store: S3ObjectStore) -> None:
+async def test_listing_and_purging_go_past_one_page(store: S3ObjectStore, prefix: str) -> None:
     """S3 lists and deletes at most 1000 keys per request.
 
     A customer's workspace holds far more, and erasing one is a prefix
@@ -193,36 +275,40 @@ async def test_listing_and_purging_go_past_one_page(store: S3ObjectStore) -> Non
 
     workspace, source = uuid.uuid4(), uuid.uuid4()
     when = datetime.now(UTC)
-    keys = [object_key(workspace, source, when) for _ in range(OVER_ONE_PAGE)]
+    keys = [prefix + object_key(workspace, source, when) for _ in range(OVER_ONE_PAGE)]
     await asyncio.gather(
         *[store.put(key, from_bytes(b"x"), content_type="text/plain") for key in keys]
     )
 
-    listed = [key async for key in store.iter_prefix(workspace_prefix(workspace))]
+    listed = [key async for key in store.iter_prefix(prefix + workspace_prefix(workspace))]
     assert len(listed) == OVER_ONE_PAGE, (
         f"iter_prefix saw {len(listed)} of {OVER_ONE_PAGE} objects — it stops at a page boundary"
     )
 
-    removed = await store.delete_prefix(workspace_prefix(workspace))
+    removed = await store.delete_prefix(prefix + workspace_prefix(workspace))
     assert removed == OVER_ONE_PAGE, (
         f"delete_prefix removed {removed} of {OVER_ONE_PAGE} — "
         "a customer's data would be left behind"
     )
-    assert [key async for key in store.iter_prefix(workspace_prefix(workspace))] == []
+    assert [key async for key in store.iter_prefix(prefix + workspace_prefix(workspace))] == []
 
 
-async def test_a_prefix_delete_leaves_its_neighbours_alone(store: S3ObjectStore) -> None:
+async def test_a_prefix_delete_leaves_its_neighbours_alone(
+    store: S3ObjectStore, prefix: str
+) -> None:
     """Erasing one customer must not touch the one whose id sorts next to it."""
     doomed, kept = uuid.uuid4(), uuid.uuid4()
     source, when = uuid.uuid4(), datetime.now(UTC)
     for _ in range(3):
         await store.put(
-            object_key(doomed, source, when), from_bytes(b"x"), content_type="text/plain"
+            prefix + object_key(doomed, source, when),
+            from_bytes(b"x"),
+            content_type="text/plain",
         )
-    survivor = object_key(kept, source, when)
+    survivor = prefix + object_key(kept, source, when)
     await store.put(survivor, from_bytes(b"x"), content_type="text/plain")
 
-    assert await store.delete_prefix(workspace_prefix(doomed)) == 3
+    assert await store.delete_prefix(prefix + workspace_prefix(doomed)) == 3
     assert await store.exists(survivor)
 
 
@@ -289,7 +375,7 @@ def test_these_tests_are_not_silently_skipped_in_ci() -> None:
 
 
 async def test_the_upload_footprint_does_not_grow_with_the_payload(
-    store: S3ObjectStore,
+    store: S3ObjectStore, prefix: str
 ) -> None:
     """The bound, stated as what it actually is: a constant.
 
@@ -319,7 +405,7 @@ async def test_the_upload_footprint_does_not_grow_with_the_payload(
             yield bytes((index % 251,)) * CHUNK_SIZE
 
     async def peak_for(chunks: int) -> int:
-        key = f"footprint/{uuid.uuid4()}.bin"
+        key = f"{prefix}footprint/{uuid.uuid4()}.bin"
         tracemalloc.start()
         try:
             tracemalloc.reset_peak()
@@ -346,7 +432,7 @@ async def test_the_upload_footprint_does_not_grow_with_the_payload(
 
 
 async def test_a_payload_over_the_ceiling_leaves_nothing_in_the_bucket(
-    store: S3ObjectStore, monkeypatch: pytest.MonkeyPatch
+    store: S3ObjectStore, prefix: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A refusal must not leave half an object behind.
 
@@ -367,7 +453,7 @@ async def test_a_payload_over_the_ceiling_leaves_nothing_in_the_bucket(
         for index in range(32):
             yield bytes((index % 251,)) * CHUNK_SIZE
 
-    key = f"too-big/{uuid.uuid4()}.bin"
+    key = f"{prefix}too-big/{uuid.uuid4()}.bin"
 
     with pytest.raises(ObjectTooLargeError, match="LEKA_MAX_OBJECT_BYTES"):
         await store.put(key, synthetic(), content_type="application/octet-stream")
@@ -375,7 +461,9 @@ async def test_a_payload_over_the_ceiling_leaves_nothing_in_the_bucket(
     assert await store.exists(key) is False
 
     incomplete = await asyncio.to_thread(
-        lambda: _client().list_multipart_uploads(Bucket=store._bucket)  # type: ignore[attr-defined]
+        lambda: _client().list_multipart_uploads(  # type: ignore[attr-defined]
+            Bucket=store._bucket, Prefix=prefix
+        )
     )
     assert not incomplete.get("Uploads"), (
         "an aborted upload left multipart parts on the server: invisible to a listing, and billed"

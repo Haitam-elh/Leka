@@ -84,6 +84,15 @@ STREAM_QUEUE_CHUNKS = 4
 S3_PART_BYTES = 8 * 1024 * 1024
 S3_CONCURRENT_PARTS = 1
 
+# How many HTTPS connections the client keeps to S3.
+#
+# botocore's default is ten, which is fine for one upload at a time and not
+# for a worker syncing several sources at once: past ten, connections are
+# discarded and reopened, and every reopen is a TLS handshake. Thirty-two
+# matches the ceiling of the default thread pool, so the two limits agree
+# rather than one silently throttling the other.
+S3_MAX_CONNECTIONS = 32
+
 
 class ObjectStoreError(RuntimeError):
     """The object store could not do what was asked.
@@ -638,6 +647,7 @@ class S3ObjectStore:
             return
 
         import boto3
+        from botocore.config import Config
 
         self._client = boto3.client(
             "s3",
@@ -645,6 +655,7 @@ class S3ObjectStore:
             region_name=region,
             aws_access_key_id=access_key_id,
             aws_secret_access_key=secret_access_key,
+            config=Config(max_pool_connections=S3_MAX_CONNECTIONS),
         )
 
     def _is_missing(self, error: Exception) -> bool:
