@@ -19,6 +19,7 @@ import json
 import subprocess
 import sys
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -459,3 +460,147 @@ def test_the_adr_records_the_decisions_this_ticket_made() -> None:
     assert "no index" in adr.lower(), (
         "the sortable fields without an index are an exception and must be stated"
     )
+
+
+# ── The cursor's own encoding ────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("label", "key"),
+    [
+        ("datetime", datetime(2026, 9, 21, 12, 0, 0, 123456, tzinfo=UTC)),
+        ("uuid", uuid.UUID("0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0")),
+        ("string", "acme-corp"),
+        ("integer", 42),
+    ],
+)
+def test_a_sort_key_survives_the_cursor_round_trip(label: str, key: object) -> None:
+    """A cursor carries the last row's sort value through JSON and back.
+
+    Datetimes and UUIDs do not survive that on their own, so they are
+    tagged and rebuilt. The uuid branch has no route sorting by one today —
+    it is tested because the code offers it, and an encoder that silently
+    returned a string for one type would corrupt the comparison rather than
+    fail.
+    """
+    from leka.db.pagination import decode_cursor, encode_cursor
+
+    row_id = uuid.uuid4()
+    cursor = encode_cursor(sort="created_at", direction="desc", key=key, row_id=row_id)
+
+    decoded_key, decoded_id = decode_cursor(cursor, sort="created_at", direction="desc")
+
+    assert decoded_key == key, f"{label} did not survive the round trip"
+    assert type(decoded_key) is type(key), f"{label} came back as {type(decoded_key).__name__}"
+    assert decoded_id == row_id
+
+
+def test_a_cursor_signed_by_us_but_nonsense_inside_is_refused() -> None:
+    """Correctly signed, correctly shaped, and still unusable.
+
+    Only we can produce this — which is the point. It is what an older
+    encoding of ours looks like after a change, and it must refuse rather
+    than raise something a caller does not expect.
+    """
+    import base64
+    import hashlib
+    import hmac
+
+    from leka.core.config import settings
+    from leka.db.pagination import CursorError, decode_cursor
+
+    payload = json.dumps(
+        {"s": "created_at", "d": "desc", "k": "x", "i": "not-a-uuid"},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    signature = hmac.new(
+        settings.secret_key.get_secret_value().encode(), payload, hashlib.sha256
+    ).digest()
+
+    def b64(raw: bytes) -> str:
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    with pytest.raises(CursorError):
+        decode_cursor(f"{b64(payload)}.{b64(signature)}", sort="created_at", direction="desc")
+
+
+def test_a_cursor_of_an_unknown_value_type_is_refused() -> None:
+    """The encoding may change. A cursor from before that change must be
+    refused, not guessed at."""
+    import base64
+    import hashlib
+    import hmac
+
+    from leka.core.config import settings
+    from leka.db.pagination import CursorError, decode_cursor
+
+    payload = json.dumps(
+        {"s": "created_at", "d": "desc", "k": {"t": "decimal", "v": "1.5"}, "i": str(uuid.uuid4())},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    signature = hmac.new(
+        settings.secret_key.get_secret_value().encode(), payload, hashlib.sha256
+    ).digest()
+
+    def b64(raw: bytes) -> str:
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    with pytest.raises(CursorError):
+        decode_cursor(f"{b64(payload)}.{b64(signature)}", sort="created_at", direction="desc")
+
+
+# ── Who a rate limit counts against ──────────────────────────────────────────
+
+
+def test_an_anonymous_caller_is_counted_by_address_not_lumped_together() -> None:
+    """Behind a proxy, every request arrives from the same socket.
+
+    Without reading X-Forwarded-For, one noisy visitor would exhaust the
+    bucket for everybody else on the internet — the limiter would become
+    the outage.
+    """
+    from starlette.requests import Request
+
+    from leka.api.ratelimit import caller_key
+
+    def request_from(headers: list[tuple[bytes, bytes]], client: tuple[str, int] | None) -> Request:
+        return Request(
+            {"type": "http", "headers": headers, "client": client, "method": "GET", "path": "/"}
+        )
+
+    behind_proxy = caller_key(
+        request_from([(b"x-forwarded-for", b"203.0.113.7, 10.0.0.1")], ("10.0.0.1", 1234))
+    )
+    direct = caller_key(request_from([], ("203.0.113.9", 1234)))
+
+    assert behind_proxy == "i:203.0.113.7", "the first hop is the caller, not the proxy"
+    assert direct == "i:203.0.113.9"
+    assert behind_proxy != direct
+
+
+def test_a_signed_in_caller_is_counted_by_session_and_the_token_is_hashed() -> None:
+    """A Redis key is read over shoulders, dumped by KEYS, exported by
+    monitoring. The session token is a credential and must not be one of
+    those keys in clear."""
+    from starlette.requests import Request
+
+    from leka.api.ratelimit import caller_key
+    from leka.core.config import settings
+
+    token = "a-real-looking-session-token"
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "client": ("203.0.113.9", 1234),
+            "headers": [(b"cookie", f"{settings.session_cookie_name}={token}".encode())],
+        }
+    )
+
+    key = caller_key(request)
+
+    assert key.startswith("s:"), "a signed-in caller should be counted by session"
+    assert token not in key, "the session token appears in a Redis key in clear"

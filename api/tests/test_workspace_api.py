@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -20,7 +21,7 @@ from sqlalchemy import text
 
 from leka.db import session_factory, system_scope
 from leka.platform import Role, Workspace, WorkspaceStatus
-from tests.conftest import FakeIdentity, error_message, page_items
+from tests.conftest import FakeIdentity, error_message, next_cursor, page_items
 
 pytestmark = pytest.mark.integration
 
@@ -368,3 +369,130 @@ async def test_deleting_a_workspace_erases_its_data_and_only_its_data(
 
     assert doomed["id"] not in owners
     assert kept["id"] in owners
+
+
+# ── Paging past the first page ───────────────────────────────────────────────
+
+
+async def _seat(workspace_id: uuid.UUID, user_id: uuid.UUID, created_at: datetime) -> None:
+    """Insert one membership with a chosen created_at.
+
+    Raw SQL, and the timestamp is chosen rather than taken from the clock:
+    the whole point below is five rows sharing one to the microsecond.
+    """
+    with system_scope():
+        async with session_factory() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO memberships (workspace_id, user_id, role, created_at) "
+                    "VALUES (:ws, :user, 'member', :created_at)"
+                ),
+                {"ws": workspace_id, "user": user_id, "created_at": created_at},
+            )
+            await session.commit()
+
+
+async def _walk_members(client: AsyncClient, limit: int) -> tuple[list[str], int]:
+    """Follow next_cursor to the end. Returns the ids seen and the page count.
+
+    Bounded at ten pages so a cursor that never advances fails the assertion
+    below rather than looping until the suite is killed.
+    """
+    seen: list[str] = []
+    cursor: str | None = None
+    pages = 0
+
+    while pages < 10:
+        query = f"{API}/members?limit={limit}"
+        if cursor:
+            query += f"&cursor={cursor}"
+        response = await client.get(query)
+        assert response.status_code == 200, response.text
+
+        seen.extend(str(item["id"]) for item in page_items(response))
+        pages += 1
+        cursor = next_cursor(response)
+        if cursor is None:
+            break
+
+    return seen, pages
+
+
+async def test_following_the_cursor_returns_every_member_exactly_once(
+    client: AsyncClient, identity: FakeIdentity, people: dict[str, uuid.UUID]
+) -> None:
+    """Page two, and the tie-break underneath it.
+
+    Every other pagination test in the suite fits in one page, so the branch
+    that ISSUES a cursor had never run — nor had the datetime encoding
+    inside it, and created_at is what /members sorts by. The guarantee was
+    real and nothing protected it.
+
+    What it guards against is not an error. It is a seat that silently
+    appears twice, or never appears at all, on a screen nobody would think
+    to doubt.
+    """
+    workspace = await _create_workspace(client, identity, people["owner"], "Acme")
+    workspace_id = uuid.UUID(workspace["id"])
+
+    # Four more seats, all at the SAME instant to the microsecond. That is
+    # the case a sort key alone cannot separate, and exactly why the cursor
+    # carries the row id as a tiebreaker: without it, two rows on a page
+    # boundary sharing a timestamp lose one of themselves for ever.
+    same_instant = datetime(2026, 9, 21, 12, 0, 0, 123456, tzinfo=UTC)
+    for index in range(4):
+        await _seat(workspace_id, await _make_user(f"seat-{index}"), same_instant)
+
+    seen, pages = await _walk_members(client, limit=2)
+
+    assert len(seen) == 5, f"five seats exist, {len(seen)} were seen over {pages} pages"
+    assert len(set(seen)) == 5, f"{len(seen) - len(set(seen))} seat(s) came back twice"
+    assert pages == 3, f"five rows at limit=2 is three pages, not {pages}"
+
+
+async def test_paging_with_distinct_timestamps_also_returns_everyone(
+    client: AsyncClient, identity: FakeIdentity, people: dict[str, uuid.UUID]
+) -> None:
+    """The ordinary case, where the sort key alone would have been enough.
+
+    Kept alongside the tie-break test rather than replaced by it: an
+    implementation that broke ties correctly but mishandled ordinary
+    ordering would pass the other one.
+    """
+    workspace = await _create_workspace(client, identity, people["owner"], "Acme")
+    workspace_id = uuid.UUID(workspace["id"])
+
+    for index in range(4):
+        await _seat(
+            workspace_id,
+            await _make_user(f"spread-{index}"),
+            datetime(2026, 9, 21 + index, 9, 0, tzinfo=UTC),
+        )
+
+    seen, pages = await _walk_members(client, limit=2)
+
+    assert len(seen) == 5
+    assert len(set(seen)) == 5
+    assert pages == 3
+
+
+async def test_the_last_page_says_it_is_the_last(
+    client: AsyncClient, identity: FakeIdentity, people: dict[str, uuid.UUID]
+) -> None:
+    """A null next_cursor is how a client knows to stop.
+
+    One extra row is fetched and dropped to decide this, so a client that
+    keeps asking until the cursor is null makes no wasted request at all
+    rather than discovering the end by receiving an empty page.
+    """
+    workspace = await _create_workspace(client, identity, people["owner"], "Acme")
+    await _seat(
+        uuid.UUID(workspace["id"]),
+        await _make_user("second"),
+        datetime(2026, 9, 21, 10, 0, tzinfo=UTC),
+    )
+
+    first = await client.get(f"{API}/members?limit=2")
+
+    assert len(page_items(first)) == 2
+    assert next_cursor(first) is None, "a cursor was issued for a page with nothing after it"
