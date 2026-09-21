@@ -15,9 +15,15 @@ running it twice is the same as running it once.
 JOBS ARE NAMED BY STRING, never imported. `enqueue("leka.ingestion.tasks.x")`
 rather than importing x and passing the function. Two reasons, and the second
 is the real one: RQ serialises a function reference as its dotted path
-anyway, and leka.platform sits BELOW leka.ingestion in the dependency order
-(architecture rule 1), so importing the task here would invert the one rule
-the module layout exists to enforce.
+anyway, and leka.background sits BELOW every module that owns a job in the
+dependency order (architecture rule 1), so importing the task here would
+invert the one rule the module layout exists to enforce.
+
+THIS LIVED IN leka.platform UNTIL LEKA-334. It moved down to leka.background,
+below platform, so that the events and the execution history built there and
+the queue they hand work to are one mechanism rather than two — and so that
+platform, which enqueues a purge when a workspace is erased, can still import
+it. Nothing about how it behaves changed.
 
 FAILING TO ENQUEUE IS NOT SILENT, AND NOT FATAL. If Redis is unreachable the
 attempt is logged as an error and the caller carries on. That is deliberate:

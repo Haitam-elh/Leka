@@ -518,7 +518,7 @@ async def test_enqueue_puts_the_job_on_the_queue(monkeypatch: pytest.MonkeyPatch
     importing a task to enqueue it would invert the one rule the module
     layout exists to enforce — and RQ stores a dotted path anyway.
     """
-    from leka.platform import jobs
+    from leka.background import jobs
 
     class FakeQueue:
         def __init__(self) -> None:
@@ -543,7 +543,7 @@ async def test_a_queue_that_is_down_is_reported_not_raised(
     sweep behind it. Refusing to delete a customer's account because Redis
     was briefly unreachable would be the worse outcome by a long way.
     """
-    from leka.platform import jobs
+    from leka.background import jobs
 
     class BrokenQueue:
         def enqueue(self, job: str, *args: Any, **kwargs: Any) -> None:
@@ -559,7 +559,7 @@ def test_the_queue_is_built_once_and_can_be_forgotten() -> None:
     """Built on first use rather than at import: a module import must not
     open a network connection, or every test and every migration pays for
     one it never uses."""
-    from leka.platform import jobs
+    from leka.background import jobs
 
     jobs.reset_queue()
     first = jobs.queue()

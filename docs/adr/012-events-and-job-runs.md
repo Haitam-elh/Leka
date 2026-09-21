@@ -12,7 +12,7 @@ it was a Redis queue and four tasks run by hand, and it could not answer a
 question a platform engineer asks the first week: **what if the queue loses
 the message?**
 
-`enqueue` (in `leka.platform.jobs`) logs a failure
+`enqueue` (then in `leka.platform.jobs`, now `leka.background.jobs`) logs a failure
 and carries on. That is right for
 housekeeping, which has the reconciliation sweep behind it, and wrong for an
 event that nothing else would ever find again — a source sync requested by a
