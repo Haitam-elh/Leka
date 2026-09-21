@@ -169,6 +169,8 @@ erDiagram
     SOURCES ||--o{ ENTITIES : "was seen by"
     ENTITIES ||--o{ RELATIONSHIPS : "from"
     ENTITIES ||--o{ RELATIONSHIPS : "to"
+    WORKSPACES ||--o{ RAW_PAYLOADS : owns
+    SOURCES ||--o{ RAW_PAYLOADS : "was fetched from"
 ```
 
 **`entities`** — every object LEKA knows about, discriminated by `type`
@@ -180,6 +182,15 @@ erDiagram
 
 Both carry `confidence` and entities carry `last_seen_at`. LEKA infers things;
 an answer built on shaky evidence has to be able to say so.
+
+**`raw_payloads`** — what a connector actually fetched, before anything was
+made of it. THE BYTES ARE NOT IN THIS TABLE: the row holds a key, a size, a
+SHA-256 and an expiry, and the payload itself lives in an object store. They
+are the largest volume in the product and the shortest-lived, and keeping them
+here would swell every backup and lengthen every restore. See
+[ADR 010](adr/010-object-storage.md), and
+[docs/data-lifecycle.md](data-lifecycle.md) for how long anything is kept and
+what happens when a customer leaves.
 
 ### Tenancy
 
@@ -358,3 +369,6 @@ Every change is held to them. They are listed in
 | An orchestration framework | `capabilities` is a few hundred lines we control, against a dependency that moves faster than we do |
 | A `shared/` package | a drawer where coupling goes to hide. Something used by two modules belongs to one of them, or to `platform` |
 | A README in every folder | they rot. The module docstring sits next to the code and is read during review |
+| Payload bytes in PostgreSQL | [ADR 010](adr/010-object-storage.md). The largest and least durable data we hold, in the store that is hardest to back up and restore |
+| Partitioned tables | `raw_payloads` will need it. Not yet — the triggers are written down as numbers in [ADR 010](adr/010-object-storage.md), and the quarterly restore drill is what observes them |
+| A scheduler | every background task is a plain function with a synchronous entry point, safe to run twice. `cron` is the whole story until it is not |

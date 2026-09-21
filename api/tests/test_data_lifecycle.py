@@ -569,3 +569,53 @@ def test_the_queue_is_built_once_and_can_be_forgotten() -> None:
 
     jobs.reset_queue()
     assert jobs.queue() is not first
+
+# ── The documentation must agree with the code ───────────────────────────────
+
+
+def test_the_lifecycle_document_matches_the_policy() -> None:
+    """docs/data-lifecycle.md is what a customer's DPO is shown.
+
+    A retention table that drifts from the code is worse than no table: it is
+    a written promise about data we are not actually keeping to. The same
+    reasoning as tests/test_permissions_matrix.py, applied to the other
+    document somebody outside the team reads.
+    """
+    from pathlib import Path
+
+    document = Path(__file__).resolve().parents[2] / "docs" / "data-lifecycle.md"
+    text = document.read_text(encoding="utf-8")
+
+    missing = [kind.value for kind in SourceKind if kind.value not in text.lower()]
+    assert not missing, (
+        f"source kinds absent from docs/data-lifecycle.md: {missing}. "
+        "Every kind LEKA connects to must say how long its payloads are kept."
+    )
+
+    for kind, days in DEFAULT_RETENTION_DAYS.items():
+        assert f"| {days} |" in text, (
+            f"{kind.value} is kept for {days} days in retention.py, and that "
+            "number does not appear in the retention table of "
+            "docs/data-lifecycle.md."
+        )
+
+    assert str(FALLBACK_RETENTION_DAYS) in text, (
+        "the fallback retention is not stated in docs/data-lifecycle.md"
+    )
+
+
+def test_the_runbook_records_a_drill_that_was_actually_run() -> None:
+    """A backup that has never been restored is an assumption.
+
+    This does not check the numbers — it checks that the document contains
+    measurements and a date rather than intentions, so that "we will test the
+    backups" cannot quietly become the permanent state of the file.
+    """
+    from pathlib import Path
+
+    runbook = (Path(__file__).resolve().parents[2] / "docs" / "runbook.md").read_text(
+        encoding="utf-8"
+    )
+
+    for expected in ("**Performed:**", "RPO", "RTO", "pg_restore", "Verification"):
+        assert expected in runbook, f"docs/runbook.md no longer records {expected!r}"
