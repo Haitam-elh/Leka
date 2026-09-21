@@ -36,25 +36,56 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from alembic import command
 
 
+def _from_dotenv(name: str) -> str | None:
+    """Read one variable out of .env, by hand.
+
+    This runs before leka.core.config is imported, so pydantic-settings has
+    not loaded anything yet — and it cannot, because the redirection below
+    has to happen first. Six lines of parsing rather than a dependency, or
+    than every developer remembering to export a variable the project
+    already stores in a file.
+    """
+    env_file = Path(__file__).resolve().parents[2] / ".env"
+    if not env_file.is_file():
+        return None
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith(f"{name}=") and not stripped.startswith("#"):
+            return stripped.split("=", 1)[1].strip() or None
+    return None
+
+
 def _redirect_to_a_test_database() -> str:
     """Point this process at <database>_test, creating the name if needed.
 
     Runs at import, before leka.core.config is loaded. CI already sets a
     dedicated database, so a name that already ends in _test is left alone.
+
+    The environment wins over .env, because CI sets it and a developer
+    overriding it for one run means it. Falling back to .env is what makes
+    `pytest` work from a plain shell — docs/setup.md says to run exactly
+    that, and it used to fail with a message about a variable nobody had
+    been told to export.
     """
-    url = os.environ.get("LEKA_DATABASE_URL")
+    url = os.environ.get("LEKA_DATABASE_URL") or _from_dotenv("LEKA_DATABASE_URL")
     if url is None:
-        msg = "LEKA_DATABASE_URL must be set to run the tests"
+        msg = (
+            "LEKA_DATABASE_URL is neither in the environment nor in .env. "
+            "Copy .env.example to .env and fill it in — see docs/setup.md."
+        )
         raise RuntimeError(msg)
 
     parsed = urlparse(url)
     name = parsed.path.lstrip("/")
-    if name.endswith("_test"):
-        return url
+    if not name.endswith("_test"):
+        url = urlunparse(parsed._replace(path=f"/{name}_test"))
 
-    redirected = urlunparse(parsed._replace(path=f"/{name}_test"))
-    os.environ["LEKA_DATABASE_URL"] = redirected
-    return redirected
+    # Set in both cases, including when the value came from .env: everything
+    # imported after this point reads the environment, and a value that only
+    # lived in this function would let the suite run against the developer's
+    # own database.
+    os.environ["LEKA_DATABASE_URL"] = url
+    return url
 
 
 TEST_DATABASE_URL = _redirect_to_a_test_database()

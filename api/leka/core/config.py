@@ -275,6 +275,10 @@ class Settings(BaseSettings):
         "smtp_password",
         "smtp_host",
         "smtp_username",
+        "s3_bucket",
+        "s3_endpoint_url",
+        "s3_access_key_id",
+        "s3_secret_access_key",
         mode="before",
     )
     @classmethod
@@ -291,6 +295,12 @@ class Settings(BaseSettings):
         filled in reads as configured, and the failure moves from startup to
         the first time it is used — the failure mode this whole file exists
         to prevent.
+
+        The S3 fields are here for exactly that reason, found the hard way:
+        with LEKA_S3_BUCKET blank, LEKA_OBJECT_STORE=s3 in production passed
+        _refuse_local_object_store_in_production — which tests each value
+        against None — and the process started with a bucket called "". The
+        first payload write would have been the first sign.
         """
         if isinstance(value, str) and not value.strip():
             return None
