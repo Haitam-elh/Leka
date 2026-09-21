@@ -211,6 +211,11 @@ exception and is not really one: it verifies a membership and then writes the
 id into the server's own session — a client may ASK to move, never ASSERT
 where it is. See [ADR 007](adr/007-tenant-isolation-strategy.md).
 
+A test enumerates every mounted route and requires each to be protected or
+listed as deliberately public with a written reason, so a route added
+without authentication fails CI rather than shipping. See
+[ADR 011](adr/011-api-conventions.md) and [docs/api.md](api.md).
+
 That rule is a discipline, so we do not rely on it alone. Reads are filtered
 by a session-level scope guard that refuses any query touching a
 workspace-scoped table with no workspace declared, and cross-tenant
@@ -369,6 +374,9 @@ Every change is held to them. They are listed in
 | An orchestration framework | `capabilities` is a few hundred lines we control, against a dependency that moves faster than we do |
 | A `shared/` package | a drawer where coupling goes to hide. Something used by two modules belongs to one of them, or to `platform` |
 | A README in every folder | they rot. The module docstring sits next to the code and is read during review |
+| Offset pagination | [ADR 011](adr/011-api-conventions.md). Rows arrive while somebody reads, so page two repeats or loses items |
+| A general filter syntax | a standing invitation to query something nobody meant to expose. Filters are declared per resource |
+| A separate API gateway | our gateway is FastAPI. Request ids and rate limiting are two middlewares, not a component to operate |
 | Payload bytes in PostgreSQL | [ADR 010](adr/010-object-storage.md). The largest and least durable data we hold, in the store that is hardest to back up and restore |
 | Partitioned tables | `raw_payloads` will need it. Not yet — the triggers are written down as numbers in [ADR 010](adr/010-object-storage.md), and the quarterly restore drill is what observes them |
 | A scheduler | every background task is a plain function with a synchronous entry point, safe to run twice. `cron` is the whole story until it is not |

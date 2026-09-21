@@ -18,7 +18,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.db import WorkspaceScopedRepository, system_scope, workspace_scope
@@ -54,6 +54,41 @@ class MembershipResolver:
                 select(Membership).where(Membership.user_id == user_id)
             )
             return result.scalar_one_or_none()
+
+    def workspaces_for_user(self, user_id: uuid.UUID) -> Select[tuple[Workspace]]:
+        """The query for the workspaces this person may enter.
+
+        Workspaces only, not (workspace, membership) pairs: the paginator
+        orders and positions on ONE entity, and a page of tuples would need
+        a second paginator. The roles come back from roles_in below, keyed
+        by workspace, which is one indexed lookup over the ids on the page.
+
+        The caller declares system_scope. This crosses tenants along exactly
+        one axis — this person's own memberships — and saying so at the call
+        site is the point of that context manager.
+        """
+        return (
+            select(Workspace)
+            .join(Membership, Membership.workspace_id == Workspace.id)
+            .where(Membership.user_id == user_id)
+        )
+
+    async def roles_in(
+        self, user_id: uuid.UUID, workspace_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, Role]:
+        """This person's role in each of these workspaces.
+
+        Called with the ids on one page, so the IN list is bounded by the
+        page size rather than by how many workspaces they belong to.
+        """
+        if not workspace_ids:
+            return {}
+        result = await self._session.execute(
+            select(Membership.workspace_id, Membership.role)
+            .where(Membership.user_id == user_id)
+            .where(Membership.workspace_id.in_(workspace_ids))
+        )
+        return dict(result.all())  # type: ignore[arg-type]
 
     async def list_workspaces_for_user(
         self, user_id: uuid.UUID

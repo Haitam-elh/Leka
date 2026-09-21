@@ -20,7 +20,7 @@ from sqlalchemy import text
 
 from leka.db import session_factory, system_scope
 from leka.platform import Role, Workspace, WorkspaceStatus
-from tests.conftest import FakeIdentity
+from tests.conftest import FakeIdentity, error_message, page_items
 
 pytestmark = pytest.mark.integration
 
@@ -95,7 +95,7 @@ async def test_entering_a_workspace_without_a_membership_is_refused(
     response = await client.get(f"{API}/workspaces/current")
 
     assert response.status_code == 403
-    assert "not a member" in response.json()["detail"].lower()
+    assert "not a member" in error_message(response).lower()
 
 
 async def test_switching_to_a_workspace_you_do_not_belong_to_is_refused(
@@ -135,7 +135,7 @@ async def test_i_only_see_the_workspaces_i_belong_to(
     identity.sign_in(people["owner"], uuid.UUID(mine["id"]))
     response = await client.get(f"{API}/workspaces")
 
-    listed = {item["id"] for item in response.json()}
+    listed = {item["id"] for item in page_items(response)}
     assert mine["id"] in listed
     assert theirs["id"] not in listed
 
@@ -230,12 +230,12 @@ async def test_the_last_owner_cannot_be_removed(
     rescued — a support ticket created by one careless click."""
     await _create_workspace(client, identity, people["owner"], "Acme Corp")
     members = await client.get(f"{API}/members")
-    seat = members.json()[0]
+    seat = page_items(members)[0]
 
     response = await client.delete(f"{API}/members/{seat['id']}")
 
     assert response.status_code == 409
-    assert "last owner" in response.json()["detail"].lower()
+    assert "last owner" in error_message(response).lower()
 
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
@@ -262,7 +262,7 @@ async def test_a_suspended_workspace_reads_but_does_not_write(
 
     assert readable.status_code == 200
     assert writable.status_code == 403
-    assert "suspended" in writable.json()["detail"].lower()
+    assert "suspended" in error_message(writable).lower()
 
 
 async def test_a_workspace_awaiting_deletion_refuses_everything(
@@ -278,7 +278,7 @@ async def test_a_workspace_awaiting_deletion_refuses_everything(
     assert listed.status_code == 200
     denied = await client.patch(f"{API}/workspaces/current", json={"name": "Renamed"})
     assert denied.status_code == 403
-    assert "deletion" in denied.json()["detail"].lower()
+    assert "deletion" in error_message(denied).lower()
 
 
 # ── Invitations ──────────────────────────────────────────────────────────────

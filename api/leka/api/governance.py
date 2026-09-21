@@ -10,15 +10,18 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from leka.api.dependencies import (
     InvitationAcceptanceDep,
     MembershipRepositoryDep,
     MembershipServiceDep,
     PrincipalDep,
+    SessionDep,
     UserIdDep,
 )
+from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
+from leka.db import SortableField
 from leka.governance import Permission, Principal, require_permission
 from leka.platform import (
     InvitationCreate,
@@ -27,19 +30,59 @@ from leka.platform import (
     MemberRead,
     MemberRoleUpdate,
     Membership,
+    Role,
 )
 
 router = APIRouter(tags=["members"])
 
+# What /members may be sorted by, and what supports each one.
+#
+# created_at has no index of its own, and that is a deliberate exception
+# rather than an oversight: the query is already restricted to one
+# workspace by an indexed column, and a workspace holds tens of members. A
+# sort of twenty rows in memory costs nothing. The rule matters for the
+# tables that grow without bound — raw_payloads and entities already carry
+# the composite indexes their sorts need.
+MEMBER_SORTS = SortCatalogue(
+    fields=(
+        SortableField("created_at", Membership.created_at, "no index; bounded by workspace_id"),
+        SortableField("role", Membership.role, "no index; bounded by workspace_id"),
+    ),
+    default="created_at",
+)
 
-@router.get("/members", response_model=list[MemberRead])
+
+@router.get("/members", response_model=PageEnvelope[MemberRead])
 async def list_members(
     principal: PrincipalDep,
     memberships: MembershipRepositoryDep,
-) -> list[MemberRead]:
-    """Everyone with a seat in the active workspace."""
-    seats = await memberships.list_all()
-    return [MemberRead.model_validate(seat) for seat in seats]
+    page: PageParams,
+    db: SessionDep,
+    role: Annotated[Role | None, Query(description="Only seats with this role.")] = None,
+) -> PageEnvelope[MemberRead]:
+    """Everyone with a seat in the active workspace.
+
+    `role` is a DECLARED, TYPED parameter, which is what makes filtering a
+    whitelist here: a value outside the enumeration is refused by FastAPI
+    before this function runs, and there is no path by which a query string
+    becomes a column name. Adding a filter means adding a parameter, on
+    purpose.
+    """
+    statement = memberships.select(Membership)
+    if role is not None:
+        statement = statement.where(Membership.role == role)
+
+    result = await serve_page(
+        db,
+        statement,
+        request=page,
+        catalogue=MEMBER_SORTS,
+        id_column=Membership.id,
+    )
+    return PageEnvelope(
+        data=[MemberRead.model_validate(seat) for seat in result.items],
+        next_cursor=result.next_cursor,
+    )
 
 
 @router.post(

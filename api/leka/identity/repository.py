@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, Result, delete, select, update
+from sqlalchemy import CursorResult, Result, Select, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.identity.models import EmailToken, Session, TokenPurpose, User
@@ -81,15 +81,25 @@ class SessionRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_for_user(self, user_id: uuid.UUID) -> Sequence[Session]:
-        """Live sessions, newest first. What the "your devices" screen shows."""
-        now = datetime.now(UTC)
-        result = await self._session.execute(
+    def live_for_user(self, user_id: uuid.UUID) -> Select[tuple[Session]]:
+        """The query for this person's live sessions, without running it.
+
+        A statement rather than rows, so the paginator can add the ordering
+        and the position it needs. The filters that matter — this person,
+        not revoked, not expired — are already in it and nothing downstream
+        can widen them.
+        """
+        return (
             select(Session)
             .where(Session.user_id == user_id)
             .where(Session.revoked_at.is_(None))
-            .where(Session.expires_at > now)
-            .order_by(Session.last_seen_at.desc())
+            .where(Session.expires_at > datetime.now(UTC))
+        )
+
+    async def list_for_user(self, user_id: uuid.UUID) -> Sequence[Session]:
+        """Live sessions, newest first. For callers that want them all."""
+        result = await self._session.execute(
+            self.live_for_user(user_id).order_by(Session.last_seen_at.desc())
         )
         return result.scalars().all()
 

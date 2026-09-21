@@ -27,6 +27,7 @@ from leka.core.config import settings
 from leka.db import session_factory, system_scope
 from leka.identity import ConsoleEmailSender, EmailMessage
 from leka.identity.cookies import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
+from tests.conftest import comparable_error, error_code, page_items
 
 pytestmark = pytest.mark.integration
 
@@ -142,7 +143,7 @@ async def test_a_new_account_must_verify_before_signing_in(
     )
 
     assert refused.status_code == 403
-    assert refused.json()["detail"]["code"] == "account_unverified"
+    assert error_code(refused) == "account_unverified"
 
 
 async def test_a_verification_token_works_once(
@@ -156,7 +157,7 @@ async def test_a_verification_token_works_once(
 
     assert first.status_code == 200
     assert second.status_code == 400
-    assert second.json()["detail"]["code"] == "token_invalid"
+    assert error_code(second) == "token_invalid"
 
 
 async def test_a_verification_token_survives_no_race(
@@ -230,8 +231,8 @@ async def test_an_unknown_address_and_a_wrong_password_are_indistinguishable(
     )
 
     assert unknown.status_code == wrong.status_code == 401
-    assert unknown.json() == wrong.json()
-    assert unknown.json()["detail"]["code"] == "invalid_credentials"
+    assert comparable_error(unknown) == comparable_error(wrong)
+    assert error_code(unknown) == "invalid_credentials"
 
 
 async def test_the_session_cookie_carries_its_protections(
@@ -357,7 +358,7 @@ async def test_an_unauthenticated_request_is_refused_not_crashed(
     response = await client.get(f"{API}/me")
 
     assert response.status_code == 401
-    assert response.json()["detail"]["code"] == "not_authenticated"
+    assert error_code(response) == "not_authenticated"
 
 
 # ── Passwords ────────────────────────────────────────────────────────────────
@@ -477,7 +478,7 @@ async def test_i_can_see_and_revoke_my_own_sessions(
     await _sign_in(client, "nora@acme.example")
 
     listed = await client.get(f"{API}/sessions")
-    sessions = listed.json()
+    sessions = page_items(listed)
 
     assert listed.status_code == 200
     assert len(sessions) == 2
@@ -488,7 +489,7 @@ async def test_i_can_see_and_revoke_my_own_sessions(
     other = next(item for item in sessions if not item["is_current"])
     revoked = await client.delete(f"{API}/sessions/{other['id']}")
     assert revoked.status_code == 204
-    assert len((await client.get(f"{API}/sessions")).json()) == 1
+    assert len(page_items(await client.get(f"{API}/sessions"))) == 1
 
 
 async def test_i_cannot_revoke_someone_elses_session(

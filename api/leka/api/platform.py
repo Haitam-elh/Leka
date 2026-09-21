@@ -16,24 +16,29 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from leka.api.dependencies import (
     MembershipResolverDep,
     PrincipalDep,
+    SessionDep,
     SessionStoreDep,
     UserIdDep,
     WorkspaceRepositoryDep,
     WorkspaceServiceDep,
 )
+from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
+from leka.db import SortableField, system_scope
 from leka.governance import Permission, Principal, require_permission
 from leka.platform import (
     CurrentWorkspace,
     DeletionScheduled,
     Role,
+    Workspace,
     WorkspaceCreate,
     WorkspaceId,
     WorkspaceRead,
+    WorkspaceStatus,
     WorkspaceSummary,
     WorkspaceUpdate,
 )
@@ -56,23 +61,66 @@ async def create_workspace(
     return WorkspaceRead.model_validate(workspace)
 
 
-@router.get("", response_model=list[WorkspaceSummary])
+# What /workspaces may be sorted by.
+#
+# name is what a switcher shows, so it is the default. uq_workspaces_slug
+# backs a slug sort; name and created_at have no index and do not need one
+# — a person belongs to a handful of workspaces, and the query is already
+# restricted to their own memberships.
+WORKSPACE_SORTS = SortCatalogue(
+    fields=(
+        SortableField("name", Workspace.name, "no index; bounded by the caller's memberships"),
+        SortableField("slug", Workspace.slug, "uq_workspaces_slug"),
+        SortableField("created_at", Workspace.created_at, "no index; same bound as name"),
+    ),
+    default="name",
+)
+
+
+@router.get("", response_model=PageEnvelope[WorkspaceSummary])
 async def list_my_workspaces(
     user_id: UserIdDep,
     memberships: MembershipResolverDep,
-) -> list[WorkspaceSummary]:
-    """Every workspace I may enter. What fills the switcher."""
-    pairs = await memberships.list_workspaces_for_user(user_id)
-    return [
-        WorkspaceSummary(
-            id=workspace.id,
-            name=workspace.name,
-            slug=workspace.slug,
-            status=workspace.status,
-            role=membership.role,
+    page: PageParams,
+    db: SessionDep,
+    status: Annotated[
+        WorkspaceStatus | None, Query(description="Only workspaces in this state.")
+    ] = None,
+) -> PageEnvelope[WorkspaceSummary]:
+    """Every workspace I may enter. What fills the switcher.
+
+    system_scope here rather than inside the repository, because this is the
+    one question asked before any workspace exists in the request: which
+    ones may this person enter at all. Declared at the call site, in one
+    visible line, which is what that context manager is for.
+    """
+    statement = memberships.workspaces_for_user(user_id)
+    if status is not None:
+        statement = statement.where(Workspace.status == status)
+
+    with system_scope():
+        result = await serve_page(
+            db,
+            statement,
+            request=page,
+            catalogue=WORKSPACE_SORTS,
+            id_column=Workspace.id,
         )
-        for workspace, membership in pairs
-    ]
+        roles = await memberships.roles_in(user_id, [row.id for row in result.items])
+
+    return PageEnvelope(
+        data=[
+            WorkspaceSummary(
+                id=workspace.id,
+                name=workspace.name,
+                slug=workspace.slug,
+                status=workspace.status,
+                role=roles[workspace.id],
+            )
+            for workspace in result.items
+        ],
+        next_cursor=result.next_cursor,
+    )
 
 
 @router.get("/current", response_model=CurrentWorkspace)
