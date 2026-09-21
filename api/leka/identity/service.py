@@ -390,25 +390,43 @@ class AuthService:
         One exception for "never existed", "already used", "expired" and
         "wrong kind": telling them apart lets someone probe for live tokens.
         The distinction is logged, where only we can read it.
-        """
-        stored = await self._tokens.get_by_token_hash(hash_token(token))
-        if stored is None:
-            logger.info("token_rejected", purpose=purpose.value, reason="unknown")
-            msg = "unknown token"
-            raise AuthenticationError(msg)
-        if stored.purpose is not purpose:
-            logger.info("token_rejected", purpose=purpose.value, reason="wrong_purpose")
-            msg = "wrong token purpose"
-            raise AuthenticationError(msg)
-        if stored.consumed_at is not None:
-            logger.info("token_rejected", purpose=purpose.value, reason="already_used")
-            msg = "token already used"
-            raise AuthenticationError(msg)
-        if stored.expires_at <= datetime.now(UTC):
-            logger.info("token_rejected", purpose=purpose.value, reason="expired")
-            msg = "token expired"
-            raise AuthenticationError(msg)
 
-        stored.consumed_at = datetime.now(UTC)
-        await self._tokens.flush()
-        return stored
+        The decision comes from a conditional UPDATE, not from a read
+        followed by a check. Two concurrent requests carrying the same token
+        can no longer both succeed: the database serialises them on the row
+        and only one of them finds anything left to spend.
+        """
+        token_hash = hash_token(token)
+        stored = await self._tokens.consume(token_hash, purpose)
+        if stored is not None:
+            return stored
+
+        # The refusal is already settled. This second read only decides what
+        # to write in the log, so it can no longer open a window.
+        await self._log_rejection(token_hash, purpose)
+        msg = "invalid token"
+        raise AuthenticationError(msg)
+
+    async def _log_rejection(self, token_hash: str, purpose: TokenPurpose) -> None:
+        """Say in the log why a token was refused.
+
+        The caller was told nothing beyond "invalid", which is deliberate.
+        We still want the four reasons apart when reading our own logs: a
+        burst of "expired" is a link people click too late, a burst of
+        "unknown" is someone guessing.
+        """
+        stored = await self._tokens.get_by_token_hash(token_hash)
+        if stored is None:
+            reason = "unknown"
+        elif stored.purpose is not purpose:
+            reason = "wrong_purpose"
+        elif stored.consumed_at is not None:
+            reason = "already_used"
+        elif stored.expires_at <= datetime.now(UTC):
+            reason = "expired"
+        else:
+            # The UPDATE matched nothing, yet the row now looks spendable.
+            # Only a concurrent request can produce that, and naming it is
+            # more useful than pretending it was one of the four above.
+            reason = "lost_race"
+        logger.info("token_rejected", purpose=purpose.value, reason=reason)

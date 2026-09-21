@@ -163,6 +163,38 @@ class EmailTokenRepository:
         )
         return result.scalar_one_or_none()
 
+    async def consume(self, token_hash: str, purpose: TokenPurpose) -> EmailToken | None:
+        """Spend a token, atomically. Returns None if there was nothing to spend.
+
+        The guard lives in the WHERE rather than in the calling code: two
+        concurrent requests run the same UPDATE, PostgreSQL serialises them
+        on the row, and the second finds nothing left to update. RETURNING
+        brings the row back in the same statement, so there is no second read
+        to fall out of step with the write.
+
+        This is the same shape as invalidate_outstanding below, for the same
+        reason. A read, a check in Python, then a write is not a guard: it is
+        a guard with a gap in the middle, and both requests fit through it.
+
+        No populate_existing, and that was measured rather than assumed. An
+        ORM UPDATE ... RETURNING can hand back a stale instance when the row
+        already sits in the session's identity map; here it does not, on
+        SQLAlchemy 2.0 with or without the option. Nothing loads the row
+        beforehand anyway — each HTTP request gets its own session, and this
+        is the first statement to touch the token.
+        """
+        now = datetime.now(UTC)
+        result = await self._session.execute(
+            update(EmailToken)
+            .where(EmailToken.token_hash == token_hash)
+            .where(EmailToken.purpose == purpose)
+            .where(EmailToken.consumed_at.is_(None))
+            .where(EmailToken.expires_at > now)
+            .values(consumed_at=now)
+            .returning(EmailToken)
+        )
+        return result.scalar_one_or_none()
+
     async def invalidate_outstanding(self, user_id: uuid.UUID, purpose: TokenPurpose) -> int:
         """Consume every live token of this kind for this person.
 
