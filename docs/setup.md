@@ -187,6 +187,58 @@ often as you like. It touches nothing else in your database.
 
 ---
 
+## 4c. The background worker
+
+Optional for frontend work, necessary for anything touching retention or
+deletion.
+
+LEKA splits two loops: the interactive one answers requests, the background
+one does the expensive and the slow. Deleting a customer's stored objects is
+the first piece of work that genuinely cannot happen inside a request — a
+workspace can hold hundreds of thousands of them.
+
+The worker runs **on your host**, like the API. `docker-compose.yml` provides
+backing services only, deliberately (see the note at the top of that file).
+
+```bash
+api/.venv/bin/rq worker --url redis://127.0.0.1:6379/0 leka
+```
+
+Without it, work is still enqueued and simply waits in Redis. Nothing
+breaks — a deletion goes through and its objects are collected later by the
+reconciliation sweep. That is by design, not by luck; see
+[docs/data-lifecycle.md](data-lifecycle.md).
+
+The periodic sweeps have no scheduler. Run them by hand when you need them:
+
+```bash
+api/.venv/bin/python -m leka.ingestion.tasks   # retention, then orphans
+api/.venv/bin/python -m leka.platform.tasks    # erasures past their grace period
+api/.venv/bin/python -m leka.identity.tasks    # expired sessions and tokens
+```
+
+Each is safe to run twice.
+
+### Where raw payloads go locally
+
+Nowhere near PostgreSQL. `LEKA_OBJECT_STORE=local` writes them under
+`var/objects/`, which is in `.gitignore` — they are customer data, and rule 12
+is rule 12.
+
+```
+var/objects/{workspace_id}/{source_id}/{yyyy}/{mm}/{dd}/{uuid}.json
+```
+
+You can delete that whole directory at any time. The rows will then point at
+objects that are gone, which is exactly the state `reconcile_orphaned_objects`
+exists to clean up — and a reasonable way to see it work.
+
+Production refuses to start on the local store. A container filesystem is
+ephemeral, and a redeploy would take every payload with it. See
+[ADR 010](adr/010-object-storage.md).
+
+---
+
 ## 5. The frontend
 
 In a second terminal, with the API still running:

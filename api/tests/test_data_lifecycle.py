@@ -570,6 +570,7 @@ def test_the_queue_is_built_once_and_can_be_forgotten() -> None:
     jobs.reset_queue()
     assert jobs.queue() is not first
 
+
 # ── The documentation must agree with the code ───────────────────────────────
 
 
