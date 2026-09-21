@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 # Importing a module registers its tables on Base.metadata. Modules are
 # imported through their __init__.py, never through their internals
 # (architecture rule 1).
+import leka.background
 import leka.connectors
 import leka.identity
 import leka.ingestion

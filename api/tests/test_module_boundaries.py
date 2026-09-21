@@ -28,13 +28,13 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "leka"
 # lower layers. Equal layers are independent of each other and must not
 # import one another.
 #
-# Layer 2 is left free on purpose: the background module (job queue, events,
-# execution history) is infrastructure that platform itself must be able to
-# use, so it sits between db and platform. Only the relative order matters —
-# the numbers are labels.
+# background (job queue, events, execution history) is infrastructure that
+# platform itself must be able to use, so it sits between db and platform.
+# Only the relative order matters — the numbers are labels.
 LAYERS: dict[str, int] = {
     "core": 0,
     "db": 1,
+    "background": 2,
     "platform": 3,
     "identity": 4,
     "connectors": 4,
