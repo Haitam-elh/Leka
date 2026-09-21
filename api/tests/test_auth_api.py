@@ -13,6 +13,7 @@ changed.
 
 from __future__ import annotations
 
+import asyncio
 import re
 import uuid
 from collections.abc import AsyncIterator
@@ -156,6 +157,30 @@ async def test_a_verification_token_works_once(
     assert first.status_code == 200
     assert second.status_code == 400
     assert second.json()["detail"]["code"] == "token_invalid"
+
+
+async def test_a_verification_token_survives_no_race(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    """The same link, clicked twice at the same instant, is spent once.
+
+    The sequential test above passes even when the guard is a read followed
+    by a write: nothing runs between the two. This one fires both together,
+    which is what a double-click or a retrying mail client actually does.
+    """
+    await client.post(f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD})
+    token = mailbox.last_link(r"/auth/verify/(\S+)")
+
+    first, second = await asyncio.gather(
+        client.post(f"{API}/verify/{token}"),
+        client.post(f"{API}/verify/{token}"),
+    )
+
+    accepted = sorted([first.status_code, second.status_code])
+    assert accepted == [200, 400], (
+        f"the same token was spent twice concurrently (got {accepted}) - "
+        "the consumed_at guard belongs in the UPDATE, not in Python"
+    )
 
 
 async def test_registering_a_taken_address_looks_exactly_like_success(
@@ -406,6 +431,39 @@ async def test_a_reset_token_works_once_and_revokes_every_session(
         json={"email": "nora@acme.example", "password": "a brand new secret"},
     )
     assert signed_in.status_code == 200
+
+
+async def test_a_reset_token_survives_no_race(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    """The same link, clicked twice at the same instant, spends once.
+
+    The sequential test above passes even when the guard is a read followed
+    by a write: nothing runs between the two. This one fires both resets
+    together, which is what a double-click, a retrying client, or anyone
+    holding the link actually does. Two different passwords must not both
+    be accepted, with the last writer silently winning.
+    """
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await client.post(f"{API}/password/forgot", json={"email": "nora@acme.example"})
+    token = mailbox.last_link(r"token=(\S+)")
+
+    first, second = await asyncio.gather(
+        client.post(
+            f"{API}/password/reset",
+            json={"token": token, "password": "first password here"},
+        ),
+        client.post(
+            f"{API}/password/reset",
+            json={"token": token, "password": "second password here"},
+        ),
+    )
+
+    accepted = sorted([first.status_code, second.status_code])
+    assert accepted == [204, 400], (
+        f"the same token was spent twice concurrently (got {accepted}) - "
+        "the consumed_at guard belongs in the UPDATE, not in Python"
+    )
 
 
 # ── Sessions ─────────────────────────────────────────────────────────────────
