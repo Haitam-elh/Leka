@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.db import system_scope, workspace_scope
+from leka.platform.jobs import enqueue
 from leka.platform.models import (
     Invitation,
     InvitationStatus,
@@ -157,8 +158,22 @@ class WorkspaceService:
         One DELETE: every business table cascades from workspaces. The
         guarantee is in the schema, not in a script that has to remember
         every table — and a table added next year inherits it for free.
+
+        THE CASCADE DOES NOT REACH THE OBJECT STORE. It removes the ROWS in
+        raw_payloads; the bytes those rows pointed at are untouched, because
+        nothing in PostgreSQL can reach a bucket. Leaving it there would mean
+        a deleted customer's data stays with us for ever — an erasure that
+        did not happen, and a bill for it.
+
+        So the objects are purged too, on the queue rather than here: a
+        workspace can hold hundreds of thousands of them and a request must
+        not wait. If the queue is unreachable the attempt is logged and the
+        deletion still goes through; leka.ingestion.tasks.reconcile finds
+        whatever was left behind. See docs/data-lifecycle.md.
         """
+        workspace_id = str(workspace.id)
         await self._workspaces.delete(workspace)
+        await enqueue("leka.platform.tasks.run_purge_workspace_objects", workspace_id)
 
 
 class InvitationAcceptance:

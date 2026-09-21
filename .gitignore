@@ -43,3 +43,7 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Local object store (LEKA_OBJECT_STORE=local). Customer payloads —
+# never in Git, and never in a backup of this repository.
+var/

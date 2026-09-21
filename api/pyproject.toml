@@ -33,6 +33,9 @@ dependencies = [
     "argon2-cffi>=23.1.0",
     # Agent front matter
     "pyyaml>=6.0.2",
+    # S3-compatible object storage (Cloudflare R2 today, Amazon S3 later) —
+    # see docs/adr/010-object-storage.md
+    "boto3>=1.35.0",
 ]
 
 [project.optional-dependencies]
@@ -120,7 +123,7 @@ module = ["alembic.*"]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["rq.*", "pgvector.*", "asyncpg.*"]
+module = ["rq.*", "pgvector.*", "asyncpg.*", "boto3.*", "botocore.*"]
 ignore_missing_imports = true
 
 # ─────────────────────────────────────────────────────────────────────────────
