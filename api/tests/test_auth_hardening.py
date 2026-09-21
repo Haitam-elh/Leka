@@ -22,6 +22,7 @@ from leka.core.ratelimit import LOGIN_PER_IP, REGISTER_PER_IP
 from leka.db import session_factory, system_scope
 from leka.identity.cookies import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 from leka.platform import Membership, Role, Workspace
+from tests.conftest import error_code, error_message
 
 from .test_auth_api import (
     API,
@@ -109,7 +110,7 @@ async def test_a_throttled_response_says_how_long_to_wait(
         )
 
     assert response.status_code == 429
-    assert response.json()["detail"]["code"] == "rate_limited"
+    assert error_code(response) == "rate_limited"
     assert "Retry-After" in response.headers
 
 
@@ -215,7 +216,7 @@ async def test_a_mutation_without_its_csrf_token_is_refused(
     response = await client.post(f"{API}/logout")
 
     assert response.status_code == 403
-    assert response.json()["code"] == "csrf_failed"
+    assert error_code(response) == "csrf_failed"
 
 
 async def test_a_wrong_csrf_token_is_refused(
@@ -306,7 +307,7 @@ async def test_removing_a_membership_cuts_access_on_the_next_request(
     after = await client.get("/api/v1/workspaces/current")
 
     assert after.status_code == 403
-    assert "not a member" in after.json()["detail"].lower()
+    assert "not a member" in error_message(after).lower()
 
 
 async def test_a_session_survives_its_workspace_being_deleted(
@@ -420,7 +421,7 @@ async def test_an_unauthenticated_request_to_a_workspace_route_is_401_not_500(
         response = await client.get(path)
 
         assert response.status_code == 401, path
-        assert response.json()["detail"]["code"] == "not_authenticated"
+        assert error_code(response) == "not_authenticated"
 
 
 async def test_signing_in_lands_you_in_your_only_workspace(

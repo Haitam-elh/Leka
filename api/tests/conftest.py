@@ -23,6 +23,7 @@ import uuid
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 import asyncpg
@@ -243,3 +244,74 @@ async def session() -> AsyncIterator[AsyncSession]:
                     if workspace.id not in created_before:
                         await cleanup.delete(workspace)
                 await cleanup.commit()
+
+
+# ── Reading an error response ────────────────────────────────────────────────
+
+
+def error_code(response: Any) -> str:
+    """The machine code out of an error body.
+
+    One helper rather than `response.json()["error"]["code"]` spelled out
+    forty times: the shape is a contract with clients, and the day it moves
+    again this is the one place that has to follow.
+
+    LEKA-333 replaced three error shapes with one. Tests that used to read
+    `["detail"]["code"]` read this instead — the assertion they make is
+    unchanged, only where they look for the value.
+    """
+    body: dict[str, Any] = response.json()
+    return str(body["error"]["code"])
+
+
+def error_message(response: Any) -> str:
+    """The human sentence out of an error body."""
+    body: dict[str, Any] = response.json()
+    return str(body["error"]["message"])
+
+
+def error_fields(response: Any) -> dict[str, str]:
+    """Per-field problems, as {field: message}. Empty when there are none."""
+    body: dict[str, Any] = response.json()
+    details = body["error"].get("details") or []
+    return {item["field"]: item["message"] for item in details}
+
+
+def comparable_error(response: Any) -> dict[str, Any]:
+    """An error body with the request id removed, for comparing two of them.
+
+    Several tests assert that two refusals are indistinguishable — an
+    unknown address and a wrong password, a token that never existed and one
+    already spent. That property is what stops the API answering "does this
+    person have an account here?".
+
+    Since LEKA-333 every error carries its own request id, so two bodies are
+    never byte-identical. The id is a ULID: a timestamp and ten random
+    bytes, generated the same way on both paths, so it distinguishes the
+    REQUESTS and never the ACCOUNTS. Removing it keeps the assertion exactly
+    as strong — anything else that differed would still fail, including a
+    field added later.
+    """
+    body: dict[str, Any] = response.json()
+    error = {key: value for key, value in body["error"].items() if key != "request_id"}
+    return {**body, "error": error}
+
+
+def page_items(response: Any) -> list[Any]:
+    """The rows out of a list response.
+
+    Every list route returns {"data": [...], "next_cursor": ...} since
+    LEKA-333 — a bare array has nowhere to put the cursor. This is the one
+    place tests read that shape, so the day it changes again only this
+    function follows.
+    """
+    body: dict[str, Any] = response.json()
+    items: list[Any] = body["data"]
+    return items
+
+
+def next_cursor(response: Any) -> str | None:
+    """The cursor for the following page, or None at the end of a list."""
+    body: dict[str, Any] = response.json()
+    cursor: str | None = body["next_cursor"]
+    return cursor
