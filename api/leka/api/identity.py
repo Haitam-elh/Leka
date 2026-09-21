@@ -24,8 +24,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.core import ratelimit
-from leka.db import get_session
+from leka.db import SortableField, get_session
 from leka.identity import (
     AccountUnverifiedError,
     AuthenticationError,
@@ -118,6 +119,22 @@ async def _enforce(scope: str, identifier: str, limit: ratelimit.Limit) -> None:
             },
             headers={"Retry-After": str(verdict.retry_after_seconds)},
         )
+
+
+async def require_session(session: CurrentSession) -> Session:
+    """The signed-in session, or a refusal. A dependency, not a body check.
+
+    Every route that needs a session used to call _require_session(session)
+    as its first statement. That works, and it is invisible: nothing outside
+    the function body says the route is protected, so no check can tell a
+    route that forgot from a route that is deliberately open. LEKA-333's
+    route enumeration test reads the dependency tree, which is why this is a
+    dependency.
+    """
+    return _require_session(session)
+
+
+RequiredSession = Annotated[Session, Depends(require_session)]
 
 
 def _require_session(session: Session | None) -> Session:
@@ -239,10 +256,9 @@ async def logout(response: Response, session: CurrentSession, auth: AuthDep) -> 
 
 @router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
 async def logout_everywhere(
-    response: Response, session: CurrentSession, auth: AuthDep, db: SessionDep
+    response: Response, current: RequiredSession, auth: AuthDep, db: SessionDep
 ) -> Response:
     """Sign out of every device, including this one."""
-    current = _require_session(session)
     user = await UserRepository(db).get(current.user_id)
     if user is not None:
         await auth.logout_everywhere(user)
@@ -252,7 +268,7 @@ async def logout_everywhere(
 
 @router.get("/me", response_model=MeResponse)
 async def read_me(
-    session: CurrentSession,
+    current: RequiredSession,
     db: SessionDep,
 ) -> MeResponse:
     """Who I am, where I may go, and where I currently am.
@@ -260,7 +276,6 @@ async def read_me(
     One call: three round-trips for this would show as a flicker on every
     page load.
     """
-    current = _require_session(session)
     user = await UserRepository(db).get(current.user_id)
     if user is None:  # pragma: no cover - cascade makes this unreachable
         raise _refuse(AuthErrorCode.SESSION_EXPIRED, "Your session has expired.")
@@ -325,7 +340,7 @@ async def reset_password(
 @router.post("/password/change", status_code=status.HTTP_204_NO_CONTENT)
 async def change_password(
     payload: ChangePasswordRequest,
-    session: CurrentSession,
+    current: RequiredSession,
     auth: AuthDep,
     db: SessionDep,
 ) -> Response:
@@ -335,7 +350,6 @@ async def change_password(
     browser they are using, as a reward for improving their security,
     teaches them not to.
     """
-    current = _require_session(session)
     user = await UserRepository(db).get(current.user_id)
     if user is None:  # pragma: no cover
         raise _refuse(AuthErrorCode.SESSION_EXPIRED, "Your session has expired.")
@@ -355,35 +369,60 @@ async def change_password(
 # ── Sessions ─────────────────────────────────────────────────────────────────
 
 
-@router.get("/sessions", response_model=list[SessionRead])
-async def list_my_sessions(session: CurrentSession, db: SessionDep) -> list[SessionRead]:
+# What /auth/sessions may be sorted by.
+#
+# last_seen_at is what somebody actually wants — "which of these did I use
+# most recently?" — and neither it nor created_at has an index. Both are
+# bounded by ix_sessions_user_id, and a person has a handful of sessions.
+SESSION_SORTS = SortCatalogue(
+    fields=(
+        SortableField("last_seen_at", Session.last_seen_at, "no index; bounded by user_id"),
+        SortableField("created_at", Session.created_at, "no index; bounded by user_id"),
+        SortableField("expires_at", Session.expires_at, "ix_sessions_expires_at"),
+    ),
+    default="last_seen_at",
+)
+
+
+@router.get("/sessions", response_model=PageEnvelope[SessionRead])
+async def list_my_sessions(
+    current: RequiredSession, db: SessionDep, page: PageParams
+) -> PageEnvelope[SessionRead]:
     """My signed-in devices."""
-    current = _require_session(session)
-    rows = await SessionRepository(db).list_for_user(current.user_id)
-    return [
-        SessionRead(
-            id=row.id,
-            created_at=row.created_at,
-            last_seen_at=row.last_seen_at,
-            expires_at=row.expires_at,
-            user_agent=row.user_agent,
-            ip_prefix=row.ip_prefix,
-            is_current=row.id == current.id,
-        )
-        for row in rows
-    ]
+    result = await serve_page(
+        db,
+        SessionRepository(db).live_for_user(current.user_id),
+        request=page,
+        catalogue=SESSION_SORTS,
+        id_column=Session.id,
+    )
+    rows = result.items
+    return PageEnvelope(
+        data=[
+            SessionRead(
+                id=row.id,
+                created_at=row.created_at,
+                last_seen_at=row.last_seen_at,
+                expires_at=row.expires_at,
+                user_agent=row.user_agent,
+                ip_prefix=row.ip_prefix,
+                is_current=row.id == current.id,
+            )
+            for row in rows
+        ],
+        next_cursor=result.next_cursor,
+    )
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_session(
-    session_id: uuid.UUID, session: CurrentSession, db: SessionDep, auth: AuthDep
+    session_id: uuid.UUID, current: RequiredSession, db: SessionDep, auth: AuthDep
 ) -> Response:
     """Sign out one device.
 
     Scoped to my own sessions: revoking someone else's by guessing an id is
     not reachable from here.
     """
-    current = _require_session(session)
     sessions = SessionRepository(db)
     target = await sessions.get_for_user(current.user_id, session_id)
     if target is None:
