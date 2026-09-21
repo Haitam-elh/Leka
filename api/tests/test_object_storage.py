@@ -373,7 +373,10 @@ async def test_the_s3_adapter_tells_a_missing_key_from_a_real_failure(
 
     assert await store.exists("never-written") is False
 
-    def refuse(**_: Any) -> None:
+    # The same signature as the method it replaces, boto3's capitals and
+    # all. A stand-in that takes **kwargs would type-check as a different
+    # thing and hide the very mismatch this file exists to catch.
+    def refuse(Bucket: str, Key: str) -> dict[str, Any]:  # noqa: N803
         raise FakeS3._Error("AccessDenied", 403)
 
     fake.head_object = refuse  # type: ignore[method-assign]
