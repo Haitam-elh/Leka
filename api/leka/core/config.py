@@ -162,6 +162,31 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     mistral_api_key: SecretStr | None = None
 
+    # ── Object storage (LEKA-332) ───────────────────────────────────────────
+    # Raw payloads — a GitHub API response, a Datadog log export, a Confluence
+    # page — do not belong in PostgreSQL. They are the largest volume in the
+    # product and the shortest-lived; in the database they would swell every
+    # backup and slow every restore. The rows hold metadata and a key, the
+    # bytes live here. See docs/adr/010-object-storage.md.
+    #
+    # "local" is the default so the whole platform is testable with no account
+    # anywhere, exactly as ConsoleEmailSender did for LEKA-330. Production
+    # refuses to start with it — see _refuse_local_object_store_in_production.
+    object_store: Literal["local", "s3"] = "local"
+
+    # Where LocalObjectStore writes. Relative paths resolve against the repo
+    # root, so one developer's working directory is not part of the contract.
+    object_store_path: Path = Path("var/objects")
+
+    # S3-compatible. Cloudflare R2 today, Amazon S3 in phase 3, same protocol
+    # and the same code either way: only the endpoint changes.
+    s3_bucket: str | None = None
+    s3_endpoint_url: str | None = None
+    # R2 ignores the region and wants "auto"; S3 wants a real one.
+    s3_region: str = "auto"
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: SecretStr | None = None
+
     @field_validator("database_url")
     @classmethod
     def _require_async_driver(cls, value: PostgresDsn) -> PostgresDsn:
@@ -260,9 +285,57 @@ class Settings(BaseSettings):
 
         return self
 
+    @model_validator(mode="after")
+    def _refuse_local_object_store_in_production(self) -> Settings:
+        """A local disk is not durable storage.
+
+        LocalObjectStore writes under a directory. On a container that is an
+        ephemeral filesystem: the payloads survive exactly as long as the
+        container does, and a redeploy loses every one of them silently —
+        the rows keep pointing at keys whose bytes are gone. Like the cookie
+        check above, this is verified at startup rather than left to a review.
+        """
+        if self.environment != "production":
+            return self
+
+        if self.object_store == "local":
+            msg = (
+                "LEKA_OBJECT_STORE=local in production: raw payloads would be "
+                "written to a container filesystem and lost on the next "
+                "deploy, leaving rows that point at nothing. Configure the S3 "
+                "store (LEKA_S3_BUCKET, LEKA_S3_ENDPOINT_URL and credentials)."
+            )
+            raise ValueError(msg)
+
+        missing = [
+            name
+            for name, value in (
+                ("LEKA_S3_BUCKET", self.s3_bucket),
+                ("LEKA_S3_ACCESS_KEY_ID", self.s3_access_key_id),
+                ("LEKA_S3_SECRET_ACCESS_KEY", self.s3_secret_access_key),
+            )
+            if value is None
+        ]
+        if missing:
+            msg = f"LEKA_OBJECT_STORE=s3 but {', '.join(missing)} is not set."
+            raise ValueError(msg)
+
+        return self
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def object_store_root(self) -> Path:
+        """Where LocalObjectStore writes, as an absolute path.
+
+        A relative setting resolves against the repository root rather than
+        the process working directory: the API, the worker and a test runner
+        start from different places and must agree on one directory.
+        """
+        configured = self.object_store_path
+        return configured if configured.is_absolute() else REPO_ROOT / configured
 
     @property
     def smtp_configured(self) -> bool:

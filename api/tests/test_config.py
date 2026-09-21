@@ -26,6 +26,19 @@ VALID = {
     "encryption_keys": ["MN3nrX7VP5Mj0SRB4G-pIPOrvlCyT-CQoBZvsQFYHss="],
 }
 
+# Production asks for more than the required four. The startup guards exist
+# for settings that work perfectly in every test and quietly stop protecting
+# anyone in production — a cookie without Secure, an object store on a
+# container's ephemeral disk. Anything asserting something ABOUT production
+# has to satisfy them first.
+PRODUCTION = {
+    **VALID,
+    "object_store": "s3",
+    "s3_bucket": "leka-payloads",
+    "s3_access_key_id": "not-a-real-key",
+    "s3_secret_access_key": "not-a-real-secret",
+}
+
 
 def test_optional_settings_fall_back_to_safe_defaults(
     monkeypatch: pytest.MonkeyPatch,
@@ -56,10 +69,54 @@ def test_environment_variable_overrides_the_default(
     monkeypatch.setitem(Settings.model_config, "env_file", None)
     monkeypatch.setenv("LEKA_ENVIRONMENT", "production")
 
-    config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
+    config = Settings(_env_file=None, **PRODUCTION)  # type: ignore[arg-type]
 
     assert config.environment == "production"
     assert config.is_production is True
+
+
+def test_production_refuses_a_local_object_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A container's filesystem is not durable storage.
+
+    LocalObjectStore is the right default everywhere else — it is what makes
+    the platform runnable with no account anywhere. In production it would
+    write customer payloads to an ephemeral disk: the next deploy takes them
+    all, and every raw_payloads row is left pointing at nothing. Silently.
+    """
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    monkeypatch.setenv("LEKA_ENVIRONMENT", "production")
+
+    with pytest.raises(ValidationError, match="LEKA_OBJECT_STORE=local in production"):
+        Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
+
+
+def test_production_names_every_missing_s3_setting_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One crash naming three missing variables beats three deploys."""
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    monkeypatch.setenv("LEKA_ENVIRONMENT", "production")
+
+    with pytest.raises(ValidationError) as refused:
+        Settings(_env_file=None, object_store="s3", **VALID)  # type: ignore[arg-type]
+
+    message = str(refused.value)
+    assert "LEKA_S3_BUCKET" in message
+    assert "LEKA_S3_ACCESS_KEY_ID" in message
+    assert "LEKA_S3_SECRET_ACCESS_KEY" in message
+
+
+def test_a_local_object_store_is_fine_everywhere_else(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The guard must bite in production and nowhere else, or it would make
+    the default unusable and someone would configure their way around it."""
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    for environment in ("local", "ci", "staging"):
+        monkeypatch.setenv("LEKA_ENVIRONMENT", environment)
+        config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
+        assert config.object_store == "local"
+        assert config.object_store_root.is_absolute()
 
 
 def test_missing_required_variables_are_all_reported(
