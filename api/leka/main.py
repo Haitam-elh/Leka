@@ -16,6 +16,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from leka.api import api_router
+from leka.api.errors import ERROR_RESPONSES, register_error_handlers
+from leka.api.ratelimit import rate_limit_middleware
+from leka.api.request_id import REQUEST_ID_HEADER, request_id_middleware
 from leka.core.config import settings
 from leka.core.logging import configure_logging
 from leka.db import engine
@@ -35,19 +38,46 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("leka_stopped")
 
 
+# The interactive documentation and the schema, served over HTTP — or not.
+#
+# On a B2B SaaS, /docs published to anyone who asks is a free map of the
+# attack surface: every route, every field, every enumeration, kept up to
+# date by us. It stays open everywhere except production.
+#
+# The schema is still GENERATED in production — app.openapi() works
+# regardless, and CI keeps checking api-types.ts for drift. What changes is
+# who can fetch it over the network, not whether it exists.
+_PUBLISH_SCHEMA = not settings.is_production
+
 app = FastAPI(
     title="LEKA API",
     version="0.1.0",
     description="Continuous architecture mapping and evidence-backed answers.",
-    openapi_url=f"{settings.api_v1_prefix}/openapi.json",
-    docs_url=f"{settings.api_v1_prefix}/docs",
+    openapi_url=f"{settings.api_v1_prefix}/openapi.json" if _PUBLISH_SCHEMA else None,
+    docs_url=f"{settings.api_v1_prefix}/docs" if _PUBLISH_SCHEMA else None,
+    redoc_url=f"{settings.api_v1_prefix}/redoc" if _PUBLISH_SCHEMA else None,
     lifespan=lifespan,
 )
+
+# Three handlers, so a client meets one error shape instead of three. See
+# leka/api/errors.py for what FastAPI does without them.
+register_error_handlers(app)
 
 # Defence in depth behind SameSite=Lax. Middleware rather than a dependency
 # on each route, so a route added later is covered without its author knowing
 # the check exists. See docs/adr/009-cookie-strategy.md.
 app.middleware("http")(csrf_middleware)
+
+# A backstop limit on every route, so one is never missing because an
+# author forgot to ask for it. The authentication routes keep their own,
+# stricter ones on top. See leka/api/ratelimit.py.
+app.middleware("http")(rate_limit_middleware)
+
+# Added LAST, which puts it OUTERMOST: Starlette runs the most recently
+# added middleware first. Everything below it — a CSRF refusal, a rate
+# limit refusal, an unparseable body — therefore carries an identifier,
+# and those are exactly the refusals somebody will ask about.
+app.middleware("http")(request_id_middleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,9 +85,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Without this the browser can see the header and JavaScript cannot.
+    # The whole point is that a user can read us the id from a failure.
+    expose_headers=[REQUEST_ID_HEADER],
 )
 
-app.include_router(api_router, prefix=settings.api_v1_prefix)
+# ERROR_RESPONSES on every route, so the published schema describes the shape
+# errors actually have. Without it api-types.ts types FastAPI's default —
+# and a frontend would be written against a body that never arrives.
+app.include_router(api_router, prefix=settings.api_v1_prefix, responses=ERROR_RESPONSES)
 
 # Fill the seam LEKA-331 left open. Until this call, every route needing a
 # user raises — which is what kept the platform honest while identity was

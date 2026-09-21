@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 from starlette.status import HTTP_403_FORBIDDEN
 
 from leka.core.config import settings
+from leka.core.errors import ErrorCode, error_envelope
 from leka.identity.cookies import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 
 logger = structlog.get_logger(__name__)
@@ -66,11 +67,22 @@ async def csrf_middleware(
 
 
 def _refuse(reason: str, request: Request) -> JSONResponse:
+    """Refuse, in the one error shape the API returns.
+
+    Built here rather than raised, because middleware runs outside the chain
+    that turns exceptions into responses — nothing this function raises
+    would ever reach leka.api.errors. So it assembles the envelope itself,
+    from leka.core.errors, which is low enough in the dependency order for
+    this module to import.
+
+    Before LEKA-333 this returned {"detail": ..., "code": ...} and was a
+    fourth error shape nobody had counted.
+    """
     logger.info("csrf_refused", reason=reason, path=request.url.path)
     return JSONResponse(
         status_code=HTTP_403_FORBIDDEN,
-        content={
-            "detail": ("This request is missing its CSRF token. Reload the page and try again."),
-            "code": "csrf_failed",
-        },
+        content=error_envelope(
+            ErrorCode.CSRF_FAILED,
+            "This request is missing its CSRF token. Reload the page and try again.",
+        ),
     )

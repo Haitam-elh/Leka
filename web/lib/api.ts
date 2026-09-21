@@ -7,6 +7,11 @@
  * `tsc --noEmit` fails in CI before the mismatch reaches a user.
  */
 
+import type { components } from "./api-types";
+
+/** The body of any error the API returns. One shape, whatever failed. */
+type ErrorBody = components["schemas"]["ErrorBody"];
+
 // localhost, not 127.0.0.1: the dev server is on localhost:3000, and a
 // browser treats the two as different SITES — a SameSite=Lax session cookie
 // set by one is never sent to the other. See docs/adr/009-cookie-strategy.md.
@@ -14,29 +19,31 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const API_PREFIX = "/api/v1";
 
 const CSRF_COOKIE = "leka_csrf";
+const REQUEST_ID_HEADER = "X-Request-ID";
 const CSRF_HEADER = "X-CSRF-Token";
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
-/** Machine-readable codes the API returns alongside a human sentence. */
-export type AuthErrorCode =
-  | "invalid_credentials"
-  | "account_unverified"
-  | "rate_limited"
-  | "token_invalid"
-  | "token_expired"
-  | "password_too_short"
-  | "password_breached"
-  | "not_authenticated"
-  | "session_expired"
-  | "csrf_failed";
+/**
+ * Machine-readable codes the API returns alongside a human sentence.
+ *
+ * Taken from the generated schema rather than written out again: the API
+ * owns this list, and a code added or renamed there now fails `tsc` here
+ * instead of quietly falling through a switch at runtime.
+ */
+export type ApiErrorCode = components["schemas"]["ErrorCode"];
+
+/** The name this was known by before LEKA-333 widened it past auth. */
+export type AuthErrorCode = ApiErrorCode;
 
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly path: string,
     message: string,
-    readonly code?: AuthErrorCode,
+    readonly code?: ApiErrorCode,
     readonly fieldErrors?: Record<string, string>,
+    /** Quote this to us and we can find the exact request in the logs. */
+    readonly requestId?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -72,21 +79,36 @@ function readCsrfToken(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-/** Pull a per-field map out of FastAPI's 422 body, for form-level messages. */
-function readFieldErrors(body: unknown): Record<string, string> | undefined {
-  if (typeof body !== "object" || body === null) return undefined;
-  const detail = (body as { detail?: unknown }).detail;
-  if (!Array.isArray(detail)) return undefined;
+/**
+ * Read an error body.
+ *
+ * One shape now, whatever failed: a missing field, a business rule, a bug,
+ * a refused CSRF token, a path that matches no route. Before LEKA-333 this
+ * file carried three parsers — one for Pydantic's 422, one for `detail` as
+ * a string, one for it as an object — and they existed because the API had
+ * three shapes. It has one.
+ */
+function readError(body: unknown): {
+  message?: string;
+  code?: ApiErrorCode;
+  fieldErrors?: Record<string, string>;
+  requestId?: string;
+} {
+  const error = (body as { error?: unknown } | null)?.error;
+  if (typeof error !== "object" || error === null) return {};
 
-  const errors: Record<string, string> = {};
-  for (const item of detail) {
-    const location = (item as { loc?: unknown[] }).loc;
-    const message = (item as { msg?: string }).msg;
-    if (Array.isArray(location) && typeof message === "string") {
-      errors[String(location[location.length - 1])] = message;
-    }
+  const shaped = error as ErrorBody;
+  const fieldErrors: Record<string, string> = {};
+  for (const item of shaped.details ?? []) {
+    fieldErrors[item.field] = item.message;
   }
-  return Object.keys(errors).length > 0 ? errors : undefined;
+
+  return {
+    message: shaped.message,
+    code: shaped.code,
+    fieldErrors: Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined,
+    requestId: shaped.request_id ?? undefined,
+  };
 }
 
 /**
@@ -161,31 +183,17 @@ export async function apiFetch<T>(
 
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => null);
-    const detail = (body as { detail?: unknown } | null)?.detail;
-
-    // The API returns {detail, code} for authentication errors, a plain
-    // string elsewhere, and a list of field errors on a 422.
-    let message = response.statusText;
-    let code: AuthErrorCode | undefined;
-
-    if (typeof detail === "string") {
-      message = detail;
-    } else if (detail && typeof detail === "object" && !Array.isArray(detail)) {
-      const shaped = detail as { detail?: string; code?: AuthErrorCode };
-      message = shaped.detail ?? message;
-      code = shaped.code;
-    } else if (body && typeof body === "object" && "code" in body) {
-      const shaped = body as { detail?: string; code?: AuthErrorCode };
-      message = shaped.detail ?? message;
-      code = shaped.code;
-    }
+    const { message, code, fieldErrors, requestId } = readError(body);
 
     throw new ApiError(
       response.status,
       path,
-      message,
+      message ?? response.statusText,
       code,
-      readFieldErrors(body),
+      fieldErrors,
+      // Falls back to the header, which the API sets on EVERY response —
+      // including the ones whose body never parsed.
+      requestId ?? response.headers.get(REQUEST_ID_HEADER) ?? undefined,
     );
   }
 
