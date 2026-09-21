@@ -187,6 +187,18 @@ class Settings(BaseSettings):
     s3_access_key_id: str | None = None
     s3_secret_access_key: SecretStr | None = None
 
+    # The largest single payload LEKA will store, in bytes. Default 1 GiB.
+    #
+    # Streaming bounds our MEMORY; it does not bound the disk, the bill, or
+    # the time a sync takes. A source that answers with forty gigabytes has
+    # either broken or been asked the wrong question, and storing it is the
+    # expensive way to find out. The write is refused mid-flight, before the
+    # bytes land, and nothing is left behind.
+    #
+    # A ceiling, not a target. Raise it when a real payload is refused, and
+    # look at the payload first.
+    max_object_bytes: int = Field(default=1024 * 1024 * 1024, ge=1024 * 1024)
+
     # ── Retention ───────────────────────────────────────────────────────────
     # How long a raw payload is ours to keep, in days, per source kind. The
     # policy itself lives in leka.ingestion.retention, which is where the

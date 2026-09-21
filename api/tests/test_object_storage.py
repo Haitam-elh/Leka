@@ -271,8 +271,29 @@ class FakeS3:
         bucket: str,
         key: str,
         ExtraArgs: dict[str, str] | None = None,  # noqa: N803
+        Config: Any = None,  # noqa: N803
     ) -> None:
-        self.objects[key] = fileobj.read()
+        """Read the stream the way boto3 does: in pieces, never in one go.
+
+        `read()` with no argument would pull the whole payload into memory,
+        which is precisely what the adapter is built to avoid — a stand-in
+        that did that would keep passing after a regression put the object
+        back in RAM.
+
+        Config is accepted and ignored. It carries the multipart settings
+        that bound boto3's own buffers; there is nothing here for them to
+        bound, but a stand-in whose signature does not match the method it
+        replaces fails on the real call instead of in this file.
+        """
+        from leka.platform.storage import CHUNK_SIZE
+
+        received = bytearray()
+        while True:
+            piece = fileobj.read(CHUNK_SIZE)
+            if not piece:
+                break
+            received.extend(piece)
+        self.objects[key] = bytes(received)
         self.content_types[key] = (ExtraArgs or {}).get("ContentType", "")
 
     def get_object(self, Bucket: str, Key: str) -> dict[str, Any]:  # noqa: N803

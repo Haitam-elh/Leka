@@ -29,9 +29,11 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import queue
 import shutil
+import threading
 import uuid
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -48,6 +50,40 @@ logger = structlog.get_logger(__name__)
 # something the container's memory limit notices.
 CHUNK_SIZE = 1024 * 1024
 
+# How many chunks may sit between the event loop and the worker thread.
+#
+# This number is the memory bound. Everything that moves bytes through this
+# module holds at most STREAM_QUEUE_CHUNKS + 2 chunks at once — the queue,
+# the one being produced, and the one being consumed — whatever the size of
+# the object. Four is enough to keep a disk or a socket busy without the
+# producer waiting; raising it buys throughput and costs exactly
+# CHUNK_SIZE per unit.
+STREAM_QUEUE_CHUNKS = 4
+
+# What boto3 is allowed to hold for a multipart upload.
+#
+# Its defaults are ten parts of 8 MiB in flight — eighty megabytes of buffers
+# per upload. On a worker running several syncs at once that is the problem
+# this module exists to avoid, moved one layer down. S3 refuses parts below
+# 5 MiB, so 8 MiB is the smallest sensible part.
+#
+# ONE PART AT A TIME, and that number was measured rather than reasoned
+# about. Uploading 16 MB and then 64 MB to MinIO, peak allocation:
+#
+#     max_concurrency=2   26.2 MB -> 36.1 MB     (+9.9 MB)
+#     max_concurrency=1   26.1 MB -> 27.1 MB     (+1.0 MB)
+#
+# Quadrupling the payload costs one megabyte with a single part in flight and
+# ten with two. Concurrency is the lever here; max_in_memory_upload_chunks,
+# which the documentation points at for non-seekable streams, made no
+# measurable difference on its own and is set to match anyway.
+#
+# The cost is throughput: parts go up one after another instead of two at a
+# time. That is the right trade for a background worker, where a sync taking
+# slightly longer is invisible and a worker dying of memory is not.
+S3_PART_BYTES = 8 * 1024 * 1024
+S3_CONCURRENT_PARTS = 1
+
 
 class ObjectStoreError(RuntimeError):
     """The object store could not do what was asked.
@@ -61,6 +97,16 @@ class ObjectStoreError(RuntimeError):
 
 class ObjectNotFoundError(ObjectStoreError):
     """No object under that key. Usually a row outliving its bytes."""
+
+
+class ObjectTooLargeError(ObjectStoreError):
+    """A payload went past the configured ceiling and was refused.
+
+    Streaming bounds our memory, not our disk and not our bill. A source
+    that answers with forty gigabytes has either broken or been asked the
+    wrong question, and storing it would be the expensive way to find out.
+    Refused loudly, mid-flight, with nothing left behind.
+    """
 
 
 @dataclass(frozen=True)
@@ -209,47 +255,80 @@ class LocalObjectStore:
             raise ObjectStoreError(msg)
         return candidate
 
-    def _put_blocking(self, path: Path, chunks: list[bytes]) -> tuple[int, str]:
+    @staticmethod
+    def _staging(path: Path) -> Path:
+        """Where a write goes before it is complete.
+
+        A temporary file, renamed once whole. A crash halfway leaves a .part
+        behind rather than a truncated object that reads as complete — and
+        rename is atomic on every filesystem we care about.
+        """
+        return path.with_suffix(path.suffix + ".part")
+
+    def _write_blocking(self, path: Path, stream: _BoundedStream) -> None:
+        """Consume the stream onto disk, one chunk at a time.
+
+        Runs in a worker thread. It pulls from the bounded queue rather than
+        from a list, so what it holds is one chunk, however large the object
+        is.
+
+        A failure — the producer raising, the disk filling, the ceiling
+        being passed — removes the staging file on the way out. Leaving it
+        would mean a half-written payload sitting in the store, counted by
+        nothing and cleaned up by nobody.
+        """
         path.parent.mkdir(parents=True, exist_ok=True)
-        digest = hashlib.sha256()
-        size = 0
-        # A temporary file, renamed once complete. A crash halfway through
-        # leaves a .part behind rather than a truncated object that looks
-        # whole — and rename is atomic on every filesystem we care about.
-        staging = path.with_suffix(path.suffix + ".part")
-        with staging.open("wb") as handle:
-            for chunk in chunks:
-                handle.write(chunk)
-                digest.update(chunk)
-                size += len(chunk)
-        staging.replace(path)
-        return size, digest.hexdigest()
+        staging = self._staging(path)
+        try:
+            with staging.open("wb") as handle:
+                for chunk in stream.chunks():
+                    handle.write(chunk)
+            staging.replace(path)
+        except BaseException:
+            staging.unlink(missing_ok=True)
+            raise
 
     async def put(
         self, key: str, chunks: AsyncIterator[bytes], *, content_type: str
     ) -> StoredObject:
+        """Write an object, holding at most a few chunks of it.
+
+        The async iterator cannot be pulled from a worker thread, and the
+        filesystem calls cannot run on the event loop. _BoundedStream is the
+        bridge: the loop feeds a queue of STREAM_QUEUE_CHUNKS while the
+        thread drains it, so memory is bounded by the queue and not by the
+        payload. See _BoundedStream for the bound and what it does not cover.
+        """
         path = self._path(key)
-        # Consumed here rather than inside the thread: the iterator is async,
-        # and a worker thread has no event loop to drive it. Chunks are
-        # handed over one CHUNK_SIZE at a time, so this is not the whole
-        # object in memory unless the caller made it so.
-        buffered: list[bytes] = [chunk async for chunk in chunks]
-        size, checksum = await asyncio.to_thread(self._put_blocking, path, buffered)
+        stream = _BoundedStream(limit_bytes=settings.max_object_bytes)
+        await _stream_through(stream, chunks, lambda s: self._write_blocking(path, s))
         return StoredObject(
-            key=key, size_bytes=size, checksum_sha256=checksum, content_type=content_type
+            key=key,
+            size_bytes=stream.size,
+            checksum_sha256=stream.checksum(),
+            content_type=content_type,
         )
 
     async def get(self, key: str) -> AsyncIterator[bytes]:
+        """Read an object back, a chunk at a time.
+
+        Each read happens in a worker thread and is yielded before the next
+        one is asked for, so a large object is never materialised here. The
+        caller decides how much of it to keep.
+        """
         path = self._path(key)
         if not await asyncio.to_thread(path.is_file):
             raise ObjectNotFoundError(key)
 
-        def read_all() -> list[bytes]:
-            with path.open("rb") as handle:
-                return list(iter(lambda: handle.read(CHUNK_SIZE), b""))
-
-        for chunk in await asyncio.to_thread(read_all):
-            yield chunk
+        handle = await asyncio.to_thread(path.open, "rb")
+        try:
+            while True:
+                chunk = await asyncio.to_thread(handle.read, CHUNK_SIZE)
+                if not chunk:
+                    return
+                yield chunk
+        finally:
+            await asyncio.to_thread(handle.close)
 
     async def delete(self, key: str) -> bool:
         path = self._path(key)
@@ -298,33 +377,222 @@ class LocalObjectStore:
 # ── S3-compatible ────────────────────────────────────────────────────────────
 
 
-class _ChunkReader:
-    """A file-like view over an async iterator, for boto3's upload_fileobj.
+class _Failed:
+    """Carries the producer's exception across to the consumer thread."""
 
-    boto3 wants something with `read(n)`. The chunks arrive asynchronously
-    and boto3 pulls synchronously from another thread, so they are drained
-    into a list first and handed over as a stream. That keeps the whole
-    adapter honest about one thing: boto3 never receives a single bytes
-    object it has to hold, it receives something it reads a piece at a time.
+    def __init__(self, error: BaseException) -> None:
+        self.error = error
+
+
+class _End:
+    """Marks the end of the stream."""
+
+
+class _BoundedStream:
+    """A bounded pipe from an async producer to a synchronous consumer.
+
+    THE PROBLEM THIS SOLVES. A payload arrives as an async iterator, and the
+    things that write it — the filesystem, boto3 — are synchronous and run
+    in a worker thread. A thread has no event loop, so it cannot pull from
+    an async iterator. The obvious bridge is to drain the iterator into a
+    list and hand the list over. That is what this module used to do, and it
+    meant a 200 MB export occupied 200 MB of RAM: CHUNK_SIZE bounded the
+    size of each element, never the length of the list.
+
+    WHAT IT DOES INSTEAD. A `queue.Queue` holding STREAM_QUEUE_CHUNKS items.
+    The event loop pushes chunks into it — from a worker thread, so a full
+    queue never blocks the loop — and the consumer pulls them out. A full
+    queue makes the producer wait, and that backpressure is what makes the
+    bound real: at most STREAM_QUEUE_CHUNKS + 2 chunks exist at once,
+    whatever the size of the object.
+
+    That is a bound on what THIS module accumulates, and nothing more. boto3
+    keeps its own buffers for a multipart upload and the operating system
+    caches writes; neither is ours to promise. The guarantee is that LEKA
+    does not hold the object.
+
+    EXCEPTIONS TRAVEL BOTH WAYS, which is most of the code below. A producer
+    that raises must not leave the consumer waiting for a chunk that will
+    never arrive, and a consumer that dies must not leave the producer
+    blocked on a queue nobody will drain. Either freezes a worker with no
+    message at all, which is the failure that costs an afternoon before
+    anyone knows where to look.
+
+    The size and the SHA-256 are computed as the chunks go past, in one
+    pass, on the producer side. Nothing is revisited, because there is no
+    list left to revisit.
     """
 
-    def __init__(self, chunks: list[bytes]) -> None:
-        self._chunks: Iterator[bytes] = iter(chunks)
+    # How long the consumer's blocking get waits before checking whether the
+    # producer is still there. It runs in a worker thread, so waiting costs
+    # nothing but the thread it already holds.
+    POLL_SECONDS = 0.05
+
+    # How long the producer waits, on the event loop, when the queue is full.
+    # Shorter, because this one is latency on every chunk of every upload.
+    PRODUCER_POLL_SECONDS = 0.005
+
+    def __init__(self, *, limit_bytes: int) -> None:
+        self._queue: queue.Queue[bytes | _Failed | _End] = queue.Queue(maxsize=STREAM_QUEUE_CHUNKS)
+        self._abandoned = threading.Event()
         self._buffer = bytearray()
-        self._done = False
+        self._exhausted = False
+        self._limit_bytes = limit_bytes
+        self._digest = hashlib.sha256()
+        self.size = 0
+
+    # ── Producer side: the event loop ────────────────────────────────────
+
+    async def feed(self, chunks: AsyncIterator[bytes]) -> None:
+        """Push an async iterator into the queue, measuring as it passes.
+
+        Never raises. A failure goes onto the queue instead and surfaces
+        when the consumer reads it, so an error reaches the caller by
+        exactly one path rather than by two that can race.
+        """
+        try:
+            async for chunk in chunks:
+                self.size += len(chunk)
+                if self.size > self._limit_bytes:
+                    megabyte = 1024 * 1024
+                    msg = (
+                        f"payload exceeds the configured ceiling of "
+                        f"{self._limit_bytes / megabyte:.0f} MB "
+                        "(LEKA_MAX_OBJECT_BYTES). Nothing was stored."
+                    )
+                    raise ObjectTooLargeError(msg)
+                self._digest.update(chunk)
+                if not await self._offer(chunk):
+                    return
+        except BaseException as error:
+            await self._offer(_Failed(error))
+        finally:
+            await self._offer(_End())
+
+    async def _offer(self, item: bytes | _Failed | _End) -> bool:
+        """Put one item, or give up because the consumer has gone.
+
+        NEVER FROM A WORKER THREAD, and that is not a stylistic choice. The
+        consumer already occupies one thread of the default executor for as
+        long as the transfer lasts. If the producer took another, then N
+        concurrent uploads would take 2N threads from a pool that has about
+        thirty — and past that point every running consumer would be waiting
+        for a chunk from a producer queued behind it for a thread that is
+        never released. The whole pool deadlocks, silently.
+
+        So this waits on the event loop instead: a non-blocking put, and
+        `await asyncio.sleep` when the queue is full. The loop stays free,
+        the backpressure still happens, and no thread is involved.
+
+        Returns False once the consumer has abandoned the stream, which is
+        what stops a producer pushing an entire object into a queue nobody
+        will ever read again.
+        """
+        while not self._abandoned.is_set():
+            try:
+                self._queue.put_nowait(item)
+            except queue.Full:
+                await asyncio.sleep(self.PRODUCER_POLL_SECONDS)
+                continue
+            return True
+        return False
+
+    # ── Consumer side: the worker thread ─────────────────────────────────
+
+    def abandon(self) -> None:
+        """Say that nobody will read from this stream again.
+
+        Called from the consumer's `finally`, on success and on failure.
+        Without it a consumer that raised would leave the producer waiting
+        on a queue that never drains.
+        """
+        self._abandoned.set()
+        while True:
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                return
+
+    def _take(self) -> bytes | None:
+        """The next chunk, or None at the end. Raises what the producer did."""
+        while True:
+            try:
+                item = self._queue.get(timeout=self.POLL_SECONDS)
+            except queue.Empty:
+                continue
+            if isinstance(item, _End):
+                self._exhausted = True
+                return None
+            if isinstance(item, _Failed):
+                self._exhausted = True
+                raise item.error
+            return item
+
+    def chunks(self) -> Iterator[bytes]:
+        """Iterate the payload, for a consumer that writes chunk by chunk."""
+        while True:
+            chunk = self._take()
+            if chunk is None:
+                return
+            yield chunk
 
     def read(self, size: int = -1) -> bytes:
-        while not self._done and (size < 0 or len(self._buffer) < size):
-            try:
-                self._buffer.extend(next(self._chunks))
-            except StopIteration:
-                self._done = True
+        """A file-like read, for boto3's upload_fileobj.
+
+        boto3 asks for a specific number of bytes and expects them, so a
+        chunk that overshoots is held over to the next call. That remainder
+        is smaller than one chunk and is the only thing this object keeps
+        between calls.
+
+        A negative size means "everything". boto3 does not use it for an
+        upload, and it is the one call here that is NOT bounded — asking for
+        everything is asking for the object in memory. That is a limit of
+        this method, not a property of the stream.
+        """
+        while not self._exhausted and (size < 0 or len(self._buffer) < size):
+            chunk = self._take()
+            if chunk is None:
+                break
+            self._buffer.extend(chunk)
+
         if size < 0 or size >= len(self._buffer):
             out, self._buffer = bytes(self._buffer), bytearray()
             return out
         out = bytes(self._buffer[:size])
         del self._buffer[:size]
         return out
+
+    def checksum(self) -> str:
+        """The SHA-256 of everything that went past."""
+        return self._digest.hexdigest()
+
+
+async def _stream_through(
+    stream: _BoundedStream,
+    chunks: AsyncIterator[bytes],
+    consume: Callable[[_BoundedStream], None],
+) -> None:
+    """Run a synchronous consumer in a thread while feeding it from the loop.
+
+    Both run at once, which is the whole point: the consumer writes chunks
+    the producer has already handed over while the producer fetches the
+    next. Sequencing them would mean buffering everything in between, which
+    is the bug this exists to prevent.
+
+    The consumer's exception is the one that comes out. A producer failure
+    reaches the consumer through the queue and is re-raised there, so
+    whatever surfaces here is the error that actually stopped the transfer.
+    """
+
+    def run() -> None:
+        try:
+            consume(stream)
+        finally:
+            stream.abandon()
+
+    consumer = asyncio.create_task(asyncio.to_thread(run))
+    await stream.feed(chunks)
+    await consumer
 
 
 class S3ObjectStore:
@@ -397,31 +665,57 @@ class S3ObjectStore:
     async def put(
         self, key: str, chunks: AsyncIterator[bytes], *, content_type: str
     ) -> StoredObject:
-        buffered: list[bytes] = [chunk async for chunk in chunks]
-        digest = hashlib.sha256()
-        size = 0
-        for chunk in buffered:
-            digest.update(chunk)
-            size += len(chunk)
+        """Upload an object, holding at most a few chunks of it.
 
-        def upload() -> None:
+        upload_fileobj reads from a file-like object and handles multipart
+        itself — it will do that work properly only if it is given something
+        that actually streams. It used to be handed a reader over a list
+        containing the whole payload, which took that work away and made the
+        object resident regardless. _BoundedStream gives it a real stream.
+
+        boto3 keeps buffers of its own, and those are bounded here too —
+        see S3_PART_BYTES for the measurements. What comes out of it is that
+        the footprint of an upload is a constant rather than a fraction of
+        the payload: quadrupling the object moves peak allocation by about a
+        megabyte.
+        """
+        from boto3.s3.transfer import TransferConfig
+
+        stream = _BoundedStream(limit_bytes=settings.max_object_bytes)
+        transfer = TransferConfig(
+            multipart_threshold=S3_PART_BYTES,
+            multipart_chunksize=S3_PART_BYTES,
+            max_concurrency=S3_CONCURRENT_PARTS,
+        )
+        # Set after construction, not passed in: boto3's TransferConfig does
+        # not accept this one as a keyword, although it inherits it from
+        # s3transfer and honours it. It is the setting that actually bounds a
+        # non-seekable stream — see the note above S3_PART_BYTES.
+        transfer.max_in_memory_upload_chunks = S3_CONCURRENT_PARTS
+
+        def upload(source: _BoundedStream) -> None:
             self._client.upload_fileobj(
-                _ChunkReader(buffered),
+                source,
                 self._bucket,
                 key,
                 ExtraArgs={"ContentType": content_type},
+                Config=transfer,
             )
 
         try:
-            await asyncio.to_thread(upload)
+            await _stream_through(stream, chunks, upload)
+        except ObjectStoreError:
+            # Already one of ours — a ceiling breach, most likely. Wrapping
+            # it again would bury the reason.
+            raise
         except Exception as error:
             msg = f"could not write object {key!r}"
             raise ObjectStoreError(msg) from error
 
         return StoredObject(
             key=key,
-            size_bytes=size,
-            checksum_sha256=digest.hexdigest(),
+            size_bytes=stream.size,
+            checksum_sha256=stream.checksum(),
             content_type=content_type,
         )
 

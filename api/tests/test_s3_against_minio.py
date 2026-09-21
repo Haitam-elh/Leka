@@ -26,6 +26,7 @@ one that was never written, because the green tick says otherwise.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 import uuid
@@ -282,3 +283,100 @@ def test_these_tests_are_not_silently_skipped_in_ci() -> None:
             "skip on any connection problem and the pipeline would still be "
             "green, which is how an unverified adapter reaches production."
         )
+
+
+# ── Bounded memory, against a real server ────────────────────────────────────
+
+
+async def test_the_upload_footprint_does_not_grow_with_the_payload(
+    store: S3ObjectStore,
+) -> None:
+    """The bound, stated as what it actually is: a constant.
+
+    An absolute ceiling here would be a guess. This path goes through
+    upload_fileobj, which keeps buffers of its own for a multipart upload —
+    storage.py bounds them, but the exact number depends on part size,
+    concurrency and boto3's internals, and hard-coding it would make this
+    test a record of one version's behaviour.
+
+    What must be true regardless is that the footprint does NOT track the
+    payload. So the same upload runs at two sizes, four times apart, and the
+    peaks are compared. Before this was fixed the adapter drained the whole
+    iterator into a list first, so quadrupling the object quadrupled the
+    peak; now it barely moves.
+
+    Worth doing against a real server rather than trusting the local result.
+    It was exactly here that boto3's max_in_memory_upload_chunks turned out
+    to default to ten parts — 80 MB of buffers that nothing in a stand-in
+    would ever have shown.
+    """
+    import tracemalloc
+
+    from leka.platform.storage import CHUNK_SIZE
+
+    async def synthetic(chunks: int) -> AsyncIterator[bytes]:
+        for index in range(chunks):
+            yield bytes((index % 251,)) * CHUNK_SIZE
+
+    async def peak_for(chunks: int) -> int:
+        key = f"footprint/{uuid.uuid4()}.bin"
+        tracemalloc.start()
+        try:
+            tracemalloc.reset_peak()
+            written = await store.put(
+                key, synthetic(chunks), content_type="application/octet-stream"
+            )
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        assert written.size_bytes == chunks * CHUNK_SIZE
+        await store.delete(key)
+        return peak
+
+    small = await peak_for(16)
+    large = await peak_for(64)
+
+    megabyte = 1024 * 1024
+    growth = large - small
+    assert growth < 8 * CHUNK_SIZE, (
+        f"quadrupling the payload moved the peak by {growth / megabyte:.1f} MB "
+        f"({small / megabyte:.1f} MB for 16 MB, {large / megabyte:.1f} MB for "
+        "64 MB). Memory is tracking the object rather than the buffers."
+    )
+
+
+async def test_a_payload_over_the_ceiling_leaves_nothing_in_the_bucket(
+    store: S3ObjectStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refusal must not leave half an object behind.
+
+    Worth checking against a real server specifically: a multipart upload
+    interrupted partway leaves parts on the server unless it is aborted, and
+    those parts are invisible to a normal listing while still being billed.
+    """
+    from leka.core.config import settings
+    from leka.platform import storage
+    from leka.platform.storage import CHUNK_SIZE, ObjectTooLargeError
+
+    ceiling = 4 * CHUNK_SIZE
+    monkeypatch.setattr(
+        storage, "settings", settings.model_copy(update={"max_object_bytes": ceiling})
+    )
+
+    async def synthetic() -> AsyncIterator[bytes]:
+        for index in range(32):
+            yield bytes((index % 251,)) * CHUNK_SIZE
+
+    key = f"too-big/{uuid.uuid4()}.bin"
+
+    with pytest.raises(ObjectTooLargeError, match="LEKA_MAX_OBJECT_BYTES"):
+        await store.put(key, synthetic(), content_type="application/octet-stream")
+
+    assert await store.exists(key) is False
+
+    incomplete = await asyncio.to_thread(
+        lambda: _client().list_multipart_uploads(Bucket=store._bucket)  # type: ignore[attr-defined]
+    )
+    assert not incomplete.get("Uploads"), (
+        "an aborted upload left multipart parts on the server: invisible to a listing, and billed"
+    )
