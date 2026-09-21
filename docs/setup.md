@@ -92,16 +92,17 @@ git config core.hooksPath .githooks
 
 ---
 
-## 3. Start PostgreSQL and Redis
+## 3. Start PostgreSQL, Redis and MinIO
 
 ```bash
 docker compose up -d
 ```
 
-That is the whole infrastructure: PostgreSQL 16 with pgvector, and Redis 7.
-Both are bound to `127.0.0.1` only — nothing is exposed to your network.
+That is the whole infrastructure: PostgreSQL 16 with pgvector, Redis 7, and
+MinIO. All three are bound to `127.0.0.1` only — nothing is exposed to your
+network.
 
-Wait for both to report healthy:
+Wait for them to report healthy:
 
 ```bash
 docker compose ps
@@ -111,9 +112,24 @@ docker compose ps
 NAME            STATUS
 leka-postgres   Up (healthy)
 leka-redis      Up (healthy)
+leka-minio      Up (healthy)
 ```
 
 `(health: starting)` is normal for the first ten seconds.
+
+**MinIO is an S3-compatible object store**, and it is running by default for
+a reason. `S3ObjectStore` is what production uses; the only other thing
+exercising it is a stand-in we wrote ourselves, which agrees with what we
+*believe* S3 does. A real server disagrees where it counts — it refuses a
+delete of more than 1000 keys, and the stand-in accepts one happily. With
+MinIO up, `tests/test_s3_against_minio.py` runs instead of skipping.
+
+Its console is at <http://localhost:9001> (`minioadmin` / `minioadmin`),
+which is a quick way to see what a test actually wrote.
+
+None of this changes where YOUR payloads go during development: the default
+is still `LEKA_OBJECT_STORE=local`, writing under `var/objects/`. MinIO is
+there for the tests.
 
 ---
 
