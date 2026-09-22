@@ -1,7 +1,7 @@
 # ADR 012 — Events are an outbox in PostgreSQL
 
 **Status:** accepted. Each slice is appended by the pull request that builds it, so
-every decision arrives with the code it justifies. This is the second: publishing an event.
+every decision arrives with the code it justifies. This is the third: the job-run schema and its state machine.
 **Date:** 2026-09-21
 **Ticket:** LEKA-334
 
@@ -110,4 +110,80 @@ A type is dotted lowercase words (`source.sync_requested`), at most 100
 characters. A payload is JSON of at most 16 KiB. Both are refused where the event
 is written, not in the dispatcher: an outbox row that is too big or malformed is
 a bug in the publisher, and the publisher is the one who can fix it.
+
+### `job_runs` carries the execution; `sync_runs` will carry only ingestion
+
+A sync is a job. `job_runs` owns state, attempts, timestamps and the error. When
+ingestion arrives, `sync_runs` — reserved by ADR 010 — holds **only** the
+telemetry specific to ingestion (what was fetched, how much), with a foreign key
+to `job_runs.id`. Two parallel histories with their own `status` and `started_at`
+would diverge; one history and one extension table cannot.
+
+### `job_runs` has no `workspace_id`, on purpose
+
+A sweep serves every customer and belongs to none, so its owner is NULL.
+
+`workspace_id` nullable was rejected. `test_workspace_id_is_never_nullable` forbids
+it — "a row belonging to no one, readable by anyone who forgets to filter" — and
+weakening a security test to fit a table is the wrong direction. The deeper problem
+is real too: the session guard only protects models inheriting
+`WorkspaceScopedMixin`, which declares the column NOT NULL, so a nullable
+`workspace_id` would look like the isolation column while nothing protected it.
+
+Instead the column is `for_workspace_id`, nullable, and the table is listed in
+`TENANT_FREE_TABLES` with the reason, like `sessions` and `email_tokens`. The
+distinct name is the point: nobody will mistake it for the guard.
+
+**Whatever exposes the history filters on `for_workspace_id` explicitly and never
+returns the NULL rows.** A system run is operating data, not a customer's.
+`JobRunRepository.list_for_workspace` is that filter, and a test holds it there
+against the query that would leak them.
+
+**`ON DELETE CASCADE` on `for_workspace_id`:** erasing a customer erases their job
+history with the rest, which is what `docs/data-lifecycle.md` already promises. A
+consequence worth knowing: a run whose workspace was deleted after it was enqueued
+has no row left, so the worker's claim finds nothing and does nothing — there is no
+"cancelled" state to invent. The event reference is `ON DELETE SET NULL
+(event_id)`, and the column list matters: a plain `SET NULL` would also null
+`for_workspace_id` and quietly turn a customer's run into a system run when its
+event was pruned.
+
+### The state machine
+
+```
+queued ──claim──▶ running ──▶ succeeded              (final)
+   ▲                 │
+   │                 ├──▶ retrying ──due──▶ queued
+   │                 │
+   │                 └──▶ failed                      (final)
+   └─────────────────────────┘
+```
+
+| From | To | When |
+|---|---|---|
+| `queued` | `running` | a worker claims it; `attempts` goes up by one |
+| `running` | `succeeded` | the job returned |
+| `running` | `retrying` | the attempt failed and `attempts < max_attempts` |
+| `running` | `failed` | out of attempts, or a failure no retry can fix |
+| `running` | `retrying` / `failed` | the worker died (lease expired): the same two exits, and it uses up an attempt |
+| `retrying` | `queued` | `next_run_at` has passed |
+
+**`retrying` is not `queued`.** `queued` is waiting for a worker; `retrying` is an
+attempt that failed, waiting in the database for its next time. A retry is held in
+PostgreSQL and not in Redis (`enqueue_in`) because a Redis that loses its memory
+must not lose a retry. Collapsing the two would make "is this going to run again by
+itself?" unanswerable from the history.
+
+**`failed` is final and terminal.** A run that failed and will be tried again is
+`retrying`. Retrying a failed run creates a NEW run, so the history stays true.
+Status is text with a CHECK (ADR 006). The transitions are data
+(`TRANSITIONS`), and tests assert that every status is reachable, that no status can
+get stuck, that the final ones are terminal, and that every repository method, from
+every status, only ever moves a run along a declared edge.
+
+**`enqueued_at` is a different question from `status`.** Status says where the run
+is in its life; `enqueued_at` says whether Redis was told. A queued run with
+`enqueued_at IS NULL` is offered by the next pass, and one Redis was told about long
+ago and nobody claimed (`job_stale_enqueued_seconds`) is offered again — the net
+under a Redis that lost its memory. A duplicate message is harmless.
 

@@ -51,8 +51,18 @@ pytestmark = pytest.mark.integration
 #   email_tokens   belong to a person, and exist before any workspace does —
 #                  a verification link is sent before the account has entered
 #                  anywhere.
+#   job_runs       a sweep serves every customer and belongs to none, so its
+#                  owner is NULL — and a nullable workspace_id is exactly what
+#                  test_workspace_id_is_never_nullable forbids: it would look
+#                  like the isolation column while the session guard, which
+#                  only protects WorkspaceScopedMixin models, ignored it. The
+#                  owner is `for_workspace_id` instead, a different name on
+#                  purpose. Whatever exposes this history must filter on it
+#                  explicitly and never return the NULL rows: a system run is
+#                  operating data, not a customer's. JobRunRepository.
+#                  list_for_workspace is that filter; see ADR 012.
 TENANT_FREE_TABLES = frozenset(
-    {"workspaces", "users", "sessions", "email_tokens", "alembic_version"}
+    {"workspaces", "users", "sessions", "email_tokens", "job_runs", "alembic_version"}
 )
 
 PUBLIC_PATHS = frozenset({"/api/v1/health"})
