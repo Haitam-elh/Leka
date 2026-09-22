@@ -3,6 +3,9 @@
 /**
  * Which language the interface speaks, and how a component asks for a word.
  *
+ * French by default: the product is sold in French and the mockups are in
+ * French. English is one click away in the account menu.
+ *
  * The choice lives in the browser, not in the URL: locale-prefixed routes
  * (/en/…, /fr/…) are a routing decision with consequences for every link,
  * every redirect and the session cookie's path, and nothing yet needs them.
@@ -20,7 +23,7 @@ import {
 } from "@/lib/i18n/dictionaries";
 
 const STORAGE_KEY = "leka.locale";
-const FALLBACK: Locale = "en";
+const FALLBACK: Locale = "fr";
 
 interface LocaleValue {
   locale: Locale;

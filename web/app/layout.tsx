@@ -29,7 +29,7 @@ export default function RootLayout({
     // The font variables belong on <html>, not <body>: globals.css resolves
     // --font-sans at :root, and a variable declared one level lower is not
     // there yet — which is how every heading came out in the browser's serif.
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="fr" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased">
         {/* Both wrap the whole app, including the sign-in screens: the
             language is a preference someone sets before signing in, and a
