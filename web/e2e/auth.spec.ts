@@ -54,7 +54,8 @@ test("the demo account signs in, sees its workspace, and signs out", async ({ pa
   // cookie was actually stored and sent back. Since LEKA-337 the answer is
   // the application shell — the workspace on the sidebar, the account in the
   // menu — rather than the two lines the landing page used to print.
-  await expect(page).toHaveURL("http://localhost:3000/");
+  // "/" redirects to the overview: every zone has a named path.
+  await expect(page).toHaveURL("http://localhost:3000/overview");
   await expect(page.getByText("Acme Corp")).toBeVisible();
 
   await page.getByTestId("user-menu").last().click();

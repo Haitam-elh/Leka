@@ -26,7 +26,7 @@ async function signIn(page: Page) {
   await page.getByLabel("Email").fill(DEMO_EMAIL);
   await page.getByLabel("Password").fill(DEMO_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL("http://localhost:3000/");
+  await expect(page).toHaveURL("http://localhost:3000/overview");
 }
 
 test.describe("the shell", () => {
@@ -34,14 +34,14 @@ test.describe("the shell", () => {
     await signIn(page);
 
     for (const [href, id] of [
-      ["/", "overview"],
+      ["/overview", "overview"],
       ["/intentions", "intentions"],
       ["/sources", "sources"],
       ["/team", "team"],
     ] as const) {
       await page.goto(href);
 
-      await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "Navigation principale" })).toBeVisible();
       await expect(page.getByTestId("user-menu").first()).toBeVisible();
       await expect(page.locator("main#main-content")).toBeVisible();
       // The entry for the page you are on, and only that one.
@@ -55,7 +55,7 @@ test.describe("the shell", () => {
       await page.setViewportSize({ width: size.width, height: size.height });
       await signIn(page);
 
-      await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "Navigation principale" })).toBeVisible();
 
       // Nothing sticks out sideways: the one thing a shell gets wrong first.
       const overflow = await page.evaluate(
@@ -88,7 +88,7 @@ test.describe("the shell", () => {
     await signIn(page);
     await page.setViewportSize({ width: 900, height: 800 });
 
-    const navigation = page.getByRole("navigation", { name: "Main navigation" });
+    const navigation = page.getByRole("navigation", { name: "Navigation principale" });
     await expect(navigation).toBeHidden();
 
     await page.getByTestId("open-navigation").click();
@@ -101,7 +101,7 @@ test.describe("the shell", () => {
   test("lets the keyboard skip the twelve navigation links", async ({ page }) => {
     await signIn(page);
 
-    const skip = page.getByRole("link", { name: "Skip to content" });
+    const skip = page.getByRole("link", { name: "Aller au contenu" });
 
     // Not "the first Tab": `next dev` injects its own dev-tools button into
     // the page, and it takes a tab stop that production does not have. What
@@ -127,11 +127,11 @@ test.describe("the shell", () => {
   test("changes language from the account menu", async ({ page }) => {
     await signIn(page);
 
-    await expect(page.getByTestId("nav-environment")).toContainText("My environment");
+    await expect(page.getByTestId("nav-environment")).toContainText("Mon environnement");
 
     await page.getByTestId("user-menu").last().click();
-    await page.getByRole("menuitemradio", { name: "Français" }).click();
+    await page.getByRole("menuitemradio", { name: "English" }).click();
 
-    await expect(page.getByTestId("nav-environment")).toContainText("Mon environnement");
+    await expect(page.getByTestId("nav-environment")).toContainText("My environment");
   });
 });
