@@ -16,8 +16,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.background import enqueue
 from leka.db import system_scope, workspace_scope
-from leka.platform.jobs import enqueue
 from leka.platform.models import (
     Invitation,
     InvitationStatus,

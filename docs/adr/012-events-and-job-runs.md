@@ -1,7 +1,7 @@
 # ADR 012 — Events are an outbox in PostgreSQL
 
 **Status:** accepted. Each slice is appended by the pull request that builds it, so
-every decision arrives with the code it justifies. This is the first: the event model.
+every decision arrives with the code it justifies. This is the second: publishing an event.
 **Date:** 2026-09-21
 **Ticket:** LEKA-334
 
@@ -12,7 +12,7 @@ it was a Redis queue and four tasks run by hand, and it could not answer a
 question a platform engineer asks the first week: **what if the queue loses
 the message?**
 
-`enqueue` (in `leka.platform.jobs`) logs a failure
+`enqueue` (then in `leka.platform.jobs`, now `leka.background.jobs`) logs a failure
 and carries on. That is right for
 housekeeping, which has the reconciliation sweep behind it, and wrong for an
 event that nothing else would ever find again — a source sync requested by a
@@ -103,4 +103,11 @@ Events carry a nullable `request_id`. The publisher captures it when it writes
 the event; when the work runs, the worker binds it with
 `structlog.contextvars.bind_contextvars`. One search then joins "the user
 clicked" to "the worker crashed three minutes later".
+
+### What an event may carry
+
+A type is dotted lowercase words (`source.sync_requested`), at most 100
+characters. A payload is JSON of at most 16 KiB. Both are refused where the event
+is written, not in the dispatcher: an outbox row that is too big or malformed is
+a bug in the publisher, and the publisher is the one who can fix it.
 

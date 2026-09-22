@@ -12,6 +12,16 @@ event payloads and job arguments are JSON, never a typed workspace.
 See docs/adr/012-events-and-job-runs.md.
 """
 
+from leka.background.jobs import QUEUE_NAME, enqueue, queue, reset_queue
 from leka.background.models import Event, EventStatus
+from leka.background.service import publish_event
 
-__all__ = ["Event", "EventStatus"]
+__all__ = [
+    "QUEUE_NAME",
+    "Event",
+    "EventStatus",
+    "enqueue",
+    "publish_event",
+    "queue",
+    "reset_queue",
+]

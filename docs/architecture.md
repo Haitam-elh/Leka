@@ -97,8 +97,8 @@ written.
 | --- | --- | --- | --- |
 | `core` | settings, exceptions, FastAPI dependencies, logging | nothing | built |
 | `db` | engine, session, declarative base, column mixins, tenant scope guard | `core` | built |
-| `background` | the background loop's machinery: events (an outbox), and later job runs, the queue and their scheduling. Below `platform` so that platform can use it | `core`, `db` | **LEKA-334** — `events` schema built; dispatch, runs and scheduling planned |
-| `platform` | tenancy (workspaces, memberships, invitations), the LEKA-330 seam, secrets, health | `core`, `db` | tenancy, seam, secrets and the queue (`jobs`) built |
+| `background` | the background loop's machinery: events (an outbox), the job queue, and later job runs and their scheduling. Below `platform` so that platform can use it | `core`, `db` | **LEKA-334** — `events` schema and the queue built; dispatch, runs and scheduling planned |
+| `platform` | tenancy (workspaces, memberships, invitations), the LEKA-330 seam, secrets, health | `core`, `db` | tenancy, seam and secrets built |
 | `identity` | who someone is, and which workspaces they may enter | `core`, `db`, `platform` | **LEKA-330** |
 | `connectors` | talking to customer systems; one subpackage per system | `core`, `db`, `platform` | `sources` built, no connector yet |
 | `ingestion` | collect → extract → parse → normalise | ← `connectors` | skeleton |
