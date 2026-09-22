@@ -109,10 +109,13 @@
   --shell-surface: #f6fafe;       /* the sidebar */
   --shell-canvas: #f3f6fd;        /* the page behind the cards */
   --shell-line: #e6eaf4;          /* the hairline between the two */
-  --shell-muted: #7b8096;         /* tagline, dates, secondary labels */
+  /* Darkened from the mockup's #7b8096, which reads 3.9:1 on white and
+   * fails WCAG AA for body text. Same hue, same feel, 4.96:1. */
+  --shell-muted: #6a6f86;         /* tagline, dates, secondary labels */
   --shell-nav: #262952;           /* a nav label at rest */
   --shell-badge: #fcdcdd;         /* the counter beside "To approve" */
-  --shell-badge-foreground: #db4e55;
+  /* Same story: the mockup's #db4e55 on that pink reads 3.1:1. */
+  --shell-badge-foreground: #c2272f;
 
   /* Measured on the same screen: 222px and 64px at its 1536px width. */
   --shell-sidebar-width: 14rem;   /* 224px */
