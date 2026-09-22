@@ -96,7 +96,10 @@ opened it.
 `components/shell/*.test.tsx` covers the config-driven navigation, the
 current-page mark, the badge, the fold button and both menus under the
 keyboard. `web/e2e/shell.spec.ts` covers the three viewports, the drawer, the
-skip link and the language switch in a real browser.
+skip link and the language switch in a real browser. `app/design-tokens.test.ts`
+reads the tokens out of globals.css and measures every text pair against
+WCAG AA — three colours taken from the mockups failed it, and were darkened
+by the least that passes.
 
 TODO: `@axe-core/playwright` for an automated contrast and landmark audit.
 It was left out of LEKA-337 to avoid adding a dependency for one assertion.
