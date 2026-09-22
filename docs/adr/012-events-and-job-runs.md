@@ -1,7 +1,7 @@
 # ADR 012 — Events are an outbox in PostgreSQL
 
 **Status:** accepted. Each slice is appended by the pull request that builds it, so
-every decision arrives with the code it justifies. This is the fourth: the repository and the guarantees it makes.
+every decision arrives with the code it justifies. This is the fifth: the runner.
 **Date:** 2026-09-21
 **Ticket:** LEKA-334
 
@@ -209,4 +209,18 @@ ever looking like it was failing.
 Retries wait `job_retry_base_seconds` doubling each attempt, capped at
 `job_retry_max_seconds`: a downstream that is down for a minute should not be
 hammered every thirty seconds.
+
+### The runner: a thread for the job, its own engine for the bookkeeping
+
+Existing tasks are synchronous RQ entry points that call `asyncio.run` themselves,
+which cannot run inside a running loop. The runner executes the job in a thread and
+keeps its own loop free to renew the lease — which is what stops a job that
+legitimately takes ten minutes from looking like a dead one. Its own state writes
+use an engine **without a pool**: an asyncpg connection belongs to the loop that
+opened it, and the job's loop and the runner's would otherwise share `leka.db`'s
+pool.
+
+A job that cannot be imported fails at once and is not retried: it will not import
+next time either. The request that caused a run is set on `current_request_id()` for
+the job's duration and bound into every log line.
 

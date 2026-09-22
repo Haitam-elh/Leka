@@ -117,6 +117,9 @@ this is only what each variable is for. `leka/core/settings/background.py`.
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `LEKA_JOB_MAX_ATTEMPTS` | `3` | A job run is failed for good after this many attempts, 1–20 |
+| `LEKA_JOB_RETRY_BASE_SECONDS` | `30` | Delay before the first retry; doubles each attempt up to the cap below, 1–3600 |
+| `LEKA_JOB_RETRY_MAX_SECONDS` | `3600` | Cap on the retry delay, 1–86400. Refused at startup if below the base |
+| `LEKA_JOB_LEASE_SECONDS` | `300` | A worker silent this long (30–7200) is taken to be dead; it renews at a third of this |
 
 ## The secrets: who reads them, how often they rotate
 
@@ -130,7 +133,7 @@ are in `docs/runbook.md`.
 | --- | --- | --- |
 | `LEKA_SECRET_KEY` | `leka.core.signing` | 365 days |
 | `LEKA_ENCRYPTION_KEYS` | `leka.platform.secrets` | 365 days |
-| `LEKA_DATABASE_URL` | `leka.db.session`, `alembic.env` | 365 days |
+| `LEKA_DATABASE_URL` | `leka.db.session`, `alembic.env`, `leka.background.runner` | 365 days |
 | `LEKA_REDIS_URL` | `leka.core.ratelimit`, `leka.platform.health`, `leka.background.jobs` | 365 days |
 | `LEKA_SMTP_PASSWORD` | `leka.identity.email` | 365 days |
 | `LEKA_RESEND_API_KEY` | `leka.identity.email` | 90 days |
