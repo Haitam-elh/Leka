@@ -31,7 +31,7 @@ from sqlalchemy import DateTime, Interval, case, func, literal, null, select, up
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.background.models import Event, JobQueue, JobRun, JobStatus
+from leka.background.models import Event, EventStatus, JobQueue, JobRun, JobStatus
 from leka.core.config import settings
 from leka.db import Page, SortableField, WorkspaceScopedRepository, paginate
 
@@ -71,6 +71,47 @@ class EventRepository(WorkspaceScopedRepository):
         )
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
+
+
+class EventDispatchRepository:
+    """What the dispatcher and the retention sweep ask, across every workspace."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def claim_pending(self, *, limit: int) -> Sequence[Event]:
+        """The oldest pending events, locked for this transaction.
+
+        FOR UPDATE SKIP LOCKED: a second dispatcher running at the same moment
+        skips whatever this one holds instead of waiting for it or, worse,
+        taking the same rows and enqueueing every event twice.
+        """
+        result = await self._session.execute(
+            select(Event)
+            .where(Event.status == EventStatus.PENDING)
+            .order_by(Event.created_at, Event.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        return result.scalars().all()
+
+    @staticmethod
+    def mark_runs_created(event: Event, *, at: datetime) -> None:
+        event.status = EventStatus.RUNS_CREATED
+        event.runs_created_at = at
+        event.last_error = None
+
+    @staticmethod
+    def mark_unroutable(event: Event, error: str) -> None:
+        event.status = EventStatus.FAILED
+        event.last_error = error
+
+    @staticmethod
+    def record_failed_attempt(event: Event, error: str, *, give_up: bool) -> None:
+        event.dispatch_attempts += 1
+        event.last_error = error[:1000]
+        if give_up:
+            event.status = EventStatus.FAILED
 
 
 def _after(now: datetime, seconds: Any) -> Any:
@@ -378,4 +419,4 @@ class JobRunRepository:
         return result.scalar_one_or_none()
 
 
-__all__ = ["EventRepository", "JobRunRepository"]
+__all__ = ["EventDispatchRepository", "EventRepository", "JobRunRepository"]

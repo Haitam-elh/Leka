@@ -24,7 +24,7 @@ from leka.background.models import (
     JobRun,
     JobStatus,
 )
-from leka.background.service import publish_event
+from leka.background.service import enqueue_job, publish_event
 
 __all__ = [
     "ACTIVE_JOB_STATUSES",
@@ -37,6 +37,7 @@ __all__ = [
     "JobRun",
     "JobStatus",
     "enqueue",
+    "enqueue_job",
     "publish_event",
     "queue",
     "reset_queue",

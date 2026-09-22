@@ -6,11 +6,12 @@ things — syncing, normalising, and the housekeeping in this file. A request
 that deletes a customer must not wait while half a million objects are
 removed from a bucket.
 
-WHAT THIS IS NOT. It is not a scheduler and it is not a retry framework. RQ
-gives us a durable list in Redis and a worker that drains it; that is the
-whole of it. Anything needing "every hour" is driven from outside, by cron or
-by `rq worker` plus a timer, and every task in LEKA is written so that
-running it twice is the same as running it once.
+WHAT THIS IS. The transport: RQ gives us a durable list in Redis and a worker
+that drains it, and this puts a job on it. It knows nothing about retries or
+schedules. Those live beside it — runner.py (state, attempts, leases),
+schedule.py and cron_config.py (what runs every hour) — and are described in
+docs/background.md. Every task in LEKA is written so that running it twice is the
+same as running it once, which is what lets all of that be at-least-once.
 
 JOBS ARE NAMED BY STRING, never imported. `enqueue("leka.ingestion.tasks.x")`
 rather than importing x and passing the function. Two reasons, and the second
@@ -31,6 +32,12 @@ the work this queue carries is housekeeping with a safety net behind it — the
 reconciliation sweep finds objects no row speaks for, whatever the reason
 nobody deleted them. Refusing to delete a customer's account because a queue
 was briefly down would be the worse failure.
+
+WORK THAT HAS NO SUCH NET GOES THROUGH A JOB RUN INSTEAD. leka.background's
+`enqueue_job` writes the run to the database first and this second, so a queue
+that refuses the message leaves a row saying "never enqueued" that the next pass
+picks up. Nothing is lost because Redis had a bad minute. This function is the
+transport under both, and stays fail-soft on its own.
 """
 
 from __future__ import annotations
@@ -44,47 +51,64 @@ from leka.core.config import settings
 
 logger = structlog.get_logger(__name__)
 
-# One queue. LEKA is one worker's worth of work for a long time yet, and
-# several queues with one worker between them is a way to starve one of them
-# by accident. Splitting is a decision to take when a slow job is measurably
-# delaying a fast one.
+# The default queue. There are three (JobQueue): leka:high for work a person is
+# waiting for, this one, and leka:low for the sweeps, drained in that order by a
+# single worker. That is the only priority RQ has, and it has two limits worth
+# knowing: a continuous stream of high starves low, and a long job blocks
+# everything whatever its queue — priority only chooses the NEXT job. See ADR 012.
 QUEUE_NAME = "leka"
 
 _queue: Any | None = None
+# The other queues (leka:high, leka:low), built on first use like the default.
+# The default keeps its own slot: it is what most callers use, and what tests
+# replace to see what would have been enqueued.
+_named_queues: dict[str, Any] = {}
 
 
-def queue() -> Any:
-    """The RQ queue for this process, created on first use.
+def _build(name: str) -> Any:
+    import redis
+    from rq import Queue
+
+    return Queue(
+        name,
+        connection=redis.from_url(
+            str(settings.redis_url), socket_connect_timeout=2, socket_timeout=2
+        ),
+    )
+
+
+def queue(name: str = QUEUE_NAME) -> Any:
+    """The RQ queue of that name for this process, created on first use.
 
     Not at import: a module import must not open a network connection, or
     every test and every migration pays for one it never uses.
     """
     global _queue
-    if _queue is None:
-        import redis
-        from rq import Queue
-
-        _queue = Queue(
-            QUEUE_NAME,
-            connection=redis.from_url(
-                str(settings.redis_url), socket_connect_timeout=2, socket_timeout=2
-            ),
-        )
-    return _queue
+    if name == QUEUE_NAME:
+        if _queue is None:
+            _queue = _build(name)
+        return _queue
+    if name not in _named_queues:
+        _named_queues[name] = _build(name)
+    return _named_queues[name]
 
 
 def reset_queue() -> None:
-    """Forget the built queue. For tests that substitute one."""
+    """Forget every built queue. For tests that substitute one."""
     global _queue
     _queue = None
+    _named_queues.clear()
 
 
-async def enqueue(job: str, *args: Any, **kwargs: Any) -> bool:
-    """Put a job on the queue. Says whether it got there.
+async def enqueue(job: str, *args: Any, queue_name: str = QUEUE_NAME, **kwargs: Any) -> bool:
+    """Put a job on a queue. Says whether it got there.
 
     `job` is a dotted path — "leka.ingestion.tasks.run_sweep" — because that
     is what RQ stores anyway, and because naming it avoids an import that
     would point the wrong way through the module layers.
+
+    `queue_name` says which queue; everything else in kwargs is RQ's own
+    (`job_timeout`, ...) or the job's.
 
     Returns False rather than raising when the queue is unreachable. Callers
     are doing something else that matters; see the module docstring for why
@@ -95,11 +119,11 @@ async def enqueue(job: str, *args: Any, **kwargs: Any) -> bool:
     loop is still every other request waiting.
     """
     try:
-        await asyncio.to_thread(lambda: queue().enqueue(job, *args, **kwargs))
+        await asyncio.to_thread(lambda: queue(queue_name).enqueue(job, *args, **kwargs))
     except Exception as error:
-        logger.error("job_not_enqueued", job=job, error=str(error))
+        logger.error("job_not_enqueued", job=job, queue=queue_name, error=str(error))
         return False
-    logger.info("job_enqueued", job=job)
+    logger.info("job_enqueued", job=job, queue=queue_name)
     return True
 
 

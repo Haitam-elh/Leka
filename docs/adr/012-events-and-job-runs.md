@@ -1,7 +1,7 @@
 # ADR 012 — Events are an outbox in PostgreSQL
 
 **Status:** accepted. Each slice is appended by the pull request that builds it, so
-every decision arrives with the code it justifies. This is the fifth: the runner.
+every decision arrives with the code it justifies. This is the sixth: the dispatcher and the service.
 **Date:** 2026-09-21
 **Ticket:** LEKA-334
 
@@ -223,4 +223,61 @@ pool.
 A job that cannot be imported fails at once and is not retried: it will not import
 next time either. The request that caused a run is set on `current_request_id()` for
 the job's duration and bound into every log line.
+
+### Concurrency: at most one active run per key
+
+`concurrency_key` is unique among active runs, per owner (`queued`, `running`,
+`retrying`), by two partial indexes — because NULLs are distinct in a unique index
+and a system sweep has no workspace; with one, two workers could run the same
+retention sweep at once. `enqueue_job` returns None when the key is held: two
+people clicking "sync" is not an error, it is already happening.
+
+### Dispatch is two hops, and each is a database write first
+
+An event reaches a worker in two steps, and **Redis is never on the path of a
+transaction**:
+
+1. The **dispatcher** claims pending events (`FOR UPDATE SKIP LOCKED`), creates a
+   `job_runs` row per route, marks the event `runs_created`, and commits.
+2. The **enqueue pass** takes runs the queue has not been told about
+   (`enqueued_at IS NULL`), offers each to Redis, and stamps `enqueued_at`.
+
+The first version of this ADR had the dispatcher talk to Redis itself. That held a
+row lock for a Redis timeout per event, and let a worker pick a message up before
+the transaction that created its run had committed. Splitting it means a run is
+durable before anyone hears of it, and "the queue was down" is a row that says so
+rather than an event stuck in a pass.
+
+Within each hop the order is the design. The dispatcher may die after creating the
+runs and before marking the event, and will then create them again: `UNIQUE
+(event_id, job)` refuses the second, which is what turns at-least-once into one
+run. The enqueue pass offers a run to Redis and THEN stamps `enqueued_at` — in that
+order, never the reverse, because a crash between the two must re-enqueue rather than
+lose the job silently. **So a run can be picked up twice**, and it is the claim that
+makes that harmless: one UPDATE that only one worker can win. Two tests hold it — one
+runs the same run from five workers at once, one enqueues the same run twice on a real
+Redis — and each asserts the job executed once.
+
+If the first offer fails Redis is down, and the rest would fail the same way, each
+after a timeout. So **a pass stops at its first failure** and leaves the others
+exactly as they were, to be found again. An event that cannot be turned into runs at all
+— a bug, a constraint — is retried and after `dispatch_max_attempts` marked
+`failed`; each is handled in a savepoint, so one poisoned event cannot hold up the
+ones behind it.
+
+### Routing is a table
+
+`leka.background.routes.ROUTES` maps an event type to dotted job paths. Adding
+a consumer is one line. The alternative, a registry every module writes itself
+into, keeps the layering but makes the worker import every consumer before it can
+dispatch anything: a dependency on import order that fails only in production.
+The price of the table is that a file names things it does not own; when it has
+more than a handful of entries that is the moment to reconsider.
+
+**An event with no route is marked `failed`, not ignored** — dropping it silently
+would look exactly like it working. A job named in the table receives one
+argument, the event id as a string, and must check its workspace still exists:
+a workspace can be deleted between the event and the job. A test checks that
+every path in the table names a function that exists, so a rename cannot leave a
+route pointing at nothing until a worker fails at three in the morning.
 
