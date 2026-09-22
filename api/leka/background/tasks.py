@@ -1,11 +1,12 @@
 """Background work for the background module: the passes that keep the loop moving.
 
-Three, and each is a plain function with a synchronous entry point, safe to run
+Four, and each is a plain function with a synchronous entry point, safe to run
 twice and concurrently — the house pattern, and what lets one tick drive them all.
 
     dispatch_pending_events   event -> job runs (database writes only)
     recover_runs              lost workers, due retries, runs the queue forgot
     enqueue_pending_runs      job runs -> Redis. The ONLY thing that talks to it
+    prune_events              the outbox does not grow for ever
 
 REDIS IS NEVER ON THE PATH OF A TRANSACTION. The dispatcher writes rows and
 commits; a separate pass offers those rows to the queue. That is the reason for
@@ -194,6 +195,34 @@ async def run_maintenance() -> dict[str, dict[str, int]]:
     }
 
 
+async def prune_events(
+    *, now: datetime | None = None, batch: int = 1000, max_batches: int = 20
+) -> int:
+    """Delete settled events (runs created, or failed) older than the retention.
+
+    Bounded, like the payload sweep: a first run after the retention changes can
+    match a great many rows, and a task that tries to finish in one go is one
+    that is killed halfway. It stops after max_batches and the next run picks up
+    where this one left off.
+    """
+    cutoff = (now or datetime.now(UTC)) - timedelta(days=settings.event_retention_days)
+    removed = 0
+
+    for _ in range(max_batches):
+        with system_scope():
+            async with session_factory() as session:
+                deleted = await EventDispatchRepository(session).delete_settled_before(
+                    cutoff, limit=batch
+                )
+                await session.commit()
+        removed += deleted
+        if deleted < batch:
+            break
+
+    logger.info("event_prune_completed", removed=removed)
+    return removed
+
+
 def run_dispatch() -> dict[str, int]:
     """Entry point for RQ, which is synchronous."""
     return asyncio.run(dispatch_pending_events())
@@ -204,5 +233,11 @@ def run_maintenance_tick() -> dict[str, dict[str, int]]:
     return asyncio.run(run_maintenance())
 
 
+def run_prune_events() -> int:
+    """Entry point for RQ, which is synchronous."""
+    return asyncio.run(prune_events())
+
+
 if __name__ == "__main__":  # pragma: no cover
     run_maintenance_tick()
+    run_prune_events()

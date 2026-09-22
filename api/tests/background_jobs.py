@@ -39,4 +39,22 @@ def sleep(seconds: float) -> None:
     time.sleep(seconds)
 
 
+def record_event(event_id: str) -> None:
+    """What an event route's job looks like: one argument, the event id."""
+    CALLS.append(("record_event", (event_id, current_request_id())))
+
+
+def flaky(name: str, fail_times: int) -> None:
+    """Fails the first `fail_times` times it is called, then works."""
+    seen = sum(1 for call, payload in CALLS if call == "flaky" and payload == name)
+    CALLS.append(("flaky", name))
+    if seen < fail_times:
+        msg = f"flaky job {name!r} failing on call {seen + 1}"
+        raise RuntimeError(msg)
+
+
+def label(text: str) -> None:
+    CALLS.append(("label", text))
+
+
 not_a_function = "this is a string, not a callable"

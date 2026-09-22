@@ -125,9 +125,13 @@ What survives, and why:
 
 ## Running the sweeps
 
-There is no scheduler in LEKA. Every task is a plain function with a
-synchronous entry point, so it can be run by hand, by `cron`, or from the
-queue.
+These run on their own. `rq cron leka.background.cron_config` puts each on the
+queue at the interval below; the worker runs it; and each run is recorded (its
+attempts, its error, when it finished) in `job_runs`, where a sweep that is still
+going is not started a second time. See [background.md](background.md).
+
+Every task is also a plain function with a synchronous entry point, so it can still
+be run by hand:
 
 ```bash
 # Retention: delete what has outlived its policy, row then object
@@ -141,11 +145,12 @@ python -m leka.identity.tasks
 ```
 
 Every one of them is safe to run twice: running a sweep again finds nothing
-left to do rather than doing damage. That is deliberate, and it is what lets
-`cron` be the whole of the scheduling story for now.
+left to do rather than doing damage. That is deliberate, and it is what lets a
+schedule that fires while the last run is still going simply be refused.
 
 **Reconciliation should be run with `dry_run=True` the first time against any
-real bucket.** Its failure mode is deleting live data, so seeing the number
+real bucket.** The scheduled one does this for you: it only REPORTS, and deletes
+nothing until `LEKA_RECONCILE_DELETES=true` is set. Its failure mode is deleting live data, so seeing the number
 before trusting it is cheap:
 
 ```python
@@ -159,14 +164,15 @@ and checksum the store measured — so for a moment a perfectly good payload
 has no row. Without that grace period, reconciliation would delete data that
 was arriving correctly, and nothing would ever say so.
 
-## Suggested schedule
+## The schedule
 
 Nothing here is time-critical to the minute. These are the intervals the
-sweeps were written for.
+sweeps were written for, and the ones in `leka.background.schedule`.
 
 | Task | Interval | Why that one |
 |---|---|---|
 | `sweep_expired_payloads` | hourly | Bounded per run, so it catches up rather than falling behind |
 | `erase_workspaces_past_grace` | hourly | A deletion should complete within an hour of its grace period ending |
 | `purge_expired` (identity) | hourly | Expired sessions are credentials; the smallest set we can hold is the right one |
-| `reconcile_orphaned_objects` | weekly | Walks the whole store. It is a net, not a hot path |
+| `reconcile_orphaned_objects` | weekly | Walks the whole store. It is a net, not a hot path. Dry unless `LEKA_RECONCILE_DELETES=true` |
+| `prune_events` | daily | The outbox does not grow for ever |

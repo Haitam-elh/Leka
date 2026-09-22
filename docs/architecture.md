@@ -97,7 +97,7 @@ written.
 | --- | --- | --- | --- |
 | `core` | settings, exceptions, FastAPI dependencies, logging | nothing | built |
 | `db` | engine, session, declarative base, column mixins, tenant scope guard | `core` | built |
-| `background` | the background loop's machinery: events (an outbox), the job queue, and later job runs and their scheduling. Below `platform` so that platform can use it | `core`, `db` | **LEKA-334** — `events` schema and the queue built; dispatch, runs and scheduling planned |
+| `background` | the background loop's machinery: events (an outbox), the job queue, and later job runs and their scheduling. Below `platform` so that platform can use it | `core`, `db` | **LEKA-334** — events, job runs, the queue and its schedule; see [background.md](background.md) |
 | `platform` | tenancy (workspaces, memberships, invitations), the LEKA-330 seam, secrets, health | `core`, `db` | tenancy, seam and secrets built |
 | `identity` | who someone is, and which workspaces they may enter | `core`, `db`, `platform` | **LEKA-330** |
 | `connectors` | talking to customer systems; one subpackage per system | `core`, `db`, `platform` | `sources` built, no connector yet |
@@ -381,4 +381,4 @@ Every change is held to them. They are listed in
 | A separate API gateway | our gateway is FastAPI. Request ids and rate limiting are two middlewares, not a component to operate |
 | Payload bytes in PostgreSQL | [ADR 010](adr/010-object-storage.md). The largest and least durable data we hold, in the store that is hardest to back up and restore |
 | Partitioned tables | `raw_payloads` will need it. Not yet — the triggers are written down as numbers in [ADR 010](adr/010-object-storage.md), and the quarterly restore drill is what observes them |
-| A scheduler | every background task is a plain function with a synchronous entry point, safe to run twice. `cron` is the whole story until it is not |
+| A scheduler of our own | `rq cron`, which ships with RQ, puts the periodic sweeps on the queue from a table in `leka.background.schedule`. Every task is still a plain function with a synchronous entry point, safe to run twice; the schedule decides when, not how. See [background.md](background.md) |

@@ -24,6 +24,10 @@ class BackgroundSettings:
     # ge=1: a 0 reads as "disabled" to whoever types it and as "never try" to
     # the code, so it is refused rather than given a meaning.
     dispatch_max_attempts: int = Field(default=5, ge=1, le=50)
+    # How long an event that has settled (runs created, or failed) is kept.
+    # Pending events are never pruned: an old pending event is a problem to
+    # see, not to delete.
+    event_retention_days: int = Field(default=14, ge=1, le=365)
 
     # How many times a job run is attempted before it is failed for good. ge=1,
     # for the same reason as above.
@@ -42,6 +46,13 @@ class BackgroundSettings:
     # again. It is the net under a Redis that lost its memory; the claim makes a
     # duplicate message harmless, so this errs long rather than short.
     job_stale_enqueued_seconds: int = Field(default=3600, ge=60, le=86400)
+
+    # Whether the scheduled reconciliation sweep may DELETE. Off by default, so it
+    # runs dry: it reports what it would remove and removes nothing. Its failure mode
+    # is deleting live data, docs/data-lifecycle.md says to look at its number before
+    # trusting it against a real bucket, and a schedule that started deleting on
+    # its own would skip exactly that. Turn it on once you have.
+    reconcile_deletes: bool = False
 
     @model_validator(mode="after")
     def _retry_cap_is_not_below_its_base(self) -> Self:

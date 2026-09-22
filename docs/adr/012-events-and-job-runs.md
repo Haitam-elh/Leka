@@ -1,7 +1,8 @@
 # ADR 012 — Events are an outbox in PostgreSQL
 
-**Status:** accepted. Each slice is appended by the pull request that builds it, so
-every decision arrives with the code it justifies. This is the sixth: the dispatcher and the service.
+**Status:** accepted. Each slice was appended by the pull request that built it, so
+every decision arrived with the code it justifies: the event model and dispatch,
+the job-run state machine, and — last — the queues and the schedule.
 **Date:** 2026-09-21
 **Ticket:** LEKA-334
 
@@ -104,12 +105,54 @@ the event; when the work runs, the worker binds it with
 `structlog.contextvars.bind_contextvars`. One search then joins "the user
 clicked" to "the worker crashed three minutes later".
 
-### What an event may carry
+### Dispatch is two hops, and each is a database write first
 
-A type is dotted lowercase words (`source.sync_requested`), at most 100
-characters. A payload is JSON of at most 16 KiB. Both are refused where the event
-is written, not in the dispatcher: an outbox row that is too big or malformed is
-a bug in the publisher, and the publisher is the one who can fix it.
+An event reaches a worker in two steps, and **Redis is never on the path of a
+transaction**:
+
+1. The **dispatcher** claims pending events (`FOR UPDATE SKIP LOCKED`), creates a
+   `job_runs` row per route, marks the event `runs_created`, and commits.
+2. The **enqueue pass** takes runs the queue has not been told about
+   (`enqueued_at IS NULL`), offers each to Redis, and stamps `enqueued_at`.
+
+The first version of this ADR had the dispatcher talk to Redis itself. That held a
+row lock for a Redis timeout per event, and let a worker pick a message up before
+the transaction that created its run had committed. Splitting it means a run is
+durable before anyone hears of it, and "the queue was down" is a row that says so
+rather than an event stuck in a pass.
+
+Within each hop the order is the design. The dispatcher may die after creating the
+runs and before marking the event, and will then create them again: `UNIQUE
+(event_id, job)` refuses the second, which is what turns at-least-once into one
+run. The enqueue pass offers a run to Redis and THEN stamps `enqueued_at` — in that
+order, never the reverse, because a crash between the two must re-enqueue rather than
+lose the job silently. **So a run can be picked up twice**, and it is the claim that
+makes that harmless: one UPDATE that only one worker can win. Two tests hold it — one
+runs the same run from five workers at once, one enqueues the same run twice on a real
+Redis — and each asserts the job executed once.
+
+If the first offer fails Redis is down, and the rest would fail the same way, each
+after a timeout. So **a pass stops at its first failure** and leaves the others
+exactly as they were, to be found again. An event that cannot be turned into runs at all
+— a bug, a constraint — is retried and after `dispatch_max_attempts` marked
+`failed`; each is handled in a savepoint, so one poisoned event cannot hold up the
+ones behind it.
+
+### Routing is a table
+
+`leka.background.routes.ROUTES` maps an event type to dotted job paths. Adding
+a consumer is one line. The alternative, a registry every module writes itself
+into, keeps the layering but makes the worker import every consumer before it can
+dispatch anything: a dependency on import order that fails only in production.
+The price of the table is that a file names things it does not own; when it has
+more than a handful of entries that is the moment to reconsider.
+
+**An event with no route is marked `failed`, not ignored** — dropping it silently
+would look exactly like it working. A job named in the table receives one
+argument, the event id as a string, and must check its workspace still exists:
+a workspace can be deleted between the event and the job. A test checks that
+every path in the table names a function that exists, so a rename cannot leave a
+route pointing at nothing until a worker fails at three in the morning.
 
 ### `job_runs` carries the execution; `sync_runs` will carry only ingestion
 
@@ -232,52 +275,96 @@ and a system sweep has no workspace; with one, two workers could run the same
 retention sweep at once. `enqueue_job` returns None when the key is held: two
 people clicking "sync" is not an error, it is already happening.
 
-### Dispatch is two hops, and each is a database write first
+### The outbox is pruned
 
-An event reaches a worker in two steps, and **Redis is never on the path of a
-transaction**:
+Events whose runs were created, and failed ones, older than `event_retention_days` are deleted, in
+bounded batches. **A pending event is never pruned**: an old pending event means
+the dispatcher is not working, and that is something to see, not to clean up.
 
-1. The **dispatcher** claims pending events (`FOR UPDATE SKIP LOCKED`), creates a
-   `job_runs` row per route, marks the event `runs_created`, and commits.
-2. The **enqueue pass** takes runs the queue has not been told about
-   (`enqueued_at IS NULL`), offers each to Redis, and stamps `enqueued_at`.
+### What an event may carry
 
-The first version of this ADR had the dispatcher talk to Redis itself. That held a
-row lock for a Redis timeout per event, and let a worker pick a message up before
-the transaction that created its run had committed. Splitting it means a run is
-durable before anyone hears of it, and "the queue was down" is a row that says so
-rather than an event stuck in a pass.
+A type is dotted lowercase words (`source.sync_requested`), at most 100
+characters. A payload is JSON of at most 16 KiB. Both are refused where the event
+is written, not in the dispatcher: an outbox row that is too big or malformed is
+a bug in the publisher, and the publisher is the one who can fix it.
 
-Within each hop the order is the design. The dispatcher may die after creating the
-runs and before marking the event, and will then create them again: `UNIQUE
-(event_id, job)` refuses the second, which is what turns at-least-once into one
-run. The enqueue pass offers a run to Redis and THEN stamps `enqueued_at` — in that
-order, never the reverse, because a crash between the two must re-enqueue rather than
-lose the job silently. **So a run can be picked up twice**, and it is the claim that
-makes that harmless: one UPDATE that only one worker can win. Two tests hold it — one
-runs the same run from five workers at once, one enqueues the same run twice on a real
-Redis — and each asserts the job executed once.
+### Three queues, and what they do not do
 
-If the first offer fails Redis is down, and the rest would fail the same way, each
-after a timeout. So **a pass stops at its first failure** and leaves the others
-exactly as they were, to be found again. An event that cannot be turned into runs at all
-— a bug, a constraint — is retried and after `dispatch_max_attempts` marked
-`failed`; each is handled in a savepoint, so one poisoned event cannot hold up the
-ones behind it.
+`leka:high`, `leka`, `leka:low`, drained in that order by one worker
+(`rq worker leka:high leka leka:low`). RQ has no other notion of priority, so a
+`priority` column would be metadata, not scheduling. This reverses the comment in
+the queue module that deferred a split until a slow job was seen to delay a fast one:
+the ticket asks for priority, and the split is cheap.
 
-### Routing is a table
+What three queues do not fix, stated so nobody relies on them:
 
-`leka.background.routes.ROUTES` maps an event type to dotted job paths. Adding
-a consumer is one line. The alternative, a registry every module writes itself
-into, keeps the layering but makes the worker import every consumer before it can
-dispatch anything: a dependency on import order that fails only in production.
-The price of the table is that a file names things it does not own; when it has
-more than a handful of entries that is the moment to reconsider.
+- **Starvation.** A continuous stream of `high` starves `low`, and with one worker
+  that is guaranteed rather than theoretical. Accepted; the fix, if it bites, is
+  rotating the queue order.
+- **A long job blocks everything, whatever its queue.** With one worker, priority
+  only matters when choosing the NEXT job. A ten-minute retention sweep makes the
+  tick wait ten minutes. The remedy is operational — a second worker on `leka:high`
+  alone — and is in `docs/background.md`.
 
-**An event with no route is marked `failed`, not ignored** — dropping it silently
-would look exactly like it working. A job named in the table receives one
-argument, the event id as a string, and must check its workspace still exists:
-a workspace can be deleted between the event and the job. A test checks that
-every path in the table names a function that exists, so a rename cannot leave a
-route pointing at nothing until a worker fails at three in the morning.
+The rule: **`high` is work a person is waiting for; `low` is the sweeps.** A route says
+which queue its job goes on and defaults to the middle.
 
+### Scheduling is `rq cron` and a table
+
+The periodic sweeps are scheduled by `rq cron`, which ships with RQ, from a table in
+`leka.background.schedule`. This adds no dependency. `croniter` is what `rq.cron` parses
+its expressions with; it is a transitive dependency of RQ and nothing here imports it —
+the tests build RQ's own `CronJob` to validate an expression, so the only API relied on
+is RQ's.
+
+**The scheduler only schedules.** It does not run the sweeps; it puts a small function on
+the queue, which creates a job RUN and offers that to the queue the row names. So a sweep
+shows up in the history with its attempts and its error like any other job, and it carries
+a concurrency key, so a schedule that fires while the last run is still going is refused
+rather than stacked. The scheduling call itself goes on `leka:high` because it is cheap and
+must never wait behind the sweep it is scheduling.
+
+**A tick every ten seconds** dispatches events, repairs runs and offers waiting ones to
+Redis. It expires after three intervals if the queue is so backed up that it has not started:
+it is idempotent and the next is coming, and without the expiry a stalled worker would come
+back to a queue full of them.
+
+**The existing sweeps are not rewritten.** Retention, erasure, session purge and
+reconciliation are tested and their order is deliberate; the schedule decides when they run,
+not how. Each is safe to run twice, which is what lets a refused overlap be the whole
+strategy.
+
+**Reconciliation is scheduled dry.** Its failure mode is deleting live data, and
+`docs/data-lifecycle.md` asks that its number be looked at before it is trusted against a real
+bucket. A schedule that started deleting on its own would skip exactly that, so the scheduled
+run only reports until `LEKA_RECONCILE_DELETES=true`.
+
+### Job runs are not pruned, yet
+
+Events are, because they are an outbox. Job runs are the history, and there is no volume to
+set a retention against. **Revisit when `job_runs` passes 1 million rows**, or when the
+customer-facing history query is measurably slow — whichever is first. Pruning must never
+touch an active run, and should keep failed ones longer than succeeded ones.
+
+## Consequences
+
+**Good.** An event cannot exist without its change, and cannot be lost with
+Redis. A duplicate webhook ends in a refused INSERT rather than a second event.
+
+**Bad, and accepted.** At-least-once puts the burden of idempotence on every
+consumer; priority by queue can starve; one worker means a long job delays the tick.
+The dispatcher and the enqueue pass are more things that run, and an outbox table is a table that grows until something prunes it. `job_runs` sits outside
+the session guard, so its isolation rests on one explicit filter and one test rather
+than on the structure. Job runs are not pruned yet: their retention is a decision for
+when there is a volume to measure.
+
+## Alternatives considered
+
+**Enqueue straight to Redis, inside the request.** Simplest. Rejected: the
+request can commit and Redis be down, or Redis accept and the commit roll back.
+The two stores disagree with nothing to reconcile them.
+
+**A broker (Kafka, RabbitMQ).** Rejected on the operator constraint alone.
+
+**Keeping the queue in `platform` and building above it.** See the placement
+above. Rejected for the split it creates, not because it cannot work.

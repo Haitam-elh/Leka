@@ -27,7 +27,7 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import DateTime, Interval, case, func, literal, null, select, update
+from sqlalchemy import DateTime, Interval, case, delete, func, literal, null, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -112,6 +112,23 @@ class EventDispatchRepository:
         event.last_error = error[:1000]
         if give_up:
             event.status = EventStatus.FAILED
+
+    async def delete_settled_before(self, cutoff: datetime, *, limit: int) -> int:
+        """Delete dispatched and failed events older than the cutoff.
+
+        Never a pending one. An old pending event means the dispatcher is not
+        working, and that is a thing to see, not to clean up.
+        """
+        stale = (
+            select(Event.id)
+            .where(Event.status.in_((EventStatus.RUNS_CREATED, EventStatus.FAILED)))
+            .where(Event.created_at < cutoff)
+            .limit(limit)
+        )
+        result = await self._session.execute(
+            delete(Event).where(Event.id.in_(stale)).execution_options(synchronize_session=False)
+        )
+        return int(result.rowcount)  # type: ignore[attr-defined]
 
 
 def _after(now: datetime, seconds: Any) -> Any:
@@ -419,4 +436,4 @@ class JobRunRepository:
         return result.scalar_one_or_none()
 
 
-__all__ = ["EventDispatchRepository", "EventRepository", "JobRunRepository"]
+__all__ = ["LEASE_EXPIRED", "EventDispatchRepository", "EventRepository", "JobRunRepository"]
