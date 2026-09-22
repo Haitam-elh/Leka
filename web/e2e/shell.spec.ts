@@ -101,8 +101,23 @@ test.describe("the shell", () => {
   test("lets the keyboard skip the twelve navigation links", async ({ page }) => {
     await signIn(page);
 
-    await page.keyboard.press("Tab");
     const skip = page.getByRole("link", { name: "Skip to content" });
+
+    // Not "the first Tab": `next dev` injects its own dev-tools button into
+    // the page, and it takes a tab stop that production does not have. What
+    // matters is that the skip link comes BEFORE the navigation, so a few
+    // presses are allowed — but reaching a navigation link first is the
+    // failure this test is about.
+    for (let press = 0; press < 3; press += 1) {
+      await page.keyboard.press("Tab");
+      if (await skip.evaluate((node) => node === document.activeElement)) break;
+
+      const onANavigationLink = await page.evaluate(
+        () => document.activeElement?.closest("nav[aria-label]") !== null,
+      );
+      expect(onANavigationLink, "the navigation was reached before the skip link").toBe(false);
+    }
+
     await expect(skip).toBeFocused();
 
     await page.keyboard.press("Enter");
