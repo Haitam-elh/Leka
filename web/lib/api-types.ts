@@ -27,6 +27,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Job Runs
+         * @description The background jobs run for this workspace, newest first.
+         */
+        get: operations["list_job_runs_api_v1_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job Run
+         * @description One run of this workspace's. Not found if it is someone else's, or nobody's.
+         */
+        get: operations["get_job_run_api_v1_jobs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/register": {
         parameters: {
             query?: never;
@@ -649,6 +689,89 @@ export interface components {
          * @enum {string}
          */
         InvitationStatus: "pending" | "accepted" | "revoked";
+        /**
+         * JobQueue
+         * @description The three queues, in the order a worker drains them.
+         *
+         *     RQ has no other notion of priority: a worker started with
+         *     `rq worker leka:high leka leka:low` empties the first before it looks at the
+         *     next. HIGH is work a person is waiting for; LOW is the sweeps.
+         * @enum {string}
+         */
+        JobQueue: "leka:high" | "leka" | "leka:low";
+        /** JobRunRead */
+        JobRunRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Job
+             * @description What ran, as the system names it.
+             */
+            job: string;
+            /** @description queued: waiting for a worker. running: a worker has it. retrying: an attempt failed and another is due at next_run_at. succeeded and failed are final. */
+            status: components["schemas"]["JobStatus"];
+            /** @description How urgent it was: leka:high, leka or leka:low. */
+            queue: components["schemas"]["JobQueue"];
+            /**
+             * Attempts
+             * @description How many times a worker has started it.
+             */
+            attempts: number;
+            /**
+             * Max Attempts
+             * @description After this many attempts a failure is final.
+             */
+            max_attempts: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Started At
+             * @description When a worker first started it.
+             */
+            started_at: string | null;
+            /**
+             * Finished At
+             * @description When it reached a final status.
+             */
+            finished_at: string | null;
+            /**
+             * Next Run At
+             * @description When a retry is due. Null unless retrying.
+             */
+            next_run_at: string | null;
+            /**
+             * Request Id
+             * @description The request that caused it, if there was one. Quote it when you write to us.
+             */
+            request_id: string | null;
+        };
+        /**
+         * JobStatus
+         * @description Where a run is in its life. See TRANSITIONS for every way out.
+         *
+         *     `queued`     waiting for a worker. It may or may not have reached Redis yet:
+         *                  that is `enqueued_at`, a different question.
+         *     `running`    a worker claimed it and holds a lease.
+         *     `retrying`   an attempt failed and another is due at `next_run_at`. The run
+         *                  waits IN THE DATABASE, not in Redis: a Redis that loses its
+         *                  memory must not lose a retry.
+         *     `succeeded`  final.
+         *     `failed`     final — out of attempts, or a failure no retry can fix.
+         *
+         *     `retrying` is not `queued`. A run that failed and will be tried again is
+         *     `retrying`; one that is simply waiting for a worker is `queued`. Collapsing
+         *     them would make "is this going to run again by itself?" unanswerable from the
+         *     history, and a "failed" that means "failed for now" is how a dashboard ends up
+         *     reporting an incident that has already resolved itself.
+         * @enum {string}
+         */
+        JobStatus: "queued" | "running" | "retrying" | "succeeded" | "failed";
         /** LoginRequest */
         LoginRequest: {
             /** Email */
@@ -692,6 +815,19 @@ export interface components {
         /** MemberRoleUpdate */
         MemberRoleUpdate: {
             role: components["schemas"]["Role"];
+        };
+        /** PageEnvelope[JobRunRead] */
+        PageEnvelope_JobRunRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["JobRunRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
         };
         /** PageEnvelope[MemberRead] */
         PageEnvelope_MemberRead_: {
@@ -960,6 +1096,203 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_job_runs_api_v1_jobs_get: {
+        parameters: {
+            query?: {
+                /** @description Only runs in this status. */
+                status?: components["schemas"]["JobStatus"] | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_JobRunRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_job_run_api_v1_jobs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRunRead"];
                 };
             };
             /** @description The request could not be understood. */

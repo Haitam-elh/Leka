@@ -346,6 +346,25 @@ set a retention against. **Revisit when `job_runs` passes 1 million rows**, or w
 customer-facing history query is measurably slow — whichever is first. Pruning must never
 touch an active run, and should keep failed ones longer than succeeded ones.
 
+### The history route: what a customer may read
+
+`GET /api/v1/jobs` and `/jobs/{id}`, read-only, behind a new permission **`job:read`** held by
+admins and owners. A member has no use for the history: it names jobs and counts attempts, which
+is how the system talks to itself.
+
+The route is where the design pays for one decision. `job_runs` sits outside the session guard, so
+nothing structural stops a mistake here from leaking one customer's history to another, or the
+system's own runs to everyone. What holds instead is one filter, written once
+(`JobRunRepository.for_workspace`), a guard that refuses `None` (an equality against `None` compiles
+to `IS NULL`, which is exactly the rows to withhold), and a test that names them.
+
+**It answers 404, not 403,** for a run that is someone else's or nobody's: 403 would confirm it
+exists. **It never returns `last_error`.** An exception message names hosts, paths and queries, and
+the API already refuses to say what went wrong inside (a 500 says only that it did); the same rule
+applies here. The read model is a whitelist built from the row, so a column added to `job_runs` later
+is not exposed by accident, and a test holds the list. Sorting is limited to `created_at`, which is
+what the index serves.
+
 ## Consequences
 
 **Good.** An event cannot exist without its change, and cannot be lost with

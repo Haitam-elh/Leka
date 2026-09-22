@@ -43,6 +43,8 @@ class Permission(enum.StrEnum):
     INTENTION_CREATE = "intention:create"
     INTENTION_APPROVE = "intention:approve"
 
+    JOB_READ = "job:read"
+
 
 # Roles are a chain: an owner can do everything an admin can, an admin
 # everything a member can. Expressed as ranks so that require_role(ADMIN)
@@ -71,6 +73,7 @@ _ADMIN_PERMISSIONS = _MEMBER_PERMISSIONS | {
     Permission.MEMBER_REMOVE,
     Permission.SOURCE_MANAGE,
     Permission.INTENTION_APPROVE,
+    Permission.JOB_READ,
 }
 
 # Only an owner deletes the workspace or hands it over. An admin managing

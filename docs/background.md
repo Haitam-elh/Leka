@@ -107,10 +107,10 @@ recorded as a run, and is not started again while the previous one is still acti
 
 ## Looking at what happened
 
-Every run is a row. There is no route for it yet, so this is SQL — against `job_runs`,
-which belongs to no workspace, so **these are for operating the system, not for showing a
-customer** (a customer's own history is `JobRunRepository.list_for_workspace`, which filters on
-`for_workspace_id` and never returns the system runs).
+Every run is a row. A workspace's admins can read their own through `GET /api/v1/jobs`
+(see [api.md](api.md)). What follows is SQL against `job_runs`, which belongs to no workspace, so
+**it is for operating the system, not for showing a customer**: it includes the system's own runs,
+and the error text the API deliberately never returns.
 
 ```sql
 -- the shape of things
@@ -209,8 +209,8 @@ repository, exactly as the existing sweeps do.
 - **No exactly-once.** See the top. Jobs must be idempotent.
 - **Job runs are not pruned.** Events are; runs are the history and there is no volume yet to
   set a retention against. The trigger to decide is written in ADR 012.
-- **No route for the history.** The query exists and is tested; exposing it is an API change
-  and belongs with whoever owns `leka/api/`.
+- **No error text for customers.** `GET /api/v1/jobs` shows status, attempts and timing but never
+  `last_error`: an exception names hosts, paths and queries. You have it in SQL and in the logs.
 - **No dashboard, no alerting.** The queries above are the dashboard. An alert on "runs not
   told about" and "events `pending` for more than a few minutes" is the first one to add.
 
@@ -224,6 +224,7 @@ repository, exactly as the existing sweeps do.
 | `tests/test_event_dispatch.py` | publishing and dispatching, including a poisoned event and a dead queue |
 | `tests/test_job_runs.py` | the state machine, the claim race, retry, recovery, the customer-facing history |
 | `tests/test_background_schedule.py` | every scheduled job exists, is synchronous, and has a valid schedule |
+| `tests/test_job_history_api.py` | what a customer may read: only their own runs, never the system's, never an error text, 404 not 403 |
 | `tests/test_background_e2e.py` | the whole loop on a real Redis and worker: success, retry, exhaustion, a dead worker, a Redis that forgot, priority, duplicates |
 
 The end-to-end tests use **Redis database 15**, never 0, so a worker running on your own

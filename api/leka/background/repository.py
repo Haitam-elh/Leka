@@ -27,7 +27,7 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import DateTime, Interval, case, delete, func, literal, null, select, update
+from sqlalchemy import DateTime, Interval, Select, case, delete, func, literal, null, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -408,18 +408,31 @@ class JobRunRepository:
 
     # ── What a customer may see ───────────────────────────────────────────
 
+    @staticmethod
+    def for_workspace(workspace_id: uuid.UUID | None) -> Select[tuple[JobRun]]:
+        """A workspace's own runs. THE ONE PLACE this filter is written.
+
+        An equality never matches NULL, which is the point: a system run is operating data,
+        not a customer's, and must never come back from here. That holds only while
+        `workspace_id` is a workspace — `== None` compiles to `IS NULL` and would hand out
+        exactly the rows this exists to withhold, so it is refused rather than trusted.
+
+        Typed as optional on purpose, like WorkspaceScopedRepository: a caller CAN pass None —
+        a principal that failed to resolve — and the honest thing is to accept the call and
+        refuse it loudly rather than declare it impossible.
+        """
+        if workspace_id is None:
+            msg = "the history of no workspace is not a thing: that would be the system's runs"
+            raise ValueError(msg)
+        return select(JobRun).where(JobRun.for_workspace_id == workspace_id)
+
     async def list_for_workspace(
         self, workspace_id: uuid.UUID, *, limit: int, cursor: str | None = None
     ) -> Page[JobRun]:
-        """One workspace's history, newest first.
-
-        Filters on for_workspace_id EXPLICITLY, and an equality never matches
-        NULL — which is the point: a system run is operating data, not a
-        customer's, and must never come back from here.
-        """
+        """One workspace's history, newest first."""
         return await paginate(
             self._session,
-            select(JobRun).where(JobRun.for_workspace_id == workspace_id),
+            self.for_workspace(workspace_id),
             sort_by=SortableField(
                 "created_at", JobRun.created_at, "ix_job_runs_for_workspace_id_created_at"
             ),
@@ -431,7 +444,7 @@ class JobRunRepository:
 
     async def get_for_workspace(self, workspace_id: uuid.UUID, run_id: uuid.UUID) -> JobRun | None:
         result = await self._session.execute(
-            select(JobRun).where(JobRun.id == run_id, JobRun.for_workspace_id == workspace_id)
+            self.for_workspace(workspace_id).where(JobRun.id == run_id)
         )
         return result.scalar_one_or_none()
 
