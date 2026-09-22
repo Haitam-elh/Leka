@@ -21,7 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* TODO LEKA-338: real counts. The mockup shows three decisions waiting
           and one unread notification; until the features that produce those
           numbers exist, the shell is handed them. */}
-      <AppShell badges={{ pendingApprovals: 3 }} notificationCount={1}>
+      <AppShell badges={{ approvals: 3 }} notificationCount={1}>
         {children}
       </AppShell>
     </ShellProvider>

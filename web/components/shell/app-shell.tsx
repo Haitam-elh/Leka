@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/shell/app-sidebar";
 import { SkipLink } from "@/components/shell/skip-link";
 import { useShell } from "@/components/shell/shell-provider";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import type { BadgeKey } from "@/config/routes";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { cn } from "cn";
 
@@ -38,7 +39,7 @@ export function AppShell({
   notificationCount = 0,
 }: {
   children: React.ReactNode;
-  badges?: Partial<Record<string, number>>;
+  badges?: Partial<Record<BadgeKey, number>>;
   notificationCount?: number;
 }) {
   const t = useDictionary();
