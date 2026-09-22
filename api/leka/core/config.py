@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import ValidationError, model_validator
+from pydantic import SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from leka.core.settings.database import DatabaseSettings
@@ -156,6 +156,37 @@ class Settings(
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def secret_values(self) -> tuple[SecretStr, ...]:
+        """Every secret actually configured, for the log masking to recognise.
+
+        Found from the fields themselves rather than listed, so a secret added
+        to any domain later is masked without anybody remembering to add it
+        here. A connection URL counts through its password.
+
+        Only leka.core.logging reads this: holding every value is exactly its
+        job, and nobody else's. tests/test_secret_access.py enforces it.
+        """
+        found: list[SecretStr] = []
+        for name in type(self).model_fields:
+            value = getattr(self, name)
+            for item in value if isinstance(value, tuple) else (value,):
+                if isinstance(item, SecretStr):
+                    found.append(item)
+                else:
+                    found.extend(SecretStr(password) for password in _url_passwords(item))
+        return tuple(found)
+
+
+def _url_passwords(value: object) -> list[str]:
+    """The passwords a connection URL carries, if the value is one."""
+    hosts = getattr(value, "hosts", None)
+    if callable(hosts):
+        # PostgresDsn can name several hosts, each with its own credentials.
+        return [host["password"] for host in hosts() if host.get("password")]
+    password = getattr(value, "password", None)
+    return [password] if isinstance(password, str) and password else []
 
 
 def _load_settings() -> Settings:

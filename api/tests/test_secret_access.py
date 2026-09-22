@@ -62,6 +62,9 @@ SECRET_OWNERS: dict[str, frozenset[str]] = {
     "database_url": frozenset({"leka.db.session", "alembic.env"}),
     # Three clients for one server. Consolidating them belongs to LEKA-334.
     "redis_url": frozenset({"leka.core.ratelimit", "leka.platform.health", "leka.platform.jobs"}),
+    # Every value at once, so the log masking can recognise them anywhere.
+    # Holding them all is that module's job, and nobody else's.
+    "secret_values": frozenset({"leka.core.logging"}),
 }
 
 # Grants nobody exercises yet, on purpose. Any other unused grant is stale:
@@ -264,8 +267,9 @@ def test_no_module_reads_a_secret_it_does_not_own() -> None:
         if secret is None:
             violations.append(f"{path}:{line}: {what}")
         elif not _within(module, SECRET_OWNERS.get(secret, ())):
-            owners = ", ".join(sorted(SECRET_OWNERS.get(secret, ()))) or "nobody"
-            violations.append(f"{path}:{line}: {what}, which only {owners} may read")
+            owners = ", ".join(sorted(SECRET_OWNERS.get(secret, ())))
+            rule = f"which only {owners} may read" if owners else "which has no owner"
+            violations.append(f"{path}:{line}: {what}, {rule}")
 
     assert not violations, (
         "secrets read outside their owners:\n  "
