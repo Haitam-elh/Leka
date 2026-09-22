@@ -109,6 +109,15 @@ may be absent: the platform boots and serves without a model.
 | `LEKA_MAX_OBJECT_BYTES` | `1073741824` | Largest payload stored, in bytes. A ceiling, not a target |
 | `LEKA_RAW_PAYLOAD_RETENTION_DAYS` | `{}` | JSON object overriding retention per source kind, in DAYS, 1–3650. The policy itself is in `leka/ingestion/retention.py` |
 
+## Background loop
+
+See docs/background.md for how the loop as a whole is run and operated;
+this is only what each variable is for. `leka/core/settings/background.py`.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LEKA_JOB_MAX_ATTEMPTS` | `3` | A job run is failed for good after this many attempts, 1–20 |
+
 ## The secrets: who reads them, how often they rotate
 
 Nothing else may read these. The rule is enforced on every pull request by
