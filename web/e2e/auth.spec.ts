@@ -51,12 +51,15 @@ test("the demo account signs in, sees its workspace, and signs out", async ({ pa
   await page.getByRole("button", { name: "Sign in" }).click();
 
   // The whole point of the browser test: this only works if the session
-  // cookie was actually stored and sent back.
+  // cookie was actually stored and sent back. Since LEKA-337 the answer is
+  // the application shell — the workspace on the sidebar, the account in the
+  // menu — rather than the two lines the landing page used to print.
   await expect(page).toHaveURL("http://localhost:3000/");
-  await expect(page.getByText(`Signed in as ${DEMO_EMAIL}`)).toBeVisible();
-  await expect(page.getByText(/Workspace: Acme Corp/)).toBeVisible();
+  await expect(page.getByText("Acme Corp")).toBeVisible();
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByTestId("user-menu").last().click();
+  await expect(page.getByText(DEMO_EMAIL)).toBeVisible();
+  await page.getByTestId("sign-out").click();
   await expect(page).toHaveURL(/\/login$/);
 
   // And the session is genuinely gone, not just navigated away from.
