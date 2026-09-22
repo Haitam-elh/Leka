@@ -39,6 +39,22 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* LEKA shell — see docs/frontend/app-shell.md */
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-violet: var(--brand-violet);
+  --color-brand-violet-soft: var(--brand-violet-soft);
+  --color-shell-surface: var(--shell-surface);
+  --color-shell-canvas: var(--shell-canvas);
+  --color-shell-line: var(--shell-line);
+  --color-shell-muted: var(--shell-muted);
+  --color-shell-nav: var(--shell-nav);
+  --color-shell-badge: var(--shell-badge);
+  --color-shell-badge-foreground: var(--shell-badge-foreground);
+  --spacing-sidebar: var(--shell-sidebar-width);
+  --spacing-rail: var(--shell-sidebar-rail);
+  --spacing-header: var(--shell-header-height);
+  /* max-w-content: Tailwind v4 reads widths from the container namespace. */
+  --container-content: var(--shell-content-max);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -72,6 +88,38 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+  /* next/font defines --font-geist-sans on <body>; the theme above maps
+   * Tailwind's font-sans onto --font-sans, which nothing set. Undefined, it
+   * resolved to the browser's serif and every heading came out wrong. */
+  --font-sans: var(--font-geist-sans);
+
+  /* ── LEKA brand ───────────────────────────────────────────────────────
+   *
+   * Sampled from docs/product/mockups, not guessed: the overview screen was
+   * decoded pixel by pixel and these are the values it actually uses. The
+   * design system (LEKA-339) owns them from now on; the shell only reads
+   * them, and no component in components/shell/ writes a colour of its own.
+   *
+   * Light only, deliberately. The mockups describe no dark theme, and
+   * inventing one here would mean inventing it twice.
+   */
+  --brand-navy: #071143;          /* primary actions, headings, the logo's LE */
+  --brand-violet: #4e0af4;        /* the logo's KA, and the active nav item */
+  --brand-violet-soft: #ebecfe;   /* the pill behind that active item */
+  --shell-surface: #f6fafe;       /* the sidebar */
+  --shell-canvas: #f3f6fd;        /* the page behind the cards */
+  --shell-line: #e6eaf4;          /* the hairline between the two */
+  --shell-muted: #7b8096;         /* tagline, dates, secondary labels */
+  --shell-nav: #262952;           /* a nav label at rest */
+  --shell-badge: #fcdcdd;         /* the counter beside "To approve" */
+  --shell-badge-foreground: #db4e55;
+
+  /* Measured on the same screen: 222px and 64px at its 1536px width. */
+  --shell-sidebar-width: 14rem;   /* 224px */
+  --shell-sidebar-rail: 4rem;     /* icons only, between 1024 and 1279px */
+  --shell-header-height: 4rem;    /* 64px */
+  --shell-content-max: 90rem;     /* 1440px of content, then centred */
+
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
