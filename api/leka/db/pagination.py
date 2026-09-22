@@ -11,11 +11,15 @@ A cursor names a POSITION instead of a COUNT: "everything after this row".
 Rows arriving above it do not move it.
 
 THE CURSOR IS OPAQUE, AND SIGNED. Opaque so the encoding can change without
-breaking clients, and so nobody is tempted to build one by hand. Signed with
-the application secret, so a modified one is refused before its contents are
-trusted at all — the difference between "a forged cursor is harmless" and
-"a forged cursor is impossible". Validation alone would have been enough for
-the first; the second is cheap.
+breaking clients, and so nobody is tempted to build one by hand. Signed, so a
+modified one is refused before its contents are trusted at all — the
+difference between "a forged cursor is harmless" and "a forged cursor is
+impossible". Validation alone would have been enough for the first; the
+second is cheap.
+
+The key is not the application secret itself but one derived from it for
+cursors alone, by leka.core.signing: a cursor signature proves nothing
+anywhere else, and this module never holds the secret.
 
 A rotation of LEKA_SECRET_KEY invalidates cursors in flight. A cursor lives
 for seconds, so that is a non-event, and it is the price of the signature.
@@ -36,7 +40,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import hmac
 import json
 import uuid
@@ -48,7 +51,7 @@ from sqlalchemy import Select, literal, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from leka.core.config import settings
+from leka.core.signing import Purpose, sign
 
 Direction = Literal["asc", "desc"]
 
@@ -101,8 +104,7 @@ def _unb64(value: str) -> bytes:
 
 
 def _sign(payload: bytes) -> str:
-    secret = settings.secret_key.get_secret_value().encode()
-    return _b64(hmac.new(secret, payload, hashlib.sha256).digest())
+    return _b64(sign(Purpose.PAGINATION_CURSOR, payload))
 
 
 def _encode_value(value: object) -> object:
