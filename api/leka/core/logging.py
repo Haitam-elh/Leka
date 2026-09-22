@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from collections.abc import MutableMapping
+from collections.abc import Iterable, MutableMapping
 from typing import Any
 
 import structlog
@@ -46,6 +46,12 @@ REDACTED_KEYS = frozenset(
 
 MASK = "[redacted]"
 
+# A value shorter than this is never masked by value. The local database
+# password is "leka": masked by value, the product's own name would vanish
+# from every line, and a marker everywhere is a marker nobody reads. A real
+# secret is longer than this anyway.
+MIN_MASKED_LENGTH = 8
+
 
 def redact_secrets(
     logger: object, method_name: str, event_dict: MutableMapping[str, Any]
@@ -63,6 +69,49 @@ def redact_secrets(
         ):
             event_dict[key] = MASK
     return event_dict
+
+
+class SecretValueMasker:
+    """Replace every configured secret, wherever it appears in a line.
+
+    The net under REDACTED_KEYS, which only knows key names. A secret logged
+    under `value=`, inside a sentence, inside a URL or inside a traceback
+    passes every check on keys there is; this one looks at the values.
+
+    Cheap on purpose, because it runs on every line. The secrets are known
+    once, at startup. A line is searched with `in`, which runs in C, and
+    rewritten only when a secret is actually in it.
+
+    Lines from libraries that log through the standard library — uvicorn,
+    SQLAlchemy — do not pass through structlog's processors, and so not
+    through this one.
+    """
+
+    def __init__(self, secrets: Iterable[str]) -> None:
+        # Longest first: when one secret contains another, the longer one
+        # must go whole, or its remainder is left in the line.
+        kept = {secret for secret in secrets if len(secret) >= MIN_MASKED_LENGTH}
+        self._secrets = tuple(sorted(kept, key=len, reverse=True))
+
+    def __call__(
+        self, logger: object, method_name: str, event_dict: MutableMapping[str, Any]
+    ) -> MutableMapping[str, Any]:
+        if self._secrets:
+            for key in list(event_dict):
+                event_dict[key] = self._mask(event_dict[key])
+        return event_dict
+
+    def _mask(self, value: object) -> object:
+        if value is None or isinstance(value, bool | int | float):
+            return value
+        # Anything else becomes text somewhere down the line — a URL object,
+        # a dict, an exception — so it is searched as the text it will be.
+        text = value if isinstance(value, str) else str(value)
+        if not any(secret in text for secret in self._secrets):
+            return value
+        for secret in self._secrets:
+            text = text.replace(secret, MASK)
+        return text
 
 
 def configure_logging(settings: Settings) -> None:
@@ -88,6 +137,9 @@ def configure_logging(settings: Settings) -> None:
             structlog.processors.StackInfoRenderer(),
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             structlog.processors.format_exc_info,
+            # Last before rendering: it must see the traceback as text, which
+            # format_exc_info has only just produced.
+            SecretValueMasker(value.get_secret_value() for value in settings.secret_values),
             renderer,
         ],
         wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, settings.log_level)),
