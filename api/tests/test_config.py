@@ -11,6 +11,12 @@ import pytest
 from pydantic import ValidationError
 
 from leka.core.config import ConfigurationError, Settings, _load_settings
+from leka.core.settings.database import DatabaseSettings
+from leka.core.settings.email import EmailSettings
+from leka.core.settings.model_access import ModelAccessSettings
+from leka.core.settings.runtime import RuntimeSettings
+from leka.core.settings.security import SecuritySettings
+from leka.core.settings.storage import StorageSettings
 
 REQUIRED = (
     "LEKA_DATABASE_URL",
@@ -222,3 +228,77 @@ def test_a_malformed_encryption_key_stops_startup() -> None:
 def test_at_least_one_encryption_key_is_required() -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, **{**VALID, "encryption_keys": []})  # type: ignore[arg-type]
+
+
+# ── The settings split, and the trap inside it ───────────────────────────────
+
+
+DOMAIN_MIXINS = (
+    RuntimeSettings,
+    DatabaseSettings,
+    SecuritySettings,
+    EmailSettings,
+    ModelAccessSettings,
+    StorageSettings,
+)
+
+
+def test_no_two_domains_define_the_same_method_name() -> None:
+    """A name collision between mixins is silent, and it disables a validator.
+
+    Python resolves methods by MRO: two domains defining
+    `_blank_is_not_configured` leave exactly one alive, and the other's
+    fields simply stop being validated. No error, no warning, nothing from
+    pydantic.
+
+    This is not hypothetical. It happened while the split was being written:
+    three domains used that exact name, only the email one survived, and
+    blank S3 and model keys went back to being "" — which is the bug the
+    validator exists to prevent, reintroduced by the refactor meant to be
+    behaviour-neutral. The test below caught it; this one makes sure nobody
+    has to be that lucky twice.
+    """
+    seen: dict[str, str] = {}
+    collisions: list[str] = []
+
+    for mixin in DOMAIN_MIXINS:
+        for name, value in vars(mixin).items():
+            if name.startswith("__") or not callable(getattr(value, "__func__", value)):
+                continue
+            if name in seen:
+                collisions.append(f"{name}: {seen[name]} and {mixin.__name__}")
+            seen[name] = mixin.__name__
+
+    assert not collisions, (
+        "two settings domains define the same method, and only one of them "
+        "will run:\n  " + "\n  ".join(collisions) + "\n\nPrefix it with the "
+        "domain — _blank_s3_field_is_not_configured, not _blank_is_not_configured."
+    )
+
+
+def test_every_domain_is_assembled_into_settings() -> None:
+    """A domain file nobody mixed in is a file whose settings do not exist.
+
+    It would import cleanly, read cleanly, and have no effect whatsoever —
+    the fields simply would not be on Settings.
+    """
+    missing = [mixin.__name__ for mixin in DOMAIN_MIXINS if mixin not in Settings.__mro__]
+    assert not missing, f"domain settings declared but never mixed in: {missing}"
+
+
+def test_every_declared_field_belongs_to_a_domain() -> None:
+    """Settings itself declares no fields; they all live in a domain file.
+
+    If a field appears directly on Settings, the next person adding one will
+    follow that example, and the file goes back to being the place where two
+    tickets collide.
+    """
+    own_fields = [
+        name
+        for name, value in vars(Settings).get("__annotations__", {}).items()
+        if not name.startswith("_") and name != "model_config"
+    ]
+    assert not own_fields, (
+        f"these fields are declared on Settings rather than in a domain file: "
+        f"{own_fields}. Put them in core/settings/<domain>.py."
+    )
