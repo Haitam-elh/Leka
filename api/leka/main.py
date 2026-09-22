@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import FastAPI
@@ -33,6 +34,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Configure logging on the way up, close the pool on the way down."""
     configure_logging(settings)
     logger.info("leka_starting", environment=settings.environment)
+    # A warning, never a refusal: stopping because a key is a day past its
+    # lifetime would be manufacturing an outage. See core/settings/_rotation.py.
+    for overdue in settings.overdue_secrets(datetime.now(UTC).date()):
+        logger.warning("secret_rotation_overdue", **overdue._asdict())
     yield
     await engine.dispose()
     logger.info("leka_stopped")

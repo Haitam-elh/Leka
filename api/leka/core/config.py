@@ -24,11 +24,13 @@ The import path is unchanged: `from leka.core.config import settings`.
 
 from __future__ import annotations
 
-from typing import Self
+from datetime import UTC, date, datetime, timedelta
+from typing import NamedTuple, Self
 
 from pydantic import SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from leka.core.settings._rotation import RotateEvery
 from leka.core.settings.database import DatabaseSettings
 from leka.core.settings.email import EmailSettings
 from leka.core.settings.model_access import ModelAccessSettings
@@ -37,11 +39,20 @@ from leka.core.settings.runtime import RuntimeSettings
 from leka.core.settings.security import SecuritySettings
 from leka.core.settings.storage import StorageSettings
 
-__all__ = ["REPO_ROOT", "ConfigurationError", "Settings", "settings"]
+__all__ = ["REPO_ROOT", "ConfigurationError", "OverdueSecret", "Settings", "settings"]
 
 
 class ConfigurationError(RuntimeError):
     """Raised on startup when the environment is incomplete or malformed."""
+
+
+class OverdueSecret(NamedTuple):
+    """A secret past its lifetime, or of unknown age. Names and numbers only."""
+
+    setting: str
+    # None: nobody recorded when it was last rotated.
+    age_days: int | None
+    rotate_every_days: int
 
 
 class Settings(
@@ -153,9 +164,54 @@ class Settings(
 
         return self
 
+    @model_validator(mode="after")
+    def _rotation_dates_name_real_secrets(self) -> Self:
+        """A typo in LEKA_SECRETS_ROTATED_ON must not quietly switch the age check off.
+
+        An unknown name records the age of nothing, and a date in the future
+        makes a secret look fresh for years. Both stop the process, like any
+        invalid configuration — which is not the same as stopping because a
+        secret is old. A day of slack, for whoever typed the date ahead of UTC.
+        """
+        lifetimes = _lifetimes()
+        unknown = sorted(set(self.secrets_rotated_on) - set(lifetimes))
+        if unknown:
+            msg = (
+                f"LEKA_SECRETS_ROTATED_ON names {unknown}, which are not secrets. "
+                f"Known: {sorted(lifetimes)}."
+            )
+            raise ValueError(msg)
+
+        tomorrow = datetime.now(UTC).date() + timedelta(days=1)
+        future = sorted(name for name, day in self.secrets_rotated_on.items() if day > tomorrow)
+        if future:
+            msg = f"LEKA_SECRETS_ROTATED_ON dates {future} in the future."
+            raise ValueError(msg)
+        return self
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    def overdue_secrets(self, today: date) -> list[OverdueSecret]:
+        """Secrets past their declared lifetime, or of unknown age.
+
+        Staging and production only: local and CI keys are throwaway, and a
+        warning on every laptop is a warning nobody reads. A secret that is
+        not configured has nothing to rotate, and is not reported.
+        """
+        if self.environment not in {"staging", "production"}:
+            return []
+
+        overdue: list[OverdueSecret] = []
+        for name, lifetime in _lifetimes().items():
+            if not _holds_a_secret(getattr(self, name)):
+                continue
+            rotated = self.secrets_rotated_on.get(name)
+            age = None if rotated is None else (today - rotated).days
+            if age is None or age > lifetime:
+                overdue.append(OverdueSecret(name, age, lifetime))
+        return overdue
 
     @property
     def secret_values(self) -> tuple[SecretStr, ...]:
@@ -177,6 +233,22 @@ class Settings(
                 else:
                     found.extend(SecretStr(password) for password in _url_passwords(item))
         return tuple(found)
+
+
+def _lifetimes() -> dict[str, int]:
+    """Every field's declared lifetime, read from its RotateEvery marker."""
+    return {
+        name: marker.days
+        for name, field in Settings.model_fields.items()
+        for marker in field.metadata
+        if isinstance(marker, RotateEvery)
+    }
+
+
+def _holds_a_secret(value: object) -> bool:
+    """Whether a field's value actually carries a secret: a URL may have no password."""
+    items = value if isinstance(value, tuple) else (value,)
+    return any(isinstance(item, SecretStr) or _url_passwords(item) for item in items)
 
 
 def _url_passwords(value: object) -> list[str]:

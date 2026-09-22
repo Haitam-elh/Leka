@@ -7,11 +7,12 @@ These settings say which store holds them and what the ceilings are.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, field_validator
 
 from leka.core.settings._blank import blank_is_none
+from leka.core.settings._rotation import RotateEvery
 from leka.core.settings.paths import REPO_ROOT
 
 
@@ -35,7 +36,7 @@ class StorageSettings:
     # R2 ignores the region and wants "auto"; S3 wants a real one.
     s3_region: str = "auto"
     s3_access_key_id: str | None = None
-    s3_secret_access_key: SecretStr | None = None
+    s3_secret_access_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
 
     # The largest single payload LEKA will store, in bytes. Default 1 GiB.
     #
