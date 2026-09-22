@@ -376,3 +376,35 @@ Your URL starts with `postgresql://`. It must be `postgresql+asyncpg://`.
 **`pip install` fails on a wheel, or the API behaves strangely.**
 Check you are on Python 3.12: `python --version` inside the activated
 virtualenv. 3.13 and later are not supported yet.
+
+**`pytest` collects nothing and says `Can't locate revision identified by '…'`.**
+Your database is at a migration the branch you are on does not have: you ran
+`alembic upgrade` on one branch and then switched to another. `conftest.py`
+upgrades the test database to `head` when the session starts, so pytest stops
+before it collects a single test — it looks like a broken suite and is not.
+
+Alembic cannot downgrade a revision whose file is gone, so the cheap way out
+is to go back **before** switching, once per migration the branch added, on
+both databases:
+
+```bash
+cd api
+.venv/bin/alembic downgrade -1
+LEKA_DATABASE_URL="$(grep '^LEKA_DATABASE_URL=' ../.env | cut -d= -f2-)_test" \
+  .venv/bin/alembic downgrade -1
+```
+
+If you have already switched, go back to the other branch, run the above, and
+switch again. Or recreate the databases — they are disposable. Stop the API
+first, or PostgreSQL refuses to drop a database in use:
+
+```bash
+# from the repository root
+docker compose exec -T postgres psql -U leka -d postgres \
+  -c "DROP DATABASE IF EXISTS leka_test;" \
+  -c "DROP DATABASE IF EXISTS leka;" \
+  -c "CREATE DATABASE leka OWNER leka;"
+cd api && .venv/bin/alembic upgrade head && .venv/bin/python ../scripts/seed.py
+```
+
+`leka_test` is recreated by the next `pytest` run.
