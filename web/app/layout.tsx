@@ -15,8 +15,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// No title at all here, deliberately. Next renders metadata into the head
+// before anything else, so a title declared at this level wins over the one
+// the page computes — and every tab said "LEKA". Each layout below renders
+// its own <title>, which React 19 hoists into the head.
 export const metadata: Metadata = {
-  title: "LEKA",
   description: "Understand. Decide. Act.",
 };
 

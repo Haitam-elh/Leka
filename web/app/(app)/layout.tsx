@@ -1,6 +1,7 @@
 "use client";
 
 import { AppShell } from "@/components/shell/app-shell";
+import { DocumentTitle } from "@/components/shell/document-title";
 import { ShellProvider } from "@/components/shell/shell-provider";
 
 /**
@@ -18,6 +19,7 @@ import { ShellProvider } from "@/components/shell/shell-provider";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <ShellProvider>
+      <DocumentTitle />
       {/* TODO LEKA-338: real counts. The mockup shows three decisions waiting
           and one unread notification; until the features that produce those
           numbers exist, the shell is handed them. */}

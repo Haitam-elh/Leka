@@ -75,6 +75,21 @@ const fr = {
     /** Appended to the entry's label: "À valider, 3 éléments en attente". */
     pendingApprovals: "{count} éléments en attente",
   },
+  /** The tabs of a detail page. Their ids are URL segments — see config/routes.ts. */
+  tabs: {
+    overview: "Vue d'ensemble",
+    analysis: "Analyse",
+    evidence: "Preuves",
+    actions: "Actions",
+    history: "Historique",
+    metrics: "Métriques",
+    dependencies: "Dépendances",
+    incidents: "Incidents",
+    deployments: "Déploiements",
+    logs: "Logs",
+    configuration: "Configuration",
+    documentation: "Documentation",
+  },
   /** What a page says when it has nothing to show, or refuses to show it. */
   states: {
     emptyTitle: "Rien à afficher pour l'instant",
@@ -119,6 +134,9 @@ export type NavKey = keyof Dictionary["nav"];
 
 /** And the group titles it may use. */
 export type GroupKey = keyof Dictionary["groups"];
+
+/** The tab segments config/routes.ts may declare. */
+export type TabKey = keyof Dictionary["tabs"];
 
 const en: Dictionary = {
   nav: {
@@ -170,6 +188,20 @@ const en: Dictionary = {
     soon: "Soon",
     planGated: "Included in a higher plan",
     pendingApprovals: "{count} items waiting",
+  },
+  tabs: {
+    overview: "Overview",
+    analysis: "Analysis",
+    evidence: "Evidence",
+    actions: "Actions",
+    history: "History",
+    metrics: "Metrics",
+    dependencies: "Dependencies",
+    incidents: "Incidents",
+    deployments: "Deployments",
+    logs: "Logs",
+    configuration: "Configuration",
+    documentation: "Documentation",
   },
   states: {
     emptyTitle: "Nothing to show yet",
