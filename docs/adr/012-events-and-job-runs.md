@@ -1,7 +1,7 @@
 # ADR 012 — Events are an outbox in PostgreSQL
 
 **Status:** accepted. Each slice is appended by the pull request that builds it, so
-every decision arrives with the code it justifies. This is the third: the job-run schema and its state machine.
+every decision arrives with the code it justifies. This is the fourth: the repository and the guarantees it makes.
 **Date:** 2026-09-21
 **Ticket:** LEKA-334
 
@@ -186,4 +186,27 @@ is in its life; `enqueued_at` says whether Redis was told. A queued run with
 `enqueued_at IS NULL` is offered by the next pass, and one Redis was told about long
 ago and nobody claimed (`job_stale_enqueued_seconds`) is offered again — the net
 under a Redis that lost its memory. A duplicate message is harmless.
+
+### One UPDATE decides every race
+
+Each transition is a single statement with the state it expects in the `WHERE`,
+and says whether it changed anything. RQ delivers at least once, so two workers can
+hold the same message; `UPDATE ... WHERE status = 'queued'` lets exactly one win. A
+worker that lost its lease and finishes late finds the run no longer `running` and
+leaves it alone rather than overwriting what recovery decided. There is a test that
+races eight workers for one run.
+
+### A worker holds a lease, and a dead one loses it
+
+A claimed run has `locked_until`; the worker renews it at a third of
+`job_lease_seconds`, so it survives two missed beats. A worker that dies cannot
+report its own death, so **recovery** finds runs whose lease expired and moves them
+to `retrying` or `failed`. Without it the run stays `running` for ever and — worse —
+holds its concurrency key, so nothing else can run in its place. A lost worker uses
+up an attempt, or a job that kills its worker every time would be retried without
+ever looking like it was failing.
+
+Retries wait `job_retry_base_seconds` doubling each attempt, capped at
+`job_retry_max_seconds`: a downstream that is down for a minute should not be
+hammered every thirty seconds.
 
