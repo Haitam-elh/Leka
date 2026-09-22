@@ -12,9 +12,18 @@ from leka.connectors.models import Source, SourceKind, SourceStatus
 from leka.connectors.repository import SourceCredentialSweeper, SourceRepository
 from leka.connectors.schemas import RawRecord, SyncResult
 from leka.connectors.service import SourceService
+from leka.connectors.tasks import (
+    ROTATED_COLUMNS,
+    RotationRefusedError,
+    RotationReport,
+    rotate_source_credentials,
+)
 
 __all__ = [
+    "ROTATED_COLUMNS",
     "RawRecord",
+    "RotationRefusedError",
+    "RotationReport",
     "Source",
     "SourceCredentialSweeper",
     "SourceKind",
@@ -22,4 +31,5 @@ __all__ = [
     "SourceService",
     "SourceStatus",
     "SyncResult",
+    "rotate_source_credentials",
 ]
