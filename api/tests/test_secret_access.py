@@ -389,3 +389,21 @@ def test_the_scan_catches(source: str) -> None:
 def test_the_scan_leaves_ordinary_code_alone(source: str) -> None:
     """A net that catches everything gets switched off."""
     assert not _findings(source, SECRETS), f"flagged for nothing:\n{source}"
+
+
+def test_the_documented_owners_match_the_table() -> None:
+    """docs/configuration.md is what a person reads; this table is what CI enforces."""
+    doc = (REPO_ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
+    rows = {line.split("`")[1]: line for line in doc.splitlines() if line.startswith("| `LEKA_")}
+    variables = [name for name, why in SECRETS.items() if why != "a property returning a secret"]
+
+    wrong = [
+        name
+        for name in variables
+        if any(
+            f"`{owner}`" not in rows.get(f"LEKA_{name.upper()}", "")
+            for owner in SECRET_OWNERS[name]
+        )
+    ]
+    assert variables, "no secret variables found — the comparison would pass over nothing"
+    assert not wrong, f"docs/configuration.md disagrees with SECRET_OWNERS on: {wrong}"

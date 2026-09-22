@@ -7,10 +7,12 @@ three weeks later — is the failure mode this whole file was written against.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from pydantic import ValidationError
 
-from leka.core.config import ConfigurationError, Settings, _load_settings
+from leka.core.config import REPO_ROOT, ConfigurationError, Settings, _load_settings
 from leka.core.settings.database import DatabaseSettings
 from leka.core.settings.email import EmailSettings
 from leka.core.settings.model_access import ModelAccessSettings
@@ -302,3 +304,33 @@ def test_every_declared_field_belongs_to_a_domain() -> None:
         f"these fields are declared on Settings rather than in a domain file: "
         f"{own_fields}. Put them in core/settings/<domain>.py."
     )
+
+
+# ── The documentation cannot fall behind ─────────────────────────────────────
+
+# Read by the test suite and CI, never by the application. Documented in
+# their own section of docs/configuration.md.
+TEST_ONLY_VARIABLES = frozenset(
+    {
+        "LEKA_PYTHON",
+        "LEKA_REQUIRE_S3_TESTS",
+        "LEKA_S3_TEST_ACCESS_KEY",
+        "LEKA_S3_TEST_ENDPOINT",
+        "LEKA_S3_TEST_SECRET_KEY",
+        "LEKA_S3_TEST_TARGET",
+    }
+)
+
+
+def test_every_setting_is_documented_and_nothing_else() -> None:
+    """A variable nobody documented is one an operator meets in a stack trace;
+    a documented variable that no longer exists is one they set for nothing."""
+    doc = (REPO_ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
+    documented = set(re.findall(r"LEKA_[A-Z0-9_]+", doc))
+    expected = {f"LEKA_{name.upper()}" for name in Settings.model_fields}
+
+    assert not expected - documented, (
+        f"undocumented: {sorted(expected - documented)}. Add them to docs/configuration.md."
+    )
+    stale = documented - expected - TEST_ONLY_VARIABLES
+    assert not stale, f"docs/configuration.md names variables that do not exist: {sorted(stale)}"
