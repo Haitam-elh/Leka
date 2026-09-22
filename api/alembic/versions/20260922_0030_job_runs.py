@@ -4,7 +4,7 @@ Revision ID: c327b838b263
 Revises: 87a4e899df19
 Created: 2026-09-22
 
-LEKA-334. One table; docs/adr/012-events-and-job-runs.md says why.
+LEKA-334. One table; docs/adr/013-events-and-job-runs.md says why.
 
 **job_runs has NO workspace_id.** A sweep serves every customer and belongs to
 none, so its owner is NULL, and a nullable workspace_id is what

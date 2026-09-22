@@ -10,7 +10,7 @@ platform enqueues work itself (erasing a workspace purges its objects), so it
 must be able to import this. The price is that this cannot import platform —
 event payloads and job arguments are JSON, never a typed workspace.
 
-See docs/adr/012-events-and-job-runs.md.
+See docs/adr/013-events-and-job-runs.md.
 """
 
 from leka.background.jobs import QUEUE_NAME, enqueue, queue, reset_queue

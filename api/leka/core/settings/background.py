@@ -1,7 +1,7 @@
 """The background loop's own settings: events, job runs, the queue, retry and lease.
 
 Fields arrive here as the deliverable that needs them is built (LEKA-334); see
-docs/adr/012-events-and-job-runs.md. Every one is bounded: a 0 reads as "disabled"
+docs/adr/013-events-and-job-runs.md. Every one is bounded: a 0 reads as "disabled"
 to whoever types it and as "never try" to the code, so it is refused rather than
 given a meaning.
 """

@@ -60,7 +60,7 @@ pytestmark = pytest.mark.integration
 #                  purpose. Whatever exposes this history must filter on it
 #                  explicitly and never return the NULL rows: a system run is
 #                  operating data, not a customer's. JobRunRepository.
-#                  list_for_workspace is that filter; see ADR 012.
+#                  list_for_workspace is that filter; see ADR 013.
 TENANT_FREE_TABLES = frozenset(
     {"workspaces", "users", "sessions", "email_tokens", "job_runs", "alembic_version"}
 )

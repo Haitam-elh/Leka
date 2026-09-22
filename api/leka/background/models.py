@@ -16,7 +16,7 @@ first: the dispatcher turns an event into job_runs rows (durable, deduplicated b
 queue and stamps `enqueued_at`. Redis is never on the path of a transaction, and
 a run the queue never heard of is a row saying so.
 
-See docs/adr/012-events-and-job-runs.md for why an outbox rather than a broker.
+See docs/adr/013-events-and-job-runs.md for why an outbox rather than a broker.
 
 AT-LEAST-ONCE, NOT EXACTLY-ONCE. A dispatcher can die between creating the runs
 and marking the event dispatched, and will then do it again; RQ can deliver one
