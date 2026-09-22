@@ -6,9 +6,12 @@ log, which is what makes those flows testable without an account anywhere.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import Field, SecretStr, field_validator
 
 from leka.core.settings._blank import blank_is_none
+from leka.core.settings._rotation import RotateEvery
 
 
 class EmailSettings:
@@ -23,11 +26,11 @@ class EmailSettings:
     smtp_host: str | None = None
     smtp_port: int = Field(default=465, ge=1, le=65535)
     smtp_username: str | None = None
-    smtp_password: SecretStr | None = None
+    smtp_password: Annotated[SecretStr | None, RotateEvery(days=365)] = None
     # True for port 465 (implicit TLS), False for 587 (STARTTLS).
     smtp_use_ssl: bool = True
 
-    resend_api_key: SecretStr | None = None
+    resend_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
 
     @field_validator("smtp_host", "smtp_username", "smtp_password", "resend_api_key", mode="before")
     @classmethod

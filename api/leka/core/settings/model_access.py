@@ -6,11 +6,12 @@ keys are optional: the platform boots and serves without a model configured.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import SecretStr, field_validator
 
 from leka.core.settings._blank import blank_is_none
+from leka.core.settings._rotation import RotateEvery
 
 
 class ModelAccessSettings:
@@ -27,8 +28,8 @@ class ModelAccessSettings:
     """
 
     llm_provider: Literal["mistral", "anthropic"] = "mistral"
-    anthropic_api_key: SecretStr | None = None
-    mistral_api_key: SecretStr | None = None
+    anthropic_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
+    mistral_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
 
     @field_validator("anthropic_api_key", "mistral_api_key", mode="before")
     @classmethod

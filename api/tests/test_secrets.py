@@ -106,3 +106,12 @@ def test_new_writes_use_the_first_key(key: str) -> None:
     fresh = rotating.encrypt(TOKEN)
 
     assert SecretBox((new_key,)).decrypt(fresh) == TOKEN
+
+
+def test_only_what_the_first_key_wrote_is_current(key: str) -> None:
+    """What lets an interrupted rotation resume instead of starting over."""
+    rotating = SecretBox((Fernet.generate_key().decode(), key))
+
+    assert rotating.needs_rotation(SecretBox((key,)).encrypt(TOKEN)) is True
+    assert rotating.needs_rotation(rotating.encrypt(TOKEN)) is False
+    assert rotating.needs_rotation(b"not a fernet token at all") is True

@@ -9,21 +9,24 @@ tuple because rotation needs the old key readable while the new one writes.
 
 from __future__ import annotations
 
-from typing import Literal
+from datetime import date
+from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, field_validator
+
+from leka.core.settings._rotation import RotateEvery
 
 
 class SecuritySettings:
     """Signing, encryption, session lifetimes, cookie flags."""
 
-    secret_key: SecretStr = Field(
+    secret_key: Annotated[SecretStr, RotateEvery(days=365)] = Field(
         description=(
             "Root of every signature the server hands to a client. Read by "
             "leka.core.signing alone, which derives a key per purpose from it."
         ),
     )
-    encryption_keys: tuple[SecretStr, ...] = Field(
+    encryption_keys: Annotated[tuple[SecretStr, ...], RotateEvery(days=365)] = Field(
         min_length=1,
         description=(
             "Fernet keys for credentials at rest. The FIRST encrypts; all of "
@@ -33,6 +36,13 @@ class SecuritySettings:
             'print(Fernet.generate_key().decode())"'
         ),
     )
+
+    # When each secret was last rotated, in THIS environment. A fact about
+    # one deployment, set where the secret itself is set and at the same
+    # moment; the lifetimes it is compared with are declared on the fields.
+    #   LEKA_SECRETS_ROTATED_ON={"secret_key": "2026-09-22"}
+    # Checked in core/config.py, which warns — never refuses to start.
+    secrets_rotated_on: dict[str, date] = Field(default_factory=dict)
 
     # Two limits, not one. A session dies at the absolute maximum whatever
     # happens, and at the idle timeout if unused. Both matter: the first

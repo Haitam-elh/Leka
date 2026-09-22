@@ -34,7 +34,8 @@ class SecretBox:
     Takes several keys on purpose. The first encrypts; all of them are tried
     when decrypting. That is what makes key rotation possible without a
     flag day: add the new key at the front, deploy, re-encrypt existing rows
-    with `rotate`, then drop the old key in a later deploy.
+    with scripts/rotate_encryption_key.py, then drop the old key in a later
+    deploy.
 
     A single key is the degenerate case and works the same way.
     """
@@ -43,7 +44,10 @@ class SecretBox:
         if not keys:
             msg = "SecretBox needs at least one key"
             raise ValueError(msg)
-        self._fernet = MultiFernet([Fernet(key.encode()) for key in keys])
+        fernets = [Fernet(key.encode()) for key in keys]
+        self._primary = fernets[0]
+        self._fernet = MultiFernet(fernets)
+        self.key_count = len(keys)
 
     def encrypt(self, plaintext: str) -> bytes:
         """Encrypt with the primary key."""
@@ -61,12 +65,25 @@ class SecretBox:
             )
             raise DecryptionError(msg) from exc
 
+    def needs_rotation(self, token: bytes) -> bool:
+        """Whether a stored value was written by anything but the primary key.
+
+        Answered from the token's signature alone. Nothing is decrypted, so
+        asking the question never puts a plaintext in memory. A token no
+        configured key wrote needs rotation too, and rotate() says so loudly.
+        """
+        try:
+            self._primary.extract_timestamp(token)
+        except InvalidToken:
+            return True
+        return False
+
     def rotate(self, token: bytes) -> bytes:
         """Re-encrypt an existing value with the primary key.
 
-        Used by the re-encryption script during a key rotation. Decrypting
-        and re-encrypting would work too; this does it without the plaintext
-        ever existing as a Python string.
+        Used by scripts/rotate_encryption_key.py during a key rotation.
+        Decrypting and re-encrypting would work too; this does it without the
+        plaintext ever existing as a Python string.
         """
         try:
             return self._fernet.rotate(token)
