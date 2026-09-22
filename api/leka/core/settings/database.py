@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import Field, PostgresDsn, RedisDsn, field_validator
+
+from leka.core.settings._rotation import RotateEvery
 
 
 class DatabaseSettings:
@@ -12,10 +16,10 @@ class DatabaseSettings:
     accident. The process must refuse to start rather than invent one.
     """
 
-    database_url: PostgresDsn = Field(
+    database_url: Annotated[PostgresDsn, RotateEvery(days=365)] = Field(
         description="postgresql+asyncpg://user:password@host:port/database",
     )
-    redis_url: RedisDsn = Field(
+    redis_url: Annotated[RedisDsn, RotateEvery(days=365)] = Field(
         description="redis://host:port/db — queue backend for the background loop",
     )
 

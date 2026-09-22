@@ -32,6 +32,7 @@ WHAT LIVES WHERE
     storage.py      object store, S3, retention
     email.py        SMTP and the API sender
     model_access.py the LLM provider and its keys
+    _rotation.py    RotateEvery, the lifetime each secret field declares
 
 A field validator lives with the field it validates. A validator that spans
 domains — "in production, the cookie must be Secure" combines `environment`
@@ -51,6 +52,7 @@ not `_blank_is_not_configured`. `test_config.py` has a check that fails if
 two domains ever share a name again.
 """
 
+from leka.core.settings._rotation import RotateEvery
 from leka.core.settings.database import DatabaseSettings
 from leka.core.settings.email import EmailSettings
 from leka.core.settings.model_access import ModelAccessSettings
@@ -64,6 +66,7 @@ __all__ = [
     "DatabaseSettings",
     "EmailSettings",
     "ModelAccessSettings",
+    "RotateEvery",
     "RuntimeSettings",
     "SecuritySettings",
     "StorageSettings",
