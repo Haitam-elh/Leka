@@ -122,7 +122,7 @@ are in `docs/runbook.md`.
 | `LEKA_SECRET_KEY` | `leka.core.signing` | 365 days |
 | `LEKA_ENCRYPTION_KEYS` | `leka.platform.secrets` | 365 days |
 | `LEKA_DATABASE_URL` | `leka.db.session`, `alembic.env` | 365 days |
-| `LEKA_REDIS_URL` | `leka.core.ratelimit`, `leka.platform.health`, `leka.platform.jobs` | 365 days |
+| `LEKA_REDIS_URL` | `leka.core.ratelimit`, `leka.platform.health`, `leka.background.jobs` | 365 days |
 | `LEKA_SMTP_PASSWORD` | `leka.identity.email` | 365 days |
 | `LEKA_RESEND_API_KEY` | `leka.identity.email` | 90 days |
 | `LEKA_ANTHROPIC_API_KEY` | `leka.capabilities` | 90 days |

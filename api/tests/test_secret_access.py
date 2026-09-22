@@ -60,8 +60,10 @@ SECRET_OWNERS: dict[str, frozenset[str]] = {
     # A managed database or Redis puts its password in the URL, so reading
     # the URL is reading the password.
     "database_url": frozenset({"leka.db.session", "alembic.env"}),
-    # Three clients for one server. Consolidating them belongs to LEKA-334.
-    "redis_url": frozenset({"leka.core.ratelimit", "leka.platform.health", "leka.platform.jobs"}),
+    # Three clients for one server, consolidated by LEKA-334: the job queue
+    # moved from leka.platform.jobs to leka.background.jobs, below platform, so
+    # that platform itself can enqueue work.
+    "redis_url": frozenset({"leka.core.ratelimit", "leka.platform.health", "leka.background.jobs"}),
     # Every value at once, so the log masking can recognise them anywhere.
     # Holding them all is that module's job, and nobody else's.
     "secret_values": frozenset({"leka.core.logging"}),
