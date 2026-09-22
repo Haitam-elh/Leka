@@ -27,11 +27,11 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import DateTime, Interval, case, func, literal, null, select, update
+from sqlalchemy import DateTime, Interval, Select, case, delete, func, literal, null, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.background.models import Event, JobQueue, JobRun, JobStatus
+from leka.background.models import Event, EventStatus, JobQueue, JobRun, JobStatus
 from leka.core.config import settings
 from leka.db import Page, SortableField, WorkspaceScopedRepository, paginate
 
@@ -71,6 +71,64 @@ class EventRepository(WorkspaceScopedRepository):
         )
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
+
+
+class EventDispatchRepository:
+    """What the dispatcher and the retention sweep ask, across every workspace."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def claim_pending(self, *, limit: int) -> Sequence[Event]:
+        """The oldest pending events, locked for this transaction.
+
+        FOR UPDATE SKIP LOCKED: a second dispatcher running at the same moment
+        skips whatever this one holds instead of waiting for it or, worse,
+        taking the same rows and enqueueing every event twice.
+        """
+        result = await self._session.execute(
+            select(Event)
+            .where(Event.status == EventStatus.PENDING)
+            .order_by(Event.created_at, Event.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        return result.scalars().all()
+
+    @staticmethod
+    def mark_runs_created(event: Event, *, at: datetime) -> None:
+        event.status = EventStatus.RUNS_CREATED
+        event.runs_created_at = at
+        event.last_error = None
+
+    @staticmethod
+    def mark_unroutable(event: Event, error: str) -> None:
+        event.status = EventStatus.FAILED
+        event.last_error = error
+
+    @staticmethod
+    def record_failed_attempt(event: Event, error: str, *, give_up: bool) -> None:
+        event.dispatch_attempts += 1
+        event.last_error = error[:1000]
+        if give_up:
+            event.status = EventStatus.FAILED
+
+    async def delete_settled_before(self, cutoff: datetime, *, limit: int) -> int:
+        """Delete dispatched and failed events older than the cutoff.
+
+        Never a pending one. An old pending event means the dispatcher is not
+        working, and that is a thing to see, not to clean up.
+        """
+        stale = (
+            select(Event.id)
+            .where(Event.status.in_((EventStatus.RUNS_CREATED, EventStatus.FAILED)))
+            .where(Event.created_at < cutoff)
+            .limit(limit)
+        )
+        result = await self._session.execute(
+            delete(Event).where(Event.id.in_(stale)).execution_options(synchronize_session=False)
+        )
+        return int(result.rowcount)  # type: ignore[attr-defined]
 
 
 def _after(now: datetime, seconds: Any) -> Any:
@@ -350,18 +408,31 @@ class JobRunRepository:
 
     # ── What a customer may see ───────────────────────────────────────────
 
+    @staticmethod
+    def for_workspace(workspace_id: uuid.UUID | None) -> Select[tuple[JobRun]]:
+        """A workspace's own runs. THE ONE PLACE this filter is written.
+
+        An equality never matches NULL, which is the point: a system run is operating data,
+        not a customer's, and must never come back from here. That holds only while
+        `workspace_id` is a workspace — `== None` compiles to `IS NULL` and would hand out
+        exactly the rows this exists to withhold, so it is refused rather than trusted.
+
+        Typed as optional on purpose, like WorkspaceScopedRepository: a caller CAN pass None —
+        a principal that failed to resolve — and the honest thing is to accept the call and
+        refuse it loudly rather than declare it impossible.
+        """
+        if workspace_id is None:
+            msg = "the history of no workspace is not a thing: that would be the system's runs"
+            raise ValueError(msg)
+        return select(JobRun).where(JobRun.for_workspace_id == workspace_id)
+
     async def list_for_workspace(
         self, workspace_id: uuid.UUID, *, limit: int, cursor: str | None = None
     ) -> Page[JobRun]:
-        """One workspace's history, newest first.
-
-        Filters on for_workspace_id EXPLICITLY, and an equality never matches
-        NULL — which is the point: a system run is operating data, not a
-        customer's, and must never come back from here.
-        """
+        """One workspace's history, newest first."""
         return await paginate(
             self._session,
-            select(JobRun).where(JobRun.for_workspace_id == workspace_id),
+            self.for_workspace(workspace_id),
             sort_by=SortableField(
                 "created_at", JobRun.created_at, "ix_job_runs_for_workspace_id_created_at"
             ),
@@ -373,9 +444,9 @@ class JobRunRepository:
 
     async def get_for_workspace(self, workspace_id: uuid.UUID, run_id: uuid.UUID) -> JobRun | None:
         result = await self._session.execute(
-            select(JobRun).where(JobRun.id == run_id, JobRun.for_workspace_id == workspace_id)
+            self.for_workspace(workspace_id).where(JobRun.id == run_id)
         )
         return result.scalar_one_or_none()
 
 
-__all__ = ["EventRepository", "JobRunRepository"]
+__all__ = ["LEASE_EXPIRED", "EventDispatchRepository", "EventRepository", "JobRunRepository"]

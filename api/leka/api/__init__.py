@@ -11,6 +11,7 @@ They hold no business logic and no database queries.
 from fastapi import APIRouter
 
 from leka.api import (
+    background,
     capabilities,
     connectors,
     context,
@@ -26,6 +27,7 @@ from leka.api import (
 api_router = APIRouter()
 
 api_router.include_router(health.router)
+api_router.include_router(background.router)
 
 # Ordered the way the system is layered, not alphabetically: someone reading
 # this should see the shape of the product.

@@ -136,6 +136,31 @@ expose.
 
 ---
 
+## Job history
+
+What ran in the background for your workspace, and how it went. Read-only, and for admins and
+owners only (`job:read`, see [permissions.md](permissions.md)).
+
+```
+GET /api/v1/jobs            a page of runs, newest first
+GET /api/v1/jobs/{id}       one run
+```
+
+A run has a `status` — `queued` (waiting for a worker), `running`, `retrying` (an attempt failed
+and another is due at `next_run_at`), and the final `succeeded` and `failed` — with its
+`attempts`, when it `created_at` / `started_at` / `finished_at`, and the `request_id` of what
+caused it. Quote that id when you write to us: it is the one that ties a run to our logs.
+
+`?status=` filters, and `?sort=` accepts `created_at` only. Everything else about paging is as
+described under Lists above.
+
+**What it never shows.** An error message: an exception text names hosts, paths and queries, and
+this API does not say what went wrong inside (see What a 500 says). A run that belongs to nobody —
+the platform's own housekeeping — and one that belongs to another workspace. Both answer **404**,
+not 403, so that neither can be told apart from a run that never existed.
+
+---
+
 ## Rate limiting
 
 Every response carries `RateLimit-Limit`, `RateLimit-Remaining` and

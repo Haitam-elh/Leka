@@ -59,7 +59,9 @@ SECRET_OWNERS: dict[str, frozenset[str]] = {
     "llm_api_key": frozenset({"leka.capabilities"}),
     # A managed database or Redis puts its password in the URL, so reading
     # the URL is reading the password.
-    "database_url": frozenset({"leka.db.session", "alembic.env"}),
+    "database_url": frozenset(
+        {"leka.db.session", "alembic.env", "leka.background.runner"}
+    ),  # background.runner: its own unpooled engine, one per job (see its docstring)
     # Three clients for one server, consolidated by LEKA-334: the job queue
     # moved from leka.platform.jobs to leka.background.jobs, below platform, so
     # that platform itself can enqueue work.

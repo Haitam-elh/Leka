@@ -217,20 +217,36 @@ The worker runs **on your host**, like the API. `docker-compose.yml` provides
 backing services only, deliberately (see the note at the top of that file).
 
 ```bash
-api/.venv/bin/rq worker --url redis://127.0.0.1:6379/0 leka
+api/.venv/bin/rq worker --url redis://127.0.0.1:6379/0 leka:high leka leka:low
 ```
 
-Without it, work is still enqueued and simply waits in Redis. Nothing
-breaks — a deletion goes through and its objects are collected later by the
-reconciliation sweep. That is by design, not by luck; see
-[docs/data-lifecycle.md](data-lifecycle.md).
+Three queues, drained in that order: `leka:high` is work a person is waiting for,
+`leka` is everything else, `leka:low` is the sweeps.
 
-The periodic sweeps have no scheduler. Run them by hand when you need them:
+Without a worker, work is still recorded and simply waits. Nothing breaks — a
+deletion goes through and its objects are collected later by the reconciliation
+sweep. That is by design, not by luck; see [docs/data-lifecycle.md](data-lifecycle.md).
+
+The periodic sweeps are scheduled by a second process, which only puts jobs on the
+queue at the right times:
+
+```bash
+api/.venv/bin/rq cron leka.background.cron_config --url redis://127.0.0.1:6379/0
+```
+
+Without it nothing is scheduled and published events still flow, because a small
+maintenance tick is what dispatches them — and that tick is scheduled too. So for
+anything involving events or the sweeps, run both. Everything about how they work,
+what they do when Redis or a worker dies, and how to look at what happened is in
+[docs/background.md](background.md).
+
+You can still run a sweep by hand:
 
 ```bash
 api/.venv/bin/python -m leka.ingestion.tasks   # retention, then orphans
 api/.venv/bin/python -m leka.platform.tasks    # erasures past their grace period
 api/.venv/bin/python -m leka.identity.tasks    # expired sessions and tokens
+api/.venv/bin/python -m leka.background.tasks  # one tick of the event loop, and prune
 ```
 
 Each is safe to run twice.

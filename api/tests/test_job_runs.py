@@ -468,3 +468,10 @@ async def test_the_history_can_be_paged_through_completely(session: AsyncSession
             break
 
     assert sorted(seen) == sorted(created)
+
+
+def test_the_history_of_no_workspace_is_refused_rather_than_returning_the_system_runs() -> None:
+    """`for_workspace_id == None` compiles to IS NULL: exactly the rows this filter exists to
+    withhold. A caller that lost its workspace must be stopped, not handed the system's runs."""
+    with pytest.raises(ValueError, match="no workspace"):
+        JobRunRepository.for_workspace(None)
