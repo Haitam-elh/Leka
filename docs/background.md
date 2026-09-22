@@ -2,7 +2,7 @@
 
 How work gets done when nobody is waiting: what runs, how to run it, how to see what
 happened, and what to do when it breaks. The reasoning is in
-[ADR 012](adr/012-events-and-job-runs.md); this is the part you need at three in
+[ADR 013](adr/013-events-and-job-runs.md); this is the part you need at three in
 the morning.
 
 ---
@@ -208,7 +208,7 @@ repository, exactly as the existing sweeps do.
   that depends on order must say so and enforce it itself.
 - **No exactly-once.** See the top. Jobs must be idempotent.
 - **Job runs are not pruned.** Events are; runs are the history and there is no volume yet to
-  set a retention against. The trigger to decide is written in ADR 012.
+  set a retention against. The trigger to decide is written in ADR 013.
 - **No error text for customers.** `GET /api/v1/jobs` shows status, attempts and timing but never
   `last_error`: an exception names hosts, paths and queries. You have it in SQL and in the logs.
 - **No dashboard, no alerting.** The queries above are the dashboard. An alert on "runs not

@@ -4,7 +4,7 @@ Revision ID: 87a4e899df19
 Revises: 67406715fb5e
 Created: 2026-09-21
 
-LEKA-334. One table; docs/adr/012-events-and-job-runs.md says why.
+LEKA-334. One table; docs/adr/013-events-and-job-runs.md says why.
 
 **events** belongs to a workspace and follows the house pattern: workspace_id
 NOT NULL with a foreign key, a composite unique (workspace_id, id) for other

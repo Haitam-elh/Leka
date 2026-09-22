@@ -19,7 +19,7 @@ the middle, so a route only says so when it has a reason.
 A job named here receives ONE argument: the event id, as a string (RQ
 serialises to JSON). It reads the event, checks its workspace still exists —
 a workspace can be deleted between the event and the job — and does its work.
-It must be safe to run twice: dispatch is at-least-once (ADR 012).
+It must be safe to run twice: dispatch is at-least-once (ADR 013).
 
 AN EVENT WITH NO ENTRY HERE IS MARKED FAILED, not ignored. Dropping it
 silently would look exactly like it working.

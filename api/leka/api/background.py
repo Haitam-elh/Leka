@@ -6,7 +6,7 @@ the workspace comes from the principal and from nowhere else (rule 3).
 
 WHAT IT WITHHOLDS. `job_runs` is the one table the session guard does not protect: a sweep belongs
 to no customer, so its owner is NULL, and the column is `for_workspace_id` rather than
-`workspace_id` for that reason (ADR 012). So the guard cannot save a mistake here — the filter is
+`workspace_id` for that reason (ADR 013). So the guard cannot save a mistake here — the filter is
 written once, in JobRunRepository.for_workspace, and this route only ever builds its query from
 that. It never returns the system's own runs, and it answers "not found", not "forbidden", for a
 run that is someone else's or nobody's: 403 would confirm the run exists.

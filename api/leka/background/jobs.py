@@ -55,7 +55,7 @@ logger = structlog.get_logger(__name__)
 # waiting for, this one, and leka:low for the sweeps, drained in that order by a
 # single worker. That is the only priority RQ has, and it has two limits worth
 # knowing: a continuous stream of high starves low, and a long job blocks
-# everything whatever its queue — priority only chooses the NEXT job. See ADR 012.
+# everything whatever its queue — priority only chooses the NEXT job. See ADR 013.
 QUEUE_NAME = "leka"
 
 _queue: Any | None = None

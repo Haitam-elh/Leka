@@ -1,4 +1,4 @@
-# ADR 012 — Events are an outbox in PostgreSQL
+# ADR 013 — Events are an outbox in PostgreSQL
 
 **Status:** accepted. Each slice was appended by the pull request that built it, so
 every decision arrived with the code it justifies: the event model and dispatch,
