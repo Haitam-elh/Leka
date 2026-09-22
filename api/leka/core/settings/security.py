@@ -1,8 +1,9 @@
 """Keys, sessions and cookies: what protects a person's account.
 
-Two secrets live here and they do different jobs. `secret_key` signs things
-the server hands a client and expects back — a session token, a paginated
-cursor. `encryption_keys` encrypt customers' credentials at rest, and are a
+Two secrets live here and they do different jobs. `secret_key` is the root
+of every signature the server hands a client and expects back — today, a
+pagination cursor. Sessions are not signed: they are random tokens, stored
+hashed. `encryption_keys` encrypt customers' credentials at rest, and are a
 tuple because rotation needs the old key readable while the new one writes.
 """
 
@@ -18,9 +19,8 @@ class SecuritySettings:
 
     secret_key: SecretStr = Field(
         description=(
-            "Signing key for anything the server hands to a client. "
-            "Read by leka.identity for sessions and, through a derived key, "
-            "by leka.db.pagination for cursors."
+            "Root of every signature the server hands to a client. Read by "
+            "leka.core.signing alone, which derives a key per purpose from it."
         ),
     )
     encryption_keys: tuple[SecretStr, ...] = Field(

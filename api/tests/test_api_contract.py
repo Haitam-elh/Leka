@@ -182,16 +182,14 @@ async def test_a_cursor_cannot_carry_a_workspace(
 ) -> None:
     """The workspace comes from the principal, never from the request.
 
-    Signed with the real secret rather than forged, which is the stronger
+    Signed with the real key rather than forged, which is the stronger
     test: this is a cursor the server accepts, carrying a field it must
     ignore. Checking that a BADLY signed cursor is rejected would prove only
     that the signature works.
     """
     import base64
-    import hashlib
-    import hmac
 
-    from leka.core.config import settings
+    from leka.core.signing import Purpose, sign
 
     identity.sign_in(uuid.uuid4(), None)
     stranger = uuid.uuid4()
@@ -207,9 +205,7 @@ async def test_a_cursor_cannot_carry_a_workspace(
         separators=(",", ":"),
         sort_keys=True,
     ).encode()
-    signature = hmac.new(
-        settings.secret_key.get_secret_value().encode(), payload, hashlib.sha256
-    ).digest()
+    signature = sign(Purpose.PAGINATION_CURSOR, payload)
 
     def b64(raw: bytes) -> str:
         return base64.urlsafe_b64encode(raw).decode().rstrip("=")
@@ -503,10 +499,8 @@ def test_a_cursor_signed_by_us_but_nonsense_inside_is_refused() -> None:
     than raise something a caller does not expect.
     """
     import base64
-    import hashlib
-    import hmac
 
-    from leka.core.config import settings
+    from leka.core.signing import Purpose, sign
     from leka.db.pagination import CursorError, decode_cursor
 
     payload = json.dumps(
@@ -514,14 +508,14 @@ def test_a_cursor_signed_by_us_but_nonsense_inside_is_refused() -> None:
         separators=(",", ":"),
         sort_keys=True,
     ).encode()
-    signature = hmac.new(
-        settings.secret_key.get_secret_value().encode(), payload, hashlib.sha256
-    ).digest()
+    signature = sign(Purpose.PAGINATION_CURSOR, payload)
 
     def b64(raw: bytes) -> str:
         return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
-    with pytest.raises(CursorError):
+    # The message, not just the type: a badly signed cursor raises the same
+    # CursorError, and this test would pass on a signature it got wrong.
+    with pytest.raises(CursorError, match="contents are not usable"):
         decode_cursor(f"{b64(payload)}.{b64(signature)}", sort="created_at", direction="desc")
 
 
@@ -529,10 +523,8 @@ def test_a_cursor_of_an_unknown_value_type_is_refused() -> None:
     """The encoding may change. A cursor from before that change must be
     refused, not guessed at."""
     import base64
-    import hashlib
-    import hmac
 
-    from leka.core.config import settings
+    from leka.core.signing import Purpose, sign
     from leka.db.pagination import CursorError, decode_cursor
 
     payload = json.dumps(
@@ -540,14 +532,12 @@ def test_a_cursor_of_an_unknown_value_type_is_refused() -> None:
         separators=(",", ":"),
         sort_keys=True,
     ).encode()
-    signature = hmac.new(
-        settings.secret_key.get_secret_value().encode(), payload, hashlib.sha256
-    ).digest()
+    signature = sign(Purpose.PAGINATION_CURSOR, payload)
 
     def b64(raw: bytes) -> str:
         return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
-    with pytest.raises(CursorError):
+    with pytest.raises(CursorError, match="unknown cursor value type"):
         decode_cursor(f"{b64(payload)}.{b64(signature)}", sort="created_at", direction="desc")
 
 
