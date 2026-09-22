@@ -9,13 +9,14 @@ store: that is leka.ingestion.
 """
 
 from leka.connectors.models import Source, SourceKind, SourceStatus
-from leka.connectors.repository import SourceRepository
+from leka.connectors.repository import SourceCredentialSweeper, SourceRepository
 from leka.connectors.schemas import RawRecord, SyncResult
 from leka.connectors.service import SourceService
 
 __all__ = [
     "RawRecord",
     "Source",
+    "SourceCredentialSweeper",
     "SourceKind",
     "SourceRepository",
     "SourceService",
