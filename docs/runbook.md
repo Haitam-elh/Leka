@@ -1,10 +1,11 @@
-# Runbook — backup and restore
+# Runbook — backup, restore, and rotating a secret
 
 A backup that has never been restored is not a backup. It is an assumption.
 
 This document records a restore that was actually performed, with the
 measured numbers, and the procedure to repeat it. Where a number is a
-measurement it says so. Where it is an estimate it says that too.
+measurement it says so. Where it is an estimate it says that too. The last
+section is the other operation nobody should improvise: rotating a secret.
 
 ---
 
@@ -256,3 +257,85 @@ Update the measurements in this document each time, and update the
 partitioning trigger in ADR 010 if the restore time is approaching **30
 minutes** — that is the number at which `raw_payloads` needs partitioning,
 and this drill is how it gets noticed rather than remembered.
+
+---
+
+## Procedure — rotating a secret
+
+Every rotation ends the same way: **record the date** in
+`LEKA_SECRETS_ROTATED_ON` for that environment. Staging and production log
+`secret_rotation_overdue` at startup for any secret past its lifetime, or
+whose age nobody recorded. Which module may read which secret, and how often
+each should be rotated, is in `docs/configuration.md`.
+
+### LEKA_ENCRYPTION_KEYS — five steps, and the order is the procedure
+
+These keys encrypt customers' credentials at rest. Rotating them means
+re-encrypting rows, and getting the order wrong makes data unreadable.
+
+```bash
+# 1. Generate the new key
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+2. Put the NEW key **first**, keep the old one behind it, and **deploy the
+   API and the worker**:
+   `LEKA_ENCRYPTION_KEYS=["<new>", "<old>"]`. Every new write now uses the
+   new key; every existing row still reads with the old one.
+
+```bash
+# 3. Re-encrypt what is already stored. Count first, then do it.
+api/.venv/bin/python scripts/rotate_encryption_key.py --dry-run
+api/.venv/bin/python scripts/rotate_encryption_key.py
+
+# 4. Run it again. It must report 0 rotated and 0 unreadable.
+api/.venv/bin/python scripts/rotate_encryption_key.py --dry-run
+```
+
+5. In a **later** deploy, drop the old key:
+   `LEKA_ENCRYPTION_KEYS=["<new>"]`, and set the date in
+   `LEKA_SECRETS_ROTATED_ON`.
+
+**Interrupted at step 3?** Nothing to repair: run it again. Both keys are
+configured, so half-rotated is fully readable, each batch committed on its
+own, and rows already rewritten are skipped.
+
+**Step 3 before step 2 is deployed** — the script holds both keys while the
+running API still holds only the old one — rewrites rows the API can no
+longer read. The API keeps serving and fails on the first credential it
+needs. Recovery: deploy step 2, which is what should have happened first.
+
+**Step 5 before step 3 finished** leaves rows only the removed key can read.
+Recovery: put the old key back and finish step 3. If the old key is gone for
+good, so are those credentials: each affected customer has to reconnect the
+source. This is why step 4 exists and why step 5 waits for a later deploy.
+
+**The script exits 1** when some rows are readable by no configured key — a
+key removed too early, or a database restored from another environment. Each
+one is logged with its source id; everything else was rotated. Put the
+missing key back if you still have it.
+
+### LEKA_SECRET_KEY
+
+Replace the value and deploy. No overlap period, and nothing to re-encrypt:
+this key signs, it does not encrypt.
+
+What it costs: pagination cursors handed out before the deploy stop being
+accepted, and a client holding one starts again from the first page. A cursor
+lives for seconds. **Sessions are not affected** — they are random tokens
+stored hashed, not signed.
+
+### Everything else — database, Redis, S3, SMTP, model keys
+
+These are credentials somebody else issues, so the overlap is theirs to give:
+
+1. create the new credential at the provider, leaving the old one valid;
+2. deploy with the new value;
+3. verify: `/api/v1/health` covers PostgreSQL and Redis; for S3, store and
+   read back a payload; for SMTP, trigger one verification e-mail;
+4. revoke the old credential at the provider;
+5. record the date in `LEKA_SECRETS_ROTATED_ON`.
+
+Never step 4 before step 3. A revoked credential and a deploy that has not
+landed yet is an outage, and a quiet one: the API starts perfectly well and
+fails on the first request that needs the service.

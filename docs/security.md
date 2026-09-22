@@ -79,6 +79,25 @@ means the author of a future `logger.info("x", token=...)` does not need to
 know the rule exists. Verified by a test that also asserts the processor is
 actually installed.
 
+Key names are not enough on their own: `logger.info("connecting",
+value=...)` carries a secret under a name no list contains. A second
+processor therefore masks by VALUE — every configured secret, wherever it
+appears in a line, including inside a sentence, a URL or a traceback. Values
+under 8 characters are left alone, or the local database password, `leka`,
+would erase the product's own name from every line. Lines written by
+libraries through the standard library, uvicorn and SQLAlchemy among them, do
+not pass through these processors.
+
+### A module holding a secret it has no use for
+
+A secret rarely leaks from the module that needs it. It leaks from one that
+happened to hold it. Each secret names the modules allowed to read it, and a
+check parses the code on every pull request and fails, naming the file and
+the line, when anything else does — including the ways a static check cannot
+verify, which are refused outright. See
+[adr/012](adr/012-secret-access-control.md), and `docs/configuration.md` for
+the table.
+
 ### Link theft from an inbox
 
 Verification links last 24 hours, reset links **one hour**. Both are single
