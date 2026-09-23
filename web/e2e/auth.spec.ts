@@ -67,6 +67,32 @@ test("the demo account signs in, sees its workspace, and signs out", async ({ pa
   await expect(page).toHaveURL(/\/login$/);
 });
 
+test("signing out lands on the form even when the API call fails", async ({ page }) => {
+  // The regression behind LEKA-337's intermittent failure. Signing out used
+  // to navigate only if POST /auth/logout resolved: any failure threw out of
+  // the click handler, nothing caught it, and the person stayed on the page
+  // with no sign that the button had done anything. In CI that showed up as
+  // a sign-out test that failed once in a while and passed on a re-run.
+  //
+  // Aborting the call reproduces it on demand rather than waiting for the
+  // network to misbehave on its own.
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(DEMO_EMAIL);
+  await page.getByLabel("Password").fill(DEMO_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  // Waits for the shell rather than for a URL: this test is about leaving,
+  // and where signing in lands is someone else's decision to change.
+  await expect(page.getByTestId("user-menu").last()).toBeVisible();
+
+  await page.route("**/auth/logout", (route) => route.abort());
+
+  await page.getByTestId("user-menu").last().click();
+  await page.getByTestId("sign-out").click();
+
+  // Exactly /login, with no ?next= pointing back into the application.
+  await expect(page).toHaveURL(/\/login$/);
+});
+
 test("the sign-in page links to registration and recovery", async ({ page }) => {
   await page.goto("/login");
 

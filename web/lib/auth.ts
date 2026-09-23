@@ -47,7 +47,13 @@ export const auth = {
       body: JSON.stringify({ email, password }),
     }),
 
-  logout: () => apiFetch<void>("/auth/logout", { method: "POST" }),
+  // redirectOn401: false — this is the one call for which 401 is the
+  // outcome asked for, not a problem. The default sends the browser to
+  // /login?next=<where you were>, which on a sign-out means bouncing the
+  // person straight back into the application they just left, and which
+  // races whatever navigation the caller is doing. The caller decides
+  // where a sign-out lands.
+  logout: () => apiFetch<void>("/auth/logout", { method: "POST", redirectOn401: false }),
 
   me: (init: { redirectOn401?: boolean } = {}) =>
     apiFetch<CurrentUser>("/auth/me", init),
