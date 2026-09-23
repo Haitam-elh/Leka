@@ -22,10 +22,21 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 import { ApiError } from "@/lib/api";
 import { auth, type CurrentUser, type WorkspaceMembership } from "@/lib/auth";
+import { type CurrentWorkspace, workspace as workspaceApi } from "@/lib/workspace";
 
 export type ShellState =
   | { status: "loading" }
-  | { status: "ready"; me: CurrentUser; workspace: WorkspaceMembership | null }
+  | {
+      status: "ready";
+      me: CurrentUser;
+      workspace: WorkspaceMembership | null;
+      /**
+       * What this person may do here, as the API computed it. Empty when
+       * they belong to no workspace yet — which hides everything but the
+       * pages that need nothing, and that is the right answer.
+       */
+      permissions: readonly string[];
+    }
   /** The API is down. Not the same as signed out, and not the same advice. */
   | { status: "unreachable"; detail: string }
   | { status: "failed"; detail: string };
@@ -45,12 +56,17 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
         // from here, in one place, rather than bounced mid-render by the
         // fetch helper.
         const me = await auth.me({ redirectOn401: false });
+        // Asked together: the session says who you are, the workspace says
+        // what you may do, and the shell cannot draw itself without both.
+        const current: CurrentWorkspace | null =
+          me.active_workspace_id === null ? null : await workspaceApi.current();
         if (cancelled) return;
         setState({
           status: "ready",
           me,
           workspace:
-            me.workspaces.find((workspace) => workspace.id === me.active_workspace_id) ?? null,
+            me.workspaces.find((membership) => membership.id === me.active_workspace_id) ?? null,
+          permissions: current?.permissions ?? [],
         });
       } catch (caught) {
         if (cancelled) return;
@@ -101,6 +117,17 @@ export function useCurrentUser(): CurrentUser["user"] | null {
 export function useCurrentWorkspace(): WorkspaceMembership | null {
   const state = useShellContext();
   return state.status === "ready" ? state.workspace : null;
+}
+
+/**
+ * What the signed-in person may do in the active workspace.
+ *
+ * Used to hide what they may never open. It is NOT a security boundary:
+ * hiding a link hides a link, and the API refuses the request either way.
+ */
+export function usePermissions(): readonly string[] {
+  const state = useShellContext();
+  return state.status === "ready" ? state.permissions : [];
 }
 
 /** Every workspace this person may switch to. Empty until LEKA-331 wires the switch. */

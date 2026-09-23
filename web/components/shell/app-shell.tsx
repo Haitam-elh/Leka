@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AppHeader } from "@/components/shell/app-header";
 import { AppSidebar } from "@/components/shell/app-sidebar";
+import { CommandPalette, useCommandShortcut } from "@/components/shell/command-palette";
 import { SkipLink } from "@/components/shell/skip-link";
 import { useShell } from "@/components/shell/shell-provider";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import type { BadgeKey } from "@/config/routes";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { cn } from "cn";
 
@@ -38,13 +40,18 @@ export function AppShell({
   notificationCount = 0,
 }: {
   children: React.ReactNode;
-  badges?: Partial<Record<string, number>>;
+  badges?: Partial<Record<BadgeKey, number>>;
   notificationCount?: number;
 }) {
   const t = useDictionary();
   const state = useShell();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const searchTrigger = useRef<HTMLButtonElement>(null);
+
+  useCommandShortcut(useCallback(() => setSearchOpen(true), []));
 
   useEffect(() => {
     // The stored choice wins; without one, the viewport decides. Read after
@@ -113,7 +120,15 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <AppHeader
           onOpenNavigation={() => setDrawerOpen(true)}
+          onOpenSearch={() => setSearchOpen(true)}
+          searchTriggerRef={searchTrigger}
           notificationCount={notificationCount}
+        />
+
+        <CommandPalette
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          finalFocus={searchTrigger}
         />
 
         {/* tabIndex={-1} so the skip link can actually move focus here. */}

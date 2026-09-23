@@ -1,19 +1,14 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { PageContainer, PageHeader } from "@/components/shell/page-container";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { routes } from "@/config/routes";
 
 /**
- * A placeholder, on purpose: this ticket builds the frame, not the pictures
- * inside it. What it proves is that every route wears the same shell.
+ * The root sends you to the overview.
+ *
+ * Every zone of the product has a named path — /overview included — so the
+ * registry in config/routes.ts describes the whole information architecture
+ * without one entry having to be "the one with no path of its own".
  */
-export default function OverviewPage() {
-  const t = useDictionary();
-
-  return (
-    <PageContainer>
-      <PageHeader title={t.nav.overview} />
-      <p className="text-sm text-shell-muted">{t.shell.emptyPage}</p>
-    </PageContainer>
-  );
+export default function Index() {
+  redirect(routes.overview());
 }

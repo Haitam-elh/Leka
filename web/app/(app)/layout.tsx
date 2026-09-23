@@ -1,6 +1,9 @@
 "use client";
 
 import { AppShell } from "@/components/shell/app-shell";
+import { DocumentTitle } from "@/components/shell/document-title";
+import { RouteGuard } from "@/components/shell/route-guard";
+import { useNavBadges } from "@/lib/nav-badges";
 import { ShellProvider } from "@/components/shell/shell-provider";
 
 /**
@@ -16,13 +19,15 @@ import { ShellProvider } from "@/components/shell/shell-provider";
  * been the first to forget it.
  */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  const badges = useNavBadges();
+
   return (
     <ShellProvider>
-      {/* TODO LEKA-338: real counts. The mockup shows three decisions waiting
-          and one unread notification; until the features that produce those
-          numbers exist, the shell is handed them. */}
-      <AppShell badges={{ pendingApprovals: 3 }} notificationCount={1}>
-        {children}
+      <DocumentTitle />
+      {/* TODO LEKA-390 for the counts, and notifications have no ticket yet:
+          the shell is handed numbers rather than asking for them. */}
+      <AppShell badges={badges} notificationCount={1}>
+        <RouteGuard>{children}</RouteGuard>
       </AppShell>
     </ShellProvider>
   );

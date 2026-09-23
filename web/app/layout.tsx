@@ -15,8 +15,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// No title at all here, deliberately. Next renders metadata into the head
+// before anything else, so a title declared at this level wins over the one
+// the page computes — and every tab said "LEKA". Each layout below renders
+// its own <title>, which React 19 hoists into the head.
 export const metadata: Metadata = {
-  title: "LEKA",
   description: "Understand. Decide. Act.",
 };
 
@@ -29,7 +32,7 @@ export default function RootLayout({
     // The font variables belong on <html>, not <body>: globals.css resolves
     // --font-sans at :root, and a variable declared one level lower is not
     // there yet — which is how every heading came out in the browser's serif.
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="fr" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased">
         {/* Both wrap the whole app, including the sign-in screens: the
             language is a preference someone sets before signing in, and a
