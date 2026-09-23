@@ -183,6 +183,16 @@ const fr = {
     invalidFormat: "Ce format n'est pas reconnu.",
     invalid: "Cette valeur n'est pas valide.",
   },
+  /** Confirming, cancelling, and acting on a selection. */
+  interactions: {
+    cancel: "Annuler",
+    confirm: "Confirmer",
+    typeToConfirm: "Pour confirmer, saisissez {name}",
+    impactTitle: "Ce que cela change",
+    selectionCount: "{count} action(s) sélectionnée(s)",
+    clearSelection: "Tout désélectionner",
+    dismiss: "Fermer",
+  },
   languages: {
     fr: "Français",
     en: "English",
@@ -338,6 +348,15 @@ const en: Dictionary = {
     url: "Enter a valid web address.",
     invalidFormat: "That format is not recognised.",
     invalid: "That value is not valid.",
+  },
+  interactions: {
+    cancel: "Cancel",
+    confirm: "Confirm",
+    typeToConfirm: "To confirm, type {name}",
+    impactTitle: "What this changes",
+    selectionCount: "{count} action(s) selected",
+    clearSelection: "Clear selection",
+    dismiss: "Dismiss",
   },
   languages: {
     fr: "Français",
