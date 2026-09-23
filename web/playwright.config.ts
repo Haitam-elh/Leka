@@ -24,6 +24,24 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"]],
 
+  /**
+   * Five seconds is a laptop's budget, not a runner's.
+   *
+   * Everything these tests assert on sits behind an API call, and the one
+   * in the way of almost all of them is a password check: argon2id over
+   * 64 MiB, three passes, chosen for exactly that cost. Here it measures
+   * 180ms. CI gives it two shared cores that also carry Postgres, Redis,
+   * the API, Next and a browser, and that is the one part of the stack
+   * that gets slower rather than faster when the machine is busy.
+   *
+   * Raised on CI only, so a local run still fails fast and nobody waits
+   * fifteen seconds to be told a selector is wrong. It is a ceiling on a
+   * machine we do not control, not a target — a sign-in that genuinely
+   * takes ten seconds is a defect, and the trace carries the timing.
+   */
+  timeout: process.env.CI ? 60_000 : 30_000,
+  expect: { timeout: process.env.CI ? 15_000 : 5_000 },
+
   use: {
     // localhost, not 127.0.0.1: the browser treats them as different sites,
     // and a SameSite=Lax cookie set by one is never sent to the other.
