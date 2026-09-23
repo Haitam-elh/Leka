@@ -54,9 +54,28 @@ export interface ConfirmOptions {
    * dressed as safety, which teaches people to type past it.
    */
   requireTypedConfirmation?: string;
+  /**
+   * Turns the dialog into one that also collects a sentence.
+   *
+   * For "Refuser la sélection", where why it was refused is the only thing
+   * the next person will want. Optional on purpose: making it mandatory
+   * produces "n/a" and teaches people to type past the box.
+   */
+  reasonLabel?: string;
 }
 
-type Ask = (options: ConfirmOptions) => Promise<boolean>;
+/**
+ * Two shapes, because two questions.
+ *
+ * Without a reason the answer is yes or no, and a boolean says that
+ * exactly. With one, "no" and "yes, and here is why" cannot both be
+ * booleans — so it resolves to the text, or to null for a refusal to
+ * answer. The overload means the caller never has to check which.
+ */
+interface Ask {
+  (options: ConfirmOptions & { reasonLabel: string }): Promise<string | null>;
+  (options: ConfirmOptions): Promise<boolean>;
+}
 
 const ConfirmContext = createContext<Ask | null>(null);
 
@@ -71,7 +90,8 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const t = useDictionary();
   const [pending, setPending] = useState<ConfirmOptions | null>(null);
   const [typed, setTyped] = useState("");
-  const settle = useRef<((confirmed: boolean) => void) | null>(null);
+  const [reason, setReason] = useState("");
+  const settle = useRef<((answer: boolean | string | null) => void) | null>(null);
   /**
    * Whatever had the keyboard when the question was asked.
    *
@@ -82,17 +102,19 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
    */
   const opener = useRef<HTMLElement | null>(null);
 
-  const ask = useCallback<Ask>((options) => {
+  const ask = useCallback(((options: ConfirmOptions) => {
     opener.current = document.activeElement as HTMLElement | null;
     setTyped("");
+    setReason("");
     setPending(options);
-    return new Promise<boolean>((resolve) => {
+    return new Promise<boolean | string | null>((resolve) => {
       settle.current = resolve;
     });
-  }, []);
+  }) as Ask, []);
 
   function close(confirmed: boolean) {
-    settle.current?.(confirmed);
+    const withReason = pending?.reasonLabel !== undefined;
+    settle.current?.(withReason ? (confirmed ? reason : null) : confirmed);
     settle.current = null;
     setPending(null);
   }
@@ -143,6 +165,18 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                   value={typed}
                   onChange={(event) => setTyped(event.target.value)}
                   autoComplete="off"
+                />
+              </label>
+            ) : null}
+
+            {pending.reasonLabel ? (
+              <label className="block space-y-1.5">
+                <span className="text-sm text-shell-nav">{pending.reasonLabel}</span>
+                <textarea
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  rows={3}
+                  className="w-full resize-none rounded-lg border border-shell-line px-3 py-2 text-sm outline-none focus-visible:border-brand-violet focus-visible:ring-3 focus-visible:ring-brand-violet/30"
                 />
               </label>
             ) : null}

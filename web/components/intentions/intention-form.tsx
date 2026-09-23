@@ -16,6 +16,7 @@ import {
   clearDraft,
   IntentionComposer,
 } from "@/components/intentions/intention-composer";
+import { DecisionStep } from "@/components/intentions/decision-step";
 import { useCurrentWorkspace } from "@/components/shell/shell-provider";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -65,7 +66,12 @@ export function IntentionForm() {
   const workspace = useCurrentWorkspace();
   // The palette hands the text over in the URL (LEKA-338). Reading it here
   // rather than in the composer keeps the composer usable anywhere.
-  const prefilled = useSearchParams().get("q") ?? "";
+  const params = useSearchParams();
+  const prefilled = params.get("q") ?? "";
+  // The decision step lives at ?step=decision rather than at a route of its
+  // own: the route registry is LEKA-338's, and a skeleton does not earn an
+  // entry in it. LEKA-341 gives it a real one.
+  const onDecision = params.get("step") === "decision";
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
 
@@ -105,6 +111,8 @@ export function IntentionForm() {
     clearDraft(workspace?.id);
     form.reset();
   }
+
+  if (onDecision) return <DecisionStep />;
 
   if (submittedId !== null) {
     return (

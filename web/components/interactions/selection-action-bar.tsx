@@ -47,6 +47,10 @@ export function SelectionActionBar({
   return (
     <div
       role="region"
+      // Named, because it is not the only live region on the page: the
+      // toast viewport is another, and two anonymous regions are two
+      // identical announcements with no way to tell them apart.
+      aria-label={t.interactions.selectionRegion}
       aria-live="polite"
       className={cn(
         "sticky bottom-4 z-10 mx-auto flex w-full max-w-2xl items-center gap-3 rounded-xl border border-shell-line bg-white px-4 py-3 shadow-lg",
