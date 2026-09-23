@@ -89,6 +89,11 @@ export function CommandPalette({
   }, [query, search]);
 
   const items = useMemo<PaletteItem[]>(() => {
+    // Nothing at all until we know what this person may open. An arrow key
+    // must never wrap around a list that is still forming, and an Enter on
+    // a half-built palette must do nothing rather than the wrong thing.
+    if (permissions === null) return [];
+
     const typed = query.trim();
     const actions: PaletteItem[] = [
       {
@@ -232,7 +237,13 @@ export function CommandPalette({
             );
           })}
 
-          {results.length === 0 && query.trim().length > 0 && (
+          {permissions === null && (
+            <li className="px-2 py-3 text-sm text-shell-muted" data-testid="palette-loading">
+              {t.shell.loading}
+            </li>
+          )}
+
+          {permissions !== null && results.length === 0 && query.trim().length > 0 && (
             <li className="px-2 py-3 text-sm text-shell-muted" data-testid="palette-no-results">
               <p>{t.palette.noResults}</p>
               {/* The rule, said out loud where someone would otherwise wait

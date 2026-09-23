@@ -125,9 +125,23 @@ export function useCurrentWorkspace(): WorkspaceMembership | null {
  * Used to hide what they may never open. It is NOT a security boundary:
  * hiding a link hides a link, and the API refuses the request either way.
  */
-export function usePermissions(): readonly string[] {
+/** What this person may do — or null while the answer is still on its way.
+ *
+ * Null rather than an empty list, and the type is the whole point. An empty
+ * list is a real answer meaning "may do nothing", and this used to return it
+ * for "we have not asked yet" as well. The command palette believed it:
+ * anyone quick enough to press Ctrl+K before /auth/me came back got a
+ * palette with no navigation in it, where the arrow key wrapped around to
+ * "create an intention" and Enter did that instead of going where they
+ * asked. It cost nothing on a laptop and showed up as an intermittent CI
+ * failure, which is how the two costs of this kind of bug usually split.
+ *
+ * Whoever adds the next consumer now has to say which of the two they mean,
+ * because tsc will not let them past without it.
+ */
+export function usePermissions(): readonly string[] | null {
   const state = useShellContext();
-  return state.status === "ready" ? state.permissions : [];
+  return state.status === "ready" ? state.permissions : null;
 }
 
 /** Every workspace this person may switch to. Empty until LEKA-331 wires the switch. */
