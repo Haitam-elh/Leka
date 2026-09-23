@@ -1,5 +1,8 @@
 # Runbook — backup, restore, and rotating a secret
 
+> Losing a **deployment** rather than data? See [deployment.md](deployment.md):
+> shipping, rolling back, and a worker that has stopped consuming.
+
 A backup that has never been restored is not a backup. It is an assumption.
 
 This document records a restore that was actually performed, with the
