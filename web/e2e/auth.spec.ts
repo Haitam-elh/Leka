@@ -1,5 +1,13 @@
 import { expect, test } from "@playwright/test";
 
+import {
+  DEMO_EMAIL,
+  DEMO_PASSWORD,
+  LANDING,
+  expectSignedIn,
+  loginAnswer,
+} from "./sign-in";
+
 /**
  * The sign-in journey, clicked through by a real browser.
  *
@@ -8,7 +16,6 @@ import { expect, test } from "@playwright/test";
  * registration needs a verification link that only exists in the API's log.
  */
 
-const DEMO_EMAIL = "nora@acme.example";
 /** The form's own alert.
  *
  * Not getByRole("alert"): Next.js keeps an empty role="alert" route
@@ -16,7 +23,6 @@ const DEMO_EMAIL = "nora@acme.example";
  * strict mode. data-slot is what the design system stamps on its Alert. */
 const formAlert = (page: import("@playwright/test").Page) =>
   page.locator('[data-slot="alert"]');
-const DEMO_PASSWORD = "leka-demo-password";
 
 test("an anonymous visitor is sent to sign in", async ({ page }) => {
   await page.goto("/");
@@ -48,14 +54,19 @@ test("the demo account signs in, sees its workspace, and signs out", async ({ pa
   await page.goto("/login");
   await page.getByLabel("Email").fill(DEMO_EMAIL);
   await page.getByLabel("Password").fill(DEMO_PASSWORD);
+  const answered = loginAnswer(page);
   await page.getByRole("button", { name: "Sign in" }).click();
+  // Read the answer rather than infer it from a URL that did not change:
+  // a refusal and a slow reply look identical from the address bar, and
+  // this test is the one that should say which it was.
+  expectSignedIn(await answered);
 
   // The whole point of the browser test: this only works if the session
   // cookie was actually stored and sent back. Since LEKA-337 the answer is
   // the application shell — the workspace on the sidebar, the account in the
   // menu — rather than the two lines the landing page used to print.
   // "/" redirects to the overview: every zone has a named path.
-  await expect(page).toHaveURL("http://localhost:3000/overview");
+  await expect(page).toHaveURL(LANDING);
   await expect(page.getByText("Acme Corp")).toBeVisible();
 
   await page.getByTestId("user-menu").last().click();
@@ -80,7 +91,9 @@ test("signing out lands on the form even when the API call fails", async ({ page
   await page.goto("/login");
   await page.getByLabel("Email").fill(DEMO_EMAIL);
   await page.getByLabel("Password").fill(DEMO_PASSWORD);
+  const answered = loginAnswer(page);
   await page.getByRole("button", { name: "Sign in" }).click();
+  expectSignedIn(await answered);
   // Waits for the shell rather than for a URL: this test is about leaving,
   // and where signing in lands is someone else's decision to change.
   await expect(page.getByTestId("user-menu").last()).toBeVisible();
