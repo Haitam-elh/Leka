@@ -68,11 +68,24 @@ measures what restoring costs.
 
 ## What this costs
 
-The instance is inside the 12-month free tier; the $100 of AWS credit covers
-the rest several times over. S3 for the volumes involved is cents. Sentry,
-GHCR and Neon are on free plans. A budget alarm at €20 is set before anything
-is provisioned — not because the bill is expected, but because a forgotten
-resource is discovered a month late otherwise.
+S3 for the volumes involved is cents. Sentry, GHCR and Neon are on free
+plans. A budget alarm is set — an alert, not a cap, and it does not stop
+anything from being billed.
+
+**The account is not on the classic 12-month free tier.** It is on the plan
+that gives up to $200 of credit and lasts **six months, or until the credit
+runs out, whichever comes first** — estimated around **March 2027**. At that
+point the account **closes itself**, and the data in it is deleted ninety
+days later.
+
+Two consequences, and neither is optional:
+
+- **No customer data goes on this account** until it is converted to a paid
+  one. The S3 bucket is a validation bucket. Staging runs on seeded data and
+  nothing else.
+- **The expiry is a date in the runbook**, not a thing to remember. An
+  account that deletes itself is not a billing event, it is data loss with a
+  calendar entry, and the calendar entry is the only warning there is.
 
 ## What we give up, said plainly
 
