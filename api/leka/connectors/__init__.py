@@ -1,17 +1,66 @@
-"""Connectors: one subpackage per customer system, plus the shared base.
+"""Connectors: one subpackage per customer system, plus the framework they share.
 
 Bottom of the dependency chain. Depends on leka.core, leka.db and
 leka.platform — never on ingestion, knowledge, context or intentions
 (architecture rule 1).
 
 A connector's job stops at fetching. It does not interpret, normalise or
-store: that is leka.ingestion.
+store: that is leka.ingestion. See docs/connectors/framework.md.
+
+THE REGISTRY IS THIS FILE. A connector exists because its package is
+imported below; there is no other discovery (ADR 015).
 """
 
-from leka.connectors.models import Source, SourceKind, SourceStatus
+from leka.connectors.base import (
+    Capability,
+    ConnectionTestResult,
+    Connector,
+    ConnectorCategory,
+    ConnectorManifest,
+    HealthResult,
+)
+from leka.connectors.errors import ConnectorError, Diagnostic, DiagnosticCode, diagnose
+from leka.connectors.health import run_health_check
+from leka.connectors.lifecycle import InvalidTransitionError, LifecycleEvent, next_status
+from leka.connectors.models import (
+    HealthStatus,
+    Source,
+    SourceCredential,
+    SourceEvent,
+    SourceEventType,
+    SourceKind,
+    SourceStatus,
+    SyncStatus,
+)
+from leka.connectors.registry import (
+    UnknownConnectorError,
+    get_connector,
+    manifests,
+    register_connector,
+    unregister_connector,
+)
 from leka.connectors.repository import SourceCredentialSweeper, SourceRepository
-from leka.connectors.schemas import RawRecord, SyncResult
-from leka.connectors.service import SourceService
+from leka.connectors.schemas import (
+    CatalogEntry,
+    CredentialsRead,
+    CredentialsUpdate,
+    HealthRead,
+    RawRecord,
+    SourceCreate,
+    SourceEventRead,
+    SourceRead,
+    SourceTestOutcome,
+    SourceUpdate,
+    SyncResult,
+)
+from leka.connectors.secrets import DatabaseFernetSecretStore, SecretStore, StoredCredentials
+from leka.connectors.service import (
+    ActivationRefusedError,
+    DuplicateSourceError,
+    InvalidSourceInputError,
+    SourceNotFoundError,
+    SourceService,
+)
 from leka.connectors.tasks import (
     ROTATED_COLUMNS,
     RotationRefusedError,
@@ -21,15 +70,55 @@ from leka.connectors.tasks import (
 
 __all__ = [
     "ROTATED_COLUMNS",
+    "ActivationRefusedError",
+    "Capability",
+    "CatalogEntry",
+    "ConnectionTestResult",
+    "Connector",
+    "ConnectorCategory",
+    "ConnectorError",
+    "ConnectorManifest",
+    "CredentialsRead",
+    "CredentialsUpdate",
+    "DatabaseFernetSecretStore",
+    "Diagnostic",
+    "DiagnosticCode",
+    "DuplicateSourceError",
+    "HealthRead",
+    "HealthResult",
+    "HealthStatus",
+    "InvalidSourceInputError",
+    "InvalidTransitionError",
+    "LifecycleEvent",
     "RawRecord",
     "RotationRefusedError",
     "RotationReport",
+    "SecretStore",
     "Source",
+    "SourceCreate",
+    "SourceCredential",
     "SourceCredentialSweeper",
+    "SourceEvent",
+    "SourceEventRead",
+    "SourceEventType",
     "SourceKind",
+    "SourceNotFoundError",
+    "SourceRead",
     "SourceRepository",
     "SourceService",
     "SourceStatus",
+    "SourceTestOutcome",
+    "SourceUpdate",
+    "StoredCredentials",
     "SyncResult",
+    "SyncStatus",
+    "UnknownConnectorError",
+    "diagnose",
+    "get_connector",
+    "manifests",
+    "next_status",
+    "register_connector",
     "rotate_source_credentials",
+    "run_health_check",
+    "unregister_connector",
 ]

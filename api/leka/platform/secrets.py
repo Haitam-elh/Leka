@@ -14,6 +14,8 @@ See docs/adr/005-credential-storage.md.
 
 from __future__ import annotations
 
+import hashlib
+
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 
 from leka.core.config import settings
@@ -48,6 +50,11 @@ class SecretBox:
         self._primary = fernets[0]
         self._fernet = MultiFernet(fernets)
         self.key_count = len(keys)
+        # Which key encrypts now, as something safe to store beside the
+        # ciphertext: a truncated hash of a 256-bit random key says which
+        # key it was and nothing about it. What a rotation, and an operator
+        # checking one, compare against.
+        self.key_version = hashlib.sha256(keys[0].encode()).hexdigest()[:12]
 
     def encrypt(self, plaintext: str) -> bytes:
         """Encrypt with the primary key."""

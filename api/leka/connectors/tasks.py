@@ -34,7 +34,7 @@ logger = structlog.get_logger(__name__)
 
 # Every column this rotation rewrites. tests/test_key_rotation.py fails if a
 # column holding ciphertext appears anywhere without being listed here.
-ROTATED_COLUMNS = frozenset({"sources.credentials_encrypted"})
+ROTATED_COLUMNS = frozenset({"source_credentials.ciphertext"})
 
 
 class RotationRefusedError(RuntimeError):
@@ -87,7 +87,9 @@ async def rotate_source_credentials(
                         report.unreadable += 1
                         logger.error("credential_unreadable", source_id=str(source_id))
                         continue
-                    if dry_run or await sweeper.replace(source_id, expected=token, new=rotated):
+                    if dry_run or await sweeper.replace(
+                        source_id, expected=token, new=rotated, key_version=box.key_version
+                    ):
                         report.rotated += 1
                     else:
                         report.changed += 1
