@@ -217,7 +217,7 @@ The worker runs **on your host**, like the API. `docker-compose.yml` provides
 backing services only, deliberately (see the note at the top of that file).
 
 ```bash
-api/.venv/bin/rq worker --url redis://127.0.0.1:6379/0 leka:high leka leka:low
+cd api && .venv/bin/python -m leka.platform.worker
 ```
 
 Three queues, drained in that order: `leka:high` is work a person is waiting for,
@@ -231,7 +231,7 @@ The periodic sweeps are scheduled by a second process, which only puts jobs on t
 queue at the right times:
 
 ```bash
-api/.venv/bin/rq cron leka.background.cron_config --url redis://127.0.0.1:6379/0
+cd api && .venv/bin/python -m leka.platform.scheduler
 ```
 
 Without it nothing is scheduled and published events still flow, because a small

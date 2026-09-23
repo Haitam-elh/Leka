@@ -58,3 +58,11 @@ def label(text: str) -> None:
 
 
 not_a_function = "this is a string, not a callable"
+
+
+def leak(value: str) -> None:
+    """Fails with an argument in its message, the way a connection error
+    quotes the URL it could not reach — password included."""
+    CALLS.append(("leak", value))
+    msg = f"could not connect with {value}"
+    raise RuntimeError(msg)

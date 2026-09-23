@@ -39,11 +39,10 @@ logger = structlog.get_logger(__name__)
 def _scrub_event(event: Event, _hint: dict[str, Any]) -> Event | None:
     """Sentry's last chance to change an event, and ours.
 
-    Returns the event with every known secret replaced, at any depth. A
-    failure here must not lose the event: an error report missing one frame
-    is worth more than no error report, so anything unexpected is logged and
-    the original is dropped rather than sent unscrubbed — the one direction
-    that cannot be undone.
+    Returns the event with every known secret replaced, at any depth. If
+    scrubbing itself fails, the event is dropped and the failure logged,
+    never sent unscrubbed: a lost error report can be reproduced, a secret
+    on a third party's servers cannot be taken back.
     """
     try:
         scrubbed = scrub_secrets(event)

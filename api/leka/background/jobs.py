@@ -93,6 +93,23 @@ def queue(name: str = QUEUE_NAME) -> Any:
     return _named_queues[name]
 
 
+def worker_connection() -> Any:
+    """A Redis connection for a process that consumes the queues.
+
+    Not the one `queue()` builds. That one has a two-second socket timeout,
+    right for a request that enqueues and must not hang; wrong for a worker
+    that waits on the queue with a blocking read far longer than that, which
+    would take its own timeout for Redis being down.
+
+    Handed out from here because this module owns redis_url
+    (tests/test_secret_access.py): the process that needs a connection asks
+    for one rather than reading the URL.
+    """
+    import redis
+
+    return redis.from_url(str(settings.redis_url))
+
+
 def reset_queue() -> None:
     """Forget every built queue. For tests that substitute one."""
     global _queue

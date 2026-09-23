@@ -41,10 +41,10 @@ Two processes, on your host (`docker-compose.yml` is backing services only):
 
 ```bash
 # the worker: three queues, drained in this order
-api/.venv/bin/rq worker --url redis://127.0.0.1:6379/0 leka:high leka leka:low
+cd api && .venv/bin/python -m leka.platform.worker
 
 # the scheduler: puts the tick and the sweeps on the queue at the right times
-api/.venv/bin/rq cron leka.background.cron_config --url redis://127.0.0.1:6379/0
+cd api && .venv/bin/python -m leka.platform.scheduler
 ```
 
 `leka:high` is work a person is waiting for, `leka` is everything else, `leka:low` is the
@@ -58,11 +58,11 @@ sweeps. That is the only priority RQ has, and it has two limits worth knowing:
   tick and the scheduling calls never sit behind a sweep:
 
   ```bash
-  api/.venv/bin/rq worker --url redis://127.0.0.1:6379/0 leka:high
+  cd api && .venv/bin/python -m leka.platform.worker leka:high
   ```
 
 Nothing needs either process to be running to *record* work: events, runs and
-history are written by the API. Without a worker they wait; without `rq cron` nothing
+history are written by the API. Without a worker they wait; without the scheduler nothing
 is dispatched or scheduled, which is the state of the world before LEKA-334.
 
 To run one tick by hand — dispatch, repair, enqueue, and prune old events:
@@ -164,7 +164,7 @@ is terminal, so the history stays true.
 not retried; the error says it could not resolve the path. A test checks every scheduled and
 routed path exists, so this should only reach production from a row added without one.
 
-**Events stay `pending`.** The tick is not running (`rq cron` down, or no worker on the
+**Events stay `pending`.** The tick is not running (the scheduler down, or no worker on the
 queue it is on). Start them; nothing is lost, and the oldest go first.
 
 **An event is `failed` with "no route".** Something published an event type nobody consumes

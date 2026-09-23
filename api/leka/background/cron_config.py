@@ -1,6 +1,9 @@
 """The configuration `rq cron` loads.
 
-    rq cron leka.background.cron_config --url redis://127.0.0.1:6379/0
+    python -m leka.platform.scheduler
+
+which is `rq cron leka.background.cron_config` with logging and Sentry set up
+first (see leka/platform/scheduler.py).
 
 One process, run alongside the worker. It puts jobs on the queue at the right
 times and does nothing else; the worker runs them. If it is not running nothing
