@@ -9,6 +9,7 @@ import { FormMessage, messageFor } from "@/components/auth/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { auth } from "@/lib/auth";
 
@@ -35,7 +36,15 @@ function LoginForm() {
       await auth.login(email, password);
       // Only a same-site path: an open redirect turns our login page into a
       // convincing way to send someone to an attacker's site.
-      router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
+      //
+      // The fallback is the overview itself, not "/". Since LEKA-338 every
+      // zone has a named path and "/" is a server redirect onto one, so
+      // going through it spent two round trips where one does — at the
+      // moment someone is watching a spinner and judging whether the
+      // product is slow.
+      router.push(
+        next && next.startsWith("/") && !next.startsWith("//") ? next : routes.overview(),
+      );
     } catch (caught) {
       if (caught instanceof ApiError) {
         // The one case where the interface can offer a way forward: the
