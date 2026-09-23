@@ -1,4 +1,3 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 import { signIn } from "./sign-in";
@@ -8,9 +7,9 @@ import { signIn } from "./sign-in";
  *
  * What a unit test cannot answer here: that the composer's shortcut
  * survives a real browser's key handling, that a confirmation really traps
- * focus and gives it back, that leaving a dirty form is intercepted, and
- * that the pages these fields build have no accessibility violation a
- * machine can see.
+ * focus and gives it back, and that leaving a dirty form is intercepted.
+ * The automated accessibility review of these pages, and of every other
+ * core screen, is in accessibility.spec.ts.
  */
 
 /** ⌘ on a Mac, Ctrl everywhere else — the same binding either way. */
@@ -120,22 +119,4 @@ test.describe("the settings form", () => {
     await dialog.getByRole("button", { name: "Continuer l'édition" }).click();
     await expect(page).toHaveURL(/\/settings$/);
   });
-});
-
-test.describe("accessibility", () => {
-  for (const path of ["/intentions/new", "/settings"]) {
-    test(`finds no violation a machine can see on ${path}`, async ({ page }) => {
-      await signIn(page);
-      await page.goto(path);
-      await expect(page.getByRole("main")).toBeVisible();
-
-      const { violations } = await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
-        .analyze();
-
-      // Named rather than counted: "expected 0, got 3" sends whoever reads
-      // the failure to the report, and the report is in CI.
-      expect(violations.map((violation) => `${violation.id}: ${violation.help}`)).toEqual([]);
-    });
-  }
 });
