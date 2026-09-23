@@ -59,12 +59,13 @@ async def test_defaults_are_applied_by_the_database(session: AsyncSession) -> No
     await session.refresh(source)
 
     assert source.id is not None
-    assert source.status is SourceStatus.PENDING
+    assert source.status is SourceStatus.DRAFT
     assert source.config == {}
     # Timestamps come from PostgreSQL, so the API, the worker and psql agree.
     assert source.created_at.tzinfo is not None
-    # Credentials are encrypted before they reach this column (rule 12).
-    assert source.credentials_encrypted is None
+    # A new source has proven nothing and been checked by nothing.
+    assert source.health_status.value == "unknown"
+    assert source.sync_status.value == "never"
 
 
 async def test_entity_cannot_reference_another_workspace_source(session: AsyncSession) -> None:

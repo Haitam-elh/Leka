@@ -14,6 +14,7 @@ import subprocess
 import sys
 import uuid
 from collections.abc import AsyncIterator, Iterable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,7 @@ from leka.connectors import (
     ROTATED_COLUMNS,
     RotationRefusedError,
     Source,
+    SourceCredential,
     SourceCredentialSweeper,
     SourceKind,
     rotate_source_credentials,
@@ -38,6 +40,17 @@ OLD, NEW, FOREIGN = (Fernet.generate_key().decode() for _ in range(3))
 
 # Step 1 of the procedure: the new key first, the old one kept behind it.
 ROTATING = SecretBox((NEW, OLD))
+
+
+def _credential(source: Source, ciphertext: bytes, key_version: str) -> SourceCredential:
+    return SourceCredential(
+        workspace_id=source.workspace_id,
+        source_id=source.id,
+        ciphertext=ciphertext,
+        key_version=key_version,
+        hint="…",
+        rotated_at=datetime.now(UTC),
+    )
 
 
 @pytest.fixture
@@ -56,12 +69,11 @@ async def stored() -> AsyncIterator[dict[uuid.UUID, str]]:
                 for index in range(count):
                     token = f"ghp_{tenant}_{index}_{uuid.uuid4().hex}"
                     source = Source(
-                        workspace_id=workspace.id,
-                        kind=SourceKind.GITHUB,
-                        name=f"{tenant}-{index}",
-                        credentials_encrypted=box.encrypt(token),
+                        workspace_id=workspace.id, kind=SourceKind.GITHUB, name=f"{tenant}-{index}"
                     )
                     session.add(source)
+                    await session.flush()
+                    session.add(_credential(source, box.encrypt(token), "old"))
                     await session.flush()
                     tokens[source.id] = token
             await session.commit()
@@ -81,9 +93,12 @@ async def _ciphertexts(source_ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, bytes
     with system_scope():
         async with session_factory() as session:
             rows = await session.execute(
-                select(Source.id, Source.credentials_encrypted).where(Source.id.in_(source_ids))
+                select(SourceCredential.source_id, SourceCredential.ciphertext).where(
+                    SourceCredential.source_id.in_(source_ids)
+                )
             )
-            return {source_id: token for source_id, token in rows.tuples() if token is not None}
+            # list() first: a Result has keys(), and dict() would take it for a mapping.
+            return dict(list(rows.tuples()))
 
 
 def _all_read_by(
@@ -157,7 +172,7 @@ async def test_an_unchanged_credential_is_swapped(stored: dict[uuid.UUID, str]) 
     with system_scope():
         async with session_factory() as session:
             swapped = await SourceCredentialSweeper(session).replace(
-                source_id, expected=read, new=rotated
+                source_id, expected=read, new=rotated, key_version=ROTATING.key_version
             )
             await session.commit()
 
@@ -176,16 +191,19 @@ async def test_a_credential_saved_during_the_rotation_is_not_overwritten(
     with system_scope():
         async with session_factory() as session:
             await session.execute(
-                update(Source)
-                .where(Source.id == source_id)
-                .values(credentials_encrypted=saved_meanwhile)
+                update(SourceCredential)
+                .where(SourceCredential.source_id == source_id)
+                .values(ciphertext=saved_meanwhile)
             )
             await session.commit()
 
     with system_scope():
         async with session_factory() as session:
             swapped = await SourceCredentialSweeper(session).replace(
-                source_id, expected=read, new=ROTATING.rotate(read)
+                source_id,
+                expected=read,
+                new=ROTATING.rotate(read),
+                key_version=ROTATING.key_version,
             )
             await session.commit()
 
@@ -204,14 +222,12 @@ async def test_a_credential_no_configured_key_reads_is_reported(
                 select(Source.workspace_id).where(Source.id == next(iter(stored)))
             )
             assert workspace_id is not None
-            session.add(
-                Source(
-                    workspace_id=workspace_id,
-                    kind=SourceKind.GITHUB,
-                    name="from-another-environment",
-                    credentials_encrypted=SecretBox((FOREIGN,)).encrypt("ghp_unreadable"),
-                )
+            foreign = Source(
+                workspace_id=workspace_id, kind=SourceKind.GITHUB, name="from-another-environment"
             )
+            session.add(foreign)
+            await session.flush()
+            session.add(_credential(foreign, SecretBox((FOREIGN,)).encrypt("ghp_unreadable"), "x"))
             await session.commit()
 
     report = await rotate_source_credentials(ROTATING)
@@ -255,3 +271,23 @@ def test_every_encrypted_column_is_rotated() -> None:
         "Rotate it in its module's tasks.py and call that from "
         "scripts/rotate_encryption_key.py."
     )
+
+
+async def test_a_rotated_credential_records_the_key_that_wrote_it(
+    stored: dict[uuid.UUID, str],
+) -> None:
+    """What an operator reads to know a rotation finished: every row names the new key."""
+    await rotate_source_credentials(ROTATING)
+
+    with system_scope():
+        async with session_factory() as session:
+            versions = set(
+                (
+                    await session.execute(
+                        select(SourceCredential.key_version).where(
+                            SourceCredential.source_id.in_(stored)
+                        )
+                    )
+                ).scalars()
+            )
+    assert versions == {ROTATING.key_version}

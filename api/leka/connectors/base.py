@@ -1,0 +1,132 @@
+"""The contract every connector implements.
+
+A connector is the code that knows one vendor — GitHub, Jira — and nothing
+else. It is handed a configuration and credentials, both already validated
+and the latter already decrypted, and answers three questions: can I get
+in, what can I see, and am I healthy. Lifecycle, storage, encryption,
+permissions and history are the framework's; a connector never touches the
+database and never sees another source.
+
+READ-ONLY, BY CONTRACT. LEKA never writes to a customer's system.
+`read_only` is a literal True in the manifest, and a connector's HTTP
+client is a read client: it has no method that sends a body.
+
+Every HTTP call goes through `self.http()`: an httpx.AsyncClient with a
+10-second timeout per call, and a transport the tests replace. The whole of
+a connection test is bounded at 15 seconds by the lifecycle service.
+"""
+
+from __future__ import annotations
+
+import enum
+from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from datetime import datetime
+from typing import TYPE_CHECKING, ClassVar, Literal
+
+import httpx
+from pydantic import BaseModel, ConfigDict, Field
+
+from leka.connectors.models import HealthStatus, SourceKind
+
+if TYPE_CHECKING:  # pragma: no cover - schemas imports this module
+    from leka.connectors.schemas import RawRecord
+
+HTTP_TIMEOUT = httpx.Timeout(10.0)
+TEST_BUDGET_SECONDS = 15.0
+
+
+class ConnectorCategory(enum.StrEnum):
+    CODE = "code"
+    PROJECT = "project"
+    DOCS = "docs"
+    CLOUD = "cloud"
+    OBSERVABILITY = "observability"
+    CHAT = "chat"
+
+
+class Capability(enum.StrEnum):
+    """What a source can be read for. Declared by the connector, then
+    discovered for each source: a token may see repositories and not issues."""
+
+    REPOSITORIES = "repositories"
+    COMMITS = "commits"
+    PULL_REQUESTS = "pull_requests"
+    RELEASES = "releases"
+    ISSUES = "issues"
+
+
+class ConnectorManifest(BaseModel):
+    """What a connector is, for the catalogue and for validation."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    key: SourceKind
+    display_name: str
+    category: ConnectorCategory
+    auth_type: Literal["token"]
+    config_schema: type[BaseModel] = Field(description="Settings that are NOT secret.")
+    credentials_schema: type[BaseModel] = Field(description="Secrets, as SecretStr fields.")
+    capabilities: frozenset[Capability]
+    read_only: Literal[True] = True
+
+
+class ConnectionTestResult(BaseModel):
+    """What a successful test found."""
+
+    account: str | None = Field(default=None, description="Who the credentials belong to.")
+    metadata: dict[str, object] = Field(default_factory=dict)
+    capabilities: list[Capability] = Field(description="Declared AND actually reachable.")
+    warnings: list[str] = Field(default_factory=list)
+
+
+class HealthResult(BaseModel):
+    status: HealthStatus
+    detail: str | None = None
+    checked_at: datetime
+
+
+class Connector[ConfigT: BaseModel, CredentialsT: BaseModel](ABC):
+    """Subclass, fill in `manifest`, implement two methods, register it."""
+
+    manifest: ClassVar[ConnectorManifest]
+
+    def __init__(
+        self,
+        config: ConfigT,
+        credentials: CredentialsT,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self.config = config
+        self.credentials = credentials
+        self._transport = transport
+
+    def http(self, base_url: str, headers: dict[str, str] | None = None) -> httpx.AsyncClient:
+        """The only way a connector reaches its vendor."""
+        return httpx.AsyncClient(
+            base_url=base_url,
+            headers=headers or {},
+            timeout=HTTP_TIMEOUT,
+            transport=self._transport,
+            follow_redirects=False,
+        )
+
+    @abstractmethod
+    async def test_connection(self) -> ConnectionTestResult:
+        """Authenticate, reach what is configured, discover what is readable.
+
+        Raises ConnectorError with a Diagnostic on any failure.
+        """
+
+    @abstractmethod
+    async def check_health(self) -> HealthResult:
+        """A light call, free of quota where the vendor allows it."""
+
+    def iter_resources(self, capability: Capability) -> AsyncIterator[RawRecord]:
+        """Stream what a source holds for one capability. LEKA-352.
+
+        Declared here so the sync engine has a signature to build against;
+        not abstract, so no connector has to write a fake sync to exist.
+        """
+        raise NotImplementedError("synchronisation arrives with LEKA-352")

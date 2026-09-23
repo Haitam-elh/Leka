@@ -72,6 +72,11 @@ SCHEDULE: tuple[Scheduled, ...] = (
         kwargs={"dry_run": not settings.reconcile_deletes},
     ),
     Scheduled("prune-events", "leka.background.tasks.run_prune_events", cron="30 3 * * *"),
+    # Every activated source, a light call each (LEKA-344). Off the hour's
+    # busy minutes, like the rest.
+    Scheduled(
+        "source-health", "leka.connectors.health.run_health_checks", cron="5,20,35,50 * * * *"
+    ),
 )
 
 

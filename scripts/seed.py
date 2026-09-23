@@ -58,7 +58,7 @@ SOURCES: tuple[tuple[SourceKind, str, SourceStatus], ...] = (
     (SourceKind.AWS, "staging account", SourceStatus.ACTIVE),
     (SourceKind.DATADOG, "acme-eu", SourceStatus.ACTIVE),
     (SourceKind.SLACK, "#incidents", SourceStatus.ACTIVE),
-    (SourceKind.SLACK, "#platform", SourceStatus.PENDING),
+    (SourceKind.SLACK, "#platform", SourceStatus.DRAFT),
 )
 
 
