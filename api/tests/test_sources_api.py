@@ -1,0 +1,416 @@
+"""Sources over HTTP: lifecycle, secrets, isolation, permissions (LEKA-344).
+
+A FakeConnector — registered for these tests only — carries a source
+through its whole lifecycle without a vendor. GitHub then does the same
+end to end, its API answered by httpx.MockTransport. Nothing here touches
+the network.
+"""
+
+from __future__ import annotations
+
+import json
+import uuid
+from collections.abc import AsyncIterator, Iterator
+from typing import Any
+
+import httpx
+import pytest
+from httpx import AsyncClient
+from pydantic import BaseModel, ConfigDict, SecretStr
+from sqlalchemy import select, text
+
+from leka.api.connectors import get_connector_transport
+from leka.connectors import (
+    Capability,
+    ConnectionTestResult,
+    Connector,
+    ConnectorCategory,
+    ConnectorManifest,
+    DiagnosticCode,
+    HealthResult,
+    HealthStatus,
+    SourceCredential,
+    SourceEvent,
+    SourceKind,
+    diagnose,
+    register_connector,
+    unregister_connector,
+)
+from leka.db import session_factory, system_scope
+from leka.main import app
+from leka.platform import secret_box
+from tests.conftest import FakeIdentity, error_code
+from tests.test_github_connector import github
+
+pytestmark = pytest.mark.integration
+
+API = "/api/v1"
+FAKE_KEY = "fake-key-that-must-never-appear-anywhere"
+WRONG_KEY = "wrong-key-the-fake-refuses-every-time"
+GITHUB_TOKEN = "github_pat_11ABCDEFG0123456789_secretpartthatmustneverleak"
+
+
+class FakeConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    region: str = "eu"
+
+
+class FakeCredentials(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    api_key: SecretStr
+
+
+class FakeConnector(Connector[FakeConfig, FakeCredentials]):
+    manifest = ConnectorManifest(
+        key=SourceKind.SLACK,
+        display_name="Fake",
+        category=ConnectorCategory.CHAT,
+        auth_type="token",
+        config_schema=FakeConfig,
+        credentials_schema=FakeCredentials,
+        capabilities=frozenset({Capability.ISSUES}),
+    )
+
+    async def test_connection(self) -> ConnectionTestResult:
+        key = self.credentials.api_key.get_secret_value()
+        if key == WRONG_KEY:
+            raise diagnose(DiagnosticCode.AUTH_INVALID, detail=f"refused {key}", secrets=[key])
+        return ConnectionTestResult(account="fake", capabilities=[Capability.ISSUES])
+
+    async def check_health(self) -> HealthResult:
+        from datetime import UTC, datetime
+
+        return HealthResult(status=HealthStatus.HEALTHY, checked_at=datetime.now(UTC))
+
+
+@pytest.fixture(autouse=True)
+def fake_connector() -> Iterator[None]:
+    register_connector(FakeConnector)
+    yield
+    unregister_connector(SourceKind.SLACK)
+
+
+@pytest.fixture
+def github_api() -> Iterator[None]:
+    app.dependency_overrides[get_connector_transport] = lambda: httpx.MockTransport(github())
+    yield
+    app.dependency_overrides.pop(get_connector_transport, None)
+
+
+async def _user(label: str) -> uuid.UUID:
+    with system_scope():
+        async with session_factory() as session:
+            user_id: uuid.UUID = (
+                await session.execute(
+                    text("INSERT INTO users (email) VALUES (:e) RETURNING id"),
+                    {"e": f"{label}-{uuid.uuid4().hex[:8]}@acme.example"},
+                )
+            ).scalar_one()
+            await session.commit()
+            return user_id
+
+
+async def _workspace(members: dict[uuid.UUID, str]) -> uuid.UUID:
+    with system_scope():
+        async with session_factory() as session:
+            workspace_id: uuid.UUID = (
+                await session.execute(
+                    text("INSERT INTO workspaces (name, slug) VALUES ('W', :s) RETURNING id"),
+                    {"s": f"w-{uuid.uuid4().hex[:10]}"},
+                )
+            ).scalar_one()
+            for user_id, role in members.items():
+                await session.execute(
+                    text(
+                        "INSERT INTO memberships (workspace_id, user_id, role) VALUES (:w, :u, :r)"
+                    ),
+                    {"w": workspace_id, "u": user_id, "r": role},
+                )
+            await session.commit()
+            return workspace_id
+
+
+@pytest.fixture
+async def acme() -> AsyncIterator[dict[str, uuid.UUID]]:
+    """An owner and a member in Acme; another workspace, with its own admin."""
+    people = {name: await _user(name) for name in ("admin", "member", "other_admin")}
+    people["acme"] = await _workspace({people["admin"]: "admin", people["member"]: "member"})
+    people["globex"] = await _workspace({people["other_admin"]: "admin"})
+    yield people
+    with system_scope():
+        async with session_factory() as session:
+            await session.execute(
+                text("DELETE FROM workspaces WHERE id IN (:a, :g)"),
+                {"a": people["acme"], "g": people["globex"]},
+            )
+            await session.execute(
+                text("DELETE FROM users WHERE id IN (:a, :m, :o)"),
+                {"a": people["admin"], "m": people["member"], "o": people["other_admin"]},
+            )
+            await session.commit()
+
+
+def _as(identity: FakeIdentity, people: dict[str, uuid.UUID], who: str) -> None:
+    workspace = people["globex"] if who == "other_admin" else people["acme"]
+    identity.sign_in(people[who], workspace)
+
+
+async def _create(client: AsyncClient, **overrides: Any) -> dict[str, Any]:
+    body = {"type": "slack", "display_name": "Fake", "credentials": {"api_key": FAKE_KEY}}
+    body.update(overrides)
+    response = await client.post(f"{API}/sources", json=body)
+    assert response.status_code == 201, response.text
+    created: dict[str, Any] = response.json()
+    return created
+
+
+# ── the lifecycle, through the API ───────────────────────────────────────────
+
+
+async def test_a_source_goes_through_its_whole_lifecycle(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _create(client)
+    url = f"{API}/sources/{source['id']}"
+    assert source["status"] == "draft"
+    assert source["credentials"]["hint"]
+
+    refused = await client.post(f"{url}/activate")
+    assert refused.status_code == 409
+    assert error_code(refused) == "conflict"
+
+    tested = (await client.post(f"{url}/test")).json()
+    assert tested["ok"] is True
+    assert tested["source"]["status"] == "tested"
+    assert tested["source"]["capabilities"] == ["issues"]
+
+    assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+
+    health = (await client.post(f"{url}/health-check")).json()
+    assert health["health_status"] == "healthy"
+    assert (await client.get(f"{url}/health")).json()["health_status"] == "healthy"
+
+    # New credentials are unproven credentials.
+    rotated = await client.put(
+        f"{url}/credentials", json={"credentials": {"api_key": FAKE_KEY + "2"}}
+    )
+    assert rotated.json()["status"] == "draft"
+    assert (await client.post(f"{url}/activate")).status_code == 409
+
+    await client.post(f"{url}/test")
+    assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+    assert (await client.post(f"{url}/disable")).json()["status"] == "disabled"
+
+    events = (await client.get(f"{url}/events", params={"limit": 50})).json()["data"]
+    assert {event["type"] for event in events} >= {
+        "created",
+        "test_succeeded",
+        "activated",
+        "health_changed",
+        "credentials_rotated",
+        "disabled",
+    }
+    assert all(event["actor_user_id"] == str(acme["admin"]) for event in events)
+
+    assert (await client.delete(url)).status_code == 204
+    assert (await client.get(url)).status_code == 404
+    # The source is gone; its history is not, and it says why.
+    with system_scope():
+        async with session_factory() as session:
+            last = await session.scalar(
+                select(SourceEvent.type)
+                .where(SourceEvent.source_id == uuid.UUID(source["id"]))
+                .order_by(SourceEvent.created_at.desc())
+                .limit(1)
+            )
+            credentials = await session.scalar(
+                select(SourceCredential).where(
+                    SourceCredential.source_id == uuid.UUID(source["id"])
+                )
+            )
+    assert last == "deleted"
+    assert credentials is None
+
+
+async def test_new_settings_take_back_the_activation(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    url = f"{API}/sources/{(await _create(client))['id']}"
+    await client.post(f"{url}/test")
+
+    changed = await client.patch(url, json={"config": {"region": "us"}})
+    assert changed.json()["status"] == "draft"
+    assert (await client.post(f"{url}/activate")).status_code == 409
+
+
+async def test_a_failed_test_is_an_answer_with_a_diagnostic(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _create(client, credentials={"api_key": WRONG_KEY})
+
+    response = await client.post(f"{API}/sources/{source['id']}/test")
+
+    assert response.status_code == 200
+    outcome = response.json()
+    assert outcome["ok"] is False
+    assert outcome["diagnostic"]["code"] == "AUTH_INVALID"
+    assert outcome["diagnostic"]["message"]
+    assert outcome["source"]["status"] == "draft"
+    assert outcome["source"]["last_error"]["code"] == "AUTH_INVALID"
+    assert WRONG_KEY not in response.text
+
+
+async def test_the_input_is_checked_against_the_connector(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+
+    bad_config = await client.post(
+        f"{API}/sources",
+        json={
+            "type": "slack",
+            "display_name": "X",
+            "config": {"nope": 1},
+            "credentials": {"api_key": FAKE_KEY},
+        },
+    )
+    assert bad_config.status_code == 422
+    assert FAKE_KEY not in bad_config.text
+
+    unknown = await client.post(
+        f"{API}/sources", json={"type": "jira", "display_name": "X", "credentials": {"k": "v"}}
+    )
+    assert unknown.status_code == 422
+
+    await _create(client, display_name="Same")
+    assert (
+        await client.post(
+            f"{API}/sources",
+            json={"type": "slack", "display_name": "Same", "credentials": {"api_key": FAKE_KEY}},
+        )
+    ).status_code == 409
+
+
+# ── secrets ──────────────────────────────────────────────────────────────────
+
+
+async def test_a_secret_goes_in_and_never_comes_out(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _create(client)
+    url = f"{API}/sources/{source['id']}"
+    answers = [
+        json.dumps(source),
+        (await client.get(url)).text,
+        (await client.get(f"{API}/sources")).text,
+        (await client.post(f"{url}/test")).text,
+        (await client.put(f"{url}/credentials", json={"credentials": {"api_key": FAKE_KEY}})).text,
+        (await client.get(f"{url}/events")).text,
+    ]
+    for answer in answers:
+        assert FAKE_KEY not in answer
+    assert FAKE_KEY not in caplog.text
+    assert FAKE_KEY not in capsys.readouterr().out
+
+    with system_scope():
+        async with session_factory() as session:
+            stored = (
+                await session.execute(
+                    select(SourceCredential).where(
+                        SourceCredential.source_id == uuid.UUID(source["id"])
+                    )
+                )
+            ).scalar_one()
+    assert FAKE_KEY.encode() not in stored.ciphertext
+    assert json.loads(secret_box.decrypt(stored.ciphertext)) == {"api_key": FAKE_KEY}
+    assert stored.key_version == secret_box.key_version
+    assert FAKE_KEY not in repr(stored.hint)
+
+
+# ── who may do what, where ───────────────────────────────────────────────────
+
+
+async def test_another_workspace_cannot_see_or_test_a_source(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    url = f"{API}/sources/{(await _create(client))['id']}"
+
+    _as(identity, acme, "other_admin")
+    assert (await client.get(url)).status_code == 404
+    assert (await client.post(f"{url}/test")).status_code == 404
+    assert (await client.get(f"{API}/sources")).json()["data"] == []
+
+
+async def test_a_member_reads_but_does_not_manage(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    url = f"{API}/sources/{(await _create(client))['id']}"
+
+    _as(identity, acme, "member")
+    assert (await client.get(url)).status_code == 200
+    assert (await client.get(f"{API}/connectors/catalog")).status_code == 200
+    body = {"type": "slack", "display_name": "No", "credentials": {"api_key": FAKE_KEY}}
+    assert (await client.post(f"{API}/sources", json=body)).status_code == 403
+    assert (await client.post(f"{url}/test")).status_code == 403
+    assert (await client.post(f"{url}/activate")).status_code == 403
+
+
+# ── GitHub, end to end ───────────────────────────────────────────────────────
+
+
+async def test_github_end_to_end(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github_api: None,
+) -> None:
+    _as(identity, acme, "admin")
+    catalog = (await client.get(f"{API}/connectors/catalog")).json()
+    entry = next(item for item in catalog if item["key"] == "github")
+    assert entry["read_only"] is True
+    assert entry["credentials_schema"]["properties"]["token"]["writeOnly"] is True
+
+    source = await _create(
+        client,
+        type="github",
+        display_name="Acme GitHub",
+        config={"organization": "acme"},
+        credentials={"token": GITHUB_TOKEN},
+    )
+    assert source["credentials"]["hint"] == "github_pat_…leak"
+    url = f"{API}/sources/{source['id']}"
+
+    tested = (await client.post(f"{url}/test")).json()
+    assert tested["ok"] is True
+    assert tested["result"]["account"] == "nora"
+    assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+    assert (await client.post(f"{url}/health-check")).json()["health_status"] == "healthy"
+
+
+async def test_the_scheduled_check_visits_every_activated_source(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    """What RQ runs every fifteen minutes: activated sources only, drafts left alone."""
+    from leka.connectors.health import check_activated_sources
+
+    _as(identity, acme, "admin")
+    active = f"{API}/sources/{(await _create(client, display_name='On'))['id']}"
+    await client.post(f"{active}/test")
+    await client.post(f"{active}/activate")
+    draft = f"{API}/sources/{(await _create(client, display_name='Off'))['id']}"
+
+    outcome = await check_activated_sources()
+
+    assert outcome.get("healthy", 0) >= 1
+    assert (await client.get(f"{active}/health")).json()["health_status"] == "healthy"
+    assert (await client.get(f"{draft}/health")).json()["health_status"] == "unknown"
