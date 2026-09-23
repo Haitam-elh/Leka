@@ -20,11 +20,10 @@ from typing import Annotated
 
 import structlog
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.core.config import settings
 from leka.core.security import hash_token
-from leka.db import get_session
+from leka.db import DatabaseSession
 from leka.identity.models import Session
 from leka.identity.repository import SessionRepository
 from leka.platform import (
@@ -36,7 +35,7 @@ from leka.platform import (
 
 logger = structlog.get_logger(__name__)
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+SessionDep = DatabaseSession
 
 
 def read_session_token(request: Request) -> str | None:

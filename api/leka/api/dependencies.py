@@ -12,10 +12,12 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.db import get_session
-from leka.governance import Principal, get_current_principal
+from leka.db import DatabaseSession
+
+# Re-exported rather than redefined: one PrincipalDep, with its scope,
+# for every route (see leka/governance/dependencies.py).
+from leka.governance import PrincipalDep as PrincipalDep
 from leka.platform import (
     InvitationAcceptance,
     InvitationRepository,
@@ -30,10 +32,9 @@ from leka.platform import (
     get_session_store,
 )
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+SessionDep = DatabaseSession
 UserIdDep = Annotated[UserId, Depends(get_current_user_id)]
 SessionStoreDep = Annotated[SessionStore, Depends(get_session_store)]
-PrincipalDep = Annotated[Principal, Depends(get_current_principal)]
 
 
 def get_workspace_service(session: SessionDep) -> WorkspaceService:
