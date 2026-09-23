@@ -18,7 +18,7 @@
  */
 
 import { useRouter } from "next/navigation";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { ApiError } from "@/lib/api";
 import { auth, type CurrentUser, type WorkspaceMembership } from "@/lib/auth";
@@ -37,15 +37,32 @@ export type ShellState =
        */
       permissions: readonly string[];
     }
-  /** The API is down. Not the same as signed out, and not the same advice. */
-  | { status: "unreachable"; detail: string }
-  | { status: "failed"; detail: string };
+  /**
+   * The shell could not be drawn. The error itself is kept, not its
+   * message: ErrorState reads what KIND of failure it was — offline, the
+   * API down, a bug — and words it for a person (lib/errors.ts). The
+   * message was shown here once, and it read "Cannot reach the API at
+   * http://localhost:8000. Is it running?" to people who run nothing.
+   */
+  | { status: "failed"; error: unknown };
 
-const ShellContext = createContext<ShellState | null>(null);
+interface ShellContextValue {
+  state: ShellState;
+  /** Ask again, from the start. The failure screen's "Try again". */
+  retry: () => void;
+}
+
+const ShellContext = createContext<ShellContextValue | null>(null);
 
 export function ShellProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [state, setState] = useState<ShellState>({ status: "loading" });
+  const [attempt, setAttempt] = useState(0);
+
+  const retry = useCallback(() => {
+    setState({ status: "loading" });
+    setAttempt((previous) => previous + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,14 +91,7 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
           router.replace("/login");
           return;
         }
-        if (caught instanceof ApiError && caught.isUnreachable) {
-          setState({ status: "unreachable", detail: caught.message });
-          return;
-        }
-        setState({
-          status: "failed",
-          detail: caught instanceof Error ? caught.message : "Unknown error",
-        });
+        setState({ status: "failed", error: caught });
       }
     }
 
@@ -89,22 +99,32 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, attempt]);
 
-  return <ShellContext.Provider value={state}>{children}</ShellContext.Provider>;
+  const value = useMemo(() => ({ state, retry }), [state, retry]);
+  return <ShellContext.Provider value={value}>{children}</ShellContext.Provider>;
 }
 
 function useShellContext(): ShellState {
-  const state = useContext(ShellContext);
-  if (state === null) {
+  return useShellValue().state;
+}
+
+function useShellValue(): ShellContextValue {
+  const value = useContext(ShellContext);
+  if (value === null) {
     throw new Error("The shell hooks must be used inside <ShellProvider>");
   }
-  return state;
+  return value;
 }
 
 /** The whole state, for the shell itself: it is the one that renders loading and failure. */
 export function useShell(): ShellState {
   return useShellContext();
+}
+
+/** Start the session check again — what "Try again" does after a failure. */
+export function useShellRetry(): () => void {
+  return useShellValue().retry;
 }
 
 /** The signed-in person, or null while the answer is still on its way. */

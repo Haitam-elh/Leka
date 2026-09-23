@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { FormsGallery } from "@/app/_dev/forms/gallery";
+import { FormsGallery } from "./gallery";
 
 /**
  * Every field, in every state, on one page.
@@ -14,6 +14,12 @@ import { FormsGallery } from "@/app/_dev/forms/gallery";
  * Development only. It is not in config/routes.ts, so it is not in the
  * navigation, not in the palette and not reachable by anything but its
  * address — and in a production build that address is a 404.
+ *
+ * WHY THE FOLDER IS CALLED %5Fdev. Next treats a folder starting with an
+ * underscore as private and leaves it out of routing entirely; `_dev` made
+ * this page unreachable in every build, development included, and nobody
+ * noticed because nothing linked to it. `%5F` is an encoded underscore:
+ * the documented way to get a URL segment that starts with one.
  */
 export default function Page() {
   if (process.env.NODE_ENV === "production") notFound();

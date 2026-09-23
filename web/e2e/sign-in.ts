@@ -44,11 +44,11 @@ export function expectSignedIn(response: Response): void {
 
 export async function signIn(page: Page): Promise<void> {
   await page.goto("/login");
-  await page.getByLabel("Email").fill(DEMO_EMAIL);
-  await page.getByLabel("Password").fill(DEMO_PASSWORD);
+  await page.getByLabel("Adresse e-mail", { exact: true }).fill(DEMO_EMAIL);
+  await page.getByLabel("Mot de passe", { exact: true }).fill(DEMO_PASSWORD);
 
   const answered = loginAnswer(page);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Se connecter" }).click();
   expectSignedIn(await answered);
 
   await expect(page).toHaveURL(LANDING);

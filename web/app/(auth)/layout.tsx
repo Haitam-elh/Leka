@@ -2,8 +2,9 @@
  * The layout the authentication screens share.
  *
  * Deliberately minimal: a centred card on an empty page. The application
- * shell — sidebar, header, workspace switcher — is LEKA-337 and does not
- * exist yet. Building it here would mean building it twice.
+ * shell — sidebar, header, workspace switcher — is for the signed-in
+ * pages, under (app); a sidebar here would be a sidebar for someone with no
+ * workspace to navigate.
  */
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (

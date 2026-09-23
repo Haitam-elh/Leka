@@ -1,7 +1,7 @@
 "use client";
 
 import { Mic, Paperclip, Send, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 import { cn } from "cn";
@@ -139,7 +139,11 @@ export function IntentionComposer({
 
   const tooLong = value.length > INTENTION_MAX;
   const empty = value.trim().length === 0;
+  // Started, but not yet enough to analyse. The button is disabled, and a
+  // disabled button that does not say why reads as broken.
+  const missing = empty ? 0 : Math.max(0, INTENTION_MIN - value.trim().length);
   const compact = variant === "compact";
+  const whyDisabled = useId();
 
   async function applySuggestion(template: string) {
     if (!empty) {
@@ -238,7 +242,9 @@ export function IntentionComposer({
           </ul>
         ) : null}
 
-        <div className="mt-2 flex items-center gap-2">
+        {/* Wraps as two groups rather than squeezing words: at 1024px, with
+            the rail, "⌘↵ pour lancer" used to break over three lines. */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           {compact ? null : (
             <>
               <input
@@ -274,30 +280,40 @@ export function IntentionComposer({
             </>
           )}
 
-          <span className="flex-1" />
-
-          <span
-            className={cn(
-              "text-xs tabular-nums",
-              tooLong ? "text-shell-badge-foreground" : "text-shell-muted",
+          <div className="ml-auto flex items-center gap-2 whitespace-nowrap">
+            {/* Polite, and only while it is true: announced once as the
+                person types past it, not read out on every keystroke. */}
+            <span id={whyDisabled} aria-live="polite" className="text-xs text-shell-muted">
+              {missing > 0 ? fill(t.composer.tooShortHint, { count: missing }) : null}
+            </span>
+            <span
+              className={cn(
+                "text-xs tabular-nums",
+                tooLong ? "text-shell-badge-foreground" : "text-shell-muted",
+              )}
+            >
+              {fill(t.forms.charCount, { count: value.length, max: INTENTION_MAX })}
+            </span>
+            {missing > 0 ? null : (
+              <span className="hidden text-xs text-shell-muted sm:inline">
+                {t.composer.submitHint}
+              </span>
             )}
-          >
-            {fill(t.forms.charCount, { count: value.length, max: INTENTION_MAX })}
-          </span>
-          <span className="hidden text-xs text-shell-muted sm:inline">{t.composer.submitHint}</span>
-          <Button
-            type="button"
-            size="sm"
-            onClick={onSubmit}
-            // Below the minimum there is nothing to analyse, past the
-            // maximum there is nothing we would send. Both are refusals the
-            // person can see before pressing.
-            disabled={empty || tooLong || value.trim().length < INTENTION_MIN || submitting}
-            data-testid="intention-submit"
-          >
-            <Send className="size-4" aria-hidden="true" />
-            {t.composer.submit}
-          </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={onSubmit}
+              // Below the minimum there is nothing to analyse, past the
+              // maximum there is nothing we would send. Both are refusals the
+              // person can see before pressing.
+              disabled={empty || tooLong || missing > 0 || submitting}
+              aria-describedby={missing > 0 ? whyDisabled : undefined}
+              data-testid="intention-submit"
+            >
+              <Send className="size-4" aria-hidden="true" />
+              {t.composer.submit}
+            </Button>
+          </div>
         </div>
       </div>
 

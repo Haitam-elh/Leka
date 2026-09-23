@@ -11,6 +11,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { SelectField } from "@/components/forms/choice-fields";
 import { Form } from "@/components/forms/form";
 import { FormAlert } from "@/components/forms/form-alert";
 import { TextField } from "@/components/forms/text-field";
@@ -246,5 +247,62 @@ describe("applyServerErrors", () => {
       expect(screen.getByRole("alert")).toHaveTextContent(fr.forms.submitFailed),
     );
     expect(screen.queryByText(/localhost/)).not.toBeInTheDocument();
+  });
+});
+
+describe("a select", () => {
+  it("shows the option that was chosen, not the value it is stored as", () => {
+    // It printed "7d" and "production" on the settings screen: what the
+    // form stores, rather than what the person picked from.
+    const schema = z.object({ environment: z.string() });
+    function Select() {
+      const form = useLekaForm({
+        schema,
+        defaultValues: { environment: "production" },
+        onSubmit: vi.fn(),
+      });
+      return (
+        <Form form={form}>
+          <SelectField
+            name="environment"
+            label="Environnement"
+            options={[
+              { value: "production", label: "Production" },
+              { value: "staging", label: "Pré-production" },
+            ]}
+          />
+        </Form>
+      );
+    }
+    render(
+      <LocaleProvider>
+        <Select />
+      </LocaleProvider>,
+    );
+
+    const trigger = screen.getByRole("combobox", { name: "Environnement" });
+    expect(trigger).toHaveTextContent("Production");
+    expect(trigger).not.toHaveTextContent("production");
+  });
+});
+
+describe("a label hidden from the eye", () => {
+  it("still names the field for a screen reader", () => {
+    function Hidden() {
+      const form = useLekaForm({ schema, defaultValues: EMPTY, onSubmit: vi.fn() });
+      return (
+        <Form form={form}>
+          <TextField name="name" label="Nom" hideLabel />
+        </Form>
+      );
+    }
+    render(
+      <LocaleProvider>
+        <Hidden />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByRole("textbox", { name: "Nom" })).toBeInTheDocument();
+    expect(screen.getByText("Nom")).toHaveClass("sr-only");
   });
 });

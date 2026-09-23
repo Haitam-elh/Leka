@@ -71,6 +71,12 @@ export interface FormFieldProps<
    * one — and only the order changes.
    */
   layout?: "stacked" | "inline";
+  /**
+   * Keeps the label for screen readers and hides it from the eye — for a
+   * field that sits under a heading already saying the same words. Never
+   * for saving space: a field with no visible label is a guessing game.
+   */
+  hideLabel?: boolean;
   className?: string;
   /** The control itself. Base UI clones it with the wiring. */
   children: (props: FieldRenderProps<TFieldValues, TName>) => React.ReactElement;
@@ -88,6 +94,7 @@ export function FormField<TFieldValues extends FieldValues, TName extends Path<T
   counter,
   wrapInControl = true,
   layout = "stacked",
+  hideLabel = false,
   className,
   children,
 }: FormFieldProps<TFieldValues, TName>) {
@@ -132,6 +139,7 @@ export function FormField<TFieldValues extends FieldValues, TName extends Path<T
                 className={cn(
                   "flex items-center gap-1.5 text-sm font-medium text-shell-nav",
                   layout === "inline" && "cursor-pointer font-normal",
+                  hideLabel && "sr-only",
                 )}
               >
                 {label}

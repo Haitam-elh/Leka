@@ -4,14 +4,18 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AuthCard } from "@/components/auth/auth-card";
-import { FormMessage, messageFor } from "@/components/auth/form-message";
+import { FormMessage, authErrorMessage } from "@/components/auth/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useOnlineStatus } from "@/lib/use-online-status";
 
 export default function ForgotPasswordPage() {
+  const t = useDictionary();
+  const online = useOnlineStatus();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -26,10 +30,16 @@ export default function ForgotPasswordPage() {
       await auth.forgotPassword(email);
       setSent(true);
     } catch (caught) {
-      // Only a rate limit can fail here. Anything else still shows the same
-      // confirmation: whether an account exists is not ours to reveal.
-      if (caught instanceof ApiError && caught.code === "rate_limited") {
-        setError(messageFor(caught.code, caught.message));
+      // Whatever the SERVER answered, the same confirmation: whether an
+      // account exists is not ours to reveal. Two exceptions, neither of
+      // which reveals anything. A rate limit, which is about the asker.
+      // And a request that never reached the server — offline, or the API
+      // down — where "a link is on its way" would simply be untrue, and
+      // the person would wait for an email that was never going to come.
+      const neverArrived = !online || (caught instanceof ApiError && caught.isUnreachable);
+      const throttled = caught instanceof ApiError && caught.code === "rate_limited";
+      if (neverArrived || throttled) {
+        setError(authErrorMessage(t, caught, online));
       } else {
         setSent(true);
       }
@@ -41,28 +51,26 @@ export default function ForgotPasswordPage() {
   if (sent) {
     return (
       <AuthCard
-        title="Check your inbox"
-        description="If an account exists for that address, a reset link is on its way."
+        title={t.auth.checkInbox}
+        description={t.auth.resetSent}
         footer={
           <Link href="/login" className="underline underline-offset-4">
-            Back to sign in
+            {t.auth.backToSignIn}
           </Link>
         }
       >
-        <p className="text-sm text-muted-foreground">
-          The link works for one hour, and once only.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.auth.resetLinkLife}</p>
       </AuthCard>
     );
   }
 
   return (
     <AuthCard
-      title="Reset your password"
-      description="We will email you a link."
+      title={t.auth.forgotTitle}
+      description={t.auth.forgotDescription}
       footer={
         <Link href="/login" className="underline underline-offset-4">
-          Back to sign in
+          {t.auth.backToSignIn}
         </Link>
       }
     >
@@ -70,7 +78,7 @@ export default function ForgotPasswordPage() {
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">{t.auth.email}</Label>
           <Input
             id="email"
             type="email"
@@ -82,7 +90,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         <Button type="submit" className="w-full" disabled={busy}>
-          {busy ? "Sending…" : "Send reset link"}
+          {busy ? t.auth.sending : t.auth.sendResetLink}
         </Button>
       </form>
     </AuthCard>

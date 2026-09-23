@@ -4,23 +4,25 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AuthCard } from "@/components/auth/auth-card";
-import { FormMessage, messageFor } from "@/components/auth/form-message";
+import { FormMessage, PASSWORD_MIN, authErrorMessage } from "@/components/auth/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError } from "@/lib/api";
 import { auth } from "@/lib/auth";
-
-const MINIMUM_LENGTH = 12;
+import { fill } from "@/lib/i18n/dictionaries";
+import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useOnlineStatus } from "@/lib/use-online-status";
 
 export default function RegisterPage() {
+  const t = useDictionary();
+  const online = useOnlineStatus();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const tooShort = password.length > 0 && password.length < MINIMUM_LENGTH;
+  const tooShort = password.length > 0 && password.length < PASSWORD_MIN;
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -34,11 +36,7 @@ export default function RegisterPage() {
       // form becomes a way to ask who already has an account.
       setDone(true);
     } catch (caught) {
-      if (caught instanceof ApiError) {
-        setError(messageFor(caught.code, caught.fieldErrors?.password ?? caught.message));
-      } else {
-        setError("Something went wrong. Try again.");
-      }
+      setError(authErrorMessage(t, caught, online));
     } finally {
       setBusy(false);
     }
@@ -47,30 +45,28 @@ export default function RegisterPage() {
   if (done) {
     return (
       <AuthCard
-        title="Check your inbox"
-        description="If that address can be registered, a confirmation link is on its way."
+        title={t.auth.checkInbox}
+        description={t.auth.registerSent}
         footer={
           <Link href="/login" className="underline underline-offset-4">
-            Back to sign in
+            {t.auth.backToSignIn}
           </Link>
         }
       >
-        <p className="text-sm text-muted-foreground">
-          The link works for 24 hours, and once only.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.auth.registerLinkLife}</p>
       </AuthCard>
     );
   }
 
   return (
     <AuthCard
-      title="Create an account"
-      description="Start mapping your architecture."
+      title={t.auth.registerTitle}
+      description={t.auth.registerDescription}
       footer={
         <>
-          Already have one?{" "}
+          {t.auth.alreadyHaveOne}{" "}
           <Link href="/login" className="underline underline-offset-4">
-            Sign in
+            {t.auth.signIn}
           </Link>
         </>
       }
@@ -79,7 +75,7 @@ export default function RegisterPage() {
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">{t.auth.email}</Label>
           <Input
             id="email"
             type="email"
@@ -91,30 +87,29 @@ export default function RegisterPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password">{t.auth.password}</Label>
           <Input
             id="password"
             type="password"
             autoComplete="new-password"
             required
-            minLength={MINIMUM_LENGTH}
+            minLength={PASSWORD_MIN}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             aria-describedby="password-help"
           />
+          {/* Length only. No composition rules: demanding an uppercase and
+              a digit produces Password1! and nothing stronger. */}
           <p
             id="password-help"
-            className={`text-xs ${tooShort ? "text-destructive" : "text-muted-foreground"}`}
+            className={`text-xs ${tooShort ? "text-state-danger" : "text-muted-foreground"}`}
           >
-            {/* Length only. No composition rules: demanding an uppercase and
-                a digit produces Password1! and nothing stronger. */}
-            At least {MINIMUM_LENGTH} characters. A memorable phrase beats a
-            short, complicated word.
+            {fill(t.auth.passwordRule, { min: PASSWORD_MIN })}
           </p>
         </div>
 
         <Button type="submit" className="w-full" disabled={busy || tooShort}>
-          {busy ? "Creating…" : "Create account"}
+          {busy ? t.auth.creating : t.auth.createAccount}
         </Button>
       </form>
     </AuthCard>
