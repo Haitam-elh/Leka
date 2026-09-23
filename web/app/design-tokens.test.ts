@@ -18,12 +18,25 @@ import { describe, expect, it } from "vitest";
 
 const STYLESHEET = readFileSync(path.join(import.meta.dirname, "globals.css"), "utf8");
 
-function token(name: string): string {
-  const found = STYLESHEET.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})\\s*;`));
-  if (!found) {
-    throw new Error(`--${name} is not a hex token in globals.css`);
+function token(name: string, seen: ReadonlySet<string> = new Set()): string {
+  const declaration = STYLESHEET.match(new RegExp(`--${name}:\\s*([^;]+);`));
+  if (!declaration) {
+    throw new Error(`--${name} is not declared in globals.css`);
   }
-  return found[1];
+  const value = declaration[1].trim();
+
+  const hex = value.match(/^#[0-9a-fA-F]{6}$/);
+  if (hex) return hex[0];
+
+  // A token that aliases another rather than repeating its value — --primary
+  // pointing at --brand-navy, say. One level of var(--x) is a design-system
+  // alias; more than one is the thing worth catching, not chasing forever.
+  const alias = value.match(/^var\(--([\w-]+)\)$/);
+  if (alias && !seen.has(name)) {
+    return token(alias[1], new Set(seen).add(name));
+  }
+
+  throw new Error(`--${name} is "${value}", not a hex colour or a single-level var() alias`);
 }
 
 function luminance(colour: string): number {
@@ -55,6 +68,9 @@ const PAIRS: readonly [label: string, foreground: string, background: string][] 
   ["danger, on its background", token("state-danger"), token("state-danger-soft")],
   ["danger, on white", token("state-danger"), "#FFFFFF"],
   ["danger, on the page", token("state-danger"), token("shell-canvas")],
+  // The default button and every other surface styled with the shadcn
+  // "primary" pair (LEKA-339): brand navy, not shadcn's stock near-black.
+  ["primary button label", token("primary-foreground"), token("primary")],
 ];
 
 describe("the shell's text is readable", () => {
