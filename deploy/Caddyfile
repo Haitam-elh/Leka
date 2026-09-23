@@ -1,0 +1,36 @@
+# TLS for the staging API, obtained and renewed without anyone remembering.
+#
+# Caddy asks Let's Encrypt on first start and renews on its own. That is the
+# whole reason it is here rather than nginx: a certificate that expires on a
+# Sunday is the most predictable outage there is, and it is avoidable.
+#
+# {$LEKA_STAGING_DOMAIN} comes from staging.env. With no domain set, Caddy
+# serves plain HTTP on :80 — which is what makes this file work on the box
+# before DNS is pointed at it.
+
+{$LEKA_STAGING_DOMAIN::80} {
+	encode zstd gzip
+
+	# The health endpoint answers 503 when Postgres or Redis is unreachable.
+	# Caddy is told to believe it, so a degraded instance stops receiving
+	# traffic instead of returning errors to whoever is testing.
+	reverse_proxy api:8000 {
+		health_uri /api/v1/health
+		health_interval 10s
+		health_timeout 5s
+	}
+
+	header {
+		# Set here rather than in the application: they apply to everything
+		# this host serves, including responses the application never sees.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

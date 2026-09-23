@@ -1,0 +1,3 @@
+# The filled-in environment lives on the box and nowhere else.
+staging.env
+production.env
