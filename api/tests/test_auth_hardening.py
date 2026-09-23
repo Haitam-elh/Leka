@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -19,7 +18,7 @@ from sqlalchemy import text
 from leka.core import ratelimit
 from leka.core.config import settings
 from leka.core.ratelimit import LOGIN_PER_IP, REGISTER_PER_IP
-from leka.db import session_factory, system_scope
+from leka.db import DatabaseSession, session_factory, system_scope
 from leka.identity.cookies import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 from leka.platform import Membership, Role, Workspace
 from tests.conftest import error_code, error_message
@@ -38,7 +37,6 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 async def mailbox() -> AsyncIterator[CapturingEmailSender]:
     from leka.api import identity as identity_routes
-    from leka.db import get_session
     from leka.identity import (
         AuthService,
         EmailTokenRepository,
@@ -49,7 +47,9 @@ async def mailbox() -> AsyncIterator[CapturingEmailSender]:
 
     sender = CapturingEmailSender()
 
-    def factory(db: Any = pytest.importorskip("fastapi").Depends(get_session)) -> AuthService:
+    # The routes' own dependency: a second spelling would be a second
+    # session in the same request (see leka/db/session.py).
+    def factory(db: DatabaseSession) -> AuthService:
         return AuthService(
             UserRepository(db), SessionRepository(db), EmailTokenRepository(db), sender
         )

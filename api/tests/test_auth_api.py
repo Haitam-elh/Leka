@@ -24,7 +24,7 @@ from httpx import AsyncClient
 from sqlalchemy import text
 
 from leka.core.config import settings
-from leka.db import session_factory, system_scope
+from leka.db import DatabaseSession, session_factory, system_scope
 from leka.identity import ConsoleEmailSender, EmailMessage
 from leka.identity.cookies import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 from tests.conftest import comparable_error, error_code, page_items
@@ -69,9 +69,6 @@ async def mailbox() -> AsyncIterator[CapturingEmailSender]:
 
 
 def _service_with(sender: CapturingEmailSender) -> Any:
-    from fastapi import Depends
-
-    from leka.db import get_session
     from leka.identity import (
         AuthService,
         EmailTokenRepository,
@@ -79,7 +76,9 @@ def _service_with(sender: CapturingEmailSender) -> Any:
         UserRepository,
     )
 
-    def factory(db: Any = Depends(get_session)) -> AuthService:
+    # The same dependency the routes use: a second spelling would be a
+    # second session in the same request (see leka/db/session.py).
+    def factory(db: DatabaseSession) -> AuthService:
         return AuthService(
             UserRepository(db), SessionRepository(db), EmailTokenRepository(db), sender
         )

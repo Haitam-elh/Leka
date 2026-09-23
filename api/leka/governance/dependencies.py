@@ -16,9 +16,8 @@ from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.db import get_session, workspace_scope
+from leka.db import DatabaseSession, workspace_scope
 from leka.governance.repository import AuditRepository
 from leka.governance.schemas import Permission, Principal
 from leka.governance.service import (
@@ -38,7 +37,7 @@ from leka.platform import (
     get_session_store,
 )
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+SessionDep = DatabaseSession
 UserIdDep = Annotated[UserId, Depends(get_current_user_id)]
 SessionStoreDep = Annotated[SessionStore, Depends(get_session_store)]
 
@@ -112,7 +111,10 @@ async def get_current_principal(
         yield principal
 
 
-PrincipalDep = Annotated[Principal, Depends(get_current_principal)]
+# Ends with the handler, like the database session it depends on — FastAPI
+# refuses a dependency that outlives one it depends on. It is also what the
+# docstring above always meant: the workspace scope wraps the handler.
+PrincipalDep = Annotated[Principal, Depends(get_current_principal, scope="function")]
 
 
 def _refuse(error: AuthorisationError) -> HTTPException:

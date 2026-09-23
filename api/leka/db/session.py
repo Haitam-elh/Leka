@@ -7,7 +7,9 @@ an AsyncSession; they never build their own engine.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -60,6 +62,26 @@ async def get_session() -> AsyncIterator[AsyncSession]:
             raise
         finally:
             await session.close()
+
+
+# How every route asks for a database session. Use this, never
+# Depends(get_session) on its own — and that is not a style rule.
+#
+# scope="function" makes the commit above happen when the handler returns,
+# BEFORE the response is sent. FastAPI's default for a dependency with
+# `yield` is the opposite: it runs the code after `yield` once the response
+# has gone. The client then holds a 200 for a transaction that has not
+# committed yet, and its next request can arrive first. Signing in did
+# exactly that: the browser received its cookie, asked /auth/me, and was
+# refused a session that did not exist yet — "back on /login" in CI, one
+# sign-in in twenty, on a machine busy enough to lose the race. And a commit
+# that FAILED after the response had already said 200 was data silently
+# lost.
+#
+# One definition because the scope is part of FastAPI's dependency cache
+# key: a route that mixed the two spellings would get two sessions in one
+# request, each blind to what the other wrote.
+DatabaseSession = Annotated[AsyncSession, Depends(get_session, scope="function")]
 
 
 async def check_database() -> bool:

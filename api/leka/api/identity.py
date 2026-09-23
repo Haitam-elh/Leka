@@ -22,11 +22,10 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.core import ratelimit
-from leka.db import SortableField, get_session
+from leka.db import DatabaseSession, SortableField
 from leka.identity import (
     AccountUnverifiedError,
     AuthenticationError,
@@ -58,7 +57,7 @@ from leka.platform import MembershipResolver
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+SessionDep = DatabaseSession
 CurrentSession = Annotated[Session | None, Depends(load_session)]
 
 
@@ -191,9 +190,7 @@ async def login(
     request: Request,
     response: Response,
     auth: AuthDep,
-    memberships: Annotated[
-        MembershipResolver, Depends(lambda db=Depends(get_session): MembershipResolver(db))
-    ],
+    memberships: ResolverDep,
 ) -> MeResponse:
     """Sign in and open a NEW session.
 

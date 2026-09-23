@@ -23,12 +23,19 @@ from leka.db.repository import (
     system_scope,
     workspace_scope,
 )
-from leka.db.session import check_database, engine, get_session, session_factory
+from leka.db.session import (
+    DatabaseSession,
+    check_database,
+    engine,
+    get_session,
+    session_factory,
+)
 
 __all__ = [
     "Base",
     "CrossWorkspaceWriteError",
     "CursorError",
+    "DatabaseSession",
     "MissingWorkspaceScopeError",
     "Page",
     "SortableField",
