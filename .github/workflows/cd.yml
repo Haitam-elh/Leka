@@ -33,11 +33,23 @@ jobs:
   build:
     name: build and push the image
     runs-on: ubuntu-latest
-    # A red CI must not reach the box. The manual path skips this because it
-    # deploys a sha whose CI already passed.
+    # Two conditions, and the first one matters most today.
+    #
+    # STAGING_ENABLED is a repository variable that does not exist yet. Until
+    # somebody sets it to "true", this whole workflow is skipped — so merging
+    # it costs nothing, runs nothing and bills nothing. A pipeline that fails
+    # on every merge because it has nowhere to deploy teaches people to
+    # ignore a red tick, which is the one habit CI cannot survive.
+    #
+    # Repository variables, not secrets: the `secrets` context is not
+    # available in a job-level `if`, and this is not a secret anyway.
+    #
+    # The second: a red CI must not reach the box. The manual path skips that
+    # check because it deploys a sha whose CI already passed.
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      vars.STAGING_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.workflow_run.conclusion == 'success')
     permissions:
       contents: read
       packages: write

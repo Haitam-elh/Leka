@@ -167,9 +167,26 @@ thing that makes the paragraph above true.
 
 ---
 
-## What the pipeline needs to exist
+## Turning the pipeline on
 
-Set once, before the first deployment. Repository secrets:
+**The CD workflow does nothing until you say so.** It is guarded by a
+repository variable, `STAGING_ENABLED`, which does not exist yet — so the
+pipeline can be merged and sit in the repository costing nothing, running
+nothing and deploying nothing. That is deliberate: a workflow that fails on
+every merge because it has nowhere to go teaches people to ignore a red
+tick, and that is the one habit CI does not survive.
+
+When the instance exists and the secrets below are set, add the variable:
+
+    Settings → Secrets and variables → Actions → Variables
+    STAGING_ENABLED = true
+
+Remove it, or set it to anything else, and deployment stops again — which is
+also how you pause it during an incident without reverting anything.
+
+### Set once, before the first deployment
+
+Repository secrets:
 
 | Secret | What it is |
 |---|---|
