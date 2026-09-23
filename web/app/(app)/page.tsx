@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
+import { routes } from "@/config/routes";
+
 /**
  * The root sends you to the overview.
  *
@@ -8,5 +10,5 @@ import { redirect } from "next/navigation";
  * without one entry having to be "the one with no path of its own".
  */
 export default function Index() {
-  redirect("/overview");
+  redirect(routes.overview());
 }
