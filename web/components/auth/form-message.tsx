@@ -1,7 +1,12 @@
 "use client";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import type { AuthErrorCode } from "@/lib/api";
+import { ApiError } from "@/lib/api";
+import { classifyError } from "@/lib/errors";
+import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
+
+/** The shortest password the API accepts; the forms check it first. */
+export const PASSWORD_MIN = 12;
 
 /**
  * The message shown above a form after a failed — or successful — attempt.
@@ -24,44 +29,66 @@ export function FormMessage({
       role="alert"
       className={
         tone === "success"
-          ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100"
-          : "border-destructive/40 bg-destructive/5 text-destructive"
+          ? "border-state-success/30 bg-state-success-soft text-state-success"
+          : "border-state-danger/30 bg-state-danger-soft text-state-danger"
       }
     >
-      <AlertDescription>{message}</AlertDescription>
+      <AlertDescription className="text-current">{message}</AlertDescription>
     </Alert>
   );
 }
 
 /**
- * Turn an error code into a sentence a person can act on.
+ * Turn a failed request into a sentence a person can act on.
  *
- * The API already returns a usable message; this adds the cases where the
- * interface can say something more specific than the server should — the
- * server must not confirm that an account exists, the browser already knows
- * which one the user typed.
+ * From the error's CODE, never its message: the API's message is English
+ * and written for whoever debugs, and an API that could not be reached
+ * produced "Cannot reach the API at http://localhost:8000. Is it
+ * running?" — shown, until LEKA-343, on the sign-in page.
+ *
+ * Where the interface can say something more specific than the server
+ * should — the server must not confirm that an account exists, the browser
+ * already knows which address was typed — it says it here.
+ *
+ * `online` is `useOnlineStatus()`: a request that failed offline failed
+ * because of the connection, whatever it says.
  */
-export function messageFor(code: AuthErrorCode | undefined, fallback: string): string {
-  switch (code) {
-    case "invalid_credentials":
-      return "Invalid email or password.";
-    case "account_unverified":
-      return "Confirm your email address before signing in. Check your inbox — we can send another link.";
-    case "rate_limited":
-      return fallback;
-    case "token_invalid":
-    case "token_expired":
-      return "This link is no longer valid. Ask for a new one.";
-    case "password_breached":
-      return "This password appears in a known data breach. Choose one you have not used elsewhere.";
-    case "csrf_failed":
-      return "Your session expired while this page was open. Reload and try again.";
-    case undefined:
-      // Includes the unreachable-API case, whose message already names the
-      // address it tried. Passing it through beats replacing it with
-      // something vaguer.
-      return fallback;
+export function authErrorMessage(t: Dictionary, error: unknown, online: boolean): string {
+  const errors = t.auth.errors;
+
+  if (online && error instanceof ApiError) {
+    switch (error.code) {
+      case "invalid_credentials":
+        return errors.invalidCredentials;
+      case "account_unverified":
+        return errors.accountUnverified;
+      case "rate_limited":
+        return errors.rateLimited;
+      case "token_invalid":
+      case "token_expired":
+        return errors.tokenInvalid;
+      case "password_too_short":
+        return fill(errors.passwordTooShort, { min: PASSWORD_MIN });
+      case "password_breached":
+        return errors.passwordBreached;
+      case "csrf_failed":
+      case "session_expired":
+        return errors.sessionExpired;
+      case "validation_failed":
+        return errors.invalid;
+      default:
+        break;
+    }
+  }
+
+  switch (classifyError(error, online).kind) {
+    case "offline":
+      return errors.offline;
+    case "unreachable":
+      return errors.unreachable;
+    case "server":
+      return errors.server;
     default:
-      return fallback;
+      return errors.unknown;
   }
 }

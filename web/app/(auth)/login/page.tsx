@@ -5,15 +5,19 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { AuthCard } from "@/components/auth/auth-card";
-import { FormMessage, messageFor } from "@/components/auth/form-message";
+import { FormMessage, authErrorMessage } from "@/components/auth/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useOnlineStatus } from "@/lib/use-online-status";
 
 function LoginForm() {
+  const t = useDictionary();
+  const online = useOnlineStatus();
   const router = useRouter();
   // Where to go once signed in. apiFetch puts the page an expired session
   // was on here, so the person lands back where they were rather than on
@@ -46,15 +50,11 @@ function LoginForm() {
         next && next.startsWith("/") && !next.startsWith("//") ? next : routes.overview(),
       );
     } catch (caught) {
-      if (caught instanceof ApiError) {
-        // The one case where the interface can offer a way forward: the
-        // person has proved they own the account, so telling them to confirm
-        // their address reveals nothing they do not already know.
-        setUnverified(caught.code === "account_unverified");
-        setError(messageFor(caught.code, caught.message));
-      } else {
-        setError("Something went wrong. Try again.");
-      }
+      // The one case where the interface can offer a way forward: the
+      // person has proved they own the account, so telling them to confirm
+      // their address reveals nothing they do not already know.
+      setUnverified(caught instanceof ApiError && caught.code === "account_unverified");
+      setError(authErrorMessage(t, caught, online));
     } finally {
       setBusy(false);
     }
@@ -73,13 +73,13 @@ function LoginForm() {
 
   return (
     <AuthCard
-      title="Sign in"
-      description="Access your workspace."
+      title={t.auth.signInTitle}
+      description={t.auth.signInDescription}
       footer={
         <>
-          No account?{" "}
+          {t.auth.noAccount}{" "}
           <Link href="/register" className="underline underline-offset-4">
-            Create one
+            {t.auth.createOne}
           </Link>
         </>
       }
@@ -88,20 +88,17 @@ function LoginForm() {
 
       {unverified ? (
         resent ? (
-          <FormMessage
-            tone="success"
-            message="If that address needs confirming, a new link is on its way."
-          />
+          <FormMessage tone="success" message={t.auth.confirmationResent} />
         ) : (
           <Button type="button" variant="outline" className="w-full" onClick={resend}>
-            Send a new confirmation link
+            {t.auth.resendConfirmation}
           </Button>
         )
       ) : null}
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">{t.auth.email}</Label>
           <Input
             id="email"
             type="email"
@@ -114,12 +111,12 @@ function LoginForm() {
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t.auth.password}</Label>
             <Link
               href="/forgot-password"
               className="text-xs text-muted-foreground underline underline-offset-4"
             >
-              Forgot it?
+              {t.auth.forgot}
             </Link>
           </div>
           <Input
@@ -133,18 +130,18 @@ function LoginForm() {
         </div>
 
         <Button type="submit" className="w-full" disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? t.auth.signingIn : t.auth.signIn}
         </Button>
       </form>
     </AuthCard>
   );
 }
 
-
 export default function LoginPage() {
+  const t = useDictionary();
   // useSearchParams needs a Suspense boundary for static rendering.
   return (
-    <Suspense fallback={<AuthCard title="Sign in">{null}</AuthCard>}>
+    <Suspense fallback={<AuthCard title={t.auth.signInTitle}>{null}</AuthCard>}>
       <LoginForm />
     </Suspense>
   );

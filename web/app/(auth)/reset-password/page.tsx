@@ -5,23 +5,25 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { AuthCard } from "@/components/auth/auth-card";
-import { FormMessage, messageFor } from "@/components/auth/form-message";
+import { FormMessage, PASSWORD_MIN, authErrorMessage } from "@/components/auth/form-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError } from "@/lib/api";
 import { auth } from "@/lib/auth";
-
-const MINIMUM_LENGTH = 12;
+import { fill } from "@/lib/i18n/dictionaries";
+import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useOnlineStatus } from "@/lib/use-online-status";
 
 function ResetPasswordForm() {
+  const t = useDictionary();
+  const online = useOnlineStatus();
   const router = useRouter();
   const token = useSearchParams().get("token") ?? "";
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const tooShort = password.length > 0 && password.length < MINIMUM_LENGTH;
+  const tooShort = password.length > 0 && password.length < PASSWORD_MIN;
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -32,11 +34,7 @@ function ResetPasswordForm() {
       await auth.resetPassword(token, password);
       router.push("/login");
     } catch (caught) {
-      if (caught instanceof ApiError) {
-        setError(messageFor(caught.code, caught.fieldErrors?.password ?? caught.message));
-      } else {
-        setError("Something went wrong. Try again.");
-      }
+      setError(authErrorMessage(t, caught, online));
     } finally {
       setBusy(false);
     }
@@ -45,29 +43,26 @@ function ResetPasswordForm() {
   if (!token) {
     return (
       <AuthCard
-        title="Link incomplete"
-        description="This page needs the link from your email."
+        title={t.auth.linkIncompleteTitle}
+        description={t.auth.linkIncompleteDescription}
         footer={
           <Link href="/forgot-password" className="underline underline-offset-4">
-            Ask for a new link
+            {t.auth.askNewLink}
           </Link>
         }
       >
-        <p className="text-sm text-muted-foreground">
-          Open the link exactly as it appears in the message — some email
-          clients cut long links in half.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.auth.linkIncompleteBody}</p>
       </AuthCard>
     );
   }
 
   return (
     <AuthCard
-      title="Choose a new password"
-      description="Every other signed-in device will be signed out."
+      title={t.auth.resetTitle}
+      description={t.auth.resetDescription}
       footer={
         <Link href="/login" className="underline underline-offset-4">
-          Back to sign in
+          {t.auth.backToSignIn}
         </Link>
       }
     >
@@ -75,25 +70,27 @@ function ResetPasswordForm() {
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="password">New password</Label>
+          <Label htmlFor="password">{t.auth.newPassword}</Label>
           <Input
             id="password"
             type="password"
             autoComplete="new-password"
             required
-            minLength={MINIMUM_LENGTH}
+            minLength={PASSWORD_MIN}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
+            aria-describedby="password-help"
           />
           <p
-            className={`text-xs ${tooShort ? "text-destructive" : "text-muted-foreground"}`}
+            id="password-help"
+            className={`text-xs ${tooShort ? "text-state-danger" : "text-muted-foreground"}`}
           >
-            At least {MINIMUM_LENGTH} characters.
+            {fill(t.auth.passwordRuleShort, { min: PASSWORD_MIN })}
           </p>
         </div>
 
         <Button type="submit" className="w-full" disabled={busy || tooShort}>
-          {busy ? "Saving…" : "Set new password"}
+          {busy ? t.auth.saving : t.auth.setNewPassword}
         </Button>
       </form>
     </AuthCard>
@@ -101,9 +98,10 @@ function ResetPasswordForm() {
 }
 
 export default function ResetPasswordPage() {
+  const t = useDictionary();
   // useSearchParams needs a Suspense boundary for static rendering.
   return (
-    <Suspense fallback={<AuthCard title="Loading…">{null}</AuthCard>}>
+    <Suspense fallback={<AuthCard title={t.states.loading}>{null}</AuthCard>}>
       <ResetPasswordForm />
     </Suspense>
   );
