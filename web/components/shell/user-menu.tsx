@@ -1,7 +1,6 @@
 "use client";
 
 import { ChevronDown, LogOut, Settings, User } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { cn } from "cn";
 
 import {
@@ -40,7 +39,6 @@ export function UserMenu({
   collapsed?: boolean;
 }) {
   const t = useDictionary();
-  const router = useRouter();
   const user = useCurrentUser();
   const workspace = useCurrentWorkspace();
   const { locale, setLocale } = useLocale();
@@ -53,8 +51,24 @@ export function UserMenu({
   const initials = name.slice(0, 1).toUpperCase() || "?";
 
   async function signOut() {
-    await auth.logout();
-    router.push("/login");
+    try {
+      await auth.logout();
+    } catch {
+      // The call can fail for reasons that have nothing to do with the
+      // session — the API restarting, a dropped connection. Someone who
+      // asked to leave must not be left sitting inside the application
+      // because of it, so the navigation below is not conditional on the
+      // answer. If the session outlived the attempt they land on the form
+      // and sign in again, which is honest; before LEKA-337 they stayed on
+      // the page with no sign that anything had happened.
+    }
+    // A full page load rather than router.push. Two reasons, one of them
+    // not about tests: the App Router keeps rendered pages in a client
+    // cache, and a soft navigation leaves the screens of the session we
+    // just ended sitting in it, one Back away from being painted again.
+    // This drops the whole tab. It also lands on exactly /login instead of
+    // racing the /login?next= redirect lib/api.ts fires when a call 401s.
+    window.location.assign("/login");
   }
 
   return (
