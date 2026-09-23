@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { LANDING, signIn } from "./sign-in";
+
 /**
  * The information architecture, clicked through.
  *
@@ -7,17 +9,6 @@ import { expect, test, type Page } from "@playwright/test";
  * renders, inside the shell, with the right entry marked, the right trail
  * above the title and the right words in the browser tab.
  */
-
-const DEMO_EMAIL = "nora@acme.example";
-const DEMO_PASSWORD = "leka-demo-password";
-
-async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(DEMO_EMAIL);
-  await page.getByLabel("Password").fill(DEMO_PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL("http://localhost:3000/overview");
-}
 
 /** Every entry of the sidebar, with the title its page must carry. */
 const ZONES = [
@@ -115,10 +106,44 @@ test.describe("the command palette", () => {
     await expect(page.getByTestId("palette-input")).toBeFocused();
 
     await page.getByTestId("palette-input").fill("sources");
+    // Waits for the entry it is about to choose. Pressing the arrow key at
+    // a list that is still being built is how this test used to pass: the
+    // wrap-around landed on the only item there was.
+    await expect(page.getByTestId("palette-sources")).toBeVisible();
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
 
     await expect(page).toHaveURL("http://localhost:3000/sources");
+  });
+
+  test("refuses to act on a list it has not finished building", async ({ page }) => {
+    // The defect this stands over was invisible on a fast machine. The
+    // palette read "we have not asked yet" as "this person may do nothing",
+    // offered a navigation section with nothing in it, and the arrow key
+    // wrapped around to the one action that is always there — so Enter
+    // created an intention instead of going where the person asked.
+    //
+    // /workspaces/current is what carries the permissions, so holding it
+    // open makes that window wide enough to act inside of.
+    await page.route("**/api/v1/workspaces/current", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      await route.continue();
+    });
+
+    await signIn(page);
+
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.getByTestId("palette-input").fill("sources");
+    await expect(page.getByTestId("palette-loading")).toBeVisible();
+
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+
+    // Nothing to choose means nothing chosen: still where it was.
+    await expect(page).toHaveURL(LANDING);
+
+    // And the entry appears once the answer does.
+    await expect(page.getByTestId("palette-sources")).toBeVisible();
   });
 
   test("offers to create an intention with what was typed", async ({ page }) => {

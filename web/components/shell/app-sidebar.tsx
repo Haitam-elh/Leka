@@ -35,7 +35,11 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
   const active = resolveActiveNavItem(pathname);
   // Only what this person may open: a list of links that refuse is a list
   // nobody trusts. The API refuses them too — see lib/navigation/access.ts.
-  const inSidebar = visibleRoutes(usePermissions());
+  // Empty while the permissions are unknown, rather than the handful of
+  // entries that happen to need none: half a navigation looks like a
+  // product missing features, not like one still loading.
+  const permissions = usePermissions();
+  const inSidebar = permissions === null ? [] : visibleRoutes(permissions);
   const standalone = inSidebar.filter((route) => route.group === undefined);
   const grouped = (group: string): RouteEntry[] =>
     inSidebar.filter((route) => route.group === group);
