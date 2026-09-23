@@ -197,9 +197,9 @@ Repository secrets:
 `GITHUB_TOKEN` is provided by Actions and is what pushes to GHCR; nothing to
 create.
 
-And on AWS, before anything is provisioned: **a budget alarm at €20**. Not
-because the bill is expected, but because a forgotten resource is otherwise
-discovered a month later.
+On AWS, a **budget alarm** — already set, at €10. Not because a bill is
+expected, but because a forgotten resource is otherwise discovered a month
+later. It costs nothing: it is an alert, not a reservation.
 
 ---
 
