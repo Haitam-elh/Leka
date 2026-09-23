@@ -106,3 +106,90 @@ test.describe("the information architecture", () => {
     await expect(page).toHaveURL("http://localhost:3000/overview");
   });
 });
+
+test.describe("the command palette", () => {
+  test("opens with the keyboard and takes you where you asked", async ({ page }) => {
+    await signIn(page);
+
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(page.getByTestId("palette-input")).toBeFocused();
+
+    await page.getByTestId("palette-input").fill("sources");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+
+    await expect(page).toHaveURL("http://localhost:3000/sources");
+  });
+
+  test("offers to create an intention with what was typed", async ({ page }) => {
+    await signIn(page);
+
+    await page.getByTestId("open-search").click();
+    await page.getByTestId("palette-input").fill("pourquoi le paiement est lent ?");
+
+    await expect(page.getByTestId("palette-create-intention")).toContainText(
+      "pourquoi le paiement est lent ?",
+    );
+    // It offers the workflow; it never answers in the palette.
+    await expect(page.getByTestId("palette-no-results")).toBeVisible();
+
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/intentions\/new\?q=/);
+  });
+
+  test("closes on Escape and gives the keyboard back", async ({ page }) => {
+    await signIn(page);
+
+    await page.getByTestId("open-search").click();
+    await expect(page.getByTestId("palette-input")).toBeVisible();
+
+    await page.keyboard.press("Escape");
+
+    await expect(page.getByTestId("palette-input")).toBeHidden();
+    await expect(page.getByTestId("open-search")).toBeFocused();
+  });
+});
+
+test.describe("what a member may see", () => {
+  /**
+   * The seed has one account, an owner. Rather than inventing a second one
+   * through a verification e-mail, the API's answer is replaced: this test
+   * is about what the interface does with a permission list, and that is
+   * exactly what is being substituted.
+   */
+  async function asAMember(page: Page) {
+    await page.route("**/api/v1/workspaces/current", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          workspace: { id: "w1", name: "Acme Corp", slug: "acme", status: "active" },
+          role: "member",
+          permissions: [
+            "workspace:read",
+            "member:read",
+            "source:read",
+            "intention:read",
+            "intention:create",
+          ],
+        }),
+      });
+    });
+  }
+
+  test("hides billing, and refuses it politely when typed by hand", async ({ page }) => {
+    await signIn(page);
+    await asAMember(page);
+    await page.goto("/overview");
+
+    await expect(page.getByTestId("nav-billing")).toBeHidden();
+    await expect(page.getByTestId("nav-environment")).toBeVisible();
+
+    await page.goto("/billing");
+
+    // In the shell, with a way out: not a 404, and not a silent redirect.
+    await expect(page.getByRole("navigation", { name: "Navigation principale" })).toBeVisible();
+    await expect(page.getByTestId("route-state-forbidden")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Retour à la vue d'ensemble" })).toBeVisible();
+  });
+});
