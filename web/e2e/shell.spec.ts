@@ -1,4 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+
+import { signIn } from "./sign-in";
 
 /**
  * The shell, in a real browser, at the sizes it claims to support.
@@ -11,23 +13,12 @@ import { expect, test, type Page } from "@playwright/test";
  * journey beside it.
  */
 
-const DEMO_EMAIL = "nora@acme.example";
-const DEMO_PASSWORD = "leka-demo-password";
-
 /** The viewports the ticket supports: laptop, small desktop, desktop. */
 const SIZES = [
   { name: "1440", width: 1440, height: 900, sidebar: "visible" },
   { name: "1280", width: 1280, height: 800, sidebar: "visible" },
   { name: "1024", width: 1024, height: 768, sidebar: "visible" },
 ] as const;
-
-async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(DEMO_EMAIL);
-  await page.getByLabel("Password").fill(DEMO_PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL("http://localhost:3000/overview");
-}
 
 test.describe("the shell", () => {
   test("is the same frame on every area of the product", async ({ page }) => {

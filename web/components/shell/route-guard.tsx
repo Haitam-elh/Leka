@@ -23,6 +23,12 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   const permissions = usePermissions();
   const match = matchRoute(pathname);
 
+  // The shell only renders its children once the session is known, so this
+  // is unreachable today. It is written out rather than asserted away: the
+  // day someone moves this guard, the answer must be "show nothing", never
+  // "assume they may".
+  if (permissions === null) return null;
+
   // An unknown address is the catch-all page's business, not this one's.
   if (match !== undefined && !canOpen(match.route, permissions)) {
     return (
