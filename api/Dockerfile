@@ -73,6 +73,9 @@ EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8000/api/v1/health || exit 1
 
-# The API. The worker overrides this with:
-#   rq worker --url "$LEKA_REDIS_URL" leka:high leka leka:low
+# The API. The other processes of the same image override it — see
+# deploy/docker-compose.staging.yml:
+#   python -m leka.db.migrate           once, before anything starts
+#   python -m leka.platform.worker      runs the jobs
+#   python -m leka.platform.scheduler   puts the tick and the sweeps on the queue
 CMD ["uvicorn", "leka.main:app", "--host", "0.0.0.0", "--port", "8000"]

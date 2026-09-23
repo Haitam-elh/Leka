@@ -149,6 +149,7 @@ async def _execute(
     try:
         target = _resolve(job)
     except (ImportError, AttributeError, TypeError, ValueError) as error:
+        _report(error, run_id=run_id, job=job)
         return await _record_failure(
             run_id, f"cannot resolve job {job!r}: {error}", factory, permanent=True
         )
@@ -161,6 +162,7 @@ async def _execute(
     except Exception as error:
         error_text = f"{type(error).__name__}: {error}"
         logger.error("job_failed", error=error_text, exc_info=True)
+        _report(error, run_id=run_id, job=job)
     finally:
         stop.set()
         await renewal
@@ -176,6 +178,26 @@ async def _execute(
         return "lost"
     logger.info("job_succeeded")
     return "succeeded"
+
+
+def _report(error: BaseException, *, run_id: uuid.UUID, job: str) -> None:
+    """Hand a job's exception to Sentry, when this process has it configured.
+
+    Not automatic, and it looks as if it should be. The exception never
+    reaches RQ — this module catches it to record the attempt — so Sentry's
+    RQ integration never sees it. And a log line is not an event: structlog
+    writes to stdout, not through the `logging` module Sentry listens to.
+    Without this call, a job could fail on every retry for a week and the
+    only trace would be `job_runs.last_error`.
+
+    A no-op when Sentry was never initialised: every test, every laptop. The
+    event is scrubbed by the before_send hook leka.platform.monitoring
+    installs, not here — this layer cannot import platform, and has no need
+    to see a secret to have one removed.
+    """
+    import sentry_sdk
+
+    sentry_sdk.capture_exception(error, tags={"job": job, "run_id": str(run_id)})
 
 
 async def _record_failure(

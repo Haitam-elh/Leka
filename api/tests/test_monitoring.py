@@ -14,9 +14,11 @@ dictionary that would pass whatever the implementation did.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
+import sentry_sdk
 from pydantic import ValidationError
 
 from leka.core.config import Settings
@@ -35,6 +37,15 @@ VALID: dict[str, Any] = {
     "secret_key": SIGNING_KEY,
     "encryption_keys": ["MN3nrX7VP5Mj0SRB4G-pIPOrvlCyT-CQoBZvsQFYHss="],
 }
+
+
+@pytest.fixture(autouse=True)
+def _no_live_client_afterwards() -> Iterator[None]:
+    """Some tests here start Sentry for real, with a DSN that exists only in
+    this file. Left running, it would try to send every deliberate failure
+    in the rest of the suite over the network — from CI, to sentry.io."""
+    yield
+    sentry_sdk.init()
 
 
 @pytest.fixture
