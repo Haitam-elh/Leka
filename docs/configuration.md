@@ -126,6 +126,26 @@ this is only what each variable is for. `leka/core/settings/background.py`.
 | `LEKA_JOB_STALE_ENQUEUED_SECONDS` | `3600` | A run the queue never picked up (60–86400) is offered again |
 | `LEKA_RECONCILE_DELETES` | `false` | Whether the scheduled orphan sweep may DELETE. Off means it only reports |
 
+## Monitoring
+
+Errors, and nothing else. No metrics backend and no dashboard: the SQL in
+docs/background.md is the dashboard, by decision, and a second vendor to
+configure, pay and audit buys nothing on a product with no traffic yet.
+`leka/core/settings/monitoring.py`, wired up in `leka/platform/monitoring.py`.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LEKA_SENTRY_DSN` | — | The Sentry project. Empty means monitoring is off, which is the default everywhere but staging and production |
+| `LEKA_SENTRY_TRACES_SAMPLE_RATE` | `0.0` | Performance tracing, 0.0–1.0. Off: it is billed per span and nobody reads it yet |
+| `LEKA_SENTRY_SEND_DEFAULT_PII` | `false` | Typed so it cannot be turned on. PII here means a customer's e-mail address on a third party's servers |
+| `LEKA_RELEASE` | — | The commit sha this container was built from. Set by the deployment pipeline; it is what makes an error name the commit that caused it |
+
+Events are scrubbed before they leave, with the same masker that protects the
+logs — see `leka.core.logging.scrub_secrets` and
+`tests/test_monitoring.py`. Sentry sends the local variables of every frame
+in a traceback, and `settings` is a local variable in more places than anyone
+can enumerate.
+
 ## The secrets: who reads them, how often they rotate
 
 Nothing else may read these. The rule is enforced on every pull request by
@@ -145,6 +165,7 @@ are in `docs/runbook.md`.
 | `LEKA_ANTHROPIC_API_KEY` | `leka.capabilities` | 90 days |
 | `LEKA_MISTRAL_API_KEY` | `leka.capabilities` | 90 days |
 | `LEKA_S3_SECRET_ACCESS_KEY` | `leka.platform.storage` | 90 days |
+| `LEKA_SENTRY_DSN` | `leka.platform.monitoring` | 365 days |
 
 A connection URL counts as a secret because it carries a password. 90 days
 for keys another company issued and sees used — that is AWS's own figure for

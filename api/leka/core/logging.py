@@ -52,6 +52,11 @@ MASK = "[redacted]"
 # secret is longer than this anyway.
 MIN_MASKED_LENGTH = 8
 
+# How deep `scrub` walks a nested structure. Sentry nests an exception's
+# frames and their local variables about six levels down; ten leaves room
+# and still bounds a structure that refers to itself.
+MAX_SCRUB_DEPTH = 10
+
 
 def redact_secrets(
     logger: object, method_name: str, event_dict: MutableMapping[str, Any]
@@ -101,6 +106,31 @@ class SecretValueMasker:
                 event_dict[key] = self._mask(event_dict[key])
         return event_dict
 
+    def scrub(self, value: object) -> object:
+        """Mask every secret anywhere inside a nested structure.
+
+        The processor above only walks one level, because a log line is
+        flat. A Sentry event is not: the value that gets someone fired sits
+        in `exception.values[0].stacktrace.frames[3].vars["settings"]`, four
+        levels down. This walks the whole thing.
+
+        Depth is bounded. An event with a cycle in it would otherwise take
+        the process down while reporting the error that caused it, which is
+        the worst possible time.
+        """
+        return self._scrub(value, depth=0)
+
+    def _scrub(self, value: object, *, depth: int) -> object:
+        if not self._secrets or depth > MAX_SCRUB_DEPTH:
+            return value
+        if isinstance(value, dict):
+            return {key: self._scrub(item, depth=depth + 1) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._scrub(item, depth=depth + 1) for item in value]
+        if isinstance(value, tuple):
+            return tuple(self._scrub(item, depth=depth + 1) for item in value)
+        return self._mask(value)
+
     def _mask(self, value: object) -> object:
         if value is None or isinstance(value, bool | int | float):
             return value
@@ -112,6 +142,25 @@ class SecretValueMasker:
         for secret in self._secrets:
             text = text.replace(secret, MASK)
         return text
+
+
+_masker: SecretValueMasker = SecretValueMasker(())
+
+
+def scrub_secrets(value: object) -> object:
+    """Remove every configured secret from anything, at any depth.
+
+    The public way for another module to get a value cleaned without
+    reading the secrets itself. `tests/test_secret_access.py` allows exactly
+    one reader of `settings.secret_values`, which is this module — so
+    leka.platform.monitoring hands its Sentry events here rather than
+    building a second copy of the list and a second place to forget one.
+
+    Returns the value unchanged until `configure_logging` has run. That is
+    the honest answer at import time and during a test that never configures
+    logging: nothing is configured, so nothing is known to be secret.
+    """
+    return _masker.scrub(value)
 
 
 def configure_logging(settings: Settings) -> None:
@@ -139,9 +188,23 @@ def configure_logging(settings: Settings) -> None:
             structlog.processors.format_exc_info,
             # Last before rendering: it must see the traceback as text, which
             # format_exc_info has only just produced.
-            SecretValueMasker(value.get_secret_value() for value in settings.secret_values),
+            _remember_masker(
+                SecretValueMasker(value.get_secret_value() for value in settings.secret_values)
+            ),
             renderer,
         ],
         wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, settings.log_level)),
         cache_logger_on_first_use=True,
     )
+
+
+def _remember_masker(masker: SecretValueMasker) -> SecretValueMasker:
+    """Keep the processor's masker reachable, and hand it straight back.
+
+    Written as one expression inside the processor list so the masker used
+    for logs and the masker used for Sentry cannot become two objects built
+    from two readings of the settings.
+    """
+    global _masker
+    _masker = masker
+    return masker
