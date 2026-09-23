@@ -168,7 +168,7 @@ Two rules that are not negotiable:
 | A value is wrong | Inline, on the field. |
 | The submission was refused as a whole | `FormAlert`, at the top of the form. |
 | An asynchronous action finished | A toast. |
-| The whole page is in a state | `RouteState` (LEKA-338). |
+| The whole page is in a state | `RouteState` (LEKA-338) or `ErrorState` — see [`system-states.md`](system-states.md). |
 
 Every message says what happened **and what to do next**: "Impossible
 d'enregistrer. Vérifiez votre connexion puis réessayez." No status codes, no

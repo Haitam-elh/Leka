@@ -85,8 +85,9 @@ that is out of LEKA-337's scope.
 
 ## Accessibility, and what is checked
 
-`<header>`, `<nav aria-label="Main navigation">` and `<main id="main-content">`
-are real landmarks. The skip link is first in the tab order and moves focus
+`<header>`, the sidebar's `<aside>`, `<nav aria-label="Navigation principale">`
+and `<main id="main-content">` are real landmarks, each named from the
+dictionary. The skip link is first in the tab order and moves focus
 into `<main>`. The current entry carries `aria-current="page"` — one entry,
 never two. The fold button carries `aria-expanded` and `aria-controls`. On
 the rail, labels stay in the accessibility tree and appear as tooltips. The
@@ -101,8 +102,9 @@ reads the tokens out of globals.css and measures every text pair against
 WCAG AA — three colours taken from the mockups failed it, and were darkened
 by the least that passes.
 
-TODO: `@axe-core/playwright` for an automated contrast and landmark audit.
-It was left out of LEKA-337 to avoid adding a dependency for one assertion.
+The automated audit it once listed as a TODO exists since LEKA-343: axe,
+WCAG 2.1 A/AA plus best practices, on every core screen and every state —
+see [`system-states.md`](system-states.md#accessibility).
 
 ## Where the real data plugs in
 
@@ -116,8 +118,9 @@ It was left out of LEKA-337 to avoid adding a dependency for one assertion.
   produce them own them: LEKA-338 and after.
 - **The global search and its ⌘K palette** are LEKA-338. The header takes a
   `search` slot; until then it shows an inert picture of a search field.
-- **Loading, error and offline states** beyond what the shell needs are
-  LEKA-343.
+- **Loading, error and offline states** are LEKA-343's — see
+  [`system-states.md`](system-states.md). The shell draws them while the
+  session is checked, and offers "Réessayer" when it cannot be.
 - **The design system** is LEKA-339. The colours, widths and radii are CSS
   variables in `app/globals.css`, sampled from the mockups; no component in
   `components/shell/` writes a colour of its own.
