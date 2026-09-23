@@ -57,6 +57,9 @@ export function SelectField<TFieldValues extends FieldValues, TName extends Path
           value={(field.value as string | undefined) ?? ""}
           onValueChange={field.onChange}
           disabled={disabled}
+          // Without the items, the closed select prints the stored value —
+          // "7d", "production" — rather than what the person chose from.
+          items={options}
         >
           <SelectTrigger
             className="w-full"
