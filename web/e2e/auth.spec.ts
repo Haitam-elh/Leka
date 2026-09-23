@@ -80,7 +80,9 @@ test("signing out lands on the form even when the API call fails", async ({ page
   await page.getByLabel("Email").fill(DEMO_EMAIL);
   await page.getByLabel("Password").fill(DEMO_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL("http://localhost:3000/");
+  // Waits for the shell rather than for a URL: this test is about leaving,
+  // and where signing in lands is someone else's decision to change.
+  await expect(page.getByTestId("user-menu").last()).toBeVisible();
 
   await page.route("**/auth/logout", (route) => route.abort());
 
