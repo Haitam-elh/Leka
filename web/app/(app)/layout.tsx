@@ -7,6 +7,7 @@ import { RouteGuard } from "@/components/shell/route-guard";
 import { useNavBadges } from "@/lib/nav-badges";
 import { ShellProvider } from "@/components/shell/shell-provider";
 import { Toaster } from "@/components/ui/toast";
+import { useDictionary } from "@/lib/i18n/locale-provider";
 
 /**
  * Everything behind the sign-in page.
@@ -22,13 +23,14 @@ import { Toaster } from "@/components/ui/toast";
  */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const badges = useNavBadges();
+  const t = useDictionary();
 
   return (
     <ShellProvider>
       {/* Both mounted once, here, for the same reason: a second toast
           viewport competes for the same corner, and a second confirm
           dialog means two focus traps fighting over the keyboard. */}
-      <Toaster />
+      <Toaster closeLabel={t.interactions.dismiss} />
       <DocumentTitle />
       {/* TODO LEKA-390 for the counts, and notifications have no ticket yet:
           the shell is handed numbers rather than asking for them. */}

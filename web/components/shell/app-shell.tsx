@@ -6,7 +6,10 @@ import { AppHeader } from "@/components/shell/app-header";
 import { AppSidebar } from "@/components/shell/app-sidebar";
 import { CommandPalette, useCommandShortcut } from "@/components/shell/command-palette";
 import { SkipLink } from "@/components/shell/skip-link";
-import { useShell } from "@/components/shell/shell-provider";
+import { useShell, useShellRetry } from "@/components/shell/shell-provider";
+import { ErrorState } from "@/components/states/error-state";
+import { LoadingState } from "@/components/states/loading-state";
+import { OfflineBanner } from "@/components/states/offline-banner";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import type { BadgeKey } from "@/config/routes";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -45,6 +48,7 @@ export function AppShell({
 }) {
   const t = useDictionary();
   const state = useShell();
+  const retry = useShellRetry();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -94,8 +98,12 @@ export function AppShell({
     <div className="flex h-screen overflow-hidden bg-shell-canvas">
       <SkipLink />
 
+      {/* Named: a page with a side panel of its own used to have two
+          unnamed "complementary" regions, and someone listing landmarks
+          could not tell the sidebar from the panel. */}
       <aside
         id="app-sidebar"
+        aria-label={t.shell.sidebar}
         className={cn(
           "hidden shrink-0 border-r border-shell-line lg:block",
           collapsed ? "w-rail" : "w-sidebar",
@@ -131,31 +139,29 @@ export function AppShell({
           finalFocus={searchTrigger}
         />
 
-        {/* tabIndex={-1} so the skip link can actually move focus here. */}
-        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto outline-none">
-          {state.status === "loading" && <Centred>{t.shell.loading}</Centred>}
-          {state.status === "unreachable" && (
-            <Centred>
-              <p className="font-medium text-destructive">{t.shell.unreachableTitle}</p>
-              <p className="mt-2 text-sm text-shell-muted">{state.detail}</p>
-            </Centred>
-          )}
+        {/* tabIndex={-1} so the skip link can actually move focus here.
+            aria-busy while the session is being asked for: assistive
+            technology waits rather than reading a half-drawn page. */}
+        <main
+          id="main-content"
+          tabIndex={-1}
+          aria-busy={state.status === "loading" || undefined}
+          className="flex-1 overflow-y-auto outline-none"
+        >
+          {/* First in the content and pinned to its top: above what is on
+              screen rather than over it — that stays readable, it just may
+              be out of date — and inside the main landmark, where a screen
+              reader navigating by region will find it. */}
+          <div className="sticky top-0 z-10">
+            <OfflineBanner />
+          </div>
+          {state.status === "loading" && <LoadingState />}
           {state.status === "failed" && (
-            <Centred>
-              <p className="font-medium text-destructive">{state.detail}</p>
-            </Centred>
+            <ErrorState error={state.error} onRetry={retry} headingLevel={1} />
           )}
           {state.status === "ready" && children}
         </main>
       </div>
-    </div>
-  );
-}
-
-function Centred({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex h-full items-center justify-center px-4 text-center text-sm text-shell-muted">
-      <div className="max-w-md">{children}</div>
     </div>
   );
 }
