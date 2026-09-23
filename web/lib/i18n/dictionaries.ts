@@ -121,6 +121,49 @@ const fr = {
     searchHint: "LEKA répond aux questions dans une intention, pas ici.",
     close: "Fermer",
   },
+  /**
+   * What a form says, whatever the form is for.
+   *
+   * Optional is marked rather than required: on a screen where most fields
+   * must be filled, an asterisk on each of them is noise, and the one that
+   * matters is the exception.
+   */
+  forms: {
+    optional: "(optionnel)",
+    charCount: "{count} / {max}",
+    save: "Enregistrer",
+    saving: "Enregistrement…",
+    cancel: "Annuler",
+    discard: "Annuler les modifications",
+    /** Only shown past three errors, so the plural is always right. */
+    errorSummaryTitle: "{count} champs demandent une correction",
+    submitFailed: "Impossible d'enregistrer. Vérifiez votre connexion puis réessayez.",
+    unsavedTitle: "Quitter sans enregistrer ?",
+    unsavedBody: "Les modifications de ce formulaire seront perdues.",
+    unsavedLeave: "Quitter sans enregistrer",
+    unsavedStay: "Continuer l'édition",
+  },
+  /**
+   * Validation messages.
+   *
+   * A component never writes one. The zod error map in lib/validation emits
+   * a key and its numbers, and the field resolves it here — which is what
+   * makes the same rule read the same way on every screen, in both
+   * languages.
+   */
+  validation: {
+    required: "Ce champ est obligatoire.",
+    tooShortString: "Au moins {min} caractères.",
+    tooLongString: "{max} caractères au maximum.",
+    tooFewItems: "Choisissez au moins {min} éléments.",
+    tooManyItems: "{max} éléments au maximum.",
+    tooSmallNumber: "La valeur minimale est {min}.",
+    tooBigNumber: "La valeur maximale est {max}.",
+    email: "Indiquez une adresse e-mail valide.",
+    url: "Indiquez une adresse web valide.",
+    invalidFormat: "Ce format n'est pas reconnu.",
+    invalid: "Cette valeur n'est pas valide.",
+  },
   languages: {
     fr: "Français",
     en: "English",
@@ -230,6 +273,33 @@ const en: Dictionary = {
     noResults: "No results.",
     searchHint: "LEKA answers questions inside an intention, not here.",
     close: "Close",
+  },
+  forms: {
+    optional: "(optional)",
+    charCount: "{count} / {max}",
+    save: "Save",
+    saving: "Saving…",
+    cancel: "Cancel",
+    discard: "Discard changes",
+    errorSummaryTitle: "{count} fields need correcting",
+    submitFailed: "Could not save. Check your connection and try again.",
+    unsavedTitle: "Leave without saving?",
+    unsavedBody: "The changes in this form will be lost.",
+    unsavedLeave: "Leave without saving",
+    unsavedStay: "Keep editing",
+  },
+  validation: {
+    required: "This field is required.",
+    tooShortString: "At least {min} characters.",
+    tooLongString: "{max} characters at most.",
+    tooFewItems: "Choose at least {min} items.",
+    tooManyItems: "{max} items at most.",
+    tooSmallNumber: "The minimum is {min}.",
+    tooBigNumber: "The maximum is {max}.",
+    email: "Enter a valid email address.",
+    url: "Enter a valid web address.",
+    invalidFormat: "That format is not recognised.",
+    invalid: "That value is not valid.",
   },
   languages: {
     fr: "Français",
