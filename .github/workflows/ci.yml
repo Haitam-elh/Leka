@@ -93,6 +93,19 @@ jobs:
       - name: Alembic — migrations apply to an empty database
         run: alembic upgrade head
 
+      - name: Alembic — every migration's downgrade actually runs
+        # Reversibility was a promise nothing checked: three alembic calls
+        # existed before this one, two "upgrade head" and a "check", zero
+        # "downgrade". A migration whose downgrade() referenced a constraint
+        # name that did not exist at runtime (LEKA-336) merged and stayed
+        # broken for two days because nothing ever walked the path back down.
+        # DDL is transactional per step, so a broken downgrade here fails
+        # loudly and leaves the database exactly as upgrade head left it —
+        # this never risks a real one, only the throwaway CI database.
+        run: |
+          alembic downgrade base
+          alembic upgrade head
+
       - name: Alembic — models and migrations agree
         # Catches the classic mistake: a column changed on the model with no
         # migration written for it.

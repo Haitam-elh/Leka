@@ -141,7 +141,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("invitations")
-    op.drop_constraint("ck_workspaces_status", "workspaces", type_="check")
+    op.drop_constraint(op.f("ck_workspaces_status"), "workspaces", type_="check")
     op.drop_column("workspaces", "settings")
     op.drop_column("workspaces", "deletion_requested_at")
     op.drop_column("workspaces", "suspended_at")
