@@ -125,12 +125,18 @@ test.describe("the command palette", () => {
     //
     // /workspaces/current is what carries the permissions, so holding it
     // open makes that window wide enough to act inside of.
+    // Sign in first, with nothing slowed down: signIn waits for the shell to
+    // be usable, and it cannot do that while the call carrying the
+    // permissions is being held open. The delay goes on afterwards, and
+    // reloading the page puts the shell back into the window this test is
+    // about.
+    await signIn(page);
+
     await page.route("**/api/v1/workspaces/current", async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 3_000));
       await route.continue();
     });
-
-    await signIn(page);
+    await page.goto("/overview");
 
     await page.keyboard.press("ControlOrMeta+k");
     await page.getByTestId("palette-input").fill("sources");
