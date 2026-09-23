@@ -7,7 +7,7 @@
 ## The decision
 
 Staging runs on **one EC2 instance in `eu-central-1`**, with Docker Compose:
-the API, the RQ worker, Redis and Caddy. PostgreSQL stays on **Neon**, object
+the API, the RQ worker and its scheduler, Redis and Caddy. PostgreSQL stays on **Neon**, object
 storage is **Amazon S3**, errors go to **Sentry** on its EU region. The image
 is built by GitHub Actions and kept in **GHCR**, tagged with the commit sha.
 
@@ -53,7 +53,7 @@ here is a work queue, not a database.
 
 `docs/architecture.md` sets the constraint: two developers, part time. The
 question for every piece of infrastructure is not "does it scale" but "who
-looks after it at 9pm". One instance, four containers and a compose file is a
+looks after it at 9pm". One instance, a handful of containers and a compose file is a
 thing either of us can rebuild from scratch in ten minutes.
 
 ### Not a database on the box

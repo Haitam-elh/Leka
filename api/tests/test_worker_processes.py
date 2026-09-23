@@ -21,6 +21,7 @@ from typing import Any
 
 import pytest
 import sentry_sdk
+import yaml
 from pydantic import SecretStr
 from sentry_sdk.envelope import Envelope
 from sentry_sdk.transport import Transport
@@ -30,6 +31,7 @@ from leka.background import JobQueue, worker_connection
 from leka.background.runner import run_job
 from leka.core.config import settings
 from leka.core.logging import MASK, configure_logging
+from leka.core.settings.paths import REPO_ROOT
 from leka.platform import scheduler, worker
 from leka.platform.monitoring import configure_monitoring
 from tests import background_jobs
@@ -232,3 +234,18 @@ def test_the_scheduler_loads_the_real_schedule() -> None:
 
     # The maintenance tick, plus every entry of the schedule table.
     assert len(cron.get_jobs()) == 1 + len(SCHEDULE)
+
+
+# ── Staging runs all of it ────────────────────────────────────────────────
+
+
+def test_staging_runs_every_process_the_background_loop_needs() -> None:
+    """Staging once shipped a worker and no scheduler, and nothing failed:
+    the worker simply waited for work that nothing would ever dispatch."""
+    compose = yaml.safe_load(
+        (REPO_ROOT / "deploy" / "docker-compose.staging.yml").read_text(encoding="utf-8")
+    )
+    commands = {name: service.get("command") for name, service in compose["services"].items()}
+
+    assert commands["worker"] == ["python", "-m", "leka.platform.worker"]
+    assert commands["scheduler"] == ["python", "-m", "leka.platform.scheduler"]

@@ -9,13 +9,13 @@ on:
     workflows: [CI]
     types: [completed]
     branches: [main]
-  # Rollback, and redeploying a known-good commit. `release` is a sha that
-  # has already been built; the image is already in the registry, so this
-  # path never rebuilds and cannot produce something different.
+  # Rollback, and redeploying a known-good commit. An image that already
+  # exists in the registry is deployed as it is, never rebuilt: what goes
+  # out is byte for byte what went out the first time.
   workflow_dispatch:
     inputs:
       release:
-        description: The commit sha to deploy. Leave empty for the current HEAD of main.
+        description: The commit to deploy — a sha, full or short. Leave empty for the current HEAD of main.
         required: false
         type: string
 
@@ -24,10 +24,6 @@ concurrency:
   # the first while it is still pulling.
   group: cd-staging
   cancel-in-progress: false
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE: ${{ github.repository }}/api
 
 jobs:
   build:
@@ -44,46 +40,75 @@ jobs:
     # Repository variables, not secrets: the `secrets` context is not
     # available in a job-level `if`, and this is not a secret anyway.
     #
-    # The second: a red CI must not reach the box. The manual path skips that
-    # check because it deploys a sha whose CI already passed.
+    # The second: a red CI must not reach the box, and neither must a CI run
+    # that was not a push to main — a pull request from a branch that happens
+    # to be called main passes the `branches` filter above. The manual path
+    # skips both because it deploys a commit whose CI already passed.
     if: >-
       vars.STAGING_ENABLED == 'true' &&
       (github.event_name == 'workflow_dispatch' ||
-       github.event.workflow_run.conclusion == 'success')
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push'))
     permissions:
       contents: read
       packages: write
     outputs:
-      release: ${{ steps.release.outputs.sha }}
+      image: ${{ steps.what.outputs.image }}
+      release: ${{ steps.what.outputs.release }}
 
     steps:
-      - name: Work out what is being deployed
-        id: release
-        run: |
-          SHA="${{ inputs.release || github.event.workflow_run.head_sha || github.sha }}"
-          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
-          echo "Deploying ${SHA}"
-
       - uses: actions/checkout@v4
         with:
-          ref: ${{ steps.release.outputs.sha }}
+          # The input goes through the checkout, never into a shell: a
+          # string typed into a form must not become a command.
+          ref: ${{ inputs.release || github.event.workflow_run.head_sha || github.sha }}
 
-      - uses: docker/setup-buildx-action@v3
+      - name: Work out what is being deployed
+        id: what
+        run: |
+          # The full sha, whatever was typed. A short one would tag a second
+          # copy of an image that already exists under the long one.
+          RELEASE="$(git rev-parse HEAD)"
+          # An image reference must be lower case; the repository is
+          # Haitam-elh/Leka, and `ghcr.io/Haitam-elh/...` is refused outright.
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/api"
+          echo "release=${RELEASE}" >> "$GITHUB_OUTPUT"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "Deploying ${IMAGE}:${RELEASE}"
 
       - uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Is it already built?
+        id: existing
+        run: |
+          if docker buildx imagetools inspect "${{ steps.what.outputs.image }}:${{ steps.what.outputs.release }}" > /dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "Already in the registry: deploying it as it is."
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.existing.outputs.found != 'true'
+
       - name: Build and push
+        if: steps.existing.outputs.found != 'true'
         uses: docker/build-push-action@v6
         with:
           context: api
           push: true
           # The sha and nothing else. No `latest`: a moving tag means
           # "what is running?" has no answer and rollback has no target.
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ steps.release.outputs.sha }}
+          tags: ${{ steps.what.outputs.image }}:${{ steps.what.outputs.release }}
+          # Links the package to this repository, which is what lets the
+          # deploy job's token pull it, and says which commit it is.
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.what.outputs.release }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -92,6 +117,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     environment: staging
+    permissions:
+      contents: read
+      # The box pulls with this job's token.
+      packages: read
 
     steps:
       - uses: actions/checkout@v4
@@ -102,80 +131,24 @@ jobs:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
           key: ${{ secrets.STAGING_SSH_KEY }}
-          source: deploy/docker-compose.staging.yml,deploy/Caddyfile
+          source: deploy/docker-compose.staging.yml,deploy/Caddyfile,deploy/deploy.sh
           target: /opt/leka
           strip_components: 1
 
       - name: Deploy, verify, and roll back if it did not come up
         uses: appleboy/ssh-action@v1.2.0
         env:
+          IMAGE: ${{ needs.build.outputs.image }}
           RELEASE: ${{ needs.build.outputs.release }}
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
           key: ${{ secrets.STAGING_SSH_KEY }}
-          envs: RELEASE
-          script_stop: true
+          envs: IMAGE,RELEASE
+          # Everything that decides anything is in deploy.sh, which is what
+          # the local rehearsal runs. See docs/deployment.md.
           script: |
-            set -euo pipefail
-            cd /opt/leka
-
-            # What is running now, so there is something to go back to. On
-            # the very first deployment there is nothing, and the rollback
-            # below is skipped rather than attempted against an empty value.
-            PREVIOUS="$(grep -E '^LEKA_RELEASE=' staging.env | cut -d= -f2- || true)"
-            echo "Previous: ${PREVIOUS:-none}   New: ${RELEASE}"
-
+            set -eu
             echo "${{ secrets.GITHUB_TOKEN }}" \
-              | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            # Pulled before anything is stopped: a pull that fails must not
-            # leave the box with half a deployment.
-            docker pull "ghcr.io/${{ github.repository }}/api:${RELEASE}"
-
-            sed -i "s|^LEKA_RELEASE=.*|LEKA_RELEASE=${RELEASE}|" staging.env
-            docker compose -f docker-compose.staging.yml --env-file staging.env up -d
-
-            # The verification. Ninety seconds is migrations plus a cold
-            # start plus room; past that it is not slow, it is broken.
-            ok=0
-            for _ in $(seq 1 45); do
-              if curl -fsS --max-time 5 http://127.0.0.1/api/v1/health > /dev/null; then
-                ok=1; break
-              fi
-              sleep 2
-            done
-
-            if [ "$ok" = "1" ]; then
-              echo "Healthy on ${RELEASE}"
-              docker image prune -f --filter "until=168h" || true
-              exit 0
-            fi
-
-            echo "::error::${RELEASE} never became healthy."
-            docker compose -f docker-compose.staging.yml --env-file staging.env logs --tail=80 api || true
-
-            if [ -z "${PREVIOUS}" ]; then
-              echo "::error::No previous release to go back to. The box is down."
-              exit 1
-            fi
-
-            # The point of the whole job: a failed deployment does not stay
-            # deployed. This is the same command the runbook documents for a
-            # manual rollback, run automatically.
-            echo "Rolling back to ${PREVIOUS}"
-            sed -i "s|^LEKA_RELEASE=.*|LEKA_RELEASE=${PREVIOUS}|" staging.env
-            docker compose -f docker-compose.staging.yml --env-file staging.env up -d
-
-            for _ in $(seq 1 45); do
-              if curl -fsS --max-time 5 http://127.0.0.1/api/v1/health > /dev/null; then
-                echo "Back on ${PREVIOUS}."
-                # Still a failure: the deployment did not happen, and a
-                # green tick here would say it did.
-                exit 1
-              fi
-              sleep 2
-            done
-
-            echo "::error::Rollback to ${PREVIOUS} did not come up either."
-            exit 1
+              | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            bash /opt/leka/deploy.sh "$IMAGE" "$RELEASE"

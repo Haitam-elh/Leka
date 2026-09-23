@@ -4,8 +4,8 @@
 # obeys: two developers, part time, no dedicated operator. Everything that
 # needs someone to look after it — a cluster, a service mesh, a managed
 # cache — is a recurring cost in attention that this team does not have. One
-# EC2 instance running four containers is a thing you can hold in your head
-# and rebuild from this file in ten minutes.
+# EC2 instance running a handful of containers is a thing you can hold in
+# your head and rebuild from this file in ten minutes.
 #
 # WHY NOT App Runner, which was the other candidate: AWS closed it to new
 # accounts. It also only runs HTTP services, and the worker is an RQ process
@@ -19,15 +19,32 @@
 #   - The web application. Scoped out of this pass; see the ADR for what it
 #     needs (`output: "standalone"` in next.config.ts) and why it is next.
 #
+# Deployed by deploy.sh, which writes LEKA_IMAGE and LEKA_RELEASE into
+# staging.env. By hand:
+#
 #   docker compose -f docker-compose.staging.yml --env-file staging.env up -d
 
 name: leka-staging
 
-x-app: &app
+x-image: &image
   # Never `latest`. A tag that moves means "what is running?" has no answer,
-  # and rollback has nothing to roll back to. The pipeline writes the commit
-  # sha here; see .github/workflows/cd.yml.
-  image: ghcr.io/${GITHUB_REPOSITORY:-haitam-elh/leka}/api:${LEKA_RELEASE:?set LEKA_RELEASE to a commit sha}
+  # and rollback has nothing to roll back to. deploy.sh writes both values.
+  #
+  # The repository as one variable, lower case, rather than built from
+  # GITHUB_REPOSITORY: an image reference must be lower case, the repository
+  # is Haitam-elh/Leka, and `ghcr.io/Haitam-elh/Leka/api` is refused by
+  # every docker command there is.
+  image: ${LEKA_IMAGE:?set LEKA_IMAGE, e.g. ghcr.io/haitam-elh/leka/api}:${LEKA_RELEASE:?set LEKA_RELEASE to a commit sha}
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    # A staging box with no log rotation fills its disk and takes the
+    # application down with it, which is a tedious way to learn this.
+    options: { max-size: "10m", max-file: "3" }
+
+x-app: &app
+  <<: [*image, *logging]
   restart: unless-stopped
   env_file: [staging.env]
   environment:
@@ -41,22 +58,28 @@ x-app: &app
       condition: service_healthy
     migrate:
       condition: service_completed_successfully
-  logging:
-    driver: json-file
-    # A staging box with no log rotation fills its disk and takes the
-    # application down with it, which is a tedious way to learn this.
-    options: { max-size: "10m", max-file: "3" }
+
+x-no-http: &no-http
+  # Inherited from the image, and wrong for a process that serves no HTTP:
+  # the API's healthcheck would mark it unhealthy for ever. deploy.sh checks
+  # these two another way — still running, and not restarting.
+  healthcheck:
+    disable: true
 
 services:
-  # Runs to completion before the API and the worker start. A container that
+  # Runs to completion before anything else starts. A container that
   # migrates on its own startup races the other one that is also migrating.
+  #
+  # leka.db.migrate, not `alembic upgrade head`: on a rollback the database
+  # is ahead of the image, and alembic fails on a revision it has never
+  # heard of — which took every rollback down with it.
   migrate:
-    image: ghcr.io/${GITHUB_REPOSITORY:-haitam-elh/leka}/api:${LEKA_RELEASE:?set LEKA_RELEASE to a commit sha}
+    <<: [*image, *logging, *no-http]
     env_file: [staging.env]
     environment:
       LEKA_ENVIRONMENT: staging
       LEKA_REDIS_URL: redis://redis:6379/0
-    command: ["alembic", "upgrade", "head"]
+    command: ["python", "-m", "leka.db.migrate"]
     restart: "no"
     depends_on:
       redis:
@@ -64,20 +87,24 @@ services:
 
   api:
     <<: *app
-    # The container's own healthcheck already probes Postgres and Redis and
-    # answers 503 when either is down, so Caddy stops sending it traffic.
+    # The container's own healthcheck probes Postgres and Redis and answers
+    # 503 when either is down, so Caddy stops sending it traffic.
     expose: ["8000"]
 
+  # Runs the jobs. Not `rq worker`: that starts RQ and nothing else — no
+  # secret masking in the logs, no Sentry. See leka/platform/worker.py.
   worker:
-    <<: *app
-    command: ["sh", "-c", "rq worker --url \"$$LEKA_REDIS_URL\" leka:high leka leka:low"]
-    # Inherited from the image, and wrong here: the worker serves no HTTP,
-    # so the API's healthcheck would mark it unhealthy for ever and restart
-    # it in a loop.
-    healthcheck:
-      disable: true
+    <<: [*app, *no-http]
+    command: ["python", "-m", "leka.platform.worker"]
+
+  # Puts the tick and the sweeps on the queue. Without it the worker waits
+  # for ever: the tick is what turns events into job runs. Exactly one.
+  scheduler:
+    <<: [*app, *no-http]
+    command: ["python", "-m", "leka.platform.scheduler"]
 
   redis:
+    <<: *logging
     image: redis:7-alpine
     restart: unless-stopped
     # No persistence on purpose. The queue is a queue: LEKA-334 stores what
@@ -90,22 +117,24 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
 
   caddy:
+    <<: *logging
     image: caddy:2-alpine
     restart: unless-stopped
     ports: ["80:80", "443:443"]
+    # The Caddyfile reads the domain from Caddy's OWN environment. --env-file
+    # only feeds the substitutions in this file, so without this line Caddy
+    # never saw the domain and served plain HTTP whatever staging.env said.
+    # The domain alone, not env_file: Caddy has no use for the database
+    # password. `:80` when unset, which is plain HTTP before DNS is pointed.
+    environment:
+      LEKA_STAGING_DOMAIN: ${LEKA_STAGING_DOMAIN:-:80}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on: [api]
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
 
 volumes:
   # Certificates and account keys. Losing this volume means asking Let's
