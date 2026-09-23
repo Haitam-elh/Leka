@@ -24,15 +24,17 @@ export function FormMessage({
 }) {
   if (!message) return null;
 
-  return (
-    <Alert
-      role="alert"
-      className={
-        tone === "success"
-          ? "border-state-success/30 bg-state-success-soft text-state-success"
-          : "border-state-danger/30 bg-state-danger-soft text-state-danger"
-      }
-    >
+  // The error tone keeps its own raw classes rather than `variant="destructive"`:
+  // that variant is the quieter bg-card treatment built for FormAlert's
+  // field-level errors, and swapping it in here would mute a standalone
+  // auth-failure banner, not just deduplicate one. Success has no such
+  // conflict — nothing else uses this tone — so it takes the shared variant.
+  return tone === "success" ? (
+    <Alert role="alert" variant="success">
+      <AlertDescription className="text-current">{message}</AlertDescription>
+    </Alert>
+  ) : (
+    <Alert role="alert" className="border-state-danger/30 bg-state-danger-soft text-state-danger">
       <AlertDescription className="text-current">{message}</AlertDescription>
     </Alert>
   );

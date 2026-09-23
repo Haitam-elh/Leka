@@ -10,6 +10,13 @@ const alertVariants = cva(
         default: "bg-card text-card-foreground",
         destructive:
           "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+        // Tinted, not bg-card like the two variants above: this matches the
+        // one existing tone already built for this — StatePanel and the
+        // offline banner both read success this way — rather than the
+        // quieter destructive treatment, which a form-failure banner needs
+        // to read as more than a neutral card with red text.
+        success:
+          "border-state-success/30 bg-state-success-soft text-state-success *:data-[slot=alert-description]:text-state-success/90 *:[svg]:text-current",
       },
     },
     defaultVariants: {
