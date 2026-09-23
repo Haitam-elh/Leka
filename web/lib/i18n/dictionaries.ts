@@ -51,6 +51,7 @@ const fr = {
   shell: {
     tagline: "Understand. Decide. Act.",
     mainNavigation: "Navigation principale",
+    sidebar: "Barre latérale",
     breadcrumb: "Fil d'Ariane",
     skipToContent: "Aller au contenu",
     searchPlaceholder: "Rechercher une application, un service, un document…",
@@ -107,6 +108,26 @@ const fr = {
     notFoundBody: "Cette adresse ne correspond à aucune page de LEKA.",
     backToOverview: "Retour à la vue d'ensemble",
     goBack: "Revenir en arrière",
+    // Loading, failure and connectivity (LEKA-343). Each failure says what
+    // happened AND what to do; none of them repeats an error's own message.
+    loading: "Chargement…",
+    retry: "Réessayer",
+    reference: "Référence : {id}",
+    errorTitle: "Cette page n'a pas pu s'afficher",
+    errorBody:
+      "Réessayez. Si le problème continue, revenez à la vue d'ensemble et prévenez votre administrateur.",
+    serverTitle: "Une erreur est survenue de notre côté",
+    serverBody:
+      "Vous n'y êtes pour rien. Réessayez dans quelques instants ; si cela persiste, transmettez la référence ci-dessous à votre administrateur.",
+    unreachableTitle: "LEKA ne répond pas",
+    unreachableBody:
+      "Le service est momentanément injoignable. Rien n'est perdu : réessayez dans quelques instants.",
+    offlineTitle: "Vous êtes hors ligne",
+    offlineBody:
+      "Vérifiez votre connexion. La page se rechargera d'elle-même dès qu'elle sera revenue.",
+    offlineBanner:
+      "Vous êtes hors ligne. Ce qui est affiché peut ne plus être à jour, et rien ne sera enregistré avant le retour de la connexion.",
+    backOnline: "Connexion rétablie.",
   },
   /** The command palette: find and go, never answer. */
   palette: {
@@ -201,6 +222,8 @@ const fr = {
     compactTitle: "Que voulez-vous accomplir aujourd'hui ?",
     submit: "Lancer l'analyse",
     submitHint: "⌘↵ pour lancer",
+    sidePanel: "Contexte et périmètre",
+    tooShortHint: "Encore {count} caractère(s) pour pouvoir lancer",
     attach: "Joindre un fichier",
     dictate: "Dictée",
     soon: "Bientôt",
@@ -300,6 +323,7 @@ const en: Dictionary = {
   shell: {
     tagline: "Understand. Decide. Act.",
     mainNavigation: "Main navigation",
+    sidebar: "Sidebar",
     breadcrumb: "Breadcrumb",
     skipToContent: "Skip to content",
     searchPlaceholder: "Search an application, a service, a document…",
@@ -352,6 +376,23 @@ const en: Dictionary = {
     notFoundBody: "This address matches no page in LEKA.",
     backToOverview: "Back to the overview",
     goBack: "Go back",
+    loading: "Loading…",
+    retry: "Try again",
+    reference: "Reference: {id}",
+    errorTitle: "This page could not be displayed",
+    errorBody:
+      "Try again. If it keeps happening, go back to the overview and let your administrator know.",
+    serverTitle: "Something went wrong on our side",
+    serverBody:
+      "Nothing you did caused this. Try again in a moment; if it persists, pass the reference below to your administrator.",
+    unreachableTitle: "LEKA is not responding",
+    unreachableBody:
+      "The service cannot be reached right now. Nothing is lost: try again in a moment.",
+    offlineTitle: "You are offline",
+    offlineBody: "Check your connection. The page will reload on its own once it is back.",
+    offlineBanner:
+      "You are offline. What you see may be out of date, and nothing will be saved until the connection is back.",
+    backOnline: "Connection restored.",
   },
   palette: {
     open: "Open search",
@@ -427,6 +468,8 @@ const en: Dictionary = {
     compactTitle: "What would you like to do today?",
     submit: "Start the analysis",
     submitHint: "⌘↵ to start",
+    sidePanel: "Context and scope",
+    tooShortHint: "{count} more character(s) before you can start",
     attach: "Attach a file",
     dictate: "Dictation",
     soon: "Soon",

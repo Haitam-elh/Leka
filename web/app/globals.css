@@ -50,6 +50,13 @@
   --color-shell-nav: var(--shell-nav);
   --color-shell-badge: var(--shell-badge);
   --color-shell-badge-foreground: var(--shell-badge-foreground);
+  /* System states — see docs/frontend/system-states.md */
+  --color-state-success: var(--state-success);
+  --color-state-success-soft: var(--state-success-soft);
+  --color-state-warning: var(--state-warning);
+  --color-state-warning-soft: var(--state-warning-soft);
+  --color-state-danger: var(--state-danger);
+  --color-state-danger-soft: var(--state-danger-soft);
   --spacing-sidebar: var(--shell-sidebar-width);
   --spacing-rail: var(--shell-sidebar-rail);
   --spacing-header: var(--shell-header-height);
@@ -116,6 +123,21 @@
   --shell-badge: #fcdcdd;         /* the counter beside "To approve" */
   /* Same story: the mockup's #db4e55 on that pink reads 3.1:1. */
   --shell-badge-foreground: #c2272f;
+
+  /* ── System states (LEKA-343) ────────────────────────────────────────
+   *
+   * The three tones of the mockups' status pills — "Synchronisé",
+   * "Attention", "Erreur" on the sources screen — each darkened to the
+   * least that reads AA as body text on its own soft background and on
+   * white. Colour is never the only signal: every state also has a word
+   * and an icon, because one person in twelve cannot tell these apart.
+   */
+  --state-success: #157a3c;
+  --state-success-soft: #e8f6ee;
+  --state-warning: #a4510a;
+  --state-warning-soft: #fdf1e2;
+  --state-danger: #c2272f;
+  --state-danger-soft: #fdecec;
 
   /* Measured on the same screen: 222px and 64px at its 1536px width. */
   --shell-sidebar-width: 14rem;   /* 224px */

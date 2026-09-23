@@ -37,7 +37,7 @@ function contrast(foreground: string, background: string): number {
   return (light + 0.05) / (dark + 0.05);
 }
 
-/** Every pair the shell actually puts on screen, as text. */
+/** Every pair the interface actually puts on screen, as text. */
 const PAIRS: readonly [label: string, foreground: string, background: string][] = [
   ["page title", token("brand-navy"), token("shell-canvas")],
   ["navigation label at rest", token("shell-nav"), token("shell-surface")],
@@ -47,6 +47,14 @@ const PAIRS: readonly [label: string, foreground: string, background: string][] 
   ["search placeholder, on the white header", token("shell-muted"), "#FFFFFF"],
   ["the count beside an entry", token("shell-badge-foreground"), token("shell-badge")],
   ["skip link", "#FFFFFF", token("brand-navy")],
+  // The system states: each tone on its own soft background, and on white.
+  ["success, on its background", token("state-success"), token("state-success-soft")],
+  ["success, on white", token("state-success"), "#FFFFFF"],
+  ["warning, on its background", token("state-warning"), token("state-warning-soft")],
+  ["warning, on white", token("state-warning"), "#FFFFFF"],
+  ["danger, on its background", token("state-danger"), token("state-danger-soft")],
+  ["danger, on white", token("state-danger"), "#FFFFFF"],
+  ["danger, on the page", token("state-danger"), token("shell-canvas")],
 ];
 
 describe("the shell's text is readable", () => {

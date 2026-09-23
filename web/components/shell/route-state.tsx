@@ -4,6 +4,7 @@ import { Ban, Compass, Lock, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { StatePanel } from "@/components/states/state-panel";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -15,10 +16,17 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
  * says what happened AND what to do next. A dead end that only apologises
  * sends the person back to the sidebar to guess.
  *
- * Sober on purpose: the visual design of these belongs to LEKA-343. What
- * this ticket owes is that they exist, are reachable, and are worded.
+ * Drawn by StatePanel since LEKA-343, like ErrorState, so a refusal and a
+ * failure look like two answers from the same product.
  */
 export type RouteStateVariant = "empty" | "unavailable" | "plan-gated" | "forbidden" | "not-found";
+
+/**
+ * A refusal or a wrong address replaces the whole page, so its title is the
+ * page's title — without an h1, a screen reader user jumping to the heading
+ * lands nowhere. The others sit under a PageHeader that already has one.
+ */
+const STANDS_ALONE: ReadonlySet<RouteStateVariant> = new Set(["forbidden", "not-found"]);
 
 interface RouteStateProps {
   variant: RouteStateVariant;
@@ -27,9 +35,11 @@ interface RouteStateProps {
   body?: string;
   /** The page's own next step, for the empty state. */
   action?: React.ReactNode;
+  /** Overrides the default: 1 for the variants that stand alone, 2 otherwise. */
+  headingLevel?: 1 | 2 | 3;
 }
 
-export function RouteState({ variant, title, body, action }: RouteStateProps) {
+export function RouteState({ variant, title, body, action, headingLevel }: RouteStateProps) {
   const t = useDictionary();
   const router = useRouter();
 
@@ -91,19 +101,14 @@ export function RouteState({ variant, title, body, action }: RouteStateProps) {
     },
   }[variant];
 
-  const Icon = content.icon;
-
   return (
-    <div
-      data-testid={`route-state-${variant}`}
-      className="mx-auto flex max-w-md flex-col items-center px-4 py-16 text-center"
-    >
-      <span className="flex size-12 items-center justify-center rounded-full bg-brand-violet-soft text-brand-violet">
-        <Icon className="size-5" aria-hidden="true" />
-      </span>
-      <h2 className="mt-4 text-lg font-semibold text-brand-navy">{title ?? content.title}</h2>
-      <p className="mt-2 text-sm text-shell-muted">{body ?? content.body}</p>
-      {content.next && <div className="mt-6 flex flex-wrap justify-center gap-2">{content.next}</div>}
-    </div>
+    <StatePanel
+      testId={`route-state-${variant}`}
+      icon={content.icon}
+      title={title ?? content.title}
+      description={body ?? content.body}
+      actions={content.next}
+      headingLevel={headingLevel ?? (STANDS_ALONE.has(variant) ? 1 : 2)}
+    />
   );
 }
