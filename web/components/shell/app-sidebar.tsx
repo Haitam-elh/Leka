@@ -8,7 +8,9 @@ import { NewIntentionButton } from "@/components/shell/new-intention-button";
 import { SidebarNavItem } from "@/components/shell/sidebar-nav-item";
 import { UserMenu } from "@/components/shell/user-menu";
 import { WorkspaceSwitcher } from "@/components/shell/workspace-switcher";
-import { type BadgeKey, NAV_GROUPS, type RouteEntry, ROUTES } from "@/config/routes";
+import { type BadgeKey, NAV_GROUPS, type RouteEntry } from "@/config/routes";
+import { usePermissions } from "@/components/shell/shell-provider";
+import { visibleRoutes } from "@/lib/navigation/access";
 import { PRIMARY_ACTION_ID, resolveActiveNavItem } from "@/lib/navigation/active";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 
@@ -31,8 +33,9 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
   const t = useDictionary();
   const pathname = usePathname() ?? "/";
   const active = resolveActiveNavItem(pathname);
-
-  const inSidebar = ROUTES.filter((route) => route.showInSidebar);
+  // Only what this person may open: a list of links that refuse is a list
+  // nobody trusts. The API refuses them too — see lib/navigation/access.ts.
+  const inSidebar = visibleRoutes(usePermissions());
   const standalone = inSidebar.filter((route) => route.group === undefined);
   const grouped = (group: string): RouteEntry[] =>
     inSidebar.filter((route) => route.group === group);

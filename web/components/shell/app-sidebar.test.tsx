@@ -17,6 +17,19 @@ import { LocaleProvider } from "@/lib/i18n/locale-provider";
 
 const pathname = vi.hoisted(() => ({ value: "/overview" }));
 
+/** Everything an owner has, as docs/permissions.md lists it. */
+const OWNER = vi.hoisted(() => [
+  "workspace:read", "workspace:update", "workspace:delete", "workspace:transfer",
+  "member:read", "member:invite", "member:update_role", "member:remove",
+  "source:read", "source:manage",
+  "intention:read", "intention:create", "intention:approve", "job:read",
+]);
+/** And everything a member has, which is the interesting half. */
+const MEMBER = vi.hoisted(() => [
+  "workspace:read", "member:read", "source:read", "intention:read", "intention:create",
+]);
+const permissions = vi.hoisted(() => ({ value: [] as string[] }));
+
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname.value,
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -34,29 +47,44 @@ vi.mock("@/lib/auth", () => ({
   },
 }));
 
+vi.mock("@/lib/workspace", () => ({
+  workspace: {
+    current: vi.fn(async () => ({
+      workspace: { id: "w1", name: "Acme Corp", slug: "acme", status: "active" },
+      role: "owner",
+      permissions: permissions.value,
+    })),
+  },
+}));
+
 const { AppSidebar } = await import("@/components/shell/app-sidebar");
 const { ShellProvider } = await import("@/components/shell/shell-provider");
 
 const fr = DICTIONARIES.fr;
 const SIDEBAR_ROUTES = ROUTES.filter((route) => route.showInSidebar);
 
-function renderSidebar(props: Partial<Parameters<typeof AppSidebar>[0]> = {}) {
-  return render(
+async function renderSidebar(props: Partial<Parameters<typeof AppSidebar>[0]> = {}) {
+  const rendered = render(
     <LocaleProvider>
       <ShellProvider>
         <AppSidebar collapsed={false} onToggle={() => {}} {...props} />
       </ShellProvider>
     </LocaleProvider>,
   );
+  // The permissions arrive from the API a tick later; every assertion below
+  // is about what the sidebar shows once it knows them.
+  await screen.findByTestId("nav-overview");
+  return rendered;
 }
 
 beforeEach(() => {
   pathname.value = "/overview";
+  permissions.value = OWNER;
 });
 
 describe("the navigation comes from the registry", () => {
-  it("renders every entry it declares, and nothing else", () => {
-    renderSidebar();
+  it("renders every entry it declares, and nothing else", async () => {
+    await renderSidebar();
 
     const navigation = screen.getByRole("navigation", { name: fr.shell.mainNavigation });
     const links = within(navigation).getAllByRole("link");
@@ -70,16 +98,16 @@ describe("the navigation comes from the registry", () => {
     }
   });
 
-  it("groups them, under the titles the dictionary gives", () => {
-    renderSidebar();
+  it("groups them, under the titles the dictionary gives", async () => {
+    await renderSidebar();
 
     for (const title of Object.values(fr.groups)) {
       expect(screen.getByText(title)).toBeInTheDocument();
     }
   });
 
-  it("speaks French by default", () => {
-    renderSidebar();
+  it("speaks French by default", async () => {
+    await renderSidebar();
 
     expect(screen.getByText(fr.nav.environment)).toBeInTheDocument();
     expect(screen.queryByText(DICTIONARIES.en.nav.environment)).not.toBeInTheDocument();
@@ -87,8 +115,8 @@ describe("the navigation comes from the registry", () => {
 });
 
 describe("the primary action", () => {
-  it("is a button above the list, not one of its lines", () => {
-    renderSidebar();
+  it("is a button above the list, not one of its lines", async () => {
+    await renderSidebar();
 
     const navigation = screen.getByRole("navigation", { name: fr.shell.mainNavigation });
 
@@ -96,9 +124,9 @@ describe("the primary action", () => {
     expect(within(navigation).queryByTestId("new-intention")).not.toBeInTheDocument();
   });
 
-  it("is the thing marked as current on the composer, and Intentions is not", () => {
+  it("is the thing marked as current on the composer, and Intentions is not", async () => {
     pathname.value = "/intentions/new";
-    renderSidebar();
+    await renderSidebar();
 
     expect(screen.getByTestId("new-intention")).toHaveAttribute("aria-current", "page");
     expect(screen.getByTestId("nav-intentions")).not.toHaveAttribute("aria-current");
@@ -106,9 +134,9 @@ describe("the primary action", () => {
 });
 
 describe("the current page", () => {
-  it("is marked once, and on the parent of a detail page", () => {
+  it("is marked once, and on the parent of a detail page", async () => {
     pathname.value = "/environment/services/payment-api";
-    renderSidebar();
+    await renderSidebar();
 
     const marked = screen.getAllByRole("link", { current: "page" });
 
@@ -118,24 +146,24 @@ describe("the current page", () => {
 });
 
 describe("a count beside an entry", () => {
-  it("is announced as part of the link, not left as a lone number", () => {
-    renderSidebar({ badges: { approvals: 3 } });
+  it("is announced as part of the link, not left as a lone number", async () => {
+    await renderSidebar({ badges: { approvals: 3 } });
 
     expect(screen.getByTestId("nav-approvals")).toHaveAccessibleName(
       `${fr.nav.approvals}, 3 éléments en attente`,
     );
   });
 
-  it("is absent at zero rather than a badge reading 0", () => {
-    renderSidebar({ badges: { approvals: 0 } });
+  it("is absent at zero rather than a badge reading 0", async () => {
+    await renderSidebar({ badges: { approvals: 0 } });
 
     expect(screen.getByTestId("nav-approvals")).not.toHaveTextContent("0");
   });
 });
 
 describe("availability", () => {
-  it("says which pages are not built yet, rather than hiding them", () => {
-    renderSidebar();
+  it("says which pages are not built yet, rather than hiding them", async () => {
+    await renderSidebar();
 
     expect(screen.getByText(fr.shell.soon)).toBeInTheDocument();
     expect(screen.getByLabelText(fr.shell.planGated)).toBeInTheDocument();
@@ -145,7 +173,7 @@ describe("availability", () => {
 describe("folding the sidebar", () => {
   it("says whether it is open, and is labelled either way", async () => {
     const onToggle = vi.fn();
-    renderSidebar({ onToggle });
+    await renderSidebar({ onToggle });
 
     const button = screen.getByTestId("sidebar-toggle");
     expect(button).toHaveAttribute("aria-expanded", "true");
@@ -155,10 +183,34 @@ describe("folding the sidebar", () => {
     expect(onToggle).toHaveBeenCalledOnce();
   });
 
-  it("keeps every label reachable for a screen reader on the rail", () => {
-    renderSidebar({ collapsed: true });
+  it("keeps every label reachable for a screen reader on the rail", async () => {
+    await renderSidebar({ collapsed: true });
 
     expect(screen.getByRole("link", { name: new RegExp(fr.nav.billing) })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: fr.nav.newIntention })).toBeInTheDocument();
+  });
+});
+
+describe("what a role may see", () => {
+  it("hides from a member what a member may never open", async () => {
+    permissions.value = MEMBER;
+    await renderSidebar();
+
+    // Approving, inviting and paying are an admin's business.
+    expect(screen.queryByTestId("nav-approvals")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("nav-team")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("nav-billing")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("nav-governance")).not.toBeInTheDocument();
+  });
+
+  it("still gives a member the product", async () => {
+    permissions.value = MEMBER;
+    await renderSidebar();
+
+    // Reading the map and creating intentions is most of the value.
+    expect(screen.getByTestId("nav-environment")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-intentions")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-sources")).toBeInTheDocument();
+    expect(screen.getByTestId("new-intention")).toBeInTheDocument();
   });
 });

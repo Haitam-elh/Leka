@@ -31,6 +31,17 @@ vi.mock("@/lib/auth", () => ({
   },
 }));
 
+// The shell asks the API what this person may do, as well as who they are.
+vi.mock("@/lib/workspace", () => ({
+  workspace: {
+    current: vi.fn().mockResolvedValue({
+      workspace: { id: "w1", name: "Acme Corp", slug: "acme", status: "active" },
+      role: "owner",
+      permissions: ["workspace:read"],
+    }),
+  },
+}));
+
 const { ShellProvider } = await import("@/components/shell/shell-provider");
 const { UserMenu } = await import("@/components/shell/user-menu");
 const { WorkspaceSwitcher } = await import("@/components/shell/workspace-switcher");
