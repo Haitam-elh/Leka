@@ -284,4 +284,5 @@ triggers on demand.
   flag where it could.
 - Sources, environments and services are mocked in the screens that use them
   (LEKA-341).
-- Visual polish and tokens are LEKA-339's.
+- Visual polish and tokens are LEKA-339's — see
+  [`design-system.md`](design-system.md).

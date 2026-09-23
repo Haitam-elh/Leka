@@ -121,9 +121,10 @@ see [`system-states.md`](system-states.md#accessibility).
 - **Loading, error and offline states** are LEKA-343's — see
   [`system-states.md`](system-states.md). The shell draws them while the
   session is checked, and offers "Réessayer" when it cannot be.
-- **The design system** is LEKA-339. The colours, widths and radii are CSS
-  variables in `app/globals.css`, sampled from the mockups; no component in
-  `components/shell/` writes a colour of its own.
+- **The design system** is LEKA-339 — see
+  [`design-system.md`](design-system.md). The colours, widths and radii are
+  CSS variables in `app/globals.css`, sampled from the mockups; no component
+  in `components/shell/` writes a colour of its own.
 
 ## Language
 
