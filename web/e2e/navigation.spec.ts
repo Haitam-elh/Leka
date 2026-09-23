@@ -53,7 +53,7 @@ test.describe("the information architecture", () => {
     await signIn(page);
     await page.goto("/environment/services/payment-api");
 
-    const trail = page.getByRole("navigation", { name: "Breadcrumb" });
+    const trail = page.getByRole("navigation", { name: "Fil d'Ariane" });
     await expect(trail.getByRole("link", { name: "Mon environnement" })).toBeVisible();
     await expect(trail.getByText("Payment API")).toBeVisible();
     await expect(page).toHaveTitle("Payment API · LEKA");

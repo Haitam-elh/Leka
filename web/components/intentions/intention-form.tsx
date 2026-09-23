@@ -141,14 +141,15 @@ export function IntentionForm() {
         </Button>
       </div>
 
-      <aside className="space-y-4">
+      <aside aria-label={t.composer.sidePanel} className="space-y-4">
         <Panel title={t.composer.contextTitle} aside={<WhySources />}>
           <SelectableListField<IntentionRequest, "sources">
             name="sources"
             label={t.composer.contextTitle}
             items={SOURCES}
             selectAll
-            className="[&>label]:sr-only"
+            // The panel's heading already says it.
+            hideLabel
           />
         </Panel>
 
@@ -171,7 +172,9 @@ function Panel({
 }) {
   return (
     <section className="rounded-xl border border-shell-line bg-white p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
+      {/* Wraps as a whole: at 1024px the link used to break and leave its
+          question mark alone on a line. */}
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
         <h2 className="text-sm font-semibold text-shell-nav">{title}</h2>
         {aside}
       </div>
@@ -184,7 +187,7 @@ function WhySources() {
   const t = useDictionary();
   return (
     <Popover>
-      <PopoverTrigger className="text-xs text-brand-violet underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40">
+      <PopoverTrigger className="text-xs whitespace-nowrap text-brand-violet underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40">
         {t.composer.whySources}
       </PopoverTrigger>
       <PopoverContent className="max-w-xs text-sm">{t.composer.whySourcesBody}</PopoverContent>

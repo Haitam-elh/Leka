@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
+import { useDictionary } from "@/lib/i18n/locale-provider";
+
 /**
  * Where a page's content goes, and how its top reads.
  *
@@ -30,10 +32,14 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({ title, subtitle, breadcrumb, actions }: PageHeaderProps) {
+  const t = useDictionary();
   return (
     <div className="mb-6">
       {breadcrumb && breadcrumb.length > 0 && (
-        <nav aria-label="Breadcrumb" className="mb-2">
+        // Named in the page's language: a screen reader announcing
+        // "Breadcrumb navigation" in a French interface was the one English
+        // landmark left.
+        <nav aria-label={t.shell.breadcrumb} className="mb-2">
           <ol className="flex flex-wrap items-center gap-1 text-xs text-shell-muted">
             {breadcrumb.map((crumb, index) => (
               <li key={`${crumb.label}-${index}`} className="flex items-center gap-1">

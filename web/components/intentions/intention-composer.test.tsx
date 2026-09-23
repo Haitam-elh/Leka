@@ -104,6 +104,21 @@ describe("the send button", () => {
     expect(send()).toBeDisabled();
   });
 
+  it("says why it is refused, and how much is missing", async () => {
+    // A disabled button that does not say why reads as broken.
+    const user = userEvent.setup();
+    mount();
+
+    await user.type(box(), "lent ?");
+
+    const why = document.getElementById(send().getAttribute("aria-describedby") ?? "");
+    expect(why).toHaveTextContent("Encore 4 caractère(s) pour pouvoir lancer");
+
+    await user.type(box(), " vraiment");
+    expect(send()).toBeEnabled();
+    expect(send()).not.toHaveAttribute("aria-describedby");
+  });
+
   it("opens once there is a real question", async () => {
     const user = userEvent.setup();
     mount();
