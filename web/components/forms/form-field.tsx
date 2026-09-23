@@ -54,6 +54,23 @@ export interface FormFieldProps<
   disabled?: boolean;
   /** `n / max`, for the fields that have a limit worth watching. */
   counter?: { value: number; max: number };
+  /**
+   * False for a control that wires itself to the field.
+   *
+   * Base UI's own Select, Checkbox, Switch and Combobox read the Field
+   * context directly and label their inner trigger from it. Wrapping one in
+   * `Field.Control` would put the id and `aria-describedby` on a root that
+   * renders no element, and the label would point at nothing.
+   */
+  wrapInControl?: boolean;
+  /**
+   * "inline" puts the control before the label, on one row.
+   *
+   * A checkbox labelled from above reads as a heading with an orphan box
+   * under it. The wrapper stays the same one — the whole point of having
+   * one — and only the order changes.
+   */
+  layout?: "stacked" | "inline";
   className?: string;
   /** The control itself. Base UI clones it with the wiring. */
   children: (props: FieldRenderProps<TFieldValues, TName>) => React.ReactElement;
@@ -69,6 +86,8 @@ export function FormField<TFieldValues extends FieldValues, TName extends Path<T
   description,
   disabled = false,
   counter,
+  wrapInControl = true,
+  layout = "stacked",
   className,
   children,
 }: FormFieldProps<TFieldValues, TName>) {
@@ -84,6 +103,20 @@ export function FormField<TFieldValues extends FieldValues, TName extends Path<T
         const nearLimit =
           counter !== undefined && counter.value >= counter.max * COUNTER_ALERT_RATIO;
 
+        const rendered = children({ field, invalid: fieldState.invalid, disabled });
+        const control = wrapInControl ? (
+          <Field.Control
+            disabled={disabled}
+            // aria-required rather than required: the browser's own
+            // validation is off (see Form), and `required` would turn it back
+            // on for this one control.
+            aria-required={optional ? undefined : true}
+            render={rendered}
+          />
+        ) : (
+          rendered
+        );
+
         return (
           <Field.Root
             name={name}
@@ -91,23 +124,23 @@ export function FormField<TFieldValues extends FieldValues, TName extends Path<T
             disabled={disabled}
             touched={fieldState.isTouched}
             dirty={fieldState.isDirty}
-            className={cn("space-y-2", className)}
+            className={cn(layout === "stacked" ? "space-y-2" : "space-y-1.5", className)}
           >
-            <Field.Label className="flex items-center gap-1.5 text-sm font-medium text-shell-nav">
-              {label}
-              {optional ? (
-                <span className="font-normal text-shell-muted">{t.forms.optional}</span>
-              ) : null}
-            </Field.Label>
-
-            <Field.Control
-              disabled={disabled}
-              // aria-required rather than required: the browser's own
-              // validation is off (see Form), and `required` would turn it
-              // back on for this one control.
-              aria-required={optional ? undefined : true}
-              render={children({ field, invalid: fieldState.invalid, disabled })}
-            />
+            <div className={cn(layout === "inline" && "flex items-center gap-2.5")}>
+              {layout === "inline" ? control : null}
+              <Field.Label
+                className={cn(
+                  "flex items-center gap-1.5 text-sm font-medium text-shell-nav",
+                  layout === "inline" && "cursor-pointer font-normal",
+                )}
+              >
+                {label}
+                {optional ? (
+                  <span className="font-normal text-shell-muted">{t.forms.optional}</span>
+                ) : null}
+              </Field.Label>
+              {layout === "stacked" ? control : null}
+            </div>
 
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1 space-y-1">
