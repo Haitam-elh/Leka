@@ -1,0 +1,14 @@
+# Everything the image does not need, and two things it must never contain.
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+.coverage
+tests
+# A local .env holds real credentials. An image that carries one hands them
+# to anyone who can pull it.
+.env
+.env.*

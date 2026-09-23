@@ -53,6 +53,10 @@ SECRET_OWNERS: dict[str, frozenset[str]] = {
     "s3_secret_access_key": frozenset({"leka.platform.storage"}),
     "smtp_password": frozenset({"leka.identity.email"}),
     "resend_api_key": frozenset({"leka.identity.email"}),
+    # The DSN is read once, to start the SDK. The events themselves are
+    # cleaned by leka.core.logging, which is why this module is not also a
+    # reader of secret_values.
+    "sentry_dsn": frozenset({"leka.platform.monitoring"}),
     # Architecture rule 7: one place calls a model.
     "anthropic_api_key": frozenset({"leka.capabilities"}),
     "mistral_api_key": frozenset({"leka.capabilities"}),

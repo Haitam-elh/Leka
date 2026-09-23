@@ -35,6 +35,7 @@ from leka.core.settings.background import BackgroundSettings
 from leka.core.settings.database import DatabaseSettings
 from leka.core.settings.email import EmailSettings
 from leka.core.settings.model_access import ModelAccessSettings
+from leka.core.settings.monitoring import MonitoringSettings
 from leka.core.settings.paths import REPO_ROOT
 from leka.core.settings.runtime import RuntimeSettings
 from leka.core.settings.security import SecuritySettings
@@ -62,6 +63,7 @@ class Settings(
     SecuritySettings,
     EmailSettings,
     ModelAccessSettings,
+    MonitoringSettings,
     StorageSettings,
     BackgroundSettings,
     BaseSettings,

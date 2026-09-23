@@ -25,6 +25,7 @@ from leka.core.logging import configure_logging
 from leka.db import engine
 from leka.identity import configure_identity
 from leka.identity.csrf import csrf_middleware
+from leka.platform.monitoring import configure_monitoring
 
 logger = structlog.get_logger(__name__)
 
@@ -33,7 +34,11 @@ logger = structlog.get_logger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Configure logging on the way up, close the pool on the way down."""
     configure_logging(settings)
-    logger.info("leka_starting", environment=settings.environment)
+    # After logging, never before: the Sentry integration scrubs its events
+    # with the masker that configure_logging builds, and with no masker it
+    # would report the first errors unscrubbed.
+    monitoring = configure_monitoring(settings)
+    logger.info("leka_starting", environment=settings.environment, monitoring=monitoring)
     # A warning, never a refusal: stopping because a key is a day past its
     # lifetime would be manufacturing an outage. See core/settings/_rotation.py.
     for overdue in settings.overdue_secrets(datetime.now(UTC).date()):
