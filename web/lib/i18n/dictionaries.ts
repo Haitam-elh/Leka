@@ -154,6 +154,13 @@ const fr = {
     clearSelection: "Tout désélectionner",
     maxReached: "{max} au maximum",
     selectedCount: "{count} sélectionné(s)",
+    pickDate: "Choisir une date",
+    dateFrom: "Du",
+    dateTo: "Au",
+    period24h: "Dernières 24 heures",
+    period7d: "Derniers 7 jours",
+    period30d: "Derniers 30 jours",
+    periodCustom: "Personnalisé…",
   },
   /**
    * Validation messages.
@@ -311,6 +318,13 @@ const en: Dictionary = {
     clearSelection: "Clear selection",
     maxReached: "{max} at most",
     selectedCount: "{count} selected",
+    pickDate: "Pick a date",
+    dateFrom: "From",
+    dateTo: "To",
+    period24h: "Last 24 hours",
+    period7d: "Last 7 days",
+    period30d: "Last 30 days",
+    periodCustom: "Custom…",
   },
   validation: {
     required: "This field is required.",

@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { CheckboxField, RadioGroupField, SelectField, SwitchField } from "@/components/forms/choice-fields";
 import { ComboboxField, MultiSelectField } from "@/components/forms/combobox-field";
+import { DateField, DateRangeField, PeriodField, TimeField } from "@/components/forms/date-fields";
 import { Form } from "@/components/forms/form";
 import { FormAlert } from "@/components/forms/form-alert";
 import { FormErrorSummary } from "@/components/forms/form-error-summary";
@@ -180,6 +181,10 @@ export function FormsGallery() {
         </div>
       </Form>
 
+      <Section title="Dates">
+        <Dates />
+      </Section>
+
       <Section title="États asynchrones">
         <AsyncStates />
       </Section>
@@ -239,6 +244,44 @@ function DisabledStates() {
         options={SERVICES}
         disabled
       />
+    </Form>
+  );
+}
+
+const dateSchema = z.object({
+  day: z.string(),
+  range: z.object({ from: z.string(), to: z.string() }),
+  at: z.string(),
+  period: z.object({
+    preset: z.enum(["24h", "7d", "30d", "custom"]),
+    range: z.object({ from: z.string(), to: z.string() }),
+  }),
+});
+type DateValues = z.infer<typeof dateSchema>;
+
+function Dates() {
+  const form = useLekaForm({
+    schema: dateSchema,
+    defaultValues: {
+      day: "",
+      range: { from: "", to: "" },
+      at: "09:00",
+      period: { preset: "7d", range: { from: "", to: "" } },
+    },
+    onSubmit: () => {},
+  });
+  return (
+    <Form form={form}>
+      <DateField<DateValues, "day">
+        name="day"
+        label="Un jour"
+        description="Bornes : 2026-01-01 à 2026-12-31."
+        min="2026-01-01"
+        max="2026-12-31"
+      />
+      <DateRangeField<DateValues, "range"> name="range" label="Une plage" optional />
+      <TimeField<DateValues, "at"> name="at" label="Heure" />
+      <PeriodField<DateValues> name="period" label="Période" />
     </Form>
   );
 }
