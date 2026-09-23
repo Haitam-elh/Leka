@@ -92,6 +92,31 @@ Two things these numbers deliberately do **not** cover:
 
 ---
 
+## The AWS account closes itself around March 2027
+
+Not a risk, a schedule. The account (`544733633234`, `eu-central-1`) is on
+the plan that grants up to $200 of credit and runs for **six months or until
+the credit is gone**. At the end AWS **closes the account**; ninety days
+later it deletes what was in it.
+
+So this is the one date in this file that is not about a failure:
+
+| | |
+|---|---|
+| **Estimated expiry** | around March 2027 |
+| **What ends** | the whole account — S3 bucket, IAM user, anything running |
+| **Grace before deletion** | 90 days after closure |
+| **What is NOT on it** | the database. Neon is separate and unaffected |
+
+**Before that date**, either convert the account to a paid plan or move what
+is on it. Converting is the cheap option and takes minutes; discovering the
+closure afterwards costs the bucket.
+
+**Until then, no customer data touches this account.** The bucket
+`leka-payloads-…` is for validation. Staging runs on seeded data. That is
+not a precaution about AWS — it is that an account which deletes itself on a
+schedule is not somewhere a customer's files can live.
+
 ## Honest gaps
 
 Stated here rather than left to be discovered.
