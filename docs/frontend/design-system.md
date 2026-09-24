@@ -154,6 +154,29 @@ repeating it.
 
 ---
 
+## The logo
+
+Drawn by `components/brand/logo.tsx` and nowhere else — no screen holds a
+logo file path or the logo's colours.
+
+| | Use | File |
+|---|---|---|
+| `<Wordmark />` | "LEKΛ" where there is room: the sidebar, the sign-in pages | `public/brand/leka-wordmark.png` |
+| `<Mark />` | the Λ alone, where there is not | inline SVG, same path as `public/brand/leka-mark.svg` |
+| Tab icon | every browser | `app/icon.svg`, `app/favicon.ico` (16, 32, 48) |
+| Home-screen icon | iOS | `app/apple-icon.png` (180 × 180, white tile) |
+
+The originals are `docs/product/mockups/logoleka.jpeg` (the mark) and
+`lekalogo2.jpeg` (the wordmark). The mark is redrawn as a vector from
+them, so it is sharp at any size. The wordmark is the original with its
+grey ground made transparent: clean on the light surfaces the product uses,
+but a small, compressed JPEG underneath — **ask for the SVG original**
+before it goes on a dark background, a slide or print.
+
+The logo's colours (`#0a0f2b`, `#5037fb` → `#6243fd`) are the logo's own
+and live in its files. They are close to, not equal to, `--brand-navy` and
+`--brand-violet`: aligning the interface on them is a separate decision.
+
 ## Adding a primitive
 
 1. Wrap the Base UI primitive if one exists for it — check

@@ -1,3 +1,5 @@
+import { Wordmark } from "@/components/brand/logo";
+
 /**
  * The layout the authentication screens share.
  *
@@ -14,7 +16,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <title>LEKA</title>
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">LEKA</h1>
+          <h1 className="flex justify-center">
+            <Wordmark className="h-9" priority />
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Understand. Decide. Act.
           </p>
