@@ -15,6 +15,7 @@ leka.api.identity and the wiring in leka.main.
 
 from leka.identity.email import (
     ConsoleEmailSender,
+    DeferredEmailSender,
     EmailMessage,
     EmailSender,
     ResendEmailSender,
@@ -68,6 +69,7 @@ __all__ = [
     "ChangePasswordRequest",
     "ConsoleEmailSender",
     "DatabaseSessionStore",
+    "DeferredEmailSender",
     "EmailMessage",
     "EmailSender",
     "EmailToken",

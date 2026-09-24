@@ -21,7 +21,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.core import ratelimit
@@ -32,6 +32,7 @@ from leka.identity import (
     AuthErrorCode,
     AuthService,
     ChangePasswordRequest,
+    DeferredEmailSender,
     EmailTokenRepository,
     ForgotPasswordRequest,
     LoginRequest,
@@ -70,12 +71,14 @@ def get_membership_resolver(db: SessionDep) -> MembershipResolver:
 ResolverDep = Annotated[MembershipResolver, Depends(get_membership_resolver)]
 
 
-def get_auth_service(db: SessionDep) -> AuthService:
+def get_auth_service(db: SessionDep, background: BackgroundTasks) -> AuthService:
+    # Emails go after the response, hence after the commit: a link never
+    # names a token the database did not keep.
     return AuthService(
         UserRepository(db),
         SessionRepository(db),
         EmailTokenRepository(db),
-        build_email_sender(),
+        DeferredEmailSender(build_email_sender(), background.add_task),
     )
 
 

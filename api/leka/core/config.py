@@ -25,6 +25,7 @@ The import path is unchanged: `from leka.core.config import settings`.
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
+from email.utils import parseaddr
 from typing import NamedTuple, Self
 
 from pydantic import SecretStr, ValidationError, model_validator
@@ -129,6 +130,65 @@ class Settings(
             )
             raise ValueError(msg)
 
+        return self
+
+    @model_validator(mode="after")
+    def _refuse_silent_email_online(self) -> Self:
+        """Online, an API that cannot send email must not start.
+
+        Without SMTP or an API key the console sender is used: sign-ups are
+        accepted, tokens written, and nothing leaves — the message goes to a
+        log nobody reads. That is what met the first demo. The failure is
+        silent by construction, so it is refused where it is not.
+        """
+        if self.environment not in ("staging", "production") or self.sends_real_email:
+            return self
+        msg = (
+            f"No real email sender in {self.environment}: verification and reset "
+            "links would be written to the log and never sent. Configure SMTP "
+            "(LEKA_SMTP_HOST, LEKA_SMTP_USERNAME, LEKA_SMTP_PASSWORD — OVH: "
+            "ssl0.ovh.net, port 465) or LEKA_RESEND_API_KEY."
+        )
+        raise ValueError(msg)
+
+    @model_validator(mode="after")
+    def _refuse_links_to_nowhere_online(self) -> Self:
+        """Every emailed link is built on LEKA_WEB_URL; online it must be real."""
+        if self.environment not in ("staging", "production"):
+            return self
+        if not self.web_url.startswith("https://") or "localhost" in self.web_url:
+            msg = (
+                f"LEKA_WEB_URL={self.web_url!r} in {self.environment}: the links in "
+                "verification and reset emails would lead nowhere. Set it to the "
+                "public https address of the web app, e.g. https://app.leka-core.com."
+            )
+            raise ValueError(msg)
+        if self.email_outbox_file is not None:
+            msg = (
+                "LEKA_EMAIL_OUTBOX_FILE is set online: it writes working sign-in "
+                "links to disk. It exists for the browser tests only."
+            )
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
+    def _refuse_a_sender_the_mailbox_does_not_own(self) -> Self:
+        """OVH drops, without a word, mail whose From is not the box that signed in.
+
+        The API sees a successful SMTP exchange; the message never arrives.
+        Checked wherever SMTP is configured, laptops included — that is where
+        someone first tries it.
+        """
+        if not self.smtp_configured or self.smtp_username is None:
+            return self
+        sender = parseaddr(self.email_from)[1].lower()
+        if sender != self.smtp_username.lower():
+            msg = (
+                f"LEKA_EMAIL_FROM sends as {sender!r} but LEKA_SMTP_USERNAME signs in as "
+                f"{self.smtp_username!r}. OVH silently discards such mail: use the "
+                "same address, e.g. LEKA_EMAIL_FROM=LEKA <support@leka-core.com>."
+            )
+            raise ValueError(msg)
         return self
 
     @model_validator(mode="after")

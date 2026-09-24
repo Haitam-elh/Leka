@@ -6,6 +6,7 @@ log, which is what makes those flows testable without an account anywhere.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 from pydantic import Field, SecretStr, field_validator
@@ -32,7 +33,19 @@ class EmailSettings:
 
     resend_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
 
-    @field_validator("smtp_host", "smtp_username", "smtp_password", "resend_api_key", mode="before")
+    # Where the console sender ALSO appends each message, one JSON line each —
+    # so the browser tests can read a verification link. Local and CI only:
+    # the file holds working links, and online it is refused at startup.
+    email_outbox_file: Path | None = None
+
+    @field_validator(
+        "smtp_host",
+        "smtp_username",
+        "smtp_password",
+        "resend_api_key",
+        "email_outbox_file",
+        mode="before",
+    )
     @classmethod
     def _blank_email_field_is_not_configured(cls, value: object) -> object:
         """A blank LEKA_SMTP_HOST means "no SMTP", not a host called "".
