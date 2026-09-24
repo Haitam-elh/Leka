@@ -4,6 +4,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { cn } from "cn";
 
+import { Wordmark } from "@/components/brand/logo";
 import { NewIntentionButton } from "@/components/shell/new-intention-button";
 import { SidebarNavItem } from "@/components/shell/sidebar-nav-item";
 import { UserMenu } from "@/components/shell/user-menu";
@@ -61,10 +62,8 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
     <div className="flex h-full flex-col bg-shell-surface">
       <div className={cn("flex items-center gap-2 px-4 py-5", collapsed && "justify-center px-0")}>
         <div className={cn("min-w-0 flex-1", collapsed && "sr-only")}>
-          <p className="text-xl font-bold tracking-tight text-brand-navy">
-            LE<span className="text-brand-violet">KA</span>
-          </p>
-          <p className="mt-0.5 truncate text-xs text-shell-muted">{t.shell.tagline}</p>
+          <Wordmark className="h-[22px]" priority />
+          <p className="mt-1 truncate text-xs text-shell-muted">{t.shell.tagline}</p>
         </div>
         {onToggle && (
           <button
