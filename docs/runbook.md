@@ -261,6 +261,27 @@ whatever went wrong is not one to trust.
 
 ---
 
+## Reading dates in psql — "the times are two hours off"
+
+They are not. Every date column is `timestamptz`: the database stores an
+instant, and **psql displays it in the session's time zone, which is UTC**.
+`2026-09-24 08:00:00+00` is 10:00 in Paris in summer — the `+00` says so.
+The API sends the same instant with its offset (`…Z`), and the browser shows
+it in the viewer's local time; `tests/test_auth_emails.py` checks the offset
+is there.
+
+To read in Paris time, for this psql session only — nothing stored changes:
+
+```sql
+SET TIME ZONE 'Europe/Paris';
+SELECT email, created_at, email_verified_at FROM users ORDER BY created_at DESC LIMIT 5;
+```
+
+Never change the database's own time zone to "fix" this: the values are
+already right, and the change would only move the confusion elsewhere.
+
+---
+
 ## Repeating the drill
 
 **Quarterly**, and after any change to the schema that involves moving data
