@@ -1,24 +1,19 @@
-# TLS for the staging API, obtained and renewed without anyone remembering.
+# TLS for both names, obtained and renewed without anyone remembering.
 #
 # Caddy asks Let's Encrypt on first start and renews on its own. That is the
 # whole reason it is here rather than nginx: a certificate that expires on a
 # Sunday is the most predictable outage there is, and it is avoidable.
 #
-# {$LEKA_STAGING_DOMAIN} comes from staging.env. With no domain set, Caddy
-# serves plain HTTP on :80 — which is what makes this file work on the box
-# before DNS is pointed at it.
+# The two names come from production.env, through the compose file. BOTH
+# must already point at this box in DNS (an A record each) before the first
+# start: Let's Encrypt checks that it is talking to the name it certifies.
+#
+# app. and api. share the parent domain on purpose. That makes them the same
+# SITE to a browser, which is what lets the session cookie stay
+# SameSite=Lax and host-only (ADR 009).
 
-{$LEKA_STAGING_DOMAIN::80} {
+(common) {
 	encode zstd gzip
-
-	# The health endpoint answers 503 when Postgres or Redis is unreachable.
-	# Caddy is told to believe it, so a degraded instance stops receiving
-	# traffic instead of returning errors to whoever is testing.
-	reverse_proxy api:8000 {
-		health_uri /api/v1/health
-		health_interval 10s
-		health_timeout 5s
-	}
 
 	header {
 		# Set here rather than in the application: they apply to everything
@@ -32,5 +27,31 @@
 	log {
 		output stdout
 		format json
+	}
+}
+
+{$LEKA_APP_DOMAIN} {
+	import common
+
+	# The web app: pages, and the scripts they load. It holds no secret.
+	reverse_proxy web:3000 {
+		health_uri /login
+		health_interval 10s
+		health_timeout 5s
+	}
+
+	header X-Frame-Options "DENY"
+}
+
+{$LEKA_API_DOMAIN} {
+	import common
+
+	# The health endpoint answers 503 when Postgres or Redis is unreachable.
+	# Caddy is told to believe it, so a degraded instance stops receiving
+	# traffic instead of returning errors.
+	reverse_proxy api:8000 {
+		health_uri /api/v1/health
+		health_interval 10s
+		health_timeout 5s
 	}
 }

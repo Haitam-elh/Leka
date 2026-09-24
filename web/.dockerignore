@@ -1,0 +1,14 @@
+# Everything the image does not need, and two things it must never contain.
+node_modules
+.next
+coverage
+test-results
+playwright-report
+# The browser suite and its config: they import each other, and `next build`
+# type-checks every .ts file it can see, so both go or neither does.
+e2e
+playwright.config.ts
+# A local .env holds real credentials. An image that carries one hands them
+# to anyone who can pull it.
+.env
+.env.*
