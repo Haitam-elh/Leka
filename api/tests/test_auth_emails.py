@@ -226,6 +226,37 @@ async def test_registering_again_before_verifying_sends_a_new_link(
 
 
 @pytest.mark.integration
+async def test_asking_for_a_new_link_sends_one_that_works(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    """The first link expired, or never arrived: "Renvoyer le lien" must send
+    one. It sent nothing — the route was unreachable — while the page said a
+    link was on its way."""
+    await client.post(f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD})
+    first = urlparse(_link(mailbox.sent[-1])).path.rsplit("/", 1)[1]
+
+    resent = await client.post(f"{API}/verify/resend", json={"email": "nora@acme.example"})
+
+    assert resent.status_code == 202, resent.text
+    assert len(mailbox.sent) == 2
+    assert mailbox.sent[-1].subject == "Confirmez votre adresse e-mail LEKA"
+    second = urlparse(_link(mailbox.sent[-1])).path.rsplit("/", 1)[1]
+    # The new link works; the one it replaces does not.
+    assert (await client.post(f"{API}/verify/{first}")).status_code == 400
+    assert (await client.post(f"{API}/verify/{second}")).status_code == 200
+
+
+@pytest.mark.integration
+async def test_asking_for_a_link_for_an_unknown_address_looks_the_same(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    resent = await client.post(f"{API}/verify/resend", json={"email": "nobody@acme.example"})
+
+    assert resent.status_code == 202, resent.text
+    assert mailbox.sent == []
+
+
+@pytest.mark.integration
 async def test_registering_a_verified_address_warns_its_owner(
     client: AsyncClient, mailbox: CapturingEmailSender
 ) -> None:

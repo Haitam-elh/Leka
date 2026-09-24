@@ -355,3 +355,23 @@ def test_each_public_route_is_reachable_without_credentials(
         f"{method} {path} is listed as public but requires authentication. "
         "Either remove it from PUBLIC_ROUTES or correct the reason beside it."
     )
+
+
+def test_no_route_is_hidden_behind_an_earlier_one() -> None:
+    """A route whose path an earlier route of the same method already matches
+    is never reached. POST /auth/verify/resend sat behind
+    POST /auth/verify/{token}: "resend" was checked as a token, refused as
+    invalid, and no second link was ever sent (LEKA-330). Nothing failed
+    loudly — the page said a link was on its way."""
+    routes = _routes(app.routes, settings.api_v1_prefix)
+    hidden = [
+        f"{sorted((later.methods or set()) & (earlier.methods or set()))} {later_path} "
+        f"is caught by {earlier_path}, declared before it"
+        for index, (earlier_path, earlier) in enumerate(routes)
+        for later_path, later in routes[index + 1 :]
+        if (later.methods or set()) & (earlier.methods or set())
+        and earlier.path_regex.match(later.path)
+    ]
+
+    assert routes, "the walk found no routes, so this check would mean nothing"
+    assert not hidden, "\n".join(hidden)

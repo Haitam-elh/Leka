@@ -28,6 +28,7 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [unverified, setUnverified] = useState(false);
   const [resent, setResent] = useState(false);
+  const [resendError, setResendError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function onSubmit(event: React.FormEvent) {
@@ -62,12 +63,16 @@ function LoginForm() {
 
   async function resend() {
     setResent(false);
+    setResendError(null);
     try {
       await auth.resendVerification(email);
-    } finally {
-      // Same message whatever happened: the server does not confirm whether
-      // the address exists, and neither does this screen.
+      // The server answers the same whether the address exists or not, and
+      // so does this screen. That sameness is about the ANSWER: a request
+      // that failed got none, and "a link is on its way" would be untrue —
+      // it is how a resend route nobody could reach went unnoticed.
       setResent(true);
+    } catch (caught) {
+      setResendError(authErrorMessage(t, caught, online));
     }
   }
 
@@ -90,9 +95,12 @@ function LoginForm() {
         resent ? (
           <FormMessage tone="success" message={t.auth.confirmationResent} />
         ) : (
-          <Button type="button" variant="outline" className="w-full" onClick={resend}>
-            {t.auth.resendConfirmation}
-          </Button>
+          <>
+            <FormMessage message={resendError} />
+            <Button type="button" variant="outline" className="w-full" onClick={resend}>
+              {t.auth.resendConfirmation}
+            </Button>
+          </>
         )
       ) : null}
 
