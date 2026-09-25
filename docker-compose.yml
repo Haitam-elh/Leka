@@ -73,9 +73,12 @@ services:
     # where it matters: it refuses a delete of more than 1000 keys, and our
     # stand-in accepts one happily.
     #
-    # quay.io rather than Docker Hub: the image is not pullable from Hub
-    # without authentication.
-    image: quay.io/minio/minio
+    # MinIO no longer publishes images (quay.io answers 401, Docker Hub's
+    # minio/minio is gone — 2026-09-25). pgsty/minio is the same server,
+    # rebuilt by the Pigsty project; pinned by digest, as in CI. An existing
+    # leka-minio container keeps its old image until `docker compose up -d
+    # minio` recreates it; the data volume is kept.
+    image: pgsty/minio@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372
     container_name: leka-minio
     command: ["server", "/data", "--console-address", ":9001"]
     environment:

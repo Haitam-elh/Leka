@@ -11,6 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ActivityIcon } from "@/components/shell/nav-icons";
 import { useCurrentWorkspace, useWorkspaces } from "@/components/shell/shell-provider";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 
@@ -28,19 +29,19 @@ export function WorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean }
   const workspace = useCurrentWorkspace();
   const workspaces = useWorkspaces();
 
-  const initials = (workspace?.name ?? "?").slice(0, 1).toUpperCase();
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={t.shell.switchWorkspace}
         className={cn(
-          "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40",
+          "flex w-full items-center gap-[15px] rounded-lg px-3 py-2 text-left transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40",
           collapsed && "justify-center px-0",
         )}
       >
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand-navy text-xs font-semibold text-white">
-          {initials}
+        {/* A soft violet tile with a mark, as on the mockup — the same for
+            every workspace until a workspace can upload its own logo. */}
+        <span className="flex size-[34px] shrink-0 items-center justify-center rounded-lg bg-brand-violet-soft text-shell-nav-active">
+          <ActivityIcon className="size-4" aria-hidden="true" />
         </span>
         {!collapsed && (
           <>

@@ -44,10 +44,13 @@
   --color-brand-violet: var(--brand-violet);
   --color-brand-violet-soft: var(--brand-violet-soft);
   --color-shell-surface: var(--shell-surface);
+  --color-shell-page: var(--shell-page);
   --color-shell-canvas: var(--shell-canvas);
   --color-shell-line: var(--shell-line);
   --color-shell-muted: var(--shell-muted);
   --color-shell-nav: var(--shell-nav);
+  --color-shell-nav-active: var(--shell-nav-active);
+  --color-shell-icon: var(--shell-icon);
   --color-shell-badge: var(--shell-badge);
   --color-shell-badge-foreground: var(--shell-badge-foreground);
   /* System states — see docs/frontend/system-states.md */
@@ -122,12 +125,20 @@
   --brand-violet: #4e0af4;        /* the logo's KA, and the active nav item */
   --brand-violet-soft: #ebecfe;   /* the pill behind that active item */
   --shell-surface: #f6fafe;       /* the sidebar */
-  --shell-canvas: #f3f6fd;        /* the page behind the cards */
+  /* The page is white on every mockup (#fefefe measured on 01, 07 and 12):
+   * the cards stand out by their hairline, not by a tinted page. The tint
+   * is for fills — the search field, the composer, a table row's hover. */
+  --shell-page: #ffffff;          /* the page behind the cards */
+  --shell-canvas: #f3f6fd;        /* soft fills: search field, inputs, hovers */
   --shell-line: #e6eaf4;          /* the hairline between the two */
-  /* Darkened from the mockup's #7b8096, which reads 3.9:1 on white and
-   * fails WCAG AA for body text. Same hue, same feel, 4.96:1. */
-  --shell-muted: #6a6f86;         /* tagline, dates, secondary labels */
-  --shell-nav: #262952;           /* a nav label at rest */
+  /* The mockups' secondary text is a blue grey — tagline, role, search
+   * placeholder, "Workspace". Re-measured on 2026-09-25 against a screenshot
+   * of ours with the same method, so the JPEG's blur cancels out: 5.4:1 on
+   * white, AA for body text. */
+  --shell-muted: #62688f;         /* tagline, dates, secondary labels */
+  --shell-nav: #161a3c;           /* a nav label at rest — darker than it was */
+  --shell-nav-active: #3418b9;    /* the active entry: deep indigo, not the logo's violet */
+  --shell-icon: #3f4580;          /* nav icons: a shade lighter than their label */
   --shell-badge: #fcdcdd;         /* the counter beside "To approve" */
   /* Same story: the mockup's #db4e55 on that pink reads 3.1:1. */
   --shell-badge-foreground: #c2272f;

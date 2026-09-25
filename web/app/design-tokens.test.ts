@@ -52,11 +52,13 @@ function contrast(foreground: string, background: string): number {
 
 /** Every pair the interface actually puts on screen, as text. */
 const PAIRS: readonly [label: string, foreground: string, background: string][] = [
-  ["page title", token("brand-navy"), token("shell-canvas")],
+  ["page title", token("brand-navy"), token("shell-page")],
   ["navigation label at rest", token("shell-nav"), token("shell-surface")],
-  ["active navigation label", token("brand-violet"), token("brand-violet-soft")],
+  ["active navigation label", token("shell-nav-active"), token("brand-violet-soft")],
+  ["navigation icon — held to text contrast, not the 3:1 icons need", token("shell-icon"), token("shell-surface")],
   ["tagline and secondary labels", token("shell-muted"), token("shell-surface")],
-  ["secondary text on the page", token("shell-muted"), token("shell-canvas")],
+  ["secondary text on the page", token("shell-muted"), token("shell-page")],
+  ["search placeholder, in its field", token("shell-muted"), token("shell-canvas")],
   ["search placeholder, on the white header", token("shell-muted"), "#FFFFFF"],
   ["the count beside an entry", token("shell-badge-foreground"), token("shell-badge")],
   ["skip link", "#FFFFFF", token("brand-navy")],
@@ -67,7 +69,7 @@ const PAIRS: readonly [label: string, foreground: string, background: string][] 
   ["warning, on white", token("state-warning"), "#FFFFFF"],
   ["danger, on its background", token("state-danger"), token("state-danger-soft")],
   ["danger, on white", token("state-danger"), "#FFFFFF"],
-  ["danger, on the page", token("state-danger"), token("shell-canvas")],
+  ["danger, on the page", token("state-danger"), token("shell-page")],
   // The default button and every other surface styled with the shadcn
   // "primary" pair (LEKA-339): brand navy, not shadcn's stock near-black.
   ["primary button label", token("primary-foreground"), token("primary")],

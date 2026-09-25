@@ -14,32 +14,29 @@ and no component anywhere names a label or spells out a URL.
 
 ```
 /overview                                  the way home
-│
-├── Travail
-│   ├── /intentions                        the list
-│   │   └── /intentions/:id                overview · analysis · evidence · actions · history
-│   ├── /approvals                         with a count beside it
-│   │   └── /approvals/:id
-│   └── /activity
-│
-├── Connaissance
-│   ├── /environment                       the map
-│   │   └── /environment/:type/:id         overview · metrics · dependencies · incidents
-│   │                                      deployments · logs · configuration · documentation
-│   ├── /sources
-│   │   └── /sources/:id
-│   └── /capabilities                      "bientôt"
-│       └── /capabilities/:id
-│
-└── Administration
-    ├── /governance                        included in a higher plan
-    ├── /team
-    ├── /billing
-    └── /settings
+/intentions/new                            "Nouvelle intention", the second line
+/intentions                                the list
+│   └── /intentions/:id                    overview · analysis · evidence · actions · history
+/environment                               the map — "Mon environnement"
+│   └── /environment/:type/:id             overview · metrics · dependencies · incidents
+│                                          deployments · logs · configuration · documentation
+/activity
+/approvals                                 with a count beside it
+│   └── /approvals/:id
+/capabilities                              the page says "bientôt" until LEKA-393
+│   └── /capabilities/:id
+/sources
+│   └── /sources/:id
+/governance                                the page says "included in a higher plan"
+/team
+/billing
+/settings
 
-/intentions/new                            the primary action — a button, not a line
 /(anything else)                           the "introuvable" state, inside the shell
 ```
+
+That is the sidebar, top to bottom, exactly as `docs/product/mockups/01`
+draws it: one list, no group titles.
 
 `/` redirects to `/overview`: every zone has a named path, so the registry
 has no entry that is "the one without a path of its own".
@@ -80,16 +77,20 @@ request body. It is read from the session, server side"*
 link shared between colleagues opens in the recipient's active workspace, and
 if the entity does not exist there they see the "introuvable" state.
 
-**B. "Nouvelle intention" is a button, above the list.** Everything else in
-the sidebar is somewhere to look; this is the thing to do, and twelve lines of
-equal weight buried it. On the rail it folds to a `+` that keeps its name. It
-marks itself as the current page — and `/intentions` does **not** — because
-they are two different places to be.
+**B. "Nouvelle intention" is the second line of the list** — revised on
+2026-09-25, at the product owner's request, to match the mockups exactly. It
+was first a navy button above the list, on the argument that it is the one
+thing to *do* among places to *look*. It still marks itself as the current
+page on `/intentions/new` — and `/intentions` does **not** — because they are
+two different places to be. On the rail it folds to a `+` that keeps its name.
 
-**C. The sidebar is grouped**: the way home on its own, then Travail,
-Connaissance, Administration. Quiet titles, no rules across the sidebar. Note
-that the mockups show no group titles at all; they were added because twelve
-flat entries read as a pile, and the visual weight is Karim's call to confirm.
+**C. The sidebar is one flat list, in the mockup's order** — revised the same
+day, for the same reason. It was grouped under Travail, Connaissance and
+Administration, titles the mockups never showed. The order is the mockup's:
+Vue d'ensemble, Nouvelle intention, Intentions, Mon environnement, Activité,
+À valider, Capacités, Sources, Sécurité & gouvernance, Équipe & accès,
+Facturation, Paramètres. `web/components/shell/app-sidebar.test.tsx` holds
+that list word for word.
 
 **D. The terminology is "Mon environnement".** The ticket and the backlog say
 "Company"; the interface says "Mon environnement" everywhere, and `environment`
@@ -116,10 +117,11 @@ nobody trusts. What is typed by hand is refused in the shell, with a way out.
 permission and refuses whatever the browser believes. Server-side
 authorisation is LEKA-402 and LEKA-403.
 
-**Availability.** `soon` and `plan-gated` are shown, not hidden: an entry that
-disappears teaches nothing, while one that says "bientôt" tells a customer
-what the product is becoming. The page behind it says the same thing, and
-offers the plans when a plan is what is missing.
+**Availability.** `soon` and `plan-gated` pages stay in the list — an entry
+that disappears teaches nothing — but the list itself draws them plainly, as
+the mockup does: no "bientôt" pill, no padlock (revised 2026-09-25). The page
+behind says what it is — not built yet, or in a higher plan — and offers the
+plans when a plan is what is missing.
 
 **Search does not compete with intention.** The palette finds and goes. It
 never answers. A question typed into it — "pourquoi l'API de paiement est
@@ -135,7 +137,8 @@ existence and wording are this ticket's.
 
 1. **The registry** — `web/config/routes.ts`: an entry with its `id`, `path`,
    `labelKey`, `parentId`, `requiredPermission` and, if it belongs in the
-   sidebar, an `icon` and a `group`.
+   sidebar, an `icon` — placed in the list where the mockup puts it, since
+   the sidebar follows the registry's order.
 2. **The words** — `web/lib/i18n/dictionaries.ts`: the label under `nav`, in
    **both** languages. TypeScript fails the build if English is missing, and
    `config/routes.test.ts` fails if a label key has no translation.

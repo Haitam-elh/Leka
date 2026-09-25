@@ -12,7 +12,7 @@ import { RouteState } from "@/components/shell/route-state";
  */
 export default function NotFound() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-shell-canvas">
+    <main className="flex min-h-screen items-center justify-center bg-shell-page">
       <RouteState variant="not-found" />
     </main>
   );

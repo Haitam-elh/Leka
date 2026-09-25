@@ -79,12 +79,20 @@ export function UserMenu({
         className={cn(
           "flex items-center gap-2 rounded-lg text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
           variant === "sidebar"
-            ? "w-full px-2 py-2 hover:bg-brand-violet-soft/60"
+            ? "w-full gap-4 px-3 py-2 hover:bg-brand-violet-soft/60"
             : "px-2 py-1.5 hover:bg-brand-violet-soft/60",
           collapsed && "justify-center px-0",
         )}
       >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-violet/10 text-xs font-semibold text-brand-violet">
+        <span
+          className={cn(
+            "flex shrink-0 items-center justify-center rounded-full font-semibold",
+            // The mockup's foot of the sidebar: a navy disc, white initial.
+            variant === "sidebar"
+              ? "size-[38px] bg-brand-navy text-sm text-white"
+              : "size-8 bg-brand-violet/10 text-xs text-brand-violet",
+          )}
+        >
           {initials}
         </span>
         {collapsed ? null : variant === "sidebar" ? (
@@ -93,7 +101,7 @@ export function UserMenu({
               {name}
             </span>
             <span className="block truncate text-xs text-shell-muted">
-              {workspace?.role ?? ""}
+              {workspace ? roleLabel(t, workspace.role) : ""}
             </span>
           </span>
         ) : (
@@ -145,4 +153,10 @@ export function UserMenu({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+/** The API's role name, in the interface's language — never the raw word. */
+function roleLabel(t: ReturnType<typeof useDictionary>, role: string): string {
+  const roles: Record<string, string> = t.shell.roles;
+  return roles[role] ?? role;
 }
