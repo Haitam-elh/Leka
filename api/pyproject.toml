@@ -13,7 +13,12 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     # Database
-    "sqlalchemy[asyncio]>=2.0.35",
+    # Below 2.1 until it is migrated on purpose. 2.1 changed the typing of
+    # scalar(), Select and friends: installed unannounced by CI on
+    # 2026-09-25, it turned mypy red on every branch at once, with no
+    # change of ours. A major step is taken in its own ticket, not found
+    # on the morning of a release.
+    "sqlalchemy[asyncio]>=2.0.35,<2.1",
     "asyncpg>=0.30.0",
     "alembic>=1.13.3",
     "pgvector>=0.3.6",
