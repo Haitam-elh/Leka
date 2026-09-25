@@ -11,9 +11,8 @@ import {
 /**
  * The sign-in journey, clicked through by a real browser.
  *
- * Uses the demo account created by `python scripts/seed.py`. Run the seed
- * first; these tests say so rather than creating their own account, because
- * registration needs a verification link that only exists in the API's log.
+ * Uses the demo account created by `python scripts/seed.py` (global-setup
+ * runs it). Creating an account from its email is emails.spec.ts.
  */
 
 /** The form's own alert.

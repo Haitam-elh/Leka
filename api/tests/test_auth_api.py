@@ -114,7 +114,7 @@ async def _register_and_verify(
 ) -> None:
     registered = await client.post(f"{API}/register", json={"email": email, "password": PASSWORD})
     assert registered.status_code == 202, registered.text
-    token = mailbox.last_link(r"/auth/verify/(\S+)")
+    token = mailbox.last_link(r"/verify/(\S+)")
     verified = await client.post(f"{API}/verify/{token}")
     assert verified.status_code == 200, verified.text
 
@@ -149,7 +149,7 @@ async def test_a_verification_token_works_once(
     client: AsyncClient, mailbox: CapturingEmailSender
 ) -> None:
     await client.post(f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD})
-    token = mailbox.last_link(r"/auth/verify/(\S+)")
+    token = mailbox.last_link(r"/verify/(\S+)")
 
     first = await client.post(f"{API}/verify/{token}")
     second = await client.post(f"{API}/verify/{token}")
@@ -169,7 +169,7 @@ async def test_a_verification_token_survives_no_race(
     which is what a double-click or a retrying mail client actually does.
     """
     await client.post(f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD})
-    token = mailbox.last_link(r"/auth/verify/(\S+)")
+    token = mailbox.last_link(r"/verify/(\S+)")
 
     first, second = await asyncio.gather(
         client.post(f"{API}/verify/{token}"),
@@ -191,6 +191,7 @@ async def test_registering_a_taken_address_looks_exactly_like_success(
     first = await client.post(
         f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD}
     )
+    await client.post(f"{API}/verify/{mailbox.last_link(r'/verify/(\S+)')}")
     second = await client.post(
         f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD}
     )
@@ -198,7 +199,8 @@ async def test_registering_a_taken_address_looks_exactly_like_success(
     assert first.status_code == second.status_code == 202
     assert first.json() == second.json()
     # The owner is told, which is both the safe answer and the useful one.
-    assert "tried to create" in mailbox.sent[-1].subject
+    # (An owner who never verified gets a new link instead: test_auth_emails.)
+    assert mailbox.sent[-1].subject == "Une inscription a été tentée avec votre adresse"
 
 
 async def test_addresses_are_case_insensitive(

@@ -14,6 +14,26 @@ import { useOnlineStatus } from "@/lib/use-online-status";
 
 type State = "checking" | "confirmed" | "invalid" | { failed: unknown };
 
+/**
+ * One request per token, whoever asks.
+ *
+ * A token works once. In development React runs this page's effect twice
+ * (StrictMode): two POSTs, the first verifies, the second is told the token
+ * is spent — and the page showed that second answer. Sharing the request
+ * means both runs read the same answer. "Retry" drops it, so a request that
+ * never reached the server is really sent again.
+ */
+const requests = new Map<string, Promise<unknown>>();
+
+function verifyOnce(token: string): Promise<unknown> {
+  let request = requests.get(token);
+  if (!request) {
+    request = auth.verify(token);
+    requests.set(token, request);
+  }
+  return request;
+}
+
 export default function VerifyPage() {
   const t = useDictionary();
   const online = useOnlineStatus();
@@ -21,16 +41,17 @@ export default function VerifyPage() {
   const [state, setState] = useState<State>("checking");
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => {
+    requests.delete(params.token);
     setState("checking");
     setAttempt((previous) => previous + 1);
-  }, []);
+  }, [params.token]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function run() {
       try {
-        await auth.verify(params.token);
+        await verifyOnce(params.token);
         if (!cancelled) setState("confirmed");
       } catch (caught) {
         if (cancelled) return;

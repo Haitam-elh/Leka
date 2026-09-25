@@ -13,10 +13,15 @@ moves to leka.platform, and this module imports it from there.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
+import json
 import smtplib
 import ssl
-from dataclasses import dataclass
+import sys
+from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Protocol, runtime_checkable
 
@@ -35,6 +40,8 @@ class EmailMessage:
     to: str
     subject: str
     body: str
+    # Optional: the plain-text body is always sent, and is what counts.
+    html: str | None = None
 
 
 @runtime_checkable
@@ -59,6 +66,11 @@ class ConsoleEmailSender:
             subject=message.subject,
             body=message.body,
         )
+        # For the browser tests: they read the link from here rather than from
+        # a terminal. Refused in staging and production (core/config.py).
+        if settings.email_outbox_file is not None:
+            with settings.email_outbox_file.open("a", encoding="utf-8") as outbox:
+                outbox.write(json.dumps(asdict(message)) + "\n")
 
 
 class ResendEmailSender:
@@ -74,20 +86,27 @@ class ResendEmailSender:
         self._api_key = api_key
         self._sender = sender
 
+    async def deliver(self, message: EmailMessage) -> None:
+        """Send, and raise if it fails. What the diagnostic uses."""
+        payload: dict[str, object] = {
+            "from": self._sender,
+            "to": [message.to],
+            "subject": message.subject,
+            "text": message.body,
+        }
+        if message.html:
+            payload["html"] = message.html
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                RESEND_ENDPOINT,
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                json=payload,
+            )
+            response.raise_for_status()
+
     async def send(self, message: EmailMessage) -> None:
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    RESEND_ENDPOINT,
-                    headers={"Authorization": f"Bearer {self._api_key}"},
-                    json={
-                        "from": self._sender,
-                        "to": [message.to],
-                        "subject": message.subject,
-                        "text": message.body,
-                    },
-                )
-                response.raise_for_status()
+            await self.deliver(message)
         except httpx.HTTPError as error:
             # No body, no recipient in the log beyond what is already there:
             # the body carries the link.
@@ -126,7 +145,14 @@ class SmtpEmailSender:
         self._use_ssl = use_ssl
 
     def _send_blocking(self, message: EmailMessage) -> None:
-        payload = MIMEText(message.body, "plain", "utf-8")
+        payload: MIMEText | MIMEMultipart
+        if message.html:
+            # Text first, HTML last: a client shows the last part it can.
+            payload = MIMEMultipart("alternative")
+            payload.attach(MIMEText(message.body, "plain", "utf-8"))
+            payload.attach(MIMEText(message.html, "html", "utf-8"))
+        else:
+            payload = MIMEText(message.body, "plain", "utf-8")
         payload["Subject"] = message.subject
         payload["From"] = self._sender
         payload["To"] = message.to
@@ -146,9 +172,13 @@ class SmtpEmailSender:
                 server.login(self._username, self._password)
                 server.send_message(payload)
 
+    async def deliver(self, message: EmailMessage) -> None:
+        """Send, and raise if it fails. What the diagnostic uses."""
+        await asyncio.to_thread(self._send_blocking, message)
+
     async def send(self, message: EmailMessage) -> None:
         try:
-            await asyncio.to_thread(self._send_blocking, message)
+            await self.deliver(message)
         except (smtplib.SMTPException, OSError) as error:
             # Logged and swallowed, like the API sender: a mail server having
             # a bad afternoon must not turn a successful registration into a
@@ -177,3 +207,70 @@ def build_email_sender() -> EmailSender:
     if settings.resend_api_key is not None:
         return ResendEmailSender(settings.resend_api_key.get_secret_value(), settings.email_from)
     return ConsoleEmailSender()
+
+
+class DeferredEmailSender:
+    """Queues each message to go once the request is over.
+
+    The route hands in FastAPI's BackgroundTasks.add_task. Background tasks
+    run after the response is sent, and the request's transaction commits
+    before the response (DatabaseSession, LEKA-343) — so a message leaves
+    only once the token it carries is in the database. Sent from inside the
+    request, a link could name a token the database then never kept, if the
+    commit failed after the send.
+    """
+
+    def __init__(
+        self,
+        inner: EmailSender,
+        schedule: Callable[[Callable[[EmailMessage], Awaitable[None]], EmailMessage], None],
+    ) -> None:
+        self._inner = inner
+        self._schedule = schedule
+
+    async def send(self, message: EmailMessage) -> None:
+        self._schedule(self._inner.send, message)
+
+
+def _say(line: str) -> None:
+    # A command-line tool's output is its interface, not a log line.
+    sys.stdout.write(line + "\n")
+
+
+async def _diagnose(address: str) -> int:
+    """Send one real test message with the configured sender, errors in the open."""
+    sender = build_email_sender()
+    _say(f"Sender: {type(sender).__name__}, from {settings.email_from}")
+    if isinstance(sender, ConsoleEmailSender):
+        _say("No real sender is configured (LEKA_SMTP_HOST / LEKA_SMTP_PASSWORD, or")
+        _say("LEKA_RESEND_API_KEY): the message would only be written to the log.")
+        return 2
+    assert isinstance(sender, SmtpEmailSender | ResendEmailSender)
+    message = EmailMessage(
+        to=address,
+        subject="LEKA — e-mail de test",
+        body=(
+            "Si vous lisez ce message, LEKA sait envoyer des e-mails depuis ce serveur.\n\n"
+            f"Expéditeur : {settings.email_from}\n"
+        ),
+    )
+    try:
+        await sender.deliver(message)
+    except Exception as error:
+        # In the clear, unlike a normal send: this is the tool for finding out why.
+        _say(f"FAILED: {type(error).__name__}: {error}")
+        return 1
+    _say(f"Sent to {address}. Check the inbox, and the spam folder.")
+    return 0
+
+
+def main() -> None:  # pragma: no cover - a command-line tool
+    parser = argparse.ArgumentParser(
+        description="Send a test email with the configured sender, errors in the open."
+    )
+    parser.add_argument("--test", metavar="ADDRESS", required=True)
+    sys.exit(asyncio.run(_diagnose(parser.parse_args().test)))
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()

@@ -38,6 +38,7 @@ Production once started with a bucket named `""` because that was not true.
 | `LEKA_ENVIRONMENT` | `local` | `local`, `ci`, `staging` or `production`. Production turns on the startup guards and stops publishing `/docs`; staging and production warn about old secrets |
 | `LEKA_DEBUG` | `false` | Debug behaviour. Never true in production |
 | `LEKA_API_V1_PREFIX` | `/api/v1` | Where the API is mounted |
+| `LEKA_WEB_URL` | `http://localhost:3000` | Public address of the web app, no trailing slash. Every link in an email is built on it. In staging and production it must be `https://` and not localhost, or the API refuses to start |
 | `LEKA_CORS_ORIGINS` | `["http://localhost:3000"]` | JSON list of origins a browser may call the API from |
 | `LEKA_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
 | `LEKA_LOG_FORMAT` | `console` | `console` for a terminal, `json` for a log collector |
@@ -63,7 +64,7 @@ Production once started with a bucket named `""` because that was not true.
 | `LEKA_SESSION_ABSOLUTE_LIFETIME_DAYS` | `30` | A session dies after this whatever happens, 1–365 |
 | `LEKA_SESSION_IDLE_LIFETIME_DAYS` | `7` | …and after this unused, 1–90 |
 | `LEKA_VERIFICATION_TOKEN_LIFETIME_HOURS` | `24` | Account verification link, 1–168 |
-| `LEKA_RESET_TOKEN_LIFETIME_HOURS` | `1` | Password reset link, 1–24. Short: it waits in an inbox |
+| `LEKA_RESET_TOKEN_LIFETIME_HOURS` | `1` | Password reset link, 1–24. Short on purpose: it waits in an inbox, and whoever reads that inbox owns the account for as long as it lives (OWASP Forgot Password Cheat Sheet). Raise it only for a documented reason |
 | `LEKA_SESSION_COOKIE_NAME` | `leka_session` | |
 | `LEKA_SESSION_COOKIE_SECURE` | `true` | HTTPS only. `false` is for local development and is refused in production |
 | `LEKA_SESSION_COOKIE_SAMESITE` | `lax` | `lax`, `strict` or `none`; `none` is refused in production — see `docs/adr/009-cookie-strategy.md` |
@@ -72,17 +73,28 @@ Production once started with a bucket named `""` because that was not true.
 ## E-mail
 
 With nothing configured, verification and recovery links are written to the
-log. That is what makes those flows testable without an account anywhere.
+log. That is what makes those flows testable without an account anywhere —
+and why **staging and production refuse to start without SMTP or Resend**:
+online, a log nobody reads is an email nobody receives.
+
+Emails leave after the response, so after the request's commit: a link never
+names a token the database did not keep. To test the configured sender by
+hand, errors in the open:
+
+```bash
+python -m leka.identity.email --test someone@example.com
+```
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `LEKA_EMAIL_FROM` | `LEKA <no-reply@leka.example>` | With OVH this MUST be the authenticated mailbox, or sending fails silently |
+| `LEKA_EMAIL_FROM` | `LEKA <no-reply@leka.example>` | With OVH this MUST be the authenticated mailbox, or OVH drops the mail silently. When SMTP is configured, an address different from `LEKA_SMTP_USERNAME` stops startup |
 | `LEKA_SMTP_HOST` | — | SMTP is used when the host and the password are both set |
 | `LEKA_SMTP_PORT` | `465` | |
 | `LEKA_SMTP_USERNAME` | — | The full address, with OVH |
 | `LEKA_SMTP_PASSWORD` | — | |
 | `LEKA_SMTP_USE_SSL` | `true` | `true` for port 465, `false` for 587 (STARTTLS) |
 | `LEKA_RESEND_API_KEY` | — | API sender, used when SMTP is not configured |
+| `LEKA_EMAIL_OUTBOX_FILE` | — | Local and CI only: the console sender also appends each message, as one JSON line, to this file. The browser tests read their links from it. Refused in staging and production |
 
 ## Model access
 

@@ -87,6 +87,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/verify/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resend Verification */
+        post: operations["resend_verification_api_v1_auth_verify_resend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/verify/{token}": {
         parameters: {
             query?: never;
@@ -101,23 +118,6 @@ export interface paths {
          * @description Confirm an address. Single use, and time limited.
          */
         post: operations["verify_email_api_v1_auth_verify__token__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/verify/resend": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Resend Verification */
-        post: operations["resend_verification_api_v1_auth_verify_resend_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1951,24 +1951,26 @@ export interface operations {
             };
         };
     };
-    verify_email_api_v1_auth_verify__token__post: {
+    resend_verification_api_v1_auth_verify_resend_post: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                token: string;
-            };
+            path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserRead"];
+                    "application/json": components["schemas"]["RegistrationAccepted"];
                 };
             };
             /** @description The request could not be understood. */
@@ -2045,26 +2047,24 @@ export interface operations {
             };
         };
     };
-    resend_verification_api_v1_auth_verify_resend_post: {
+    verify_email_api_v1_auth_verify__token__post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                token: string;
+            };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ForgotPasswordRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
-            202: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RegistrationAccepted"];
+                    "application/json": components["schemas"]["UserRead"];
                 };
             };
             /** @description The request could not be understood. */

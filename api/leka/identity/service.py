@@ -40,7 +40,8 @@ from leka.core.security import (
     verify_password,
     waste_time_like_a_real_verification,
 )
-from leka.identity.email import EmailMessage, EmailSender
+from leka.identity import messages
+from leka.identity.email import EmailSender
 from leka.identity.models import EmailToken, Session, TokenPurpose, User
 from leka.identity.repository import (
     EmailTokenRepository,
@@ -155,28 +156,26 @@ class AuthService:
     async def register(self, email: str, password: str) -> None:
         """Create an account, or pretend to.
 
-        Returns nothing in both cases, and the route answers identically.
-        When the address is already registered we email its owner instead —
-        which is both the safe response and the useful one: if it was them,
-        they learn they already have an account; if it was not, they learn
-        someone is poking at their address.
+        Returns nothing in every case, and the route answers identically —
+        whether an address has an account is not ours to reveal. What the
+        owner of the address receives differs:
+
+        - free address: the account, and a verification link;
+        - registered but NEVER verified: a new verification link. The first
+          one was lost, and this is the person asking again. Telling them
+          "you already have an account" sent them to a sign-in that refused
+          them for not having verified it — a dead end on both sides;
+        - registered and verified: a warning that someone tried, which is
+          the useful answer if it was them and the safe one if it was not.
         """
         await self._reject_unusable_password(password)
 
         existing = await self._users.get_by_email(email)
         if existing is not None:
-            await self._email.send(
-                EmailMessage(
-                    to=email,
-                    subject="Someone tried to create a LEKA account with your address",
-                    body=(
-                        "If this was you, you already have an account — sign in, "
-                        "or use the forgotten-password link. If it was not, you "
-                        "do not need to do anything: no account was created and "
-                        "nothing changed."
-                    ),
-                )
-            )
+            if existing.is_verified:
+                await self._email.send(messages.already_registered(email))
+            else:
+                await self._issue_verification(existing)
             return
 
         user = User(email=email, password_hash=hash_password(password))
@@ -206,18 +205,7 @@ class AuthService:
             )
         )
         await self._tokens.flush()
-        await self._email.send(
-            EmailMessage(
-                to=user.email,
-                subject="Confirm your LEKA address",
-                body=(
-                    "Confirm your address to finish setting up your account:\n\n"
-                    f"  /auth/verify/{token}\n\n"
-                    f"The link works for {settings.verification_token_lifetime_hours} "
-                    "hours and once only."
-                ),
-            )
-        )
+        await self._email.send(messages.verification(user.email, token))
 
     async def verify_email(self, token: str) -> User:
         """Consume a verification token."""
@@ -315,19 +303,7 @@ class AuthService:
             )
         )
         await self._tokens.flush()
-        await self._email.send(
-            EmailMessage(
-                to=user.email,
-                subject="Reset your LEKA password",
-                body=(
-                    "Someone asked to reset the password for this address.\n\n"
-                    f"  /auth/password/reset?token={token}\n\n"
-                    f"The link works for {settings.reset_token_lifetime_hours} hour(s) "
-                    "and once only. If it was not you, nothing has changed and you "
-                    "can ignore this message."
-                ),
-            )
-        )
+        await self._email.send(messages.password_reset(user.email, token))
 
     async def reset_password(self, token: str, new_password: str) -> User:
         """Set a new password from a reset link.

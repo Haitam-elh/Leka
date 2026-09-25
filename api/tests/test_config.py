@@ -34,13 +34,24 @@ VALID = {
     "encryption_keys": ["MN3nrX7VP5Mj0SRB4G-pIPOrvlCyT-CQoBZvsQFYHss="],
 }
 
+# Online — staging or production — an API must be able to send its emails,
+# and the links in them must point at a real https address (LEKA-330).
+ONLINE_EMAIL = {
+    "web_url": "https://app.leka-core.com",
+    "email_from": "LEKA <support@leka-core.com>",
+    "smtp_host": "ssl0.ovh.net",
+    "smtp_username": "support@leka-core.com",
+    "smtp_password": "not-a-real-password",
+}
+
 # Production asks for more than the required four. The startup guards exist
 # for settings that work perfectly in every test and quietly stop protecting
 # anyone in production — a cookie without Secure, an object store on a
-# container's ephemeral disk. Anything asserting something ABOUT production
-# has to satisfy them first.
+# container's ephemeral disk, an email that never leaves. Anything asserting
+# something ABOUT production has to satisfy them first.
 PRODUCTION = {
     **VALID,
+    **ONLINE_EMAIL,
     "object_store": "s3",
     "s3_bucket": "leka-payloads",
     "s3_access_key_id": "not-a-real-key",
@@ -95,7 +106,7 @@ def test_production_refuses_a_local_object_store(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("LEKA_ENVIRONMENT", "production")
 
     with pytest.raises(ValidationError, match="LEKA_OBJECT_STORE=local in production"):
-        Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
+        Settings(_env_file=None, **VALID, **ONLINE_EMAIL)  # type: ignore[arg-type]
 
 
 def test_production_names_every_missing_s3_setting_at_once(
@@ -106,7 +117,7 @@ def test_production_names_every_missing_s3_setting_at_once(
     monkeypatch.setenv("LEKA_ENVIRONMENT", "production")
 
     with pytest.raises(ValidationError) as refused:
-        Settings(_env_file=None, object_store="s3", **VALID)  # type: ignore[arg-type]
+        Settings(_env_file=None, object_store="s3", **VALID, **ONLINE_EMAIL)  # type: ignore[arg-type]
 
     message = str(refused.value)
     assert "LEKA_S3_BUCKET" in message
@@ -122,7 +133,7 @@ def test_a_local_object_store_is_fine_everywhere_else(
     monkeypatch.setitem(Settings.model_config, "env_file", None)
     for environment in ("local", "ci", "staging"):
         monkeypatch.setenv("LEKA_ENVIRONMENT", environment)
-        config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
+        config = Settings(_env_file=None, **VALID, **ONLINE_EMAIL)  # type: ignore[arg-type]
         assert config.object_store == "local"
         assert config.object_store_root.is_absolute()
 

@@ -354,6 +354,11 @@ def _in_production(snippet: str) -> str:
             "LEKA_S3_BUCKET": "not-used-by-this-test",
             "LEKA_S3_ACCESS_KEY_ID": "not-used",
             "LEKA_S3_SECRET_ACCESS_KEY": "not-used",
+            "LEKA_WEB_URL": "https://app.leka-core.com",
+            "LEKA_EMAIL_FROM": "LEKA <support@leka-core.com>",
+            "LEKA_SMTP_HOST": "ssl0.ovh.net",
+            "LEKA_SMTP_USERNAME": "support@leka-core.com",
+            "LEKA_SMTP_PASSWORD": "not-used",
         },
         check=False,
     )

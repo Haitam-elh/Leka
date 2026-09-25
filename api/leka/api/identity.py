@@ -21,7 +21,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.core import ratelimit
@@ -32,6 +32,7 @@ from leka.identity import (
     AuthErrorCode,
     AuthService,
     ChangePasswordRequest,
+    DeferredEmailSender,
     EmailTokenRepository,
     ForgotPasswordRequest,
     LoginRequest,
@@ -70,12 +71,14 @@ def get_membership_resolver(db: SessionDep) -> MembershipResolver:
 ResolverDep = Annotated[MembershipResolver, Depends(get_membership_resolver)]
 
 
-def get_auth_service(db: SessionDep) -> AuthService:
+def get_auth_service(db: SessionDep, background: BackgroundTasks) -> AuthService:
+    # Emails go after the response, hence after the commit: a link never
+    # names a token the database did not keep.
     return AuthService(
         UserRepository(db),
         SessionRepository(db),
         EmailTokenRepository(db),
-        build_email_sender(),
+        DeferredEmailSender(build_email_sender(), background.add_task),
     )
 
 
@@ -158,6 +161,19 @@ async def register(
     return RegistrationAccepted()
 
 
+# Declared BEFORE /verify/{token}: routes are matched in order, and
+# "resend" is a perfectly good-looking token. The other way round it was
+# checked as one, refused, and no new link was ever sent.
+# tests/test_route_protection.py fails on any route hidden that way.
+@router.post("/verify/resend", response_model=RegistrationAccepted, status_code=202)
+async def resend_verification(
+    payload: ForgotPasswordRequest, request: Request, auth: AuthDep
+) -> RegistrationAccepted:
+    await _enforce("verify:email", payload.email, ratelimit.VERIFICATION_RESEND_PER_ACCOUNT)
+    await auth.resend_verification(payload.email)
+    return RegistrationAccepted()
+
+
 @router.post("/verify/{token}", response_model=UserRead)
 async def verify_email(token: str, auth: AuthDep) -> UserRead:
     """Confirm an address. Single use, and time limited."""
@@ -170,15 +186,6 @@ async def verify_email(token: str, auth: AuthDep) -> UserRead:
             status.HTTP_400_BAD_REQUEST,
         ) from error
     return UserRead.model_validate(user)
-
-
-@router.post("/verify/resend", response_model=RegistrationAccepted, status_code=202)
-async def resend_verification(
-    payload: ForgotPasswordRequest, request: Request, auth: AuthDep
-) -> RegistrationAccepted:
-    await _enforce("verify:email", payload.email, ratelimit.VERIFICATION_RESEND_PER_ACCOUNT)
-    await auth.resend_verification(payload.email)
-    return RegistrationAccepted()
 
 
 # ── Signing in and out ───────────────────────────────────────────────────────

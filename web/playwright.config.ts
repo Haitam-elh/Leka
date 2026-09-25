@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { OUTBOX } from "./e2e/outbox";
 import { pythonExecutable } from "./e2e/python";
 
 /**
@@ -58,9 +59,20 @@ export default defineConfig({
       // connection, which would make every sign-in silently fail. The
       // production configuration is asserted separately, in the Python
       // suite, where it does not need a browser.
+      //
+      // No real email either, whatever the developer's .env says: a test run
+      // must not send mail through the company mailbox. The messages go to
+      // the outbox file instead, which is where e2e/emails.spec.ts reads the
+      // links it clicks (LEKA-330).
       command: `${pythonExecutable()} -m uvicorn leka.main:app --port 8000`,
       cwd: "../api",
-      env: { LEKA_SESSION_COOKIE_SECURE: "false" },
+      env: {
+        LEKA_SESSION_COOKIE_SECURE: "false",
+        LEKA_SMTP_HOST: "",
+        LEKA_RESEND_API_KEY: "",
+        LEKA_WEB_URL: "http://localhost:3000",
+        LEKA_EMAIL_OUTBOX_FILE: OUTBOX,
+      },
       url: "http://localhost:8000/api/v1/health",
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
