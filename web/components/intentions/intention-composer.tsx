@@ -1,6 +1,18 @@
 "use client";
 
-import { Mic, Paperclip, Send, X } from "lucide-react";
+import {
+  ArrowUp,
+  FileDiff,
+  FileSymlink,
+  Link2,
+  type LucideIcon,
+  Mic,
+  Paperclip,
+  Send,
+  ShieldCheck,
+  Sparkle,
+  X,
+} from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
@@ -101,6 +113,7 @@ export function IntentionComposer({
   attachments = [],
   onAttachmentsChange,
   onSubmit,
+  onAttachRequest,
   submitting = false,
   className,
 }: {
@@ -110,6 +123,8 @@ export function IntentionComposer({
   attachments?: readonly Attachment[];
   onAttachmentsChange?: (next: Attachment[]) => void;
   onSubmit: () => void;
+  /** Compact only: the paperclip. Files are attached on the full step. */
+  onAttachRequest?: () => void;
   submitting?: boolean;
   className?: string;
 }) {
@@ -145,6 +160,30 @@ export function IntentionComposer({
   const compact = variant === "compact";
   const whyDisabled = useId();
 
+  // The mockup's four, with their icons. Each fills in a sentence; none sends.
+  const suggestions: { icon: LucideIcon; label: string; template: string }[] = [
+    {
+      icon: Link2,
+      label: t.composer.suggestIncident,
+      template: t.composer.suggestIncidentTemplate,
+    },
+    {
+      icon: FileDiff,
+      label: t.composer.suggestChange,
+      template: t.composer.suggestChangeTemplate,
+    },
+    {
+      icon: ShieldCheck,
+      label: t.composer.suggestCompliance,
+      template: t.composer.suggestComplianceTemplate,
+    },
+    {
+      icon: FileSymlink,
+      label: t.composer.suggestMigration,
+      template: t.composer.suggestMigrationTemplate,
+    },
+  ];
+
   async function applySuggestion(template: string) {
     if (!empty) {
       const replace = await confirm({
@@ -171,17 +210,121 @@ export function IntentionComposer({
 
     for (const file of Array.from(files)) {
       if (!(ACCEPTED_TYPES as readonly string[]).includes(file.type)) {
-        notify.error({ title: fill(t.composer.fileTypeRefused, { name: file.name }) });
+        notify.error({
+          title: fill(t.composer.fileTypeRefused, { name: file.name }),
+        });
         continue;
       }
       if (file.size > MAX_FILE_MB * 1024 * 1024) {
-        notify.error({ title: fill(t.composer.fileTooBig, { name: file.name, max: MAX_FILE_MB }) });
+        notify.error({
+          title: fill(t.composer.fileTooBig, {
+            name: file.name,
+            max: MAX_FILE_MB,
+          }),
+        });
         continue;
       }
       accepted.push({ name: file.name, file });
     }
 
     if (accepted.length > 0) onAttachmentsChange([...attachments, ...accepted]);
+  }
+
+  if (compact) {
+    // Mockup 01: a card — the spark, the question, a filled field with a
+    // paperclip, a navy square to send — and the suggestions underneath.
+    return (
+      <section
+        aria-labelledby="compact-composer-title"
+        className={cn("rounded-xl border border-shell-line bg-white px-5 pt-4 pb-3", className)}
+      >
+        <div className="flex gap-5">
+          <Sparkle
+            className="mt-0.5 size-7 shrink-0 fill-shell-nav-active text-shell-nav-active"
+            aria-hidden="true"
+          />
+          <div className="min-w-0 flex-1">
+            <h2
+              id="compact-composer-title"
+              className="text-[1.0625rem] font-semibold tracking-[-0.01em] text-brand-navy"
+            >
+              {t.composer.compactTitle}
+            </h2>
+            <div className="mt-2.5 flex items-start gap-5">
+              <div className="relative min-w-0 flex-1">
+                <Textarea
+                  ref={box}
+                  value={value}
+                  onChange={(event) => setValue(name, event.target.value, { shouldDirty: true })}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
+                    event.preventDefault();
+                    onSubmit();
+                  }}
+                  aria-label={t.composer.label}
+                  aria-keyshortcuts="Meta+Enter Control+Enter"
+                  aria-describedby={missing > 0 ? whyDisabled : undefined}
+                  placeholder={t.composer.compactPlaceholder}
+                  rows={1}
+                  data-testid="intention-input"
+                  className="min-h-[46px] resize-none rounded-lg border-shell-line bg-shell-canvas py-3 pr-12 pl-4 text-sm shadow-none placeholder:text-shell-muted focus-visible:border-brand-violet focus-visible:ring-brand-violet/20"
+                />
+                {onAttachRequest ? (
+                  <button
+                    type="button"
+                    onClick={onAttachRequest}
+                    aria-label={t.composer.attachOnNextStep}
+                    title={t.composer.attachOnNextStep}
+                    className="absolute top-[11px] right-3 rounded p-0.5 text-shell-icon outline-none hover:text-shell-nav-active focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+                  >
+                    <Paperclip className="size-[18px]" aria-hidden="true" />
+                  </button>
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                onClick={onSubmit}
+                disabled={empty || tooLong || missing > 0 || submitting}
+                aria-label={t.composer.submit}
+                data-testid="intention-submit"
+                className="size-[46px] shrink-0 rounded-lg bg-brand-navy p-0 text-white hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-100"
+              >
+                <ArrowUp className="size-5" aria-hidden="true" />
+              </Button>
+            </div>
+            {/* Only while it is true: a disabled button that does not say why
+                reads as broken. */}
+            <p
+              id={whyDisabled}
+              aria-live="polite"
+              className="mt-1.5 text-xs text-shell-muted empty:hidden"
+            >
+              {missing > 0
+                ? fill(t.composer.tooShortHint, { count: missing })
+                : tooLong
+                  ? fill(t.forms.charCount, {
+                      count: value.length,
+                      max: INTENTION_MAX,
+                    })
+                  : null}
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-3">
+          {suggestions.map(({ icon: Icon, label, template }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => void applySuggestion(template)}
+              className="flex items-center gap-2.5 rounded-lg border border-shell-line bg-white px-3.5 py-[9px] text-[0.8125rem] font-medium tracking-[-0.01em] text-brand-navy transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+            >
+              <Icon className="size-4 text-shell-icon" aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </section>
+    );
   }
 
   return (
@@ -227,7 +370,9 @@ export function IntentionComposer({
                 {attachment.name}
                 <button
                   type="button"
-                  aria-label={fill(t.composer.removeFile, { name: attachment.name })}
+                  aria-label={fill(t.composer.removeFile, {
+                    name: attachment.name,
+                  })}
                   onClick={() =>
                     onAttachmentsChange?.(
                       attachments.filter((current) => current.name !== attachment.name),
@@ -292,7 +437,10 @@ export function IntentionComposer({
                 tooLong ? "text-shell-badge-foreground" : "text-shell-muted",
               )}
             >
-              {fill(t.forms.charCount, { count: value.length, max: INTENTION_MAX })}
+              {fill(t.forms.charCount, {
+                count: value.length,
+                max: INTENTION_MAX,
+              })}
             </span>
             {missing > 0 ? null : (
               <span className="hidden text-xs text-shell-muted sm:inline">
@@ -319,19 +467,16 @@ export function IntentionComposer({
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-shell-muted">{t.composer.suggestions}</span>
-        {[
-          { label: t.composer.suggestIncident, template: t.composer.suggestIncidentTemplate },
-          { label: t.composer.suggestChange, template: t.composer.suggestChangeTemplate },
-          { label: t.composer.suggestRisk, template: t.composer.suggestRiskTemplate },
-        ].map((suggestion) => (
+        {suggestions.map(({ icon: Icon, label, template }) => (
           <Button
-            key={suggestion.label}
+            key={label}
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => void applySuggestion(suggestion.template)}
+            onClick={() => void applySuggestion(template)}
           >
-            {suggestion.label}
+            <Icon className="size-4" aria-hidden="true" />
+            {label}
           </Button>
         ))}
       </div>

@@ -70,6 +70,9 @@ const PAIRS: readonly [label: string, foreground: string, background: string][] 
   ["danger, on its background", token("state-danger"), token("state-danger-soft")],
   ["danger, on white", token("state-danger"), "#FFFFFF"],
   ["danger, on the page", token("state-danger"), token("shell-page")],
+  ["info, on its background", token("state-info"), token("state-info-soft")],
+  ["the line under the greeting", token("shell-accent-muted"), token("shell-page")],
+  ["text on the closing banner", token("shell-muted"), token("shell-highlight")],
   // The default button and every other surface styled with the shadcn
   // "primary" pair (LEKA-339): brand navy, not shadcn's stock near-black.
   ["primary button label", token("primary-foreground"), token("primary")],

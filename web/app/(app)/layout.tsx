@@ -33,9 +33,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Toaster closeLabel={t.interactions.dismiss} />
       <DocumentTitle />
       {/* TODO LEKA-390 for the counts, and notifications have no ticket yet:
-          the shell is handed numbers rather than asking for them. */}
+          the shell is handed numbers rather than asking for them. None until
+          then — the red dot on the bell was a mocked "1" for everyone. */}
       <ConfirmProvider>
-        <AppShell badges={badges} notificationCount={1}>
+        <AppShell badges={badges} notificationCount={0}>
           <RouteGuard>{children}</RouteGuard>
         </AppShell>
       </ConfirmProvider>
