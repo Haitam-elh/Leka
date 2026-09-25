@@ -60,6 +60,10 @@
   --color-state-warning-soft: var(--state-warning-soft);
   --color-state-danger: var(--state-danger);
   --color-state-danger-soft: var(--state-danger-soft);
+  --color-state-info: var(--state-info);
+  --color-state-info-soft: var(--state-info-soft);
+  --color-shell-highlight: var(--shell-highlight);
+  --color-shell-accent-muted: var(--shell-accent-muted);
   --spacing-sidebar: var(--shell-sidebar-width);
   --spacing-rail: var(--shell-sidebar-rail);
   --spacing-header: var(--shell-header-height);
@@ -139,6 +143,8 @@
   --shell-nav: #161a3c;           /* a nav label at rest — darker than it was */
   --shell-nav-active: #3418b9;    /* the active entry: deep indigo, not the logo's violet */
   --shell-icon: #3f4580;          /* nav icons: a shade lighter than their label */
+  --shell-highlight: #f5f3ff;     /* the overview's closing banner */
+  --shell-accent-muted: #5c64a8;  /* "Votre environnement est sain." — the line under the greeting */
   --shell-badge: #fcdcdd;         /* the counter beside "To approve" */
   /* Same story: the mockup's #db4e55 on that pink reads 3.1:1. */
   --shell-badge-foreground: #c2272f;
@@ -157,6 +163,10 @@
   --state-warning-soft: #fdf1e2;
   --state-danger: #c2272f;
   --state-danger-soft: #fdecec;
+  /* The fourth tone of the overview's tiles — "Sources connectées" — a
+   * cyan-blue measured at #e8f7fc on mockup 01. */
+  --state-info: #17648f;
+  --state-info-soft: #e8f6fc;
 
   /* Measured on the same screen: 222px and 64px at its 1536px width. */
   --shell-sidebar-width: 14rem;   /* 224px */

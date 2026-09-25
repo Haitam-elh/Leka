@@ -30,7 +30,18 @@ export function CompactIntentionComposer() {
 
   return (
     <Form form={form}>
-      <IntentionComposer variant="compact" onSubmit={() => void form.submit()} />
+      <IntentionComposer
+        variant="compact"
+        onSubmit={() => void form.submit()}
+        // Files are attached on the full step, where there is room to list
+        // them; the paperclip carries the sentence there as it is.
+        onAttachRequest={() => {
+          const text = form.getValues("text");
+          router.push(
+            text ? `${routes.intentionNew()}?q=${encodeURIComponent(text)}` : routes.intentionNew(),
+          );
+        }}
+      />
     </Form>
   );
 }
