@@ -40,7 +40,8 @@ cross-site POST does not carry the cookie, which is CSRF protection we get
 for free given that every mutation we serve is POST, PATCH or DELETE.
 
 Keeping it requires the frontend and the API to share a parent domain:
-`app.leka.xx` and `api.leka.xx`. **This is a deployment requirement, not a
+`app.leka.xx` and `api.leka.xx` — in production, `app.leka-core.com` and
+`api.leka-core.com`. **This is a deployment requirement, not a
 preference.** It is cheap to satisfy on day one and expensive to retrofit.
 
 The value is configurable, and the application **refuses to start** in

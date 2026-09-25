@@ -74,7 +74,7 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8000/api/v1/health || exit 1
 
 # The API. The other processes of the same image override it — see
-# deploy/docker-compose.staging.yml:
+# deploy/docker-compose.production.yml:
 #   python -m leka.db.migrate           once, before anything starts
 #   python -m leka.platform.worker      runs the jobs
 #   python -m leka.platform.scheduler   puts the tick and the sweeps on the queue

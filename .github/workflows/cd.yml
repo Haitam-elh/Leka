@@ -22,20 +22,21 @@ on:
 concurrency:
   # Never two deployments at once on one box: the second `up -d` would race
   # the first while it is still pulling.
-  group: cd-staging
+  group: cd-production
   cancel-in-progress: false
 
 jobs:
   build:
-    name: build and push the image
+    name: build and push the two images
     runs-on: ubuntu-latest
     # Two conditions, and the first one matters most today.
     #
-    # STAGING_ENABLED is a repository variable that does not exist yet. Until
-    # somebody sets it to "true", this whole workflow is skipped — so merging
-    # it costs nothing, runs nothing and bills nothing. A pipeline that fails
-    # on every merge because it has nowhere to deploy teaches people to
-    # ignore a red tick, which is the one habit CI cannot survive.
+    # PRODUCTION_ENABLED is a repository variable that does not exist until
+    # the box is ready. Until somebody sets it to "true", this whole workflow
+    # is skipped — so merging it costs nothing, runs nothing and bills
+    # nothing. A pipeline that fails on every merge because it has nowhere to
+    # deploy teaches people to ignore a red tick, which is the one habit CI
+    # cannot survive.
     #
     # Repository variables, not secrets: the `secrets` context is not
     # available in a job-level `if`, and this is not a secret anyway.
@@ -45,7 +46,7 @@ jobs:
     # to be called main passes the `branches` filter above. The manual path
     # skips both because it deploys a commit whose CI already passed.
     if: >-
-      vars.STAGING_ENABLED == 'true' &&
+      vars.PRODUCTION_ENABLED == 'true' &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.event == 'push'))
@@ -53,7 +54,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image: ${{ steps.what.outputs.image }}
+      registry: ${{ steps.what.outputs.registry }}
       release: ${{ steps.what.outputs.release }}
 
     steps:
@@ -69,12 +70,25 @@ jobs:
           # The full sha, whatever was typed. A short one would tag a second
           # copy of an image that already exists under the long one.
           RELEASE="$(git rev-parse HEAD)"
-          # An image reference must be lower case; the repository is
-          # Haitam-elh/Leka, and `ghcr.io/Haitam-elh/...` is refused outright.
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/api"
+          # An image reference must be lower case, and a GitHub owner or
+          # repository name need not be: `ghcr.io/Haitam-elh/...` is refused
+          # outright. Derived from the repository, so moving it to an
+          # organisation moves the images with it.
+          REGISTRY="ghcr.io/${GITHUB_REPOSITORY,,}"
           echo "release=${RELEASE}" >> "$GITHUB_OUTPUT"
-          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
-          echo "Deploying ${IMAGE}:${RELEASE}"
+          echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
+          echo "Deploying ${REGISTRY}/{api,web}:${RELEASE}"
+
+      - name: The web build needs the API's public address
+        env:
+          PROD_API_URL: ${{ vars.PROD_API_URL }}
+        run: |
+          # Baked into the JavaScript at build time (see web/Dockerfile). An
+          # empty value would build an app that calls nothing.
+          case "$PROD_API_URL" in
+            https://*) echo "Web app will call ${PROD_API_URL}" ;;
+            *) echo "::error::Set the repository variable PROD_API_URL, e.g. https://api.leka-core.com"; exit 1 ;;
+          esac
 
       - uses: docker/login-action@v3
         with:
@@ -82,41 +96,60 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Is it already built?
+      - name: Are they already built?
         id: existing
         run: |
-          if docker buildx imagetools inspect "${{ steps.what.outputs.image }}:${{ steps.what.outputs.release }}" > /dev/null 2>&1; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-            echo "Already in the registry: deploying it as it is."
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-          fi
+          # Per image: a rerun after the web build failed must not rebuild
+          # an API that is already in the registry.
+          for image in api web; do
+            if docker buildx imagetools inspect "${{ steps.what.outputs.registry }}/${image}:${{ steps.what.outputs.release }}" > /dev/null 2>&1; then
+              echo "${image}=true" >> "$GITHUB_OUTPUT"
+              echo "${image}: already in the registry, deployed as it is."
+            else
+              echo "${image}=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
 
       - uses: docker/setup-buildx-action@v3
-        if: steps.existing.outputs.found != 'true'
+        if: steps.existing.outputs.api != 'true' || steps.existing.outputs.web != 'true'
 
-      - name: Build and push
-        if: steps.existing.outputs.found != 'true'
+      - name: Build and push the API
+        if: steps.existing.outputs.api != 'true'
         uses: docker/build-push-action@v6
         with:
           context: api
           push: true
           # The sha and nothing else. No `latest`: a moving tag means
           # "what is running?" has no answer and rollback has no target.
-          tags: ${{ steps.what.outputs.image }}:${{ steps.what.outputs.release }}
+          tags: ${{ steps.what.outputs.registry }}/api:${{ steps.what.outputs.release }}
           # Links the package to this repository, which is what lets the
           # deploy job's token pull it, and says which commit it is.
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ steps.what.outputs.release }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build and push the web app
+        if: steps.existing.outputs.web != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: web
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.PROD_API_URL }}
+          tags: ${{ steps.what.outputs.registry }}/web:${{ steps.what.outputs.release }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.what.outputs.release }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
 
   deploy:
-    name: deploy to staging, and undo it if it does not come up
+    name: deploy to production, and undo it if it does not come up
     runs-on: ubuntu-latest
     needs: build
-    environment: staging
+    environment: production
     permissions:
       contents: read
       # The box pulls with this job's token.
@@ -128,27 +161,27 @@ jobs:
       - name: Send the deployment files
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
-          source: deploy/docker-compose.staging.yml,deploy/Caddyfile,deploy/deploy.sh
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          source: deploy/docker-compose.production.yml,deploy/Caddyfile,deploy/deploy.sh
           target: /opt/leka
           strip_components: 1
 
       - name: Deploy, verify, and roll back if it did not come up
         uses: appleboy/ssh-action@v1.2.0
         env:
-          IMAGE: ${{ needs.build.outputs.image }}
+          REGISTRY: ${{ needs.build.outputs.registry }}
           RELEASE: ${{ needs.build.outputs.release }}
         with:
-          host: ${{ secrets.STAGING_HOST }}
-          username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
-          envs: IMAGE,RELEASE
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          envs: REGISTRY,RELEASE
           # Everything that decides anything is in deploy.sh, which is what
           # the local rehearsal runs. See docs/deployment.md.
           script: |
             set -eu
             echo "${{ secrets.GITHUB_TOKEN }}" \
               | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-            bash /opt/leka/deploy.sh "$IMAGE" "$RELEASE"
+            bash /opt/leka/deploy.sh "$REGISTRY" "$RELEASE"

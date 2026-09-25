@@ -1,58 +1,56 @@
-# LEKA staging, on one machine.
+# LEKA in production, on one machine.
+#
+# ONE ENVIRONMENT ONLINE. There is no staging any more: this box is where
+# LEKA runs for its users. What protects it is what runs before it — CI on
+# every pull request, the browser suite, and deploy.sh, which puts the
+# previous release back if the new one does not come up.
 #
 # WHY ONE MACHINE. docs/architecture.md sets the constraint this whole file
 # obeys: two developers, part time, no dedicated operator. Everything that
 # needs someone to look after it — a cluster, a service mesh, a managed
 # cache — is a recurring cost in attention that this team does not have. One
 # EC2 instance running a handful of containers is a thing you can hold in
-# your head and rebuild from this file in ten minutes.
-#
-# WHY NOT App Runner, which was the other candidate: AWS closed it to new
-# accounts. It also only runs HTTP services, and the worker is an RQ process
-# that never serves a request. See docs/adr/014-hosting.md.
+# your head and rebuild from this file in ten minutes. See ADR 014.
 #
 # WHAT IS DELIBERATELY NOT HERE
-#   - Postgres. Neon already runs it, managed and backed up, and a database
-#     on this box would be the one thing on it that cannot be rebuilt.
-#   - A load balancer. Caddy terminates TLS, and an ALB is billed by the
-#     hour whether or not anyone visits.
-#   - The web application. Scoped out of this pass; see the ADR for what it
-#     needs (`output: "standalone"` in next.config.ts) and why it is next.
+#   - PostgreSQL. Amazon RDS runs it, backed up and patched by AWS, in the
+#     same region; a database on this box would be the one thing on it that
+#     cannot be rebuilt.
+#   - A load balancer. Caddy terminates TLS for both names, and an ALB is
+#     billed by the hour whether or not anyone visits.
 #
-# Deployed by deploy.sh, which writes LEKA_IMAGE and LEKA_RELEASE into
-# staging.env. By hand:
+# Deployed by deploy.sh, which writes LEKA_REGISTRY and LEKA_RELEASE into
+# production.env. By hand:
 #
-#   docker compose -f docker-compose.staging.yml --env-file staging.env up -d
+#   docker compose -f docker-compose.production.yml --env-file production.env up -d
 
-name: leka-staging
-
-x-image: &image
-  # Never `latest`. A tag that moves means "what is running?" has no answer,
-  # and rollback has nothing to roll back to. deploy.sh writes both values.
-  #
-  # The repository as one variable, lower case, rather than built from
-  # GITHUB_REPOSITORY: an image reference must be lower case, the repository
-  # is Haitam-elh/Leka, and `ghcr.io/Haitam-elh/Leka/api` is refused by
-  # every docker command there is.
-  image: ${LEKA_IMAGE:?set LEKA_IMAGE, e.g. ghcr.io/haitam-elh/leka/api}:${LEKA_RELEASE:?set LEKA_RELEASE to a commit sha}
+name: leka
 
 x-logging: &logging
   logging:
     driver: json-file
-    # A staging box with no log rotation fills its disk and takes the
-    # application down with it, which is a tedious way to learn this.
+    # A box with no log rotation fills its disk and takes the application
+    # down with it, which is a tedious way to learn this.
     options: { max-size: "10m", max-file: "3" }
 
-x-app: &app
-  <<: [*image, *logging]
-  restart: unless-stopped
-  env_file: [staging.env]
+x-backend: &backend
+  # Never `latest`. A tag that moves means "what is running?" has no answer,
+  # and rollback has nothing to roll back to. deploy.sh writes both values.
+  #
+  # The registry path is lower case — an image reference must be, and the
+  # GitHub repository name is not. deploy.sh receives it already lowered.
+  image: ${LEKA_REGISTRY:?set LEKA_REGISTRY, e.g. ghcr.io/<owner>/leka}/api:${LEKA_RELEASE:?set LEKA_RELEASE to a commit sha}
+  env_file: [production.env]
   environment:
-    LEKA_ENVIRONMENT: staging
+    LEKA_ENVIRONMENT: production
     LEKA_REDIS_URL: redis://redis:6379/0
     # The image is built from one commit; this is how an error in Sentry
     # names it. "Releases are traceable" is this line.
     LEKA_RELEASE: ${LEKA_RELEASE}
+
+x-app: &app
+  <<: [*backend, *logging]
+  restart: unless-stopped
   depends_on:
     redis:
       condition: service_healthy
@@ -74,11 +72,7 @@ services:
   # is ahead of the image, and alembic fails on a revision it has never
   # heard of — which took every rollback down with it.
   migrate:
-    <<: [*image, *logging, *no-http]
-    env_file: [staging.env]
-    environment:
-      LEKA_ENVIRONMENT: staging
-      LEKA_REDIS_URL: redis://redis:6379/0
+    <<: [*backend, *logging, *no-http]
     command: ["python", "-m", "leka.db.migrate"]
     restart: "no"
     depends_on:
@@ -103,6 +97,16 @@ services:
     <<: [*app, *no-http]
     command: ["python", "-m", "leka.platform.scheduler"]
 
+  # The Next.js application, from the same commit as the API. It holds no
+  # secret and reads no LEKA_* variable: the API's address was baked into
+  # the build (NEXT_PUBLIC_API_URL, see web/Dockerfile), and everything else
+  # it knows it asks the API.
+  web:
+    <<: *logging
+    image: ${LEKA_REGISTRY}/web:${LEKA_RELEASE}
+    restart: unless-stopped
+    expose: ["3000"]
+
   redis:
     <<: *logging
     image: redis:7-alpine
@@ -110,7 +114,7 @@ services:
     # No persistence on purpose. The queue is a queue: LEKA-334 stores what
     # must survive in `events` and `job_runs`, in Postgres, and re-dispatches
     # from there. A Redis that loses its memory costs a re-dispatch, and a
-    # Redis with an AOF file on a staging box costs a disk to look after.
+    # Redis with an AOF file costs a disk to look after.
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -123,21 +127,21 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     ports: ["80:80", "443:443"]
-    # The Caddyfile reads the domain from Caddy's OWN environment. --env-file
-    # only feeds the substitutions in this file, so without this line Caddy
-    # never saw the domain and served plain HTTP whatever staging.env said.
-    # The domain alone, not env_file: Caddy has no use for the database
-    # password. `:80` when unset, which is plain HTTP before DNS is pointed.
+    # The Caddyfile reads the two names from Caddy's OWN environment.
+    # --env-file only feeds the substitutions in this file, so without these
+    # lines Caddy would never see them. The names alone, not env_file: Caddy
+    # has no use for the database password.
     environment:
-      LEKA_STAGING_DOMAIN: ${LEKA_STAGING_DOMAIN:-:80}
+      LEKA_APP_DOMAIN: ${LEKA_APP_DOMAIN:?set LEKA_APP_DOMAIN, e.g. app.leka-core.com}
+      LEKA_API_DOMAIN: ${LEKA_API_DOMAIN:?set LEKA_API_DOMAIN, e.g. api.leka-core.com}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-    depends_on: [api]
+    depends_on: [api, web]
 
 volumes:
   # Certificates and account keys. Losing this volume means asking Let's
-  # Encrypt for a new certificate, which is rate limited.
+  # Encrypt for new certificates, which is rate limited.
   caddy-data:
   caddy-config:

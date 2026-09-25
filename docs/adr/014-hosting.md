@@ -1,8 +1,42 @@
 # 014 — Where LEKA runs
 
-**Status:** accepted
+**Status:** accepted, amended 2026-09-24 (see the first section)
 **Date:** 2026-09-23
 **Ticket:** LEKA-336
+
+## Amendment, 2026-09-24 — production, on RDS, with the web app
+
+What changed, and the reason for each. The rest of this record is the
+original decision; where it says "staging", read "production".
+
+- **One environment online, named `production`.** Not staging plus
+  production: two environments on this budget means two boxes, two
+  databases and two sets of secrets for two part-time developers, and the
+  second one is looked after by nobody. What stands in for staging is CI, the
+  browser suite, and `deploy.sh` putting the previous release back. The
+  cost, said plainly: nothing is tried online before users see it.
+- **PostgreSQL moves from Neon to Amazon RDS.** Same region, same account
+  as S3 and the instance: one provider to watch, one bill, backups the
+  account itself holds (7 days, point in time), and a database that is not
+  reachable from the internet at all — only from the instance's security
+  group. The cost: RDS bills by the hour where Neon's free plan did not, and
+  the Neon drill in `runbook.md` has to be redone on RDS.
+- **The web app is deployed** — `output: "standalone"`, its own image built
+  from the same commit as the API, `app.` and `api.` as two blocks of one
+  Caddyfile. The two names share `leka-core.com`, which is what ADR 009
+  requires.
+- **Production starts on the free plan's credits** (decided 2026-09-25),
+  and the account moves to the paid plan when they are nearly spent — and
+  before the first customer's data, whichever comes first. Running out on
+  the free plan closes the account rather than billing it (see "What this
+  costs" below, and `runbook.md`), so the upgrade is watched for monthly,
+  not waited for.
+- **One instance, now in production.** Below, "What we give up" called one
+  point of failure acceptable on staging and not in production. It is
+  accepted in production for the launch, knowingly: a handful of users, and
+  a box rebuilt from Git and `production.env` in ten minutes. A deployment
+  drops the requests in flight. The day either matters, the answer is still
+  the one below — two instances and a balancer.
 
 ## The decision
 
@@ -109,6 +143,6 @@ Two consequences, and neither is optional:
 The application reads everything from `LEKA_*` environment variables and
 nothing from a host's metadata. Object storage already speaks S3, R2 or MinIO
 through one endpoint variable (ADR 010). Moving to Scaleway, Fly or anywhere
-else that runs a container is a different `staging.env` and a different SSH
+else that runs a container is a different `production.env` and a different SSH
 target — not a rewrite. That was a condition of choosing anything at all this
 early.

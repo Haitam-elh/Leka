@@ -92,51 +92,181 @@ Two things these numbers deliberately do **not** cover:
 
 ---
 
-## The AWS account closes itself around March 2027
+## The AWS account: convert it before production
 
-Not a risk, a schedule. The account (`544733633234`, `eu-central-1`) is on
-the plan that grants up to $200 of credit and runs for **six months or until
-the credit is gone**. At the end AWS **closes the account**; ninety days
-later it deletes what was in it.
+Not a risk, a schedule. The account (`544733633234`, `eu-central-1`) was
+opened on the **free plan**: up to $200 of credit, for **six months or until
+the credit is gone**. AWS's own words:
 
-So this is the one date in this file that is not about a failure:
+> "Your free account plan ends after six months or when your credits are
+> fully used - whichever occurs first. […] After your free account plan
+> expires, your account closes automatically, and you lose access to your
+> resources and data. AWS retains your content for 90 days before
+> permanently deleting your account and all associated resources."
+> — *AWS Billing User Guide, "Choosing a plan"*
+> (<https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html>)
 
-| | |
-|---|---|
-| **Estimated expiry** | around March 2027 |
-| **What ends** | the whole account — S3 bucket, IAM user, anything running |
-| **Grace before deletion** | 90 days after closure |
-| **What is NOT on it** | the database. Neon is separate and unaffected |
+Production puts the database (RDS) and customer files (S3) on this account.
+**Decided 2026-09-25: production starts on the credits, and the account is
+converted when they are nearly spent** — below about $50, checked monthly —
+**and in any case before the first customer's data goes in.** Not after:
+running out on the free plan closes the account, it does not start a bill.
+See step 1 of `deployment.md`, "Turning production on".
 
-**Before that date**, either convert the account to a paid plan or move what
-is on it. Converting is the cheap option and takes minutes; discovering the
-closure afterwards costs the bucket.
+**The procedure, as AWS documents it** (same page, "To upgrade your free
+plan"):
 
-**Until then, no customer data touches this account.** The bucket
-`leka-payloads-…` is for validation. Staging runs on seeded data. That is
-not a precaution about AWS — it is that an account which deletes itself on a
-schedule is not somewhere a customer's files can live.
+1. Sign in to the AWS Management Console, as the account's root user or an
+   administrator with billing access.
+2. Open **Upgrade plan**:
+   <https://console.aws.amazon.com/billing/home?#/freetier/upgrade>
+3. Review the features you gain, and choose **Upgrade account**.
+
+If the console shows the newer "AWS Settings" experience instead, AWS
+documents the equivalent path — <https://settings.aws.com> → **Billing** →
+**Upgrade** → **Get started** → payment method → **Upgrade account**
+(<https://docs.aws.amazon.com/accounts/latest/reference/upgrade-account.html>).
+
+What changes, again in AWS's words:
+
+- "Any remaining credits from your free account plan are automatically
+  applied to future AWS bills." Nothing is lost by converting early.
+- "Account doesn't close when credits are depleted." — and in exchange, you
+  "pay for charges that exceed the credit balance". The budget alarm is what
+  says so before the invoice does.
+- "You cannot reverse the upgrade process."
+
+**Until it is converted, no customer data touches this account** — test
+accounts and seeded data only.
+
+## Email: the DNS records that get it delivered
+
+The API sends as `support@leka-core.com` through OVH (`ssl0.ovh.net:465`).
+Without these records, the mail leaves and lands in spam, or nowhere. All
+three live in the OVH DNS zone of `leka-core.com` (Web Cloud → Domain names
+→ `leka-core.com` → DNS zone).
+
+| Record | Type | Value | Source |
+|---|---|---|---|
+| `leka-core.com` | TXT | `v=spf1 include:mx.ovh.com ~all` | OVHcloud, "How to improve email security with an SPF record" |
+| DKIM | CNAME × 2 | created by OVH itself, see below | OVHcloud, "How to improve email security with a DKIM record" |
+| `_dmarc.leka-core.com` | TXT | `v=DMARC1; p=none; rua=mailto:support@leka-core.com` | start in observation |
+
+- **SPF.** There must be **one** `v=spf1` record. If the zone already has
+  one, merge `include:mx.ovh.com` into it; two SPF records invalidate both.
+- **DKIM.** Web Cloud → **MX Plan** (or the email offer in use) → the
+  domain → **General information** → click the red **DKIM** badge →
+  **Validate**. OVH creates the two selector CNAMEs in the zone when the
+  zone is at OVH. Wait for the badge to turn green.
+- **DMARC `p=none`** reports without rejecting anything. After a few weeks
+  of clean reports, move to `p=quarantine`. Starting at `quarantine` risks
+  losing real mail over a record that was not yet right.
+
+Then check from the box:
+
+```bash
+docker compose -f docker-compose.production.yml --env-file production.env \
+  exec api python -m leka.identity.email --test <a Gmail address you own>
+```
+
+In Gmail, *Show original* must say `SPF: PASS`, `DKIM: PASS` and
+`DMARC: PASS`.
 
 ## Honest gaps
 
 Stated here rather than left to be discovered.
 
-1. **No scheduled logical dump exists.** The drill was run by hand. Until
-   there is a cron job pushing a dump somewhere outside Neon, the only real
-   protection is Neon's own 6-hour history, and the logical-dump RPO above is
-   unbounded.
-2. **6 hours of history is the free plan.** Raise it before the first paying
-   customer. It is a project setting.
-3. **A dump has never been stored off-provider.** Neon's history protects
-   against our mistakes. It does not protect against losing the Neon account.
+1. **No scheduled logical dump exists.** RDS's automated backups (7 days,
+   point in time) are the real protection. They live in the same AWS
+   account: they do not protect against losing the account.
+2. **The drill above was measured on Neon**, before the move to RDS. The
+   RDS procedure is written from AWS's documentation and has not yet been
+   rehearsed on our instance. Run it once, on a restore beside the live
+   instance, and record the numbers here.
+3. **A dump has never been stored off-provider.**
 4. **The drill has been run once.** Quarterly is the intent; see below.
 
 ---
 
-## Procedure — point-in-time restore (the primary path)
+## Before anything risky — a manual snapshot
 
-Use this for anything caused by us: a bad migration, a bad deploy, a `DELETE`
-without a `WHERE`. It is seconds, and it does not touch the live branch.
+A manual snapshot is kept until someone deletes it, unlike the automated
+backups, which age out after 7 days. Take one before a migration that drops
+or renames, and before any `downgrade`:
+
+```bash
+aws rds create-db-snapshot --region eu-central-1 \
+  --db-instance-identifier leka \
+  --db-snapshot-identifier leka-before-$(date +%Y%m%d-%H%M)
+aws rds wait db-snapshot-available --region eu-central-1 \
+  --db-snapshot-identifier leka-before-<the same stamp>
+```
+
+---
+
+## Procedure — point-in-time restore on RDS (the primary path)
+
+Use this for anything caused by us: a bad migration, a bad deploy, a
+`DELETE` without a `WHERE`. RDS restores to a **new** instance beside the
+live one. **Do not repair the broken one**: it stays exactly as it is, which
+matters if the first theory about what happened turns out to be wrong.
+
+1. **Decide the timestamp.** The last moment you are confident the data was
+   good, in UTC, inside the 7-day window.
+
+2. **Restore beside it**, in the same network and security group:
+
+   ```bash
+   aws rds restore-db-instance-to-point-in-time --region eu-central-1 \
+     --source-db-instance-identifier leka \
+     --target-db-instance-identifier leka-restore-$(date +%Y%m%d-%H%M) \
+     --restore-time 2026-09-21T13:00:00Z \
+     --db-subnet-group-name <the one leka uses> \
+     --vpc-security-group-ids <leka-db's id> \
+     --no-publicly-accessible
+   aws rds wait db-instance-available --region eu-central-1 \
+     --db-instance-identifier <the target above>
+   ```
+
+3. **Get its endpoint:**
+
+   ```bash
+   aws rds describe-db-instances --region eu-central-1 \
+     --db-instance-identifier <the target> \
+     --query 'DBInstances[0].Endpoint.Address' --output text
+   ```
+
+4. **Verify before switching anything**, from the box (the only place
+   allowed to reach it):
+
+   ```bash
+   psql "$URI" -c "SELECT version_num FROM alembic_version;"
+   psql "$URI" -c "SELECT relname, n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC;"
+   ```
+
+5. **Point the application at it** by changing the host in
+   `LEKA_DATABASE_URL`, then `bash deploy.sh` with the running release.
+
+6. **Afterwards, re-run the deletion sweeps.** A restore reinstates rows that
+   were legitimately deleted, including workspaces a customer asked to erase.
+   Those deletions have to happen again:
+
+   ```bash
+   python -m leka.platform.tasks     # erasures past their grace period
+   python -m leka.ingestion.tasks    # retention, then reconciliation
+   ```
+
+   Skipping this step means holding data a customer asked us to delete.
+
+7. **Later**, once sure: delete the broken instance, keeping a final
+   snapshot of it.
+
+---
+
+## Procedure — point-in-time restore on Neon (before RDS)
+
+Kept while the Neon project exists, and because the drill above was run
+with it.
 
 **Before anything: do not repair the broken branch.** Branch beside it. The
 original stays exactly as it is, which matters if the first theory about what

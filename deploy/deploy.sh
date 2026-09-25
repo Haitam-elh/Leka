@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# Deploy one release of the LEKA backend on this machine, prove it came up,
-# and put the previous release back if it did not.
+# Deploy one release of LEKA — the API and the web app, built from the same
+# commit — on this machine, prove it came up, and put the previous release
+# back if it did not.
 #
-#   ./deploy.sh <image> <release>
-#   ./deploy.sh ghcr.io/haitam-elh/leka/api 3f2c1e9...
+#   ./deploy.sh <registry> <release>
+#   ./deploy.sh ghcr.io/<owner>/leka 3f2c1e9...
+#
+# The registry holds two images per release, <registry>/api:<release> and
+# <registry>/web:<release>. They go out together or not at all: a web app
+# a release ahead of its API calls routes that do not exist yet.
 #
 # Run by .github/workflows/cd.yml over SSH, and by a person the same way.
 # A file rather than a script inlined in the workflow, so that what CD runs
@@ -20,14 +25,14 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 if [ "$#" -ne 2 ]; then
-  echo "usage: $0 <image> <release>" >&2
+  echo "usage: $0 <registry> <release>" >&2
   exit 2
 fi
-IMAGE="$1"
+REGISTRY="$1"
 RELEASE="$2"
 
-ENV_FILE="staging.env"
-COMPOSE=(docker compose -f docker-compose.staging.yml --env-file "$ENV_FILE")
+ENV_FILE="production.env"
+COMPOSE=(docker compose -f docker-compose.production.yml --env-file "$ENV_FILE")
 # Ninety seconds by default: migrations, a cold start, and room. Past that
 # it is not slow, it is broken.
 HEALTH_ATTEMPTS="${HEALTH_ATTEMPTS:-45}"
@@ -63,11 +68,17 @@ steady() {
 # Once a domain is set, Caddy answers http://127.0.0.1 with a redirect to
 # HTTPS, and curl counts a redirect as a success whether or not anything is
 # behind it: the old check reported a dead API as healthy.
+#
+# The web app is asked from the API's container too: it has curl, and the
+# two share the compose network. /login is a page that renders without a
+# session, so a 200 means the server is up and serving the build.
 healthy() {
   local _
   for _ in $(seq 1 "$HEALTH_ATTEMPTS"); do
     if "${COMPOSE[@]}" exec -T api \
-      curl -fsS --max-time 5 http://127.0.0.1:8000/api/v1/health > /dev/null 2>&1; then
+      curl -fsS --max-time 5 http://127.0.0.1:8000/api/v1/health > /dev/null 2>&1 \
+      && "${COMPOSE[@]}" exec -T api \
+        curl -fsS --max-time 5 http://web:3000/login > /dev/null 2>&1; then
       # The worker and the scheduler have no endpoint to ask.
       steady worker && steady scheduler
       return
@@ -82,23 +93,25 @@ healthy() {
 # stopping the script under `set -e` with the broken release written down
 # as the current one.
 switch_to() {
-  set_var LEKA_IMAGE "$1"
+  set_var LEKA_REGISTRY "$1"
   set_var LEKA_RELEASE "$2"
   "${COMPOSE[@]}" up -d --remove-orphans
 }
 
-PREVIOUS_IMAGE="$(current LEKA_IMAGE)"
+PREVIOUS_REGISTRY="$(current LEKA_REGISTRY)"
 PREVIOUS="$(current LEKA_RELEASE)"
 echo "Previous: ${PREVIOUS:-none}   New: ${RELEASE}"
 
-# Pulled before anything is touched: a pull that fails leaves the box
+# Both pulled before anything is touched: a pull that fails leaves the box
 # exactly as it was.
-if ! docker pull "${IMAGE}:${RELEASE}"; then
-  echo "::error::Could not pull ${IMAGE}:${RELEASE}. Nothing was changed."
-  exit 1
-fi
+for image in api web; do
+  if ! docker pull "${REGISTRY}/${image}:${RELEASE}"; then
+    echo "::error::Could not pull ${REGISTRY}/${image}:${RELEASE}. Nothing was changed."
+    exit 1
+  fi
+done
 
-if switch_to "$IMAGE" "$RELEASE" && healthy; then
+if switch_to "$REGISTRY" "$RELEASE" && healthy; then
   echo "Healthy on ${RELEASE}"
   # Images no container uses, built more than a week ago. Without -a only
   # untagged layers go, and every release is tagged: an 8 GB disk fills in
@@ -110,9 +123,9 @@ fi
 
 echo "::error::${RELEASE} did not come up."
 "${COMPOSE[@]}" ps -a || true
-"${COMPOSE[@]}" logs --tail=60 migrate api worker scheduler || true
+"${COMPOSE[@]}" logs --tail=60 migrate api worker scheduler web || true
 
-if [ -z "$PREVIOUS" ] || [ -z "$PREVIOUS_IMAGE" ]; then
+if [ -z "$PREVIOUS" ] || [ -z "$PREVIOUS_REGISTRY" ]; then
   echo "::error::No previous release to go back to. The box is down."
   exit 2
 fi
@@ -121,7 +134,7 @@ fi
 # deployed. The schema is not rolled back — leka.db.migrate leaves a
 # database that is ahead of the image alone (see docs/deployment.md).
 echo "Rolling back to ${PREVIOUS}"
-if switch_to "$PREVIOUS_IMAGE" "$PREVIOUS" && healthy; then
+if switch_to "$PREVIOUS_REGISTRY" "$PREVIOUS" && healthy; then
   echo "Back on ${PREVIOUS}."
   # Still a failure: the deployment did not happen, and a green tick here
   # would say it did.

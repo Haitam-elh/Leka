@@ -1,0 +1,89 @@
+# Deploys the marketing site (the "site vitrine") to OVH web hosting.
+#
+# A TEMPLATE, NOT A WORKFLOW OF THIS REPOSITORY. The site lives in its own
+# repository; copy this file there as .github/workflows/deploy.yml. It is
+# kept here so the platform's deployment choices stay in one place.
+#
+# WHAT IT DOES. Uploads the built site over SFTP, only what changed, and
+# DELETES NOTHING on the server: a file removed from the repository stays
+# online until someone removes it by hand. That is the safe default for a
+# first version — a wrong local folder cannot wipe the hosting.
+#
+# WHY SFTP, AND NOT FTP OR FTPS. Plain FTP sends the password in clear.
+# OVHcloud documents SFTP (port 22) for its web hosting, on the Pro plan and
+# above, and it must be switched on in the Control Panel first; its guide
+# does not mention FTPS. Check the plan before anything else — see the
+# checklist in the pull request that added this file.
+#
+# WHY lftp. One command-line tool, in Ubuntu's own packages, that mirrors a
+# folder over SFTP and is told not to delete. No third-party Action handles
+# the password.
+#
+# SECRETS, in the site repository (Settings → Secrets and variables →
+# Actions), NEVER in a file:
+#   VITRINE_SFTP_HOST         the SFTP server, as the OVH Control Panel shows it
+#   VITRINE_SFTP_USER         the FTP/SFTP login
+#   VITRINE_SFTP_PASSWORD     its password
+#   VITRINE_SFTP_KNOWN_HOSTS  the server's host key line, from
+#                             `ssh-keyscan -p 22 <host>`, checked once by hand
+# and one variable:
+#   VITRINE_REMOTE_DIR        the folder on the hosting, usually `www`
+
+name: Deploy the site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List what would be uploaded, upload nothing.
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      # If the site has a build step, it goes here and SOURCE below points at
+      # its output (dist/, out/, …). A plain HTML site needs none.
+      # - run: npm ci && npm run build
+
+      - name: Install lftp
+        run: sudo apt-get update -q && sudo apt-get install -y -q lftp
+
+      - name: Trust the server's key, and only it
+        env:
+          KNOWN_HOSTS: ${{ secrets.VITRINE_SFTP_KNOWN_HOSTS }}
+        run: |
+          # Without this, the first connection trusts whoever answers.
+          test -n "$KNOWN_HOSTS" || { echo "::error::VITRINE_SFTP_KNOWN_HOSTS is not set"; exit 1; }
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Upload what changed, delete nothing
+        env:
+          HOST: ${{ secrets.VITRINE_SFTP_HOST }}
+          LOGIN: ${{ secrets.VITRINE_SFTP_USER }}
+          # lftp reads the password from LFTP_PASSWORD with --env-password:
+          # it never appears on a command line or in the log.
+          LFTP_PASSWORD: ${{ secrets.VITRINE_SFTP_PASSWORD }}
+          REMOTE_DIR: ${{ vars.VITRINE_REMOTE_DIR }}
+          SOURCE: site
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: |
+          test -n "$REMOTE_DIR" || { echo "::error::set the variable VITRINE_REMOTE_DIR, e.g. www"; exit 1; }
+          lftp --env-password -u "$LOGIN" "sftp://$HOST" -e "
+            set sftp:auto-confirm no;
+            set net:max-retries 2;
+            mirror --reverse --only-newer --verbose $DRY_RUN \
+              --exclude-glob .git* --exclude-glob .github/ \
+              '$SOURCE' '$REMOTE_DIR';
+            bye"
