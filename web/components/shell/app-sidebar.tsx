@@ -9,7 +9,7 @@ import { NewIntentionButton } from "@/components/shell/new-intention-button";
 import { SidebarNavItem } from "@/components/shell/sidebar-nav-item";
 import { UserMenu } from "@/components/shell/user-menu";
 import { WorkspaceSwitcher } from "@/components/shell/workspace-switcher";
-import { type BadgeKey, NAV_GROUPS, type RouteEntry } from "@/config/routes";
+import { type BadgeKey, type RouteEntry } from "@/config/routes";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { visibleRoutes } from "@/lib/navigation/access";
 import { PRIMARY_ACTION_ID, resolveActiveNavItem } from "@/lib/navigation/active";
@@ -24,11 +24,13 @@ interface AppSidebarProps {
 }
 
 /**
- * The navigation: the way home, the way to act, and three groups of places.
+ * The navigation, as the mockups draw it: the logo, then ONE list — the way
+ * home, the way to act, then every place — and who you are at the foot.
+ * No group titles, no separators in the list (docs/product/mockups/01).
  *
- * Every line comes from config/routes.ts. No entry, route, icon or label is
- * named here, so changing the information architecture means editing the
- * registry and the dictionary — never a component.
+ * Every line comes from config/routes.ts, in its order. No entry, route,
+ * icon or label is named here, so changing the information architecture
+ * means editing the registry and the dictionary — never a component.
  */
 export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSidebarProps) {
   const t = useDictionary();
@@ -41,9 +43,9 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
   // product missing features, not like one still loading.
   const permissions = usePermissions();
   const inSidebar = permissions === null ? [] : visibleRoutes(permissions);
-  const standalone = inSidebar.filter((route) => route.group === undefined);
-  const grouped = (group: string): RouteEntry[] =>
-    inSidebar.filter((route) => route.group === group);
+  // Home first; "Nouvelle intention" goes right under it, as on the mockup.
+  const home = inSidebar.find((route) => route.id === "overview");
+  const places = inSidebar.filter((route) => route !== home);
 
   function item(route: RouteEntry) {
     return (
@@ -59,11 +61,16 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
   }
 
   return (
-    <div className="flex h-full flex-col bg-shell-surface">
-      <div className={cn("flex items-center gap-2 px-4 py-5", collapsed && "justify-center px-0")}>
+    <div className="group/sidebar flex h-full flex-col bg-shell-surface">
+      <div
+        className={cn(
+          "flex items-start gap-2 pt-7 pr-3 pb-6 pl-7",
+          collapsed && "justify-center px-0 pt-5 pb-4",
+        )}
+      >
         <div className={cn("min-w-0 flex-1", collapsed && "sr-only")}>
-          <Wordmark className="h-[22px]" priority />
-          <p className="mt-1 truncate text-xs text-shell-muted">{t.shell.tagline}</p>
+          <Wordmark className="h-[23px]" priority />
+          <p className="mt-2.5 truncate text-[0.8125rem] text-shell-muted">{t.shell.tagline}</p>
         </div>
         {onToggle && (
           <button
@@ -73,7 +80,14 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
             aria-controls="app-sidebar"
             aria-label={collapsed ? t.shell.expandSidebar : t.shell.collapseSidebar}
             data-testid="sidebar-toggle"
-            className="rounded-lg p-1.5 text-shell-muted transition-colors outline-none hover:bg-brand-violet-soft/60 hover:text-brand-violet focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+            className={cn(
+              "rounded-lg p-1.5 text-shell-muted transition outline-none hover:bg-brand-violet-soft/60 hover:text-brand-violet focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-brand-violet/40",
+              // The mockup has no button here. It stays — folding is a real
+              // feature — but out of sight until the sidebar is pointed at
+              // or reached with the keyboard. Folded, it is the only way
+              // back, so it shows.
+              !collapsed && "opacity-0 group-hover/sidebar:opacity-100",
+            )}
           >
             {collapsed ? (
               <PanelLeftOpen className="size-4" aria-hidden="true" />
@@ -84,43 +98,22 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
         )}
       </div>
 
-      <div className={cn("px-3 pb-3", collapsed && "px-2")}>
+      <nav
+        aria-label={t.shell.mainNavigation}
+        className={cn("flex-1 space-y-1 overflow-y-auto px-3 pb-4", collapsed && "px-2")}
+      >
+        {home && item(home)}
         <NewIntentionButton
           collapsed={collapsed}
           active={active?.id === PRIMARY_ACTION_ID}
           onNavigate={onNavigate}
         />
-      </div>
-
-      <nav
-        aria-label={t.shell.mainNavigation}
-        className={cn("flex-1 overflow-y-auto px-3 pb-4", collapsed && "px-2")}
-      >
-        <div className="space-y-0.5">{standalone.map(item)}</div>
-
-        {NAV_GROUPS.map((group) => {
-          const entries = grouped(group);
-          if (entries.length === 0) return null;
-          return (
-            <div key={group} className="mt-5 space-y-0.5">
-              {/* A quiet title, no rule across the sidebar: the mockups have
-                  no separators, and a group is a hint, not a wall. */}
-              <p
-                className={cn(
-                  "px-3 pb-1 text-[0.6875rem] font-semibold tracking-wide text-shell-muted uppercase",
-                  collapsed && "sr-only",
-                )}
-              >
-                {t.groups[group]}
-              </p>
-              {entries.map(item)}
-            </div>
-          );
-        })}
+        {places.map(item)}
       </nav>
 
-      <div className={cn("space-y-1 border-t border-shell-line px-3 py-3", collapsed && "px-2")}>
+      <div className={cn("border-t border-shell-line px-3.5 py-3", collapsed && "px-2")}>
         <UserMenu variant="sidebar" collapsed={collapsed} />
+        <div className="my-2 border-t border-shell-line" aria-hidden="true" />
         <WorkspaceSwitcher collapsed={collapsed} />
       </div>
     </div>

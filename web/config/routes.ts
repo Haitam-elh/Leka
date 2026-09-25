@@ -25,20 +25,21 @@
  */
 
 import {
-  Activity,
-  CreditCard,
   Home,
   Layers,
-  LayoutGrid,
   type LucideIcon,
-  Network,
   Search,
   Settings,
-  Shield,
   ShieldCheck,
-  Users,
+  UserRoundKey,
 } from "lucide-react";
 
+import {
+  ActivityIcon,
+  BillingIcon,
+  CapabilitiesIcon,
+  EnvironmentIcon,
+} from "@/components/shell/nav-icons";
 import type { NavKey } from "@/lib/i18n/dictionaries";
 
 /** What the API calls a permission. Kept in the API's spelling on purpose. */
@@ -58,11 +59,6 @@ export type Permission =
   | "intention:approve"
   | "job:read";
 
-/** The four blocks of the sidebar. The first has no title: it is the way home. */
-export type NavGroup = "work" | "knowledge" | "admin";
-
-export const NAV_GROUPS: readonly NavGroup[] = ["work", "knowledge", "admin"];
-
 /**
  * Whether the page behind the entry exists yet.
  *
@@ -80,7 +76,6 @@ export interface RouteEntry {
   path: string;
   labelKey: NavKey;
   icon?: LucideIcon;
-  group?: NavGroup;
   parentId?: string;
   showInSidebar: boolean;
   requiredPermission?: Permission;
@@ -106,6 +101,11 @@ export const ENTITY_TABS = [
 ] as const;
 
 export const ROUTES: readonly RouteEntry[] = [
+  // In the order of the mockups' sidebar (docs/product/mockups/01), which is
+  // the order everything generated from this list follows: one flat list,
+  // no group titles. "Nouvelle intention" is its second line; it is drawn by
+  // components/shell/new-intention-button.tsx, not from this entry, because
+  // on /intentions/new it — not Intentions — is the place you are.
   {
     id: "overview",
     path: "/overview",
@@ -114,9 +114,6 @@ export const ROUTES: readonly RouteEntry[] = [
     showInSidebar: true,
     requiredPermission: "workspace:read",
   },
-
-  // The product's primary action. Not in the sidebar list: it is the button
-  // above it (see components/shell/new-intention-button.tsx).
   {
     id: "intention-new",
     path: "/intentions/new",
@@ -125,14 +122,11 @@ export const ROUTES: readonly RouteEntry[] = [
     showInSidebar: false,
     requiredPermission: "intention:create",
   },
-
-  // ── Travail ───────────────────────────────────────────────────────────────
   {
     id: "intentions",
     path: "/intentions",
     labelKey: "intentions",
     icon: Layers,
-    group: "work",
     showInSidebar: true,
     requiredPermission: "intention:read",
   },
@@ -146,11 +140,35 @@ export const ROUTES: readonly RouteEntry[] = [
     tabs: INTENTION_TABS,
   },
   {
+    id: "environment",
+    path: "/environment",
+    labelKey: "environment",
+    icon: EnvironmentIcon,
+    showInSidebar: true,
+    requiredPermission: "workspace:read",
+  },
+  {
+    id: "entity-detail",
+    path: "/environment/:entityType/:entityId",
+    labelKey: "entityDetail",
+    parentId: "environment",
+    showInSidebar: false,
+    requiredPermission: "workspace:read",
+    tabs: ENTITY_TABS,
+  },
+  {
+    id: "activity",
+    path: "/activity",
+    labelKey: "activity",
+    icon: ActivityIcon,
+    showInSidebar: true,
+    requiredPermission: "workspace:read",
+  },
+  {
     id: "approvals",
     path: "/approvals",
     labelKey: "approvals",
     icon: ShieldCheck,
-    group: "work",
     showInSidebar: true,
     // A member reads and creates intentions; approving is an admin's job, so
     // the entry is hidden rather than shown and refused.
@@ -166,57 +184,10 @@ export const ROUTES: readonly RouteEntry[] = [
     requiredPermission: "intention:approve",
   },
   {
-    id: "activity",
-    path: "/activity",
-    labelKey: "activity",
-    icon: Activity,
-    group: "work",
-    showInSidebar: true,
-    requiredPermission: "workspace:read",
-  },
-
-  // ── Connaissance ──────────────────────────────────────────────────────────
-  {
-    id: "environment",
-    path: "/environment",
-    labelKey: "environment",
-    icon: Network,
-    group: "knowledge",
-    showInSidebar: true,
-    requiredPermission: "workspace:read",
-  },
-  {
-    id: "entity-detail",
-    path: "/environment/:entityType/:entityId",
-    labelKey: "entityDetail",
-    parentId: "environment",
-    showInSidebar: false,
-    requiredPermission: "workspace:read",
-    tabs: ENTITY_TABS,
-  },
-  {
-    id: "sources",
-    path: "/sources",
-    labelKey: "sources",
-    icon: Search,
-    group: "knowledge",
-    showInSidebar: true,
-    requiredPermission: "source:read",
-  },
-  {
-    id: "source-detail",
-    path: "/sources/:sourceId",
-    labelKey: "sourceDetail",
-    parentId: "sources",
-    showInSidebar: false,
-    requiredPermission: "source:read",
-  },
-  {
     id: "capabilities",
     path: "/capabilities",
     labelKey: "capabilities",
-    icon: LayoutGrid,
-    group: "knowledge",
+    icon: CapabilitiesIcon,
     showInSidebar: true,
     requiredPermission: "workspace:read",
     // The catalogue is LEKA-393 and after. Shown, labelled, and honest.
@@ -231,14 +202,27 @@ export const ROUTES: readonly RouteEntry[] = [
     requiredPermission: "workspace:read",
     availability: "soon",
   },
-
-  // ── Administration ────────────────────────────────────────────────────────
+  {
+    id: "sources",
+    path: "/sources",
+    labelKey: "sources",
+    icon: Search,
+    showInSidebar: true,
+    requiredPermission: "source:read",
+  },
+  {
+    id: "source-detail",
+    path: "/sources/:sourceId",
+    labelKey: "sourceDetail",
+    parentId: "sources",
+    showInSidebar: false,
+    requiredPermission: "source:read",
+  },
   {
     id: "governance",
     path: "/governance",
     labelKey: "governance",
-    icon: Shield,
-    group: "admin",
+    icon: ShieldCheck,
     showInSidebar: true,
     requiredPermission: "workspace:update",
     // Policies, audit and compliance are what an enterprise plan is for.
@@ -249,8 +233,7 @@ export const ROUTES: readonly RouteEntry[] = [
     id: "team",
     path: "/team",
     labelKey: "team",
-    icon: Users,
-    group: "admin",
+    icon: UserRoundKey,
     showInSidebar: true,
     requiredPermission: "member:invite",
   },
@@ -258,8 +241,7 @@ export const ROUTES: readonly RouteEntry[] = [
     id: "billing",
     path: "/billing",
     labelKey: "billing",
-    icon: CreditCard,
-    group: "admin",
+    icon: BillingIcon,
     showInSidebar: true,
     // There is no billing:* permission: paying for the workspace is part of
     // administering it, and workspace:update is what an admin has.
@@ -270,7 +252,6 @@ export const ROUTES: readonly RouteEntry[] = [
     path: "/settings",
     labelKey: "settings",
     icon: Settings,
-    group: "admin",
     showInSidebar: true,
     requiredPermission: "workspace:read",
   },

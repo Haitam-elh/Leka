@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { NAV_GROUPS, ROUTES, routes } from "@/config/routes";
+import { ROUTES, routes } from "@/config/routes";
 import { DICTIONARIES, type Locale } from "@/lib/i18n/dictionaries";
 
 describe("the route registry", () => {
@@ -26,9 +26,6 @@ describe("the route registry", () => {
     for (const [locale, dictionary] of Object.entries(DICTIONARIES) as [Locale, (typeof DICTIONARIES)[Locale]][]) {
       for (const route of ROUTES) {
         if (!dictionary.nav[route.labelKey]) missing.push(`${locale}: ${route.labelKey}`);
-      }
-      for (const group of NAV_GROUPS) {
-        if (!dictionary.groups[group]) missing.push(`${locale}: group ${group}`);
       }
     }
     expect(missing).toEqual([]);

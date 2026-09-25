@@ -95,7 +95,7 @@ export function AppShell({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-shell-canvas">
+    <div className="flex h-screen overflow-hidden bg-shell-page">
       <SkipLink />
 
       {/* Named: a page with a side panel of its own used to have two

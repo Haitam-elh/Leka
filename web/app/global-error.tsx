@@ -30,7 +30,7 @@ export default function GlobalError({
 
   return (
     <html lang="fr">
-      <body className="flex min-h-screen items-center justify-center bg-shell-canvas antialiased">
+      <body className="flex min-h-screen items-center justify-center bg-shell-page antialiased">
         <main>
           <StatePanel
             role="alert"

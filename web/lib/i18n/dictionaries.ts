@@ -42,12 +42,6 @@ const fr = {
     billing: "Facturation",
     settings: "Paramètres",
   },
-  /** The blocks of the sidebar. The first entry stands alone, above them. */
-  groups: {
-    work: "Travail",
-    knowledge: "Connaissance",
-    admin: "Administration",
-  },
   shell: {
     tagline: "Understand. Decide. Act.",
     mainNavigation: "Navigation principale",
@@ -70,10 +64,12 @@ const fr = {
     loading: "Chargement…",
     notFoundTitle: "Page introuvable",
     emptyPage: "Rien ici pour l'instant.",
-    soon: "Bientôt",
-    planGated: "Inclus dans une offre supérieure",
     /** Appended to the entry's label: "À valider, 3 éléments en attente". */
     pendingApprovals: "{count} éléments en attente",
+    /** A member's role, as the API names it (owner, admin, member). Shown
+     * under their name at the foot of the sidebar: "owner" in English was
+     * the API's word reaching the screen untranslated. */
+    roles: { owner: "Propriétaire", admin: "Administrateur", member: "Membre" },
   },
   /** The tabs of a detail page. Their ids are URL segments — see config/routes.ts. */
   tabs: {
@@ -362,7 +358,6 @@ export type Dictionary = typeof fr;
 export type NavKey = keyof Dictionary["nav"];
 
 /** And the group titles it may use. */
-export type GroupKey = keyof Dictionary["groups"];
 
 /** The tab segments config/routes.ts may declare. */
 export type TabKey = keyof Dictionary["tabs"];
@@ -387,11 +382,6 @@ const en: Dictionary = {
     billing: "Billing",
     settings: "Settings",
   },
-  groups: {
-    work: "Work",
-    knowledge: "Knowledge",
-    admin: "Administration",
-  },
   shell: {
     tagline: "Understand. Decide. Act.",
     mainNavigation: "Main navigation",
@@ -414,9 +404,8 @@ const en: Dictionary = {
     loading: "Loading…",
     notFoundTitle: "Page not found",
     emptyPage: "Nothing here yet.",
-    soon: "Soon",
-    planGated: "Included in a higher plan",
     pendingApprovals: "{count} items waiting",
+    roles: { owner: "Owner", admin: "Admin", member: "Member" },
   },
   tabs: {
     overview: "Overview",

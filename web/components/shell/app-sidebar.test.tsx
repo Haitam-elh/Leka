@@ -1,10 +1,11 @@
 /**
  * The sidebar, rendered the way a browser renders it.
  *
- * What these protect: the navigation comes from the registry, the current
- * page is marked machine-readably and only once, the primary action is a
- * button rather than a line in the list, counts are announced, and folding
- * the sidebar says out loud what state it is in.
+ * What these protect: the navigation is the mockup's — one list, in its
+ * order, "Nouvelle intention" as its second line, no group titles — and it
+ * comes from the registry; the current page is marked machine-readably and
+ * only once, counts are announced, and folding the sidebar says out loud
+ * what state it is in.
  */
 
 import { render, screen, within } from "@testing-library/react";
@@ -89,7 +90,8 @@ describe("the navigation comes from the registry", () => {
     const navigation = screen.getByRole("navigation", { name: fr.shell.mainNavigation });
     const links = within(navigation).getAllByRole("link");
 
-    expect(links).toHaveLength(SIDEBAR_ROUTES.length);
+    // Plus "Nouvelle intention", which is a line of the list but not an entry.
+    expect(links).toHaveLength(SIDEBAR_ROUTES.length + 1);
     for (const route of SIDEBAR_ROUTES) {
       expect(within(navigation).getByTestId(`nav-${route.id}`)).toHaveAttribute(
         "href",
@@ -98,11 +100,31 @@ describe("the navigation comes from the registry", () => {
     }
   });
 
-  it("groups them, under the titles the dictionary gives", async () => {
+  it("lists them in the mockup's order, as one list with no titles", async () => {
     await renderSidebar();
 
-    for (const title of Object.values(fr.groups)) {
-      expect(screen.getByText(title)).toBeInTheDocument();
+    const navigation = screen.getByRole("navigation", { name: fr.shell.mainNavigation });
+    const labels = within(navigation)
+      .getAllByRole("link")
+      .map((link) => link.textContent?.replace(/,.*$/, "").trim());
+
+    // docs/product/mockups/01-vue-ensemble.jpeg, top to bottom.
+    expect(labels).toEqual([
+      "Vue d'ensemble",
+      "Nouvelle intention",
+      "Intentions",
+      "Mon environnement",
+      "Activité",
+      "À valider",
+      "Capacités",
+      "Sources",
+      "Sécurité & gouvernance",
+      "Équipe & accès",
+      "Facturation",
+      "Paramètres",
+    ]);
+    for (const title of ["Travail", "Connaissance", "Administration"]) {
+      expect(screen.queryByText(title)).not.toBeInTheDocument();
     }
   });
 
@@ -115,13 +137,13 @@ describe("the navigation comes from the registry", () => {
 });
 
 describe("the primary action", () => {
-  it("is a button above the list, not one of its lines", async () => {
+  it("is the second line of the list, right under the way home", async () => {
     await renderSidebar();
 
     const navigation = screen.getByRole("navigation", { name: fr.shell.mainNavigation });
+    const links = within(navigation).getAllByRole("link");
 
-    expect(screen.getByTestId("new-intention")).toBeInTheDocument();
-    expect(within(navigation).queryByTestId("new-intention")).not.toBeInTheDocument();
+    expect(links[1]).toBe(within(navigation).getByTestId("new-intention"));
   });
 
   it("is the thing marked as current on the composer, and Intentions is not", async () => {
@@ -162,11 +184,21 @@ describe("a count beside an entry", () => {
 });
 
 describe("availability", () => {
-  it("says which pages are not built yet, rather than hiding them", async () => {
+  it("shows every place plainly, as the mockup does", async () => {
     await renderSidebar();
 
-    expect(screen.getByText(fr.shell.soon)).toBeInTheDocument();
-    expect(screen.getByLabelText(fr.shell.planGated)).toBeInTheDocument();
+    // Not built yet or not in the plan, the page says so when opened
+    // (route-views.test.tsx). The line in the list stays a plain line.
+    expect(screen.queryByText("Bientôt")).not.toBeInTheDocument();
+    expect(screen.getByTestId("nav-capabilities")).toHaveTextContent(/^Capacités$/);
+    expect(screen.getByTestId("nav-governance")).toHaveTextContent(/^Sécurité & gouvernance$/);
+  });
+
+  it("gives the role in words, not the API's", async () => {
+    await renderSidebar();
+
+    expect(await screen.findByText("Propriétaire")).toBeInTheDocument();
+    expect(screen.queryByText("owner")).not.toBeInTheDocument();
   });
 });
 
