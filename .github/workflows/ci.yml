@@ -119,12 +119,20 @@ jobs:
         # It is the only thing exercising S3ObjectStore against a server we
         # did not write ourselves — and the difference is not academic: a
         # stand-in accepts a delete of more than 1000 keys, real S3 refuses.
+        #
+        # WHICH IMAGE. MinIO stopped publishing images: quay.io/minio/minio
+        # answers 401 and minio/minio on Docker Hub is gone (found on
+        # 2026-09-25, when this step failed on every branch). pgsty/minio is
+        # the same MinIO server, rebuilt and published by the Pigsty project
+        # — same command, same variables, same health endpoint. Pinned by
+        # digest: a third party's image runs in CI, so it is this exact one
+        # or none. Tests only; nothing in production uses it.
         working-directory: .
         run: |
           docker run -d --name minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
-            quay.io/minio/minio server /data
+            pgsty/minio@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372 server /data
           for _ in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:9000/minio/health/live > /dev/null; then
               echo "MinIO is up"; exit 0
