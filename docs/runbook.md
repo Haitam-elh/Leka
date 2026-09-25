@@ -107,9 +107,11 @@ the credit is gone**. AWS's own words:
 > (<https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html>)
 
 Production puts the database (RDS) and customer files (S3) on this account.
-**An account that deletes itself on a schedule is not somewhere they can
-live, so it is converted to the paid plan before production is turned on**
-— step 1 of `deployment.md`, "Turning production on".
+**Decided 2026-09-25: production starts on the credits, and the account is
+converted when they are nearly spent** — below about $50, checked monthly —
+**and in any case before the first customer's data goes in.** Not after:
+running out on the free plan closes the account, it does not start a bill.
+See step 1 of `deployment.md`, "Turning production on".
 
 **The procedure, as AWS documents it** (same page, "To upgrade your free
 plan"):
@@ -134,7 +136,8 @@ What changes, again in AWS's words:
   says so before the invoice does.
 - "You cannot reverse the upgrade process."
 
-**Until it is converted, no customer data touches this account.**
+**Until it is converted, no customer data touches this account** — test
+accounts and seeded data only.
 
 ## Email: the DNS records that get it delivered
 

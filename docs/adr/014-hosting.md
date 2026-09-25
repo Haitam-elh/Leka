@@ -25,9 +25,12 @@ original decision; where it says "staging", read "production".
   from the same commit as the API, `app.` and `api.` as two blocks of one
   Caddyfile. The two names share `leka-core.com`, which is what ADR 009
   requires.
-- **The account is converted to the paid plan first.** Customer data and a
-  database cannot live on an account that closes itself (see "What this
-  costs" below, and `runbook.md`).
+- **Production starts on the free plan's credits** (decided 2026-09-25),
+  and the account moves to the paid plan when they are nearly spent — and
+  before the first customer's data, whichever comes first. Running out on
+  the free plan closes the account rather than billing it (see "What this
+  costs" below, and `runbook.md`), so the upgrade is watched for monthly,
+  not waited for.
 - **One instance, now in production.** Below, "What we give up" called one
   point of failure acceptable on staging and not in production. It is
   accepted in production for the launch, knowingly: a handful of users, and

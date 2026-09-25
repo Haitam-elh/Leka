@@ -240,58 +240,133 @@ Everything below happens in a console, by a person. The order matters: the
 account before anything is created on it, DNS before Caddy asks for
 certificates, the database before the first deployment.
 
-### 1. The AWS account, first
+### 1. The AWS account: on the credits, upgraded before they run out
 
-It must be on the **paid plan** before production and customer data go on
-it: a free-plan account closes itself after six months or when its credit
-runs out. The procedure, and AWS's own words, are in
-[`runbook.md`](runbook.md#the-aws-account-convert-it-before-production).
+**Decided 2026-09-25:** production starts on the free plan's credits, and
+the account moves to the paid plan when they are nearly spent.
 
-### 2. The database: RDS, once
+**Nearly, not after.** On the free plan the account does not start billing
+when the credits run out — it **closes**, and AWS deletes what is on it
+ninety days later ([`runbook.md`](runbook.md#the-aws-account-convert-it-before-production)).
+So:
 
-In the RDS console, `eu-central-1`, **Create database**:
+- Once a month: Billing and Cost Management → **Credits**, read the
+  remaining balance. Below about **$50** — one month of this setup — do the
+  upgrade (three clicks, same section of the runbook). Same before the
+  first paying customer, whichever comes first.
+- The **budget alarm** measures what the credits pay for: Billing and Cost
+  Management → Budgets → the existing budget → Edit → raise it to **$50 a
+  month**, and in *Advanced options* make sure **Credits** is not counted,
+  or it reads zero while the credits drain.
+
+Everything below: region **Europe (Frankfurt) `eu-central-1`**, top right of
+every console. A resource created in another region is invisible from this
+one.
+
+### 2. The instance, first — RDS attaches itself to it
+
+EC2 → **Launch instance**:
 
 | Setting | Value | Why |
 |---|---|---|
-| Engine | PostgreSQL, version 16 | what CI tests against |
-| Template | Production is overkill; **Dev/Test**, single instance | one box, two developers — see ADR 014 |
+| Name | `leka-production` | |
+| Image | **Ubuntu Server 24.04 LTS**, 64-bit **(x86)** | the images CD builds are amd64 |
+| Type | **`t3.small`** (2 GiB) | `t3.micro`'s 1 GiB cannot hold the API, worker, scheduler, web app, Redis and Caddy |
+| Key pair | Create → `leka-admin`, ED25519, `.pem` — into the password manager | YOUR way in. Not the key GitHub uses |
+| Security group | Create → allow **SSH** from *Anywhere*, **HTTPS** and **HTTP** from the internet | SSH takes keys only; GitHub's runners have no fixed address. HTTP is for Let's Encrypt and the redirect |
+| Storage | **20 GiB gp3** | two images per release, a week of them kept |
+
+Then EC2 → Elastic IPs → **Allocate** → **Associate** with `leka-production`.
+That address is the one DNS points at; it survives a stop and start. It is
+billed (about $0.005 an hour, like every public IPv4 address on AWS).
+
+On the box, once:
+
+```bash
+ssh -i leka-admin.pem ubuntu@<elastic ip>
+curl -fsSL https://get.docker.com | sudo sh        # Docker Engine + Compose plugin
+sudo usermod -aG docker ubuntu
+sudo mkdir -p /opt/leka && sudo chown ubuntu:ubuntu /opt/leka
+exit                                                # reconnect so the group applies
+```
+
+The key GitHub Actions deploys with — on YOUR laptop, never on the box:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/leka-deploy -N "" -C "github-actions-deploy"
+ssh -i leka-admin.pem ubuntu@<elastic ip> 'cat >> ~/.ssh/authorized_keys' < ~/.ssh/leka-deploy.pub
+```
+
+The PRIVATE half (`~/.ssh/leka-deploy`, no `.pub`) becomes the GitHub
+secret `PROD_SSH_KEY` in step 7. Nowhere else.
+
+### 3. The database: RDS
+
+RDS → **Create database** → *Standard create*:
+
+| Setting | Value | Why |
+|---|---|---|
+| Engine | PostgreSQL, version **16** | what CI tests against |
+| Template | **Free tier** if offered, otherwise Dev/Test — single instance | available on the free plan for `db.t4g.micro` |
 | Identifier | `leka` | the name the runbook's commands use |
-| Master user | `leka`, password **generated**, stored in the password manager | it goes in `production.env` and nowhere else |
-| Instance | `db.t4g.micro` to start | smallest that runs it; resize later without data loss |
-| Storage | gp3, 20 GB, **encryption on** (default KMS key) | encryption can only be chosen at creation |
-| Public access | **No** | the database is reached by the box, never by the internet |
-| Security group | a new one, `leka-db`: inbound 5432 **only from the instance's security group** | not from an IP, not from 0.0.0.0/0 |
-| Initial database | `leka` | |
-| Automated backups | **on, 7 days** | the point-in-time window; see the runbook |
+| Master user | `leka`; password **self-managed**, generated, into the password manager | it goes in `production.env` and nowhere else |
+| Instance | `db.t4g.micro` | smallest that runs it; resize later without data loss |
+| Storage | gp3, 20 GB, **encryption on** | encryption can only be chosen at creation |
+| Connectivity | **Connect to an EC2 compute resource** → `leka-production` | the console creates the two security groups that let this box, and only it, reach 5432; public access stays **No** |
+| Additional configuration → Initial database | `leka` | |
+| Backups | **on, 7 days** — or the most the free plan allows, raised after the upgrade | the point-in-time window; see the runbook |
 | Deletion protection | **on** | a deleted instance takes its automated backups with it |
 
-Then in `production.env`:
+The endpoint is on the instance's page, *Connectivity & security*. The
+schema is created by the first deployment (`migrate`), from nothing: there
+is no data to carry over from Neon, which only ever held seeded data.
 
-    LEKA_DATABASE_URL=postgresql+asyncpg://leka:<password>@<endpoint>:5432/leka?ssl=require
+### 4. Object storage: a production bucket and a key that opens only it
 
-The endpoint is on the instance's page, under *Connectivity & security*.
-The schema is created by the first deployment (`migrate`), from nothing:
-there is no data to carry over from Neon, which only ever held seeded data.
+S3 → **Create bucket**: `leka-payloads-prod-<a few random letters>` (names
+are global), `eu-central-1`, **Block all public access: on** (the default),
+default encryption. Not the validation bucket: that one held test data.
 
-**It costs money, unlike Neon's free plan:** RDS bills per hour the
-instance exists, plus storage and backups beyond the database's size. The
-credit covers it at first; after that it is a line on the bill. Check it in
-the AWS Pricing Calculator before creating it, not after.
+IAM → Users → **Create user** `leka-production-s3`, no console access →
+Permissions → *Create inline policy* → JSON, with the bucket's name:
 
-### 3. The instance, once
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow", "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::<bucket>" },
+    { "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"],
+      "Resource": "arn:aws:s3:::<bucket>/*" }
+  ]
+}
+```
 
-1. An EC2 instance in `eu-central-1`, **x86_64** (the images CD builds are
-   amd64), with **at least 20 GB of disk** — each release is two images, and
-   `deploy.sh` keeps a week of them.
-2. Docker Engine and the Compose plugin (`docker compose version` answers).
-3. `/opt/leka/`, owned by the SSH user, holding `production.env` filled in
-   from `deploy/production.env.example`. CD copies the other three files on
-   every deployment.
-4. Security group: 80 and 443 open to the internet, 22 open to GitHub
-   Actions. The RDS group admits this one on 5432.
-5. An Elastic IP, so the address DNS points at survives a stop and start.
+Then the user → Security credentials → **Create access key** (*Other*). The
+two values go into `production.env` in step 5, and the password manager.
 
-### 4. DNS, at OVH
+### 5. `production.env`, on the box
+
+```bash
+scp -i leka-admin.pem deploy/production.env.example ubuntu@<elastic ip>:/opt/leka/production.env
+ssh -i leka-admin.pem ubuntu@<elastic ip>
+chmod 600 /opt/leka/production.env
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"                    # LEKA_SECRET_KEY
+python3 -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"  # one Fernet key
+nano /opt/leka/production.env
+```
+
+Fill in: `LEKA_DATABASE_URL` (password and endpoint from step 3, ending
+`?ssl=require`), `LEKA_SECRET_KEY`, `LEKA_ENCRYPTION_KEYS=["<the Fernet
+key>"]`, the S3 bucket and key from step 4, `LEKA_SMTP_PASSWORD` (the OVH
+mailbox's), and `LEKA_SENTRY_DSN` if there is one. Leave `LEKA_REGISTRY` and
+`LEKA_RELEASE` empty: `deploy.sh` writes them.
+
+**Then copy the whole file into the password manager.** It is the one thing
+on the box that Git cannot rebuild.
+
+### 6. DNS, at OVH
 
 In the zone of `leka-core.com`, two A records pointing at the Elastic IP:
 `app` and `api`. Wait until `dig +short app.leka-core.com` answers it.
@@ -299,16 +374,16 @@ Caddy then obtains both certificates on its first start. The email records
 (SPF, DKIM, DMARC) are in the same zone; see
 [`runbook.md`](runbook.md#email-the-dns-records-that-get-it-delivered).
 
-### 5. GitHub, once
+### 7. GitHub, once
 
 Repository secrets, in an environment called `production`
 (Settings → Environments → production):
 
 | Secret | What it is |
 |---|---|
-| `PROD_HOST` | the Elastic IP, or the instance's DNS name |
-| `PROD_USER` | the SSH user |
-| `PROD_SSH_KEY` | its private key — a deploy key for this alone, not anyone's personal key |
+| `PROD_HOST` | the Elastic IP |
+| `PROD_USER` | `ubuntu` |
+| `PROD_SSH_KEY` | the private deploy key from step 2 — for this alone, not anyone's personal key |
 
 Repository variables (Settings → Secrets and variables → Actions →
 Variables) — not secrets, the browser sees the first one anyway:
@@ -325,11 +400,7 @@ Remove `PRODUCTION_ENABLED`, or set it to anything else, and deployment
 stops again — which is also how you pause it during an incident without
 reverting anything.
 
-On AWS, a **budget alarm** — already set, at €10. With RDS it will be
-crossed: raise it to what the calculator said, so that it still means
-"something unexpected is running".
-
-### 6. The first deployment
+### 8. The first deployment
 
 Run the **CD** workflow by hand (Actions → CD → Run workflow). Then, from a
 laptop:
