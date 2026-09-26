@@ -349,3 +349,44 @@ async def test_a_source_deleted_since_it_was_scheduled_is_skipped(source: Source
 
     assert report.status == "skipped"
     assert SCRIPT.asked == []
+
+
+# ── what a pass finds from the one before ───────────────────────────────────
+
+
+async def test_a_pass_left_running_by_a_dead_worker_counts_as_a_failure(source: Source) -> None:
+    SCRIPT.records = {Capability.COMMITS: 1}
+    await _sync(source)
+    with workspace_scope(source.workspace_id):
+        async with session_factory() as session:
+            await session.execute(
+                text("UPDATE source_syncs SET status = 'running' WHERE source_id = :s"),
+                {"s": source.id},
+            )
+            await session.commit()
+    SCRIPT.failure = (Capability.COMMITS, 0, DiagnosticCode.PROVIDER_ERROR, None)
+
+    with pytest.raises(RetryableSyncError):
+        await _sync(source)
+
+    _, rows, _, _ = await _read(source)
+    # The abandoned pass, then this one: two failures in a row, and not "running".
+    assert (rows["commits"].status, rows["commits"].consecutive_failures) == (
+        SyncRunStatus.FAILED,
+        2,
+    )
+
+
+async def test_a_full_pass_that_fails_leaves_the_next_one_full(source: Source) -> None:
+    SCRIPT.records = {Capability.COMMITS: 3}
+    await _sync(source)
+    SCRIPT.failure = (Capability.COMMITS, 1, DiagnosticCode.PROVIDER_ERROR, None)
+
+    with pytest.raises(RetryableSyncError):
+        await _sync(source, full=True)
+
+    _, rows, _, _ = await _read(source)
+    assert rows["commits"].since is None
+    SCRIPT.failure, SCRIPT.asked = None, []
+    await _sync(source)
+    assert (Capability.COMMITS, None) in SCRIPT.asked

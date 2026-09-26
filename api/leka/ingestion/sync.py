@@ -58,6 +58,7 @@ from leka.connectors import (
     Connector,
     ConnectorError,
     Diagnostic,
+    DiagnosticCode,
     LifecycleEvent,
     RawRecord,
     Source,
@@ -86,6 +87,15 @@ RETRY_SOON_SECONDS = 300
 # person, and the health check or a test brings it back.
 SYNCABLE = (SourceStatus.ACTIVE, SourceStatus.DEGRADED)
 CONTENT_TYPE = "application/x-ndjson"
+
+
+# What a pass records for the one before it that never finished.
+ABANDONED = Diagnostic(
+    code=DiagnosticCode.UNKNOWN,
+    retryable=True,
+    message="La synchronisation précédente s'est interrompue avant de finir.",
+    remediation="Rien à faire : la suivante reprend depuis la dernière réussite.",
+)
 
 
 class RetryableSyncError(RuntimeError):
@@ -172,8 +182,19 @@ class _Pass:
     ) -> tuple[int, Diagnostic | None]:
         """Read one capability. Returns what was stored, and why it stopped if it did."""
         row = await self._syncs.get_or_create(source.id, capability.value)
+        if row.status is SyncRunStatus.RUNNING:
+            # Only one pass at a time holds sync:<source_id>, so a `running`
+            # found here is a pass whose worker died: the runner gave up on
+            # its job, nothing else will ever touch this row. Counted as the
+            # failure it was, then read as usual.
+            _failed(row, ABANDONED, row.records_last_run)
         started = datetime.now(UTC)
         read_all = self._full or _due_for_full(row, started)
+        if read_all:
+            # Forgotten from the start, not the end: a full pass that fails
+            # half-way leaves the next one full too, rather than an
+            # incremental that would never read what this one did not reach.
+            row.since = None
         row.status = SyncRunStatus.RUNNING
         row.last_started_at = started
         await self._session.commit()
