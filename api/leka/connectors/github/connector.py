@@ -12,9 +12,9 @@ quota. Healthy, or degraded when less than a tenth of the quota is left.
 list_scope: every repository the token sees, for the admin to choose from.
 
 iter_resources: the repositories in scope — all the token sees, unless
-`repositories` names some — then — repository by
-repository — their branches, commits (default branch), pull requests,
-issues and releases, following GitHub's pagination. Commits and issues are
+`repositories` names some — then, repository by repository, their
+branches, commits (default branch), pull requests, issues and releases,
+following GitHub's pagination. Commits and issues are
 filtered by `since` on GitHub's side; pull requests are read newest-updated
 first and stop at `since`; branches and releases have no such filter and
 come whole.
@@ -25,12 +25,9 @@ is where it is scoped, not here — but the test says so, in its warnings.
 
 from __future__ import annotations
 
-import asyncio
 import re
-import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, model_validator
@@ -45,7 +42,18 @@ from leka.connectors.base import (
     ScopeListing,
     ScopeOption,
 )
-from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
+from leka.connectors.errors import ConnectorError, DiagnosticCode
+from leka.connectors.http import (
+    Item,
+    VendorHttp,
+    parse_timestamp,
+    record,
+    records,
+    refusal,
+    retry_after,
+    usual_code,
+    without,
+)
 from leka.connectors.models import HealthStatus, SourceKind
 from leka.connectors.registry import register_connector
 from leka.connectors.schemas import RawRecord
@@ -132,16 +140,16 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
 
     async def test_connection(self) -> ConnectionTestResult:
         async with self._client() as client:
-            user = await self._get(client, "/user")
+            user = await client.get("/user")
             warnings = self._scope_warnings(user)
             org = self.config.organization
             metadata: dict[str, object] = {"login": user.json().get("login")}
             if org:
-                organisation = await self._get(client, f"/orgs/{org}", missing="organisation")
+                organisation = await client.get(f"/orgs/{org}", missing="organisation")
                 metadata["organization"] = organisation.json().get("login", org)
-                repos = await self._get(client, f"/orgs/{org}/repos", params={"per_page": 100})
+                repos = await client.get(f"/orgs/{org}/repos", params={"per_page": 100})
             else:
-                repos = await self._get(client, "/user/repos", params={"per_page": 100})
+                repos = await client.get("/user/repos", params={"per_page": 100})
 
             listed = repos.json()
             more = 'rel="next"' in repos.headers.get("link", "")
@@ -152,8 +160,17 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                 sample = listed[0]["full_name"]
                 if self.config.repositories:
                     sample = self.config.repositories[0]
-                    await self._get(client, f"/repos/{sample}", missing="ressource")
-                capabilities += await self._probe(client, sample)
+                    await client.get(f"/repos/{sample}")
+                capabilities += await client.probe(
+                    {
+                        Capability.COMMITS: f"/repos/{sample}/commits",
+                        Capability.PULL_REQUESTS: f"/repos/{sample}/pulls",
+                        Capability.RELEASES: f"/repos/{sample}/releases",
+                        Capability.ISSUES: f"/repos/{sample}/issues",
+                        Capability.BRANCHES: f"/repos/{sample}/branches",
+                    },
+                    params={"per_page": 1},
+                )
             else:
                 warnings.append("Aucun dépôt n'est visible avec ce jeton.")
 
@@ -166,7 +183,7 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
 
     async def check_health(self) -> HealthResult:
         async with self._client() as client:
-            response = await self._get(client, "/rate_limit")
+            response = await client.get("/rate_limit")
         core = response.json().get("resources", {}).get("core", {})
         limit, remaining = int(core.get("limit", 0)), int(core.get("remaining", 0))
         low = limit > 0 and remaining < limit * LOW_QUOTA_RATIO
@@ -186,11 +203,11 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                     ScopeOption(
                         key=str(repository["full_name"]),
                         name=str(repository["full_name"]),
-                        description=_text(repository.get("description")),
-                        private=bool(repository.get("private")),
-                        updated_at=_parse(repository["pushed_at"])
-                        if repository.get("pushed_at")
+                        description=str(repository["description"])
+                        if repository.get("description")
                         else None,
+                        private=bool(repository.get("private")),
+                        updated_at=parse_timestamp(repository.get("pushed_at")),
                     )
                 )
         return ScopeListing(options=options)
@@ -199,96 +216,58 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
         self, capability: Capability, *, since: datetime | None = None
     ) -> AsyncIterator[RawRecord]:
         async with self._client() as client:
-            if capability is Capability.REPOSITORIES:
-                async for repository in self._repositories(client):
-                    yield _record(capability, repository, updated=repository.get("updated_at"))
-                return
             async for repository in self._repositories(client):
-                async for record in self._contents(client, capability, repository, since):
-                    yield record
+                if capability is Capability.REPOSITORIES:
+                    yield record(
+                        capability,
+                        repository,
+                        external_id=str(repository["node_id"]),
+                        updated=repository.get("updated_at"),
+                    )
+                    continue
+                async for item in self._contents(client, capability, repository, since):
+                    yield item
 
     # ── inside ───────────────────────────────────────────────────────────────
 
-    def _client(self) -> httpx.AsyncClient:
-        return self.http(
+    def _client(self) -> VendorHttp:
+        secret = self.credentials.token.get_secret_value()
+        client = self.http(
             str(self.config.base_url).rstrip("/"),
             headers={
                 "Accept": "application/vnd.github+json",
                 "X-GitHub-Api-Version": API_VERSION,
                 "User-Agent": "LEKA",
-                "Authorization": f"Bearer {self.credentials.token.get_secret_value()}",
+                "Authorization": f"Bearer {secret}",
             },
         )
+        return VendorHttp(client, secret=secret, refuse=self._refuse, page_size=PAGE_SIZE)
 
-    async def _get(
-        self,
-        client: httpx.AsyncClient,
-        path: str,
-        *,
-        params: dict[str, str | int] | None = None,
-        missing: str = "ressource",
-        empty: int | None = None,
-    ) -> httpx.Response:
+    def _refuse(self, response: httpx.Response, path: str, missing: str) -> ConnectorError:
+        """GitHub's answers, as diagnostics. A 403 is a quota when none is
+        left, and a scope when GitHub says the token cannot reach it."""
+        status, body = response.status_code, response.text[:200].lower()
+        code = usual_code(status)
+        if status == 403 and response.headers.get("x-ratelimit-remaining") == "0":
+            code = DiagnosticCode.RATE_LIMITED
+        elif status == 403 and "not accessible by personal access token" in body:
+            code = DiagnosticCode.INSUFFICIENT_SCOPE
         secret = self.credentials.token.get_secret_value()
-        try:
-            response = await client.get(path, params=params)
-        except httpx.TimeoutException as error:
-            raise diagnose(
-                DiagnosticCode.TIMEOUT, detail=f"GET {path}", secrets=[secret]
-            ) from error
-        except httpx.TransportError as error:
-            raise diagnose(
-                DiagnosticCode.NETWORK_UNREACHABLE,
-                detail=f"GET {path}: {type(error).__name__}",
-                secrets=[secret],
-            ) from error
-        if response.is_success or response.status_code == empty:
-            return response
-        raise self._diagnose(response, path, missing, secret)
-
-    def _diagnose(
-        self, response: httpx.Response, path: str, missing: str, secret: str
-    ) -> ConnectorError:
-        status = response.status_code
-        body = response.text[:200]
-        detail = f"GET {path} → {status}: {body}"
-
-        def build(
-            code: DiagnosticCode, *, message: str | None = None, retry_after: int | None = None
-        ) -> ConnectorError:
-            return diagnose(
-                code,
-                message=message,
-                provider_status=status,
-                retry_after=retry_after,
-                detail=detail,
-                secrets=[secret],
+        if code is DiagnosticCode.RATE_LIMITED:
+            wait = retry_after(response, "x-ratelimit-reset")
+            return refusal(response, path, secret, code, retry_after=wait)
+        if code is DiagnosticCode.NOT_FOUND:
+            message = (
+                f"GitHub ne trouve pas cette {missing or 'ressource'}, ou le jeton ne la voit pas."
             )
+            return refusal(response, path, secret, code, message=message)
+        return refusal(response, path, secret, code)
 
-        if status == 401:
-            return build(DiagnosticCode.AUTH_INVALID)
-        if status == 429 or (
-            status == 403 and response.headers.get("x-ratelimit-remaining") == "0"
-        ):
-            return build(DiagnosticCode.RATE_LIMITED, retry_after=_retry_after(response))
-        if status == 403 and "not accessible by personal access token" in body.lower():
-            return build(DiagnosticCode.INSUFFICIENT_SCOPE)
-        if status == 403:
-            return build(DiagnosticCode.PERMISSION_DENIED)
-        if status == 404:
-            return build(
-                DiagnosticCode.NOT_FOUND,
-                message=f"GitHub ne trouve pas cette {missing}, ou le jeton ne la voit pas.",
-            )
-        if status >= 500:
-            return build(DiagnosticCode.PROVIDER_ERROR)
-        return build(DiagnosticCode.UNKNOWN)
-
-    def _visible_repositories(self, client: httpx.AsyncClient) -> AsyncIterator[dict[str, object]]:
+    def _visible_repositories(self, client: VendorHttp) -> AsyncIterator[Item]:
         org = self.config.organization
-        return self._pages(client, f"/orgs/{org}/repos" if org else "/user/repos")
+        return client.pages(f"/orgs/{org}/repos" if org else "/user/repos")
 
-    async def _repositories(self, client: httpx.AsyncClient) -> AsyncIterator[dict[str, object]]:
+    async def _repositories(self, client: VendorHttp) -> AsyncIterator[Item]:
         """The repositories in scope. GitHub's names are case-insensitive."""
         wanted = {name.lower() for name in self.config.repositories or []}
         async for repository in self._visible_repositories(client):
@@ -297,101 +276,51 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
 
     def _contents(
         self,
-        client: httpx.AsyncClient,
+        client: VendorHttp,
         capability: Capability,
-        repository: dict[str, object],
+        repository: Item,
         since: datetime | None,
     ) -> AsyncIterator[RawRecord]:
         """One repository's records for one capability."""
         name = str(repository["full_name"])
-        after: dict[str, str | int] = {"since": since.isoformat()} if since else {}
+        after = {"since": since.isoformat()} if since else {}
         if capability is Capability.BRANCHES:
-            items = self._pages(client, f"/repos/{name}/branches")
+            items = client.pages(f"/repos/{name}/branches")
             # A branch has no node_id: its repository's, and its own name.
-            return _records(
+            return records(
                 capability, items, name, key=lambda b: f"{repository['node_id']}:{b['name']}"
             )
         if capability is Capability.COMMITS:
-            items = self._pages(client, f"/repos/{name}/commits", after, empty=EMPTY_REPOSITORY)
-            return _records(capability, items, name, updated=_committed_at)
+            items = client.pages(f"/repos/{name}/commits", after, empty=EMPTY_REPOSITORY)
+            return records(
+                capability,
+                items,
+                name,
+                key=_node_id,
+                updated=lambda c: c["commit"]["committer"]["date"],
+            )
         if capability is Capability.PULL_REQUESTS:
-            items = self._pages(
-                client,
+            items = client.pages(
                 f"/repos/{name}/pulls",
                 {"state": "all", "sort": "updated", "direction": "desc"},
                 stop_before=since,
             )
-            return _records(capability, items, name)
+            return records(capability, items, name, key=_node_id)
         if capability is Capability.ISSUES:
-            items = self._pages(client, f"/repos/{name}/issues", {"state": "all", **after})
+            items = client.pages(f"/repos/{name}/issues", {"state": "all", **after})
             # GitHub lists pull requests as issues too; they have their own capability.
-            only_issues = _without(items, "pull_request")
-            return _records(capability, only_issues, name)
+            return records(capability, without(items, "pull_request"), name, key=_node_id)
         if capability is Capability.RELEASES:
-            items = self._pages(client, f"/repos/{name}/releases")
-            return _records(
-                capability, items, name, updated=lambda r: r.get("published_at") or r["created_at"]
+            items = client.pages(f"/repos/{name}/releases")
+            return records(
+                capability,
+                items,
+                name,
+                key=_node_id,
+                updated=lambda r: r.get("published_at") or r["created_at"],
             )
         msg = f"GitHub does not read {capability}"
         raise ValueError(msg)
-
-    async def _pages(
-        self,
-        client: httpx.AsyncClient,
-        path: str,
-        params: dict[str, str | int] | None = None,
-        *,
-        empty: int | None = None,
-        stop_before: datetime | None = None,
-    ) -> AsyncIterator[dict[str, object]]:
-        """Every item of a listing, following GitHub's Link header.
-
-        `stop_before`: the listing is sorted newest-updated first, and
-        nothing older than this is wanted.
-        """
-        url: str | None = path
-        query: dict[str, str | int] | None = {"per_page": PAGE_SIZE, **(params or {})}
-        while url:
-            response = await self._get(client, url, params=query, empty=empty)
-            if response.status_code == empty:
-                return
-            for item in response.json():
-                if stop_before and _parse(item.get("updated_at")) < stop_before:
-                    return
-                yield item
-            url, query = self._next_page(client, response), None  # the link carries the query
-
-    def _next_page(self, client: httpx.AsyncClient, response: httpx.Response) -> str | None:
-        """The next page — only if it is on the host the token was meant for."""
-        link = response.links.get("next", {}).get("url")
-        if link is None:
-            return None
-        if httpx.URL(link).host != client.base_url.host:
-            raise diagnose(
-                DiagnosticCode.PROVIDER_ERROR,
-                detail=f"pagination points to another host: {httpx.URL(link).host}",
-                secrets=[self.credentials.token.get_secret_value()],
-            )
-        return link
-
-    async def _probe(self, client: httpx.AsyncClient, full_name: str) -> list[Capability]:
-        """Which of the per-repository capabilities this token can read, at once."""
-        probes = {
-            Capability.COMMITS: f"/repos/{full_name}/commits",
-            Capability.PULL_REQUESTS: f"/repos/{full_name}/pulls",
-            Capability.RELEASES: f"/repos/{full_name}/releases",
-            Capability.ISSUES: f"/repos/{full_name}/issues",
-            Capability.BRANCHES: f"/repos/{full_name}/branches",
-        }
-        responses = await asyncio.gather(
-            *(client.get(path, params={"per_page": 1}) for path in probes.values()),
-            return_exceptions=True,
-        )
-        return [
-            capability
-            for capability, response in zip(probes, responses, strict=True)
-            if isinstance(response, httpx.Response) and response.is_success
-        ]
 
     @staticmethod
     def _scope_warnings(response: httpx.Response) -> list[str]:
@@ -405,70 +334,6 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
         ]
 
 
-def _retry_after(response: httpx.Response) -> int | None:
-    if "retry-after" in response.headers:
-        return int(response.headers["retry-after"])
-    reset = response.headers.get("x-ratelimit-reset")
-    return max(0, int(reset) - int(time.time())) if reset else None
-
-
-# ── records ─────────────────────────────────────────────────────────────────
-
-type Item = dict[str, object]
-
-
-def _record(
-    kind: Capability,
-    item: Item,
-    *,
-    container: str | None = None,
-    external_id: str | None = None,
-    updated: object = None,
-) -> RawRecord:
-    return RawRecord(
-        kind=kind,
-        external_id=external_id or str(item["node_id"]),
-        container=container,
-        payload=item,
-        updated_at=_parse(updated) if updated else None,
-        fetched_at=datetime.now(UTC),
-    )
-
-
-async def _records(
-    kind: Capability,
-    items: AsyncIterator[Item],
-    container: str,
-    *,
-    key: Callable[[Any], str] | None = None,
-    updated: Callable[[Any], object] = lambda item: item.get("updated_at"),
-) -> AsyncIterator[RawRecord]:
-    async for item in items:
-        yield _record(
-            kind,
-            item,
-            container=container,
-            external_id=key(item) if key else None,
-            updated=updated(item),
-        )
-
-
-async def _without(items: AsyncIterator[Item], field: str) -> AsyncIterator[Item]:
-    async for item in items:
-        if field not in item:
-            yield item
-
-
-def _committed_at(commit: Any) -> object:
-    return commit["commit"]["committer"]["date"]
-
-
-def _text(value: object) -> str | None:
-    return str(value) if value else None
-
-
-def _parse(timestamp: object) -> datetime:
-    """GitHub's ISO 8601, "2026-09-26T10:00:00Z". A missing one sorts first."""
-    if not timestamp:
-        return datetime.min.replace(tzinfo=UTC)
-    return datetime.fromisoformat(str(timestamp))
+def _node_id(item: Item) -> str:
+    """GitHub's global id: stable across renames and transfers."""
+    return str(item["node_id"])
