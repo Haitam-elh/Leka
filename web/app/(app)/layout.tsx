@@ -8,6 +8,7 @@ import { useNavBadges } from "@/lib/nav-badges";
 import { ShellProvider } from "@/components/shell/shell-provider";
 import { Toaster } from "@/components/ui/toast";
 import { useDictionary } from "@/lib/i18n/locale-provider";
+import { QueryProvider } from "@/lib/query";
 
 /**
  * Everything behind the sign-in page.
@@ -26,20 +27,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const t = useDictionary();
 
   return (
-    <ShellProvider>
-      {/* Both mounted once, here, for the same reason: a second toast
+    <QueryProvider>
+      <ShellProvider>
+        {/* Both mounted once, here, for the same reason: a second toast
           viewport competes for the same corner, and a second confirm
           dialog means two focus traps fighting over the keyboard. */}
-      <Toaster closeLabel={t.interactions.dismiss} />
-      <DocumentTitle />
-      {/* TODO LEKA-390 for the counts, and notifications have no ticket yet:
+        <Toaster closeLabel={t.interactions.dismiss} />
+        <DocumentTitle />
+        {/* TODO LEKA-390 for the counts, and notifications have no ticket yet:
           the shell is handed numbers rather than asking for them. None until
           then — the red dot on the bell was a mocked "1" for everyone. */}
-      <ConfirmProvider>
-        <AppShell badges={badges} notificationCount={0}>
-          <RouteGuard>{children}</RouteGuard>
-        </AppShell>
-      </ConfirmProvider>
-    </ShellProvider>
+        <ConfirmProvider>
+          <AppShell badges={badges} notificationCount={0}>
+            <RouteGuard>{children}</RouteGuard>
+          </AppShell>
+        </ConfirmProvider>
+      </ShellProvider>
+    </QueryProvider>
   );
 }

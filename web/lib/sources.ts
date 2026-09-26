@@ -1,9 +1,10 @@
 /**
  * The customer's connected systems, as the API describes them (LEKA-344).
  *
- * Read-only here: the overview shows them, the sources screen will manage
- * them. The shapes are the generated ones, so a field renamed on the backend
- * fails `tsc` rather than reading as `undefined` on a card.
+ * The overview reads them; the sources screen (LEKA-345) manages them —
+ * every call of docs/connectors/framework.md's API is here, once. The shapes
+ * are the generated ones, so a field renamed on the backend fails `tsc`
+ * rather than reading as `undefined` on a card.
  */
 
 import { apiFetch } from "@/lib/api";
@@ -12,6 +13,15 @@ import type { components } from "@/lib/api-types";
 export type Source = components["schemas"]["SourceRead"];
 export type SourceEvent = components["schemas"]["SourceEventRead"];
 export type SourceKind = components["schemas"]["SourceKind"];
+export type SourceStatus = components["schemas"]["SourceStatus"];
+export type CatalogEntry = components["schemas"]["CatalogEntry"];
+export type ConnectorCategory = components["schemas"]["ConnectorCategory"];
+export type Capability = components["schemas"]["Capability"];
+export type Diagnostic = components["schemas"]["Diagnostic"];
+export type TestOutcome = components["schemas"]["SourceTestOutcome"];
+export type ScopeOptions = components["schemas"]["ScopeOptionsRead"];
+export type SourceCreate = components["schemas"]["SourceCreate"];
+export type SourceUpdate = components["schemas"]["SourceUpdate"];
 
 type Page<T> = { data: T[]; next_cursor?: string | null };
 
@@ -19,11 +29,41 @@ type Page<T> = { data: T[]; next_cursor?: string | null };
  * sources than this is not one the overview has to summarise yet. */
 const PAGE_SIZE = 200;
 
+const post = <T>(path: string, body?: unknown) =>
+  apiFetch<T>(path, {
+    method: "POST",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
 export const sources = {
   list: () => apiFetch<Page<Source>>(`/sources?limit=${PAGE_SIZE}`),
+  get: (sourceId: string) => apiFetch<Source>(`/sources/${sourceId}`),
   /** Newest first — the API's default order. */
   events: (sourceId: string, limit = 10) =>
     apiFetch<Page<SourceEvent>>(`/sources/${sourceId}/events?limit=${limit}`),
+  /** What can be connected, with the JSON Schemas its form is built from. */
+  catalog: () => apiFetch<CatalogEntry[]>("/connectors/catalog"),
+
+  create: (body: SourceCreate) => post<Source>("/sources", body),
+  update: (sourceId: string, body: SourceUpdate) =>
+    apiFetch<Source>(`/sources/${sourceId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  rotateCredentials: (sourceId: string, credentials: Record<string, string>) =>
+    apiFetch<Source>(`/sources/${sourceId}/credentials`, {
+      method: "PUT",
+      body: JSON.stringify({ credentials }),
+    }),
+  remove: (sourceId: string) => apiFetch<void>(`/sources/${sourceId}`, { method: "DELETE" }),
+
+  /** 200 either way: a failed test is an answer, with its diagnostic. */
+  test: (sourceId: string) => post<TestOutcome>(`/sources/${sourceId}/test`),
+  activate: (sourceId: string) => post<Source>(`/sources/${sourceId}/activate`),
+  disable: (sourceId: string) => post<Source>(`/sources/${sourceId}/disable`),
+  checkHealth: (sourceId: string) => post<unknown>(`/sources/${sourceId}/health-check`),
+  /** What the scope can be chosen from, asked of the vendor now. */
+  scopeOptions: (sourceId: string) => apiFetch<ScopeOptions>(`/sources/${sourceId}/scope/options`),
 };
 
 /**
@@ -59,4 +99,31 @@ export function isConnected(source: Source): boolean {
 /** When it was last heard from: its last sync, else its last health check. */
 export function lastSeen(source: Source): string | null {
   return source.last_sync_at ?? source.last_health_check_at;
+}
+
+/**
+ * The mockup's "Type" of each kind of source. Written out, not read from
+ * the catalogue: a kind can have sources (the seed's Jira, Slack…) before
+ * it has a connector, and `Record` makes a new kind fail `tsc` until it is
+ * placed here.
+ */
+export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
+  github: "code",
+  gitlab: "code",
+  bitbucket: "code",
+  jira: "project",
+  confluence: "docs",
+  aws: "cloud",
+  datadog: "observability",
+  slack: "chat",
+};
+
+/** Can be switched on: tested against the settings it has now. */
+export function canActivate(source: Source): boolean {
+  return source.status === "tested" || source.status === "disabled";
+}
+
+/** Can be switched off: anything but already off. */
+export function canDisable(source: Source): boolean {
+  return source.status !== "disabled";
 }

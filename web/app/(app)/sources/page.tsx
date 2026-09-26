@@ -1,7 +1,7 @@
 "use client";
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page";
+import { SourcesPage } from "@/components/sources/sources-page";
 
 export default function Page() {
-  return <PlaceholderPage />;
+  return <SourcesPage />;
 }
