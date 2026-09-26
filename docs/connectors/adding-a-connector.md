@@ -153,6 +153,6 @@ Through the API, override `get_connector_transport` in
 - [ ] `test_connection` in three steps, parallel probes, under 15 s
 - [ ] `check_health`, quota-free if possible
 - [ ] every failure through `diagnose(..., secrets=[...])`
-- [ ] every call a GET, through `self.http()` and `VendorHttp`
+- [ ] every call a GET — or a POST to a read declared in `reads_by_post`, when the vendor offers it no other way — through `self.http()` and `VendorHttp`
 - [ ] one import line in `connectors/__init__.py`
 - [ ] tests with `MockTransport`, no network

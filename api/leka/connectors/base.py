@@ -9,7 +9,8 @@ database and never sees another source.
 
 READ-ONLY, BY CONTRACT. LEKA never writes to a customer's system.
 `read_only` is a literal True in the manifest, and a connector's HTTP
-client is a read client: it has no method that sends a body.
+client is a read client: its one method that sends a body, `post`, goes
+only to the reads a vendor offers as POST, each named by the connector.
 
 Every HTTP call goes through `self.http()`: an httpx.AsyncClient with a
 10-second timeout per call, and a transport the tests replace. The whole of
