@@ -11,7 +11,10 @@ THE REGISTRY IS THIS FILE. A connector exists because its package is
 imported below; there is no other discovery (ADR 015).
 """
 
-from leka.connectors import github  # noqa: F401  — registers GitHubConnector
+from leka.connectors import (
+    github,  # noqa: F401  — registers GitHubConnector
+    gitlab,  # noqa: F401  — registers GitLabConnector
+)
 from leka.connectors.base import (
     Capability,
     ConnectionTestResult,

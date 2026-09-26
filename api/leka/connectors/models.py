@@ -62,6 +62,7 @@ class SourceKind(enum.StrEnum):
     """
 
     GITHUB = "github"
+    GITLAB = "gitlab"
     JIRA = "jira"
     CONFLUENCE = "confluence"
     AWS = "aws"

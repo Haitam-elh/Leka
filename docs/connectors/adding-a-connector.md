@@ -114,8 +114,10 @@ timeout, and it is how the tests replace the network.
 One line in `api/leka/connectors/__init__.py`:
 
 ```python
-from leka.connectors import github  # noqa: F401  — registers GitHubConnector
-from leka.connectors import gitlab  # noqa: F401  — registers GitLabConnector
+from leka.connectors import (
+    github,  # noqa: F401  — registers GitHubConnector
+    gitlab,  # noqa: F401  — registers GitLabConnector
+)
 ```
 
 That is the whole registry. It appears in `GET /connectors/catalog`.
