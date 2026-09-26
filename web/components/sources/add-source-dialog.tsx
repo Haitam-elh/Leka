@@ -55,22 +55,28 @@ export function AddSourceDialog({
   open,
   onOpenChange,
   onDone,
+  editing,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDone: (source: Source) => void;
+  /** A source to change: the wizard starts at its connection. */
+  editing?: Source;
 }) {
   const t = useDictionary();
-  const [step, setStep] = useState<Step>("connector");
-  const [entry, setEntry] = useState<CatalogEntry | null>(null);
-  const [source, setSource] = useState<Source | null>(null);
+  const catalog = useCatalog();
+  const [step, setStep] = useState<Step>(editing ? "settings" : "connector");
+  const [picked, setEntry] = useState<CatalogEntry | null>(null);
+  const [source, setSource] = useState<Source | null>(editing ?? null);
+  const entry =
+    picked ?? (editing ? (catalog.data?.find((e) => e.key === editing.type) ?? null) : null);
 
   function close(next: boolean) {
     onOpenChange(next);
     if (!next) {
-      setStep("connector");
+      setStep(editing ? "settings" : "connector");
       setEntry(null);
-      setSource(null);
+      setSource(editing ?? null);
     }
   }
 
@@ -84,7 +90,7 @@ export function AddSourceDialog({
       <DialogContent showCloseButton={false} className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <div className="flex items-start gap-3">
           <div className="flex-1">
-            <DialogTitle>{t.sources.add.title}</DialogTitle>
+            <DialogTitle>{editing ? t.sources.page.editTitle : t.sources.add.title}</DialogTitle>
             <DialogDescription className="mt-1 flex items-center gap-1.5">
               <Lock className="size-3.5" aria-hidden="true" />
               {t.sources.add.readOnly}
