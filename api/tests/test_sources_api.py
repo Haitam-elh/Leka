@@ -397,6 +397,81 @@ async def test_github_end_to_end(
     assert (await client.post(f"{url}/health-check")).json()["health_status"] == "healthy"
 
 
+async def test_github_scope_is_chosen_from_what_github_offers(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    github_api: None,
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _create(
+        client,
+        type="github",
+        display_name="Acme GitHub",
+        config={"organization": "acme"},
+        credentials={"token": GITHUB_TOKEN},
+    )
+    url = f"{API}/sources/{source['id']}"
+
+    offered = (await client.get(f"{url}/scope/options")).json()
+    assert offered["ok"] is True
+    assert [option["key"] for option in offered["options"]] == ["acme/api"]
+    # Asking reads: nothing about the source changed, nothing was recorded.
+    assert (await client.get(url)).json()["status"] == "draft"
+    events = (await client.get(f"{url}/events")).json()["data"]
+    assert [event["type"] for event in events] == ["created"]
+
+    in_scope = {"organization": "acme", "repositories": ["acme/api"]}
+    scoped = await client.patch(url, json={"config": in_scope})
+    assert scoped.json()["config"]["repositories"] == ["acme/api"]
+    assert (await client.post(f"{url}/test")).json()["ok"] is True
+
+    elsewhere = {"organization": "acme", "repositories": ["globex/api"]}
+    refused = await client.patch(url, json={"config": elsewhere})
+    assert refused.status_code == 422
+
+    _as(identity, acme, "member")
+    assert (await client.get(f"{url}/scope/options")).status_code == 403
+    _as(identity, acme, "other_admin")
+    assert (await client.get(f"{url}/scope/options")).status_code == 404
+
+
+async def test_a_refused_scope_listing_is_an_answer_with_a_diagnostic(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    refusing = github({"/orgs/acme/repos": httpx.Response(401, json={"message": "Bad"})})
+    app.dependency_overrides[get_connector_transport] = lambda: httpx.MockTransport(refusing)
+    try:
+        _as(identity, acme, "admin")
+        source = await _create(
+            client,
+            type="github",
+            display_name="Acme GitHub",
+            config={"organization": "acme"},
+            credentials={"token": GITHUB_TOKEN},
+        )
+        response = await client.get(f"{API}/sources/{source['id']}/scope/options")
+    finally:
+        app.dependency_overrides.pop(get_connector_transport, None)
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+    assert response.json()["diagnostic"]["code"] == "AUTH_INVALID"
+    assert GITHUB_TOKEN not in response.text
+
+
+async def test_a_connector_without_a_scope_says_so(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _create(client)
+
+    response = await client.get(f"{API}/sources/{source['id']}/scope/options")
+
+    assert response.status_code == 409
+    assert error_code(response) == "conflict"
+
+
 async def test_the_scheduled_check_visits_every_activated_source(
     client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
 ) -> None:

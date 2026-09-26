@@ -19,6 +19,8 @@ from leka.connectors.base import (
     ConnectorCategory,
     ConnectorManifest,
     HealthResult,
+    ScopeListing,
+    ScopeOption,
 )
 from leka.connectors.errors import ConnectorError, Diagnostic, DiagnosticCode, diagnose
 from leka.connectors.health import run_health_check
@@ -47,6 +49,7 @@ from leka.connectors.schemas import (
     CredentialsUpdate,
     HealthRead,
     RawRecord,
+    ScopeOptionsRead,
     SourceCreate,
     SourceEventRead,
     SourceRead,
@@ -59,6 +62,7 @@ from leka.connectors.service import (
     ActivationRefusedError,
     DuplicateSourceError,
     InvalidSourceInputError,
+    NoScopeError,
     SourceNotFoundError,
     SourceService,
 )
@@ -91,9 +95,13 @@ __all__ = [
     "InvalidSourceInputError",
     "InvalidTransitionError",
     "LifecycleEvent",
+    "NoScopeError",
     "RawRecord",
     "RotationRefusedError",
     "RotationReport",
+    "ScopeListing",
+    "ScopeOption",
+    "ScopeOptionsRead",
     "SecretStore",
     "Source",
     "SourceCreate",

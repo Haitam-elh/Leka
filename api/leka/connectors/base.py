@@ -81,6 +81,23 @@ class ConnectionTestResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class ScopeOption(BaseModel):
+    """One thing an admin can put in a source's scope — a repository, a project."""
+
+    key: str = Field(description="What the config stores to include it: 'acme/api'.")
+    name: str
+    description: str | None = None
+    private: bool | None = None
+    updated_at: datetime | None = None
+
+
+class ScopeListing(BaseModel):
+    options: list[ScopeOption]
+    truncated: bool = Field(
+        default=False, description="More exist than were listed; the rest are not offered."
+    )
+
+
 class HealthResult(BaseModel):
     status: HealthStatus
     detail: str | None = None
@@ -123,6 +140,15 @@ class Connector[ConfigT: BaseModel, CredentialsT: BaseModel](ABC):
     @abstractmethod
     async def check_health(self) -> HealthResult:
         """A light call, free of quota where the vendor allows it."""
+
+    async def list_scope(self) -> ScopeListing:
+        """What this source's scope can be chosen from, ignoring the current
+        scope. Called before activation, so an admin picks rather than types.
+
+        Not abstract: a connector without a scope to choose raises
+        NotImplementedError, and the API says so.
+        """
+        raise NotImplementedError(f"{self.manifest.key} has no scope to choose")
 
     def iter_resources(
         self, capability: Capability, *, since: datetime | None = None

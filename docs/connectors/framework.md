@@ -47,6 +47,16 @@ yielded before stays valid. A connector that does not implement it raises
 `NotImplementedError` and still exists; GitHub implements it (LEKA-345), the
 engine that calls it is LEKA-352.
 
+## Scope
+
+What a source reads can be narrowed in its config — GitHub's
+`repositories: ["acme/api", …]`; absent, everything the credentials see.
+`list_scope()` offers the choices (at most 1 000, `truncated` beyond), so an
+admin picks rather than types. The scope is config: changing it sends the
+source back to `draft`, and the connection test then probes a repository
+in scope, failing with `NOT_FOUND` if GitHub does not show it. Include and
+exclude rules, and mapping, are LEKA-351.
+
 ## The lifecycle
 
 ```mermaid
@@ -163,6 +173,7 @@ Reading needs `source:read` (every member); everything else needs
 | `GET /sources/{id}` · `PATCH` · `DELETE` | read · rename or reconfigure · delete with its credential |
 | `PUT /sources/{id}/credentials` | rotate the secret — back to `draft` |
 | `POST /sources/{id}/test` · `/activate` · `/disable` | the lifecycle |
+| `GET /sources/{id}/scope/options` | what the scope can be chosen from, asked of the vendor now — 200 with `ok: false` and a diagnostic when it refuses; 409 for a connector without a scope |
 | `POST /sources/{id}/health-check` · `GET /health` | check now · last result |
 | `GET /sources/{id}/events` | the history, paginated |
 

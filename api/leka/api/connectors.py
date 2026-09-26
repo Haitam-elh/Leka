@@ -36,6 +36,8 @@ from leka.connectors import (
     HealthRead,
     InvalidSourceInputError,
     InvalidTransitionError,
+    NoScopeError,
+    ScopeOptionsRead,
     Source,
     SourceCreate,
     SourceEvent,
@@ -161,6 +163,8 @@ def _refused(error: Exception) -> ApiError:
             "Test the connection first: activation needs a successful test of the current "
             "settings and credentials.",
         )
+    if isinstance(error, NoScopeError):
+        return ApiError(409, ErrorCode.CONFLICT, "This connector has no scope to choose from.")
     if isinstance(error, InvalidTransitionError):
         return ApiError(409, ErrorCode.CONFLICT, f"Not possible now: {error}.")
     raise error
@@ -172,6 +176,7 @@ _REFUSALS = (
     DuplicateSourceError,
     ActivationRefusedError,
     InvalidTransitionError,
+    NoScopeError,
 )
 
 
@@ -268,6 +273,20 @@ async def test_source(source_id: uuid.UUID, service: ManagingService) -> SourceT
         diagnostic=diagnostic,
         source=await _read(service, source),
     )
+
+
+@router.get("/sources/{source_id}/scope/options", response_model=ScopeOptionsRead)
+async def source_scope_options(source_id: uuid.UUID, service: ManagingService) -> ScopeOptionsRead:
+    """What can be put in the source's scope — its repositories — asked of the
+    vendor now, whatever the current scope. 200 either way, like a test."""
+    source = await _source(service, source_id)
+    try:
+        listing, diagnostic = await service.scope_options(source)
+    except _REFUSALS as error:
+        raise _refused(error) from error
+    if listing is None:
+        return ScopeOptionsRead(ok=False, diagnostic=diagnostic)
+    return ScopeOptionsRead(ok=True, options=listing.options, truncated=listing.truncated)
 
 
 @router.post("/sources/{source_id}/activate", response_model=SourceRead)

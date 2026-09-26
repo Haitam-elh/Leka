@@ -22,7 +22,12 @@ import structlog
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.exc import IntegrityError
 
-from leka.connectors.base import TEST_BUDGET_SECONDS, ConnectionTestResult, Connector
+from leka.connectors.base import (
+    TEST_BUDGET_SECONDS,
+    ConnectionTestResult,
+    Connector,
+    ScopeListing,
+)
 from leka.connectors.errors import ConnectorError, Diagnostic, DiagnosticCode, diagnose
 from leka.connectors.lifecycle import LifecycleEvent, fingerprint, next_status
 from leka.connectors.models import (
@@ -61,6 +66,10 @@ class InvalidSourceInputError(ValueError):
 
 class DuplicateSourceError(ValueError):
     """Another source of this type already has this name here."""
+
+
+class NoScopeError(Exception):
+    """This connector has no scope to choose from."""
 
 
 class ActivationRefusedError(Exception):
@@ -195,6 +204,20 @@ class SourceService:
             warnings=result.warnings,
         )
         return result, None
+
+    async def scope_options(self, source: Source) -> tuple[ScopeListing | None, Diagnostic | None]:
+        """Ask the vendor what the scope can be chosen from, within the test's
+        budget. Changes nothing on the source and records nothing: it reads."""
+        try:
+            connector = await self._build(source)
+            async with asyncio.timeout(TEST_BUDGET_SECONDS):
+                return await connector.list_scope(), None
+        except NotImplementedError as error:
+            raise NoScopeError(source.kind.value) from error
+        except ConnectorError as error:
+            return None, error.diagnostic
+        except TimeoutError:
+            return None, diagnose(DiagnosticCode.TIMEOUT).diagnostic
 
     async def activate(self, source: Source) -> Source:
         tested = source.tested_config_fingerprint

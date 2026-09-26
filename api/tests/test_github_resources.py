@@ -12,10 +12,11 @@ from datetime import UTC, datetime
 
 import httpx
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from leka.connectors import Capability, ConnectorError, DiagnosticCode, RawRecord
 from leka.connectors.github import GitHubConfig, GitHubConnector, GitHubCredentials
+from leka.connectors.github import connector as github_module
 
 TOKEN = "github_pat_11ABCDEFG0123456789_secretpartthatmustneverleak"
 SINCE = datetime(2026, 9, 20, tzinfo=UTC)
@@ -51,14 +52,18 @@ class GitHub:
         return [r.url.params for r in self.requests if r.url.path == path]
 
 
-async def _stream(
-    github: Handler, capability: Capability, since: datetime | None = None
-) -> list[RawRecord]:
-    connector = GitHubConnector(
-        GitHubConfig(organization="acme"),
+def _connector(github: Handler, **config: object) -> GitHubConnector:
+    return GitHubConnector(
+        GitHubConfig.model_validate({"organization": "acme", **config}),
         GitHubCredentials(token=SecretStr(TOKEN)),
         transport=httpx.MockTransport(github),
     )
+
+
+async def _stream(
+    github: Handler, capability: Capability, since: datetime | None = None, **config: object
+) -> list[RawRecord]:
+    connector = _connector(github, **config)
     return [record async for record in connector.iter_resources(capability, since=since)]
 
 
@@ -78,11 +83,7 @@ async def test_repositories_are_read_across_every_page() -> None:
 
 async def test_the_token_owner_s_repositories_without_an_organisation() -> None:
     github = GitHub({"/user/repos": [API]})
-    connector = GitHubConnector(
-        GitHubConfig(),
-        GitHubCredentials(token=SecretStr(TOKEN)),
-        transport=httpx.MockTransport(github),
-    )
+    connector = _connector(github, organization=None)
 
     records = [r async for r in connector.iter_resources(Capability.REPOSITORIES)]
 
@@ -185,11 +186,7 @@ async def test_an_exhausted_quota_mid_stream_keeps_what_was_read() -> None:
     )
     commit = {"node_id": "C_1", "commit": {"committer": {"date": "2026-09-22T08:00:00Z"}}}
     github = GitHub({"/repos/acme/api/commits": [commit], "/repos/acme/web/commits": limited})
-    connector = GitHubConnector(
-        GitHubConfig(organization="acme"),
-        GitHubCredentials(token=SecretStr(TOKEN)),
-        transport=httpx.MockTransport(github),
-    )
+    connector = _connector(github)
     read: list[RawRecord] = []
 
     with pytest.raises(ConnectorError) as caught:
@@ -199,3 +196,71 @@ async def test_an_exhausted_quota_mid_stream_keeps_what_was_read() -> None:
     assert [r.external_id for r in read] == ["C_1"]
     assert caught.value.diagnostic.code is DiagnosticCode.RATE_LIMITED
     assert TOKEN not in repr(caught.value.diagnostic)
+
+
+# ── scope ────────────────────────────────────────────────────────────────────
+
+
+async def test_only_the_repositories_in_scope_are_read() -> None:
+    github = GitHub({})
+
+    repositories = await _stream(github, Capability.REPOSITORIES, repositories=["Acme/API"])
+    await _stream(github, Capability.COMMITS, repositories=["acme/api"])
+
+    assert [r.external_id for r in repositories] == ["R_api"]
+    assert github.params("/repos/acme/api/commits")
+    assert not github.params("/repos/acme/web/commits")
+
+
+@pytest.mark.parametrize(
+    "repositories",
+    [["api"], ["globex/api"], ["acme/api?x"], []],
+    ids=["not-a-full-name", "another-organisation", "not-a-name", "empty"],
+)
+def test_a_scope_that_cannot_be_read_is_refused(repositories: list[str]) -> None:
+    with pytest.raises(ValidationError):
+        GitHubConfig(organization="acme", repositories=repositories)
+
+
+async def test_the_scope_is_chosen_from_every_visible_repository() -> None:
+    api = {**API, "description": "The API", "private": True, "pushed_at": "2026-09-25T09:00:00Z"}
+    github = GitHub({"/orgs/acme/repos": ([api], [WEB])})
+
+    listing = await _connector(github, repositories=["acme/web"]).list_scope()
+
+    assert [option.key for option in listing.options] == ["acme/api", "acme/web"]
+    first = listing.options[0]
+    assert (first.description, first.private) == ("The API", True)
+    assert first.updated_at == datetime(2026, 9, 25, 9, tzinfo=UTC)
+    assert listing.truncated is False
+
+
+async def test_a_listing_too_long_to_offer_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(github_module, "MAX_SCOPE_OPTIONS", 1)
+
+    listing = await _connector(GitHub({})).list_scope()
+
+    assert [option.key for option in listing.options] == ["acme/api"]
+    assert listing.truncated is True
+
+
+async def test_the_connection_test_probes_a_repository_in_scope() -> None:
+    github = GitHub({"/user": {"login": "nora"}, "/orgs/acme": {"login": "acme"}})
+
+    result = await _connector(github, repositories=["acme/web"]).test_connection()
+
+    assert Capability.COMMITS in result.capabilities
+    assert github.params("/repos/acme/web/commits")
+    assert not github.params("/repos/acme/api/commits")
+
+
+async def test_a_repository_in_scope_that_github_does_not_show_fails_the_test() -> None:
+    missing = httpx.Response(404, json={"message": "Not Found"})
+    github = GitHub(
+        {"/user": {"login": "nora"}, "/orgs/acme": {"login": "acme"}, "/repos/acme/gone": missing}
+    )
+
+    with pytest.raises(ConnectorError) as caught:
+        await _connector(github, repositories=["acme/gone"]).test_connection()
+
+    assert caught.value.diagnostic.code is DiagnosticCode.NOT_FOUND

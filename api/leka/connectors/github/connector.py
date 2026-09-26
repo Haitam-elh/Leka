@@ -9,7 +9,10 @@ own permissions; asking is the only way to know.
 check_health: GET /rate_limit, which GitHub does not count against the
 quota. Healthy, or degraded when less than a tenth of the quota is left.
 
-iter_resources: the repositories the token sees, then — repository by
+list_scope: every repository the token sees, for the admin to choose from.
+
+iter_resources: the repositories in scope — all the token sees, unless
+`repositories` names some — then — repository by
 repository — their branches, commits (default branch), pull requests,
 issues and releases, following GitHub's pagination. Commits and issues are
 filtered by `since` on GitHub's side; pull requests are read newest-updated
@@ -23,13 +26,14 @@ is where it is scoped, not here — but the test says so, in its warnings.
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, model_validator
 
 from leka.connectors.base import (
     Capability,
@@ -38,6 +42,8 @@ from leka.connectors.base import (
     ConnectorCategory,
     ConnectorManifest,
     HealthResult,
+    ScopeListing,
+    ScopeOption,
 )
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
 from leka.connectors.models import HealthStatus, SourceKind
@@ -49,6 +55,10 @@ LOW_QUOTA_RATIO = 0.1
 PAGE_SIZE = 100  # GitHub's maximum
 # GitHub answers 409 for the commits of a repository with none yet.
 EMPTY_REPOSITORY = 409
+# What list_scope offers at most: ten pages. An organisation with more is
+# scoped by typing names, until the Sources screen searches (LEKA-351).
+MAX_SCOPE_OPTIONS = 1000
+FULL_NAME = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 # Classic OAuth scopes that let a token change something. Fine-grained tokens
 # send no X-OAuth-Scopes header at all, so this only ever warns about those.
 WRITE_SCOPES = ("repo", "write:", "admin:", "delete_repo", "workflow", "delete:")
@@ -66,6 +76,25 @@ class GitHubConfig(BaseModel):
         default=HttpUrl("https://api.github.com"),
         description="Change only for GitHub Enterprise Server.",
     )
+    repositories: list[str] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=MAX_SCOPE_OPTIONS,
+        description="Full names ('acme/api') of the repositories to read. "
+        "Empty: every repository the token sees.",
+    )
+
+    @model_validator(mode="after")
+    def _repositories_are_full_names_in_the_organisation(self) -> GitHubConfig:
+        for name in self.repositories or []:
+            if not FULL_NAME.match(name):
+                msg = f"{name!r} is not a full name like 'acme/api'"
+                raise ValueError(msg)
+            owner = name.split("/")[0]
+            if self.organization and owner.lower() != self.organization.lower():
+                msg = f"{name!r} is not in the organisation {self.organization!r}"
+                raise ValueError(msg)
+        return self
 
 
 class GitHubCredentials(BaseModel):
@@ -119,7 +148,12 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
             metadata["repositories_visible"] = f"{len(listed)}+" if more else len(listed)
             capabilities = [Capability.REPOSITORIES] if listed else []
             if listed:
-                capabilities += await self._probe(client, listed[0]["full_name"])
+                # Probe what will be read: a repository in scope, if one is set.
+                sample = listed[0]["full_name"]
+                if self.config.repositories:
+                    sample = self.config.repositories[0]
+                    await self._get(client, f"/repos/{sample}", missing="ressource")
+                capabilities += await self._probe(client, sample)
             else:
                 warnings.append("Aucun dépôt n'est visible avec ce jeton.")
 
@@ -141,6 +175,25 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
             detail=f"quota {remaining}/{limit}",
             checked_at=datetime.now(UTC),
         )
+
+    async def list_scope(self) -> ScopeListing:
+        options: list[ScopeOption] = []
+        async with self._client() as client:
+            async for repository in self._visible_repositories(client):
+                if len(options) == MAX_SCOPE_OPTIONS:
+                    return ScopeListing(options=options, truncated=True)
+                options.append(
+                    ScopeOption(
+                        key=str(repository["full_name"]),
+                        name=str(repository["full_name"]),
+                        description=_text(repository.get("description")),
+                        private=bool(repository.get("private")),
+                        updated_at=_parse(repository["pushed_at"])
+                        if repository.get("pushed_at")
+                        else None,
+                    )
+                )
+        return ScopeListing(options=options)
 
     async def iter_resources(
         self, capability: Capability, *, since: datetime | None = None
@@ -231,9 +284,16 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
             return build(DiagnosticCode.PROVIDER_ERROR)
         return build(DiagnosticCode.UNKNOWN)
 
-    def _repositories(self, client: httpx.AsyncClient) -> AsyncIterator[dict[str, object]]:
+    def _visible_repositories(self, client: httpx.AsyncClient) -> AsyncIterator[dict[str, object]]:
         org = self.config.organization
         return self._pages(client, f"/orgs/{org}/repos" if org else "/user/repos")
+
+    async def _repositories(self, client: httpx.AsyncClient) -> AsyncIterator[dict[str, object]]:
+        """The repositories in scope. GitHub's names are case-insensitive."""
+        wanted = {name.lower() for name in self.config.repositories or []}
+        async for repository in self._visible_repositories(client):
+            if not wanted or str(repository["full_name"]).lower() in wanted:
+                yield repository
 
     def _contents(
         self,
@@ -401,6 +461,10 @@ async def _without(items: AsyncIterator[Item], field: str) -> AsyncIterator[Item
 
 def _committed_at(commit: Any) -> object:
     return commit["commit"]["committer"]["date"]
+
+
+def _text(value: object) -> str | None:
+    return str(value) if value else None
 
 
 def _parse(timestamp: object) -> datetime:
