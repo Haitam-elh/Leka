@@ -500,6 +500,7 @@ const fr = {
       projects: "projets",
       spaces: "espaces",
       pages: "pages",
+      databases: "bases de données",
     },
     empty: {
       title: "Aucune source connectée",
@@ -592,7 +593,7 @@ const fr = {
       activated: "{name} est activée",
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
-      missingBody: "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence et Linear.",
+      missingBody: "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear et Notion.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -1190,6 +1191,7 @@ const en: Dictionary = {
       projects: "projects",
       spaces: "spaces",
       pages: "pages",
+      databases: "databases",
     },
     empty: {
       title: "No source connected",
@@ -1282,7 +1284,7 @@ const en: Dictionary = {
       activated: "{name} is activated",
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
-      missingBody: "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence and Linear today.",
+      missingBody: "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear and Notion today.",
       steps: {
         connector: "Tool",
         settings: "Connection",

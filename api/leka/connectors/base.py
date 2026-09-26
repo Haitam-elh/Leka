@@ -61,6 +61,7 @@ class Capability(enum.StrEnum):
     # Documentation tools (LEKA-346).
     SPACES = "spaces"
     PAGES = "pages"
+    DATABASES = "databases"
 
 
 class ConnectorManifest(BaseModel):

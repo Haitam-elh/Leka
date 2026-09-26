@@ -42,6 +42,7 @@ DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     SourceKind.JIRA: 90,
     SourceKind.CONFLUENCE: 90,
     SourceKind.LINEAR: 90,
+    SourceKind.NOTION: 90,
     SourceKind.SLACK: 30,
     SourceKind.AWS: 30,
     SourceKind.DATADOG: 30,

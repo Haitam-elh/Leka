@@ -1,10 +1,11 @@
 # Project and documentation tools — what LEKA asks for, and what it reads
 
-Jira, Confluence and Linear, through [the connector framework](framework.md).
-LEKA-346. **LEKA only reads**: Jira and Confluence are read with GETs, to
-the customer's Atlassian Cloud site and nowhere else; Linear, which speaks
-only GraphQL, with `query` documents sent by POST to its one endpoint —
-never a mutation.
+Jira, Confluence, Linear and Notion, through
+[the connector framework](framework.md). LEKA-346. **LEKA only reads**: Jira
+and Confluence are read with GETs, to the customer's Atlassian Cloud site
+and nowhere else; Linear, which speaks only GraphQL, with `query` documents
+sent by POST to its one endpoint — never a mutation; Notion with GETs, and
+its search, which it offers only as a POST.
 
 ---
 
@@ -218,6 +219,111 @@ Issues are asked team by team, and known by Linear's id; the identifier
   `AUTH_INVALID`, `FORBIDDEN` → `PERMISSION_DENIED`, `…NOT_FOUND` →
   `NOT_FOUND`, `RATELIMITED` → `RATE_LIMITED`, a 5xx → `PROVIDER_ERROR`.
 
+## Notion
+
+| | |
+|---|---|
+| Endpoint | `https://api.notion.com/v1`, API version `2022-06-28` — fixed, nothing to configure |
+| Credentials | `token`, an internal integration's secret (`ntn_…`, write-only) |
+| Config | `roots` |
+| Category | `docs` |
+| Capabilities | `pages`, `databases` |
+
+### What to create at Notion
+
+An internal integration, by a workspace owner:
+
+1. [notion.so/profile/integrations](https://www.notion.so/profile/integrations)
+   → **New integration**, type **Internal**, in the workspace LEKA reads.
+2. **Capabilities**: tick **Read content** and nothing else — no *Update
+   content*, no *Insert content*, no comments, **No user information**.
+   Notion's API cannot tell LEKA what was ticked, so this is the only
+   place it is decided.
+3. Copy the **Internal integration secret**.
+4. **Share with it what LEKA may read.** An integration sees nothing until
+   a page or a database is shared with it: in Notion, open the page, menu
+   **••• → Connections**, add the integration. It then sees that page and
+   everything beneath it. This is the boundary — what is not shared, LEKA
+   cannot see.
+5. In LEKA, **Sources → Add → Notion**: the secret. Test, choose the
+   roots, activate.
+
+A test with nothing shared passes with no capability and a warning saying
+how to share.
+
+### LEKA reads, one read by POST
+
+Notion lists what it shares only through `POST /search`. The client may
+POST to `/search` and nowhere else (`reads_by_post`); every other call is a
+GET, and the stand-in Notion in the tests fails on anything else.
+
+### Scope
+
+`roots` narrows what is shared, never widens it: ids of pages and
+databases, each read with everything beneath it. The form takes an id,
+dashed or not, or a pasted link (`https://www.notion.so/acme/Wiki-1a2b…?v=…`),
+and keeps the id as Notion writes it; anything else is refused when the
+source is saved. Absent, the source reads everything shared with the
+integration.
+
+The choices come from `GET /sources/{id}/scope/options`: the tops of what
+is shared — pages and databases whose parent the integration cannot see —
+among the 2 000 most recently edited objects, at most 1 000 offered. A
+page inside a column block of a shared page is offered too: Notion places
+it in the block, not the page. The connection test fails with `NOT_FOUND`,
+naming them, when Notion does not share a root.
+
+### The connection test
+
+1. `GET /users/me` — the integration, and its workspace's name.
+2. `GET /pages/{id}`, else `GET /databases/{id}` — every root is shared.
+3. One search of pages: `pages_visible` in the source's metadata (`"100+"`
+   when there are more). One search of databases.
+4. `pages` and `databases` for what those searches found.
+
+### What is read
+
+| Capability | What | Incremental |
+|---|---|---|
+| `pages` | each page — database rows included — with its properties and its blocks | most recently edited first, stops at the last pass less two minutes |
+| `databases` | each database, with its properties' schema and description | the same |
+
+Search returns what is shared, most recently edited first. An incremental
+pass stops at the first object edited before the last pass **less two
+minutes**: Notion rounds `last_edited_time` down to the minute, so a page
+edited while the last pass ran can carry a time from before it started.
+Read twice is a write, never a duplicate.
+
+A page's content is its blocks, read with `GET /blocks/{id}/children`, in
+reading order, each nested block right after the one holding it — three
+levels deep and 1 000 blocks at most; `blocks_truncated` says when some
+were left out. Child pages and child databases are not read through their
+parent: the search finds them as objects of their own. An archived page is
+listed without its content.
+
+With `roots`, an object is read only when a root is among its ancestors.
+What each object sits in is learned from the search, and what the search
+did not show — a database, a block, a page not shared — is asked of Notion
+once per pass. An ancestor Notion does not share ends the climb.
+
+Pages and databases are known by Notion's id; the page or database they
+sit in is their `container` (none at the top of the workspace).
+
+### Limits
+
+- **Pace**: Notion allows about three requests a second, on average. The
+  client keeps to it (one every 0.34 s) rather than be refused halfway;
+  a refusal all the same is `RATE_LIMITED` with `Retry-After`. Notion sends
+  no quota headers, so health is `healthy` or failed.
+- **Pagination**: Notion's cursors; a cursor Notion repeats ends the pass
+  with `PROVIDER_ERROR` rather than loop.
+- **Errors**: Notion's error `code` first — `unauthorized` →
+  `AUTH_INVALID`, `restricted_resource` → `PERMISSION_DENIED` (the
+  integration lacks *Read content*), `object_not_found` → `NOT_FOUND`,
+  `rate_limited` → `RATE_LIMITED`; a 5xx → `PROVIDER_ERROR`.
+- **Not read yet**: comments, files' contents, users' names (the payload
+  keeps their ids), deleted pages — those leave with the next full pass.
+
 ## Diagnostics
 
 | Jira or Confluence answers | Diagnostic |
@@ -232,4 +338,5 @@ Issues are asked team by team, and known by Linear's id; the identifier
 | 5xx | `PROVIDER_ERROR` |
 
 The token is removed from every detail, and so is anything shaped like an
-`Authorization` header.
+`Authorization` header — or like a Linear key (`lin_api_…`) or a Notion
+secret (`ntn_…`, `secret_…`), whoever's it is.

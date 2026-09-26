@@ -47,6 +47,8 @@ from tests.test_jira_connector import TOKEN as JIRA_TOKEN
 from tests.test_jira_connector import Jira
 from tests.test_linear_connector import KEY as LINEAR_KEY
 from tests.test_linear_connector import Linear
+from tests.test_notion_connector import TOKEN as NOTION_TOKEN
+from tests.test_notion_connector import WIKI, Notion
 
 pytestmark = pytest.mark.integration
 
@@ -655,6 +657,64 @@ async def test_linear_end_to_end(
 
     _as(identity, acme, "member")
     assert LINEAR_KEY not in (await client.get(url)).text
+    assert (await client.post(f"{url}/test")).status_code == 403
+
+
+# ── Notion, end to end ───────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def notion_api(monkeypatch: pytest.MonkeyPatch) -> Iterator[Notion]:
+    monkeypatch.setattr("leka.connectors.notion.connector.MIN_INTERVAL", 0.0)
+    notion = Notion()
+    app.dependency_overrides[get_connector_transport] = lambda: httpx.MockTransport(notion)
+    yield notion
+    app.dependency_overrides.pop(get_connector_transport, None)
+
+
+async def test_notion_end_to_end(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    notion_api: Notion,
+) -> None:
+    _as(identity, acme, "member")
+    body = {"type": "notion", "display_name": "Notion", "credentials": {"token": NOTION_TOKEN}}
+    assert (await client.post(f"{API}/sources", json=body)).status_code == 403
+
+    _as(identity, acme, "admin")
+    catalog = (await client.get(f"{API}/connectors/catalog")).json()
+    entry = next(item for item in catalog if item["key"] == "notion")
+    assert (entry["category"], entry["read_only"]) == ("docs", True)
+    assert entry["credentials_schema"]["properties"]["token"]["writeOnly"] is True
+
+    source = await _create(client, **body)
+    assert NOTION_TOKEN not in json.dumps(source)
+    url = f"{API}/sources/{source['id']}"
+
+    tested = (await client.post(f"{url}/test")).json()
+    assert tested["ok"] is True
+    assert tested["result"]["account"] == "LEKA"
+    assert sorted(tested["source"]["capabilities"]) == ["databases", "pages"]
+
+    offered = (await client.get(f"{url}/scope/options")).json()
+    assert WIKI in [option["key"] for option in offered["options"]]
+    # Pasted as a link, kept as Notion writes the id.
+    link = f"https://www.notion.so/acme/Wiki-{WIKI.replace('-', '')}?pvs=4"
+    scoped = await client.patch(url, json={"config": {"roots": [link]}})
+    assert scoped.json()["config"]["roots"] == [WIKI]
+    refused = await client.patch(url, json={"config": {"roots": ["http://10.0.0.1/admin"]}})
+    assert refused.status_code == 422
+
+    assert (await client.post(f"{url}/test")).json()["ok"] is True
+    assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+    assert (await client.post(f"{url}/health-check")).json()["health_status"] == "healthy"
+    # Every call was a GET, or a POST to /search: the stand-in asserts it.
+    assert {method for method, _, _ in notion_api.asked} == {"GET", "POST"}
+    assert set(notion_api.paths("POST")) == {"/search"}
+
+    _as(identity, acme, "member")
+    assert NOTION_TOKEN not in (await client.get(url)).text
     assert (await client.post(f"{url}/test")).status_code == 403
 
 

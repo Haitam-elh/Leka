@@ -67,6 +67,7 @@ class SourceKind(enum.StrEnum):
     JIRA = "jira"
     CONFLUENCE = "confluence"
     LINEAR = "linear"
+    NOTION = "notion"
     AWS = "aws"
     DATADOG = "datadog"
     SLACK = "slack"

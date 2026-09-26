@@ -131,6 +131,8 @@ _TOKEN_SHAPES = re.compile(
     r"|(AT(?:ATT|CTT|BB)[A-Za-z0-9_\-=]{16,})"
     # Linear's personal API keys and OAuth tokens.
     r"|(lin_(?:api|oauth)_[A-Za-z0-9]{16,})"
+    # Notion's integration secrets, the current prefix and the retired one.
+    r"|((?:ntn|secret)_[A-Za-z0-9]{32,})"
 )
 REDACTED = "[redacted]"
 MAX_DETAIL = 300
