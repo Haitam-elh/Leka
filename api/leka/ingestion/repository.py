@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -21,6 +22,7 @@ from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
 from leka.ingestion.models import (
     RawPayload,
+    SourceRecord,
     SourceSync,
     SyncRun,
     SyncRunOutcome,
@@ -243,6 +245,145 @@ class SyncRunRepository(WorkspaceScopedRepository):
     def history(self, source_id: uuid.UUID) -> Select[tuple[SyncRun]]:
         """A source's passes, for pagination; newest first by default."""
         return self.select(SyncRun).where(SyncRun.source_id == source_id)
+
+
+@dataclass(frozen=True)
+class Seen:
+    """One record a pass saw: what the index needs of it."""
+
+    external_id: str
+    container: str | None
+    checksum: str
+    # The batch it was written to; None when it was unchanged and not written.
+    payload_key: str | None
+
+
+@dataclass(frozen=True)
+class Known:
+    checksum: str
+    live: bool
+    # A batch still holds its latest version (the purge job clears this).
+    stored: bool
+
+
+class SourceRecordRepository(WorkspaceScopedRepository):
+    """The per-record index of a workspace's sources (LEKA-353)."""
+
+    async def known(
+        self, source_id: uuid.UUID, kind: str, external_ids: Sequence[str]
+    ) -> dict[str, Known]:
+        if not external_ids:
+            return {}
+        rows = await self._session.execute(
+            select(
+                SourceRecord.external_id,
+                SourceRecord.checksum,
+                SourceRecord.deleted_at,
+                SourceRecord.payload_key,
+            ).where(
+                SourceRecord.workspace_id == self.workspace_id,
+                SourceRecord.source_id == source_id,
+                SourceRecord.kind == kind,
+                SourceRecord.external_id.in_(list(external_ids)),
+            )
+        )
+        return {
+            external_id: Known(checksum, deleted_at is None, payload_key is not None)
+            for external_id, checksum, deleted_at, payload_key in rows.all()
+        }
+
+    async def seen(
+        self,
+        source_id: uuid.UUID,
+        kind: str,
+        records: Sequence[Seen],
+        *,
+        run_id: uuid.UUID,
+        at: datetime,
+    ) -> None:
+        """Record that `run_id` saw these. One statement for a batch.
+
+        A record seen again comes back (`deleted_at` NULL) — a page shared
+        again, a repository back in scope. An unchanged one keeps the batch
+        that already holds it.
+        """
+        if not records:
+            return
+        statement = insert(SourceRecord).values(
+            [
+                {
+                    "workspace_id": self.workspace_id,
+                    "source_id": source_id,
+                    "kind": kind,
+                    "external_id": record.external_id,
+                    "container": record.container,
+                    "checksum": record.checksum,
+                    "first_seen_at": at,
+                    "last_seen_at": at,
+                    "last_seen_run_id": run_id,
+                    "payload_key": record.payload_key,
+                }
+                for record in records
+            ]
+        )
+        excluded = statement.excluded
+        await self._session.execute(
+            statement.on_conflict_do_update(
+                constraint="uq_source_records_source_kind_external",
+                set_={
+                    "container": excluded.container,
+                    "checksum": excluded.checksum,
+                    "last_seen_at": excluded.last_seen_at,
+                    "last_seen_run_id": excluded.last_seen_run_id,
+                    "payload_key": func.coalesce(excluded.payload_key, SourceRecord.payload_key),
+                    "deleted_at": None,
+                    "updated_at": func.now(),
+                },
+            )
+        )
+
+    async def sweep(
+        self, source_id: uuid.UUID, kind: str, *, run_id: uuid.UUID, at: datetime
+    ) -> int:
+        """After a FULL pass of `kind` succeeded: what `run_id` did not see is
+        gone at the vendor, or out of the credentials' reach or the scope."""
+        result = await self._session.execute(
+            update(SourceRecord)
+            .where(
+                SourceRecord.workspace_id == self.workspace_id,
+                SourceRecord.source_id == source_id,
+                SourceRecord.kind == kind,
+                SourceRecord.deleted_at.is_(None),
+                SourceRecord.last_seen_run_id.is_distinct_from(run_id),
+            )
+            .values(deleted_at=at, updated_at=func.now())
+        )
+        return _affected_rows(result)
+
+    async def indexed(self, source_id: uuid.UUID, kind: str) -> bool:
+        """Whether this capability of the source has any record in the index."""
+        found = await self._session.execute(
+            select(SourceRecord.id)
+            .where(
+                SourceRecord.workspace_id == self.workspace_id,
+                SourceRecord.source_id == source_id,
+                SourceRecord.kind == kind,
+            )
+            .limit(1)
+        )
+        return found.first() is not None
+
+    async def live_counts(self) -> dict[tuple[uuid.UUID, str], int]:
+        """Records not deleted, per (source, kind), for the whole workspace."""
+        rows = await self._session.execute(
+            select(SourceRecord.source_id, SourceRecord.kind, func.count())
+            .where(
+                SourceRecord.workspace_id == self.workspace_id,
+                SourceRecord.deleted_at.is_(None),
+            )
+            .group_by(SourceRecord.source_id, SourceRecord.kind)
+        )
+        return {(source_id, kind): int(count) for source_id, kind, count in rows.all()}
 
 
 class SyncScheduleRepository:

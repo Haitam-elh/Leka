@@ -204,6 +204,12 @@ it read in full, when it ran, how far it got batch by batch, how it ended.
 The pass that fetched a payload is the run whose times hold its fetch
 (LEKA-353).
 
+**`source_records`** — the per-record index: what was seen of each vendor
+object, with its checksum, by which run, in which batch, and whether it is
+gone. What deduplicates, what knows deletions and scope removals. Not an
+entity — an issue may make several or none — and never written by
+leka.knowledge's side.
+
 ### Tenancy
 
 Every customer shares the same tables. **Every business table carries

@@ -48,6 +48,8 @@ run twice: a second pass reads again from the same cursor.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -83,6 +85,8 @@ from leka.ingestion.models import (
 )
 from leka.ingestion.repository import (
     RawPayloadRepository,
+    Seen,
+    SourceRecordRepository,
     SourceSyncRepository,
     SyncRunRepository,
     SyncScheduleRepository,
@@ -124,6 +128,7 @@ class SyncReport:
     source_id: uuid.UUID
     status: str  # "succeeded", "failed", "skipped"
     records: dict[str, int] = field(default_factory=dict)
+    deleted: dict[str, int] = field(default_factory=dict)
     error: str | None = None
 
     def as_dict(self) -> dict[str, object]:
@@ -131,6 +136,7 @@ class SyncReport:
             "source_id": str(self.source_id),
             "status": self.status,
             "records": self.records,
+            "deleted": self.deleted,
             "error": self.error,
         }
 
@@ -284,6 +290,9 @@ class _Pass:
         self._trigger = trigger
         self._runs = SyncRunRepository(session, workspace_id)
         self._run: SyncRun | None = None
+        self._records = SourceRecordRepository(session, workspace_id)
+        # What each full capability's sweep found gone, for the report.
+        self.deleted: dict[str, int] = {}
         self._sources = SourceService(session, workspace_id, actor_user_id=None)
         self._syncs = SourceSyncRepository(session, workspace_id)
         self._payloads = RawPayloadRepository(session, workspace_id)
@@ -323,6 +332,7 @@ class _Pass:
         self._run.error = failure.model_dump(mode="json") if failure else None
         await self._session.commit()
 
+        report.deleted = self.deleted
         report.status = "failed" if failure else "succeeded"
         report.error = failure.code.value if failure else None
         logger.info("source_synced", **report.as_dict())
@@ -342,7 +352,17 @@ class _Pass:
             # failure it was, then read as usual.
             _failed(row, ABANDONED, row.records_last_run)
         started = datetime.now(UTC)
-        read_all = self._full or _due_for_full(row, started)
+        # A capability that stored records before the index existed (LEKA-352)
+        # is read in full once, so the index knows all of it — not only what
+        # changes. One that never had any has nothing to catch up on.
+        read_all = (
+            self._full
+            or _due_for_full(row, started)
+            or (
+                row.records_total > 0
+                and not await self._records.indexed(source.id, capability.value)
+            )
+        )
         if read_all:
             # Forgotten from the start, not the end: a full pass that fails
             # half-way leaves the next one full too, rather than an
@@ -364,10 +384,10 @@ class _Pass:
             async for record in stream:
                 batch.append(record)
                 if len(batch) >= BATCH_SIZE:
-                    count += await self._store(source, row, batch)
+                    count += await self._store(source, row, capability, batch)
                     batch = []
             if batch:
-                count += await self._store(source, row, batch)
+                count += await self._store(source, row, capability, batch)
         except ConnectorError as error:
             _failed(row, error.diagnostic, count)
             await self._session.commit()
@@ -379,36 +399,86 @@ class _Pass:
             return 0, None
 
         _succeeded(row, started, count, full=read_all)
+        if read_all and self._run is not None:
+            # Only after a FULL read of this capability SUCCEEDED: one cut
+            # short by a quota must not call "gone" what it did not reach.
+            gone = await self._records.sweep(
+                source.id, capability.value, run_id=self._run.id, at=datetime.now(UTC)
+            )
+            self.deleted[capability.value] = gone
         await self._session.commit()
         return count, None
 
-    async def _store(self, source: Source, row: SourceSync, records: list[RawRecord]) -> int:
-        """One batch: the bytes to the store, then the row, then commit.
+    async def _store(
+        self, source: Source, row: SourceSync, capability: Capability, records: list[RawRecord]
+    ) -> int:
+        """One batch: what changed to the store, then its row, the index, commit.
+
+        DEDUPLICATED (LEKA-353): a record whose checksum is the one the index
+        holds, still live and still in a batch, is not written again — the
+        pass only notes it saw it. What is new or changed is written.
 
         Object first, row second — the order leka.ingestion.tasks relies on:
         an object whose row never committed is found by reconciliation; a
         row whose object never arrived could not be repaired.
         """
-        fetched_at = datetime.now(UTC)
-        key = object_key(self._workspace_id, source.id, fetched_at, extension="jsonl")
-        body = "\n".join(record.model_dump_json() for record in records).encode()
-        stored = await object_store().put(key, from_bytes(body), content_type=CONTENT_TYPE)
-        self._payloads.record(
-            source_id=source.id,
-            object_key=key,
-            content_type=CONTENT_TYPE,
-            size_bytes=stored.size_bytes,
-            checksum_sha256=stored.checksum_sha256,
-            fetched_at=fetched_at,
-            expires_at=expires_at(source.kind, fetched_at),
-        )
+        # A listing can shift under pagination and repeat a record: keep the
+        # last one, so the index is written once per record.
+        latest = {record.external_id: record for record in records}
+        sums = {external_id: checksum(record) for external_id, record in latest.items()}
+        known = await self._records.known(source.id, capability.value, list(latest))
+        changed = [
+            record
+            for external_id, record in latest.items()
+            if not (
+                (entry := known.get(external_id))
+                and entry.checksum == sums[external_id]
+                and entry.live
+                and entry.stored
+            )
+        ]
+
+        key: str | None = None
+        size = 0
+        if changed:
+            fetched_at = datetime.now(UTC)
+            key = object_key(self._workspace_id, source.id, fetched_at, extension="jsonl")
+            body = "\n".join(record.model_dump_json() for record in changed).encode()
+            stored = await object_store().put(key, from_bytes(body), content_type=CONTENT_TYPE)
+            size = stored.size_bytes
+            self._payloads.record(
+                source_id=source.id,
+                object_key=key,
+                content_type=CONTENT_TYPE,
+                size_bytes=stored.size_bytes,
+                checksum_sha256=stored.checksum_sha256,
+                fetched_at=fetched_at,
+                expires_at=expires_at(source.kind, fetched_at),
+            )
+        written = {record.external_id for record in changed}
+        if self._run is not None:
+            await self._records.seen(
+                source.id,
+                capability.value,
+                [
+                    Seen(
+                        external_id=external_id,
+                        container=record.container,
+                        checksum=sums[external_id],
+                        payload_key=key if external_id in written else None,
+                    )
+                    for external_id, record in latest.items()
+                ],
+                run_id=self._run.id,
+                at=datetime.now(UTC),
+            )
         # Counted as it is committed: a pass that fails later has still stored
         # this — and a pass in progress shows how far it has got.
-        row.records_total += len(records)
+        row.records_total += len(changed)
         if self._run is not None:
             self._run.records += len(records)
-            self._run.payloads += 1
-            self._run.bytes += stored.size_bytes
+            self._run.payloads += 1 if changed else 0
+            self._run.bytes += size
         await self._session.commit()
         return len(records)
 
@@ -431,11 +501,21 @@ class _Pass:
             self._sources.record(source, SourceEventType.SYNC_FAILED, code=failure.code.value)
 
 
+def checksum(record: RawRecord) -> str:
+    """sha256 of the payload's canonical JSON — keys sorted, no spacing — so
+    the same object read twice has the same checksum. A vendor field that
+    changes on every read (a signed URL) defeats it for that record, which
+    costs a write, not a wrong answer."""
+    canonical = json.dumps(record.payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
 def _capabilities(source: Source, offered: frozenset[Capability]) -> list[Capability]:
     """What the source's last test found readable and its connector can read,
-    repositories first — what the others hang from."""
+    what the others hang from first — repositories, projects."""
     found = {c for c in Capability if c.value in source.capabilities and c in offered}
-    return sorted(found, key=lambda c: (c is not Capability.REPOSITORIES, c.value))
+    roots = (Capability.REPOSITORIES, Capability.PROJECTS)
+    return sorted(found, key=lambda c: (c not in roots, c.value))
 
 
 def full_slot(source_id: uuid.UUID) -> tuple[int, int]:

@@ -27,6 +27,7 @@ from leka.core.errors import ErrorCode
 from leka.db import SortableField
 from leka.governance import Permission, Principal, require_permission
 from leka.ingestion import (
+    SourceRecordRepository,
     SourceSyncRead,
     SourceSyncRepository,
     SourceSyncs,
@@ -92,9 +93,13 @@ async def source_syncs(source_id: uuid.UUID, session: SessionDep, principal: Rea
     await _source(session, principal, source_id)
     repository = SourceSyncRepository(session, principal.workspace_id)
     under_way = (await repository.passes([source_id])).get(source_id)
+    live = await SourceRecordRepository(session, principal.workspace_id).live_counts()
     capabilities = []
     for row in await repository.for_source(source_id):
         read = SourceSyncRead.model_validate(row, from_attributes=True)
+        # What LEKA holds now, from the index; before a capability is indexed,
+        # what was written (LEKA-352).
+        read.records_total = live.get((source_id, row.capability), read.records_total)
         if read.status == SyncRunStatus.RUNNING.value and under_way != "running":
             read.status = SyncRunStatus.FAILED.value
             read.last_error = ABANDONED.model_dump(mode="json")
@@ -107,6 +112,16 @@ async def sync_summaries(session: SessionDep, principal: Reader) -> list[SyncSum
     """One line per source that has been read or has a pass under way."""
     repository = SourceSyncRepository(session, principal.workspace_id)
     read = {source_id: (total, last) for source_id, total, last in await repository.summaries()}
+    live: dict[uuid.UUID, int] = {}
+    for (source_id, _kind), count in (
+        await SourceRecordRepository(session, principal.workspace_id).live_counts()
+    ).items():
+        live[source_id] = live.get(source_id, 0) + count
+    # What LEKA holds now, from the index; before a source is indexed, what
+    # was written (LEKA-352).
+    read = {
+        source_id: (live.get(source_id, total), last) for source_id, (total, last) in read.items()
+    }
     ids = [source.id for source in await _sources(session, principal)]
     under_way = await repository.passes(ids)
     return [

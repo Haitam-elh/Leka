@@ -43,6 +43,7 @@ from leka.connectors import (
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion import (
     RawPayload,
+    SourceRecord,
     SourceSync,
     SyncRun,
     SyncRunOutcome,
@@ -73,6 +74,10 @@ class Script:
         # Fail after this many records: (capability, after, code, retry_after).
         self.failure: tuple[Capability, int, DiagnosticCode, int | None] | None = None
         self.asked: list[tuple[Capability, datetime | None]] = []
+        # Records whose payload the vendor has changed since the last read.
+        self.edited: set[int] = set()
+        # Records the vendor no longer returns (deleted, or out of reach).
+        self.gone: set[int] = set()
 
 
 SCRIPT = Script()
@@ -104,10 +109,12 @@ class FakeConnector(Connector[FakeConfig, FakeCredentials]):
             failure = SCRIPT.failure
             if failure and failure[0] is capability and index == failure[1]:
                 raise diagnose(failure[2], retry_after=failure[3])
+            if index in SCRIPT.gone:
+                continue
             yield RawRecord(
                 kind=capability,
                 external_id=f"{capability.value}-{index}",
-                payload={"n": index},
+                payload={"n": index, "edited": index in SCRIPT.edited},
                 fetched_at=datetime.now(UTC),
             )
 
@@ -237,7 +244,8 @@ async def test_the_next_pass_asks_for_what_changed_since_the_last_one_started(
 
     assert (Capability.COMMITS, first_start) in SCRIPT.asked
     _, rows, _, _ = await _read(source)
-    assert rows["commits"].records_total == 2
+    # Read twice, written once: the same commit is not stored again (LEKA-353).
+    assert rows["commits"].records_total == 1
     assert rows["commits"].since is not None and rows["commits"].since > first_start
 
 
@@ -506,3 +514,124 @@ async def test_a_skipped_pass_leaves_no_run(source: Source) -> None:
     await sync_source(source.workspace_id, uuid.uuid4())
 
     assert await _runs(source) == []
+
+
+# ── the per-record index (LEKA-353) ──────────────────────────────────────────
+
+
+async def _index(source: Source, kind: str = "commits") -> dict[str, SourceRecord]:
+    with workspace_scope(source.workspace_id):
+        async with session_factory() as session:
+            rows = await session.execute(
+                select(SourceRecord).where(
+                    SourceRecord.source_id == source.id, SourceRecord.kind == kind
+                )
+            )
+            return {row.external_id: row for row in rows.scalars()}
+
+
+async def test_a_record_read_again_unchanged_is_not_written_again(source: Source) -> None:
+    SCRIPT.records = {Capability.COMMITS: 3}
+    await _sync(source)
+    _, _, payloads_before, _ = await _read(source)
+
+    await _sync(source)  # the fake vendor returns the same three
+
+    _, _, payloads_after, _ = await _read(source)
+    assert len(payloads_after) == len(payloads_before)
+    *_, second = await _runs(source)
+    assert (second.records, second.payloads, second.bytes) == (3, 0, 0)
+    index = await _index(source)
+    assert len(index) == 3
+    assert all(row.last_seen_run_id == second.id for row in index.values())
+
+
+async def test_only_what_changed_is_written(source: Source) -> None:
+    SCRIPT.records = {Capability.COMMITS: 3}
+    await _sync(source, full=True)
+    first_keys = {row.external_id: row.payload_key for row in (await _index(source)).values()}
+    SCRIPT.edited = {1}
+
+    await _sync(source)
+
+    index = await _index(source)
+    assert index["commits-1"].payload_key != first_keys["commits-1"]
+    assert index["commits-0"].payload_key == first_keys["commits-0"]
+    *_, second = await _runs(source)
+    assert second.payloads == 1
+
+
+async def test_a_full_pass_marks_gone_what_it_did_not_see_and_a_return_revives_it(
+    source: Source,
+) -> None:
+    SCRIPT.records = {Capability.REPOSITORIES: 2, Capability.COMMITS: 4}
+    await _sync(source)
+    SCRIPT.gone = {2, 3}
+
+    report = await _sync(source, full=True)
+
+    assert report.deleted["commits"] == 2
+    index = await _index(source)
+    assert {key for key, row in index.items() if row.deleted_at} == {"commits-2", "commits-3"}
+    # Another capability's records are its own sweep's business.
+    assert all(row.deleted_at is None for row in (await _index(source, "repositories")).values())
+
+    SCRIPT.gone = set()
+    await _sync(source, full=True)
+    assert all(row.deleted_at is None for row in (await _index(source)).values())
+
+
+async def test_nothing_is_marked_gone_by_a_pass_that_did_not_read_everything(
+    source: Source,
+) -> None:
+    SCRIPT.records = {Capability.COMMITS: 4}
+    await _sync(source)
+    SCRIPT.gone = {3}
+
+    await _sync(source)  # incremental: not seeing it proves nothing
+    assert all(row.deleted_at is None for row in (await _index(source)).values())
+
+    SCRIPT.failure = (Capability.COMMITS, 1, DiagnosticCode.PROVIDER_ERROR, None)
+    with pytest.raises(RetryableSyncError):
+        await _sync(source, full=True)  # cut short: neither
+    assert all(row.deleted_at is None for row in (await _index(source)).values())
+
+
+async def test_a_capability_stored_before_the_index_is_read_in_full_once(source: Source) -> None:
+    SCRIPT.records = {Capability.COMMITS: 2}
+    await _sync(source)
+    with workspace_scope(source.workspace_id):
+        async with session_factory() as session:
+            await session.execute(
+                text("DELETE FROM source_records WHERE source_id = :s"), {"s": source.id}
+            )
+            await session.commit()
+    SCRIPT.asked.clear()
+
+    await _sync(source)
+
+    assert (Capability.COMMITS, None) in SCRIPT.asked
+    assert len(await _index(source)) == 2
+    SCRIPT.asked.clear()
+    await _sync(source)
+    assert all(
+        since is not None for capability, since in SCRIPT.asked if capability.value == "commits"
+    )
+
+
+def test_the_checksum_does_not_depend_on_key_order() -> None:
+    one = RawRecord(
+        kind=Capability.COMMITS,
+        external_id="c",
+        payload={"a": 1, "b": [2]},
+        fetched_at=datetime.now(UTC),
+    )
+    two = RawRecord(
+        kind=Capability.COMMITS,
+        external_id="c",
+        payload={"b": [2], "a": 1},
+        fetched_at=datetime.now(UTC),
+    )
+
+    assert sync_module.checksum(one) == sync_module.checksum(two)
+    assert len(sync_module.checksum(one)) == 64

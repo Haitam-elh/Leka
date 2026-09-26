@@ -9,7 +9,8 @@ vendor changed a payload shape.
 
 `raw_payloads` is the first of those tables; `source_syncs`, where each
 source's synchronisation stands, the second (LEKA-352); `sync_runs`, what
-each pass did, the third (LEKA-353). It is the row half of the split
+each pass did, the third (LEKA-353); `source_records`, what was seen of
+each vendor object, the fourth. It is the row half of the split
 described in docs/adr/010-object-storage.md: the bytes live in the object
 store, and this is everything we know about them — where they came from, how
 big they are, what they hash to, and when they stop being ours to keep.
@@ -27,11 +28,13 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Enum,
+    ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -302,3 +305,69 @@ class SyncRun(Base, WorkspaceScopedMixin):
 
     # The diagnostic it ended on, cleaned of secrets.
     error: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+
+
+class SourceRecord(Base, WorkspaceScopedMixin):
+    """What LEKA has seen of one vendor object — a repository, a commit, an
+    issue — in one source: the per-record index (LEKA-353, decided with
+    Haitam on 2026-09-27).
+
+    Three things need it, none of which a JSON-lines batch can answer:
+
+    DEDUPLICATION. A record whose checksum (sha256 of its payload's canonical
+    JSON) has not changed is not written again; the pass only notes it saw it.
+    DELETIONS. After a full pass of a capability succeeded, what that run did
+    not see (`last_seen_run_id`) is gone at the vendor, or out of the
+    credentials' reach: `deleted_at`. Deliberately by run, not by time — a
+    retry or the quota reserve can stretch a pass over hours.
+    SCOPE. A reactivation reads in full, so the same sweep removes what left
+    the scope, for every connector, without knowing what a container is.
+
+    A record seen again comes back: `deleted_at` goes back to NULL.
+    `payload_key` is the batch holding its latest version, for the job that
+    rewrites batches without what was deleted.
+
+    Not an entity: an issue can make several entities or none, and an entity
+    can come from several records. leka.knowledge reads this; ingestion never
+    writes there.
+    """
+
+    __tablename__ = "source_records"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_id"],
+            ["sources.workspace_id", "sources.id"],
+            name="fk_source_records_workspace_source",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "source_id", "kind", "external_id", name="uq_source_records_source_kind_external"
+        ),
+        CheckConstraint("length(kind) > 0 AND length(external_id) > 0", name="identity_not_empty"),
+        CheckConstraint("length(checksum) = 64", name="checksum_is_sha256"),
+        # The sweep: this capability's records the run did not see.
+        Index("ix_source_records_sweep", "source_id", "kind", "last_seen_run_id"),
+        # The purge job: deleted records whose batch still holds them.
+        Index(
+            "ix_source_records_to_purge",
+            "source_id",
+            postgresql_where=text("deleted_at IS NOT NULL AND payload_key IS NOT NULL"),
+        ),
+    )
+
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # A Capability value; unchecked, like source_syncs.capability.
+    kind: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(500), nullable=False)
+    container: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # A single-column reference on purpose: through workspace_id, SET NULL
+    # would null the workspace too (the trap job_runs documents). Runs go
+    # only with their source, and so do records.
+    last_seen_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sync_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    payload_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
