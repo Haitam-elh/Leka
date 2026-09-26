@@ -14,12 +14,14 @@ password" is the same sentence whether the address exists or not.
 from __future__ import annotations
 
 import enum
+import unicodedata
 import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from leka.core.security import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH
+from leka.identity.models import CompanySize
 
 
 class AuthErrorCode(enum.StrEnum):
@@ -92,7 +94,40 @@ class _PasswordField(BaseModel):
     password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
 
-class RegisterRequest(_EmailField, _PasswordField):
+def _plain_text(value: str | None) -> str | None:
+    """Trimmed, one line, no control character — or None when empty.
+
+    A name travels into e-mails, the interface and an operator's terminal
+    (`python -m leka.identity.admin accounts`): an escape sequence in it
+    would be one typed by a stranger into someone else's screen.
+    """
+    if value is None:
+        return None
+    text = " ".join(value.split())
+    if any(unicodedata.category(char) in ("Cc", "Cf") for char in text):
+        msg = "control characters are not allowed"
+        raise ValueError(msg)
+    return text or None
+
+
+class AccountProfile(BaseModel):
+    """Who is registering, as the site's forms have always asked: first and
+    last name and the company, required; the role and the company's size,
+    if they want to say."""
+
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str = Field(min_length=1, max_length=100)
+    company: str = Field(min_length=1, max_length=200)
+    job_title: str | None = Field(default=None, max_length=100)
+    company_size: CompanySize | None = None
+
+    @field_validator("first_name", "last_name", "company", "job_title", mode="before")
+    @classmethod
+    def _text(cls, value: object) -> object:
+        return _plain_text(value) if isinstance(value, str) else value
+
+
+class RegisterRequest(_EmailField, _PasswordField, AccountProfile):
     pass
 
 
@@ -123,6 +158,12 @@ class UserRead(BaseModel):
     email: str
     email_verified_at: datetime | None
     last_login_at: datetime | None
+    # None for an account made before registration asked.
+    first_name: str | None = None
+    last_name: str | None = None
+    company: str | None = None
+    job_title: str | None = None
+    company_size: CompanySize | None = None
 
 
 class SessionRead(BaseModel):

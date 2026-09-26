@@ -44,11 +44,16 @@ export function UserMenu({
   const { locale, setLocale } = useLocale();
 
   const email = user?.email ?? "";
-  // No display name exists yet — the account is an e-mail address until
-  // LEKA-330 grows profiles. The part before the @ is what a person
-  // recognises, and the initial is what fits in a circle.
-  const name = email.split("@")[0] || t.shell.account;
-  const initials = name.slice(0, 1).toUpperCase() || "?";
+  // The name given at registration. An account made before registration
+  // asked has none: the part before the @ is what a person recognises.
+  const given = [user?.first_name, user?.last_name].filter(Boolean).join(" ");
+  const name = given || email.split("@")[0] || t.shell.account;
+  const initials =
+    [user?.first_name, user?.last_name]
+      .map((part) => part?.trim().slice(0, 1).toUpperCase() ?? "")
+      .join("") ||
+    name.slice(0, 1).toUpperCase() ||
+    "?";
 
   async function signOut() {
     try {

@@ -155,7 +155,7 @@ async def register(
     """Create an account. Answers the same whether the address was free."""
     await _enforce("register:ip", client_ip(request), ratelimit.REGISTER_PER_IP)
     try:
-        await auth.register(payload.email, payload.password)
+        await auth.register(payload.email, payload.password, payload)
     except PasswordRejectedError as error:
         raise _refuse(AuthErrorCode.PASSWORD_BREACHED, error.reason, 422) from error
     return RegistrationAccepted()
