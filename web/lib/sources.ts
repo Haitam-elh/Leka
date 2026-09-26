@@ -127,6 +127,7 @@ export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
   gitlab: "code",
   bitbucket: "code",
   jira: "project",
+  linear: "project",
   confluence: "docs",
   aws: "cloud",
   azure: "cloud",
