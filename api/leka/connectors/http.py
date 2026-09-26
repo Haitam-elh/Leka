@@ -26,7 +26,8 @@ from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
 from leka.connectors.schemas import RawRecord
 
 type Item = dict[str, object]
-type Params = Mapping[str, str | int]
+# A list is sent as the parameter repeated: state=OPEN&state=MERGED.
+type Params = Mapping[str, str | int | list[str]]
 # What a vendor makes of a failed answer: (response, path, what was missing).
 type Refuse = Callable[[httpx.Response, str, str], ConnectorError]
 
@@ -107,12 +108,18 @@ class VendorHttp:
         *,
         empty: int | None = None,
         stop_before: datetime | None = None,
+        skip_before: datetime | None = None,
         updated_field: str = "updated_at",
     ) -> AsyncIterator[Item]:
         """Every item of a listing, page after page.
 
-        `stop_before`: the listing is sorted newest-updated first, and
-        nothing updated before this is wanted.
+        `stop_before`: the listing is SORTED newest-updated first, and
+        nothing updated before this is wanted — the first older item ends it.
+
+        `skip_before`: the listing is only ROUGHLY newest first, like a
+        branch's commits, where a rebase or an old branch merged in puts an
+        older date before newer ones. Older items are skipped, not a reason
+        to stop; the listing ends after a page with nothing newer at all.
         """
         url: str | None = path
         query: Params | None = {**self._page, **(params or {})}
@@ -121,12 +128,18 @@ class VendorHttp:
             if response.status_code == empty:
                 return
             body = response.json()
-            for item in body[self._in_body[0]] if self._in_body else body:
-                if stop_before:
-                    updated = parse_timestamp(item.get(updated_field))
-                    if updated is None or updated < stop_before:
-                        return
+            page = body[self._in_body[0]] if self._in_body else body
+            skipped = 0
+            for item in page:
+                updated = parse_timestamp(item.get(updated_field))
+                if stop_before and (updated is None or updated < stop_before):
+                    return
+                if skip_before and updated is not None and updated < skip_before:
+                    skipped += 1
+                    continue
                 yield item
+            if skip_before and page and skipped == len(page):
+                return
             url, query = self._next_page(response, body), None  # the link carries the query
 
     def _next_page(self, response: httpx.Response, body: Any) -> str | None:

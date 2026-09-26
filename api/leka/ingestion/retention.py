@@ -38,6 +38,7 @@ from leka.core.config import settings
 DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     SourceKind.GITHUB: 90,
     SourceKind.GITLAB: 90,
+    SourceKind.BITBUCKET: 90,
     SourceKind.JIRA: 90,
     SourceKind.CONFLUENCE: 90,
     SourceKind.SLACK: 30,

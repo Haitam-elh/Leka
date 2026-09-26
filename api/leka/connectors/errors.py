@@ -127,6 +127,8 @@ _TOKEN_SHAPES = re.compile(
     r"|(gh[pousr]_[A-Za-z0-9]+)"
     # GitLab's prefixed tokens: personal, OAuth, deploy, runner, CI job…
     r"|(gl(?:pat|oas|dt|rt|cbt|ptt|ft|imt|soat|ffct|agent)-[A-Za-z0-9_\-]{10,})"
+    # Atlassian's: API tokens, access tokens, the retired app passwords.
+    r"|(AT(?:ATT|CTT|BB)[A-Za-z0-9_\-=]{16,})"
 )
 REDACTED = "[redacted]"
 MAX_DETAIL = 300
