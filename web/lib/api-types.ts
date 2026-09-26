@@ -622,6 +622,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sources/{source_id}/scope/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Source Scope Options
+         * @description What can be put in the source's scope — its repositories — asked of the
+         *     vendor now, whatever the current scope. 200 either way, like a test.
+         */
+        get: operations["source_scope_options_api_v1_sources__source_id__scope_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sources/{source_id}/activate": {
         parameters: {
             query?: never;
@@ -1284,6 +1305,42 @@ export interface components {
          * @enum {string}
          */
         Role: "owner" | "admin" | "member";
+        /**
+         * ScopeOption
+         * @description One thing an admin can put in a source's scope — a repository, a project.
+         */
+        ScopeOption: {
+            /**
+             * Key
+             * @description What the config stores to include it: 'acme/api'.
+             */
+            key: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Private */
+            private?: boolean | null;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * ScopeOptionsRead
+         * @description What a source's scope can be chosen from. Like a test, a vendor that
+         *     refuses is an answer: ok false, with its diagnostic.
+         */
+        ScopeOptionsRead: {
+            /** Ok */
+            ok: boolean;
+            /** Options */
+            options?: components["schemas"]["ScopeOption"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            diagnostic?: components["schemas"]["Diagnostic"] | null;
+        };
         /**
          * SessionRead
          * @description A session as its owner sees it, on the "your devices" screen.
@@ -4731,6 +4788,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SourceTestOutcome"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    source_scope_options_api_v1_sources__source_id__scope_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopeOptionsRead"];
                 };
             };
             /** @description The request could not be understood. */

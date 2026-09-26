@@ -77,6 +77,14 @@ Return what an admin wants to see (`account`, `metadata`), the capabilities
 found, and `warnings` for what works but should not be so — a token that
 can write, when LEKA only reads.
 
+### list_scope and iter_resources (optional)
+
+`list_scope()` returns what an admin can put in the source's scope — its
+projects, its repositories — ignoring the current scope.
+`iter_resources(capability, since=...)` streams `RawRecord`s for the sync
+engine; read `since` where the vendor can filter by date. GitHub's are the
+example. A connector without them raises `NotImplementedError` and still works.
+
 ### check_health
 
 One light call, free of quota when the vendor has one (`GET /rate_limit`).

@@ -36,6 +36,7 @@ def github(overrides: dict[str, httpx.Response] | None = None) -> Handler:
         "/user": httpx.Response(200, json={"login": "nora"}),
         "/orgs/acme": httpx.Response(200, json={"login": "acme"}),
         "/orgs/acme/repos": httpx.Response(200, json=[{"full_name": "acme/api"}]),
+        "/repos/acme/api": httpx.Response(200, json={"full_name": "acme/api"}),
         "/rate_limit": httpx.Response(
             200, json={"resources": {"core": {"limit": 5000, "remaining": 4900}}}
         ),

@@ -16,7 +16,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from leka.connectors.base import Capability, ConnectionTestResult, ConnectorCategory
+from leka.connectors.base import (
+    Capability,
+    ConnectionTestResult,
+    ConnectorCategory,
+    ScopeOption,
+)
 from leka.connectors.errors import Diagnostic
 from leka.connectors.models import (
     HealthStatus,
@@ -125,6 +130,16 @@ class SourceTestOutcome(BaseModel):
     result: ConnectionTestResult | None = None
     diagnostic: Diagnostic | None = None
     source: SourceRead
+
+
+class ScopeOptionsRead(BaseModel):
+    """What a source's scope can be chosen from. Like a test, a vendor that
+    refuses is an answer: ok false, with its diagnostic."""
+
+    ok: bool
+    options: list[ScopeOption] = Field(default_factory=list)
+    truncated: bool = False
+    diagnostic: Diagnostic | None = None
 
 
 class HealthRead(BaseModel):
