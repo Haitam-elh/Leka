@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1933 461" role="img" aria-label="LEKA">
+  <defs>
+    <linearGradient id="leka-logo" x1="1571" y1="0" x2="1933" y2="461" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4B33FF"/>
+      <stop offset="1" stop-color="#6A46FF"/>
+    </linearGradient>
+  </defs>
+  <path fill="#0a0f2b" d="M1 0 L138 1 L138 362 L375 363 L375 461 L0 460Z M414 0 L816 0 L816 96 L538 98 L540 181 L790 182 L791 230 L790 276 L540 276 L539 362 L820 363 L820 461 L414 461Z M872 0 L1013 0 L1013 178 L1018 179 L1212 0 L1381 0 L1133 225 L1353 459 L1182 461 L1014 284 L1013 460 L873 461Z"/>
+  <path fill="url(#leka-logo)" d="M1571 1 L1685 0 L1933 460 L1783 461 L1626 161 L1462 461 L1309 461Z"/>
+</svg>

@@ -23,6 +23,10 @@ import {
 } from "@/lib/i18n/dictionaries";
 
 const STORAGE_KEY = "leka.locale";
+// The language chosen on leka-core.com's own pages (public/i18n.js). Same
+// origin, same storage: someone who read the site in English arrives in an
+// application in English, as long as the application speaks that language.
+const SITE_KEY = "leka-lang";
 const FALLBACK: Locale = "fr";
 
 interface LocaleValue {
@@ -42,7 +46,8 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let remembered: string | null = null;
     try {
-      remembered = window.localStorage.getItem(STORAGE_KEY);
+      remembered =
+        window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(SITE_KEY);
     } catch {
       // Private browsing, or storage refused. English it is.
     }

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Journal des versions, LEKA</title>
+<meta name="description" content="Journal des versions et des évolutions de LEKA.">
+<meta name="theme-color" content="#0a0f2b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body data-title-key="changelog.meta_title">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo-leka" viewBox="0 0 1933 461">
+    <path fill="#0a0f2b" d="M1 0 L138 1 L138 362 L375 363 L375 461 L0 460Z M414 0 L816 0 L816 96 L538 98 L540 181 L790 182 L791 230 L790 276 L540 276 L539 362 L820 363 L820 461 L414 461Z M872 0 L1013 0 L1013 178 L1018 179 L1212 0 L1381 0 L1133 225 L1353 459 L1182 461 L1014 284 L1013 460 L873 461Z"/>
+    <path fill="url(#gLeka)" d="M1571 1 L1685 0 L1933 460 L1783 461 L1626 161 L1462 461 L1309 461Z"/>
+  </symbol>
+  <linearGradient id="gLeka" x1="1571" y1="0" x2="1933" y2="461" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#4B33FF"/><stop offset="1" stop-color="#6A46FF"/>
+  </linearGradient>
+</svg>
+
+<header class="header" id="header">
+  <div class="header__inner">
+    <a class="brand" href="./index.html" aria-label="LEKA, accueil">
+      <svg viewBox="0 0 1933 461" role="img" aria-label="LEKA" style="height:19px;width:auto"><use href="#logo-leka"/></svg>
+    </a>
+    <nav class="nav" id="nav" aria-label="Navigation principale">
+      <a href="./index.html#plateforme" data-i18n="nav.plateforme">Plateforme</a>
+      <a href="./index.html#methode" data-i18n="nav.methode">Méthode</a>
+      <a href="./index.html#cas" data-i18n="nav.cas">Cas d'usage</a>
+      <a href="./index.html#securite" data-i18n="nav.securite">Sécurité</a>
+    </nav>
+    <div class="header__actions">
+      <a class="signin" href="./login.html" data-i18n="nav.signin">Se connecter</a>
+      <a class="btn btn--primary btn--sm" href="./demo.html?type=demo" data-i18n="cta.demo">Demander une démo</a>
+      <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="nav">
+        <span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="content-page">
+    <div class="shell">
+      <div class="content-head">
+        <p class="label" data-i18n="changelog.eyebrow">Journal des versions</p>
+        <h1 data-i18n="changelog.title">Ce qui change chez LEKA</h1>
+        <p data-i18n="changelog.intro">LEKA est en accès anticipé. Ce journal s'enrichira à chaque nouvelle intégration ou fonctionnalité livrée.</p>
+      </div>
+
+      <div class="changelog-list">
+        <article class="changelog-entry">
+          <div class="changelog-entry__head">
+            <span class="mono">Septembre 2026</span>
+            <h2 data-i18n="changelog.entry1.h">Nouveau site LEKA</h2>
+          </div>
+          <ul>
+            <li data-i18n="changelog.entry1.li1">Nouvelle présentation de la plateforme, de la méthode et des cas d'usage.</li>
+            <li data-i18n="changelog.entry1.li2">Ouverture des demandes de démonstration et de contact.</li>
+            <li data-i18n="changelog.entry1.li3">Premières pages de documentation et liste des connecteurs prévus.</li>
+          </ul>
+        </article>
+
+        <article class="changelog-entry">
+          <div class="changelog-entry__head">
+            <span class="mono" data-i18n="changelog.entry2.date">À venir</span>
+            <h2 data-i18n="changelog.entry2.h">Accès anticipé</h2>
+          </div>
+          <p data-i18n="changelog.entry2.p" style="font-size:14.5px;color:var(--slate)">Les prochaines entrées de ce journal accompagneront l'ouverture progressive de LEKA à ses premiers clients.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="shell">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <svg viewBox="0 0 1933 461" role="img" aria-label="LEKA" style="height:20px;width:auto">
+          <use href="#logo-leka"/>
+        </svg>
+        <p data-i18n="footer.tagline">L'intelligence qui comprend votre entreprise avant de vous répondre.</p>
+      </div>
+      <div>
+        <h4 data-i18n="footer.product">Produit</h4>
+        <ul>
+          <li><a href="./index.html#plateforme" data-i18n="nav.plateforme">Plateforme</a></li>
+          <li><a href="./index.html#methode" data-i18n="nav.methode">Méthode</a></li>
+          <li><a href="./index.html#cas" data-i18n="nav.cas">Cas d'usage</a></li>
+          <li><a href="./index.html#securite" data-i18n="nav.securite">Sécurité</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-i18n="footer.resources">Ressources</h4>
+        <ul>
+          <li><a href="./documentation.html" data-i18n="footer.documentation">Documentation</a></li>
+          <li><a href="./connecteurs.html" data-i18n="footer.connecteurs">Connecteurs</a></li>
+          <li><a href="./changelog.html" data-i18n="footer.changelog">Journal des versions</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-i18n="footer.company">Entreprise</h4>
+        <ul>
+          <li><a href="./demo.html?type=contact" data-i18n="footer.contact">Nous contacter</a></li>
+          <li><a href="./mentions-legales.html" data-i18n="footer.legal">Mentions légales</a></li>
+          <li><a href="./confidentialite.html" data-i18n="footer.privacy">Confidentialité</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span data-i18n="footer.rights">© 2026 LEKA. Tous droits réservés.</span>
+      <span class="footer__lang"><select class="lang-select" aria-label="Language / Langue"></select></span>
+    </div>
+  </div>
+</footer>
+
+<script src="./script.js"></script>
+<script src="./i18n.js"></script>
+</body>
+</html>

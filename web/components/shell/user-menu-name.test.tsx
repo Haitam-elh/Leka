@@ -16,6 +16,7 @@ vi.mock("next/navigation", () => ({
 const me = vi.fn();
 vi.mock("@/lib/auth", () => ({
   auth: { me: (...args: unknown[]) => me(...args), logout: vi.fn() },
+  markSignedOut: vi.fn(),
 }));
 
 vi.mock("@/lib/workspace", () => ({

@@ -4,13 +4,16 @@
 # whole reason it is here rather than nginx: a certificate that expires on a
 # Sunday is the most predictable outage there is, and it is avoidable.
 #
-# The two names come from production.env, through the compose file. BOTH
-# must already point at this box in DNS (an A record each) before the first
-# start: Let's Encrypt checks that it is talking to the name it certifies.
+# The names come from production.env, through the compose file. EVERY one
+# must already point at this box in DNS (an A record each) before Caddy is
+# told about it: Let's Encrypt checks that it is talking to the name it
+# certifies.
 #
-# app. and api. share the parent domain on purpose. That makes them the same
-# SITE to a browser, which is what lets the session cookie stay
-# SameSite=Lax and host-only (ADR 009).
+# leka-core.com is one site: Karim's pages and the application, served by
+# `web` (web/next.config.ts says which is which). The API stays on its own
+# name. Both share the parent domain on purpose: the same SITE to a
+# browser, which is what lets the session cookie stay SameSite=Lax and
+# host-only (ADR 009).
 
 (common) {
 	encode zstd gzip
@@ -18,7 +21,10 @@
 	header {
 		# Set here rather than in the application: they apply to everything
 		# this host serves, including responses the application never sees.
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# No includeSubDomains: sent from leka-core.com itself, it would
+		# oblige every name under it to HTTPS for a year, including ones this
+		# box does not serve and nobody here controls.
+		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		-Server
@@ -30,10 +36,17 @@
 	}
 }
 
-{$LEKA_APP_DOMAIN} {
+# LEKA_APP_ALIASES — the names that served it before, app.leka-core.com
+# and www.leka-core.com — answer with a permanent redirect to the one name,
+# the path kept: a bookmark, or a link in an email sent before the move,
+# still lands. Empty, nothing redirects.
+{$LEKA_APP_DOMAIN} {$LEKA_APP_ALIASES} {
 	import common
 
-	# The web app: pages, and the scripts they load. It holds no secret.
+	@alias not host {$LEKA_APP_DOMAIN}
+	redir @alias https://{$LEKA_APP_DOMAIN}{uri} permanent
+
+	# The site and the web app: pages, and the scripts they load. No secret.
 	reverse_proxy web:3000 {
 		health_uri /login
 		health_interval 10s

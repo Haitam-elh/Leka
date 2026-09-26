@@ -18,6 +18,10 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // leka-core.com's own pages and scripts, served as they are: plain
+      // browser JavaScript, not this app's TypeScript, reviewed in their
+      // pull requests (docs/deployment.md, "Changing the site").
+      "public/**",
     ],
   },
 ];

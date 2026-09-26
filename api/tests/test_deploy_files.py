@@ -57,14 +57,33 @@ def test_the_web_app_is_its_own_image_of_the_same_release() -> None:
 
 
 def test_caddy_serves_the_app_and_the_api_on_their_own_names() -> None:
-    """app. and api. share the parent domain: that is what keeps the session
-    cookie SameSite=Lax (ADR 009)."""
+    """leka-core.com and api. share the parent domain: that is what keeps the
+    session cookie SameSite=Lax (ADR 009). The names that served the
+    application before redirect to it, to the same path."""
     caddyfile = _text(DEPLOY / "Caddyfile")
 
-    assert re.search(r"\{\$LEKA_APP_DOMAIN\}\s*\{[^}]*reverse_proxy web:3000", caddyfile, re.S)
+    app = re.search(
+        r"\{\$LEKA_APP_DOMAIN\} \{\$LEKA_APP_ALIASES\}\s*\{(?P<body>.*?)\n\}", caddyfile, re.S
+    )
+    assert app is not None
+    assert "reverse_proxy web:3000" in app["body"]
+    assert "@alias not host {$LEKA_APP_DOMAIN}" in app["body"]
+    assert "redir @alias https://{$LEKA_APP_DOMAIN}{uri} permanent" in app["body"]
     assert re.search(r"\{\$LEKA_API_DOMAIN\}\s*\{[^}]*reverse_proxy api:8000", caddyfile, re.S)
     caddy_env = _compose()["services"]["caddy"]["environment"]
-    assert set(caddy_env) == {"LEKA_APP_DOMAIN", "LEKA_API_DOMAIN"}
+    assert set(caddy_env) == {"LEKA_APP_DOMAIN", "LEKA_API_DOMAIN", "LEKA_APP_ALIASES"}
+    # Optional: empty, nothing redirects — and the compose file must not
+    # refuse to start without it, as it does for the other two.
+    assert caddy_env["LEKA_APP_ALIASES"] == "${LEKA_APP_ALIASES:-}"
+
+
+def test_hsts_does_not_bind_every_name_under_the_domain() -> None:
+    """Sent from leka-core.com itself, includeSubDomains would force HTTPS on
+    every name under it for a year — including ones this box does not serve."""
+    caddyfile = _text(DEPLOY / "Caddyfile")
+
+    assert 'Strict-Transport-Security "max-age=31536000"' in caddyfile
+    assert 'includeSubDomains"' not in caddyfile
 
 
 def test_next_builds_a_standalone_server() -> None:

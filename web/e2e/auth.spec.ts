@@ -24,7 +24,9 @@ const formAlert = (page: import("@playwright/test").Page) =>
   page.locator('[data-slot="alert"]');
 
 test("an anonymous visitor is sent to sign in", async ({ page }) => {
-  await page.goto("/");
+  // "/" is leka-core.com's home page since the site and the application
+  // became one (site.spec.ts); any page of the application sends to sign in.
+  await page.goto("/overview");
 
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
@@ -64,7 +66,6 @@ test("the demo account signs in, sees its workspace, and signs out", async ({ pa
   // cookie was actually stored and sent back. Since LEKA-337 the answer is
   // the application shell — the workspace on the sidebar, the account in the
   // menu — rather than the two lines the landing page used to print.
-  // "/" redirects to the overview: every zone has a named path.
   await expect(page).toHaveURL(LANDING);
   await expect(page.getByText("Acme Corp")).toBeVisible();
 
@@ -74,7 +75,7 @@ test("the demo account signs in, sees its workspace, and signs out", async ({ pa
   await expect(page).toHaveURL(/\/login$/);
 
   // And the session is genuinely gone, not just navigated away from.
-  await page.goto("/");
+  await page.goto("/overview");
   await expect(page).toHaveURL(/\/login$/);
 });
 
