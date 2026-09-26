@@ -148,6 +148,20 @@ describe("the list", () => {
   });
 });
 
+describe("adding", () => {
+  it("is offered to whoever may manage sources, and to no one else", async () => {
+    renderPage();
+    expect(await screen.findByRole("button", { name: "Ajouter une source" })).toBeInTheDocument();
+  });
+
+  it("is not offered to a member", async () => {
+    permissions = ["source:read"];
+    renderPage();
+    await screen.findByText("Acme GitHub");
+    expect(screen.queryByRole("button", { name: "Ajouter une source" })).not.toBeInTheDocument();
+  });
+});
+
 describe("the panel", () => {
   it("shows a failed source's diagnostic and what to do about it", async () => {
     renderPage();
