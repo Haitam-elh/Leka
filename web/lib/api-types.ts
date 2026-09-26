@@ -766,7 +766,11 @@ export interface paths {
         };
         /**
          * Source Syncs
-         * @description Where each capability of the source stands, in capability order.
+         * @description Whether a pass is under way, and where each capability stands.
+         *
+         *     "running" only while a worker is really reading: a capability left
+         *     `running` by a pass whose worker died is shown as the failure the next
+         *     pass will record (leka/ingestion/sync.py, ABANDONED).
          */
         get: operations["source_syncs_api_v1_ingestion_sources__source_id__syncs_get"];
         put?: never;
@@ -786,7 +790,7 @@ export interface paths {
         };
         /**
          * Sync Summaries
-         * @description One line per source of the workspace that has been read at least once.
+         * @description One line per source that has been read or has a pass under way.
          */
         get: operations["sync_summaries_api_v1_ingestion_syncs_get"];
         put?: never;
@@ -1584,6 +1588,19 @@ export interface components {
             } | null;
         };
         /**
+         * SourceSyncs
+         * @description A source's sync: whether a pass is under way, and each capability.
+         */
+        SourceSyncs: {
+            /**
+             * Pass State
+             * @description running (a worker is reading it), queued (waiting), or null.
+             */
+            pass_state: string | null;
+            /** Capabilities */
+            capabilities: components["schemas"]["SourceSyncRead"][];
+        };
+        /**
          * SourceTestOutcome
          * @description A test's answer. A failed test is an answer, not an HTTP error.
          */
@@ -1631,6 +1648,11 @@ export interface components {
             records_total: number;
             /** Last Succeeded At */
             last_succeeded_at: string | null;
+            /**
+             * Pass State
+             * @description running (a worker is reading it), queued (waiting), or null.
+             */
+            pass_state?: string | null;
         };
         /** UserRead */
         UserRead: {
@@ -5676,7 +5698,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SourceSyncRead"][];
+                    "application/json": components["schemas"]["SourceSyncs"];
                 };
             };
             /** @description The request could not be understood. */
