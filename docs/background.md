@@ -47,6 +47,13 @@ cd api && .venv/bin/python -m leka.platform.worker
 cd api && .venv/bin/python -m leka.platform.scheduler
 ```
 
+**On macOS**, a job that makes a network call (a connector, the sync) kills its
+work-horse: RQ forks one per job, and macOS refuses Objective-C initialisation
+after `fork()` (`objc[…]: … may have been in progress in another thread when
+fork() was called`). Start the worker with
+`OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` in front. Linux — production, CI — is
+unaffected.
+
 `leka:high` is work a person is waiting for, `leka` is everything else, `leka:low` is the
 sweeps. That is the only priority RQ has, and it has two limits worth knowing:
 
