@@ -11,6 +11,14 @@ it. Healthy, or degraded when less than a tenth of the quota is left.
 
 list_scope: every project the token sees, for the admin to choose from.
 
+iter_resources: the projects in scope — all the token sees, unless
+`projects` names some — then, project by project, their branches, commits
+(default branch), merge requests, issues and releases, following GitLab's
+pagination. Commits are filtered by `since` on GitLab's side, merge
+requests and issues by `updated_after`; branches and releases come whole.
+A feature a project has switched off, or an empty repository, is skipped
+rather than asked for.
+
 LEKA READS. `read_api` is the only scope it needs; a token with `api` or a
 write scope is accepted — GitLab is where it is scoped, not here — but the
 test says so, in its warnings.
@@ -21,8 +29,9 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Mapping
 from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import quote
 
 import httpx
@@ -41,6 +50,7 @@ from leka.connectors.base import (
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
 from leka.connectors.models import HealthStatus, SourceKind
 from leka.connectors.registry import register_connector
+from leka.connectors.schemas import RawRecord
 
 LOW_QUOTA_RATIO = 0.1
 PAGE_SIZE = 100  # GitLab's maximum
@@ -185,6 +195,22 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
                 )
         return ScopeListing(options=options)
 
+    async def iter_resources(
+        self, capability: Capability, *, since: datetime | None = None
+    ) -> AsyncIterator[RawRecord]:
+        async with self._client() as client:
+            async for project in self._projects(client):
+                if capability is Capability.REPOSITORIES:
+                    yield _record(
+                        capability,
+                        project,
+                        external_id=str(project["id"]),
+                        updated=project.get("last_activity_at"),
+                    )
+                    continue
+                async for record in self._contents(client, capability, project, since):
+                    yield record
+
     # ── inside ───────────────────────────────────────────────────────────────
 
     def _client(self) -> httpx.AsyncClient:
@@ -292,8 +318,59 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
             "un jeton limité à read_api suffit et limite l'exposition."
         ]
 
+    async def _projects(self, client: httpx.AsyncClient) -> AsyncIterator[Item]:
+        """The projects in scope. GitLab's paths are case-insensitive."""
+        wanted = {path.lower() for path in self.config.projects or []}
+        async for project in self._pages(client, self._projects_path(), self._projects_query()):
+            if not wanted or str(project["path_with_namespace"]).lower() in wanted:
+                yield project
+
+    def _contents(
+        self,
+        client: httpx.AsyncClient,
+        capability: Capability,
+        project: Item,
+        since: datetime | None,
+    ) -> AsyncIterator[RawRecord]:
+        """One project's records for one capability."""
+        pid, path = project["id"], str(project["path_with_namespace"])
+        if not _offers(project, capability):
+            return _nothing()
+        if capability is Capability.BRANCHES:
+            items = self._pages(client, f"/projects/{pid}/repository/branches", {})
+            return _records(capability, items, path, key=lambda b: f"{pid}:{b['name']}")
+        if capability is Capability.COMMITS:
+            after = {"since": since.isoformat()} if since else {}
+            items = self._pages(client, f"/projects/{pid}/repository/commits", after)
+            return _records(
+                capability,
+                items,
+                path,
+                key=lambda c: f"{pid}:{c['id']}",
+                updated=lambda c: c.get("committed_date"),
+            )
+        # Without a state, a project's listing holds every state: open, merged, closed.
+        updated_after = {"updated_after": since.isoformat()} if since else {}
+        if capability is Capability.PULL_REQUESTS:
+            items = self._pages(client, f"/projects/{pid}/merge_requests", updated_after)
+            return _records(capability, items, path)
+        if capability is Capability.ISSUES:
+            items = self._pages(client, f"/projects/{pid}/issues", updated_after)
+            return _records(capability, items, path)
+        if capability is Capability.RELEASES:
+            items = self._pages(client, f"/projects/{pid}/releases", {})
+            return _records(
+                capability,
+                items,
+                path,
+                key=lambda r: f"{pid}:{r['tag_name']}",
+                updated=lambda r: r.get("released_at") or r.get("created_at"),
+            )
+        msg = f"GitLab does not read {capability}"
+        raise ValueError(msg)
+
     async def _pages(
-        self, client: httpx.AsyncClient, path: str, params: dict[str, str | int]
+        self, client: httpx.AsyncClient, path: str, params: Mapping[str, str | int]
     ) -> AsyncIterator[Item]:
         """Every item of a listing, following GitLab's Link header."""
         url: str | None = path
@@ -352,3 +429,58 @@ def _retry_after(response: httpx.Response) -> int | None:
 def _parse(timestamp: object) -> datetime | None:
     """GitLab's ISO 8601, "2026-09-26T10:00:00.000Z"."""
     return datetime.fromisoformat(str(timestamp)) if timestamp else None
+
+
+# ── records ─────────────────────────────────────────────────────────────────
+
+# The project field that says a feature is switched off, per capability.
+# Asking for a disabled feature is a 403 or a 404 that means nothing.
+_FEATURE = {
+    Capability.BRANCHES: "repository_access_level",
+    Capability.COMMITS: "repository_access_level",
+    Capability.PULL_REQUESTS: "merge_requests_access_level",
+    Capability.ISSUES: "issues_access_level",
+    Capability.RELEASES: "releases_access_level",
+}
+_NEEDS_A_REPOSITORY = {Capability.BRANCHES, Capability.COMMITS}
+
+
+def _offers(project: Item, capability: Capability) -> bool:
+    if project.get(_FEATURE[capability]) == "disabled":
+        return False
+    return not (capability in _NEEDS_A_REPOSITORY and project.get("empty_repo"))
+
+
+def _record(
+    kind: Capability,
+    item: Item,
+    *,
+    external_id: str,
+    container: str | None = None,
+    updated: object = None,
+) -> RawRecord:
+    return RawRecord(
+        kind=kind,
+        external_id=external_id,
+        container=container,
+        payload=item,
+        updated_at=_parse(updated),
+        fetched_at=datetime.now(UTC),
+    )
+
+
+async def _records(
+    kind: Capability,
+    items: AsyncIterator[Item],
+    container: str,
+    *,
+    key: Callable[[Any], str] = lambda item: str(item["id"]),
+    updated: Callable[[Any], object] = lambda item: item.get("updated_at"),
+) -> AsyncIterator[RawRecord]:
+    async for item in items:
+        yield _record(kind, item, external_id=key(item), container=container, updated=updated(item))
+
+
+async def _nothing() -> AsyncIterator[RawRecord]:
+    return
+    yield  # an async generator that yields nothing
