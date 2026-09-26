@@ -48,13 +48,19 @@ screen offers the choices from `GET /sources/{id}/scope/options`, at most
 | `repositories` | repositories | projects | whole each pass |
 | `branches` | branches | branches | whole each pass |
 | `commits` | commits of the default branch | commits of the default branch | filtered by date on the platform's side |
-| `pull_requests` | pull requests | merge requests | GitHub: newest-updated first, stops at the last pass |
+| `pull_requests` | pull requests | merge requests | GitHub: newest-updated first, stops at the last pass. GitLab: `updated_after` |
 | `issues` | issues, without pull requests | issues | filtered by date on the platform's side |
 | `releases` | releases | releases | whole each pass |
 
-A capability the token cannot read is left out at the test (`capabilities`
-on the source), not failed later. GitLab's synchronisation arrives in the
-next part of LEKA-345; the engine that runs either is LEKA-352.
+Every state is read — open, merged, closed. A capability the token cannot
+read is left out at the test (`capabilities` on the source), not failed
+later. GitLab skips what a project has switched off (issues, merge
+requests, releases, the repository) and the commits and branches of an
+empty repository. The engine that runs the synchronisation is LEKA-352.
+
+Records are known by the platform's own ids, stable across renames:
+GitHub's `node_id`; GitLab's numeric ids, prefixed with the project's for
+what has none of its own (`11:main`, `11:<sha>`, `11:v1.2`).
 
 ## Limits
 
