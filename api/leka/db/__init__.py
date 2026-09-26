@@ -4,7 +4,7 @@ Imported by every module's models.py and repository.py. Depends on nothing
 but leka.core.
 """
 
-from leka.db.base import Base
+from leka.db.base import Base, load_schema
 from leka.db.mixins import TimestampMixin, UUIDPrimaryKeyMixin, WorkspaceScopedMixin
 from leka.db.pagination import (
     CursorError,
@@ -50,6 +50,7 @@ __all__ = [
     "encode_cursor",
     "engine",
     "get_session",
+    "load_schema",
     "paginate",
     "session_factory",
     "system_scope",

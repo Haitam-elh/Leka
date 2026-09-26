@@ -34,7 +34,7 @@ from leka.background.repository import EventDispatchRepository, JobRunRepository
 from leka.background.routes import ROUTES
 from leka.background.runner import rq_timeout
 from leka.core.config import settings
-from leka.db import session_factory, system_scope
+from leka.db import load_schema, session_factory, system_scope
 
 logger = structlog.get_logger(__name__)
 
@@ -238,6 +238,13 @@ def run_prune_events() -> int:
     return asyncio.run(prune_events())
 
 
+async def _by_hand() -> None:
+    """Both passes in ONE loop: the connection pool belongs to the loop that
+    opened it, and a second asyncio.run() inherits connections of a closed one."""
+    await run_maintenance()
+    await prune_events()
+
+
 if __name__ == "__main__":  # pragma: no cover
-    run_maintenance_tick()
-    run_prune_events()
+    load_schema()  # every table, as the API has (leka/schema.py)
+    asyncio.run(_by_hand())

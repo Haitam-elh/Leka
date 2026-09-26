@@ -12,6 +12,8 @@ else, and started that way the worker:
 - ignored LEKA_LOG_FORMAT, printing coloured console output to a staging log
   collector that expects JSON;
 - never initialised Sentry, so an exception in a job reached nobody.
+- and never registered the whole schema: a job importing one module met a
+  foreign key to a table it had never been shown (leka/schema.py).
 
 Same queues, same order as before: leka:high, leka, leka:low. See JobQueue.
 
@@ -30,6 +32,7 @@ from rq import Queue, Worker
 from leka.background import JobQueue, worker_connection
 from leka.core.config import settings
 from leka.core.logging import configure_logging
+from leka.db import load_schema
 from leka.platform.monitoring import configure_monitoring
 
 # Drained in this order, which is the only priority RQ has.
@@ -54,6 +57,8 @@ def main(argv: Sequence[str] = ()) -> None:
     # After logging, never before — the same order as the API's lifespan:
     # Sentry scrubs its events with the masker configure_logging builds.
     configure_monitoring(settings)
+    # Every table, before RQ forks a work-horse per job: they inherit it.
+    load_schema()
 
     connection = worker_connection()
     worker = Worker(

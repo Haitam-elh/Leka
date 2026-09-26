@@ -14,7 +14,7 @@ import asyncio
 
 import structlog
 
-from leka.db import session_factory, system_scope
+from leka.db import load_schema, session_factory, system_scope
 from leka.identity.repository import EmailTokenRepository, SessionRepository
 
 logger = structlog.get_logger(__name__)
@@ -46,4 +46,5 @@ def run_purge() -> dict[str, int]:
 
 
 if __name__ == "__main__":  # pragma: no cover
+    load_schema()  # every table, as the API has (leka/schema.py)
     run_purge()
