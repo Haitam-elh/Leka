@@ -514,6 +514,8 @@ const fr = {
       clusters: "clusters",
       networks: "réseaux",
       load_balancers: "load balancers",
+      spaces: "espaces",
+      pages: "pages",
     },
     empty: {
       title: "Aucune source connectée",
@@ -645,7 +647,7 @@ const fr = {
       activated: "{name} est activée",
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
-      missingBody: "LEKA se connecte aujourd'hui à GitHub, GitLab et Bitbucket. Jira et Confluence arrivent.",
+      missingBody: "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira et Confluence.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -1302,6 +1304,8 @@ const en: Dictionary = {
       clusters: "clusters",
       networks: "networks",
       load_balancers: "load balancers",
+      spaces: "spaces",
+      pages: "pages",
     },
     empty: {
       title: "No source connected",
@@ -1433,7 +1437,7 @@ const en: Dictionary = {
       activated: "{name} is activated",
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
-      missingBody: "LEKA connects to GitHub, GitLab and Bitbucket today. Jira and Confluence are coming.",
+      missingBody: "LEKA connects to GitHub, GitLab, Bitbucket, Jira and Confluence today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
