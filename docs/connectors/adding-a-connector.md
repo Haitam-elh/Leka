@@ -106,8 +106,15 @@ Map the vendor's answers to the codes of
 
 ### HTTP
 
-Only through `self.http(base_url, headers=...)`. It sets the 10-second
-timeout, and it is how the tests replace the network.
+Only through `self.http(base_url, headers=...)`, wrapped in
+`leka.connectors.http.VendorHttp` — it sets the 10-second timeout, and it is
+how the tests replace the network. `VendorHttp` gives `get` (a failure
+becomes a diagnostic through your `refuse`), `pages` (the Link header, or
+the body with `in_body=("values", "next")`, never to another host), `probe`,
+and `get_if_answered` for what a vendor may not answer. `refusal`,
+`usual_code`, `retry_after`, `record` and `records` do the rest; a
+connector writes only what its vendor means — which 403 is a quota, which a
+scope.
 
 ## 3. Register it
 
@@ -143,6 +150,6 @@ Through the API, override `get_connector_transport` in
 - [ ] `test_connection` in three steps, parallel probes, under 15 s
 - [ ] `check_health`, quota-free if possible
 - [ ] every failure through `diagnose(..., secrets=[...])`
-- [ ] every call a GET, through `self.http()`
+- [ ] every call a GET, through `self.http()` and `VendorHttp`
 - [ ] one import line in `connectors/__init__.py`
 - [ ] tests with `MockTransport`, no network

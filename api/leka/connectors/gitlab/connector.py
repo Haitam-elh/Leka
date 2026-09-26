@@ -26,12 +26,9 @@ test says so, in its warnings.
 
 from __future__ import annotations
 
-import asyncio
 import re
-import time
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any
 from urllib.parse import quote
 
 import httpx
@@ -47,7 +44,18 @@ from leka.connectors.base import (
     ScopeListing,
     ScopeOption,
 )
-from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
+from leka.connectors.errors import ConnectorError, DiagnosticCode
+from leka.connectors.http import (
+    Item,
+    VendorHttp,
+    nothing,
+    parse_timestamp,
+    record,
+    records,
+    refusal,
+    retry_after,
+    usual_code,
+)
 from leka.connectors.models import HealthStatus, SourceKind
 from leka.connectors.registry import register_connector
 from leka.connectors.schemas import RawRecord
@@ -59,8 +67,6 @@ WRITE_SCOPES = ("api", "write_repository", "write_registry", "sudo", "admin_mode
 # A namespace path: "acme", "acme/platform/api". GitLab allows letters,
 # digits, "_", "-" and ".", nests groups, and starts no segment with "." or "-".
 PATH = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$")
-
-type Item = dict[str, object]
 
 
 class GitLabConfig(BaseModel):
@@ -134,15 +140,15 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
 
     async def test_connection(self) -> ConnectionTestResult:
         async with self._client() as client:
-            user = (await self._get(client, "/user")).json()
+            user = (await client.get("/user")).json()
             metadata: dict[str, object] = {"login": user.get("username")}
             warnings = await self._token_warnings(client, metadata)
             group = self.config.group
             if group:
-                found = await self._get(client, f"/groups/{_id(group)}", missing="ce groupe")
+                found = await client.get(f"/groups/{_id(group)}", missing="ce groupe")
                 metadata["group"] = found.json().get("full_path", group)
 
-            listing = await self._get(client, self._projects_path(), params=self._projects_query())
+            listing = await client.get(self._projects_path(), params=self._projects_query())
             listed = listing.json()
             more = "next" in listing.links
             metadata["projects_visible"] = f"{len(listed)}+" if more else len(listed)
@@ -152,8 +158,17 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
                 sample = str(listed[0]["id"])
                 if self.config.projects:
                     path = f"/projects/{_id(self.config.projects[0])}"
-                    sample = str((await self._get(client, path, missing="ce projet")).json()["id"])
-                capabilities += await self._probe(client, sample)
+                    sample = str((await client.get(path, missing="ce projet")).json()["id"])
+                capabilities += await client.probe(
+                    {
+                        Capability.COMMITS: f"/projects/{sample}/repository/commits",
+                        Capability.PULL_REQUESTS: f"/projects/{sample}/merge_requests",
+                        Capability.RELEASES: f"/projects/{sample}/releases",
+                        Capability.ISSUES: f"/projects/{sample}/issues",
+                        Capability.BRANCHES: f"/projects/{sample}/repository/branches",
+                    },
+                    params={"per_page": 1},
+                )
             else:
                 warnings.append("Aucun projet n'est visible avec ce jeton.")
 
@@ -166,7 +181,7 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
 
     async def check_health(self) -> HealthResult:
         async with self._client() as client:
-            response = await self._get(client, "/user")
+            response = await client.get("/user")
         limit = int(response.headers.get("ratelimit-limit", 0))
         remaining = int(response.headers.get("ratelimit-remaining", limit))
         low = limit > 0 and remaining < limit * LOW_QUOTA_RATIO
@@ -179,7 +194,7 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
     async def list_scope(self) -> ScopeListing:
         options: list[ScopeOption] = []
         async with self._client() as client:
-            async for project in self._pages(client, self._projects_path(), self._projects_query()):
+            async for project in client.pages(self._projects_path(), self._projects_query()):
                 if len(options) == MAX_SCOPE_OPTIONS:
                     return ScopeListing(options=options, truncated=True)
                 options.append(
@@ -190,7 +205,7 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
                         if project.get("description")
                         else None,
                         private=project.get("visibility") != "public",
-                        updated_at=_parse(project.get("last_activity_at")),
+                        updated_at=parse_timestamp(project.get("last_activity_at")),
                     )
                 )
         return ScopeListing(options=options)
@@ -201,27 +216,44 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
         async with self._client() as client:
             async for project in self._projects(client):
                 if capability is Capability.REPOSITORIES:
-                    yield _record(
+                    yield record(
                         capability,
                         project,
                         external_id=str(project["id"]),
                         updated=project.get("last_activity_at"),
                     )
                     continue
-                async for record in self._contents(client, capability, project, since):
-                    yield record
+                async for item in self._contents(client, capability, project, since):
+                    yield item
 
     # ── inside ───────────────────────────────────────────────────────────────
 
-    def _client(self) -> httpx.AsyncClient:
-        return self.http(
+    def _client(self) -> VendorHttp:
+        secret = self.credentials.token.get_secret_value()
+        client = self.http(
             str(self.config.base_url).rstrip("/") + "/api/v4",
-            headers={
-                "Accept": "application/json",
-                "User-Agent": "LEKA",
-                "PRIVATE-TOKEN": self.credentials.token.get_secret_value(),
-            },
+            headers={"Accept": "application/json", "User-Agent": "LEKA", "PRIVATE-TOKEN": secret},
         )
+        return VendorHttp(client, secret=secret, refuse=self._refuse, page_size=PAGE_SIZE)
+
+    def _refuse(self, response: httpx.Response, path: str, missing: str) -> ConnectorError:
+        """GitLab's answers, as diagnostics. A 401 may say the token expired;
+        a 403 may say its scope is short."""
+        status, body = response.status_code, response.text[:200].lower()
+        code = usual_code(status)
+        if status == 401 and ("expired" in body or "revoked" in body):
+            code = DiagnosticCode.AUTH_EXPIRED
+        elif status == 403 and "insufficient_scope" in body:
+            code = DiagnosticCode.INSUFFICIENT_SCOPE
+        secret = self.credentials.token.get_secret_value()
+        if code is DiagnosticCode.RATE_LIMITED:
+            wait = retry_after(response, "ratelimit-reset")
+            return refusal(response, path, secret, code, retry_after=wait)
+        if code is DiagnosticCode.NOT_FOUND:
+            what = missing or "cette ressource"
+            message = f"GitLab ne trouve pas {what}, ou le jeton ne le voit pas."
+            return refusal(response, path, secret, code, message=message)
+        return refusal(response, path, secret, code)
 
     def _projects_path(self) -> str:
         group = self.config.group
@@ -232,80 +264,11 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
             return {"include_subgroups": "true", "per_page": PAGE_SIZE}
         return {"membership": "true", "per_page": PAGE_SIZE}
 
-    async def _get(
-        self,
-        client: httpx.AsyncClient,
-        path: str,
-        *,
-        params: dict[str, str | int] | None = None,
-        missing: str = "cette ressource",
-    ) -> httpx.Response:
-        secret = self.credentials.token.get_secret_value()
-        try:
-            response = await client.get(path, params=params)
-        except httpx.TimeoutException as error:
-            raise diagnose(
-                DiagnosticCode.TIMEOUT, detail=f"GET {path}", secrets=[secret]
-            ) from error
-        except httpx.TransportError as error:
-            raise diagnose(
-                DiagnosticCode.NETWORK_UNREACHABLE,
-                detail=f"GET {path}: {type(error).__name__}",
-                secrets=[secret],
-            ) from error
-        if response.is_success:
-            return response
-        raise self._diagnose(response, path, missing, secret)
-
-    def _diagnose(
-        self, response: httpx.Response, path: str, missing: str, secret: str
-    ) -> ConnectorError:
-        status = response.status_code
-        body = response.text[:200]
-        detail = f"GET {path} → {status}: {body}"
-
-        def build(
-            code: DiagnosticCode, *, message: str | None = None, retry_after: int | None = None
-        ) -> ConnectorError:
-            return diagnose(
-                code,
-                message=message,
-                provider_status=status,
-                retry_after=retry_after,
-                detail=detail,
-                secrets=[secret],
-            )
-
-        lowered = body.lower()
-        if status == 401 and ("expired" in lowered or "revoked" in lowered):
-            return build(DiagnosticCode.AUTH_EXPIRED)
-        if status == 401:
-            return build(DiagnosticCode.AUTH_INVALID)
-        if status == 429:
-            return build(DiagnosticCode.RATE_LIMITED, retry_after=_retry_after(response))
-        if status == 403 and "insufficient_scope" in lowered:
-            return build(DiagnosticCode.INSUFFICIENT_SCOPE)
-        if status == 403:
-            return build(DiagnosticCode.PERMISSION_DENIED)
-        if status == 404:
-            return build(
-                DiagnosticCode.NOT_FOUND,
-                message=f"GitLab ne trouve pas {missing}, ou le jeton ne le voit pas.",
-            )
-        if status >= 500:
-            return build(DiagnosticCode.PROVIDER_ERROR)
-        return build(DiagnosticCode.UNKNOWN)
-
-    async def _token_warnings(
-        self, client: httpx.AsyncClient, metadata: dict[str, object]
-    ) -> list[str]:
+    async def _token_warnings(self, client: VendorHttp, metadata: dict[str, object]) -> list[str]:
         """What GitLab says about the token itself. Older instances, and some
         token types, do not answer: that is not a failure of the test."""
-        try:
-            response = await client.get("/personal_access_tokens/self")
-        except httpx.HTTPError:
-            return []
-        if not response.is_success:
+        response = await client.get_if_answered("/personal_access_tokens/self")
+        if response is None:
             return []
         token = response.json()
         if token.get("expires_at"):
@@ -318,16 +281,16 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
             "un jeton limité à read_api suffit et limite l'exposition."
         ]
 
-    async def _projects(self, client: httpx.AsyncClient) -> AsyncIterator[Item]:
+    async def _projects(self, client: VendorHttp) -> AsyncIterator[Item]:
         """The projects in scope. GitLab's paths are case-insensitive."""
         wanted = {path.lower() for path in self.config.projects or []}
-        async for project in self._pages(client, self._projects_path(), self._projects_query()):
+        async for project in client.pages(self._projects_path(), self._projects_query()):
             if not wanted or str(project["path_with_namespace"]).lower() in wanted:
                 yield project
 
     def _contents(
         self,
-        client: httpx.AsyncClient,
+        client: VendorHttp,
         capability: Capability,
         project: Item,
         since: datetime | None,
@@ -335,14 +298,14 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
         """One project's records for one capability."""
         pid, path = project["id"], str(project["path_with_namespace"])
         if not _offers(project, capability):
-            return _nothing()
+            return nothing()
         if capability is Capability.BRANCHES:
-            items = self._pages(client, f"/projects/{pid}/repository/branches", {})
-            return _records(capability, items, path, key=lambda b: f"{pid}:{b['name']}")
+            items = client.pages(f"/projects/{pid}/repository/branches")
+            return records(capability, items, path, key=lambda b: f"{pid}:{b['name']}")
         if capability is Capability.COMMITS:
             after = {"since": since.isoformat()} if since else {}
-            items = self._pages(client, f"/projects/{pid}/repository/commits", after)
-            return _records(
+            items = client.pages(f"/projects/{pid}/repository/commits", after)
+            return records(
                 capability,
                 items,
                 path,
@@ -352,14 +315,14 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
         # Without a state, a project's listing holds every state: open, merged, closed.
         updated_after = {"updated_after": since.isoformat()} if since else {}
         if capability is Capability.PULL_REQUESTS:
-            items = self._pages(client, f"/projects/{pid}/merge_requests", updated_after)
-            return _records(capability, items, path)
+            items = client.pages(f"/projects/{pid}/merge_requests", updated_after)
+            return records(capability, items, path, key=_gitlab_id)
         if capability is Capability.ISSUES:
-            items = self._pages(client, f"/projects/{pid}/issues", updated_after)
-            return _records(capability, items, path)
+            items = client.pages(f"/projects/{pid}/issues", updated_after)
+            return records(capability, items, path, key=_gitlab_id)
         if capability is Capability.RELEASES:
-            items = self._pages(client, f"/projects/{pid}/releases", {})
-            return _records(
+            items = client.pages(f"/projects/{pid}/releases")
+            return records(
                 capability,
                 items,
                 path,
@@ -369,69 +332,16 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
         msg = f"GitLab does not read {capability}"
         raise ValueError(msg)
 
-    async def _pages(
-        self, client: httpx.AsyncClient, path: str, params: Mapping[str, str | int]
-    ) -> AsyncIterator[Item]:
-        """Every item of a listing, following GitLab's Link header."""
-        url: str | None = path
-        query: dict[str, str | int] | None = {"per_page": PAGE_SIZE, **params}
-        while url:
-            response = await self._get(client, url, params=query)
-            for item in response.json():
-                yield item
-            url, query = self._next_page(client, response), None  # the link carries the query
-
-    def _next_page(self, client: httpx.AsyncClient, response: httpx.Response) -> str | None:
-        """The next page — only if it is on the host the token was meant for."""
-        link = response.links.get("next", {}).get("url")
-        if link is None:
-            return None
-        if httpx.URL(link).host != client.base_url.host:
-            raise diagnose(
-                DiagnosticCode.PROVIDER_ERROR,
-                detail=f"pagination points to another host: {httpx.URL(link).host}",
-                secrets=[self.credentials.token.get_secret_value()],
-            )
-        return link
-
-    async def _probe(self, client: httpx.AsyncClient, project: str) -> list[Capability]:
-        """Which of the per-project capabilities this token can read, at once."""
-        probes = {
-            Capability.COMMITS: f"/projects/{project}/repository/commits",
-            Capability.PULL_REQUESTS: f"/projects/{project}/merge_requests",
-            Capability.RELEASES: f"/projects/{project}/releases",
-            Capability.ISSUES: f"/projects/{project}/issues",
-            Capability.BRANCHES: f"/projects/{project}/repository/branches",
-        }
-        responses = await asyncio.gather(
-            *(client.get(path, params={"per_page": 1}) for path in probes.values()),
-            return_exceptions=True,
-        )
-        return [
-            capability
-            for capability, response in zip(probes, responses, strict=True)
-            if isinstance(response, httpx.Response) and response.is_success
-        ]
-
 
 def _id(path: str) -> str:
     """A namespace path as GitLab takes it in a URL: 'acme/api' → 'acme%2Fapi'."""
     return quote(path, safe="")
 
 
-def _retry_after(response: httpx.Response) -> int | None:
-    if "retry-after" in response.headers:
-        return int(response.headers["retry-after"])
-    reset = response.headers.get("ratelimit-reset")
-    return max(0, int(reset) - int(time.time())) if reset else None
+def _gitlab_id(item: Item) -> str:
+    """GitLab's id, unique on the instance — not the per-project `iid`."""
+    return str(item["id"])
 
-
-def _parse(timestamp: object) -> datetime | None:
-    """GitLab's ISO 8601, "2026-09-26T10:00:00.000Z"."""
-    return datetime.fromisoformat(str(timestamp)) if timestamp else None
-
-
-# ── records ─────────────────────────────────────────────────────────────────
 
 # The project field that says a feature is switched off, per capability.
 # Asking for a disabled feature is a 403 or a 404 that means nothing.
@@ -449,38 +359,3 @@ def _offers(project: Item, capability: Capability) -> bool:
     if project.get(_FEATURE[capability]) == "disabled":
         return False
     return not (capability in _NEEDS_A_REPOSITORY and project.get("empty_repo"))
-
-
-def _record(
-    kind: Capability,
-    item: Item,
-    *,
-    external_id: str,
-    container: str | None = None,
-    updated: object = None,
-) -> RawRecord:
-    return RawRecord(
-        kind=kind,
-        external_id=external_id,
-        container=container,
-        payload=item,
-        updated_at=_parse(updated),
-        fetched_at=datetime.now(UTC),
-    )
-
-
-async def _records(
-    kind: Capability,
-    items: AsyncIterator[Item],
-    container: str,
-    *,
-    key: Callable[[Any], str] = lambda item: str(item["id"]),
-    updated: Callable[[Any], object] = lambda item: item.get("updated_at"),
-) -> AsyncIterator[RawRecord]:
-    async for item in items:
-        yield _record(kind, item, external_id=key(item), container=container, updated=updated(item))
-
-
-async def _nothing() -> AsyncIterator[RawRecord]:
-    return
-    yield  # an async generator that yields nothing
