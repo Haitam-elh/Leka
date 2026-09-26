@@ -1420,7 +1420,7 @@ export interface components {
          * SourceEventType
          * @enum {string}
          */
-        SourceEventType: "created" | "test_succeeded" | "test_failed" | "activated" | "reconfigured" | "credentials_rotated" | "health_changed" | "disabled" | "deleted";
+        SourceEventType: "created" | "test_succeeded" | "test_failed" | "activated" | "reconfigured" | "credentials_rotated" | "health_changed" | "disabled" | "deleted" | "sync_failed" | "sync_recovered";
         /**
          * SourceKind
          * @description The customer systems LEKA knows the shape of.

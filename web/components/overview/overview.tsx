@@ -365,6 +365,8 @@ const EVENT_LOOK: Record<SourceEvent["type"], { icon: LucideIcon; tone: TileTone
   health_changed: { icon: HeartPulse, tone: "warning" },
   disabled: { icon: CircleOff, tone: "warning" },
   deleted: { icon: Trash2, tone: "danger" },
+  sync_failed: { icon: TriangleAlert, tone: "danger" },
+  sync_recovered: { icon: CircleCheck, tone: "success" },
 };
 
 function ActivityCard({ load }: { load: Load }) {

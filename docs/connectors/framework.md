@@ -151,16 +151,20 @@ from `POST /sources/{id}/health-check`, and every fifteen minutes for
 activated sources (`source-health` in `leka/background/schedule.py`).
 
 `sync_status` (`never`, `idle`, `running`, `failed`) and `last_sync_at`
-exist and are returned; the sync engine fills them (LEKA-352).
+are filled by the sync (`leka/ingestion/sync.py`, LEKA-352). A sync that
+fails for a reason a person must fix (`AUTH_INVALID`, `PERMISSION_DENIED`…)
+moves an activated source to `error`, like an unhealthy check.
 
 ## History
 
 `source_events` is append-only: `created`, `test_succeeded`, `test_failed`,
 `activated`, `reconfigured`, `credentials_rotated`, `health_changed`,
-`disabled`, `deleted`, with the actor and a payload that never holds a
-secret. It has no foreign key to `sources`, so the deletion stays recorded.
-Nothing is published on the event bus yet: the outbox marks an event nobody
-consumes as failed, and nothing consumes these until LEKA-352.
+`disabled`, `deleted`, and from the sync `sync_failed` (when a source starts
+failing) and `sync_recovered` (the first success after) — not one line per
+pass. With the actor and a payload that never holds a secret. It has no
+foreign key to `sources`, so the deletion stays recorded. Nothing is
+published on the event bus: the outbox marks an event nobody consumes as
+failed, and the sync is enqueued directly rather than through an event.
 
 ## The API
 
@@ -180,8 +184,9 @@ Reading needs `source:read` (every member); everything else needs
 
 ## What is not here
 
-- **The sync engine** — LEKA-352: the job that calls `iter_resources`, keeps
-  `since`, stores the records and fills the sync fields.
+- **The sync engine** — not here: `leka/ingestion/sync.py` (LEKA-352), which
+  sits above connectors, calls `iter_resources`, keeps `since` per capability
+  in `source_syncs`, stores the records and fills the sync fields.
 - **KMS / Secrets Manager** — LEKA-405: another `SecretStore`.
 - **OAuth apps, GitHub App** — the MVP takes a fine-grained personal access token.
 - **The Sources page** — the frontend reads the catalogue's JSON Schemas when it comes.
