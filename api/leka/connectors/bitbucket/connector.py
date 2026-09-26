@@ -15,8 +15,9 @@ list_scope: every repository of the workspace, for the admin to choose from.
 iter_resources: the repositories in scope, then per repository its
 branches, the commits of its main branch, its pull requests (every state)
 and its issues (where the tracker is on). Bitbucket filters none of them by
-date: commits come newest first, pull requests and issues are asked newest-
-updated first, and each stops at `since`. Bitbucket has no releases.
+date: pull requests and issues are asked newest-updated first and stop at
+`since`; commits come only roughly newest first, so the older ones are
+skipped and the listing ends after a page with nothing newer. Bitbucket has no releases.
 
 Two kinds of token. A repository, project or workspace access token is sent
 as a Bearer token. An Atlassian API token needs its account's email, and
@@ -298,7 +299,8 @@ class BitbucketConnector(Connector[BitbucketConfig, BitbucketCredentials]):
         if capability is Capability.BRANCHES:
             return records(capability, client.pages(path), name, key=lambda b: f"{rid}:{b['name']}")
         if capability is Capability.COMMITS:
-            items = client.pages(path, stop_before=since, updated_field="date")
+            # Only roughly newest first: a rebase can put an old date ahead.
+            items = client.pages(path, skip_before=since, updated_field="date")
             return records(
                 capability, items, name, key=lambda c: f"{rid}:{c['hash']}", updated=_date
             )

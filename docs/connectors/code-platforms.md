@@ -61,7 +61,7 @@ screen offers the choices from `GET /sources/{id}/scope/options`, at most
 |---|---|---|---|---|
 | `repositories` | repositories | projects | repositories | whole each pass |
 | `branches` | branches | branches | branches | whole each pass |
-| `commits` | default branch | default branch | main branch | GitHub, GitLab: filtered by the platform. Bitbucket: newest first, stops at the last pass |
+| `commits` | default branch | default branch | main branch | GitHub, GitLab: filtered by the platform. Bitbucket: roughly newest first — older commits are skipped, and the listing ends after a page with nothing newer (a rebase can put an old date ahead) |
 | `pull_requests` | pull requests | merge requests | pull requests | GitHub, Bitbucket: newest-updated first, stops at the last pass. GitLab: `updated_after` |
 | `issues` | issues, without pull requests | issues | issues, where the tracker is on | GitHub, GitLab: filtered by the platform. Bitbucket: newest-updated first, stops |
 | `releases` | releases | releases | — (Bitbucket has none) | whole each pass |

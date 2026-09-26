@@ -217,17 +217,42 @@ async def test_repositories_in_scope_are_known_by_their_uuid() -> None:
     assert [r.external_id for r in records] == ["{r-web}"]
 
 
-async def test_commits_of_the_main_branch_stop_at_the_last_pass() -> None:
+async def test_commits_of_the_main_branch_end_after_a_page_older_than_the_last_pass() -> None:
     new = {"hash": "abc", "date": "2026-09-22T08:00:00+00:00"}
     old = {"hash": "def", "date": "2026-09-01T08:00:00+00:00"}
-    bitbucket = Bitbucket({"/repositories/acme/api/commits/main": ([new, old], [old])})
+    bitbucket = Bitbucket({"/repositories/acme/api/commits/main": ([new, old], [old], [new])})
 
     records = await _stream(bitbucket, Capability.COMMITS, since=SINCE)
 
     assert [(r.external_id, r.container) for r in records] == [("{r-api}:abc", "acme/api")]
-    assert len(bitbucket.queries["/repositories/acme/api/commits/main"]) == 1
+    # Page 2 holds nothing newer: page 3 is never asked for.
+    assert len(bitbucket.queries["/repositories/acme/api/commits/main"]) == 2
     # acme/web has no main branch: an empty repository, not asked.
     assert not any("acme/web/commits" in path for path in bitbucket.queries)
+
+
+async def test_an_older_commit_ahead_of_a_newer_one_does_not_hide_it() -> None:
+    """A rebase, or an old branch merged in, puts an older date first."""
+    older = {"hash": "aaa", "date": "2026-09-01T08:00:00+00:00"}
+    newer = {"hash": "bbb", "date": "2026-09-22T08:00:00+00:00"}
+    bitbucket = Bitbucket({"/repositories/acme/api/commits/main": [older, newer]})
+
+    records = await _stream(bitbucket, Capability.COMMITS, since=SINCE)
+
+    assert [r.external_id for r in records] == ["{r-api}:bbb"]
+
+
+async def test_a_newer_commit_on_a_later_page_is_still_read() -> None:
+    older = {"hash": "aaa", "date": "2026-09-01T08:00:00+00:00"}
+    newer = {"hash": "bbb", "date": "2026-09-22T08:00:00+00:00"}
+    undated = {"hash": "ccc"}
+    pages = ([newer, older], [older, newer, undated], [older])
+    bitbucket = Bitbucket({"/repositories/acme/api/commits/main": pages})
+
+    records = await _stream(bitbucket, Capability.COMMITS, since=SINCE)
+
+    # Undated is kept: nothing says it is old.
+    assert [r.external_id for r in records] == ["{r-api}:bbb", "{r-api}:bbb", "{r-api}:ccc"]
 
 
 async def test_pull_requests_of_every_state_newest_first() -> None:
