@@ -87,7 +87,7 @@ async def test_a_working_token_reports_the_account_and_what_it_can_read() -> Non
     assert result.metadata["group"] == "acme"
     assert result.metadata["projects_visible"] == 2
     assert result.metadata["token_expires_at"] == "2026-12-31"
-    assert set(result.capabilities) == set(Capability)
+    assert set(result.capabilities) == GitLabConnector.manifest.capabilities
     assert result.warnings == []
     # The first visible project is the sample, by id.
     assert "/projects/11/merge_requests" in gitlab.paths

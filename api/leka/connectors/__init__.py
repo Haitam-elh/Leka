@@ -15,6 +15,7 @@ from leka.connectors import (
     bitbucket,  # noqa: F401  — registers BitbucketConnector
     github,  # noqa: F401  — registers GitHubConnector
     gitlab,  # noqa: F401  — registers GitLabConnector
+    jira,  # noqa: F401  — registers JiraConnector
 )
 from leka.connectors.base import (
     Capability,
