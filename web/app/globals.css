@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* React Flow's structural styles (LEKA-340, components/knowledge/dependency-graph.tsx). */
+@import "@xyflow/react/dist/base.css";
 
 @custom-variant dark (&:is(.dark *));
 

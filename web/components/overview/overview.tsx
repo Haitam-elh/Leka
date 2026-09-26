@@ -28,6 +28,7 @@ import { cn } from "cn";
 import { CompactIntentionComposer } from "@/components/intentions/compact-composer";
 import { PageContainer } from "@/components/shell/page-container";
 import { useCurrentUser } from "@/components/shell/shell-provider";
+import { StatusBadge } from "@/components/knowledge/status-badge";
 import { SourceLogo } from "@/components/sources/source-logo";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -210,33 +211,6 @@ function IconTile({
       )}
     >
       <Icon className={cn("size-5", iconClassName)} aria-hidden="true" />
-    </span>
-  );
-}
-
-const PILL: Record<SourceTone, string> = {
-  synced: "bg-state-success-soft text-state-success",
-  attention: "bg-state-warning-soft text-state-warning",
-  error: "bg-state-danger-soft text-state-danger",
-  setup: "bg-brand-violet-soft text-shell-nav-active",
-  off: "bg-shell-canvas text-shell-muted",
-};
-
-function TonePill({ tone, label }: { tone: SourceTone; label: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap",
-        PILL[tone],
-      )}
-    >
-      {tone === "synced" ? (
-        <CircleCheck
-          className="size-3.5 fill-current text-inherit [&>path]:stroke-white"
-          aria-hidden="true"
-        />
-      ) : null}
-      {label}
     </span>
   );
 }
@@ -528,7 +502,7 @@ function SourcesCard({ load }: { load: Load }) {
                 >
                   {source.display_name}
                 </span>
-                <TonePill tone={tone} label={t.overview.tone[tone]} />
+                <StatusBadge variant={`source.${tone}`} />
                 <span className="shrink-0 text-right text-xs whitespace-nowrap text-shell-muted">
                   {seen ? ago(t, seen) : t.overview.neverSeen}
                 </span>
