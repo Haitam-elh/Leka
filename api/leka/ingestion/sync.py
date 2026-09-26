@@ -165,12 +165,17 @@ async def enqueue_sync(
 
 
 def run_sync_for_event(event_id: str) -> str:
-    """`source.activated` (leka/background/routes.py): the first pass.
+    """`source.activated` (leka/background/routes.py): a FULL pass.
 
     Published in the activation's own transaction, so it exists only if the
     activation does — a pass enqueued from the request could start before
     the request committed and find the source not yet active. It does not
     read here: it enqueues, so the pass holds the source's key like any other.
+
+    Full, not only the first time: changing a source's settings or
+    credentials sends it back to draft, so every widened scope — a project,
+    a repository, a space added — comes back through an activation. An
+    incremental pass from the old cursor would never read its history.
     """
     return asyncio.run(_on_activated(uuid.UUID(event_id)))
 
@@ -182,7 +187,7 @@ async def _on_activated(event_id: uuid.UUID) -> str:
     if event is None:
         return "gone"
     source_id = uuid.UUID(str(event.payload["source_id"]))
-    queued = await enqueue_sync(event.workspace_id, source_id)
+    queued = await enqueue_sync(event.workspace_id, source_id, full=True)
     return "queued" if queued else "already_active"
 
 

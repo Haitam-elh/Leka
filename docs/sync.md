@@ -37,7 +37,7 @@ net under that trust. An admin can also ask for one (`full=true`).
 
 | Trigger | What | Guarantee |
 |---|---|---|
-| A source is **activated** | `source.activated` is published in the activation's transaction; its route queues the first pass | the pass exists only if the activation committed |
+| A source is **activated** | `source.activated` is published in the activation's transaction; its route queues a **full** pass | the pass exists only if the activation committed; full because changing settings or credentials sends a source back to draft, so a widened scope always comes back through here and its history is read |
 | The **schedule** | `source-sync`, at :10 :25 :40 :55 — queues a pass for every activated source **not tried for an hour** | "tried", not "succeeded": a source failing for a person to fix is not hammered every 15 minutes |
 | **"Synchroniser maintenant"** | `POST /ingestion/sources/{id}/sync` (`source:manage`), on `leka:high` | a person is waiting |
 

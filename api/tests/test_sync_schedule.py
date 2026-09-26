@@ -117,6 +117,8 @@ async def test_the_activation_event_queues_a_pass_under_the_source_key(
     assert call["job"] == "leka.ingestion.sync.run_sync"
     assert call["args"] == (str(acme["acme"]), source["id"])
     assert call["concurrency_key"] == f"sync:{source['id']}"
+    # Full: a re-activation follows a change of scope or credentials.
+    assert call["job_kwargs"] == {"full": True}
 
 
 # ── the schedule ─────────────────────────────────────────────────────────────
