@@ -82,7 +82,9 @@ repository `uuid`, and that uuid before what lives in it (`{…}:main`,
 
 - **Quota**: GitHub 5 000 calls an hour per token; GitLab.com's limits per
   user, self-managed as configured; Bitbucket Cloud's per hour, per token.
-  An exhausted quota is `RATE_LIMITED` with the time to wait. Health turns
+  An exhausted quota is `RATE_LIMITED` with the time to wait. A bulk read
+  stops itself earlier, when less than 10 % is left, so the customer's own
+  tools keep a reserve on a token they share with LEKA. Health turns
   `degraded` below a tenth of the quota (GitHub, GitLab), or when Bitbucket
   says it is near its limit.
 - **Pagination** follows the platform's `Link` header (GitHub, GitLab) or

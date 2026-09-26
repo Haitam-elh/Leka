@@ -318,3 +318,48 @@ async def test_the_passes_of_a_source_are_read_newest_first_by_its_members(
     ]
     _as(identity, acme, "other_admin")
     assert (await client.get(f"{API}/ingestion/sources/{source['id']}/runs")).status_code == 404
+
+
+# ── backpressure (LEKA-353) ──────────────────────────────────────────────────
+
+
+async def test_the_schedule_leaves_room_per_workspace_and_in_total(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    enqueued: list[dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _as(identity, acme, "admin")
+    sources = [await _activated(client) for _ in range(4)]
+    # One pass of this workspace is already under way.
+    await _run(acme["acme"], sources[0]["id"], "running")
+    monkeypatch.setattr(sync_module, "MAX_ACTIVE_PASSES_PER_WORKSPACE", 2)
+
+    result = await sync_module.enqueue_due_syncs()
+
+    mine = [call for call in enqueued if call["args"][0] == str(acme["acme"])]
+    assert len(mine) == 1  # 2 allowed, 1 already running
+    assert result["deferred"] >= 2
+
+    enqueued.clear()
+    monkeypatch.setattr(sync_module, "MAX_ACTIVE_PASSES_PER_WORKSPACE", 10)
+    monkeypatch.setattr(sync_module, "MAX_ACTIVE_PASSES", 0)
+    result = await sync_module.enqueue_due_syncs()
+    assert enqueued == [] and result["queued"] == 0
+
+
+async def test_a_person_waiting_is_not_held_back_by_the_schedule_s_limits(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    enqueued: list[dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+    monkeypatch.setattr(sync_module, "MAX_ACTIVE_PASSES", 0)
+
+    response = await client.post(f"{API}/ingestion/sources/{source['id']}/sync")
+
+    assert response.json() == {"queued": True}

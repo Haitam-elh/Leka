@@ -262,6 +262,15 @@ class SyncScheduleRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def active_passes(self, job: str) -> dict[uuid.UUID, int]:
+        """Passes queued, running or waiting for a retry, per workspace."""
+        rows = await self._session.execute(
+            select(JobRun.for_workspace_id, func.count())
+            .where(JobRun.job == job, JobRun.status.in_(ACTIVE_JOB_STATUSES))
+            .group_by(JobRun.for_workspace_id)
+        )
+        return {workspace_id: int(count) for workspace_id, count in rows.all() if workspace_id}
+
     async def due(
         self, *, before: datetime, statuses: Sequence[str], limit: int
     ) -> Sequence[tuple[uuid.UUID, uuid.UUID]]:
