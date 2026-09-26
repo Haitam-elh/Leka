@@ -20,6 +20,7 @@ same answer.
 | **Invitations** | `invitations` | `INVITATION_LIFETIME` | expire in place; removed with the workspace |
 | **Entities, relationships** | `entities`, `relationships` | as long as the workspace | cascade from `workspaces` |
 | **Sources and their credentials** | `sources` | as long as the workspace | cascade; credentials are Fernet-encrypted at rest (ADR 005) |
+| **Sync state** — how far each source has been read, the last diagnostic | `source_syncs` | as long as its source | cascade from `sources`; holds no payload, and its diagnostics are cleaned of secrets |
 | **Memberships, users** | `memberships`, `users` | as long as the account | cascade from `workspaces`; a user row survives, since a person may belong to several workspaces |
 
 ### Raw payload retention, by source kind

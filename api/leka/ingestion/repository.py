@@ -13,10 +13,11 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy import CursorResult, Result, Select, delete, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.db import WorkspaceScopedRepository
-from leka.ingestion.models import RawPayload
+from leka.ingestion.models import RawPayload, SourceSync
 
 
 def _affected_rows(result: Result[Any]) -> int:
@@ -136,6 +137,38 @@ class RawPayloadRepository(WorkspaceScopedRepository):
         """
         payload.deleted_at = now or datetime.now(UTC)
         return payload
+
+
+class SourceSyncRepository(WorkspaceScopedRepository):
+    """Where each capability of each source stands, within one workspace.
+
+    Reads and the one write that must not race: the row of a (source,
+    capability) is made by whichever pass gets there first, with INSERT ...
+    ON CONFLICT DO NOTHING, and read back — two passes started together
+    (the scheduler and a "sync now") both find the same row rather than one
+    failing on the unique constraint. The transitions themselves belong to
+    the sync (leka/ingestion/sync.py), which owns their order.
+    """
+
+    async def for_source(self, source_id: uuid.UUID) -> Sequence[SourceSync]:
+        return await self.list(
+            self.select(SourceSync)
+            .where(SourceSync.source_id == source_id)
+            .order_by(SourceSync.capability)
+        )
+
+    async def get_or_create(self, source_id: uuid.UUID, capability: str) -> SourceSync:
+        await self._session.execute(
+            insert(SourceSync)
+            .values(workspace_id=self.workspace_id, source_id=source_id, capability=capability)
+            .on_conflict_do_nothing(constraint="uq_source_syncs_source_capability")
+        )
+        found = await self._session.execute(
+            self.select(SourceSync).where(
+                SourceSync.source_id == source_id, SourceSync.capability == capability
+            )
+        )
+        return found.scalar_one()
 
 
 class RawPayloadSweeper:
