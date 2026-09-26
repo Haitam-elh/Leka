@@ -17,7 +17,7 @@ Three families, each decided somewhere else and gathered here:
 |---|---|---|
 | shadcn semantic | `--primary`, `--secondary`, `--muted`, `--accent`, `--destructive`, `--border`, `--input`, `--ring`, `--card`, `--popover`, … | shadcn's `base-nova` scaffold; `--primary` and `--ring` aliased to the brand in LEKA-339 |
 | Brand & shell | `--brand-navy`, `--brand-violet`, `--brand-violet-soft`, `--shell-surface`, `--shell-page`, `--shell-canvas`, `--shell-line`, `--shell-muted`, `--shell-nav`, `--shell-nav-active`, `--shell-icon`, `--shell-badge`, `--shell-badge-foreground` | LEKA-337, sampled pixel-by-pixel from the mockups; re-measured 2026-09-25 against a screenshot of ours (page white, secondary text blue-grey, active entry deep indigo, icons a shade lighter than labels) — see [`app-shell.md`](app-shell.md) |
-| System state | `--state-success[-soft]`, `--state-warning[-soft]`, `--state-danger[-soft]` | LEKA-343 — see [`system-states.md`](system-states.md) |
+| System state | `--state-success[-soft]`, `--state-warning[-soft]`, `--state-danger[-soft]`, `--state-info[-soft]` | LEKA-343 — see [`system-states.md`](system-states.md); the info tone added for the overview and the knowledge components |
 
 **Every one of them is measured, not chosen twice.** `web/app/design-tokens.test.ts`
 reads each pair actually put on screen as text out of `globals.css` and
@@ -223,5 +223,7 @@ and live in its files. They are close to, not equal to, `--brand-navy` and
   conventions around them.
 - [`system-states.md`](system-states.md) — loading, error and offline
   states, and the `--state-*` tokens' full story.
+- [`knowledge-components.md`](knowledge-components.md) — entities, relationships, provenance,
+  quality and freshness (LEKA-340).
 - `web/app/design-tokens.test.ts` — the contrast test every colour pair
   above is measured against.

@@ -28,6 +28,8 @@ import { cn } from "cn";
 import { CompactIntentionComposer } from "@/components/intentions/compact-composer";
 import { PageContainer } from "@/components/shell/page-container";
 import { useCurrentUser } from "@/components/shell/shell-provider";
+import { StatusBadge } from "@/components/knowledge/status-badge";
+import { exactDate, shortWhen, timeAgo } from "@/components/knowledge/time";
 import { SourceLogo } from "@/components/sources/source-logo";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -114,33 +116,12 @@ function useOverviewData(): Load {
 
 // ── Formatting ──────────────────────────────────────────────────────────────
 
-type Dictionary = ReturnType<typeof useDictionary>;
-
 function intlLocale(locale: string): string {
   return locale === "fr" ? "fr-FR" : "en-GB";
 }
 
 function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function ago(t: Dictionary, iso: string): string {
-  const minutes = Math.floor((Date.now() - Date.parse(iso)) / 60_000);
-  if (minutes < 1) return t.overview.justNow;
-  if (minutes < 60) return fill(t.overview.minutesAgo, { count: minutes });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return fill(t.overview.hoursAgo, { count: hours });
-  return fill(t.overview.daysAgo, { count: Math.floor(hours / 24) });
-}
-
-/** "14:42" today, "24 sept." before — the mockup only ever shows today. */
-function when(locale: string, iso: string): string {
-  const date = new Date(iso);
-  const today = new Date().toDateString() === date.toDateString();
-  return new Intl.DateTimeFormat(
-    intlLocale(locale),
-    today ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short" },
-  ).format(date);
 }
 
 // ── Building blocks ─────────────────────────────────────────────────────────
@@ -210,33 +191,6 @@ function IconTile({
       )}
     >
       <Icon className={cn("size-5", iconClassName)} aria-hidden="true" />
-    </span>
-  );
-}
-
-const PILL: Record<SourceTone, string> = {
-  synced: "bg-state-success-soft text-state-success",
-  attention: "bg-state-warning-soft text-state-warning",
-  error: "bg-state-danger-soft text-state-danger",
-  setup: "bg-brand-violet-soft text-shell-nav-active",
-  off: "bg-shell-canvas text-shell-muted",
-};
-
-function TonePill({ tone, label }: { tone: SourceTone; label: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap",
-        PILL[tone],
-      )}
-    >
-      {tone === "synced" ? (
-        <CircleCheck
-          className="size-3.5 fill-current text-inherit [&>path]:stroke-white"
-          aria-hidden="true"
-        />
-      ) : null}
-      {label}
     </span>
   );
 }
@@ -436,9 +390,13 @@ function ActivityCard({ load }: { load: Load }) {
                 data-testid="activity-row"
               >
                 <IconTile icon={look.icon} tone={look.tone} className="size-9" />
-                <span className="w-12 shrink-0 text-[0.8125rem] text-shell-muted tabular-nums">
-                  {when(locale, event.created_at)}
-                </span>
+                <time
+                  dateTime={event.created_at}
+                  title={exactDate(locale, event.created_at)}
+                  className="w-12 shrink-0 text-[0.8125rem] text-shell-muted tabular-nums"
+                >
+                  {shortWhen(locale, event.created_at)}
+                </time>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-brand-navy">
                     {t.overview.events[event.type]}
@@ -528,9 +486,9 @@ function SourcesCard({ load }: { load: Load }) {
                 >
                   {source.display_name}
                 </span>
-                <TonePill tone={tone} label={t.overview.tone[tone]} />
+                <StatusBadge variant={`source.${tone}`} />
                 <span className="shrink-0 text-right text-xs whitespace-nowrap text-shell-muted">
-                  {seen ? ago(t, seen) : t.overview.neverSeen}
+                  {seen ? timeAgo(t, seen) : t.overview.neverSeen}
                 </span>
               </li>
             );
