@@ -74,10 +74,17 @@ from leka.connectors import (
     next_status,
 )
 from leka.db import session_factory, system_scope, workspace_scope
-from leka.ingestion.models import SourceSync, SyncRunStatus
+from leka.ingestion.models import (
+    SourceSync,
+    SyncRun,
+    SyncRunOutcome,
+    SyncRunStatus,
+    SyncTrigger,
+)
 from leka.ingestion.repository import (
     RawPayloadRepository,
     SourceSyncRepository,
+    SyncRunRepository,
     SyncScheduleRepository,
 )
 from leka.ingestion.retention import expires_at
@@ -128,9 +135,18 @@ class SyncReport:
         }
 
 
-def run_sync(workspace_id: str, source_id: str, full: bool = False) -> dict[str, object]:
+def run_sync(
+    workspace_id: str, source_id: str, full: bool = False, trigger: str = "schedule"
+) -> dict[str, object]:
     """Entry point for the job runner, which is synchronous."""
-    report = asyncio.run(sync_source(uuid.UUID(workspace_id), uuid.UUID(source_id), full=full))
+    report = asyncio.run(
+        sync_source(
+            uuid.UUID(workspace_id),
+            uuid.UUID(source_id),
+            full=full,
+            trigger=SyncTrigger(trigger),
+        )
+    )
     return report.as_dict()
 
 
@@ -162,6 +178,7 @@ async def enqueue_sync(
     *,
     full: bool = False,
     queue: JobQueue = JobQueue.DEFAULT,
+    trigger: SyncTrigger = SyncTrigger.SCHEDULE,
 ) -> bool:
     """Put a pass on the queue. False if one is already queued or running for
     this source — someone clicking while the schedule runs it is not an error."""
@@ -169,7 +186,7 @@ async def enqueue_sync(
         SYNC_JOB,
         str(workspace_id),
         str(source_id),
-        job_kwargs={"full": full},
+        job_kwargs={"full": full, "trigger": trigger.value},
         for_workspace_id=workspace_id,
         queue=queue,
         concurrency_key=concurrency_key(source_id),
@@ -200,7 +217,9 @@ async def _on_activated(event_id: uuid.UUID) -> str:
     if event is None:
         return "gone"
     source_id = uuid.UUID(str(event.payload["source_id"]))
-    queued = await enqueue_sync(event.workspace_id, source_id, full=True)
+    queued = await enqueue_sync(
+        event.workspace_id, source_id, full=True, trigger=SyncTrigger.ACTIVATION
+    )
     return "queued" if queued else "already_active"
 
 
@@ -238,19 +257,33 @@ async def enqueue_due_syncs(*, now: datetime | None = None) -> dict[str, int]:
 
 
 async def sync_source(
-    workspace_id: uuid.UUID, source_id: uuid.UUID, *, full: bool = False
+    workspace_id: uuid.UUID,
+    source_id: uuid.UUID,
+    *,
+    full: bool = False,
+    trigger: SyncTrigger = SyncTrigger.SCHEDULE,
 ) -> SyncReport:
     """One pass over one source. See the module docstring."""
     with workspace_scope(workspace_id):
         async with session_factory() as session:
-            return await _Pass(session, workspace_id, full=full).run(source_id)
+            return await _Pass(session, workspace_id, full=full, trigger=trigger).run(source_id)
 
 
 class _Pass:
-    def __init__(self, session: AsyncSession, workspace_id: uuid.UUID, *, full: bool) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        workspace_id: uuid.UUID,
+        *,
+        full: bool,
+        trigger: SyncTrigger,
+    ) -> None:
         self._session = session
         self._workspace_id = workspace_id
         self._full = full
+        self._trigger = trigger
+        self._runs = SyncRunRepository(session, workspace_id)
+        self._run: SyncRun | None = None
         self._sources = SourceService(session, workspace_id, actor_user_id=None)
         self._syncs = SourceSyncRepository(session, workspace_id)
         self._payloads = RawPayloadRepository(session, workspace_id)
@@ -267,6 +300,9 @@ class _Pass:
 
         was_failing = source.sync_status is SyncStatus.FAILED
         source.sync_status = SyncStatus.RUNNING
+        self._run = await self._runs.start(
+            source.id, trigger=self._trigger, full=self._full, at=datetime.now(UTC)
+        )
         await self._session.commit()
 
         failure: Diagnostic | None = None
@@ -281,6 +317,10 @@ class _Pass:
             failure = error.diagnostic
 
         self._conclude(source, failure, was_failing=was_failing)
+        self._run.status = SyncRunOutcome.FAILED if failure else SyncRunOutcome.SUCCEEDED
+        self._run.finished_at = datetime.now(UTC)
+        self._run.capability = None
+        self._run.error = failure.model_dump(mode="json") if failure else None
         await self._session.commit()
 
         report.status = "failed" if failure else "succeeded"
@@ -310,6 +350,11 @@ class _Pass:
             row.since = None
         row.status = SyncRunStatus.RUNNING
         row.last_started_at = started
+        if self._run is not None:
+            self._run.capability = capability.value
+            # A pass is full if it read a capability whole, asked or not: the
+            # first pass, a weekly slot, a forgotten cursor.
+            self._run.full_read = self._run.full_read or read_all
         await self._session.commit()
 
         count = 0
@@ -357,8 +402,13 @@ class _Pass:
             fetched_at=fetched_at,
             expires_at=expires_at(source.kind, fetched_at),
         )
-        # Counted as it is committed: a pass that fails later has still stored this.
+        # Counted as it is committed: a pass that fails later has still stored
+        # this — and a pass in progress shows how far it has got.
         row.records_total += len(records)
+        if self._run is not None:
+            self._run.records += len(records)
+            self._run.payloads += 1
+            self._run.bytes += stored.size_bytes
         await self._session.commit()
         return len(records)
 

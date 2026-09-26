@@ -118,7 +118,7 @@ async def test_the_activation_event_queues_a_pass_under_the_source_key(
     assert call["args"] == (str(acme["acme"]), source["id"])
     assert call["concurrency_key"] == f"sync:{source['id']}"
     # Full: a re-activation follows a change of scope or credentials.
-    assert call["job_kwargs"] == {"full": True}
+    assert call["job_kwargs"] == {"full": True, "trigger": "activation"}
 
 
 # ── the schedule ─────────────────────────────────────────────────────────────
@@ -174,7 +174,7 @@ async def test_an_admin_asks_for_a_pass_and_a_second_click_is_not_an_error(
 
     assert (first.status_code, first.json()) == (202, {"queued": True})
     assert (second.status_code, second.json()) == (202, {"queued": False})
-    assert enqueued[0]["job_kwargs"] == {"full": True}
+    assert enqueued[0]["job_kwargs"] == {"full": True, "trigger": "manual"}
     assert enqueued[0]["queue"].value == "leka:high"
 
 
@@ -287,6 +287,37 @@ async def test_under_way_means_a_worker_holds_it_not_that_a_row_says_so(
     running = (await client.get(f"{API}/ingestion/sources/{left['id']}/syncs")).json()
     assert running["pass_state"] == "running"
     assert running["capabilities"][0]["status"] == "running"
+
+
+async def test_the_passes_of_a_source_are_read_newest_first_by_its_members(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+    now = datetime.now(UTC)
+    await _set(
+        source["id"],
+        acme["acme"],
+        "INSERT INTO sync_runs (workspace_id, source_id, trigger, full_read, status, started_at, "
+        "finished_at, records, payloads, bytes) SELECT workspace_id, id, t, f, st, "
+        "CAST(:now AS timestamptz) - a, "
+        "CASE WHEN st = 'running' THEN NULL "
+        "ELSE CAST(:now AS timestamptz) - a + interval '1 minute' END, r, 1, 100 "
+        "FROM sources, (VALUES ('activation', true, 'succeeded', interval '2 hours', 40), "
+        "('schedule', false, 'running', interval '1 minute', 3)) AS v(t, f, st, a, r) "
+        "WHERE id = :s",
+        now=now,
+    )
+
+    _as(identity, acme, "member")
+    runs = (await client.get(f"{API}/ingestion/sources/{source['id']}/runs")).json()["data"]
+
+    assert [(run["trigger"], run["status"], run["records"]) for run in runs] == [
+        ("schedule", "running", 3),
+        ("activation", "succeeded", 40),
+    ]
+    _as(identity, acme, "other_admin")
+    assert (await client.get(f"{API}/ingestion/sources/{source['id']}/runs")).status_code == 404
 
 
 # ── backpressure (LEKA-353) ──────────────────────────────────────────────────

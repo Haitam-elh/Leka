@@ -8,7 +8,8 @@ A failed parse is data, not an exception to swallow. It is how we find out a
 vendor changed a payload shape.
 
 `raw_payloads` is the first of those tables; `source_syncs`, where each
-source's synchronisation stands, the second (LEKA-352). It is the row half of the split
+source's synchronisation stands, the second (LEKA-352); `sync_runs`, what
+each pass did, the third (LEKA-353). It is the row half of the split
 described in docs/adr/010-object-storage.md: the bytes live in the object
 store, and this is everything we know about them — where they came from, how
 big they are, what they hash to, and when they stop being ours to keep.
@@ -22,6 +23,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
@@ -205,3 +207,98 @@ class SourceSync(Base, WorkspaceScopedMixin):
     # The last diagnostic (leka.connectors.Diagnostic), already cleaned of
     # anything secret. Null once a pass succeeds.
     last_error: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+
+
+class SyncTrigger(enum.StrEnum):
+    """What started a pass."""
+
+    ACTIVATION = "activation"
+    SCHEDULE = "schedule"
+    MANUAL = "manual"
+
+
+class SyncRunOutcome(enum.StrEnum):
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    # Found `running` by the next pass: its worker died (leka/ingestion/sync.py).
+    ABANDONED = "abandoned"
+
+
+class SyncRun(Base, WorkspaceScopedMixin):
+    """One pass over one source, from start to end (LEKA-353).
+
+    `source_syncs` says where each capability stands; this says what each
+    pass did: what started it, whether it read everything, when it ran, how
+    far it got — updated batch by batch, which is what makes a pass in
+    progress observable — and how it ended.
+
+    PROVENANCE. A payload in `raw_payloads` carries its source and the moment
+    it was fetched; the pass that fetched it is the run of that source whose
+    [started_at, finished_at] holds that moment. One pass at a time per
+    source (sync:<source_id>) is what makes that unambiguous.
+    """
+
+    __tablename__ = "sync_runs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_id"],
+            ["sources.workspace_id", "sources.id"],
+            name="fk_sync_runs_workspace_source",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "trigger IN (" + ", ".join(f"'{s}'" for s in _statuses(SyncTrigger)) + ")",
+            name="trigger",
+        ),
+        CheckConstraint(
+            "status IN (" + ", ".join(f"'{s}'" for s in _statuses(SyncRunOutcome)) + ")",
+            name="status",
+        ),
+        CheckConstraint(
+            "records >= 0 AND payloads >= 0 AND bytes >= 0", name="counts_not_negative"
+        ),
+        CheckConstraint(
+            "finished_at IS NULL OR finished_at >= started_at", name="finished_after_started"
+        ),
+        # A source's history, newest first — the only way it is read.
+        Index("ix_sync_runs_source_started_at", "source_id", "started_at"),
+    )
+
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    trigger: Mapped[SyncTrigger] = mapped_column(
+        Enum(
+            SyncTrigger,
+            name="trigger",
+            native_enum=False,
+            length=50,
+            values_callable=_statuses,
+            create_constraint=False,
+        ),
+        nullable=False,
+    )
+    # Not `full`, a reserved word in SQL: an operator's query would fail on it.
+    full_read: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    status: Mapped[SyncRunOutcome] = mapped_column(
+        Enum(
+            SyncRunOutcome,
+            name="status",
+            native_enum=False,
+            length=50,
+            values_callable=_statuses,
+            create_constraint=False,
+        ),
+        nullable=False,
+        server_default=SyncRunOutcome.RUNNING.value,
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Progress, as each batch is committed.
+    capability: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    records: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    payloads: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+
+    # The diagnostic it ended on, cleaned of secrets.
+    error: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)

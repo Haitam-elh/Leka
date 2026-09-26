@@ -801,6 +801,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingestion/sources/{source_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Source Runs
+         * @description The source's passes, newest first — one still running shows how far it has got.
+         */
+        get: operations["source_runs_api_v1_ingestion_sources__source_id__runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1302,6 +1322,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[SyncRunRead] */
+        PageEnvelope_SyncRunRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["SyncRunRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[WorkspaceSummary] */
         PageEnvelope_WorkspaceSummary_: {
             /**
@@ -1627,6 +1660,57 @@ export interface components {
              * @description False when a pass is already queued or running for this source: it is already happening.
              */
             queued: boolean;
+        };
+        /**
+         * SyncRunRead
+         * @description One pass over a source: what started it, how far it got, how it ended.
+         */
+        SyncRunRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Trigger
+             * @description activation, schedule or manual.
+             */
+            trigger: string;
+            /**
+             * Full Read
+             * @description Read at least one capability whole, ignoring where the last pass stopped.
+             */
+            full_read: boolean;
+            /**
+             * Status
+             * @description running, succeeded, failed or abandoned.
+             */
+            status: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Capability
+             * @description What it is reading now, while it runs.
+             */
+            capability: string | null;
+            /** Records */
+            records: number;
+            /** Payloads */
+            payloads: number;
+            /** Bytes */
+            bytes: number;
+            /**
+             * Error
+             * @description The diagnostic it ended on.
+             */
+            error: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * SyncStatus
@@ -5791,6 +5875,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncSummary"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    source_runs_api_v1_ingestion_sources__source_id__runs_get: {
+        parameters: {
+            query?: {
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_SyncRunRead_"];
                 };
             };
             /** @description The request could not be understood. */

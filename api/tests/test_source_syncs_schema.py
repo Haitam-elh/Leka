@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -18,7 +19,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.connectors import Source, SourceKind
 from leka.db import session_factory, system_scope, workspace_scope
-from leka.ingestion import SourceSync, SourceSyncRepository, SyncRunStatus
+from leka.ingestion import (
+    SourceSync,
+    SourceSyncRepository,
+    SyncRun,
+    SyncRunStatus,
+    SyncTrigger,
+)
 from leka.platform import Workspace
 
 pytestmark = pytest.mark.integration
@@ -148,3 +155,52 @@ async def test_a_workspace_sees_only_its_own_syncs(session: AsyncSession) -> Non
     with workspace_scope(mine.id):
         assert [row.capability for row in await repository.for_source(my_source.id)] == ["commits"]
         assert await repository.for_source(their_source.id) == []
+
+
+# ── sync_runs (LEKA-353) ─────────────────────────────────────────────────────
+
+
+def _run(source: Source, **values: object) -> SyncRun:
+    run = SyncRun(
+        workspace_id=source.workspace_id,
+        source_id=source.id,
+        trigger=SyncTrigger.SCHEDULE,
+        full_read=False,
+        started_at=datetime.now(UTC),
+    )
+    for name, value in values.items():
+        setattr(run, name, value)
+    return run
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"trigger": "webhook"},
+        {"status": "paused"},
+        {"records": -1},
+        {"finished_at": datetime(2000, 1, 1, tzinfo=UTC)},
+    ],
+    ids=["unknown-trigger", "unknown-status", "negative-records", "finished-before-started"],
+)
+async def test_what_the_database_refuses_of_a_run(
+    session: AsyncSession, values: dict[str, object]
+) -> None:
+    source = await _source(session, await _workspace(session, "runs"))
+    session.add(_run(source, **values))
+
+    with pytest.raises((IntegrityError, DBAPIError, LookupError)):
+        await session.flush()
+
+
+async def test_a_run_goes_with_its_source(session: AsyncSession) -> None:
+    source = await _source(session, await _workspace(session, "run-cascade"))
+    session.add(_run(source))
+    await session.flush()
+
+    await session.delete(source)
+    await session.flush()
+
+    with system_scope():
+        left = await session.execute(select(SyncRun).where(SyncRun.source_id == source.id))
+    assert left.scalars().all() == []

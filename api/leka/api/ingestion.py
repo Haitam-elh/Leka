@@ -2,6 +2,7 @@
 
     POST /ingestion/sources/{id}/sync     "sync now" — source:manage
     GET  /ingestion/sources/{id}/syncs    a pass under way?, and each capability
+    GET  /ingestion/sources/{id}/runs     its passes, newest first (LEKA-353)
     GET  /ingestion/syncs                 one line per source, for a list
 
 A route validates, calls one service, and returns (architecture rule 6).
@@ -19,17 +20,23 @@ from fastapi import APIRouter, Depends, status
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
+from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.background import JobQueue
 from leka.connectors import Source, SourceNotFoundError, SourceService
 from leka.core.errors import ErrorCode
+from leka.db import SortableField
 from leka.governance import Permission, Principal, require_permission
 from leka.ingestion import (
     SourceSyncRead,
     SourceSyncRepository,
     SourceSyncs,
     SyncRequested,
+    SyncRun,
+    SyncRunRead,
+    SyncRunRepository,
     SyncRunStatus,
     SyncSummary,
+    SyncTrigger,
 )
 from leka.ingestion.sync import ABANDONED, SYNCABLE, enqueue_sync
 
@@ -64,7 +71,13 @@ async def sync_now(
     if source.status not in SYNCABLE:
         raise ApiError(409, ErrorCode.CONFLICT, "Only an activated source can be synchronised.")
     # High: a person is waiting for it.
-    queued = await enqueue_sync(principal.workspace_id, source.id, full=full, queue=JobQueue.HIGH)
+    queued = await enqueue_sync(
+        principal.workspace_id,
+        source.id,
+        full=full,
+        queue=JobQueue.HIGH,
+        trigger=SyncTrigger.MANUAL,
+    )
     return SyncRequested(queued=queued)
 
 
@@ -111,3 +124,28 @@ async def sync_summaries(session: SessionDep, principal: Reader) -> list[SyncSum
 async def _sources(session: SessionDep, principal: Principal) -> list[Source]:
     service = SourceService(session, principal.workspace_id, actor_user_id=principal.user_id)
     return list(await service.repository.list(service.repository.list_statement()))
+
+
+RUN_SORTS = SortCatalogue(
+    fields=(SortableField("started_at", SyncRun.started_at, "ix_sync_runs_source_started_at"),),
+    default="started_at",
+)
+
+
+@router.get("/sources/{source_id}/runs", response_model=PageEnvelope[SyncRunRead])
+async def source_runs(
+    source_id: uuid.UUID, session: SessionDep, principal: Reader, page: PageParams
+) -> PageEnvelope[SyncRunRead]:
+    """The source's passes, newest first — one still running shows how far it has got."""
+    await _source(session, principal, source_id)
+    result = await serve_page(
+        session,
+        SyncRunRepository(session, principal.workspace_id).history(source_id),
+        request=page,
+        catalogue=RUN_SORTS,
+        id_column=SyncRun.id,
+    )
+    return PageEnvelope(
+        data=[SyncRunRead.model_validate(run, from_attributes=True) for run in result.items],
+        next_cursor=result.next_cursor,
+    )
