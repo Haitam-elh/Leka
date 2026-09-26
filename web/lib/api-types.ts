@@ -988,7 +988,7 @@ export interface components {
          *     discovered for each source: a token may see repositories and not issues.
          * @enum {string}
          */
-        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "spaces" | "pages";
+        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "spaces" | "pages" | "databases";
         /** CatalogEntry */
         CatalogEntry: {
             key: components["schemas"]["SourceKind"];
@@ -1900,7 +1900,7 @@ export interface components {
          *     the database stopped checking this list in LEKA-344.
          * @enum {string}
          */
-        SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "linear" | "aws" | "azure" | "gcp" | "datadog" | "slack";
+        SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "linear" | "notion" | "aws" | "azure" | "gcp" | "datadog" | "slack";
         /**
          * SourceNormalisation
          * @description Where a source's normalisation stands.

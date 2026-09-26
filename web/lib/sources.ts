@@ -129,6 +129,7 @@ export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
   jira: "project",
   linear: "project",
   confluence: "docs",
+  notion: "docs",
   aws: "cloud",
   azure: "cloud",
   gcp: "cloud",
