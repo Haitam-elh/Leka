@@ -37,9 +37,9 @@ def test_one_module_alone_cannot_resolve_its_foreign_keys() -> None:
     assert "NoReferencedTableError" in alone.stderr
 
 
-def test_the_worker_registers_every_table_before_it_runs_a_job() -> None:
+def test_load_schema_registers_every_table() -> None:
     ready = _fresh(
-        "from leka.platform.worker import load_schema\n"
+        "from leka.db import load_schema\n"
         "load_schema()\n"
         "import leka.connectors\n"
         "from leka.db import Base\n"
@@ -66,3 +66,20 @@ def test_every_module_that_declares_a_table_is_in_the_registry() -> None:
     }
 
     assert declaring <= registered, f"not in leka/schema.py: {sorted(declaring - registered)}"
+
+
+def test_every_process_that_queries_registers_the_schema_first() -> None:
+    """The worker, and every task that can be run by hand (`python -m ...`)
+    and opens a session, calls load_schema() before it does anything."""
+    missing = []
+    for path in sorted(PACKAGE.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if 'if __name__ == "__main__"' not in source or "session_factory" not in source:
+            continue
+        entry = source.split('if __name__ == "__main__"', 1)[1]
+        if "load_schema()" not in entry:
+            missing.append(str(path.relative_to(PACKAGE.parent)))
+    worker = (PACKAGE / "platform" / "worker.py").read_text(encoding="utf-8")
+
+    assert missing == [], f"call load_schema() in the __main__ block of: {missing}"
+    assert "load_schema()" in worker.split("def main(", 1)[1]

@@ -31,7 +31,7 @@ from datetime import UTC, datetime
 import structlog
 from sqlalchemy import select
 
-from leka.db import session_factory, system_scope
+from leka.db import load_schema, session_factory, system_scope
 from leka.platform.models import Workspace, WorkspaceStatus
 from leka.platform.service import DELETION_GRACE_PERIOD
 from leka.platform.storage import object_store, workspace_prefix
@@ -117,4 +117,5 @@ def run_erase_workspaces_past_grace() -> dict[str, int]:
 
 
 if __name__ == "__main__":  # pragma: no cover
+    load_schema()  # every table, as the API has (leka/schema.py)
     run_erase_workspaces_past_grace()

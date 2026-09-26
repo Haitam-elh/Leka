@@ -35,7 +35,7 @@ import sys
 from sqlalchemy import select
 
 from leka.core.config import settings
-from leka.db import session_factory, system_scope, workspace_scope
+from leka.db import load_schema, session_factory, system_scope, workspace_scope
 from leka.identity.models import User
 from leka.identity.repository import UserRepository
 from leka.platform import (
@@ -176,4 +176,5 @@ async def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":  # pragma: no cover - the process itself
+    load_schema()  # every table, as the API has (leka/schema.py)
     sys.exit(asyncio.run(main()))

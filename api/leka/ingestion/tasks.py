@@ -31,7 +31,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 
-from leka.db import session_factory, system_scope
+from leka.db import load_schema, session_factory, system_scope
 from leka.ingestion.models import RawPayload
 from leka.ingestion.repository import RawPayloadSweeper
 from leka.platform.storage import ObjectStoreError, object_store
@@ -200,6 +200,13 @@ def run_reconcile(*, dry_run: bool = False) -> dict[str, int]:
     return asyncio.run(reconcile_orphaned_objects(dry_run=dry_run))
 
 
+async def _by_hand() -> None:
+    """Both sweeps in ONE loop: the connection pool belongs to the loop that
+    opened it, and a second asyncio.run() inherits connections of a closed one."""
+    await sweep_expired_payloads()
+    await reconcile_orphaned_objects()
+
+
 if __name__ == "__main__":  # pragma: no cover
-    run_sweep()
-    run_reconcile()
+    load_schema()  # every table, as the API has (leka/schema.py)
+    asyncio.run(_by_hand())

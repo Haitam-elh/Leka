@@ -32,6 +32,7 @@ from rq import Queue, Worker
 from leka.background import JobQueue, worker_connection
 from leka.core.config import settings
 from leka.core.logging import configure_logging
+from leka.db import load_schema
 from leka.platform.monitoring import configure_monitoring
 
 # Drained in this order, which is the only priority RQ has.
@@ -49,16 +50,6 @@ def queues_to_drain(names: Sequence[str]) -> tuple[JobQueue, ...]:
     return tuple(JobQueue(name) for name in names)
 
 
-def load_schema() -> None:
-    """Show SQLAlchemy every table before any job runs, as the API does.
-
-    In the worker, before RQ forks a work-horse per job: every job inherits
-    it. Imported here rather than at the top of this module because it
-    imports every module of LEKA, which the tests of this file do not need.
-    """
-    import leka.schema  # noqa: F401 — see leka/schema.py
-
-
 def main(argv: Sequence[str] = ()) -> None:
     queues = queues_to_drain(argv)
 
@@ -66,6 +57,7 @@ def main(argv: Sequence[str] = ()) -> None:
     # After logging, never before — the same order as the API's lifespan:
     # Sentry scrubs its events with the masker configure_logging builds.
     configure_monitoring(settings)
+    # Every table, before RQ forks a work-horse per job: they inherit it.
     load_schema()
 
     connection = worker_connection()
