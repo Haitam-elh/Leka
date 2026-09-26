@@ -98,3 +98,21 @@ class SyncRequested(BaseModel):
         description="False when a pass is already queued or running for this source: "
         "it is already happening."
     )
+
+
+class SyncRunRead(BaseModel):
+    """One pass over a source: what started it, how far it got, how it ended."""
+
+    id: uuid.UUID
+    trigger: str = Field(description="activation, schedule or manual.")
+    full_read: bool = Field(
+        description="Read at least one capability whole, ignoring where the last pass stopped."
+    )
+    status: str = Field(description="running, succeeded, failed or abandoned.")
+    started_at: datetime
+    finished_at: datetime | None
+    capability: str | None = Field(description="What it is reading now, while it runs.")
+    records: int
+    payloads: int
+    bytes: int
+    error: dict[str, object] | None = Field(description="The diagnostic it ended on.")

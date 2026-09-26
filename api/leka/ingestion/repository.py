@@ -12,14 +12,20 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, Result, Select, delete, func, or_, select
+from sqlalchemy import CursorResult, Result, Select, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import ACTIVE_JOB_STATUSES, JobRun, JobStatus
 from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
-from leka.ingestion.models import RawPayload, SourceSync
+from leka.ingestion.models import (
+    RawPayload,
+    SourceSync,
+    SyncRun,
+    SyncRunOutcome,
+    SyncTrigger,
+)
 
 
 def _affected_rows(result: Result[Any]) -> int:
@@ -209,6 +215,34 @@ class SourceSyncRepository(WorkspaceScopedRepository):
             )
         )
         return found.scalar_one()
+
+
+class SyncRunRepository(WorkspaceScopedRepository):
+    """The passes over a workspace's sources: one row each (LEKA-353)."""
+
+    async def start(
+        self, source_id: uuid.UUID, *, trigger: SyncTrigger, full: bool, at: datetime
+    ) -> SyncRun:
+        """A new pass. A run of this source still `running` is one whose worker
+        died — only one pass holds sync:<source_id> — so it is closed first,
+        as abandoned, at the moment it is found."""
+        await self._session.execute(
+            update(SyncRun)
+            .where(
+                SyncRun.workspace_id == self.workspace_id,
+                SyncRun.source_id == source_id,
+                SyncRun.status == SyncRunOutcome.RUNNING,
+            )
+            .values(status=SyncRunOutcome.ABANDONED, finished_at=at)
+        )
+        run = SyncRun(source_id=source_id, trigger=trigger, full_read=full, started_at=at)
+        self.add(run)
+        await self.flush()
+        return run
+
+    def history(self, source_id: uuid.UUID) -> Select[tuple[SyncRun]]:
+        """A source's passes, for pagination; newest first by default."""
+        return self.select(SyncRun).where(SyncRun.source_id == source_id)
 
 
 class SyncScheduleRepository:

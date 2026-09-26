@@ -59,6 +59,19 @@ while one is queued or running gets `already_active` / `{"queued": false}`,
 not a second pass. Only `active` and `degraded` sources are read: a source
 in `error` waits for a person, `disabled` for someone to switch it on.
 
+## What each pass leaves behind
+
+`sync_runs` (LEKA-353): one row per pass — its **trigger** (`activation`,
+`schedule`, `manual`), whether it **read in full** (asked, or because a
+capability was due), its start and end, and its **progress**, updated with
+every committed batch: the capability it is on, records, payloads, bytes.
+It ends `succeeded`, `failed` with the diagnostic, or **`abandoned`** — found
+still `running` by the next pass of the source, whose worker died.
+
+**Provenance.** A payload's row carries its source and when it was fetched;
+the pass that fetched it is that source's run whose start and end hold that
+moment — unambiguous, because one pass at a time holds `sync:<source_id>`.
+
 ## When a pass fails
 
 | The vendor's failure | Examples | What happens |
@@ -90,6 +103,7 @@ while it waits (or waits for a retry), read from the job runs — not from
 `source_syncs`, which only knows a pass started. A capability `running`
 with no pass running is shown as the failure the next pass will record.
 | `POST /ingestion/sources/{id}/sync?full=` | queue a pass; 409 if the source is not activated |
+| `GET /ingestion/sources/{id}/runs` | its passes, newest first: trigger, full read, start, end, progress (capability, records, payloads, bytes), outcome, error — paginated |
 
 **For operations** — SQL, across every workspace, not for customers:
 
@@ -109,6 +123,14 @@ GROUP BY s.id HAVING coalesce(max(y.last_succeeded_at), 'epoch') < now() - inter
 -- passes left "running" by a worker that died (the schedule retries them after an hour)
 SELECT source_id, capability, last_started_at FROM source_syncs
 WHERE status = 'running' AND last_started_at < now() - interval '1 hour';
+
+-- passes over the last day: how many, how they ended, what they read
+SELECT status, trigger, count(*), sum(records) AS records, pg_size_pretty(sum(bytes)) AS size
+FROM sync_runs WHERE started_at > now() - interval '1 day' GROUP BY 1, 2 ORDER BY 1, 2;
+
+-- passes running now, and how far each has got
+SELECT s.name, r.capability, r.records, r.payloads, now() - r.started_at AS running_for
+FROM sync_runs r JOIN sources s ON s.id = r.source_id WHERE r.status = 'running';
 
 -- the passes themselves, as job runs
 SELECT status, count(*) FROM job_runs WHERE job = 'leka.ingestion.sync.run_sync' GROUP BY 1;
