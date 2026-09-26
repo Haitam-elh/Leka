@@ -194,6 +194,11 @@ here would swell every backup and lengthen every restore. See
 [docs/data-lifecycle.md](data-lifecycle.md) for how long anything is kept and
 what happens when a customer leaves.
 
+**`source_syncs`** — how far each capability of each source has been read:
+the cursor the next incremental pass starts from (when the last successful
+one started), how many records it brought, how many passes in a row failed
+and why. One row per (source, capability); the sync of LEKA-352 writes it.
+
 ### Tenancy
 
 Every customer shares the same tables. **Every business table carries
