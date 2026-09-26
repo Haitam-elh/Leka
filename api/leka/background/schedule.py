@@ -77,6 +77,12 @@ SCHEDULE: tuple[Scheduled, ...] = (
     Scheduled(
         "source-health", "leka.connectors.health.run_health_checks", cron="5,20,35,50 * * * *"
     ),
+    # Offers a pass to every switched-on source not tried for an hour
+    # (LEKA-352). The passes themselves run on the default queue, one per
+    # source at a time.
+    Scheduled(
+        "source-sync", "leka.ingestion.sync.run_enqueue_due_syncs", cron="10,25,40,55 * * * *"
+    ),
 )
 
 

@@ -53,6 +53,7 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.background import Event, JobQueue, enqueue_job
 from leka.connectors import (
     Capability,
     Connector,
@@ -69,9 +70,13 @@ from leka.connectors import (
     SyncStatus,
     next_status,
 )
-from leka.db import session_factory, workspace_scope
+from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion.models import SourceSync, SyncRunStatus
-from leka.ingestion.repository import RawPayloadRepository, SourceSyncRepository
+from leka.ingestion.repository import (
+    RawPayloadRepository,
+    SourceSyncRepository,
+    SyncScheduleRepository,
+)
 from leka.ingestion.retention import expires_at
 from leka.platform import from_bytes, object_key, object_store
 
@@ -122,6 +127,84 @@ def run_sync(workspace_id: str, source_id: str, full: bool = False) -> dict[str,
     """Entry point for the job runner, which is synchronous."""
     report = asyncio.run(sync_source(uuid.UUID(workspace_id), uuid.UUID(source_id), full=full))
     return report.as_dict()
+
+
+# ── Starting a pass ─────────────────────────────────────────────────────────
+
+SYNC_JOB = "leka.ingestion.sync.run_sync"
+# How long after a pass was last tried the scheduler starts another.
+SYNC_INTERVAL = timedelta(hours=1)
+# Sources offered per scheduler pass: the rest are next tick's.
+SCHEDULE_BATCH = 200
+
+
+def concurrency_key(source_id: uuid.UUID) -> str:
+    """One pass per source at a time, whoever asked for it."""
+    return f"sync:{source_id}"
+
+
+async def enqueue_sync(
+    workspace_id: uuid.UUID,
+    source_id: uuid.UUID,
+    *,
+    full: bool = False,
+    queue: JobQueue = JobQueue.DEFAULT,
+) -> bool:
+    """Put a pass on the queue. False if one is already queued or running for
+    this source — someone clicking while the schedule runs it is not an error."""
+    run = await enqueue_job(
+        SYNC_JOB,
+        str(workspace_id),
+        str(source_id),
+        job_kwargs={"full": full},
+        for_workspace_id=workspace_id,
+        queue=queue,
+        concurrency_key=concurrency_key(source_id),
+    )
+    return run is not None
+
+
+def run_sync_for_event(event_id: str) -> str:
+    """`source.activated` (leka/background/routes.py): the first pass.
+
+    Published in the activation's own transaction, so it exists only if the
+    activation does — a pass enqueued from the request could start before
+    the request committed and find the source not yet active. It does not
+    read here: it enqueues, so the pass holds the source's key like any other.
+    """
+    return asyncio.run(_on_activated(uuid.UUID(event_id)))
+
+
+async def _on_activated(event_id: uuid.UUID) -> str:
+    with system_scope():
+        async with session_factory() as session:
+            event = await session.get(Event, event_id)
+    if event is None:
+        return "gone"
+    source_id = uuid.UUID(str(event.payload["source_id"]))
+    queued = await enqueue_sync(event.workspace_id, source_id)
+    return "queued" if queued else "already_active"
+
+
+def run_enqueue_due_syncs() -> dict[str, int]:
+    """Entry point for the schedule (leka/background/schedule.py)."""
+    return asyncio.run(enqueue_due_syncs())
+
+
+async def enqueue_due_syncs(*, now: datetime | None = None) -> dict[str, int]:
+    """Offer a pass to every switched-on source not tried for SYNC_INTERVAL."""
+    before = (now or datetime.now(UTC)) - SYNC_INTERVAL
+    with system_scope():
+        async with session_factory() as session:
+            due = await SyncScheduleRepository(session).due(
+                before=before, statuses=[s.value for s in SYNCABLE], limit=SCHEDULE_BATCH
+            )
+    result = {"queued": 0, "already_active": 0}
+    for workspace_id, source_id in due:
+        queued = await enqueue_sync(workspace_id, source_id)
+        result["queued" if queued else "already_active"] += 1
+    logger.info("syncs_scheduled", **result)
+    return result
 
 
 async def sync_source(

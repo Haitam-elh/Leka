@@ -1,0 +1,234 @@
+"""Starting a sync: the schedule, the activation, the "sync now" (LEKA-352).
+
+What these protect: a switched-on source is read without anyone asking — at
+once when it is activated, then when it has not been tried for an hour —
+never twice at a time, never while switched off; and the API lets an admin
+ask for a pass and anyone read how far each source has been read.
+
+The queue itself is not here (test_background_e2e.py is): what is asserted
+is what would have been enqueued, captured where `enqueue_job` is called.
+"""
+
+# ruff: noqa: F811 — the fixtures of test_sources_api are imported to be requested by name.
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy import select, text
+
+from leka.background import Event
+from leka.connectors import Source, SourceStatus
+from leka.db import session_factory, system_scope, workspace_scope
+from leka.ingestion import SourceSync
+from leka.ingestion import sync as sync_module
+from tests.conftest import FakeIdentity, error_code
+from tests.test_sources_api import _as, _create, acme, fake_connector  # noqa: F401 — fixtures
+
+pytestmark = pytest.mark.integration
+
+API = "/api/v1"
+
+
+@pytest.fixture
+def enqueued(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    """Every pass that would have been put on the queue, instead of the queue."""
+    calls: list[dict[str, Any]] = []
+    active: set[str] = set()
+
+    async def fake_enqueue_job(job: str, *args: object, **kwargs: Any) -> object | None:
+        key = kwargs["concurrency_key"]
+        if key in active:
+            return None
+        active.add(key)
+        calls.append({"job": job, "args": args, **kwargs})
+        return object()
+
+    monkeypatch.setattr(sync_module, "enqueue_job", fake_enqueue_job)
+    return calls
+
+
+async def _activated(client: AsyncClient) -> dict[str, Any]:
+    source = await _create(client, display_name=f"Fake {uuid.uuid4().hex[:6]}")
+    url = f"{API}/sources/{source['id']}"
+    await client.post(f"{url}/test")
+    activated: dict[str, Any] = (await client.post(f"{url}/activate")).json()
+    assert activated["status"] == "active"
+    return activated
+
+
+async def _set(source_id: str, workspace_id: uuid.UUID, sql: str, **values: object) -> None:
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            await session.execute(text(sql), {"s": uuid.UUID(source_id), **values})
+            await session.commit()
+
+
+# ── the activation ───────────────────────────────────────────────────────────
+
+
+async def test_activating_a_source_publishes_its_first_sync_with_the_change(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+
+    with system_scope():
+        async with session_factory() as session:
+            events = (
+                (
+                    await session.execute(
+                        select(Event).where(
+                            Event.workspace_id == acme["acme"], Event.type == "source.activated"
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+    assert [event.payload for event in events] == [{"source_id": source["id"]}]
+
+
+async def test_the_activation_event_queues_a_pass_under_the_source_key(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    enqueued: list[dict[str, Any]],
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+    with system_scope():
+        async with session_factory() as session:
+            event = (
+                (await session.execute(select(Event).where(Event.type == "source.activated")))
+                .scalars()
+                .first()
+            )
+    assert event is not None
+
+    assert await sync_module._on_activated(event.id) == "queued"
+    # Twice (dispatch is at-least-once): one pass, not two.
+    assert await sync_module._on_activated(event.id) == "already_active"
+
+    (call,) = enqueued
+    assert call["job"] == "leka.ingestion.sync.run_sync"
+    assert call["args"] == (str(acme["acme"]), source["id"])
+    assert call["concurrency_key"] == f"sync:{source['id']}"
+
+
+# ── the schedule ─────────────────────────────────────────────────────────────
+
+
+async def test_the_schedule_offers_what_was_not_tried_for_an_hour(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    enqueued: list[dict[str, Any]],
+) -> None:
+    _as(identity, acme, "admin")
+    never = await _activated(client)
+    recent = await _activated(client)
+    stale = await _activated(client)
+    off = await _activated(client)
+    await client.post(f"{API}/sources/{off['id']}/disable")
+    draft = await _create(client, display_name="Draft")
+
+    now = datetime.now(UTC)
+    for source, tried in ((recent, now - timedelta(minutes=10)), (stale, now - timedelta(hours=3))):
+        await _set(
+            source["id"],
+            acme["acme"],
+            "INSERT INTO source_syncs (workspace_id, source_id, capability, last_started_at) "
+            "SELECT workspace_id, id, 'issues', :at FROM sources WHERE id = :s",
+            at=tried,
+        )
+
+    result = await sync_module.enqueue_due_syncs(now=now)
+
+    offered = {call["args"][1] for call in enqueued}
+    assert {never["id"], stale["id"]} <= offered
+    assert not {recent["id"], off["id"], draft["id"]} & offered
+    assert result["queued"] >= 2
+
+
+# ── the API ──────────────────────────────────────────────────────────────────
+
+
+async def test_an_admin_asks_for_a_pass_and_a_second_click_is_not_an_error(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    enqueued: list[dict[str, Any]],
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+    url = f"{API}/ingestion/sources/{source['id']}/sync"
+
+    first = await client.post(url, params={"full": "true"})
+    second = await client.post(url)
+
+    assert (first.status_code, first.json()) == (202, {"queued": True})
+    assert (second.status_code, second.json()) == (202, {"queued": False})
+    assert enqueued[0]["job_kwargs"] == {"full": True}
+    assert enqueued[0]["queue"].value == "leka:high"
+
+
+async def test_only_an_activated_source_can_be_synchronised(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    draft = await _create(client)
+
+    refused = await client.post(f"{API}/ingestion/sources/{draft['id']}/sync")
+
+    assert refused.status_code == 409
+    assert error_code(refused) == "conflict"
+
+
+async def test_a_member_reads_how_far_sources_were_read_but_cannot_start_a_pass(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+    at = datetime.now(UTC)
+    await _set(
+        source["id"],
+        acme["acme"],
+        "INSERT INTO source_syncs (workspace_id, source_id, capability, records_total, "
+        "last_succeeded_at, status) SELECT workspace_id, id, c, n, :at, 'idle' FROM sources, "
+        "(VALUES ('commits', 40), ('issues', 2)) AS v(c, n) WHERE id = :s",
+        at=at,
+    )
+
+    _as(identity, acme, "member")
+    syncs = (await client.get(f"{API}/ingestion/sources/{source['id']}/syncs")).json()
+    summary = (await client.get(f"{API}/ingestion/syncs")).json()
+    refused = await client.post(f"{API}/ingestion/sources/{source['id']}/sync")
+
+    assert [(row["capability"], row["records_total"]) for row in syncs] == [
+        ("commits", 40),
+        ("issues", 2),
+    ]
+    assert [(row["source_id"], row["records_total"]) for row in summary] == [(source["id"], 42)]
+    assert refused.status_code == 403
+
+
+async def test_another_workspace_cannot_read_or_start_a_sync(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+
+    _as(identity, acme, "other_admin")
+    assert (await client.get(f"{API}/ingestion/sources/{source['id']}/syncs")).status_code == 404
+    assert (await client.post(f"{API}/ingestion/sources/{source['id']}/sync")).status_code == 404
+    assert (await client.get(f"{API}/ingestion/syncs")).json() == []
+
+
+def test_the_sync_does_not_read_a_source_waiting_for_a_person() -> None:
+    assert SourceStatus.ERROR not in sync_module.SYNCABLE
+    assert SourceStatus.DISABLED not in sync_module.SYNCABLE
+    assert Source is not None and SourceSync is not None

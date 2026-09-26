@@ -12,10 +12,11 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, Result, Select, delete, select
+from sqlalchemy import CursorResult, Result, Select, delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
 from leka.ingestion.models import RawPayload, SourceSync
 
@@ -157,6 +158,20 @@ class SourceSyncRepository(WorkspaceScopedRepository):
             .order_by(SourceSync.capability)
         )
 
+    async def summaries(self) -> Sequence[tuple[uuid.UUID, int, datetime | None]]:
+        """Per source of this workspace: records brought so far, and the last
+        success of any of its capabilities. One query for a whole list."""
+        rows = await self._session.execute(
+            select(
+                SourceSync.source_id,
+                func.sum(SourceSync.records_total),
+                func.max(SourceSync.last_succeeded_at),
+            )
+            .where(SourceSync.workspace_id == self.workspace_id)
+            .group_by(SourceSync.source_id)
+        )
+        return [(source_id, int(total), last) for source_id, total, last in rows.all()]
+
     async def get_or_create(self, source_id: uuid.UUID, capability: str) -> SourceSync:
         await self._session.execute(
             insert(SourceSync)
@@ -169,6 +184,46 @@ class SourceSyncRepository(WorkspaceScopedRepository):
             )
         )
         return found.scalar_one()
+
+
+class SyncScheduleRepository:
+    """Which sources are due a pass, across every workspace. For the scheduler.
+
+    Not workspace-scoped, like RawPayloadSweeper: it answers a question about
+    all of them, and runs under system_scope, declared by its caller.
+
+    DUE MEANS NOT TRIED FOR `interval`, not "not succeeded for": a source
+    failing for a reason that needs a person would otherwise be tried at
+    every scheduler tick. The last attempt is the newest `last_started_at`
+    of its capabilities; a source never tried has none, and is due at once.
+    A pass whose worker died leaves a `running` behind but an old start, so
+    it is due again too.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def due(
+        self, *, before: datetime, statuses: Sequence[str], limit: int
+    ) -> Sequence[tuple[uuid.UUID, uuid.UUID]]:
+        """(workspace_id, source_id) of the switched-on sources last tried before `before`."""
+        last_tried = (
+            select(SourceSync.source_id, func.max(SourceSync.last_started_at).label("at"))
+            .group_by(SourceSync.source_id)
+            .subquery()
+        )
+        statement = (
+            select(Source.workspace_id, Source.id)
+            .outerjoin(last_tried, last_tried.c.source_id == Source.id)
+            .where(
+                Source.status.in_(statuses),
+                or_(last_tried.c.at.is_(None), last_tried.c.at < before),
+            )
+            .order_by(last_tried.c.at.asc().nulls_first())
+            .limit(limit)
+        )
+        rows = await self._session.execute(statement)
+        return [(workspace_id, source_id) for workspace_id, source_id in rows.all()]
 
 
 class RawPayloadSweeper:

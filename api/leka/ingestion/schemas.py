@@ -48,3 +48,40 @@ class NormalisedRelationship(BaseModel):
     to_external_id: str
     source_id: uuid.UUID
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+# ── The sync, over the API (LEKA-352) ────────────────────────────────────────
+
+
+class SourceSyncRead(BaseModel):
+    """Where one capability of one source stands."""
+
+    capability: str
+    status: str = Field(description="idle, running or failed.")
+    since: datetime | None = Field(
+        description="When the last successful pass started: where the next one reads from."
+    )
+    last_started_at: datetime | None
+    last_succeeded_at: datetime | None
+    last_full_at: datetime | None = Field(description="The last pass that read everything.")
+    records_last_run: int
+    records_total: int
+    consecutive_failures: int
+    last_error: dict[str, object] | None = Field(
+        description="The last diagnostic, cleaned of secrets. Null once a pass succeeds."
+    )
+
+
+class SyncSummary(BaseModel):
+    """One source's sync, in a line: what a list shows."""
+
+    source_id: uuid.UUID
+    records_total: int
+    last_succeeded_at: datetime | None
+
+
+class SyncRequested(BaseModel):
+    queued: bool = Field(
+        description="False when a pass is already queued or running for this source: "
+        "it is already happening."
+    )

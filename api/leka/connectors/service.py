@@ -22,6 +22,7 @@ import structlog
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.exc import IntegrityError
 
+from leka.background import publish_event
 from leka.connectors.base import (
     TEST_BUDGET_SECONDS,
     ConnectionTestResult,
@@ -100,6 +101,7 @@ class SourceService:
         transport: httpx.AsyncBaseTransport | None = None,
         secrets: SecretStore | None = None,
     ) -> None:
+        self._session = session
         self._sources = SourceRepository(session, workspace_id)
         self._events = SourceEventRepository(session, workspace_id)
         self._secrets: SecretStore = secrets or DatabaseFernetSecretStore(
@@ -226,6 +228,11 @@ class SourceService:
             raise ActivationRefusedError(str(source.id))
         source.status = new_status
         self._record(source, SourceEventType.ACTIVATED)
+        # In this transaction: the first sync starts only if the activation
+        # is committed (leka/ingestion/sync.py, run_sync_for_event).
+        await publish_event(
+            self._session, source.workspace_id, "source.activated", {"source_id": str(source.id)}
+        )
         return source
 
     async def disable(self, source: Source) -> Source:
