@@ -66,6 +66,9 @@ class Capability(enum.StrEnum):
     CLUSTERS = "clusters"
     NETWORKS = "networks"
     LOAD_BALANCERS = "load_balancers"
+    # Documentation tools (LEKA-346).
+    SPACES = "spaces"
+    PAGES = "pages"
 
 
 class ConnectorManifest(BaseModel):

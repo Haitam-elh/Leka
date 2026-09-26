@@ -40,6 +40,7 @@ from leka.db import session_factory, system_scope
 from leka.main import app
 from leka.platform import secret_box
 from tests.conftest import FakeIdentity, error_code
+from tests.test_confluence_connector import Confluence
 from tests.test_github_connector import github
 from tests.test_jira_connector import EMAIL as JIRA_EMAIL
 from tests.test_jira_connector import TOKEN as JIRA_TOKEN
@@ -543,6 +544,58 @@ async def test_only_an_admin_connects_jira_and_the_token_never_comes_back(
     assert (await client.post(f"{url}/test")).status_code == 404
     # Nothing of the above reached Jira: refusals happen before a request.
     assert jira_api.requests == []
+
+
+# ── Confluence, end to end ───────────────────────────────────────────────────
+
+
+@pytest.fixture
+def confluence_api() -> Iterator[Confluence]:
+    confluence = Confluence()
+    app.dependency_overrides[get_connector_transport] = lambda: httpx.MockTransport(confluence)
+    yield confluence
+    app.dependency_overrides.pop(get_connector_transport, None)
+
+
+async def test_confluence_end_to_end(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    confluence_api: Confluence,
+) -> None:
+    _as(identity, acme, "admin")
+    catalog = (await client.get(f"{API}/connectors/catalog")).json()
+    entry = next(item for item in catalog if item["key"] == "confluence")
+    assert (entry["category"], entry["read_only"]) == ("docs", True)
+
+    body = {**_jira("acme.atlassian.net"), "type": "confluence", "display_name": "Wiki"}
+    source = await _create(client, **body)
+    assert source["config"] == {"site": "acme", "spaces": None}
+    url = f"{API}/sources/{source['id']}"
+
+    tested = (await client.post(f"{url}/test")).json()
+    assert tested["ok"] is True
+    assert sorted(tested["source"]["capabilities"]) == ["pages", "spaces"]
+
+    offered = (await client.get(f"{url}/scope/options")).json()
+    assert [option["key"] for option in offered["options"]] == ["ENG", "OPS"]
+    scoped = await client.patch(url, json={"config": {"site": "acme", "spaces": ["ENG"]}})
+    assert scoped.json()["config"]["spaces"] == ["ENG"]
+    unknown = await client.patch(url, json={"config": {"site": "acme", "spaces": ["SEC"]}})
+    assert unknown.status_code == 200  # saved; the test is what checks it exists
+    failed = (await client.post(f"{url}/test")).json()
+    assert failed["ok"] is False
+    assert failed["diagnostic"]["code"] == "NOT_FOUND"
+
+    await client.patch(url, json={"config": {"site": "acme", "spaces": ["ENG"]}})
+    assert (await client.post(f"{url}/test")).json()["ok"] is True
+    assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+    assert (await client.post(f"{url}/health-check")).json()["health_status"] == "healthy"
+    assert {request.url.host for request in confluence_api.requests} == {"acme.atlassian.net"}
+
+    _as(identity, acme, "member")
+    assert (await client.get(f"{url}/scope/options")).status_code == 403
+    assert JIRA_TOKEN not in (await client.get(url)).text
 
 
 async def test_a_refused_scope_listing_is_an_answer_with_a_diagnostic(

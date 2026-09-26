@@ -4,7 +4,7 @@ How LEKA connects to a customer's systems — GitHub today, Jira, AWS and the
 rest next — through one model. LEKA-344. The decisions behind it are in
 [ADR 015](../adr/015-connector-framework.md); adding a connector is
 [a tutorial of its own](adding-a-connector.md). What GitHub and GitLab ask
-for and read: [code-platforms.md](code-platforms.md); Jira:
+for and read: [code-platforms.md](code-platforms.md); Jira and Confluence:
 [project-and-documentation.md](project-and-documentation.md).
 
 **LEKA only reads.** No connector writes to a customer's system: the
