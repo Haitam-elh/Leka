@@ -211,7 +211,9 @@ function Greeting({ load }: { load: Load }) {
   const t = useDictionary();
   const { locale } = useLocale();
   const user = useCurrentUser();
-  const name = capitalise(user?.email.split("@")[0] ?? "");
+  // The first name given at registration; an account made before it was
+  // asked is greeted by the first part of its address until it gives one.
+  const name = user?.first_name?.trim() || capitalise(user?.email.split("@")[0] ?? "");
   const today = capitalise(
     new Intl.DateTimeFormat(intlLocale(locale), {
       weekday: "long",

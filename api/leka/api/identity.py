@@ -38,6 +38,7 @@ from leka.identity import (
     LoginRequest,
     MeResponse,
     PasswordRejectedError,
+    ProfileUpdate,
     RecoveryAccepted,
     RegisterRequest,
     RegistrationAccepted,
@@ -284,6 +285,27 @@ async def read_me(
     if user is None:  # pragma: no cover - cascade makes this unreachable
         raise _refuse(AuthErrorCode.SESSION_EXPIRED, "Your session has expired.")
     return await _me(user, current, MembershipResolver(db))
+
+
+@router.patch("/me", response_model=UserRead)
+async def update_me(
+    payload: ProfileUpdate,
+    current: RequiredSession,
+    db: SessionDep,
+) -> UserRead:
+    """Change who I said I am — only the fields sent.
+
+    How an account made before registration asked gets a name, and how
+    anyone corrects theirs. The address is not here: changing it needs the
+    new one proven, which is another flow.
+    """
+    user = await UserRepository(db).get(current.user_id)
+    if user is None:  # pragma: no cover - cascade makes this unreachable
+        raise _refuse(AuthErrorCode.SESSION_EXPIRED, "Your session has expired.")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(user, field, value)
+    await db.flush()
+    return UserRead.model_validate(user)
 
 
 async def _me(user: User, session: Session, memberships: MembershipResolver) -> MeResponse:

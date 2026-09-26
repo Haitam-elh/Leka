@@ -304,6 +304,84 @@ async def test_registering_again_never_rewrites_who_the_owner_said_they_were(
     assert found.one() == ("Nora", "Acme")
 
 
+async def test_someone_signed_in_changes_only_what_they_send(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await _sign_in(client, "nora@acme.example")
+
+    changed = await client.patch(
+        f"{API}/me", json={"first_name": " Nora-Aïcha ", "job_title": "CTO"}
+    )
+
+    assert changed.status_code == 200, changed.text
+    user = (await client.get(f"{API}/me")).json()["user"]
+    assert (user["first_name"], user["last_name"], user["company"]) == (
+        "Nora-Aïcha",
+        "Diallo",
+        "Acme",
+    )
+    assert user["job_title"] == "CTO"
+
+    cleared = await client.patch(f"{API}/me", json={"job_title": None})
+    assert cleared.json()["job_title"] is None
+
+
+async def test_an_account_from_before_names_gets_one(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    """The accounts made before registration asked: how they get a name."""
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    with system_scope():
+        async with session_factory() as session:
+            await session.execute(
+                text("UPDATE users SET first_name = NULL, last_name = NULL, company = NULL")
+            )
+            await session.commit()
+    await _sign_in(client, "nora@acme.example")
+
+    await client.patch(
+        f"{API}/me", json={"first_name": "Haitam", "last_name": "E.", "company": "LEKA"}
+    )
+
+    user = (await client.get(f"{API}/me")).json()["user"]
+    assert (user["first_name"], user["last_name"], user["company"]) == ("Haitam", "E.", "LEKA")
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"first_name": None},
+        {"company": "   "},
+        {"last_name": "D\x1b[2J"},
+        {"company_size": "tiny"},
+        {"email": "mallory@evil.example"},
+        {"password": "a brand new passphrase"},
+    ],
+)
+async def test_a_change_that_would_empty_or_widen_the_profile_is_refused(
+    client: AsyncClient, mailbox: CapturingEmailSender, body: dict[str, object]
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await _sign_in(client, "nora@acme.example")
+
+    response = await client.patch(f"{API}/me", json=body)
+
+    assert response.status_code == 422
+    user = (await client.get(f"{API}/me")).json()["user"]
+    assert (user["email"], user["first_name"], user["company"]) == (
+        "nora@acme.example",
+        "Nora",
+        "Acme",
+    )
+
+
+async def test_nobody_changes_a_profile_without_a_session(client: AsyncClient) -> None:
+    response = await client.patch(f"{API}/me", json={"first_name": "Mallory"})
+
+    assert response.status_code == 401
+
+
 async def test_addresses_are_case_insensitive(
     client: AsyncClient, mailbox: CapturingEmailSender
 ) -> None:

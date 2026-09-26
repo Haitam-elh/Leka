@@ -163,7 +163,10 @@ name and company, required; role and company size, if they chose to say.
 Nothing else is asked. They are kept on `users`, shown to that person and to
 whoever runs `python -m leka.identity.admin accounts` — to know who is asking
 for access before granting it — and never rewritten by a later registration
-with the same address, which anyone can type. Control and formatting
+with the same address, which anyone can type. Its owner changes it, signed
+in, from the account menu (`PATCH /auth/me`): the only way an account made
+before registration asked gets a name. The address is not changeable there —
+a new one would have to be proven first. Control and formatting
 characters are refused: a name travels into e-mails and into an operator's
 terminal, where an escape sequence would be a stranger typing on their
 screen.

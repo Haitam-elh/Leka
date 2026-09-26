@@ -18,7 +18,7 @@ import unicodedata
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from leka.core.security import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH
 from leka.identity.models import CompanySize
@@ -129,6 +129,36 @@ class AccountProfile(BaseModel):
 
 class RegisterRequest(_EmailField, _PasswordField, AccountProfile):
     pass
+
+
+class ProfileUpdate(BaseModel):
+    """What someone changes about themselves. Only the fields sent change.
+
+    The three the form requires can be changed, never emptied; the role and
+    the company size can be cleared with null. Accounts made before
+    registration asked start with none, and this is how they get a name.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str | None = Field(default=None, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
+    company: str | None = Field(default=None, max_length=200)
+    job_title: str | None = Field(default=None, max_length=100)
+    company_size: CompanySize | None = None
+
+    @field_validator("first_name", "last_name", "company", "job_title", mode="before")
+    @classmethod
+    def _text(cls, value: object) -> object:
+        return _plain_text(value) if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def _required_stay_filled(self) -> ProfileUpdate:
+        for name in ("first_name", "last_name", "company"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                msg = f"{name} can be changed, not emptied"
+                raise ValueError(msg)
+        return self
 
 
 class LoginRequest(_EmailField):
