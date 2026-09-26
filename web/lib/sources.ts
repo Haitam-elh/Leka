@@ -25,6 +25,7 @@ export type SourceUpdate = components["schemas"]["SourceUpdate"];
 export type SourceSync = components["schemas"]["SourceSyncRead"];
 export type SourceSyncs = components["schemas"]["SourceSyncs"];
 export type SyncSummary = components["schemas"]["SyncSummary"];
+export type SyncRun = components["schemas"]["SyncRunRead"];
 
 type Page<T> = { data: T[]; next_cursor?: string | null };
 
@@ -75,6 +76,9 @@ export const sources = {
   syncs: (sourceId: string) => apiFetch<SourceSyncs>(`/ingestion/sources/${sourceId}/syncs`),
   /** One line per source that has been read: records so far, last success. */
   syncSummaries: () => apiFetch<SyncSummary[]>("/ingestion/syncs"),
+  /** Its passes, newest first (LEKA-353). */
+  runs: (sourceId: string, limit = 10) =>
+    apiFetch<Page<SyncRun>>(`/ingestion/sources/${sourceId}/runs?limit=${limit}`),
 };
 
 /**

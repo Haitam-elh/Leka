@@ -3,7 +3,9 @@
 How a connected source's data reaches LEKA, how often, what happens when it
 fails, and how to see all of it. LEKA-352. The code is
 [`leka/ingestion/sync.py`](../api/leka/ingestion/sync.py); it runs on the
-background loop described in [background.md](background.md).
+background loop described in [background.md](background.md). What each link
+promises the next — record, payload, provenance, guarantees — is
+[collection.md](collection.md).
 
 ---
 

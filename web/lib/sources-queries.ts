@@ -16,6 +16,7 @@ export const sourceKeys = {
   catalog: () => ["connectors", "catalog"] as const,
   syncs: (id: string) => [...sourceKeys.all, "syncs", id] as const,
   syncSummaries: () => [...sourceKeys.all, "sync-summaries"] as const,
+  runs: (id: string) => [...sourceKeys.all, "runs", id] as const,
 };
 
 export function useSources() {
@@ -74,5 +75,15 @@ export function useSyncSummaries() {
     queryKey: sourceKeys.syncSummaries(),
     queryFn: async () =>
       new Map((await sources.syncSummaries()).map((line) => [line.source_id, line])),
+  });
+}
+
+/** A source's latest passes. Polled while the newest one runs, so its
+ * progress — the capability, the records — is seen moving. */
+export function useSourceRuns(id: string) {
+  return useQuery({
+    queryKey: sourceKeys.runs(id),
+    queryFn: async () => (await sources.runs(id)).data,
+    refetchInterval: (query) => (query.state.data?.[0]?.status === "running" ? 5_000 : false),
   });
 }
