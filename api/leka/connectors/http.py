@@ -48,7 +48,8 @@ class VendorHttp:
     ) -> None:
         """`in_body`: for vendors that page in the body rather than the Link
         header — the fields holding the items and the next page's URL,
-        ("values", "next") for Bitbucket."""
+        ("values", "next") for Bitbucket, ("results", "_links.next") for
+        Confluence: a field may be a path."""
         self._client = client
         self._secret = secret
         self._refuse = refuse
@@ -120,6 +121,8 @@ class VendorHttp:
         branch's commits, where a rebase or an old branch merged in puts an
         older date before newer ones. Older items are skipped, not a reason
         to stop; the listing ends after a page with nothing newer at all.
+
+        `updated_field` may be a path: "version.createdAt".
         """
         url: str | None = path
         query: Params | None = {**self._page, **(params or {})}
@@ -128,10 +131,10 @@ class VendorHttp:
             if response.status_code == empty:
                 return
             body = response.json()
-            page = body[self._in_body[0]] if self._in_body else body
+            page = (dig(body, self._in_body[0]) or []) if self._in_body else body
             skipped = 0
             for item in page:
-                updated = parse_timestamp(item.get(updated_field))
+                updated = parse_timestamp(dig(item, updated_field))
                 if stop_before and (updated is None or updated < stop_before):
                     return
                 if skip_before and updated is not None and updated < skip_before:
@@ -143,22 +146,28 @@ class VendorHttp:
             url, query = self._next_page(response, body), None  # the link carries the query
 
     def _next_page(self, response: httpx.Response, body: Any) -> str | None:
-        """The next page — only if it is on the host the secret was meant for."""
+        """The next page — only if it is on the host the secret was meant for,
+        over the same scheme.
+
+        A relative link ("/wiki/api/v2/spaces?cursor=…", Confluence's) is
+        read against the base URL; an absolute one, or a protocol-relative
+        "//elsewhere", must land on the same host all the same.
+        """
         if self._in_body:
-            found = body.get(self._in_body[1])
+            found = dig(body, self._in_body[1])
         else:
             found = response.links.get("next", {}).get("url")
         if not found:
             return None
-        link = str(found)
-        host = httpx.URL(link).host
-        if host != self._client.base_url.host:
+        base = self._client.base_url
+        link = base.join(str(found))
+        if (link.scheme, link.host) != (base.scheme, base.host):
             raise diagnose(
                 DiagnosticCode.PROVIDER_ERROR,
-                detail=f"pagination points to another host: {host}",
+                detail=f"pagination points to another host: {link.scheme}://{link.host}",
                 secrets=[self._secret],
             )
-        return link
+        return str(link)
 
     async def probe(
         self, paths: Mapping[Capability, str], params: Params | None = None
@@ -217,6 +226,16 @@ def retry_after(response: httpx.Response, reset_header: str | None = None) -> in
         return int(response.headers["retry-after"])
     reset = response.headers.get(reset_header) if reset_header else None
     return max(0, int(reset) - int(time.time())) if reset else None
+
+
+def dig(item: Any, path: str) -> Any:
+    """`item["version"]["createdAt"]` for "version.createdAt"; None where a
+    step is missing."""
+    for step in path.split("."):
+        if not isinstance(item, dict):
+            return None
+        item = item.get(step)
+    return item
 
 
 def parse_timestamp(value: object) -> datetime | None:
