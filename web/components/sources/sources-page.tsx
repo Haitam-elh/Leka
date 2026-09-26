@@ -1,11 +1,13 @@
 "use client";
 
-import { CircleAlert, Clock, FileText, type LucideIcon, Plug, RefreshCw } from "lucide-react";
+import { CircleAlert, Clock, FileText, type LucideIcon, Plug, Plus, RefreshCw } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { cn } from "cn";
 import { SearchInput } from "@/components/forms/search-input";
+import { AddSourceDialog } from "@/components/sources/add-source-dialog";
+import { Button } from "@/components/ui/button";
 import { type KnowledgeColumn, KnowledgeTable } from "@/components/knowledge/knowledge-table";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { timeAgo } from "@/components/knowledge/time";
@@ -52,6 +54,14 @@ export function SourcesPage() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const ownerOf = useOwnerOf();
+  const canManage = usePermissions()?.includes("source:manage") ?? false;
+  const [adding, setAdding] = useState(false);
+  const addButton = canManage ? (
+    <Button onClick={() => setAdding(true)}>
+      <Plus aria-hidden="true" />
+      {t.sources.add.open}
+    </Button>
+  ) : null;
 
   const all = list.data ?? [];
   const shown = all.filter(
@@ -65,13 +75,19 @@ export function SourcesPage() {
         title={t.sources.title}
         subtitle={t.sources.subtitle}
         breadcrumb={buildBreadcrumb(pathname, t)}
+        actions={all.length > 0 ? addButton : null}
+      />
+      <AddSourceDialog
+        open={adding}
+        onOpenChange={setAdding}
+        onDone={(done) => setSelectedId(done.id)}
       />
       {list.isPending ? (
         <LoadingState size="page" />
       ) : list.isError ? (
         <ErrorState error={list.error} onRetry={() => void list.refetch()} size="page" />
       ) : all.length === 0 ? (
-        <NoSources />
+        <NoSources action={addButton} />
       ) : (
         <div className="flex flex-col gap-5">
           <Stats sources={all} />
@@ -381,14 +397,14 @@ function summary(t: Dictionary, source: Source): string {
   return [sourceTitle(source.type), reads.join(", ")].filter(Boolean).join(" · ");
 }
 
-function NoSources() {
+function NoSources({ action }: { action: React.ReactNode }) {
   const t = useDictionary();
-  const canManage = usePermissions()?.includes("source:manage") ?? false;
   return (
     <StatePanel
       icon={Plug}
       title={t.sources.empty.title}
-      description={canManage ? t.sources.empty.manager : t.sources.empty.reader}
+      description={action ? t.sources.empty.manager : t.sources.empty.reader}
+      actions={action}
       size="page"
     />
   );

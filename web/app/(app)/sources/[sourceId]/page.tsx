@@ -1,7 +1,10 @@
 "use client";
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page";
+import { useParams } from "next/navigation";
+
+import { SourcePage } from "@/components/sources/source-page";
 
 export default function Page() {
-  return <PlaceholderPage />;
+  const { sourceId } = useParams<{ sourceId: string }>();
+  return <SourcePage sourceId={sourceId} />;
 }

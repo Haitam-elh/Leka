@@ -34,6 +34,55 @@ export function SourcePanel({
   onClose: () => void;
 }) {
   const t = useDictionary();
+  const s = t.sources.panel;
+  return (
+    <aside
+      aria-label={fill(s.label, { name: source.display_name })}
+      className="flex flex-col gap-4 self-start rounded-xl border border-shell-line bg-white p-4 xl:sticky xl:top-4"
+    >
+      <header className="flex items-center gap-3">
+        <SourceLogo kind={source.type} className="size-8 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-lg font-semibold text-brand-navy">{source.display_name}</h2>
+          <StatusBadge variant={`source.${sourceTone(source)}`} size="sm" />
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={s.close}
+          className="rounded p-1 text-shell-muted outline-none hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </button>
+      </header>
+
+      <Tabs defaultValue="details">
+        <TabsList>
+          <TabsTab value="details">{s.details}</TabsTab>
+          <TabsTab value="history">{s.history}</TabsTab>
+        </TabsList>
+        <TabsPanel value="details" className="flex flex-col gap-4 pt-4">
+          <SourceFacts source={source} owner={owner} />
+        </TabsPanel>
+        <TabsPanel value="history" className="pt-4">
+          <SourceHistory source={source} />
+        </TabsPanel>
+      </Tabs>
+
+      <Link
+        href={routes.source(source.id)}
+        className="flex items-center gap-1 self-end rounded text-sm font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+      >
+        {s.openDetail}
+        <ArrowRight className="size-3.5" aria-hidden="true" />
+      </Link>
+    </aside>
+  );
+}
+
+/** What a source is and where it stands: its last error first, if any. */
+export function SourceFacts({ source, owner }: { source: Source; owner: string }) {
+  const t = useDictionary();
   const { locale } = useLocale();
   const s = t.sources.panel;
   const when = (iso: string | null | undefined) => (iso ? timeAgo(t, iso) : t.sources.never);
@@ -65,65 +114,27 @@ export function SourcePanel({
   }
 
   return (
-    <aside
-      aria-label={fill(s.label, { name: source.display_name })}
-      className="flex flex-col gap-4 self-start rounded-xl border border-shell-line bg-white p-4 xl:sticky xl:top-4"
-    >
-      <header className="flex items-center gap-3">
-        <SourceLogo kind={source.type} className="size-8 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-lg font-semibold text-brand-navy">{source.display_name}</h2>
-          <StatusBadge variant={`source.${sourceTone(source)}`} size="sm" />
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={s.close}
-          className="rounded p-1 text-shell-muted outline-none hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-        >
-          <X className="size-4" aria-hidden="true" />
-        </button>
-      </header>
-
-      <Tabs defaultValue="details">
-        <TabsList>
-          <TabsTab value="details">{s.details}</TabsTab>
-          <TabsTab value="history">{s.history}</TabsTab>
-        </TabsList>
-        <TabsPanel value="details" className="flex flex-col gap-4 pt-4">
-          {source.last_error ? <LastError diagnostic={source.last_error} /> : null}
-          <MetadataPanel sections={[{ title: s.general, items: general }]} />
-          <section>
-            <h3 className="mb-2 text-sm font-semibold text-brand-navy">{s.reads}</h3>
-            {source.capabilities.length > 0 ? (
-              <ul className="flex flex-wrap gap-1.5">
-                {source.capabilities.map((capability) => (
-                  <li
-                    key={capability}
-                    className="rounded-md bg-brand-violet-soft px-2 py-0.5 text-xs text-shell-nav-active"
-                  >
-                    {capabilityWord(t, capability)}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-shell-muted">{s.notTested}</p>
-            )}
-          </section>
-        </TabsPanel>
-        <TabsPanel value="history" className="pt-4">
-          <History source={source} />
-        </TabsPanel>
-      </Tabs>
-
-      <Link
-        href={routes.source(source.id)}
-        className="flex items-center gap-1 self-end rounded text-sm font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-      >
-        {s.openDetail}
-        <ArrowRight className="size-3.5" aria-hidden="true" />
-      </Link>
-    </aside>
+    <>
+      {source.last_error ? <LastError diagnostic={source.last_error} /> : null}
+      <MetadataPanel sections={[{ title: s.general, items: general }]} />
+      <section>
+        <h3 className="mb-2 text-sm font-semibold text-brand-navy">{s.reads}</h3>
+        {source.capabilities.length > 0 ? (
+          <ul className="flex flex-wrap gap-1.5">
+            {source.capabilities.map((capability) => (
+              <li
+                key={capability}
+                className="rounded-md bg-brand-violet-soft px-2 py-0.5 text-xs text-shell-nav-active"
+              >
+                {capabilityWord(t, capability)}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-shell-muted">{s.notTested}</p>
+        )}
+      </section>
+    </>
   );
 }
 
@@ -142,9 +153,9 @@ function LastError({ diagnostic }: { diagnostic: Diagnostic }) {
   );
 }
 
-function History({ source }: { source: Source }) {
+export function SourceHistory({ source, limit = 20 }: { source: Source; limit?: number }) {
   const t = useDictionary();
-  const events = useSourceEvents(source.id);
+  const events = useSourceEvents(source.id, limit);
   if (events.isError)
     return <p className="text-sm text-shell-muted">{t.sources.panel.historyFailed}</p>;
   if (!events.data) return null;
