@@ -51,6 +51,7 @@ from leka.ingestion import (
     SyncTrigger,
 )
 from leka.ingestion import sync as sync_module
+from leka.ingestion.purge import PURGE_JOB, purge_deleted
 from leka.ingestion.sync import RetryableSyncError, sync_source
 from leka.platform import LocalObjectStore
 
@@ -81,6 +82,7 @@ class Script:
 
 
 SCRIPT = Script()
+queued_purges: list[tuple[str, tuple[object, ...]]] = []
 OFFERED = frozenset({Capability.REPOSITORIES, Capability.COMMITS, Capability.ISSUES})
 
 
@@ -129,6 +131,14 @@ def fake(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[LocalObjec
 
     store = LocalObjectStore(tmp_path)
     monkeypatch.setattr(storage, "_store", store)
+    # The purge job a pass queues is captured, not put on a queue.
+    queued_purges.clear()
+
+    async def capture(job: str, *args: object, **kwargs: object) -> object:
+        queued_purges.append((job, args))
+        return object()
+
+    monkeypatch.setattr(sync_module, "enqueue_job", capture)
     yield store
     unregister_connector(SourceKind.SLACK)
 
@@ -635,3 +645,76 @@ def test_the_checksum_does_not_depend_on_key_order() -> None:
 
     assert sync_module.checksum(one) == sync_module.checksum(two)
     assert len(sync_module.checksum(one)) == 64
+
+
+# ── purging deleted records from the store (LEKA-353) ───────────────────────
+
+
+async def _lines(store: LocalObjectStore, key: str) -> list[str]:
+    body = b"".join([chunk async for chunk in store.get(key)])
+    return [json.loads(line)["external_id"] for line in body.splitlines()]
+
+
+async def _live_payloads(source: Source) -> list[RawPayload]:
+    _, _, payloads, _ = await _read(source)
+    return sorted((p for p in payloads if p.deleted_at is None), key=lambda p: p.fetched_at)
+
+
+async def test_a_pass_that_marks_records_gone_queues_their_purge(source: Source) -> None:
+    SCRIPT.records = {Capability.COMMITS: 2}
+    await _sync(source)
+    assert queued_purges == []
+    SCRIPT.gone = {1}
+
+    await _sync(source, full=True)
+
+    assert queued_purges == [(PURGE_JOB, (str(source.workspace_id), str(source.id)))]
+
+
+async def test_the_purge_rewrites_mixed_batches_and_withdraws_empty_ones(
+    source: Source, fake: LocalObjectStore
+) -> None:
+    SCRIPT.records = {Capability.COMMITS: 4}  # batches [0, 1] and [2, 3]
+    await _sync(source)
+    first, _ = await _live_payloads(source)
+    SCRIPT.gone = {1, 2, 3}
+    await _sync(source, full=True)
+
+    result = await purge_deleted(source.workspace_id, source.id)
+
+    assert (result["rewritten"], result["withdrawn"], result["records_removed"]) == (1, 1, 3)
+    (left,) = await _live_payloads(source)
+    assert left.id == first.id and left.object_key != first.object_key
+    assert await _lines(fake, left.object_key) == ["commits-0"]
+    assert not await fake.exists(first.object_key)  # the old object is gone
+    index = await _index(source)
+    assert index["commits-0"].payload_key == left.object_key
+    assert all(index[f"commits-{n}"].payload_key is None for n in (1, 2, 3))
+
+
+async def test_the_purge_removes_every_version_not_only_the_latest(
+    source: Source, fake: LocalObjectStore
+) -> None:
+    SCRIPT.records = {Capability.COMMITS: 1}
+    await _sync(source)  # version 1
+    SCRIPT.edited = {0}
+    await _sync(source)  # version 2, in another batch
+    assert len(await _live_payloads(source)) == 2
+    SCRIPT.gone = {0}
+    await _sync(source, full=True)
+
+    await purge_deleted(source.workspace_id, source.id)
+
+    assert await _live_payloads(source) == []
+
+
+async def test_the_purge_is_idempotent(source: Source) -> None:
+    SCRIPT.records = {Capability.COMMITS: 3}
+    await _sync(source)
+    SCRIPT.gone = {0}
+    await _sync(source, full=True)
+    await purge_deleted(source.workspace_id, source.id)
+
+    again = await purge_deleted(source.workspace_id, source.id)
+
+    assert again == {"examined": 0, "rewritten": 0, "withdrawn": 0, "records_removed": 0}

@@ -138,6 +138,12 @@ class RawPayloadRepository(WorkspaceScopedRepository):
         """
         return await self.list(self.live().where(RawPayload.checksum_sha256 == checksum_sha256))
 
+    async def all_for_source(self, source_id: uuid.UUID) -> Sequence[RawPayload]:
+        """Every live payload of one source, oldest first."""
+        return await self.list(
+            self.live().where(RawPayload.source_id == source_id).order_by(RawPayload.fetched_at)
+        )
+
     def mark_deleted(self, payload: RawPayload, *, now: datetime | None = None) -> RawPayload:
         """Withdraw a payload without removing it yet.
 
@@ -372,6 +378,60 @@ class SourceRecordRepository(WorkspaceScopedRepository):
             .limit(1)
         )
         return found.first() is not None
+
+    async def has_pending_purge(self, source_id: uuid.UUID) -> bool:
+        found = await self._session.execute(
+            select(SourceRecord.id)
+            .where(
+                SourceRecord.workspace_id == self.workspace_id,
+                SourceRecord.source_id == source_id,
+                SourceRecord.deleted_at.is_not(None),
+                SourceRecord.payload_key.is_not(None),
+            )
+            .limit(1)
+        )
+        return found.first() is not None
+
+    async def pending_purge(self, source_id: uuid.UUID) -> set[tuple[str, str]]:
+        """(kind, external_id) of the deleted records a batch may still hold."""
+        rows = await self._session.execute(
+            select(SourceRecord.kind, SourceRecord.external_id).where(
+                SourceRecord.workspace_id == self.workspace_id,
+                SourceRecord.source_id == source_id,
+                SourceRecord.deleted_at.is_not(None),
+                SourceRecord.payload_key.is_not(None),
+            )
+        )
+        return {(kind, external_id) for kind, external_id in rows.all()}
+
+    async def move_payload(self, source_id: uuid.UUID, old_key: str, new_key: str) -> None:
+        """Records whose latest version was in a rewritten batch now point at
+        its new object."""
+        await self._session.execute(
+            update(SourceRecord)
+            .where(
+                SourceRecord.workspace_id == self.workspace_id,
+                SourceRecord.source_id == source_id,
+                SourceRecord.payload_key == old_key,
+            )
+            .values(payload_key=new_key, updated_at=func.now())
+        )
+
+    async def purged(self, source_id: uuid.UUID, gone: set[tuple[str, str]]) -> None:
+        """No batch holds these any more. Only those still deleted: one seen
+        again during the purge was written again and keeps its batch."""
+        for kind in {kind for kind, _ in gone}:
+            await self._session.execute(
+                update(SourceRecord)
+                .where(
+                    SourceRecord.workspace_id == self.workspace_id,
+                    SourceRecord.source_id == source_id,
+                    SourceRecord.kind == kind,
+                    SourceRecord.external_id.in_([e for k, e in gone if k == kind]),
+                    SourceRecord.deleted_at.is_not(None),
+                )
+                .values(payload_key=None, updated_at=func.now())
+            )
 
     async def live_counts(self) -> dict[tuple[uuid.UUID, str], int]:
         """Records not deleted, per (source, kind), for the whole workspace."""

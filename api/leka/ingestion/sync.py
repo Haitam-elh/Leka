@@ -83,6 +83,8 @@ from leka.ingestion.models import (
     SyncRunStatus,
     SyncTrigger,
 )
+from leka.ingestion.purge import PURGE_JOB
+from leka.ingestion.purge import concurrency_key as purge_key
 from leka.ingestion.repository import (
     RawPayloadRepository,
     Seen,
@@ -332,6 +334,16 @@ class _Pass:
         self._run.error = failure.model_dump(mode="json") if failure else None
         await self._session.commit()
 
+        # Deleted records still in a batch — found now, or left by a purge that
+        # never ran: the purge job takes them out of the store (purge.py).
+        if await self._records.has_pending_purge(source.id):
+            await enqueue_job(
+                PURGE_JOB,
+                str(self._workspace_id),
+                str(source.id),
+                for_workspace_id=self._workspace_id,
+                concurrency_key=purge_key(source.id),
+            )
         report.deleted = self.deleted
         report.status = "failed" if failure else "succeeded"
         report.error = failure.code.value if failure else None

@@ -13,7 +13,7 @@ same answer.
 
 | Data | Where | Kept for | Deleted by |
 |---|---|---|---|
-| **Raw payloads** (bytes) | object store | 30–90 days by source kind | `leka.ingestion.tasks.sweep_expired_payloads` |
+| **Raw payloads** (bytes) | object store | 30–90 days by source kind — **or until the vendor object is gone** | `leka.ingestion.tasks.sweep_expired_payloads`; a record deleted at the vendor, restricted or out of scope is removed within minutes of the full pass that finds it, by `leka.ingestion.purge` ([collection.md](collection.md#8-purging-what-was-deleted)) |
 | **Raw payloads** (metadata) | `raw_payloads` | same, same row | the same sweep, row first |
 | **Sessions** | `sessions` | absolute expiry, or revoked | `leka.identity.tasks.purge_expired` |
 | **Email tokens** | `email_tokens` | single use, time limited | the same purge |
