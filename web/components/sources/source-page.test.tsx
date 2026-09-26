@@ -27,6 +27,9 @@ const api = {
   disable: vi.fn(),
   remove: vi.fn(),
   checkHealth: vi.fn(),
+  syncNow: vi.fn(),
+  syncs: vi.fn(),
+  syncSummaries: vi.fn(),
 };
 const push = vi.fn();
 const notify = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
@@ -102,6 +105,8 @@ beforeEach(() => {
   api.get.mockResolvedValue(source());
   api.events.mockResolvedValue({ data: [] });
   api.catalog.mockResolvedValue([GITHUB]);
+  api.syncs.mockResolvedValue([]);
+  api.syncSummaries.mockResolvedValue([]);
 });
 
 describe("a source's page", () => {
@@ -184,5 +189,80 @@ describe("a source's page", () => {
     renderPage();
 
     expect(await screen.findByText("Page introuvable")).toBeInTheDocument();
+  });
+});
+
+describe("its sync", () => {
+  it("shows where each capability stands, and why the last pass failed", async () => {
+    api.get.mockResolvedValue(source({ status: "active" }));
+    api.syncs.mockResolvedValue([
+      {
+        capability: "commits",
+        status: "idle",
+        since: new Date().toISOString(),
+        last_started_at: null,
+        last_succeeded_at: new Date().toISOString(),
+        last_full_at: "2026-09-20T10:00:00Z",
+        records_last_run: 10,
+        records_total: 8320,
+        consecutive_failures: 0,
+        last_error: null,
+      },
+      {
+        capability: "issues",
+        status: "failed",
+        since: null,
+        last_started_at: null,
+        last_succeeded_at: null,
+        last_full_at: null,
+        records_last_run: 0,
+        records_total: 0,
+        consecutive_failures: 3,
+        last_error: { code: "RATE_LIMITED", message: "Le quota d'appels est épuisé." },
+      },
+    ]);
+    renderPage();
+
+    const section = (await screen.findByRole("heading", { name: "Synchronisation" })).closest(
+      "section",
+    ) as HTMLElement;
+    const row = (name: string) => within(section).getByText(name).closest("tr") as HTMLElement;
+    expect(await within(section).findByText("8 320")).toBeInTheDocument();
+    expect(within(row("issues")).getByText("Le quota d'appels est épuisé.")).toBeInTheDocument();
+    expect(within(row("issues")).getByText("3")).toBeInTheDocument();
+  });
+
+  it("says a source not read yet will be read, rather than an empty table", async () => {
+    renderPage();
+
+    expect(await screen.findByText(/Pas encore lue/)).toBeInTheDocument();
+  });
+
+  it("starts a pass on demand, and a second one is already under way", async () => {
+    api.get.mockResolvedValue(source({ status: "active" }));
+    api.syncNow.mockResolvedValueOnce({ queued: true }).mockResolvedValueOnce({ queued: false });
+    renderPage();
+    const button = await screen.findByRole("button", { name: "Synchroniser maintenant" });
+
+    await userEvent.click(button);
+    await userEvent.click(button);
+
+    expect(api.syncNow).toHaveBeenCalledWith("s1");
+    expect(notify.info).toHaveBeenNthCalledWith(1, {
+      title: "Synchronisation lancée",
+      description: expect.stringContaining("Acme GitHub"),
+    });
+    expect(notify.info).toHaveBeenNthCalledWith(2, {
+      title: "Une synchronisation de Acme GitHub est déjà en cours.",
+    });
+  });
+
+  it("is not offered for a source that is not switched on", async () => {
+    renderPage(); // tested, not activated
+
+    await screen.findByRole("button", { name: "Tester la connexion" });
+    expect(
+      screen.queryByRole("button", { name: "Synchroniser maintenant" }),
+    ).not.toBeInTheDocument();
   });
 });

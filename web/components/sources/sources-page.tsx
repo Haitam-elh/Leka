@@ -29,7 +29,8 @@ import {
   type Source,
   sourceTone,
 } from "@/lib/sources";
-import { useSources } from "@/lib/sources-queries";
+import { useSources, useSyncSummaries } from "@/lib/sources-queries";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 /**
  * The sources screen, laid out as docs/product/mockups/12-sources.jpeg.
@@ -54,6 +55,9 @@ export function SourcesPage() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const ownerOf = useOwnerOf();
+  const summaries = useSyncSummaries();
+  // Records read so far, per source; undefined until a pass has read it.
+  const recordsOf = (source: Source) => summaries.data?.get(source.id)?.records_total;
   const canManage = usePermissions()?.includes("source:manage") ?? false;
   const [adding, setAdding] = useState(false);
   const addButton = canManage ? (
@@ -90,7 +94,7 @@ export function SourcesPage() {
         <NoSources action={addButton} />
       ) : (
         <div className="flex flex-col gap-5">
-          <Stats sources={all} />
+          <Stats sources={all} recordsOf={recordsOf} />
           <Filters
             sources={all}
             category={category}
@@ -103,12 +107,14 @@ export function SourcesPage() {
               sources={shown}
               selectedId={selectedId}
               ownerOf={ownerOf}
+              recordsOf={recordsOf}
               onSelect={(source) => setSelectedId(source.id === selectedId ? null : source.id)}
             />
             {selected ? (
               <SourcePanel
                 source={selected}
                 owner={ownerOf(selected)}
+                records={recordsOf(selected)}
                 onClose={() => setSelectedId(null)}
               />
             ) : null}
@@ -140,9 +146,18 @@ function useOwnerOf(): (source: Source) => string {
 
 // ── The figures ─────────────────────────────────────────────────────────────
 
-function Stats({ sources }: { sources: Source[] }) {
+function Stats({
+  sources,
+  recordsOf,
+}: {
+  sources: Source[];
+  recordsOf: (source: Source) => number | undefined;
+}) {
   const t = useDictionary();
   const s = t.sources.stats;
+  const number = useNumber();
+  const read = sources.map(recordsOf).filter((n): n is number => n !== undefined);
+  const records = read.reduce((sum, n) => sum + n, 0);
   const connected = sources.filter(isConnected).length;
   const running = sources.filter((source) => source.sync_status === "running").length;
   const errors = sources.filter((source) => sourceTone(source) === "error").length;
@@ -170,7 +185,13 @@ function Stats({ sources }: { sources: Source[] }) {
         label={s.errors}
         note={errors === 0 ? s.noErrors : undefined}
       />
-      <Stat icon={FileText} tone="info" value="—" label={s.items} note={s.itemsPending} />
+      <Stat
+        icon={FileText}
+        tone="info"
+        value={read.length > 0 ? number(records) : "—"}
+        label={s.items}
+        note={read.length > 0 ? fill(s.itemsFrom, { count: read.length }) : s.itemsPending}
+      />
       <Stat
         icon={Clock}
         tone="violet"
@@ -316,15 +337,18 @@ function SourcesTable({
   sources,
   selectedId,
   ownerOf,
+  recordsOf,
   onSelect,
 }: {
   sources: Source[];
   selectedId: string | null;
   ownerOf: (source: Source) => string;
+  recordsOf: (source: Source) => number | undefined;
   onSelect: (source: Source) => void;
 }) {
   const t = useDictionary();
   const c = t.sources.columns;
+  const number = useNumber();
   const columns: KnowledgeColumn<Source>[] = [
     {
       id: "name",
@@ -369,11 +393,17 @@ function SourcesTable({
       id: "items",
       header: c.items,
       align: "end",
-      cell: () => (
-        <span title={t.sources.notCounted} aria-label={t.sources.notCounted}>
-          —
-        </span>
-      ),
+      sortValue: (source) => recordsOf(source),
+      cell: (source) => {
+        const records = recordsOf(source);
+        return records === undefined ? (
+          <span title={t.sources.notCounted} aria-label={t.sources.notCounted}>
+            —
+          </span>
+        ) : (
+          number(records)
+        );
+      },
     },
     { id: "owner", header: c.owner, cell: ownerOf },
   ];
@@ -408,4 +438,11 @@ function NoSources({ action }: { action: React.ReactNode }) {
       size="page"
     />
   );
+}
+
+/** "12 430": the reader's way of writing a number. */
+function useNumber(): (value: number) => string {
+  const { locale } = useLocale();
+  const format = new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB");
+  return (value) => format.format(value);
 }

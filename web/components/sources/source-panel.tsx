@@ -27,10 +27,12 @@ import { useSourceEvents } from "@/lib/sources-queries";
 export function SourcePanel({
   source,
   owner,
+  records,
   onClose,
 }: {
   source: Source;
   owner: string;
+  records?: number;
   onClose: () => void;
 }) {
   const t = useDictionary();
@@ -62,7 +64,7 @@ export function SourcePanel({
           <TabsTab value="history">{s.history}</TabsTab>
         </TabsList>
         <TabsPanel value="details" className="flex flex-col gap-4 pt-4">
-          <SourceFacts source={source} owner={owner} />
+          <SourceFacts source={source} owner={owner} records={records} />
         </TabsPanel>
         <TabsPanel value="history" className="pt-4">
           <SourceHistory source={source} />
@@ -81,7 +83,16 @@ export function SourcePanel({
 }
 
 /** What a source is and where it stands: its last error first, if any. */
-export function SourceFacts({ source, owner }: { source: Source; owner: string }) {
+export function SourceFacts({
+  source,
+  owner,
+  records,
+}: {
+  source: Source;
+  owner: string;
+  /** Read so far by the sync; undefined until a pass has read it. */
+  records?: number;
+}) {
   const t = useDictionary();
   const { locale } = useLocale();
   const s = t.sources.panel;
@@ -101,6 +112,13 @@ export function SourceFacts({ source, owner }: { source: Source; owner: string }
     },
     ...(account ? [{ label: s.account, value: String(account) }] : []),
     { label: s.lastSync, value: when(source.last_sync_at) },
+    {
+      label: s.records,
+      value:
+        records === undefined
+          ? t.sources.notCounted
+          : new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB").format(records),
+    },
     { label: s.lastCheck, value: when(source.last_health_check_at) },
     { label: s.owner, value: owner },
     { label: s.created, value: exactDate(locale, source.created_at) },

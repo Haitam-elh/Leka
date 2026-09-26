@@ -22,6 +22,8 @@ export type TestOutcome = components["schemas"]["SourceTestOutcome"];
 export type ScopeOptions = components["schemas"]["ScopeOptionsRead"];
 export type SourceCreate = components["schemas"]["SourceCreate"];
 export type SourceUpdate = components["schemas"]["SourceUpdate"];
+export type SourceSync = components["schemas"]["SourceSyncRead"];
+export type SyncSummary = components["schemas"]["SyncSummary"];
 
 type Page<T> = { data: T[]; next_cursor?: string | null };
 
@@ -64,6 +66,14 @@ export const sources = {
   checkHealth: (sourceId: string) => post<unknown>(`/sources/${sourceId}/health-check`),
   /** What the scope can be chosen from, asked of the vendor now. */
   scopeOptions: (sourceId: string) => apiFetch<ScopeOptions>(`/sources/${sourceId}/scope/options`),
+
+  /** Read it now; `queued` is false when a pass is already on its way (LEKA-352). */
+  syncNow: (sourceId: string, full = false) =>
+    post<{ queued: boolean }>(`/ingestion/sources/${sourceId}/sync?full=${full}`),
+  /** Where each capability stands. */
+  syncs: (sourceId: string) => apiFetch<SourceSync[]>(`/ingestion/sources/${sourceId}/syncs`),
+  /** One line per source that has been read: records so far, last success. */
+  syncSummaries: () => apiFetch<SyncSummary[]>("/ingestion/syncs"),
 };
 
 /**
@@ -121,6 +131,11 @@ export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
 /** Can be switched on: tested against the settings it has now. */
 export function canActivate(source: Source): boolean {
   return source.status === "tested" || source.status === "disabled";
+}
+
+/** Can be read now: switched on, and not waiting for a person. */
+export function canSync(source: Source): boolean {
+  return source.status === "active" || source.status === "degraded";
 }
 
 /** Can be switched off: anything but already off. */
