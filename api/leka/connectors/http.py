@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import AsyncIterator, Callable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import Any, Self
@@ -26,6 +27,45 @@ from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
 from leka.connectors.schemas import RawRecord
 
 type Item = dict[str, object]
+
+# What a bulk read leaves of a token's quota. The token is often the
+# customer's own — their CI and scripts spend the same quota — so LEKA stops
+# reading before the last tenth rather than spending it all and failing, and
+# comes back after the vendor's reset (LEKA-353).
+QUOTA_RESERVE = 0.10
+# When a vendor only says "near the limit" and not when it resets (Bitbucket).
+UNKNOWN_RESET_SECONDS = 600
+
+
+@dataclass(frozen=True)
+class Quota:
+    remaining: int
+    limit: int
+    reset_at: int | None  # epoch seconds, when the vendor says
+
+    @property
+    def low(self) -> bool:
+        return self.limit > 0 and self.remaining < self.limit * QUOTA_RESERVE
+
+
+def quota_of(response: httpx.Response) -> Quota | None:
+    """What a response says of the quota: GitHub's x-ratelimit-*, GitLab's
+    ratelimit-*, Bitbucket's x-ratelimit-nearlimit. None when it says nothing."""
+    headers = response.headers
+    for prefix in ("x-ratelimit-", "ratelimit-"):
+        remaining, limit = headers.get(f"{prefix}remaining"), headers.get(f"{prefix}limit")
+        if remaining is None or limit is None:
+            continue
+        try:
+            reset = headers.get(f"{prefix}reset")
+            return Quota(int(remaining), int(limit), int(reset) if reset else None)
+        except ValueError:
+            return None
+    if headers.get("x-ratelimit-nearlimit", "").lower() == "true":
+        return Quota(remaining=0, limit=1, reset_at=None)
+    return None
+
+
 # A list is sent as the parameter repeated: state=OPEN&state=MERGED.
 type Params = Mapping[str, str | int | list[str]]
 # What a vendor makes of a failed answer: (response, path, what was missing).
@@ -141,6 +181,33 @@ class VendorHttp:
             if skip_before and page and skipped == len(page):
                 return
             url, query = self._next_page(response, body), None  # the link carries the query
+            if url:
+                self._spare_the_quota(response)
+
+    def _spare_the_quota(self, response: httpx.Response) -> None:
+        """Stop a bulk read before the next page when the token's quota is low.
+
+        Only in `pages`: a connection test or a health check is a handful of
+        calls, and refusing it for a quota at 9 % would say the source is
+        broken when it is only busy. What was read so far stands; the pass
+        records RATE_LIMITED with when to come back.
+        """
+        quota = quota_of(response)
+        if quota is None or not quota.low:
+            return
+        wait = (
+            max(0, quota.reset_at - int(time.time()))
+            if quota.reset_at is not None
+            else UNKNOWN_RESET_SECONDS
+        )
+        raise diagnose(
+            DiagnosticCode.RATE_LIMITED,
+            message="LEKA a mis la lecture en pause pour laisser une réserve de quota "
+            "à vos autres outils sur ce jeton.",
+            retry_after=wait,
+            detail=f"quota {quota.remaining}/{quota.limit}, below the reserve",
+            secrets=[self._secret],
+        )
 
     def _next_page(self, response: httpx.Response, body: Any) -> str | None:
         """The next page — only if it is on the host the secret was meant for."""

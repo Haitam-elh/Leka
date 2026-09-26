@@ -59,6 +59,27 @@ while one is queued or running gets `already_active` / `{"queued": false}`,
 not a second pass. Only `active` and `degraded` sources are read: a source
 in `error` waits for a person, `disabled` for someone to switch it on.
 
+## Backpressure
+
+Two limits, so that reading a source never costs more than it should
+(LEKA-353):
+
+- **The customer's quota.** A token is often the customer's own, spent by
+  their CI and scripts too. During a bulk read, when the vendor says less
+  than **10 %** of the token's quota is left (`x-ratelimit-*` on GitHub,
+  `ratelimit-*` on GitLab, `x-ratelimit-nearlimit` on Bitbucket), the read
+  stops before the next page with `RATE_LIMITED` and the time until the
+  vendor's reset — what was read stays stored, and the failure is handled
+  like any quota wait below. A connection test or a health check, a handful
+  of calls, is never refused for it (`QUOTA_RESERVE` in
+  `leka/connectors/http.py`).
+- **LEKA's own capacity.** The schedule offers no more passes than leave
+  **20 under way across the platform, 3 per workspace** — so one customer
+  with forty sources does not hold every worker. What does not fit waits for
+  the next tick, oldest first (`deferred` in `syncs_scheduled`). "Synchroniser
+  maintenant" and an activation are not held back: a person is waiting
+  (`MAX_ACTIVE_PASSES*` in `leka/ingestion/sync.py`).
+
 ## When a pass fails
 
 | The vendor's failure | Examples | What happens |

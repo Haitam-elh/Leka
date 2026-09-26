@@ -7,11 +7,13 @@ refusals that apply to every vendor.
 
 from __future__ import annotations
 
+import time
+
 import httpx
 import pytest
 
 from leka.connectors import ConnectorError, DiagnosticCode
-from leka.connectors.http import VendorHttp, refusal, usual_code
+from leka.connectors.http import Quota, VendorHttp, quota_of, refusal, usual_code
 
 SECRET = "a-secret-that-must-never-leak-0123456789"
 
@@ -78,3 +80,82 @@ async def test_a_refusal_carries_its_code_and_never_the_secret(status: int, code
 
     assert caught.value.diagnostic.code == DiagnosticCode(code)
     assert SECRET not in repr(caught.value.diagnostic)
+
+
+# ── sparing the customer's quota (LEKA-353) ──────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("headers", "expected"),
+    [
+        (
+            {
+                "x-ratelimit-remaining": "4900",
+                "x-ratelimit-limit": "5000",
+                "x-ratelimit-reset": "9",
+            },
+            Quota(4900, 5000, 9),
+        ),  # GitHub
+        ({"ratelimit-remaining": "3", "ratelimit-limit": "2000"}, Quota(3, 2000, None)),  # GitLab
+        ({"x-ratelimit-nearlimit": "true"}, Quota(0, 1, None)),  # Bitbucket
+        ({}, None),
+        ({"x-ratelimit-remaining": "many", "x-ratelimit-limit": "5000"}, None),
+    ],
+    ids=["github", "gitlab", "bitbucket", "silent", "garbled"],
+)
+def test_the_quota_is_read_the_way_each_vendor_writes_it(
+    headers: dict[str, str], expected: Quota | None
+) -> None:
+    assert quota_of(httpx.Response(200, headers=headers)) == expected
+
+
+def _paged(remaining: int, *, reset_in: int = 120) -> tuple[httpx.MockTransport, list[str]]:
+    asked: list[str] = []
+    reset = str(int(time.time()) + reset_in)
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        page = request.url.params.get("page", "1")
+        asked.append(page)
+        quota = {
+            "x-ratelimit-remaining": str(remaining),
+            "x-ratelimit-limit": "100",
+            "x-ratelimit-reset": reset,
+        }
+        if page == "1":
+            following = "https://api.vendor.example/things?page=2"
+            return httpx.Response(
+                200, json={"values": [{"n": 1}], "next": following}, headers=quota
+            )
+        return httpx.Response(200, json={"values": [{"n": 2}]}, headers=quota)
+
+    return httpx.MockTransport(handle), asked
+
+
+async def test_a_bulk_read_stops_before_the_reserve_and_keeps_what_it_read() -> None:
+    transport, asked = _paged(remaining=5)
+    read: list[object] = []
+
+    async with _vendor(transport) as vendor:
+        with pytest.raises(ConnectorError) as caught:
+            async for item in vendor.pages("/things"):
+                read.append(item["n"])
+
+    assert read == [1]  # the page it had is kept
+    assert asked == ["1"]  # the next one is not asked for
+    diagnostic = caught.value.diagnostic
+    assert diagnostic.code is DiagnosticCode.RATE_LIMITED
+    assert diagnostic.retry_after is not None and 100 <= diagnostic.retry_after <= 120
+    assert "réserve" in diagnostic.message
+
+
+async def test_a_quota_above_the_reserve_or_a_last_page_does_not_stop_it() -> None:
+    plenty, asked = _paged(remaining=50)
+    async with _vendor(plenty) as vendor:
+        assert [item["n"] async for item in vendor.pages("/things")] == [1, 2]
+    assert asked == ["1", "2"]
+
+
+async def test_a_single_call_is_not_refused_for_a_low_quota() -> None:
+    transport, _ = _paged(remaining=1)
+    async with _vendor(transport) as vendor:
+        assert (await vendor.get("/things")).status_code == 200

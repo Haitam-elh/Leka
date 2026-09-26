@@ -141,6 +141,14 @@ SYNC_JOB = "leka.ingestion.sync.run_sync"
 SYNC_INTERVAL = timedelta(hours=1)
 # Sources offered per scheduler pass: the rest are next tick's.
 SCHEDULE_BATCH = 200
+# BACKPRESSURE (LEKA-353). The schedule offers no more passes than these
+# leave room for, across the platform and per workspace: the workers and
+# the database take what the queue holds, and one customer with forty
+# sources must not hold every worker while the others wait. What does not
+# fit is offered at the next tick, oldest first. "Synchroniser maintenant"
+# and an activation are not held back: a person is waiting for them.
+MAX_ACTIVE_PASSES = 20
+MAX_ACTIVE_PASSES_PER_WORKSPACE = 3
 
 
 def concurrency_key(source_id: uuid.UUID) -> str:
@@ -202,17 +210,29 @@ def run_enqueue_due_syncs() -> dict[str, int]:
 
 
 async def enqueue_due_syncs(*, now: datetime | None = None) -> dict[str, int]:
-    """Offer a pass to every switched-on source not tried for SYNC_INTERVAL."""
+    """Offer a pass to every switched-on source not tried for SYNC_INTERVAL,
+    within the room MAX_ACTIVE_PASSES and its per-workspace share leave."""
     before = (now or datetime.now(UTC)) - SYNC_INTERVAL
     with system_scope():
         async with session_factory() as session:
-            due = await SyncScheduleRepository(session).due(
+            schedule = SyncScheduleRepository(session)
+            due = await schedule.due(
                 before=before, statuses=[s.value for s in SYNCABLE], limit=SCHEDULE_BATCH
             )
-    result = {"queued": 0, "already_active": 0}
+            active = await schedule.active_passes(SYNC_JOB)
+    total = sum(active.values())
+    result = {"queued": 0, "already_active": 0, "deferred": 0}
     for workspace_id, source_id in due:
+        if total >= MAX_ACTIVE_PASSES or active.get(workspace_id, 0) >= (
+            MAX_ACTIVE_PASSES_PER_WORKSPACE
+        ):
+            result["deferred"] += 1
+            continue
         queued = await enqueue_sync(workspace_id, source_id)
         result["queued" if queued else "already_active"] += 1
+        if queued:
+            total += 1
+            active[workspace_id] = active.get(workspace_id, 0) + 1
     logger.info("syncs_scheduled", **result)
     return result
 
