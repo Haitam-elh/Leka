@@ -42,6 +42,11 @@ const MARKS: Record<SourceKind, { title: string; color: string; path: string }> 
   },
 };
 
+/** The system's own name — "GitHub", "Amazon Web Services". */
+export function sourceTitle(kind: SourceKind): string {
+  return MARKS[kind].title;
+}
+
 export function SourceLogo({ kind, className }: { kind: SourceKind; className?: string }) {
   const mark = MARKS[kind];
   return (
