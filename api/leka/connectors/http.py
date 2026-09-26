@@ -26,7 +26,8 @@ from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
 from leka.connectors.schemas import RawRecord
 
 type Item = dict[str, object]
-type Params = Mapping[str, str | int]
+# A list is sent as the parameter repeated: state=OPEN&state=MERGED.
+type Params = Mapping[str, str | int | list[str]]
 # What a vendor makes of a failed answer: (response, path, what was missing).
 type Refuse = Callable[[httpx.Response, str, str], ConnectorError]
 
