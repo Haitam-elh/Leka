@@ -32,7 +32,7 @@ import structlog
 from leka.background.jobs import enqueue
 from leka.background.repository import EventDispatchRepository, JobRunRepository
 from leka.background.routes import ROUTES
-from leka.background.runner import RQ_JOB_TIMEOUT
+from leka.background.runner import rq_timeout
 from leka.core.config import settings
 from leka.db import session_factory, system_scope
 
@@ -133,7 +133,7 @@ async def enqueue_pending_runs(
                 EXECUTE,
                 str(run.id),
                 queue_name=run.queue.value,
-                job_timeout=RQ_JOB_TIMEOUT,
+                job_timeout=rq_timeout(run.job),
             )
             if not offered:
                 result["queue_down"] = 1

@@ -25,8 +25,7 @@ AN EVENT WITH NO ENTRY HERE IS MARKED FAILED, not ignored. Dropping it
 silently would look exactly like it working.
 
 `tests/test_event_dispatch.py` checks that every path below names a function
-that exists. It is empty today because nothing consumes an event yet; the first
-connector adds the first line.
+that exists.
 """
 
 from __future__ import annotations
@@ -42,4 +41,7 @@ class Route:
     queue: JobQueue = JobQueue.DEFAULT
 
 
-ROUTES: dict[str, tuple[Route, ...]] = {}
+ROUTES: dict[str, tuple[Route, ...]] = {
+    # A source switched on is read for the first time (LEKA-352).
+    "source.activated": (Route("leka.ingestion.sync.run_sync_for_event"),),
+}

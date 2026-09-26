@@ -51,6 +51,20 @@ Outcome = Literal["succeeded", "retrying", "failed", "skipped", "lost"]
 # in a loop. A job killed here is recovered like any dead worker.
 RQ_JOB_TIMEOUT = 7200
 
+# The jobs that legitimately run longer, named by path like the routes
+# (leka/background/routes.py). A source's sync reads for as long as the vendor
+# makes it wait — a large Notion workspace at ~3 requests a second is hours —
+# while the lease, renewed every third of its length, still tells a live
+# worker from a dead one. Everything else keeps the two hours above.
+RQ_JOB_TIMEOUTS: dict[str, int] = {
+    "leka.ingestion.sync.run_sync": 12 * 3600,
+}
+
+
+def rq_timeout(job: str) -> int:
+    """How long RQ lets this job's work-horse live."""
+    return RQ_JOB_TIMEOUTS.get(job, RQ_JOB_TIMEOUT)
+
 
 def _resolve(dotted_path: str) -> Callable[..., Any]:
     """The function a job path names. Raises if it does not name one.

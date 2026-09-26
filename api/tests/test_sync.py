@@ -390,3 +390,39 @@ async def test_a_full_pass_that_fails_leaves_the_next_one_full(source: Source) -
     SCRIPT.failure, SCRIPT.asked = None, []
     await _sync(source)
     assert (Capability.COMMITS, None) in SCRIPT.asked
+
+
+# ── the weekly slot ──────────────────────────────────────────────────────────
+
+
+def test_each_source_has_its_night_and_they_are_spread() -> None:
+    slots = [sync_module.full_slot(uuid.uuid4()) for _ in range(2000)]
+
+    assert {weekday for weekday, _ in slots} == set(range(7))
+    assert {hour for _, hour in slots} == set(sync_module.FULL_SLOT_HOURS)
+
+
+def test_the_last_slot_is_the_latest_one_not_in_the_future() -> None:
+    source_id = uuid.uuid4()
+    weekday, hour = sync_module.full_slot(source_id)
+    now = datetime(2026, 9, 27, 15, 30, tzinfo=UTC)
+
+    slot = sync_module.last_slot(source_id, now)
+
+    assert (slot.weekday(), slot.hour, slot.minute) == (weekday, hour, 0)
+    assert now - timedelta(days=7) < slot <= now
+
+
+async def test_a_full_pass_waits_for_the_source_slot(source: Source) -> None:
+    SCRIPT.records = {Capability.COMMITS: 1}
+    await _sync(source)  # the first pass is full
+    _, rows, _, _ = await _read(source)
+    first_full = rows["commits"].last_full_at
+    assert first_full is not None
+    SCRIPT.asked.clear()
+
+    await _sync(source)  # an hour later, same week: incremental
+
+    assert all(since is not None for _, since in SCRIPT.asked)
+    _, rows, _, _ = await _read(source)
+    assert rows["commits"].last_full_at == first_full

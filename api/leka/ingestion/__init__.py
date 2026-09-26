@@ -10,7 +10,14 @@ from leka.ingestion.repository import (
     RawPayloadRepository,
     SourceSyncRepository,
 )
-from leka.ingestion.schemas import NormalisedEntity, NormalisedRelationship
+from leka.ingestion.schemas import (
+    NormalisedEntity,
+    NormalisedRelationship,
+    SourceSyncRead,
+    SourceSyncs,
+    SyncRequested,
+    SyncSummary,
+)
 from leka.ingestion.service import IngestionService
 
 __all__ = [
@@ -21,6 +28,10 @@ __all__ = [
     "RawPayload",
     "RawPayloadRepository",
     "SourceSync",
+    "SourceSyncRead",
     "SourceSyncRepository",
+    "SourceSyncs",
+    "SyncRequested",
     "SyncRunStatus",
+    "SyncSummary",
 ]

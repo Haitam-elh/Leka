@@ -85,6 +85,28 @@ async def test_enqueue_job_records_the_run_and_puts_it_on_the_queue(
     assert (await row_of(session, run.id))["enqueued_at"] is not None
 
 
+async def test_a_long_job_is_given_its_own_time_and_the_rest_two_hours(
+    session: AsyncSession, queue: FakeQueue
+) -> None:
+    """A sync may read for hours (leka/background/runner.py, RQ_JOB_TIMEOUTS)."""
+    workspace = await make_workspace(session)
+    await session.commit()
+
+    await enqueue_job(f"{PATH}.succeed", for_workspace_id=workspace)
+    await enqueue_job(
+        "leka.ingestion.sync.run_sync", str(workspace), str(workspace), for_workspace_id=workspace
+    )
+
+    assert [kwargs["job_timeout"] for _, _, kwargs in queue.jobs] == [7200, 12 * 3600]
+
+
+def test_every_long_job_names_a_real_function() -> None:
+    from leka.background.runner import RQ_JOB_TIMEOUTS, _resolve
+
+    for job in RQ_JOB_TIMEOUTS:
+        assert callable(_resolve(job)), job
+
+
 async def test_enqueue_job_refuses_a_second_run_for_the_same_key(
     session: AsyncSession, queue: FakeQueue
 ) -> None:

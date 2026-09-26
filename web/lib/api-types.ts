@@ -734,6 +734,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingestion/sources/{source_id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Now
+         * @description Read the source now rather than at the next scheduled pass.
+         *
+         *     `full` ignores where the last pass stopped and reads everything. 202
+         *     either way: `queued` is false when a pass is already on its way.
+         */
+        post: operations["sync_now_api_v1_ingestion_sources__source_id__sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingestion/sources/{source_id}/syncs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Source Syncs
+         * @description Whether a pass is under way, and where each capability stands.
+         *
+         *     "running" only while a worker is really reading: a capability left
+         *     `running` by a pass whose worker died is shown as the failure the next
+         *     pass will record (leka/ingestion/sync.py, ABANDONED).
+         */
+        get: operations["source_syncs_api_v1_ingestion_sources__source_id__syncs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingestion/syncs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sync Summaries
+         * @description One line per source that has been read or has a pass under way.
+         */
+        get: operations["sync_summaries_api_v1_ingestion_syncs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1481,6 +1548,59 @@ export interface components {
          */
         SourceStatus: "draft" | "tested" | "active" | "degraded" | "error" | "disabled";
         /**
+         * SourceSyncRead
+         * @description Where one capability of one source stands.
+         */
+        SourceSyncRead: {
+            /** Capability */
+            capability: string;
+            /**
+             * Status
+             * @description idle, running or failed.
+             */
+            status: string;
+            /**
+             * Since
+             * @description When the last successful pass started: where the next one reads from.
+             */
+            since: string | null;
+            /** Last Started At */
+            last_started_at: string | null;
+            /** Last Succeeded At */
+            last_succeeded_at: string | null;
+            /**
+             * Last Full At
+             * @description The last pass that read everything.
+             */
+            last_full_at: string | null;
+            /** Records Last Run */
+            records_last_run: number;
+            /** Records Total */
+            records_total: number;
+            /** Consecutive Failures */
+            consecutive_failures: number;
+            /**
+             * Last Error
+             * @description The last diagnostic, cleaned of secrets. Null once a pass succeeds.
+             */
+            last_error: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * SourceSyncs
+         * @description A source's sync: whether a pass is under way, and each capability.
+         */
+        SourceSyncs: {
+            /**
+             * Pass State
+             * @description running (a worker is reading it), queued (waiting), or null.
+             */
+            pass_state: string | null;
+            /** Capabilities */
+            capabilities: components["schemas"]["SourceSyncRead"][];
+        };
+        /**
          * SourceTestOutcome
          * @description A test's answer. A failed test is an answer, not an HTTP error.
          */
@@ -1500,12 +1620,40 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** SyncRequested */
+        SyncRequested: {
+            /**
+             * Queued
+             * @description False when a pass is already queued or running for this source: it is already happening.
+             */
+            queued: boolean;
+        };
         /**
          * SyncStatus
          * @description Filled in by the sync engine (LEKA-352). Only the field exists today.
          * @enum {string}
          */
         SyncStatus: "never" | "idle" | "running" | "failed";
+        /**
+         * SyncSummary
+         * @description One source's sync, in a line: what a list shows.
+         */
+        SyncSummary: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Records Total */
+            records_total: number;
+            /** Last Succeeded At */
+            last_succeeded_at: string | null;
+            /**
+             * Pass State
+             * @description running (a worker is reading it), queued (waiting), or null.
+             */
+            pass_state?: string | null;
+        };
         /** UserRead */
         UserRead: {
             /**
@@ -5361,6 +5509,288 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PageEnvelope_SourceEventRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    sync_now_api_v1_ingestion_sources__source_id__sync_post: {
+        parameters: {
+            query?: {
+                full?: boolean;
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRequested"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    source_syncs_api_v1_ingestion_sources__source_id__syncs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceSyncs"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    sync_summaries_api_v1_ingestion_syncs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncSummary"][];
                 };
             };
             /** @description The request could not be understood. */

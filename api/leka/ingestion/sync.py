@@ -17,9 +17,12 @@ the object store in batches, and record how far it got.
 THE CURSOR IS WHEN THE LAST SUCCESSFUL PASS STARTED (see SourceSync). A
 failed pass does not move it; the next one reads from the same place, and
 what the failed one already stored is stored again — a write, not a wrong
-answer. Every FULL_RESYNC_EVERY a pass ignores the cursor and reads
-everything: incremental reads trust every vendor's dates, and this is the
-net under that trust.
+answer. Once a week a pass ignores the cursor and reads everything:
+incremental reads trust every vendor's dates, and this is the net under
+that trust. Each source has its own slot (full_slot), at night UTC, so a
+workspace's sources and a thousand workspaces do not all read in full at
+once; a source never read in full, or whose cursor was forgotten, is read
+in full at its next pass whatever the day.
 
 FAILURES, AND WHO DEALS WITH THEM:
 
@@ -53,6 +56,7 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.background import Event, JobQueue, enqueue_job
 from leka.connectors import (
     Capability,
     Connector,
@@ -69,16 +73,22 @@ from leka.connectors import (
     SyncStatus,
     next_status,
 )
-from leka.db import session_factory, workspace_scope
+from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion.models import SourceSync, SyncRunStatus
-from leka.ingestion.repository import RawPayloadRepository, SourceSyncRepository
+from leka.ingestion.repository import (
+    RawPayloadRepository,
+    SourceSyncRepository,
+    SyncScheduleRepository,
+)
 from leka.ingestion.retention import expires_at
 from leka.platform import from_bytes, object_key, object_store
 
 logger = structlog.get_logger(__name__)
 
 BATCH_SIZE = 500
-FULL_RESYNC_EVERY = timedelta(days=7)
+# The weekly full pass lands in a slot between these hours, UTC: the night
+# of the product's customers, who are in Europe. One constant to move.
+FULL_SLOT_HOURS = (1, 2, 3, 4)
 # A retryable failure asked to wait longer than this is left to the next
 # scheduled pass rather than to the runner's retries, which would all land
 # inside the wait and fail again.
@@ -122,6 +132,89 @@ def run_sync(workspace_id: str, source_id: str, full: bool = False) -> dict[str,
     """Entry point for the job runner, which is synchronous."""
     report = asyncio.run(sync_source(uuid.UUID(workspace_id), uuid.UUID(source_id), full=full))
     return report.as_dict()
+
+
+# ── Starting a pass ─────────────────────────────────────────────────────────
+
+SYNC_JOB = "leka.ingestion.sync.run_sync"
+# How long after a pass was last tried the scheduler starts another.
+SYNC_INTERVAL = timedelta(hours=1)
+# Sources offered per scheduler pass: the rest are next tick's.
+SCHEDULE_BATCH = 200
+
+
+def concurrency_key(source_id: uuid.UUID) -> str:
+    """One pass per source at a time, whoever asked for it."""
+    return f"sync:{source_id}"
+
+
+async def enqueue_sync(
+    workspace_id: uuid.UUID,
+    source_id: uuid.UUID,
+    *,
+    full: bool = False,
+    queue: JobQueue = JobQueue.DEFAULT,
+) -> bool:
+    """Put a pass on the queue. False if one is already queued or running for
+    this source — someone clicking while the schedule runs it is not an error."""
+    run = await enqueue_job(
+        SYNC_JOB,
+        str(workspace_id),
+        str(source_id),
+        job_kwargs={"full": full},
+        for_workspace_id=workspace_id,
+        queue=queue,
+        concurrency_key=concurrency_key(source_id),
+    )
+    return run is not None
+
+
+def run_sync_for_event(event_id: str) -> str:
+    """`source.activated` (leka/background/routes.py): a FULL pass.
+
+    Published in the activation's own transaction, so it exists only if the
+    activation does — a pass enqueued from the request could start before
+    the request committed and find the source not yet active. It does not
+    read here: it enqueues, so the pass holds the source's key like any other.
+
+    Full, not only the first time: changing a source's settings or
+    credentials sends it back to draft, so every widened scope — a project,
+    a repository, a space added — comes back through an activation. An
+    incremental pass from the old cursor would never read its history.
+    """
+    return asyncio.run(_on_activated(uuid.UUID(event_id)))
+
+
+async def _on_activated(event_id: uuid.UUID) -> str:
+    with system_scope():
+        async with session_factory() as session:
+            event = await session.get(Event, event_id)
+    if event is None:
+        return "gone"
+    source_id = uuid.UUID(str(event.payload["source_id"]))
+    queued = await enqueue_sync(event.workspace_id, source_id, full=True)
+    return "queued" if queued else "already_active"
+
+
+def run_enqueue_due_syncs() -> dict[str, int]:
+    """Entry point for the schedule (leka/background/schedule.py)."""
+    return asyncio.run(enqueue_due_syncs())
+
+
+async def enqueue_due_syncs(*, now: datetime | None = None) -> dict[str, int]:
+    """Offer a pass to every switched-on source not tried for SYNC_INTERVAL."""
+    before = (now or datetime.now(UTC)) - SYNC_INTERVAL
+    with system_scope():
+        async with session_factory() as session:
+            due = await SyncScheduleRepository(session).due(
+                before=before, statuses=[s.value for s in SYNCABLE], limit=SCHEDULE_BATCH
+            )
+    result = {"queued": 0, "already_active": 0}
+    for workspace_id, source_id in due:
+        queued = await enqueue_sync(workspace_id, source_id)
+        result["queued" if queued else "already_active"] += 1
+    logger.info("syncs_scheduled", **result)
+    return result
 
 
 async def sync_source(
@@ -275,10 +368,29 @@ def _capabilities(source: Source, offered: frozenset[Capability]) -> list[Capabi
     return sorted(found, key=lambda c: (c is not Capability.REPOSITORIES, c.value))
 
 
+def full_slot(source_id: uuid.UUID) -> tuple[int, int]:
+    """(weekday, hour UTC) of a source's weekly full pass, from its id.
+
+    Derived rather than stored: the same every week, spread evenly across
+    the week's nights, and nothing to keep in step.
+    """
+    number = source_id.int
+    return number % 7, FULL_SLOT_HOURS[(number // 7) % len(FULL_SLOT_HOURS)]
+
+
+def last_slot(source_id: uuid.UUID, now: datetime) -> datetime:
+    """The most recent occurrence of the source's slot, at or before `now`."""
+    weekday, hour = full_slot(source_id)
+    slot = now.astimezone(UTC).replace(hour=hour, minute=0, second=0, microsecond=0)
+    slot -= timedelta(days=(slot.weekday() - weekday) % 7)
+    return slot if slot <= now else slot - timedelta(days=7)
+
+
 def _due_for_full(row: SourceSync, now: datetime) -> bool:
+    """Never read in full, cursor forgotten, or its weekly slot has come since."""
     if row.since is None or row.last_full_at is None:
         return True
-    return now - row.last_full_at >= FULL_RESYNC_EVERY
+    return row.last_full_at < last_slot(row.source_id, now)
 
 
 def _succeeded(row: SourceSync, started: datetime, count: int, *, full: bool) -> None:
