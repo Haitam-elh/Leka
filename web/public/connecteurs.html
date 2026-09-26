@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connecteurs, LEKA</title>
+<meta name="description" content="Les intégrations et connecteurs pris en charge par LEKA : code, tickets, documentation, cloud, données, infrastructure, supervision.">
+<meta name="theme-color" content="#0a0f2b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body data-title-key="docs.conn.meta_title">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo-leka" viewBox="0 0 1933 461">
+    <path fill="#0a0f2b" d="M1 0 L138 1 L138 362 L375 363 L375 461 L0 460Z M414 0 L816 0 L816 96 L538 98 L540 181 L790 182 L791 230 L790 276 L540 276 L539 362 L820 363 L820 461 L414 461Z M872 0 L1013 0 L1013 178 L1018 179 L1212 0 L1381 0 L1133 225 L1353 459 L1182 461 L1014 284 L1013 460 L873 461Z"/>
+    <path fill="url(#gLeka)" d="M1571 1 L1685 0 L1933 460 L1783 461 L1626 161 L1462 461 L1309 461Z"/>
+  </symbol>
+  <linearGradient id="gLeka" x1="1571" y1="0" x2="1933" y2="461" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#4B33FF"/><stop offset="1" stop-color="#6A46FF"/>
+  </linearGradient>
+</svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ic-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m8.5 8-4.5 4 4.5 4M15.5 8l4.5 4-4.5 4"/></symbol>
+  <symbol id="ic-ticket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="12" rx="2.5"/><path d="M8 6v12"/></symbol>
+  <symbol id="ic-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h7.5L19 9v11.5H6z"/><path d="M13.5 3.5V9H19M9 13h7M9 16.5h5"/></symbol>
+  <symbol id="ic-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 18.5a4 4 0 0 1-.3-8 5.5 5.5 0 0 1 10.6 1.3 3.4 3.4 0 0 1-.6 6.7z"/></symbol>
+  <symbol id="ic-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6M5 12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8"/></symbol>
+  <symbol id="ic-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="6.5" rx="1.8"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="1.8"/><path d="M7 7.2h.01M7 16.8h.01"/></symbol>
+  <symbol id="ic-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></symbol>
+  <symbol id="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></symbol>
+  <symbol id="ic-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10" width="15" height="10.5" rx="2.4"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10"/></symbol>
+  <symbol id="ic-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5c2-1 5-1 7 0v13c-2-1-5-1-7 0zM20 5.5c-2-1-5-1-7 0v13c2-1 5-1 7 0z"/></symbol>
+  <symbol id="ic-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6.5 18.5 12 13 17.5"/></symbol>
+</svg>
+<header class="header" id="header">
+  <div class="header__inner">
+    <a class="brand" href="./index.html" aria-label="LEKA, accueil">
+      <svg viewBox="0 0 1933 461" role="img" aria-label="LEKA" style="height:19px;width:auto"><use href="#logo-leka"/></svg>
+    </a>
+    <nav class="nav" id="nav" aria-label="Navigation principale">
+      <a href="./index.html#plateforme" data-i18n="nav.plateforme">Plateforme</a>
+      <a href="./index.html#methode" data-i18n="nav.methode">Méthode</a>
+      <a href="./index.html#cas" data-i18n="nav.cas">Cas d'usage</a>
+      <a href="./index.html#securite" data-i18n="nav.securite">Sécurité</a>
+    </nav>
+    <div class="header__actions">
+      <a class="signin" href="./login.html" data-i18n="nav.signin">Se connecter</a>
+      <a class="btn btn--primary btn--sm" href="./demo.html?type=demo" data-i18n="cta.demo">Demander une démo</a>
+      <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="nav">
+        <span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="content-page">
+    <div class="shell">
+      <div class="content-head">
+        <p class="label" data-i18n="docs.conn.eyebrow">Connecteurs</p>
+        <h1 data-i18n="docs.conn.title">Les intégrations que LEKA comprend</h1>
+        <p data-i18n="docs.conn.intro">Cette liste reflète les catégories d'outils que LEKA sait relier entre elles. La disponibilité précise pour votre stack dépend de votre environnement : parlez-en à l'équipe.</p>
+      </div>
+
+      <div class="connector-grid">
+        <article class="connector-card">
+          <div class="connector-card__head">
+            <svg><use href="#ic-code"/></svg>
+            <b data-i18n="docs.conn.code.h">Code</b>
+          </div>
+          <p data-i18n="docs.conn.code.p">Vos dépôts, l'historique des commits et les pull requests pour relier un changement de code à son impact métier.</p>
+          <span class="connector-card__tools" data-i18n="docs.conn.code.tools">GitHub, GitLab</span>
+        </article>
+        <article class="connector-card">
+          <div class="connector-card__head">
+            <svg><use href="#ic-ticket"/></svg>
+            <b data-i18n="docs.conn.tickets.h">Tickets</b>
+          </div>
+          <p data-i18n="docs.conn.tickets.p">Les incidents, demandes et tickets ouverts, pour situer une intention dans ce qui se passe déjà chez vous.</p>
+          <span class="connector-card__tools" data-i18n="docs.conn.tickets.tools">Jira, ServiceNow</span>
+        </article>
+        <article class="connector-card">
+          <div class="connector-card__head">
+            <svg><use href="#ic-doc"/></svg>
+            <b data-i18n="docs.conn.docs.h">Documentation</b>
+          </div>
+          <p data-i18n="docs.conn.docs.p">Vos pages internes, procédures et décisions d'architecture déjà écrites, pour ne rien vous faire ressaisir.</p>
+          <span class="connector-card__tools" data-i18n="docs.conn.docs.tools">Confluence, Notion</span>
+        </article>
+        <article class="connector-card">
+          <div class="connector-card__head">
+            <svg><use href="#ic-cloud"/></svg>
+            <b data-i18n="docs.conn.cloud.h">Cloud</b>
+          </div>
+          <p data-i18n="docs.conn.cloud.p">La cartographie de vos ressources cloud et leur configuration, pour comprendre votre infrastructure réelle.</p>
+          <span class="connector-card__tools" data-i18n="docs.conn.cloud.tools">AWS, Azure, GCP</span>
+        </article>
+        <article class="connector-card">
+          <div class="connector-card__head">
+            <svg><use href="#ic-db"/></svg>
+            <b data-i18n="docs.conn.data.h">Données</b>
+          </div>
+          <p data-i18n="docs.conn.data.p">Vos bases et entrepôts de données, pour situer les dépendances de données entre vos applications.</p>
+          <span class="connector-card__tools" data-i18n="docs.conn.data.tools">Bases et entrepôts</span>
+        </article>
+        <article class="connector-card">
+          <div class="connector-card__head">
+            <svg><use href="#ic-server"/></svg>
+            <b data-i18n="docs.conn.infra.h">Infrastructure</b>
+          </div>
+          <p data-i18n="docs.conn.infra.p">Vos déploiements et votre configuration d'infrastructure comme code.</p>
+          <span class="connector-card__tools" data-i18n="docs.conn.infra.tools">Kubernetes, Terraform</span>
+        </article>
+        <article class="connector-card">
+          <div class="connector-card__head">
+            <svg><use href="#ic-pulse"/></svg>
+            <b data-i18n="docs.conn.obs.h">Supervision</b>
+          </div>
+          <p data-i18n="docs.conn.obs.p">Vos métriques et alertes en temps réel, pour relier un signal à sa cause probable.</p>
+          <span class="connector-card__tools" data-i18n="docs.conn.obs.tools">Datadog, Sentry</span>
+        </article>
+      </div>
+
+      <p style="margin-top:40px;font-size:14.5px;color:var(--slate)" data-i18n="docs.conn.outro">Un outil que vous utilisez n'apparaît pas ici&nbsp;? <a class="link" style="display:inline-flex" href="./demo.html?type=team">Écrivez-nous, nous vous répondrons directement.</a></p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="shell">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <svg viewBox="0 0 1933 461" role="img" aria-label="LEKA" style="height:20px;width:auto">
+          <use href="#logo-leka"/>
+        </svg>
+        <p data-i18n="footer.tagline">L'intelligence qui comprend votre entreprise avant de vous répondre.</p>
+      </div>
+      <div>
+        <h4 data-i18n="footer.product">Produit</h4>
+        <ul>
+          <li><a href="./index.html#plateforme" data-i18n="nav.plateforme">Plateforme</a></li>
+          <li><a href="./index.html#methode" data-i18n="nav.methode">Méthode</a></li>
+          <li><a href="./index.html#cas" data-i18n="nav.cas">Cas d'usage</a></li>
+          <li><a href="./index.html#securite" data-i18n="nav.securite">Sécurité</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-i18n="footer.resources">Ressources</h4>
+        <ul>
+          <li><a href="./documentation.html" data-i18n="footer.documentation">Documentation</a></li>
+          <li><a href="./connecteurs.html" data-i18n="footer.connecteurs">Connecteurs</a></li>
+          <li><a href="./changelog.html" data-i18n="footer.changelog">Journal des versions</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-i18n="footer.company">Entreprise</h4>
+        <ul>
+          <li><a href="./demo.html?type=contact" data-i18n="footer.contact">Nous contacter</a></li>
+          <li><a href="./mentions-legales.html" data-i18n="footer.legal">Mentions légales</a></li>
+          <li><a href="./confidentialite.html" data-i18n="footer.privacy">Confidentialité</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span data-i18n="footer.rights">© 2026 LEKA. Tous droits réservés.</span>
+      <span class="footer__lang"><select class="lang-select" aria-label="Language / Langue"></select></span>
+    </div>
+  </div>
+</footer>
+
+<script src="./script.js"></script>
+<script src="./i18n.js"></script>
+</body>
+</html>

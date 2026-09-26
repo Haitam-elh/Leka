@@ -1,7 +1,8 @@
 # Deployment — how LEKA ships, and how to undo it
 
-One environment online: **production**, at `https://app.leka-core.com` (the
-web app) and `https://api.leka-core.com` (the API). There is no staging: what
+One environment online: **production**, at `https://leka-core.com` (the
+site and the web app, one address — see [below](#leka-corecom-the-site-and-the-application-as-one))
+and `https://api.leka-core.com` (the API). There is no staging: what
 protects production is what runs before it — CI and the browser suite on
 every pull request, and `deploy.sh`, which puts the previous release back
 when a new one does not come up.
@@ -19,7 +20,7 @@ managed platform, see [`adr/014-hosting.md`](adr/014-hosting.md).
 |---|---|
 | **Instance** | one EC2, `eu-central-1`, x86_64, Docker Compose |
 | **Containers** | `caddy` → `web` and `api`, plus `worker`, `scheduler`, `redis`, and `migrate` which runs once |
-| **Names** | `app.leka-core.com` → `web`, `api.leka-core.com` → `api`; Caddy holds both certificates |
+| **Names** | `leka-core.com` → `web` (the site and the application), `api.leka-core.com` → `api`; `app.` and `www.` redirect to `leka-core.com`; Caddy holds every certificate |
 | **Database** | Amazon RDS for PostgreSQL, `eu-central-1` — **not** on the instance, not reachable from the internet |
 | **Object storage** | Amazon S3, `eu-central-1` |
 | **Email** | the OVH mailbox `support@leka-core.com`, over SMTP (`ssl0.ovh.net:465`) |
@@ -369,7 +370,8 @@ on the box that Git cannot rebuild.
 ### 6. DNS, at OVH
 
 In the zone of `leka-core.com`, two A records pointing at the Elastic IP:
-`app` and `api`. Wait until `dig +short app.leka-core.com` answers it.
+`app` and `api` — and, since the move [below](#leka-corecom-the-site-and-the-application-as-one),
+`leka-core.com` itself and `www`. Wait until `dig +short app.leka-core.com` answers it.
 Caddy then obtains both certificates on its first start. The email records
 (SPF, DKIM, DMARC) are in the same zone; see
 [`runbook.md`](runbook.md#email-the-dns-records-that-get-it-delivered).
@@ -407,11 +409,96 @@ laptop:
 
 ```bash
 curl -fsS https://api.leka-core.com/api/v1/health
-curl -fsSI https://app.leka-core.com/login | head -1
+curl -fsSI https://leka-core.com/login | head -1
 ```
 
 and create an account through the page, as a user would: the email must
-arrive, and its link must open `https://app.leka-core.com/verify/…`.
+arrive, and its link must open `https://leka-core.com/verify/…`.
+
+---
+
+## leka-core.com: the site and the application, as one
+
+Karim's site — the pages that were on OVH's shared hosting — and the
+application are one site since this change. `web` serves both:
+
+| Address | What answers |
+|---|---|
+| `/`, `/connecteurs.html`, `/demo.html`… | the site: static files in `web/public/`, untouched by the build |
+| `/login`, `/register`, `/overview`, `/sources`… | the application |
+| `/login.html` | a permanent redirect to `/login` — the site's sign-in could not sign anyone in |
+| `/index.html` | a permanent redirect to `/` |
+| `app.leka-core.com/…`, `www.leka-core.com/…` | a permanent redirect to `leka-core.com/…`, path kept |
+
+The API keeps its own name. `leka-core.com` and `api.leka-core.com` are the
+same site to a browser, so the session cookie does not change (ADR 009).
+
+### Moving to it — in this order
+
+Each step works on its own; the order is what keeps the site up.
+
+1. **Merge.** CD deploys as usual. Nothing moves yet: `app.leka-core.com`
+   still serves everything, and its `/` now shows the site.
+2. **DNS, by whoever holds the OVH account** — OVH Manager → Web Cloud →
+   Noms de domaine → `leka-core.com` → Zone DNS:
+   - the **A** record of `leka-core.com` itself (sous-domaine vide): change
+     its target from OVH's hosting to the Elastic IP, `3.78.172.119`;
+   - **delete** any **AAAA** record of `leka-core.com` and of `www`: OVH
+     adds one for its hosting, and a visitor on IPv6 would still reach the
+     old site;
+   - `www`: a **CNAME** to `leka-core.com.` (or an A to the Elastic IP);
+   - leave `app`, `api`, **MX**, and the **TXT** records (SPF, DKIM, DMARC)
+     exactly as they are — the mailbox `support@leka-core.com` depends on
+     them.
+3. **Wait** until `dig +short leka-core.com` and `dig +short www.leka-core.com`
+   both answer `3.78.172.119`, and `dig +short AAAA leka-core.com` answers
+   nothing.
+4. **On the box**, in `/opt/leka/production.env`:
+
+   ```bash
+   LEKA_APP_DOMAIN=leka-core.com
+   LEKA_APP_ALIASES=www.leka-core.com, app.leka-core.com
+   LEKA_WEB_URL=https://leka-core.com
+   LEKA_CORS_ORIGINS=["https://leka-core.com"]
+   ```
+
+   then deploy the release already running, so every container reads it —
+   Caddy is recreated with the new names and asks for their certificates:
+
+   ```bash
+   cd /opt/leka
+   bash deploy.sh "$(grep ^LEKA_REGISTRY= production.env | cut -d= -f2)" \
+                  "$(grep ^LEKA_RELEASE= production.env | cut -d= -f2)"
+   ```
+
+5. **Check**, from a laptop:
+
+   ```bash
+   curl -fsSI https://leka-core.com/ | head -1                  # 200
+   curl -sI https://app.leka-core.com/overview | grep -i ^location   # https://leka-core.com/overview
+   curl -sI https://leka-core.com/login.html | grep -i ^location     # /login
+   ```
+
+   and register from the site's "Se connecter": the confirmation email's
+   link must open `https://leka-core.com/verify/…`.
+
+Undo: put the four lines back as they were and deploy again; the DNS change
+is the only step OVH's side has to reverse.
+
+### Changing the site
+
+The site is `web/public/` — `index.html`, the other pages, `style.css`,
+`script.js`, `i18n.js`. It is changed through a pull request like any file,
+no longer by FTP: whatever is uploaded to the old hosting is no longer
+what anyone sees. Two things to know before editing it:
+
+- **It shares the application's origin.** A script on any of its pages runs
+  with the same rights as the application's own. Nothing on the site may
+  put text from the address, a form or a third party into the page as HTML;
+  its scripts today only ever insert their own translations.
+- **Names the application uses are taken**: no file in `web/public/` named
+  like one of its routes (`login`, `register`, `overview`…), and no link to
+  `login.html` expected to show a page.
 
 ---
 

@@ -19,7 +19,7 @@ import { ProfileDialog } from "@/components/shell/profile-dialog";
 import { useCurrentUser, useCurrentWorkspace } from "@/components/shell/shell-provider";
 import { LOCALES, type Locale } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
-import { auth } from "@/lib/auth";
+import { auth, markSignedOut } from "@/lib/auth";
 
 /**
  * The account, and the two things anyone looks for in it: settings and the
@@ -76,6 +76,7 @@ export function UserMenu({
     // just ended sitting in it, one Back away from being painted again.
     // This drops the whole tab. It also lands on exactly /login instead of
     // racing the /login?next= redirect lib/api.ts fires when a call 401s.
+    markSignedOut();
     window.location.assign("/login");
   }
 

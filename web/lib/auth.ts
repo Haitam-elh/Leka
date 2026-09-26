@@ -44,6 +44,32 @@ export interface CurrentUser {
   active_workspace_id: string | null;
 }
 
+/**
+ * Set by signing out, read once by the sign-in page: someone who just asked
+ * to leave lands on the form even when the call failed and the session
+ * outlived it — rather than being sent straight back inside because a
+ * session is still there. Per tab, and gone on first read.
+ */
+const SIGNED_OUT = "leka.signedOut";
+
+export function markSignedOut(): void {
+  try {
+    window.sessionStorage.setItem(SIGNED_OUT, "1");
+  } catch {
+    // Storage refused: the page may send them back in; the menu still works.
+  }
+}
+
+export function justSignedOut(): boolean {
+  try {
+    const was = window.sessionStorage.getItem(SIGNED_OUT) === "1";
+    window.sessionStorage.removeItem(SIGNED_OUT);
+    return was;
+  } catch {
+    return false;
+  }
+}
+
 export const auth = {
   register: (email: string, password: string, profile: AccountProfile) =>
     apiFetch<{ detail: string }>("/auth/register", {

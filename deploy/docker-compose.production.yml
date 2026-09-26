@@ -127,13 +127,15 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     ports: ["80:80", "443:443"]
-    # The Caddyfile reads the two names from Caddy's OWN environment.
+    # The Caddyfile reads the names from Caddy's OWN environment.
     # --env-file only feeds the substitutions in this file, so without these
     # lines Caddy would never see them. The names alone, not env_file: Caddy
     # has no use for the database password.
     environment:
-      LEKA_APP_DOMAIN: ${LEKA_APP_DOMAIN:?set LEKA_APP_DOMAIN, e.g. app.leka-core.com}
+      LEKA_APP_DOMAIN: ${LEKA_APP_DOMAIN:?set LEKA_APP_DOMAIN, e.g. leka-core.com}
       LEKA_API_DOMAIN: ${LEKA_API_DOMAIN:?set LEKA_API_DOMAIN, e.g. api.leka-core.com}
+      # Optional: names redirected to LEKA_APP_DOMAIN. Empty, none.
+      LEKA_APP_ALIASES: ${LEKA_APP_ALIASES:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

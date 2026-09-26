@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LEKA, l'intelligence qui comprend votre entreprise</title>
+<meta name="description" content="LEKA relie vos outils, vos données et votre documentation pour comprendre votre entreprise, puis répondre à chaque intention dans son contexte.">
+<meta property="og:title" content="LEKA, l'intelligence qui comprend votre entreprise">
+<meta property="og:description" content="Vous savez ce que vous voulez. LEKA sait comment.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0a0f2b">
+<link rel="icon" href="./leka-mark.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body data-title-key="home.meta_title">
+
+<!-- ====================================================================
+     Jeu d'icônes, un seul trait, une seule grille 24×24.
+     ==================================================================== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="i" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></g>
+  </defs>
+  <symbol id="ic-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6.5 18.5 12 13 17.5"/></symbol>
+  <symbol id="ic-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="ic-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+  <symbol id="ic-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.8 2.8L16.2 9.7"/></symbol>
+  <symbol id="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></symbol>
+  <symbol id="ic-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m8.5 8-4.5 4 4.5 4M15.5 8l4.5 4-4.5 4"/></symbol>
+  <symbol id="ic-ticket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="12" rx="2.5"/><path d="M8 6v12"/></symbol>
+  <symbol id="ic-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h7.5L19 9v11.5H6z"/><path d="M13.5 3.5V9H19M9 13h7M9 16.5h5"/></symbol>
+  <symbol id="ic-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 18.5a4 4 0 0 1-.3-8 5.5 5.5 0 0 1 10.6 1.3 3.4 3.4 0 0 1-.6 6.7z"/></symbol>
+  <symbol id="ic-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6M5 12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8"/></symbol>
+  <symbol id="ic-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="6.5" rx="1.8"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="1.8"/><path d="M7 7.2h.01M7 16.8h.01"/></symbol>
+  <symbol id="ic-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></symbol>
+  <symbol id="ic-more" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 12h.01M12 12h.01M18 12h.01"/></symbol>
+  <symbol id="ic-graph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.4"/><circle cx="5" cy="18" r="2.4"/><circle cx="19" cy="18" r="2.4"/><path d="m10.8 7.2-4.6 8.6M13.2 7.2l4.6 8.6M7.4 18h9.2"/></symbol>
+  <symbol id="ic-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3.5 8.5 4.3L12 12 3.5 7.8z"/><path d="m3.5 12.4 8.5 4.3 8.5-4.3M3.5 16.6l8.5 4.3 8.5-4.3"/></symbol>
+  <symbol id="ic-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9.5" cy="8" r="3.2"/><path d="M3.5 19.5a6 6 0 0 1 12 0M16.5 5.2a3.2 3.2 0 0 1 0 5.7M18 14.4a6 6 0 0 1 2.5 5.1"/></symbol>
+  <symbol id="ic-flow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.5" width="7" height="6" rx="1.6"/><rect x="14" y="14.5" width="7" height="6" rx="1.6"/><path d="M10 6.5h4.5a3 3 0 0 1 3 3v5"/></symbol>
+  <symbol id="ic-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.2l3.4 2"/></symbol>
+  <symbol id="ic-sla" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 20 7v5.4c0 4.3-3.2 7.3-8 8.1-4.8-.8-8-3.8-8-8.1V7z"/></symbol>
+  <symbol id="ic-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10" width="15" height="10.5" rx="2.4"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10"/></symbol>
+  <symbol id="ic-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12s3.6-6 9-6c1.5 0 2.8.4 4 1M21 12s-3.6 6-9 6c-1.6 0-3-.4-4.2-1"/><path d="m4 4 16 16"/></symbol>
+  <symbol id="ic-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="13" r="4"/><path d="m11.2 10.4 8.3-8.4M17 4.5l2.2 2.2M14.6 7l2.2 2.2"/></symbol>
+  <symbol id="ic-log" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5h14v15H5z"/><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4"/></symbol>
+  <symbol id="ic-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 0 1-13.7 5.6M4 12a8 8 0 0 1 13.7-5.6"/><path d="M4 18.5V13h5.5M20 5.5V11h-5.5"/></symbol>
+</svg>
+
+<!-- ====================================================================
+     En-tête
+     ==================================================================== -->
+<header class="header" id="header">
+  <div class="header__inner">
+    <a class="brand" href="#top" aria-label="LEKA, accueil">
+      <img src="./leka-logo.svg" alt="LEKA" width="80" height="19">
+    </a>
+
+    <nav class="nav" id="nav" aria-label="Navigation principale">
+      <a href="#plateforme" data-i18n="nav.plateforme">Plateforme</a>
+      <a href="#methode" data-i18n="nav.methode">Méthode</a>
+      <a href="#cas" data-i18n="nav.cas">Cas d'usage</a>
+      <a href="#securite" data-i18n="nav.securite">Sécurité</a>
+    </nav>
+
+    <div class="header__actions">
+      <a class="signin" href="./login.html" data-i18n="nav.signin">Se connecter</a>
+      <a class="btn btn--primary btn--sm" href="./demo.html?type=demo" data-i18n="cta.demo">Demander une démo</a>
+      <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="nav">
+        <span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ==================================================================
+       Hero
+       ================================================================== -->
+  <section class="hero">
+    <div class="hero__bg" aria-hidden="true"></div>
+    <svg class="hero__lattice" viewBox="0 0 600 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <g>
+        <line x1="90" y1="130" x2="250" y2="90"/><line x1="250" y1="90" x2="420" y2="160"/>
+        <line x1="90" y1="130" x2="160" y2="290"/><line x1="160" y1="290" x2="250" y2="90"/>
+        <line x1="160" y1="290" x2="330" y2="270"/><line x1="330" y1="270" x2="420" y2="160"/>
+        <line x1="330" y1="270" x2="470" y2="330"/><line x1="160" y1="290" x2="210" y2="450"/>
+        <line x1="210" y1="450" x2="330" y2="270"/><line x1="210" y1="450" x2="380" y2="470"/>
+        <line x1="380" y1="470" x2="470" y2="330"/><line x1="470" y1="330" x2="540" y2="200"/>
+        <line x1="420" y1="160" x2="540" y2="200"/><line x1="380" y1="470" x2="500" y2="520"/>
+        <line x1="500" y1="520" x2="470" y2="330"/>
+      </g>
+      <g>
+        <circle cx="90" cy="130" r="2.6"/><circle cx="250" cy="90" r="3.6"/><circle cx="420" cy="160" r="2.6"/>
+        <circle cx="160" cy="290" r="3.6"/><circle cx="330" cy="270" r="4.4"/><circle cx="470" cy="330" r="3.6"/>
+        <circle cx="210" cy="450" r="2.6"/><circle cx="380" cy="470" r="3.6"/><circle cx="540" cy="200" r="2.6"/>
+        <circle cx="500" cy="520" r="2.6"/>
+      </g>
+    </svg>
+
+    <div class="shell hero__inner">
+      <div class="hero__copy">
+        <p class="label" data-i18n="home.hero.eyebrow">Le système nerveux technologique de votre entreprise</p>
+        <h1 class="display" data-i18n="home.hero.title">Vous savez<br>ce que vous voulez.<br><em>LEKA sait comment.</em></h1>
+        <p class="lead" data-i18n="home.hero.lead">LEKA relie vos outils, vos données et votre documentation pour construire une compréhension vivante de votre entreprise et répondre à chaque intention dans son contexte réel.</p>
+        <p class="hero__statement" data-i18n="home.hero.statement">Vous décidez. LEKA porte la complexité.</p>
+
+        <div class="hero__ctas">
+          <a class="btn btn--primary" href="./demo.html?type=demo" data-i18n="cta.demo">Demander une démo</a>
+          <a class="btn btn--ghost" href="#methode" data-i18n="home.hero.cta_secondary">Voir comment ça marche</a>
+        </div>
+
+        <ul class="benefits">
+          <li>
+            <svg><use href="#ic-search"/></svg>
+            <b data-i18n="home.benefits.1.h">Moins de recherche</b>
+            <span data-i18n="home.benefits.1.p">L'information vient à vous.</span>
+          </li>
+          <li>
+            <svg><use href="#ic-graph"/></svg>
+            <b data-i18n="home.benefits.2.h">Moins de dépendance</b>
+            <span data-i18n="home.benefits.2.p">Une connaissance partagée.</span>
+          </li>
+          <li>
+            <svg><use href="#ic-pulse"/></svg>
+            <b data-i18n="home.benefits.3.h">Plus d'action</b>
+            <span data-i18n="home.benefits.3.p">Des résultats concrets.</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Maquette produit -->
+      <div class="hero__app">
+        <article class="app" id="app" aria-label="Aperçu de l'interface LEKA">
+          <aside class="app__side">
+            <span class="brand"><img src="./leka-logo.svg" alt="LEKA" width="63" height="15"></span>
+            <button class="app__new" type="button" tabindex="-1">
+              <svg><use href="#ic-search"/></svg> <span data-i18n="home.app.new">Nouvelle intention</span>
+            </button>
+            <ul class="app__nav">
+              <li aria-current="page"><svg><use href="#ic-layers"/></svg> <span data-i18n="home.app.nav1">Mon entreprise</span></li>
+              <li><svg><use href="#ic-code"/></svg> <span data-i18n="home.app.nav2">Applications</span></li>
+              <li><svg><use href="#ic-graph"/></svg> <span data-i18n="home.app.nav3">Dépendances</span></li>
+              <li><svg><use href="#ic-pulse"/></svg> <span data-i18n="home.app.nav4">Incidents</span></li>
+              <li><svg><use href="#ic-flow"/></svg> <span data-i18n="home.app.nav5">Changements</span></li>
+              <li><svg><use href="#ic-doc"/></svg> <span data-i18n="home.app.nav6">Documentation</span></li>
+              <li><svg><use href="#ic-users"/></svg> <span data-i18n="home.app.nav7">Équipes</span></li>
+            </ul>
+            <div class="app__user">
+              <span class="app__avatar">N</span>
+              <span><b>Nora</b><small data-i18n="home.app.role">Administratrice</small></span>
+            </div>
+          </aside>
+
+          <div class="app__main">
+            <div class="app__query">
+              <span data-i18n="home.app.query">Pourquoi l'application de paiement est-elle lente depuis hier, et quelles sont mes options pour la corriger&nbsp;?</span>
+              <span class="app__send" role="presentation"><svg><use href="#ic-up"/></svg></span>
+            </div>
+
+            <section class="app__panel">
+              <div class="app__panel-head">
+                <span class="app__pulse" aria-hidden="true"></span>
+                <span data-i18n="home.app.analysis">Analyse dans le contexte de votre entreprise</span>
+                <span class="mono" id="appTimer">24 s</span>
+              </div>
+              <ul class="app__steps" id="appSteps">
+                <li><span class="app__tick"><svg><use href="#ic-check"/></svg></span> <span data-i18n="home.app.step1">Derniers déploiements</span></li>
+                <li><span class="app__tick"><svg><use href="#ic-check"/></svg></span> <span data-i18n="home.app.step2">Métriques</span> <small>Datadog</small></li>
+                <li><span class="app__tick"><svg><use href="#ic-check"/></svg></span> <span data-i18n="home.app.step3">Incidents récents</span> <small>Jira</small></li>
+                <li><span class="app__tick"><svg><use href="#ic-check"/></svg></span> <span data-i18n="home.app.step4">Graphe de dépendances</span></li>
+                <li><span class="app__tick"><svg><use href="#ic-check"/></svg></span> <span data-i18n="home.app.step5">Documentation interne</span></li>
+                <li><span class="app__tick"><svg><use href="#ic-check"/></svg></span> <span data-i18n="home.app.step6">Contraintes métier</span> <small>SLA, pics d'activité</small></li>
+              </ul>
+            </section>
+
+            <section class="app__panel">
+              <div class="app__finding">
+                <svg><use href="#ic-check-circle"/></svg>
+                <div>
+                  <b data-i18n="home.app.finding_h">Cause probable identifiée</b>
+                  <p data-i18n="home.app.finding_p">La latence du service de paiement suit une modification du service d'authentification déployée hier à 18:42. Ce service est critique pour vos parcours clients (SLA 99,9&nbsp;%).</p>
+                </div>
+              </div>
+              <div class="app__stats">
+                <div><b>3</b><small data-i18n="home.app.stat1">services impactés</small></div>
+                <div><b>2 400</b><small data-i18n="home.app.stat2">utilisateurs concernés</small></div>
+                <div><b class="risk" data-i18n="home.app.risk">Élevé</b><small data-i18n="home.app.stat3">risque métier</small></div>
+              </div>
+              <div class="app__actions">
+                <button type="button" tabindex="-1"><span data-i18n="home.app.action1">Voir l'analyse complète</span></button>
+                <button type="button" class="outline" tabindex="-1"><span data-i18n="home.app.action2">Préparer un plan d'action</span></button>
+              </div>
+            </section>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       Plateforme, sources → noyau → compréhension
+       ================================================================== -->
+  <section class="section section--mist" id="plateforme">
+    <div class="shell connect">
+      <div class="section-head reveal">
+        <p class="label" data-i18n="home.platform.eyebrow">Votre entreprise, connectée</p>
+        <h2 class="title" data-i18n="home.platform.title">Toute votre technologie.<br>Une seule compréhension.</h2>
+        <p class="body"><span data-i18n="home.platform.body">LEKA se branche sur vos outils existants et en tire une représentation vivante de votre entreprise&nbsp;: vos applications, leurs dépendances, vos processus et vos contraintes métier. Rien à ressaisir, rien à maintenir en double.</span></p>
+      </div>
+
+      <div class="connect__map reveal">
+        <svg class="connect__lines" viewBox="0 0 1000 440" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M210 52 C332 52 374 172 440 188"/>
+          <path d="M210 108 C332 108 374 178 440 188"/>
+          <path d="M210 164 C332 164 374 185 440 188"/>
+          <path d="M210 220 C332 220 374 192 440 188"/>
+          <path d="M210 276 C332 276 374 199 440 188"/>
+          <path d="M210 332 C332 332 374 205 440 188"/>
+          <path d="M210 388 C332 388 374 212 440 188"/>
+          <path class="is-live" d="M560 188 C636 188 668 168 790 24"/>
+          <path class="is-live" d="M560 188 C636 188 668 175 790 80"/>
+          <path class="is-live" d="M560 188 C636 188 668 182 790 136"/>
+          <path class="is-live" d="M560 188 C636 188 668 188 790 192"/>
+          <path class="is-live" d="M560 188 C636 188 668 195 790 248"/>
+          <path class="is-live" d="M560 188 C636 188 668 202 790 304"/>
+          <path class="is-live" d="M560 188 C636 188 668 209 790 360"/>
+          <path class="is-live" d="M560 188 C636 188 668 215 790 416"/>
+        </svg>
+
+        <ul class="connect__col" aria-label="Sources connectées">
+          <li class="node"><svg><use href="#ic-code"/></svg><span><b data-i18n="home.platform.n1">Code</b><small>GitHub, GitLab</small></span></li>
+          <li class="node"><svg><use href="#ic-ticket"/></svg><span><b data-i18n="home.platform.n2">Tickets</b><small>Jira, ServiceNow</small></span></li>
+          <li class="node"><svg><use href="#ic-doc"/></svg><span><b data-i18n="home.platform.n3">Documentation</b><small>Confluence, Notion</small></span></li>
+          <li class="node"><svg><use href="#ic-cloud"/></svg><span><b data-i18n="home.platform.n4">Cloud</b><small>AWS, Azure, GCP</small></span></li>
+          <li class="node"><svg><use href="#ic-db"/></svg><span><b data-i18n="home.platform.n5">Données</b><small data-i18n="home.platform.n5s">Bases et entrepôts</small></span></li>
+          <li class="node"><svg><use href="#ic-server"/></svg><span><b data-i18n="home.platform.n6">Infrastructure</b><small>Kubernetes, Terraform</small></span></li>
+          <li class="node"><svg><use href="#ic-pulse"/></svg><span><b data-i18n="home.platform.n7">Supervision</b><small>Datadog, Sentry</small></span></li>
+        </ul>
+
+        <div class="connect__core">
+          <div class="connect__orb">
+            <svg viewBox="0 0 624 461" aria-hidden="true"><path fill="#fff" d="M262 1 L376 0 L624 460 L474 461 L317 161 L153 461 L0 461Z"/></svg>
+          </div>
+          <p><strong data-i18n="home.platform.orb1">Le contexte de votre entreprise, unifié.</strong><br><span data-i18n="home.platform.orb2">Mis à jour en continu.</span></p>
+        </div>
+
+        <ul class="connect__col" aria-label="Ce que LEKA comprend">
+          <li class="node"><svg><use href="#ic-layers"/></svg><span><b data-i18n="home.platform.m1">Applications</b></span></li>
+          <li class="node"><svg><use href="#ic-graph"/></svg><span><b data-i18n="home.platform.m2">Dépendances</b></span></li>
+          <li class="node"><svg><use href="#ic-users"/></svg><span><b data-i18n="home.platform.m3">Équipes</b></span></li>
+          <li class="node"><svg><use href="#ic-flow"/></svg><span><b data-i18n="home.platform.m4">Processus métier</b></span></li>
+          <li class="node"><svg><use href="#ic-server"/></svg><span><b data-i18n="home.platform.m5">Infrastructure</b></span></li>
+          <li class="node"><svg><use href="#ic-db"/></svg><span><b data-i18n="home.platform.m6">Données</b></span></li>
+          <li class="node"><svg><use href="#ic-clock"/></svg><span><b data-i18n="home.platform.m7">Historique</b></span></li>
+          <li class="node"><svg><use href="#ic-sla"/></svg><span><b data-i18n="home.platform.m8">Contraintes et SLA</b></span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       Méthode, de l'intention à l'action
+       ================================================================== -->
+  <section class="section" id="methode">
+    <div class="shell">
+      <div class="section-head reveal">
+        <p class="label" data-i18n="home.method.eyebrow">De l'intention à l'action</p>
+        <h2 class="title" data-i18n="home.method.title">Vous donnez une intention.<br>LEKA s'occupe du reste.</h2>
+        <p class="body" data-i18n="home.method.body">LEKA lit votre demande dans le contexte de votre entreprise, rassemble ce qui compte, propose un plan et l'exécute dans le cadre que vous avez défini. Quatre étapes, à chaque fois les mêmes.</p>
+      </div>
+
+      <ol class="flow reveal" id="flow">
+        <li class="flow__step">
+          <span class="flow__num">01</span>
+          <h3 data-i18n="home.method.s1h">Vous exprimez votre intention</h3>
+          <p data-i18n="home.method.s1p">Une demande dans vos mots, sans jargon technique ni formulaire.</p>
+        </li>
+        <li class="flow__step">
+          <span class="flow__num">02</span>
+          <h3 data-i18n="home.method.s2h">LEKA rassemble le contexte</h3>
+          <p data-i18n="home.method.s2p">Elle va chercher ce qui est réellement lié à votre demande.</p>
+          <div class="flow__tags">
+            <span data-i18n="home.method.tag1">Architecture</span><span data-i18n="home.method.tag2">Dépendances</span><span data-i18n="home.method.tag3">Contraintes</span><span data-i18n="home.method.tag4">Équipes</span>
+          </div>
+        </li>
+        <li class="flow__step">
+          <span class="flow__num">03</span>
+          <h3 data-i18n="home.method.s3h">Vous choisissez l'option</h3>
+          <p data-i18n="home.method.s3p">Des recommandations, leurs alternatives et l'impact estimé de chacune.</p>
+        </li>
+        <li class="flow__step">
+          <span class="flow__num">04</span>
+          <h3 data-i18n="home.method.s4h">LEKA agit dans votre cadre</h3>
+          <p data-i18n="home.method.s4p">Exécution contrôlée, suivi du résultat, documentation mise à jour.</p>
+        </li>
+      </ol>
+
+      <div class="flow__prompt reveal">
+        <p data-i18n="home.method.quote">«&nbsp;Prépare la mise à jour de l'application de facturation sans impacter les clients.&nbsp;»</p>
+        <span class="mono" data-i18n="home.method.quote_meta">Contexte rassemblé en 18 s · 6 sources</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       Cas d'usage
+       ================================================================== -->
+  <section class="section section--mist" id="cas">
+    <div class="shell">
+      <div class="section-head reveal">
+        <p class="label" data-i18n="home.case.eyebrow">Un cas concret&nbsp;: l'incident</p>
+        <h2 class="title" data-i18n="home.case.title">D'un problème à une solution.</h2>
+        <p class="body" data-i18n="home.case.body">Un matin ordinaire. Une alerte tombe sur l'application de paiement. Voici ce que LEKA fait pendant que vos équipes prennent leur café.</p>
+      </div>
+
+      <div class="case">
+        <ol class="timeline reveal" id="timeline">
+          <span class="timeline__fill" id="timelineFill" aria-hidden="true"></span>
+          <li><span class="mono">08:14</span><div><b data-i18n="home.case.t1h">Alerte détectée</b><span data-i18n="home.case.t1p">Latence anormale sur l'application de paiement</span></div></li>
+          <li><span class="mono">08:15</span><div><b data-i18n="home.case.t2h">Analyse du contexte</b><span data-i18n="home.case.t2p">Déploiements récents, métriques, tickets ouverts</span></div></li>
+          <li><span class="mono">08:16</span><div><b data-i18n="home.case.t3h">Cause identifiée</b><span data-i18n="home.case.t3p">Modification du service d'authentification, 18:42 la veille</span></div></li>
+          <li><span class="mono">08:17</span><div><b data-i18n="home.case.t4h">Impacts mesurés</b><span data-i18n="home.case.t4p">3 services, 2 400 utilisateurs, SLA 99,9 % menacé</span></div></li>
+          <li><span class="mono">08:18</span><div><b data-i18n="home.case.t5h">Actions proposées</b><span data-i18n="home.case.t5p">Correctif, rollback ou ajustement de configuration</span></div></li>
+          <li><span class="mono">08:19</span><div><b data-i18n="home.case.t6h">Prêt pour décision</b><span data-i18n="home.case.t6p">Validation humaine requise avant exécution</span></div></li>
+        </ol>
+
+        <aside class="result reveal">
+          <h3 data-i18n="home.case.result_h">Ce que vous recevez à 08:19</h3>
+          <dl>
+            <div>
+              <dt data-i18n="home.case.dt1">Cause</dt>
+              <dd data-i18n="home.case.dd1">Modification du service d'authentification déployée hier à 18:42.</dd>
+            </div>
+            <div class="result__sep"></div>
+            <div>
+              <dt data-i18n="home.case.dt2">Impact</dt>
+              <dd data-i18n="home.case.dd2">3 services concernés · 2 400 utilisateurs · SLA 99,9 %</dd>
+            </div>
+            <div class="result__sep"></div>
+            <div>
+              <dt data-i18n="home.case.dt3">Actions proposées</dt>
+              <dd>
+                <ul>
+                  <li data-i18n="home.case.dd3a">Appliquer le correctif recommandé</li>
+                  <li data-i18n="home.case.dd3b">Planifier un rollback sur la fenêtre de 22 h</li>
+                  <li data-i18n="home.case.dd3c">Mettre à jour la documentation du service</li>
+                </ul>
+              </dd>
+            </div>
+          </dl>
+          <a class="btn btn--primary" href="#demo" data-i18n="home.case.result_cta">Voir le plan d'action</a>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       Contexte vivant
+       ================================================================== -->
+  <section class="section">
+    <div class="shell">
+      <div class="section-head reveal">
+        <p class="label" data-i18n="home.living.eyebrow">Votre entreprise évolue, LEKA aussi</p>
+        <h2 class="title" data-i18n="home.living.title">Un contexte vivant,<br>pas un instantané.</h2>
+        <p class="body" data-i18n="home.living.body">Chaque changement dans votre entreprise nourrit la compréhension de LEKA. Les demandes suivantes sont traitées avec le contexte le plus récent, pas avec celui d'il y a six mois.</p>
+      </div>
+
+      <div class="living reveal">
+        <div>
+          <h3 data-i18n="home.living.c1h">Votre entreprise aujourd'hui</h3>
+          <p data-i18n="home.living.c1p">Un environnement qui bouge tous les jours.</p>
+          <ul>
+            <li><svg><use href="#ic-layers"/></svg> <span data-i18n="home.living.c1li1">Applications et services</span></li>
+            <li><svg><use href="#ic-db"/></svg> <span data-i18n="home.living.c1li2">Données</span></li>
+            <li><svg><use href="#ic-cloud"/></svg> <span data-i18n="home.living.c1li3">Infrastructure</span></li>
+            <li><svg><use href="#ic-users"/></svg> <span data-i18n="home.living.c1li4">Équipes</span></li>
+            <li><svg><use href="#ic-doc"/></svg> <span data-i18n="home.living.c1li5">Documentation</span></li>
+          </ul>
+        </div>
+
+        <div class="living--mid">
+          <h3 data-i18n="home.living.c2h">Un changement survient</h3>
+          <p data-i18n="home.living.c2p">Un déploiement, un incident, une migration, une nouvelle page de documentation.</p>
+          <ul>
+            <li><svg><use href="#ic-refresh"/></svg> <span data-i18n="home.living.c2li1">LEKA met à jour sa compréhension</span></li>
+            <li><svg><use href="#ic-graph"/></svg> <span data-i18n="home.living.c2li2">Les liens se réajustent</span></li>
+            <li><svg><use href="#ic-log"/></svg> <span data-i18n="home.living.c2li3">L'historique se conserve</span></li>
+          </ul>
+          <span class="living__loop"><svg><use href="#ic-refresh"/></svg> <span data-i18n="home.living.c2loop">En continu</span></span>
+        </div>
+
+        <div>
+          <h3 data-i18n="home.living.c3h">Des réponses plus justes</h3>
+          <p data-i18n="home.living.c3p">Vos prochaines demandes partent d'un contexte à jour.</p>
+          <ul>
+            <li><svg><use href="#ic-check-circle"/></svg> <span data-i18n="home.living.c3li1">Analyses plus précises</span></li>
+            <li><svg><use href="#ic-check-circle"/></svg> <span data-i18n="home.living.c3li2">Recommandations adaptées</span></li>
+            <li><svg><use href="#ic-check-circle"/></svg> <span data-i18n="home.living.c3li3">Contraintes prises en compte</span></li>
+            <li><svg><use href="#ic-check-circle"/></svg> <span data-i18n="home.living.c3li4">Moins de risques d'erreur</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       Sécurité
+       ================================================================== -->
+  <section class="section section--mist" id="securite">
+    <div class="shell security">
+      <div class="section-head reveal">
+        <p class="label" data-i18n="home.security.eyebrow">Sécurité et gouvernance</p>
+        <h2 class="title" data-i18n="home.security.title">Votre contexte reste le vôtre.</h2>
+        <p class="body" data-i18n="home.security.body">LEKA travaille sur la connaissance la plus sensible de votre entreprise. Le cadre de sécurité est donc posé avant la première connexion, pas après.</p>
+      </div>
+
+      <div class="reveal">
+        <div class="security__grid">
+          <div>
+            <svg><use href="#ic-lock"/></svg>
+            <b data-i18n="home.security.g1h">Hébergement au choix</b>
+            <p data-i18n="home.security.g1p">Cloud dédié en Europe ou déploiement dans votre propre environnement.</p>
+          </div>
+          <div>
+            <svg><use href="#ic-eye-off"/></svg>
+            <b data-i18n="home.security.g2h">Aucun entraînement sur vos données</b>
+            <p data-i18n="home.security.g2p">Vos contenus ne servent jamais à entraîner un modèle, le nôtre comme ceux de tiers.</p>
+          </div>
+          <div>
+            <svg><use href="#ic-key"/></svg>
+            <b data-i18n="home.security.g3h">Vos permissions font foi</b>
+            <p data-i18n="home.security.g3p">LEKA hérite des droits de vos outils. Personne ne voit ce qu'il n'avait pas le droit de voir.</p>
+          </div>
+          <div>
+            <svg><use href="#ic-log"/></svg>
+            <b data-i18n="home.security.g4h">Traçabilité complète</b>
+            <p data-i18n="home.security.g4p">Chaque réponse cite ses sources, chaque action exécutée est journalisée.</p>
+          </div>
+        </div>
+        <div class="badges">
+          <span>SOC 2 Type II</span>
+          <span>ISO 27001</span>
+          <span data-i18n="home.security.badge3">Conforme RGPD</span>
+          <span>SSO / SCIM</span>
+          <span data-i18n="home.security.badge5">Chiffrement AES-256</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================
+       Clôture
+       ================================================================== -->
+  <section class="section section--ink closing" id="demo">
+    <div class="shell closing__inner">
+      <div class="reveal">
+        <h2 class="title" data-i18n="home.closing.title">La complexité ne disparaît pas.<br><span>Elle change de mains.</span></h2>
+      </div>
+      <div class="reveal">
+        <p data-i18n="home.closing.body">Vous gardez l'intention, le jugement et la décision. LEKA prend en charge la compréhension et l'exécution dans le contexte de votre entreprise.</p>
+      </div>
+      <div class="closing__ctas reveal">
+        <a class="btn btn--light" href="./demo.html?type=demo" data-i18n="cta.demo">Demander une démo</a>
+        <a class="btn btn--ghost" style="color:#fff;border-color:rgba(255,255,255,.28)" href="./demo.html?type=team" data-i18n="cta.team">Parler à l'équipe</a>
+      </div>
+      <ul class="closing__points reveal">
+        <li><b data-i18n="home.closing.p1h">Une entreprise comprise</b><span data-i18n="home.closing.p1p">Sans cartographie manuelle.</span></li>
+        <li><b data-i18n="home.closing.p2h">Des décisions plus rapides</b><span data-i18n="home.closing.p2p">Le contexte arrive avec la question.</span></li>
+        <li><b data-i18n="home.closing.p3h">Des équipes autonomes</b><span data-i18n="home.closing.p3p">La connaissance cesse d'être un goulot.</span></li>
+        <li><b data-i18n="home.closing.p4h">Un système qui s'améliore</b><span data-i18n="home.closing.p4p">Chaque changement l'enrichit.</span></li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<!-- ====================================================================
+     Pied de page
+     ==================================================================== -->
+<footer class="footer">
+  <div class="shell">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <svg viewBox="0 0 1933 461" role="img" aria-label="LEKA" style="height:20px;width:auto">
+          <path fill="#fff" d="M1 0 L138 1 L138 362 L375 363 L375 461 L0 460Z M414 0 L816 0 L816 96 L538 98 L540 181 L790 182 L791 230 L790 276 L540 276 L539 362 L820 363 L820 461 L414 461Z M872 0 L1013 0 L1013 178 L1018 179 L1212 0 L1381 0 L1133 225 L1353 459 L1182 461 L1014 284 L1013 460 L873 461Z"/>
+          <path fill="#6A46FF" d="M1571 1 L1685 0 L1933 460 L1783 461 L1626 161 L1462 461 L1309 461Z"/>
+        </svg>
+        <p data-i18n="footer.tagline">L'intelligence qui comprend votre entreprise avant de vous répondre.</p>
+      </div>
+      <div>
+        <h4 data-i18n="footer.product">Produit</h4>
+        <ul>
+          <li><a href="#plateforme" data-i18n="nav.plateforme">Plateforme</a></li>
+          <li><a href="#methode" data-i18n="nav.methode">Méthode</a></li>
+          <li><a href="#cas" data-i18n="nav.cas">Cas d'usage</a></li>
+          <li><a href="#securite" data-i18n="nav.securite">Sécurité</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-i18n="footer.resources">Ressources</h4>
+        <ul>
+          <li><a href="./documentation.html" data-i18n="footer.documentation">Documentation</a></li>
+          <li><a href="./connecteurs.html" data-i18n="footer.connecteurs">Connecteurs</a></li>
+          <li><a href="./changelog.html" data-i18n="footer.changelog">Journal des versions</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-i18n="footer.company">Entreprise</h4>
+        <ul>
+          <li><a href="./demo.html?type=contact" data-i18n="footer.contact">Nous contacter</a></li>
+          <li><a href="./mentions-legales.html" data-i18n="footer.legal">Mentions légales</a></li>
+          <li><a href="./confidentialite.html" data-i18n="footer.privacy">Confidentialité</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span data-i18n="footer.rights">© 2026 LEKA. Tous droits réservés.</span>
+      <span class="footer__lang"><select class="lang-select" aria-label="Language / Langue"></select></span>
+    </div>
+  </div>
+</footer>
+
+<script src="./script.js"></script>
+<script src="./i18n.js"></script>
+</body>
+</html>

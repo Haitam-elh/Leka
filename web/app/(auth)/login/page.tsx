@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { AuthCard } from "@/components/auth/auth-card";
 import { FormMessage, authErrorMessage } from "@/components/auth/form-message";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
-import { auth } from "@/lib/auth";
+import { auth, justSignedOut } from "@/lib/auth";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { useOnlineStatus } from "@/lib/use-online-status";
 
@@ -23,6 +23,12 @@ function LoginForm() {
   // was on here, so the person lands back where they were rather than on
   // the home page wondering what happened.
   const next = useSearchParams().get("next");
+  // Only a same-site path: an open redirect turns our login page into a
+  // convincing way to send someone to an attacker's site.
+  //
+  // The fallback is the overview itself, not "/": "/" is leka-core.com's
+  // home page, the site, not the application.
+  const target = next && next.startsWith("/") && !next.startsWith("//") ? next : routes.overview();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +36,25 @@ function LoginForm() {
   const [resent, setResent] = useState(false);
   const [resendError, setResendError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Already signed in: the site's "Se connecter" is the way into the
+  // application, so it goes on rather than asking for a password again.
+  useEffect(() => {
+    if (justSignedOut()) return;
+    let cancelled = false;
+    auth.me({ redirectOn401: false }).then(
+      () => {
+        if (!cancelled) router.replace(target);
+      },
+      () => {
+        // Not signed in, or the API is unreachable: the form is the answer
+        // either way, and it says so itself when it is used.
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [router, target]);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -39,17 +64,7 @@ function LoginForm() {
 
     try {
       await auth.login(email, password);
-      // Only a same-site path: an open redirect turns our login page into a
-      // convincing way to send someone to an attacker's site.
-      //
-      // The fallback is the overview itself, not "/". Since LEKA-338 every
-      // zone has a named path and "/" is a server redirect onto one, so
-      // going through it spent two round trips where one does — at the
-      // moment someone is watching a spinner and judging whether the
-      // product is slow.
-      router.push(
-        next && next.startsWith("/") && !next.startsWith("//") ? next : routes.overview(),
-      );
+      router.push(target);
     } catch (caught) {
       // The one case where the interface can offer a way forward: the
       // person has proved they own the account, so telling them to confirm
