@@ -14,6 +14,8 @@ export const sourceKeys = {
   detail: (id: string) => [...sourceKeys.all, "detail", id] as const,
   events: (id: string) => [...sourceKeys.all, "events", id] as const,
   catalog: () => ["connectors", "catalog"] as const,
+  syncs: (id: string) => [...sourceKeys.all, "syncs", id] as const,
+  syncSummaries: () => [...sourceKeys.all, "sync-summaries"] as const,
 };
 
 export function useSources() {
@@ -53,5 +55,24 @@ export function useSourceMutation<TArgs, TResult>(run: (args: TArgs) => Promise<
   return useMutation({
     mutationFn: run,
     onSettled: () => client.invalidateQueries({ queryKey: sourceKeys.all }),
+  });
+}
+
+/** Where each capability of a source stands. Polled while a pass is
+ * queued or running — the API says which, from the job itself. */
+export function useSourceSyncs(id: string) {
+  return useQuery({
+    queryKey: sourceKeys.syncs(id),
+    queryFn: () => sources.syncs(id),
+    refetchInterval: (query) => (query.state.data?.pass_state ? 5_000 : false),
+  });
+}
+
+/** Records per source, keyed by its id — one call for the whole list. */
+export function useSyncSummaries() {
+  return useQuery({
+    queryKey: sourceKeys.syncSummaries(),
+    queryFn: async () =>
+      new Map((await sources.syncSummaries()).map((line) => [line.source_id, line])),
   });
 }

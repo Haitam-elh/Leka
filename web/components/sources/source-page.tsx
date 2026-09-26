@@ -1,6 +1,6 @@
 "use client";
 
-import { HeartPulse, Pencil, Plug, Power, PowerOff, Trash2 } from "lucide-react";
+import { HeartPulse, Pencil, Plug, Power, PowerOff, RefreshCw, Trash2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -13,6 +13,7 @@ import { useCurrentUser, usePermissions } from "@/components/shell/shell-provide
 import { AddSourceDialog } from "@/components/sources/add-source-dialog";
 import { SourceFacts, SourceHistory } from "@/components/sources/source-panel";
 import { SourceLogo } from "@/components/sources/source-logo";
+import { SourceSyncSection } from "@/components/sources/source-sync";
 import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { Button } from "@/components/ui/button";
@@ -22,9 +23,9 @@ import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
-import { canActivate, canDisable, type Source, sources, sourceTone } from "@/lib/sources";
+import { canActivate, canDisable, canSync, type Source, sources, sourceTone } from "@/lib/sources";
 import { scopeFieldOf } from "@/lib/sources-form";
-import { useCatalog, useSource, useSourceMutation } from "@/lib/sources-queries";
+import { useCatalog, useSource, useSourceMutation, useSyncSummaries } from "@/lib/sources-queries";
 
 /**
  * One source, with everything that can be done to it (LEKA-345).
@@ -79,6 +80,7 @@ export function SourcePage({ sourceId }: { sourceId: string }) {
             </div>
             <Facts source={source} />
           </section>
+          <SourceSyncSection source={source} />
           <Configuration source={source} />
         </div>
         <section className="self-start rounded-xl border border-shell-line bg-white p-4">
@@ -91,7 +93,14 @@ export function SourcePage({ sourceId }: { sourceId: string }) {
 }
 
 function Facts({ source }: { source: Source }) {
-  return <SourceFacts source={source} owner={useOwner(source)} />;
+  const summaries = useSyncSummaries();
+  return (
+    <SourceFacts
+      source={source}
+      owner={useOwner(source)}
+      records={summaries.data?.get(source.id)?.records_total}
+    />
+  );
 }
 
 function useOwner(source: Source): string {
@@ -177,6 +186,23 @@ function Actions({ source }: { source: Source }) {
     );
   }
 
+  async function syncNow() {
+    await attempt(
+      async () => {
+        const { queued } = await sources.syncNow(source.id);
+        if (queued) {
+          notify.info({
+            title: t.sources.sync.started,
+            description: fill(t.sources.sync.startedBody, { name }),
+          });
+        } else {
+          notify.info({ title: fill(t.sources.sync.already, { name }) });
+        }
+      },
+      () => {},
+    );
+  }
+
   async function checkHealth() {
     await attempt(
       () => sources.checkHealth(source.id),
@@ -207,6 +233,12 @@ function Actions({ source }: { source: Source }) {
     <div className="flex flex-wrap gap-2">
       {hasConnector ? (
         <>
+          {canSync(source) ? (
+            <Button onClick={() => void syncNow()} disabled={busy}>
+              <RefreshCw aria-hidden="true" />
+              {t.sources.sync.now}
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={() => void test()} disabled={busy}>
             <Plug aria-hidden="true" />
             {p.test}

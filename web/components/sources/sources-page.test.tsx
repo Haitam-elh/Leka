@@ -17,6 +17,7 @@ import type { Source, SourceEvent } from "@/lib/sources";
 
 const list = vi.fn();
 const events = vi.fn();
+const syncSummaries = vi.fn();
 let permissions: string[] = ["source:read", "source:manage"];
 
 vi.mock("@/lib/sources", async (original) => ({
@@ -24,6 +25,7 @@ vi.mock("@/lib/sources", async (original) => ({
   sources: {
     list: () => list(),
     events: (id: string) => events(id),
+    syncSummaries: () => syncSummaries(),
   },
 }));
 
@@ -101,6 +103,7 @@ beforeEach(() => {
   permissions = ["source:read", "source:manage"];
   list.mockResolvedValue({ data: [GITHUB, GITLAB, JIRA] });
   events.mockResolvedValue({ data: [] });
+  syncSummaries.mockResolvedValue([]);
 });
 
 describe("the figures", () => {
@@ -112,6 +115,38 @@ describe("the figures", () => {
     expect(within(connected).getByText("2")).toBeInTheDocument();
     expect(screen.getByText("Comptés dès la première synchronisation")).toBeInTheDocument();
     expect(screen.queryByText("48 320")).not.toBeInTheDocument();
+  });
+});
+
+describe("what the sync read", () => {
+  it("counts the records of each source, and all of them", async () => {
+    syncSummaries.mockResolvedValue([
+      {
+        source_id: GITHUB.id,
+        records_total: 12430,
+        last_succeeded_at: minutesAgo(4),
+        pass_state: "running",
+      },
+      {
+        source_id: GITLAB.id,
+        records_total: 70,
+        last_succeeded_at: minutesAgo(9),
+        pass_state: null,
+      },
+    ]);
+    renderPage();
+
+    const table = await screen.findByRole("table");
+    const row = (name: string) => within(table).getByText(name).closest("tr") as HTMLElement;
+    expect(await within(row("Acme GitHub")).findByText("12 430")).toBeInTheDocument();
+    expect(within(row("Acme Jira")).getByLabelText("Pas encore compté")).toBeInTheDocument();
+
+    const tile = screen.getByText("Éléments synchronisés").closest("li") as HTMLElement;
+    expect(within(tile).getByText("12 500")).toBeInTheDocument();
+    expect(within(tile).getByText("lus dans 2 source(s)")).toBeInTheDocument();
+    // Running is what a worker holds, not what a source's status says.
+    const running = screen.getByText("Synchronisations en cours").closest("li") as HTMLElement;
+    expect(within(running).getByText("1")).toBeInTheDocument();
   });
 });
 
