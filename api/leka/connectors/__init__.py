@@ -13,6 +13,7 @@ imported below; there is no other discovery (ADR 015).
 
 from leka.connectors import (
     bitbucket,  # noqa: F401  — registers BitbucketConnector
+    confluence,  # noqa: F401  — registers ConfluenceConnector
     github,  # noqa: F401  — registers GitHubConnector
     gitlab,  # noqa: F401  — registers GitLabConnector
     jira,  # noqa: F401  — registers JiraConnector
