@@ -28,14 +28,25 @@ from leka.connectors.models import (
 
 
 class RawRecord(BaseModel):
-    """One object as its source described it, untouched."""
+    """One object as its source described it, untouched.
+
+    No source id: a connector does not know which source it is serving. The
+    sync engine, which does, stores the record against it.
+    """
 
     model_config = ConfigDict(frozen=True)
 
-    source_id: uuid.UUID
+    kind: Capability
+    # The vendor's own identifier, stable across renames where the vendor
+    # has one (GitHub's node_id): what a later pass updates rather than
+    # duplicates.
     external_id: str
-    kind: str
+    # Where it lives inside the source, for a human: "acme/api". None for
+    # what lives at the top (a repository).
+    container: str | None = None
     payload: dict[str, object]
+    # When the vendor says it last changed; None when it does not say.
+    updated_at: datetime | None = None
     fetched_at: datetime
 
 

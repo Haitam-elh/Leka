@@ -54,6 +54,7 @@ class Capability(enum.StrEnum):
     PULL_REQUESTS = "pull_requests"
     RELEASES = "releases"
     ISSUES = "issues"
+    BRANCHES = "branches"
 
 
 class ConnectorManifest(BaseModel):
@@ -123,10 +124,21 @@ class Connector[ConfigT: BaseModel, CredentialsT: BaseModel](ABC):
     async def check_health(self) -> HealthResult:
         """A light call, free of quota where the vendor allows it."""
 
-    def iter_resources(self, capability: Capability) -> AsyncIterator[RawRecord]:
-        """Stream what a source holds for one capability. LEKA-352.
+    def iter_resources(
+        self, capability: Capability, *, since: datetime | None = None
+    ) -> AsyncIterator[RawRecord]:
+        """Stream what a source holds for one capability, page by page.
 
-        Declared here so the sync engine has a signature to build against;
-        not abstract, so no connector has to write a fake sync to exist.
+        `since` is None for an initial pass. For an incremental one it is
+        when the previous successful pass started: the connector returns
+        what changed after it where the vendor can filter, and everything
+        where it cannot — the sync engine keeps the latest version of each
+        external_id, so a record seen twice costs a write, not a duplicate.
+
+        A failure raises ConnectorError, like the other two methods. What
+        was yielded before it is valid: the engine keeps it, and the next
+        pass starts from the same `since`.
+
+        Not abstract: a connector that cannot synchronise yet still exists.
         """
-        raise NotImplementedError("synchronisation arrives with LEKA-352")
+        raise NotImplementedError(f"{self.manifest.key} does not synchronise yet")

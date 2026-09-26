@@ -723,7 +723,7 @@ export interface components {
          *     discovered for each source: a token may see repositories and not issues.
          * @enum {string}
          */
-        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "issues";
+        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "issues" | "branches";
         /** CatalogEntry */
         CatalogEntry: {
             key: components["schemas"]["SourceKind"];
