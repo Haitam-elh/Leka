@@ -30,6 +30,7 @@ const api = {
   syncNow: vi.fn(),
   syncs: vi.fn(),
   syncSummaries: vi.fn(),
+  runs: vi.fn(),
 };
 const push = vi.fn();
 const notify = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
@@ -107,6 +108,7 @@ beforeEach(() => {
   api.catalog.mockResolvedValue([GITHUB]);
   api.syncs.mockResolvedValue({ pass_state: null, capabilities: [] });
   api.syncSummaries.mockResolvedValue([]);
+  api.runs.mockResolvedValue({ data: [] });
 });
 
 describe("a source's page", () => {
@@ -269,5 +271,55 @@ describe("its sync", () => {
     expect(
       screen.queryByRole("button", { name: "Synchroniser maintenant" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("its passes", () => {
+  const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+  const run = (overrides: Record<string, unknown>) => ({
+    id: crypto.randomUUID(),
+    trigger: "schedule",
+    full_read: false,
+    status: "succeeded",
+    started_at: minutesAgo(60),
+    finished_at: minutesAgo(56),
+    capability: null,
+    records: 1240,
+    payloads: 3,
+    bytes: 2_400_000,
+    error: null,
+    ...overrides,
+  });
+
+  it("lists them, and says how far the running one has got", async () => {
+    api.runs.mockResolvedValue({
+      data: [
+        run({ status: "running", finished_at: null, capability: "commits", records: 1500 }),
+        run({ trigger: "manual", full_read: true }),
+        run({ status: "failed", error: { message: "Le jeton a été refusé." } }),
+        run({ trigger: "activation", status: "abandoned" }),
+      ],
+    });
+    renderPage();
+
+    const section = (
+      await screen.findByRole("heading", { name: "Historique des synchronisations" })
+    ).closest("section") as HTMLElement;
+    const progress = await within(section).findByText(/Lecture des commits/);
+    expect(progress).toHaveTextContent("Lecture des commits : 1 500 élément(s) jusqu'ici");
+    expect(progress).toHaveAttribute("role", "status");
+    const rows = within(section).getAllByRole("row").slice(1);
+    expect(within(rows[1]).getByText("Un administrateur")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Complète")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("4 min 00 s")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("2,3 Mo")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("Le jeton a été refusé.")).toBeInTheDocument();
+    expect(within(rows[3]).getByText("Interrompue")).toBeInTheDocument();
+  });
+
+  it("says when there has been none", async () => {
+    renderPage();
+
+    expect(await screen.findByText("Aucune synchronisation pour l'instant.")).toBeInTheDocument();
   });
 });
