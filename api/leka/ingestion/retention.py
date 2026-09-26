@@ -37,6 +37,7 @@ from leka.core.config import settings
 # Observability — enormous, stale in days.
 DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     SourceKind.GITHUB: 90,
+    SourceKind.GITLAB: 90,
     SourceKind.JIRA: 90,
     SourceKind.CONFLUENCE: 90,
     SourceKind.SLACK: 30,
