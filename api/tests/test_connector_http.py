@@ -241,3 +241,58 @@ async def test_a_single_call_is_not_refused_for_a_low_quota() -> None:
     transport, _ = _paged(remaining=1)
     async with _vendor(transport) as vendor:
         assert (await vendor.get("/things")).status_code == 200
+
+
+# ── reads a vendor offers only as POST ───────────────────────────────────────
+
+
+def _reading_by_post(handler: httpx.MockTransport) -> VendorHttp:
+    def refuse(response: httpx.Response, path: str, missing: str) -> ConnectorError:
+        return refusal(response, path, SECRET, usual_code(response.status_code))
+
+    client = httpx.AsyncClient(base_url="https://api.vendor.example", transport=handler)
+    return VendorHttp(
+        client, secret=SECRET, refuse=refuse, page_size=50, reads_by_post=frozenset({"/search"})
+    )
+
+
+async def test_a_declared_read_is_posted_with_its_body() -> None:
+    sent: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={"results": []})
+
+    async with _reading_by_post(httpx.MockTransport(handle)) as vendor:
+        response = await vendor.post("/search", {"query": "runbook"})
+
+    assert response.json() == {"results": []}
+    assert (sent[0].method, sent[0].url.path) == ("POST", "/search")
+    assert sent[0].read() == b'{"query":"runbook"}'
+
+
+@pytest.mark.parametrize("path", ["/pages", "/search/../pages", "/search/", "/blocks/1/children"])
+async def test_a_post_anywhere_else_is_refused_before_it_is_sent(path: str) -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("nothing may be sent")
+
+    async with _reading_by_post(httpx.MockTransport(handle)) as vendor:
+        with pytest.raises(ValueError, match="not a read this connector declared"):
+            await vendor.post(path, {"archived": True})
+
+
+async def test_a_refused_post_is_a_diagnostic_like_a_get() -> None:
+    echo = httpx.MockTransport(lambda request: httpx.Response(429, text=f"slow down {SECRET}"))
+
+    async with _reading_by_post(echo) as vendor:
+        with pytest.raises(ConnectorError) as caught:
+            await vendor.post("/search", {})
+
+    assert caught.value.diagnostic.code is DiagnosticCode.RATE_LIMITED
+    assert SECRET not in repr(caught.value.diagnostic)
+
+
+async def test_a_client_that_declared_nothing_posts_nothing() -> None:
+    async with _vendor(httpx.MockTransport(lambda request: httpx.Response(200))) as vendor:
+        with pytest.raises(ValueError):
+            await vendor.post("/things", {})
