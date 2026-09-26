@@ -867,6 +867,16 @@ export interface components {
             new_password: string;
         };
         /**
+         * CompanySize
+         * @description How many people work where someone works, as they said when
+         *     registering — the brackets of the site's own forms.
+         *
+         *     Text with a CHECK constraint, not a PostgreSQL ENUM — see
+         *     docs/adr/006-enum-storage.md.
+         * @enum {string}
+         */
+        CompanySize: "1-10" | "11-50" | "51-200" | "201-1000" | "1000+";
+        /**
          * ConnectionTestResult
          * @description What a successful test found.
          */
@@ -1361,6 +1371,15 @@ export interface components {
         };
         /** RegisterRequest */
         RegisterRequest: {
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
+            /** Company */
+            company: string;
+            /** Job Title */
+            job_title?: string | null;
+            company_size?: components["schemas"]["CompanySize"] | null;
             /** Password */
             password: string;
             /** Email */
@@ -1751,6 +1770,15 @@ export interface components {
             email_verified_at: string | null;
             /** Last Login At */
             last_login_at: string | null;
+            /** First Name */
+            first_name?: string | null;
+            /** Last Name */
+            last_name?: string | null;
+            /** Company */
+            company?: string | null;
+            /** Job Title */
+            job_title?: string | null;
+            company_size?: components["schemas"]["CompanySize"] | null;
         };
         /**
          * WorkspaceCreate

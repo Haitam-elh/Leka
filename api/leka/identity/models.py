@@ -22,7 +22,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -32,6 +32,21 @@ from leka.db import Base, TimestampMixin, UUIDPrimaryKeyMixin
 def _values(enum_class: type[enum.StrEnum]) -> list[str]:
     """Store the enum VALUE, not the member name."""
     return [member.value for member in enum_class]
+
+
+class CompanySize(enum.StrEnum):
+    """How many people work where someone works, as they said when
+    registering — the brackets of the site's own forms.
+
+    Text with a CHECK constraint, not a PostgreSQL ENUM — see
+    docs/adr/006-enum-storage.md.
+    """
+
+    UP_TO_10 = "1-10"
+    UP_TO_50 = "11-50"
+    UP_TO_200 = "51-200"
+    UP_TO_1000 = "201-1000"
+    OVER_1000 = "1000+"
 
 
 class TokenPurpose(enum.StrEnum):
@@ -49,6 +64,12 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """A person who can sign in."""
 
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "company_size IN (" + ", ".join(f"'{size}'" for size in _values(CompanySize)) + ")",
+            name="company_size",
+        ),
+    )
 
     # Globally unique: one account per person across the whole platform.
     # Lower-cased on the way in, so Nora@ and nora@ are the same account and
@@ -81,6 +102,26 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # anyone who knows an email address can deny that person access. Rate
     # limiting handles abuse; see docs/security.md.
     failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+    # Who they are, as they said when registering: what an operator needs
+    # to know before granting a workspace, and what the interface calls
+    # them. Asked of every new account; NULL for the accounts made before
+    # the site asked, and never required to sign in.
+    first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    company: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    job_title: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    company_size: Mapped[CompanySize | None] = mapped_column(
+        Enum(
+            CompanySize,
+            name="company_size",
+            native_enum=False,
+            length=20,
+            values_callable=_values,
+            create_constraint=False,
+        ),
+        nullable=True,
+    )
 
     @property
     def is_verified(self) -> bool:

@@ -48,6 +48,7 @@ from leka.identity.repository import (
     SessionRepository,
     UserRepository,
 )
+from leka.identity.schemas import AccountProfile
 
 logger = structlog.get_logger(__name__)
 
@@ -153,7 +154,7 @@ class AuthService:
 
     # ── Registration and verification ────────────────────────────────────────
 
-    async def register(self, email: str, password: str) -> None:
+    async def register(self, email: str, password: str, profile: AccountProfile) -> None:
         """Create an account, or pretend to.
 
         Returns nothing in every case, and the route answers identically —
@@ -167,6 +168,10 @@ class AuthService:
           them for not having verified it — a dead end on both sides;
         - registered and verified: a warning that someone tried, which is
           the useful answer if it was them and the safe one if it was not.
+
+        The profile is kept only on a NEW account. Registering again with an
+        address never rewrites who its owner said they were: anyone can type
+        someone else's address into the form.
         """
         await self._reject_unusable_password(password)
 
@@ -178,7 +183,15 @@ class AuthService:
                 await self._issue_verification(existing)
             return
 
-        user = User(email=email, password_hash=hash_password(password))
+        user = User(
+            email=email,
+            password_hash=hash_password(password),
+            first_name=profile.first_name,
+            last_name=profile.last_name,
+            company=profile.company,
+            job_title=profile.job_title,
+            company_size=profile.company_size,
+        )
         self._users.add(user)
         await self._users.flush()
         await self._issue_verification(user)

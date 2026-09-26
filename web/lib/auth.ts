@@ -14,22 +14,41 @@ export interface WorkspaceMembership {
   role: string;
 }
 
+/** The brackets the site's forms have always offered. */
+export const COMPANY_SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"] as const;
+export type CompanySize = (typeof COMPANY_SIZES)[number];
+
+/** Who is registering: the first three are required, the rest optional. */
+export interface AccountProfile {
+  first_name: string;
+  last_name: string;
+  company: string;
+  job_title?: string;
+  company_size?: CompanySize;
+}
+
 export interface CurrentUser {
   user: {
     id: string;
     email: string;
     email_verified_at: string | null;
     last_login_at: string | null;
+    // Null for an account made before registration asked.
+    first_name?: string | null;
+    last_name?: string | null;
+    company?: string | null;
+    job_title?: string | null;
+    company_size?: CompanySize | null;
   };
   workspaces: WorkspaceMembership[];
   active_workspace_id: string | null;
 }
 
 export const auth = {
-  register: (email: string, password: string) =>
+  register: (email: string, password: string, profile: AccountProfile) =>
     apiFetch<{ detail: string }>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, ...profile }),
     }),
 
   verify: (token: string) =>
