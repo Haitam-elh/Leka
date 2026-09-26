@@ -138,6 +138,11 @@ describe("the overview", () => {
       expect.stringContaining("Source activée"),
       expect.stringContaining("Connexion vérifiée"),
     ]);
+    // The moment itself, machine-readable, as the knowledge timeline gives it.
+    const time = rows[0].querySelector("time");
+    expect(time).not.toBeNull();
+    expect(Date.parse(time?.getAttribute("dateTime") ?? "")).toBeGreaterThan(Date.now() - 6 * 60_000);
+    expect(time).toHaveAttribute("title");
   });
 
   it("never shows the mockup's figures", async () => {

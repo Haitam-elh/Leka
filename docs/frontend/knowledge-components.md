@@ -142,9 +142,16 @@ be added as a dependency when a page needs it.
 ## Where they are used
 
 - **Vue d'ensemble**: the connected sources card uses `StatusBadge`
-  (`source.*`).
-- **Mon environnement / Company Model**: out of this ticket's scope — those
-  pages need a knowledge API first. They are what these components are for.
+  (`source.*`), and its times — "Il y a 4 min", "14:02" — come from the
+  same helpers as the components' (`time.ts`), so no two screens can
+  disagree about how long ago something was.
+- **Mon environnement / Company Model**: those pages are LEKA-369's
+  (Knowledge Graph & Company Views, sprint 3), which also brings the API
+  that serves the graph — no route reads it yet, and nothing writes it
+  before the extraction and company-model tickets (LEKA-354, LEKA-361,
+  LEKA-368). They are built from these components: mockup 10 is
+  `DependencyGraph` with `StatusBadge` and `EventTimeline`, mockup 11 is
+  `EntityDetailPanel`.
 
 ## Adding a state
 
