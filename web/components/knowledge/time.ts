@@ -28,3 +28,13 @@ export function exactDate(locale: string, iso: string | Date): string {
     timeStyle: "short",
   }).format(new Date(iso));
 }
+
+/** "14:02" today, "24 sept." before — how the mockups' timelines read. */
+export function shortWhen(locale: string, iso: string | Date, now = Date.now()): string {
+  const date = new Date(iso);
+  const today = new Date(now).toDateString() === date.toDateString();
+  return new Intl.DateTimeFormat(
+    locale === "fr" ? "fr-FR" : "en-GB",
+    today ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short" },
+  ).format(date);
+}
