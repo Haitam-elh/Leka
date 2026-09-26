@@ -12,6 +12,8 @@ else, and started that way the worker:
 - ignored LEKA_LOG_FORMAT, printing coloured console output to a staging log
   collector that expects JSON;
 - never initialised Sentry, so an exception in a job reached nobody.
+- and never registered the whole schema: a job importing one module met a
+  foreign key to a table it had never been shown (leka/schema.py).
 
 Same queues, same order as before: leka:high, leka, leka:low. See JobQueue.
 
@@ -47,6 +49,16 @@ def queues_to_drain(names: Sequence[str]) -> tuple[JobQueue, ...]:
     return tuple(JobQueue(name) for name in names)
 
 
+def load_schema() -> None:
+    """Show SQLAlchemy every table before any job runs, as the API does.
+
+    In the worker, before RQ forks a work-horse per job: every job inherits
+    it. Imported here rather than at the top of this module because it
+    imports every module of LEKA, which the tests of this file do not need.
+    """
+    import leka.schema  # noqa: F401 — see leka/schema.py
+
+
 def main(argv: Sequence[str] = ()) -> None:
     queues = queues_to_drain(argv)
 
@@ -54,6 +66,7 @@ def main(argv: Sequence[str] = ()) -> None:
     # After logging, never before — the same order as the API's lifespan:
     # Sentry scrubs its events with the masker configure_logging builds.
     configure_monitoring(settings)
+    load_schema()
 
     connection = worker_connection()
     worker = Worker(
