@@ -108,6 +108,10 @@ class SourceEventType(enum.StrEnum):
     HEALTH_CHANGED = "health_changed"
     DISABLED = "disabled"
     DELETED = "deleted"
+    # Written by the sync (LEKA-352) when a source starts failing and when it
+    # recovers — not on every pass, or an hourly sync would bury the rest.
+    SYNC_FAILED = "sync_failed"
+    SYNC_RECOVERED = "sync_recovered"
 
 
 class Source(Base, WorkspaceScopedMixin):

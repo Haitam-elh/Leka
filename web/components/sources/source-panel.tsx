@@ -177,7 +177,8 @@ export function timelineEvent(t: Dictionary, event: SourceEvent): TimelineEvent 
           current: health[String(payload.current)] ?? String(payload.current),
         })
       : words[event.type];
-  const failed = event.type === "test_failed" || event.type === "deleted";
+  const failed =
+    event.type === "test_failed" || event.type === "deleted" || event.type === "sync_failed";
   return {
     id: event.id,
     type: event.type === "health_changed" || failed ? "health_change" : "change",

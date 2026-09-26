@@ -264,6 +264,19 @@ class SourceService:
         self._record(source, SourceEventType.DELETED, kind=source.kind.value, name=source.name)
         await self._sources.remove(source)
 
+    async def open_connector(self, source: Source) -> Connector[Any, Any]:
+        """The source's connector, its credentials decrypted, for one pass.
+
+        For the sync (leka.ingestion), which reads through it. Raises
+        ConnectorError with CONFIG_INVALID when it cannot be built. Hold it
+        for the pass and drop it: nothing should keep a plaintext longer.
+        """
+        return await self._build(source)
+
+    def record(self, source: Source, type_: SourceEventType, **payload: object) -> None:
+        """Append to the source's history, for work done outside this service."""
+        self._record(source, type_, **payload)
+
     # ── inside ───────────────────────────────────────────────────────────────
 
     async def _build(self, source: Source) -> Connector[Any, Any]:
