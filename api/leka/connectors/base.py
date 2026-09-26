@@ -12,7 +12,8 @@ READ-ONLY, BY CONTRACT. LEKA never writes to a customer's system.
 client is a read client: it has no method that sends a body.
 
 Every HTTP call goes through `self.http()`: an httpx.AsyncClient with a
-10-second timeout per call, and a transport the tests replace. The whole of
+10-second timeout per call, and a transport the tests replace — otherwise
+https to public addresses only (leka/connectors/network.py). The whole of
 a connection test is bounded at 15 seconds by the lifecycle service.
 """
 
@@ -28,6 +29,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from leka.connectors.models import HealthStatus, SourceKind
+from leka.connectors.network import PublicTransport
 
 if TYPE_CHECKING:  # pragma: no cover - schemas imports this module
     from leka.connectors.schemas import RawRecord
@@ -126,7 +128,8 @@ class Connector[ConfigT: BaseModel, CredentialsT: BaseModel](ABC):
             base_url=base_url,
             headers=headers or {},
             timeout=HTTP_TIMEOUT,
-            transport=self._transport,
+            # The tests' MockTransport, or the network — public addresses only.
+            transport=self._transport or PublicTransport(),
             follow_redirects=False,
         )
 

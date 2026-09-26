@@ -35,7 +35,13 @@ class Connector[ConfigT, CredentialsT](ABC):
 A connector receives its config and credentials **already validated and
 decrypted**, and never touches the database. Every HTTP call goes through
 `self.http()`: `httpx.AsyncClient`, 10 s per call, a transport the tests
-replace. A whole connection test is bounded at **15 s** by the service.
+replace. Otherwise the transport is `PublicTransport`
+(`leka/connectors/network.py`): **https only, to public addresses only**,
+checked when connecting — the name is resolved, every address must be
+globally routable (no loopback, private, link-local, metadata or CGNAT
+range), and the connection goes to the address checked, the name kept for
+Host and TLS. A `base_url` that breaks this is `CONFIG_INVALID`; the form
+already refuses plain http and literal private addresses. A whole connection test is bounded at **15 s** by the service.
 
 `iter_resources` streams what a source holds for one capability, page by
 page, as `RawRecord`s: the vendor's payload untouched, its stable

@@ -57,6 +57,7 @@ from leka.connectors.http import (
     usual_code,
 )
 from leka.connectors.models import HealthStatus, SourceKind
+from leka.connectors.network import PublicHttpsUrl
 from leka.connectors.registry import register_connector
 from leka.connectors.schemas import RawRecord
 
@@ -78,7 +79,7 @@ class GitLabConfig(BaseModel):
         description="The group to read, with its subgroups: 'acme' or 'acme/platform'. "
         "Empty: the projects the token's owner is a member of.",
     )
-    base_url: HttpUrl = Field(
+    base_url: PublicHttpsUrl = Field(
         default=HttpUrl("https://gitlab.com"),
         description="Change only for a self-managed GitLab.",
     )
