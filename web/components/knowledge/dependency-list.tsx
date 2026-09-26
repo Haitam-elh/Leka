@@ -70,9 +70,10 @@ export function DependencyList({
           const direction = upstream
             ? t.knowledge.dependencies.upstream
             : t.knowledge.dependencies.downstream;
-          const relation = item.relation && item.relation !== "depends_on"
-            ? t.knowledge.relationships[item.relation]
-            : null;
+          const relation =
+            item.relation && item.relation !== "depends_on"
+              ? t.knowledge.relationships[item.relation]
+              : null;
 
           return (
             <li
@@ -92,7 +93,10 @@ export function DependencyList({
                     {item.entity.name}
                   </button>
                 ) : (
-                  <p title={item.entity.name} className="truncate text-[0.8125rem] font-semibold text-brand-navy">
+                  <p
+                    title={item.entity.name}
+                    className="truncate text-[0.8125rem] font-semibold text-brand-navy"
+                  >
                     {item.entity.name}
                   </p>
                 )}

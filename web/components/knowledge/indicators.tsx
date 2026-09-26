@@ -21,7 +21,11 @@ export function qualityLevel(score: number): QualityLevel {
   return "low";
 }
 
-const QUALITY_TONE: Record<QualityLevel, Tone> = { high: "success", medium: "warning", low: "danger" };
+const QUALITY_TONE: Record<QualityLevel, Tone> = {
+  high: "success",
+  medium: "warning",
+  low: "danger",
+};
 
 export interface QualityIndicatorProps {
   /** 0 to 100. From an entity's confidence: confidenceToScore(). */
@@ -145,7 +149,10 @@ export function FreshnessIndicator({
 
   return (
     <Tooltip>
+      {/* "Il y a 3 min" is computed from now: the server's now and the
+          browser's can straddle a minute. Only these nodes may differ. */}
       <TooltipTrigger
+        suppressHydrationWarning
         data-freshness={state}
         aria-label={`${fill(t.knowledge.freshness.aria, { state: word, ago })}. ${exact}`}
         className={cn(
@@ -155,8 +162,8 @@ export function FreshnessIndicator({
         )}
       >
         <Icon aria-hidden="true" className="size-3.5 shrink-0" />
-        {showLabel && state !== "never" ? <span>{word} ·</span> : null}
-        <span>{ago}</span>
+        {showLabel && state !== "never" ? <span suppressHydrationWarning>{word} ·</span> : null}
+        <span suppressHydrationWarning>{ago}</span>
       </TooltipTrigger>
       <TooltipContent>{exact}</TooltipContent>
     </Tooltip>

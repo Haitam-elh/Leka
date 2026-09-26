@@ -71,7 +71,12 @@ describe("EntityDetailPanel", () => {
     expect(panel).toHaveTextContent("Version v2.8.4");
     expect(panel).toHaveTextContent("Thomas Martin");
     expect(within(panel).getByRole("group", { name: "Provenance" })).toBeVisible();
-    for (const title of ["Changements récents", "Incidents récents", "Dépendances (1)", "Informations générales"]) {
+    for (const title of [
+      "Changements récents",
+      "Incidents récents",
+      "Dépendances (1)",
+      "Informations générales",
+    ]) {
       expect(within(panel).getByRole("heading", { level: 3, name: title })).toBeVisible();
     }
   });
@@ -99,7 +104,14 @@ describe("EntityDetailPanel", () => {
   it("drops sections whose lists are empty, rather than showing empty boxes", () => {
     mount(
       <EntityDetailPanel
-        entity={{ ...PAYMENT_API, changes: [], incidents: [], dependencies: [], sections: [], metrics: [] }}
+        entity={{
+          ...PAYMENT_API,
+          changes: [],
+          incidents: [],
+          dependencies: [],
+          sections: [],
+          metrics: [],
+        }}
       />,
     );
 

@@ -85,7 +85,11 @@ describe("DependencyList", () => {
   });
 });
 
-const event = (index: number, minutesAgo: number, type = EVENT_TYPES[index % 7]): TimelineEvent => ({
+const event = (
+  index: number,
+  minutesAgo: number,
+  type = EVENT_TYPES[index % 7],
+): TimelineEvent => ({
   id: `evt-${index}`,
   type,
   title: `Événement ${index}`,

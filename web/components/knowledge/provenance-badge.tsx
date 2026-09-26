@@ -61,7 +61,9 @@ export function ProvenanceBadge({
 
   return (
     <Tooltip>
+      {/* Its name says how long ago it synced — computed from now. */}
       <TooltipTrigger
+        suppressHydrationWarning
         data-stale={stale ? "true" : undefined}
         aria-label={`${fill(t.knowledge.provenance.aria, { source: full })}. ${lines.slice(1).join(". ")}`}
         className={cn(

@@ -41,10 +41,7 @@ describe("MetadataPanel", () => {
   it("shows a dash for a missing value, and nothing for empty sections", () => {
     const { container } = mount(
       <MetadataPanel
-        sections={[
-          { title: "Vide", items: [] },
-          { items: [{ label: "Runbook", value: null }] },
-        ]}
+        sections={[{ title: "Vide", items: [] }, { items: [{ label: "Runbook", value: null }] }]}
       />,
     );
 
@@ -119,7 +116,9 @@ const bodyRows = () => within(screen.getAllByRole("rowgroup")[1]).getAllByRole("
 
 describe("KnowledgeTable", () => {
   it("has a caption and headers that describe it", () => {
-    mount(<KnowledgeTable caption="Services" columns={COLUMNS} rows={rows(3)} rowKey={(r) => r.id} />);
+    mount(
+      <KnowledgeTable caption="Services" columns={COLUMNS} rows={rows(3)} rowKey={(r) => r.id} />,
+    );
 
     expect(screen.getByRole("table", { name: "Services" })).toBeVisible();
     expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
@@ -132,7 +131,9 @@ describe("KnowledgeTable", () => {
 
   it("sorts from the header, says how in aria-sort, and keeps missing values last", async () => {
     const user = userEvent.setup();
-    mount(<KnowledgeTable caption="Services" columns={COLUMNS} rows={rows(8)} rowKey={(r) => r.id} />);
+    mount(
+      <KnowledgeTable caption="Services" columns={COLUMNS} rows={rows(8)} rowKey={(r) => r.id} />,
+    );
 
     const header = screen.getByRole("columnheader", { name: /Incidents/ });
     expect(header).toHaveAttribute("aria-sort", "none");
@@ -145,12 +146,16 @@ describe("KnowledgeTable", () => {
     expect(header).toHaveAttribute("aria-sort", "descending");
     expect(bodyRows()[0]).toHaveTextContent("4");
     expect(bodyRows().at(-1)).toHaveTextContent("—");
-    expect(screen.getByRole("columnheader", { name: "Identifiant" })).not.toHaveAttribute("aria-sort");
+    expect(screen.getByRole("columnheader", { name: "Identifiant" })).not.toHaveAttribute(
+      "aria-sort",
+    );
   });
 
   it("pages 500 rows, rendering one page at a time", async () => {
     const user = userEvent.setup();
-    mount(<KnowledgeTable caption="Services" columns={COLUMNS} rows={rows(500)} rowKey={(r) => r.id} />);
+    mount(
+      <KnowledgeTable caption="Services" columns={COLUMNS} rows={rows(500)} rowKey={(r) => r.id} />,
+    );
 
     expect(bodyRows()).toHaveLength(25);
     expect(screen.getByText("Page 1 sur 20")).toBeVisible();
@@ -183,7 +188,15 @@ describe("KnowledgeTable", () => {
   });
 
   it("shows skeleton rows while loading, and says it is loading", () => {
-    mount(<KnowledgeTable caption="Services" columns={COLUMNS} rows={[]} rowKey={(r) => r.id} loading />);
+    mount(
+      <KnowledgeTable
+        caption="Services"
+        columns={COLUMNS}
+        rows={[]}
+        rowKey={(r) => r.id}
+        loading
+      />,
+    );
 
     expect(screen.getByRole("table")).toHaveAttribute("aria-busy", "true");
     expect(screen.getByRole("status")).toHaveTextContent("Chargement…");

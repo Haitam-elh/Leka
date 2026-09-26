@@ -115,7 +115,10 @@ function Section({
 }) {
   const id = useId();
   return (
-    <section aria-labelledby={id} className={cn("rounded-xl border border-shell-line bg-white p-4", className)}>
+    <section
+      aria-labelledby={id}
+      className={cn("rounded-xl border border-shell-line bg-white p-4", className)}
+    >
       <h3 id={id} className="mb-3 text-sm font-semibold text-brand-navy">
         {title}
       </h3>
@@ -150,7 +153,9 @@ export function EntityDetailPanel({
   const dependencies = entity.dependencies ?? [];
   const sections = (entity.sections ?? []).filter((section) => section.items.length > 0);
   const trust =
-    entity.lastUpdated !== undefined || entity.source !== undefined || entity.confidence !== undefined;
+    entity.lastUpdated !== undefined ||
+    entity.source !== undefined ||
+    entity.confidence !== undefined;
 
   const history = (
     <>
@@ -208,7 +213,9 @@ export function EntityDetailPanel({
             {entity.status ? <StatusBadge variant={`entity.${entity.status}`} /> : null}
             {entity.version ? (
               <span className="rounded-md border border-shell-line px-1.5 py-0.5 text-xs text-shell-nav">
-                <span className="sr-only">{fill(t.knowledge.detail.version, { version: entity.version })}</span>
+                <span className="sr-only">
+                  {fill(t.knowledge.detail.version, { version: entity.version })}
+                </span>
                 <span aria-hidden="true">{entity.version}</span>
               </span>
             ) : null}
@@ -229,7 +236,12 @@ export function EntityDetailPanel({
             </Button>
           ) : null}
           {onClose ? (
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label={t.knowledge.detail.close}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              aria-label={t.knowledge.detail.close}
+            >
               <X aria-hidden="true" className="size-4" />
             </Button>
           ) : null}
@@ -237,14 +249,20 @@ export function EntityDetailPanel({
       </header>
 
       {trust ? (
-        <div role="group" className="flex flex-wrap items-center gap-2" aria-label={t.knowledge.detail.provenance}>
+        <div
+          role="group"
+          className="flex flex-wrap items-center gap-2"
+          aria-label={t.knowledge.detail.provenance}
+        >
           {entity.lastUpdated !== undefined ? (
             <FreshnessIndicator lastUpdated={entity.lastUpdated} />
           ) : null}
           {entity.source ? (
             <ProvenanceBadge
               source={entity.source}
-              quality={entity.confidence !== undefined ? confidenceToScore(entity.confidence) : undefined}
+              quality={
+                entity.confidence !== undefined ? confidenceToScore(entity.confidence) : undefined
+              }
             />
           ) : null}
           {entity.confidence !== undefined ? (
@@ -261,7 +279,10 @@ export function EntityDetailPanel({
           {entity.tags && entity.tags.length > 0 ? (
             <ul className="flex flex-wrap gap-1.5" aria-label={t.knowledge.detail.tags}>
               {entity.tags.map((tag) => (
-                <li key={tag} className="rounded-md bg-shell-canvas px-1.5 py-0.5 text-xs text-shell-nav">
+                <li
+                  key={tag}
+                  className="rounded-md bg-shell-canvas px-1.5 py-0.5 text-xs text-shell-nav"
+                >
                   {tag}
                 </li>
               ))}
@@ -285,7 +306,12 @@ export function EntityDetailPanel({
                   <p className="text-xs text-shell-muted">{metric.label}</p>
                   <p className="text-xl font-bold text-brand-navy tabular-nums">{metric.value}</p>
                   {metric.delta ? (
-                    <p className={cn("flex items-center gap-1 text-xs font-medium", DELTA_TEXT[tone])}>
+                    <p
+                      className={cn(
+                        "flex items-center gap-1 text-xs font-medium",
+                        DELTA_TEXT[tone],
+                      )}
+                    >
                       <Arrow aria-hidden="true" className="size-3" />
                       <span aria-hidden="true">{metric.delta.value}</span>
                       <span className="sr-only">
@@ -298,7 +324,9 @@ export function EntityDetailPanel({
                       </span>
                     </p>
                   ) : null}
-                  {metric.series ? <Sparkline values={metric.series} tone={tone} className="mt-1" /> : null}
+                  {metric.series ? (
+                    <Sparkline values={metric.series} tone={tone} className="mt-1" />
+                  ) : null}
                 </li>
               );
             })}

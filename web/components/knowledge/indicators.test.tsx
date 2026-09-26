@@ -104,7 +104,9 @@ describe("FreshnessIndicator", () => {
 
     const trigger = screen.getByRole("button");
     expect(trigger).toHaveTextContent("À jour ·Il y a 3 h");
-    expect(trigger).toHaveAccessibleName(/Fraîcheur : À jour, Il y a 3 h\. Mise à jour le 26 sept\. 2026/);
+    expect(trigger).toHaveAccessibleName(
+      /Fraîcheur : À jour, Il y a 3 h\. Mise à jour le 26 sept\. 2026/,
+    );
 
     await user.tab();
     expect(trigger).toHaveFocus();

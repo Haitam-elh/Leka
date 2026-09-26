@@ -52,7 +52,10 @@ export function StatusBadge({
       )}
     >
       {dot ? (
-        <span aria-hidden="true" className={cn("size-1.5 shrink-0 rounded-full", TONES[tone].dot)} />
+        <span
+          aria-hidden="true"
+          className={cn("size-1.5 shrink-0 rounded-full", TONES[tone].dot)}
+        />
       ) : (
         <Icon
           aria-hidden="true"

@@ -50,9 +50,14 @@ const LAYER: Record<EntityType, number> = {
   infra_resource: 4,
 };
 
+/** Past this many, a layer wraps onto another row: 80 services side by side
+ * fit the screen only as an unreadable strip. */
+const MAX_COLUMNS = 10;
+
 /**
- * Where each entity goes when the caller gives no positions: one row per
- * layer, centred. Deterministic, and nothing more.
+ * Where each entity goes when the caller gives no positions: its layer's
+ * rows, top to bottom, each at most MAX_COLUMNS wide and centred.
+ * Deterministic, and nothing more.
  *
  * TODO LEKA-340 follow-up: a real auto-layout (dagre or elkjs) that
  * minimises crossings. Not a dependency yet — the positions come from the
@@ -61,25 +66,31 @@ const LAYER: Record<EntityType, number> = {
 export function layeredPositions(
   entities: readonly KnowledgeEntity[],
 ): Record<string, { x: number; y: number }> {
-  const rows = new Map<number, KnowledgeEntity[]>();
+  const layers = new Map<number, KnowledgeEntity[]>();
   for (const entity of entities) {
     const layer = LAYER[entity.type];
-    rows.set(layer, [...(rows.get(layer) ?? []), entity]);
+    layers.set(layer, [...(layers.get(layer) ?? []), entity]);
   }
-  const widest = Math.max(0, ...[...rows.values()].map((row) => row.length));
+
+  const rows: KnowledgeEntity[][] = [];
+  for (const layer of [...layers.keys()].sort((a, b) => a - b)) {
+    const members = layers.get(layer) ?? [];
+    for (let start = 0; start < members.length; start += MAX_COLUMNS) {
+      rows.push(members.slice(start, start + MAX_COLUMNS));
+    }
+  }
+
+  const widest = Math.max(0, ...rows.map((row) => row.length));
   const positions: Record<string, { x: number; y: number }> = {};
-  [...rows.keys()]
-    .sort((a, b) => a - b)
-    .forEach((layer, rowIndex) => {
-      const row = rows.get(layer) ?? [];
-      const offset = ((widest - row.length) * (NODE_WIDTH + COLUMN_GAP)) / 2;
-      row.forEach((entity, column) => {
-        positions[entity.id] = {
-          x: offset + column * (NODE_WIDTH + COLUMN_GAP),
-          y: rowIndex * (NODE_HEIGHT + ROW_GAP),
-        };
-      });
+  rows.forEach((row, rowIndex) => {
+    const offset = ((widest - row.length) * (NODE_WIDTH + COLUMN_GAP)) / 2;
+    row.forEach((entity, column) => {
+      positions[entity.id] = {
+        x: offset + column * (NODE_WIDTH + COLUMN_GAP),
+        y: rowIndex * (NODE_HEIGHT + ROW_GAP),
+      };
     });
+  });
   return positions;
 }
 
@@ -137,7 +148,12 @@ function EntityNode({ data }: NodeProps<Node<EntityNodeData, "entity">>) {
         onClick={data.onOpen}
         className="shadow-sm"
       />
-      <Handle type="source" position={Position.Bottom} isConnectable={false} className="opacity-0" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        isConnectable={false}
+        className="opacity-0"
+      />
     </div>
   );
 }
@@ -164,7 +180,11 @@ function Controls() {
   const buttons = [
     { label: t.knowledge.graph.zoomIn, icon: ZoomIn, run: () => void flow.zoomIn() },
     { label: t.knowledge.graph.zoomOut, icon: ZoomOut, run: () => void flow.zoomOut() },
-    { label: t.knowledge.graph.fit, icon: Maximize, run: () => void flow.fitView({ padding: 0.2 }) },
+    {
+      label: t.knowledge.graph.fit,
+      icon: Maximize,
+      run: () => void flow.fitView({ padding: 0.2 }),
+    },
     {
       label: t.knowledge.graph.reset,
       icon: RotateCcw,
@@ -275,7 +295,10 @@ export function DependencyGraph(props: DependencyGraphProps) {
     <section
       aria-labelledby={titleId}
       data-slot="dependency-graph"
-      className={cn("relative overflow-hidden rounded-xl border border-shell-line bg-white", className)}
+      className={cn(
+        "relative overflow-hidden rounded-xl border border-shell-line bg-white",
+        className,
+      )}
       style={{ height }}
     >
       <h3 id={titleId} className="sr-only">

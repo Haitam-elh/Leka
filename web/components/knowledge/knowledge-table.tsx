@@ -90,7 +90,8 @@ export function KnowledgeTable<T>({
     return [...rows].sort((a, b) => {
       const va = value(a);
       const vb = value(b);
-      if (va === null || va === undefined || vb === null || vb === undefined) return compare(va, vb);
+      if (va === null || va === undefined || vb === null || vb === undefined)
+        return compare(va, vb);
       return sign * compare(va, vb);
     });
   }, [rows, columns, sort]);

@@ -114,7 +114,12 @@ describe("DependencyGraph", () => {
   it("offers zoom, fit and reset as buttons with words", () => {
     mount(<DependencyGraph entities={ENTITIES} relationships={LINKS} />);
 
-    for (const name of ["Zoom avant", "Zoom arrière", "Ajuster à l'écran", "Réinitialiser la vue"]) {
+    for (const name of [
+      "Zoom avant",
+      "Zoom arrière",
+      "Ajuster à l'écran",
+      "Réinitialiser la vue",
+    ]) {
       expect(screen.getByRole("button", { name, hidden: true })).toBeInTheDocument();
     }
   });
@@ -141,6 +146,9 @@ describe("DependencyGraph", () => {
     const positions = layeredPositions(many);
     const spots = new Set(Object.values(positions).map(({ x, y }) => `${x}:${y}`));
     expect(spots.size).toBe(150);
+    // Rows wrap at ten: the map stays roughly square rather than a strip.
+    const columns = new Set(Object.values(positions).map(({ x }) => x));
+    expect(columns.size).toBeLessThanOrEqual(10);
 
     mount(<DependencyGraph entities={many} relationships={links} />);
     const text = within(screen.getByTestId("graph-text"));

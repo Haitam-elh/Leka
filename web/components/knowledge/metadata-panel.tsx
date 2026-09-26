@@ -93,10 +93,7 @@ export function MetadataPanel({
             </h3>
           ) : null}
           <dl
-            className={cn(
-              "grid gap-x-6 gap-y-2",
-              columns === 2 ? "sm:grid-cols-2" : "grid-cols-1",
-            )}
+            className={cn("grid gap-x-6 gap-y-2", columns === 2 ? "sm:grid-cols-2" : "grid-cols-1")}
           >
             {section.items.map((item) => {
               const text =
@@ -105,7 +102,10 @@ export function MetadataPanel({
                   ? String(item.value)
                   : undefined);
               return (
-                <div key={item.label} className="grid grid-cols-[minmax(0,9rem)_1fr] items-center gap-3">
+                <div
+                  key={item.label}
+                  className="grid grid-cols-[minmax(0,9rem)_1fr] items-center gap-3"
+                >
                   <dt className="truncate text-[0.8125rem] text-shell-muted">{item.label}</dt>
                   <dd className="flex min-w-0 items-center gap-1.5 text-[0.8125rem] text-brand-navy">
                     {isEmpty(item.value) ? (
@@ -113,7 +113,9 @@ export function MetadataPanel({
                     ) : (
                       <span className="min-w-0 break-words">{item.value}</span>
                     )}
-                    {text && !isEmpty(item.value) ? <CopyButton label={item.label} text={text} /> : null}
+                    {text && !isEmpty(item.value) ? (
+                      <CopyButton label={item.label} text={text} />
+                    ) : null}
                   </dd>
                 </div>
               );

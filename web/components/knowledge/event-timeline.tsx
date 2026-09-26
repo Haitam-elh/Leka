@@ -129,6 +129,7 @@ export function EventTimeline({
               <div className="relative min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
                   <time
+                    suppressHydrationWarning
                     dateTime={event.at}
                     title={exactDate(locale, event.at)}
                     className="shrink-0 text-xs text-shell-muted tabular-nums"
