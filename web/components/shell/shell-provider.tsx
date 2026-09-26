@@ -50,6 +50,8 @@ interface ShellContextValue {
   state: ShellState;
   /** Ask again, from the start. The failure screen's "Try again". */
   retry: () => void;
+  /** The person as the API answered after they changed their profile. */
+  updateUser: (user: CurrentUser["user"]) => void;
 }
 
 const ShellContext = createContext<ShellContextValue | null>(null);
@@ -101,7 +103,15 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
     };
   }, [router, attempt]);
 
-  const value = useMemo(() => ({ state, retry }), [state, retry]);
+  // In place, not a reload: the greeting and the menu change with the
+  // answer, and the page does not flash through its loading state.
+  const updateUser = useCallback((user: CurrentUser["user"]) => {
+    setState((previous) =>
+      previous.status === "ready" ? { ...previous, me: { ...previous.me, user } } : previous,
+    );
+  }, []);
+
+  const value = useMemo(() => ({ state, retry, updateUser }), [state, retry, updateUser]);
   return <ShellContext.Provider value={value}>{children}</ShellContext.Provider>;
 }
 
@@ -125,6 +135,11 @@ export function useShell(): ShellState {
 /** Start the session check again — what "Try again" does after a failure. */
 export function useShellRetry(): () => void {
   return useShellValue().retry;
+}
+
+/** Replace the signed-in person with the API's newer answer. */
+export function useUpdateCurrentUser(): (user: CurrentUser["user"]) => void {
+  return useShellValue().updateUser;
 }
 
 /** The signed-in person, or null while the answer is still on its way. */

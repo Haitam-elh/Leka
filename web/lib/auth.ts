@@ -77,6 +77,10 @@ export const auth = {
   me: (init: { redirectOn401?: boolean } = {}) =>
     apiFetch<CurrentUser>("/auth/me", init),
 
+  /** Only the fields given change; the answer is the whole person. */
+  updateProfile: (changes: Partial<{ [K in keyof AccountProfile]: AccountProfile[K] | null }>) =>
+    apiFetch<CurrentUser["user"]>("/auth/me", { method: "PATCH", body: JSON.stringify(changes) }),
+
   forgotPassword: (email: string) =>
     apiFetch<{ detail: string }>("/auth/password/forgot", {
       method: "POST",
