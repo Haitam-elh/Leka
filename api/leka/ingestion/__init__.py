@@ -6,6 +6,7 @@ about how the graph is queried or how answers are built.
 
 from leka.ingestion.models import (
     RawPayload,
+    SourceRecord,
     SourceSync,
     SyncRun,
     SyncRunOutcome,
@@ -15,6 +16,7 @@ from leka.ingestion.models import (
 from leka.ingestion.repository import (
     IngestionRunRepository,
     RawPayloadRepository,
+    SourceRecordRepository,
     SourceSyncRepository,
     SyncRunRepository,
 )
@@ -36,6 +38,8 @@ __all__ = [
     "NormalisedRelationship",
     "RawPayload",
     "RawPayloadRepository",
+    "SourceRecord",
+    "SourceRecordRepository",
     "SourceSync",
     "SourceSyncRead",
     "SourceSyncRepository",

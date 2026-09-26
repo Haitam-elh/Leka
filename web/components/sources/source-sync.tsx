@@ -10,7 +10,15 @@ import type { Source, SourceSync } from "@/lib/sources";
 import { useSourceSyncs } from "@/lib/sources-queries";
 
 /** The sync's own order: what the rest hangs from first. */
-const ORDER = ["repositories", "branches", "commits", "pull_requests", "issues", "releases"];
+const ORDER = [
+  "repositories",
+  "projects",
+  "branches",
+  "commits",
+  "pull_requests",
+  "issues",
+  "releases",
+];
 
 /**
  * How far each capability of a source has been read (LEKA-352): its status,

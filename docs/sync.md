@@ -70,6 +70,11 @@ every committed batch: the capability it is on, records, payloads, bytes.
 It ends `succeeded`, `failed` with the diagnostic, or **`abandoned`** — found
 still `running` by the next pass of the source, whose worker died.
 
+**What each record became** is in `source_records`, the per-record index:
+an unchanged record is not written again, and after a full read of a
+capability succeeds, what the run did not see is marked deleted — see
+[collection.md](collection.md#4-the-per-record-index).
+
 **Provenance.** A payload's row carries its source and when it was fetched;
 the pass that fetched it is that source's run whose start and end hold that
 moment — unambiguous, because one pass at a time holds `sync:<source_id>`.

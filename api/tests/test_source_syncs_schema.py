@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.connectors import Source, SourceKind
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion import (
+    SourceRecord,
     SourceSync,
     SourceSyncRepository,
     SyncRun,
@@ -203,4 +204,71 @@ async def test_a_run_goes_with_its_source(session: AsyncSession) -> None:
 
     with system_scope():
         left = await session.execute(select(SyncRun).where(SyncRun.source_id == source.id))
+    assert left.scalars().all() == []
+
+
+# ── source_records (LEKA-353) ────────────────────────────────────────────────
+
+
+def _record(source: Source, **values: object) -> SourceRecord:
+    now = datetime.now(UTC)
+    record = SourceRecord(
+        workspace_id=source.workspace_id,
+        source_id=source.id,
+        kind="commits",
+        external_id="c-1",
+        checksum="a" * 64,
+        first_seen_at=now,
+        last_seen_at=now,
+    )
+    for name, value in values.items():
+        setattr(record, name, value)
+    return record
+
+
+async def test_one_index_row_per_record_of_a_source(session: AsyncSession) -> None:
+    source = await _source(session, await _workspace(session, "records"))
+    session.add(_record(source))
+    await session.flush()
+
+    session.add(_record(source))
+    with pytest.raises(IntegrityError):
+        await session.flush()
+
+
+@pytest.mark.parametrize(
+    "values",
+    [{"checksum": "short"}, {"external_id": ""}, {"kind": ""}],
+    ids=["not-a-sha256", "empty-id", "empty-kind"],
+)
+async def test_what_the_database_refuses_of_a_record(
+    session: AsyncSession, values: dict[str, object]
+) -> None:
+    source = await _source(session, await _workspace(session, "records-refused"))
+    session.add(_record(source, **values))
+
+    with pytest.raises((IntegrityError, DBAPIError)):
+        await session.flush()
+
+
+async def test_a_record_outlives_its_run_and_goes_with_its_source(session: AsyncSession) -> None:
+    source = await _source(session, await _workspace(session, "records-cascade"))
+    run = _run(source)
+    session.add(run)
+    await session.flush()
+    record = _record(source, last_seen_run_id=run.id)
+    session.add(record)
+    await session.flush()
+
+    await session.delete(run)
+    await session.flush()
+    await session.refresh(record)
+    assert record.last_seen_run_id is None
+
+    await session.delete(source)
+    await session.flush()
+    with system_scope():
+        left = await session.execute(
+            select(SourceRecord).where(SourceRecord.source_id == source.id)
+        )
     assert left.scalars().all() == []

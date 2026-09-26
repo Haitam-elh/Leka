@@ -62,28 +62,52 @@ Each batch of up to **500 records** becomes one object:
   pass at a time holds `sync:<source_id>`.
 - **Which vendor object**: `kind` + `external_id` (+ `container`).
 
-## 4. Guarantees
+## 4. The per-record index
+
+`source_records` (decided with Haitam, 2026-09-27): one row per `(source,
+kind, external_id)` — the checksum of its latest payload (sha256 of the
+canonical JSON, keys sorted), when it was first and last seen, **by which
+run** (`last_seen_run_id`), the batch holding its latest version
+(`payload_key`), and `deleted_at`.
+
+- **Deduplication.** Each batch is checked against the index: a record
+  whose checksum is unchanged, still live and still in a batch is **not
+  written again** — the pass only records it saw it. New or changed records
+  are written. A vendor field that changes on every read (a signed URL)
+  defeats it for that record: a write, not a wrong answer.
+- **Deletions.** After a **full** read of a capability **succeeds**, what
+  its run did not see is marked `deleted_at` — gone at the vendor, restricted,
+  made private. By run, not by time: a retry or the quota reserve can stretch
+  a pass. Never after an incremental read, never after a full read cut short.
+- **Scope.** A reactivation reads in full, so the same sweep removes what
+  left the scope — for every connector, whatever its containers mean.
+- **Return.** A record seen again comes back: `deleted_at` goes back to NULL.
+- **Before the index.** A capability that stored records under LEKA-352 is
+  read in full once, so the index knows all of it.
+
+## 5. Guarantees
 
 | | |
 |---|---|
 | **No loss** | The cursor (`source_syncs.since`) is the start of the last *successful* pass; a failed pass does not move it, so what it did not reach is read by the next. A weekly full pass, per source, reads everything regardless. |
-| **At-least-once** | A record can be stored more than once: a retried pass re-reads from the same cursor, an incremental read overlaps the previous one by design, a full pass re-reads everything. |
-| **Bounded duplication** | A retry re-reads at most what the failed pass had stored; the full pass, one copy per week. Nothing grows without a pass to cause it, and retention removes old payloads. |
-| **Per-record deduplication** | **Not yet.** It needs an index of what was seen per `(source, kind, external_id)` — also what detects deletions and scope removals. Pending a design decision (see *Not yet*). |
+| **At-least-once, deduplicated** | A record may be *read* more than once — a retry, an incremental overlap, the weekly full pass — but is *written* again only when its content changed. |
+| **Deletions known** | Within a week (the full pass), or at once after a reactivation. |
 | **Ordering** | None across payloads. Within a capability, records come in the vendor's order. |
 
-## 5. Reading it — for the extraction (LEKA-354)
+## 6. Reading it — for the extraction (LEKA-354)
 
 1. Take a source's live payloads (`raw_payloads`, `deleted_at IS NULL`),
    in `fetched_at` order, from where the extraction last stopped.
 2. Read each object line by line; each line is a `RawRecord`.
 3. **Keep the latest version of each `(kind, external_id)`**: the greatest
-   `updated_at`, then the greatest `fetched_at`. That one rule is what makes
-   at-least-once harmless.
-4. Verify the SHA-256 if the payload is to be trusted for an answer — the
+   `updated_at`, then the greatest `fetched_at` — or read `payload_key` in
+   the index, which names the batch holding it.
+4. **Drop what the index says is deleted** (`deleted_at IS NOT NULL`), and
+   follow it into `entities`: that is where a deletion reaches the model.
+5. Verify the SHA-256 if the payload is to be trusted for an answer — the
    row has what the store measured.
 
-## 6. Backpressure and failures
+## 7. Backpressure and failures
 
 In [sync.md](sync.md): the 10 % quota reserve on bulk reads, the cap of
 passes under way (20, 3 per workspace), the three kinds of failure and who
@@ -91,8 +115,9 @@ handles each, an abandoned pass found by the next.
 
 ## Not yet
 
-- **Per-record index** — deduplication, deleted objects, objects out of
-  scope. Where it lives (LEKA-352, 353, or on `entities`) is an open question.
+- **Removing deleted records from the stored batches.** Marked in the index
+  now; the job that rewrites the batches without them — a restricted page
+  must not stay with us until retention — is the next PR.
 - **Checkpoints inside a capability** — a pass that fails half-way through
   a large capability re-reads it from the cursor, not from the page it
-  reached. Bounded (above); worth it once passes of hours are common.
+  reached; the index makes that re-read cost reads, not writes.

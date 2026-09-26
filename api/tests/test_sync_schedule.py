@@ -363,3 +363,32 @@ async def test_a_person_waiting_is_not_held_back_by_the_schedule_s_limits(
     response = await client.post(f"{API}/ingestion/sources/{source['id']}/sync")
 
     assert response.json() == {"queued": True}
+
+
+async def test_what_a_source_holds_is_counted_from_the_index(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    """Live records, not everything ever written: a list re-read every hour
+    (repositories, branches) must not grow the count (LEKA-353)."""
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+    await _set(
+        source["id"],
+        acme["acme"],
+        "INSERT INTO source_syncs (workspace_id, source_id, capability, records_total, status) "
+        "SELECT workspace_id, id, 'commits', 900, 'idle' FROM sources WHERE id = :s",
+    )
+    await _set(
+        source["id"],
+        acme["acme"],
+        "INSERT INTO source_records (workspace_id, source_id, kind, external_id, checksum, "
+        "first_seen_at, last_seen_at, deleted_at) SELECT workspace_id, id, 'commits', e, "
+        "repeat('a', 64), now(), now(), d FROM sources, (VALUES ('c1', NULL::timestamptz), "
+        "('c2', NULL), ('c3', now())) AS v(e, d) WHERE id = :s",
+    )
+
+    summary = (await client.get(f"{API}/ingestion/syncs")).json()
+    syncs = (await client.get(f"{API}/ingestion/sources/{source['id']}/syncs")).json()
+
+    assert [row["records_total"] for row in summary if row["source_id"] == source["id"]] == [2]
+    assert [row["records_total"] for row in syncs["capabilities"]] == [2]
