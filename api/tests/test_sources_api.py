@@ -41,6 +41,9 @@ from leka.main import app
 from leka.platform import secret_box
 from tests.conftest import FakeIdentity, error_code
 from tests.test_github_connector import github
+from tests.test_jira_connector import EMAIL as JIRA_EMAIL
+from tests.test_jira_connector import TOKEN as JIRA_TOKEN
+from tests.test_jira_connector import Jira
 
 pytestmark = pytest.mark.integration
 
@@ -280,10 +283,12 @@ async def test_the_input_is_checked_against_the_connector(
     assert bad_config.status_code == 422
     assert FAKE_KEY not in bad_config.text
 
+    # A kind LEKA knows but has no connector for yet.
     unknown = await client.post(
-        f"{API}/sources", json={"type": "jira", "display_name": "X", "credentials": {"k": "v"}}
+        f"{API}/sources", json={"type": "datadog", "display_name": "X", "credentials": {"k": "v"}}
     )
     assert unknown.status_code == 422
+    assert "No connector exists" in unknown.text
 
     await _create(client, display_name="Same")
     assert (
@@ -434,6 +439,110 @@ async def test_github_scope_is_chosen_from_what_github_offers(
     assert (await client.get(f"{url}/scope/options")).status_code == 403
     _as(identity, acme, "other_admin")
     assert (await client.get(f"{url}/scope/options")).status_code == 404
+
+
+# ── Jira, end to end ─────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def jira_api() -> Iterator[Jira]:
+    jira = Jira()
+    app.dependency_overrides[get_connector_transport] = lambda: httpx.MockTransport(jira)
+    yield jira
+    app.dependency_overrides.pop(get_connector_transport, None)
+
+
+def _jira(site: str = "acme", **config: object) -> dict[str, Any]:
+    return {
+        "type": "jira",
+        "display_name": "Acme Jira",
+        "config": {"site": site, **config},
+        "credentials": {"token": JIRA_TOKEN, "email": JIRA_EMAIL},
+    }
+
+
+async def test_jira_end_to_end(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    jira_api: Jira,
+) -> None:
+    _as(identity, acme, "admin")
+    catalog = (await client.get(f"{API}/connectors/catalog")).json()
+    entry = next(item for item in catalog if item["key"] == "jira")
+    assert (entry["category"], entry["read_only"]) == ("project", True)
+    assert entry["credentials_schema"]["properties"]["token"]["writeOnly"] is True
+
+    # Pasted from the browser's address bar: kept as the site's name.
+    source = await _create(client, **_jira("https://acme.atlassian.net/jira/software"))
+    assert source["config"] == {"site": "acme", "projects": None}
+    assert JIRA_TOKEN not in json.dumps(source)
+    url = f"{API}/sources/{source['id']}"
+
+    tested = (await client.post(f"{url}/test")).json()
+    assert tested["ok"] is True
+    assert tested["result"]["account"] == "Nora Admin"
+    assert sorted(tested["source"]["capabilities"]) == ["issues", "projects"]
+
+    offered = (await client.get(f"{url}/scope/options")).json()
+    assert [option["key"] for option in offered["options"]] == ["PAY", "OPS"]
+    scoped = await client.patch(url, json={"config": {"site": "acme", "projects": ["pay"]}})
+    assert scoped.json()["config"]["projects"] == ["PAY"]
+
+    assert (await client.post(f"{url}/test")).json()["ok"] is True
+    assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+    assert (await client.post(f"{url}/health-check")).json()["health_status"] == "healthy"
+    # Every call went to the customer's site, as a GET: the stand-in asserts both.
+    assert {request.url.host for request in jira_api.requests} == {"acme.atlassian.net"}
+
+
+@pytest.mark.parametrize(
+    "site",
+    [
+        "169.254.169.254",
+        "http://10.0.0.1/rest/api/3",
+        "localhost:8000",
+        "evil.example",
+        "acme.atlassian.net.evil.example",
+    ],
+)
+async def test_a_jira_source_cannot_be_aimed_anywhere_but_atlassian(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID], site: str
+) -> None:
+    _as(identity, acme, "admin")
+
+    refused = await client.post(f"{API}/sources", json=_jira(site))
+
+    assert refused.status_code == 422
+    assert JIRA_TOKEN not in refused.text
+    assert (await client.get(f"{API}/sources")).json()["data"] == []
+
+
+async def test_only_an_admin_connects_jira_and_the_token_never_comes_back(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    jira_api: Jira,
+) -> None:
+    _as(identity, acme, "member")
+    assert (await client.post(f"{API}/sources", json=_jira())).status_code == 403
+
+    _as(identity, acme, "admin")
+    url = f"{API}/sources/{(await _create(client, **_jira()))['id']}"
+
+    _as(identity, acme, "member")
+    seen = await client.get(url)
+    assert seen.status_code == 200
+    assert JIRA_TOKEN not in seen.text
+    assert seen.json()["credentials"]["hint"]
+    assert (await client.post(f"{url}/test")).status_code == 403
+    assert (await client.get(f"{url}/scope/options")).status_code == 403
+
+    _as(identity, acme, "other_admin")
+    assert (await client.get(url)).status_code == 404
+    assert (await client.post(f"{url}/test")).status_code == 404
+    # Nothing of the above reached Jira: refusals happen before a request.
+    assert jira_api.requests == []
 
 
 async def test_a_refused_scope_listing_is_an_answer_with_a_diagnostic(

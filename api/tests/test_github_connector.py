@@ -68,7 +68,7 @@ async def test_a_working_token_reports_the_account_and_what_it_can_read() -> Non
     assert result.account == "nora"
     assert result.metadata["organization"] == "acme"
     assert result.metadata["repositories_visible"] == 1
-    assert set(result.capabilities) == set(Capability)
+    assert set(result.capabilities) == GitHubConnector.manifest.capabilities
     assert result.warnings == []
 
 

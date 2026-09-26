@@ -500,6 +500,7 @@ const fr = {
       releases: "releases",
       issues: "issues",
       branches: "branches",
+      projects: "projets",
     },
     empty: {
       title: "Aucune source connectée",
@@ -642,6 +643,10 @@ const fr = {
       email: {
         label: "E-mail du compte",
         help: "Seulement pour un jeton API Atlassian.",
+      },
+      site: {
+        label: "Site Atlassian",
+        help: "Son nom, comme dans acme.atlassian.net.",
       },
     },
     events: {
@@ -1202,6 +1207,7 @@ const en: Dictionary = {
       releases: "releases",
       issues: "issues",
       branches: "branches",
+      projects: "projects",
     },
     empty: {
       title: "No source connected",
@@ -1344,6 +1350,10 @@ const en: Dictionary = {
       email: {
         label: "Account email",
         help: "Only for an Atlassian API token.",
+      },
+      site: {
+        label: "Atlassian site",
+        help: "Its name, as in acme.atlassian.net.",
       },
     },
     events: {

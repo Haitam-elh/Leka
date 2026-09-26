@@ -55,6 +55,8 @@ class Capability(enum.StrEnum):
     RELEASES = "releases"
     ISSUES = "issues"
     BRANCHES = "branches"
+    # Project tools (LEKA-346). Their issues are ISSUES, as a code host's are.
+    PROJECTS = "projects"
 
 
 class ConnectorManifest(BaseModel):
