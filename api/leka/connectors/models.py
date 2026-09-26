@@ -66,6 +66,7 @@ class SourceKind(enum.StrEnum):
     BITBUCKET = "bitbucket"
     JIRA = "jira"
     CONFLUENCE = "confluence"
+    LINEAR = "linear"
     AWS = "aws"
     DATADOG = "datadog"
     SLACK = "slack"

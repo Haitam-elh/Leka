@@ -45,6 +45,8 @@ from tests.test_github_connector import github
 from tests.test_jira_connector import EMAIL as JIRA_EMAIL
 from tests.test_jira_connector import TOKEN as JIRA_TOKEN
 from tests.test_jira_connector import Jira
+from tests.test_linear_connector import KEY as LINEAR_KEY
+from tests.test_linear_connector import Linear
 
 pytestmark = pytest.mark.integration
 
@@ -596,6 +598,64 @@ async def test_confluence_end_to_end(
     _as(identity, acme, "member")
     assert (await client.get(f"{url}/scope/options")).status_code == 403
     assert JIRA_TOKEN not in (await client.get(url)).text
+
+
+# ── Linear, end to end ───────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def linear_api() -> Iterator[Linear]:
+    linear = Linear()
+    app.dependency_overrides[get_connector_transport] = lambda: httpx.MockTransport(linear)
+    yield linear
+    app.dependency_overrides.pop(get_connector_transport, None)
+
+
+async def test_linear_end_to_end(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    linear_api: Linear,
+) -> None:
+    _as(identity, acme, "member")
+    body = {"type": "linear", "display_name": "Linear", "credentials": {"api_key": LINEAR_KEY}}
+    assert (await client.post(f"{API}/sources", json=body)).status_code == 403
+
+    _as(identity, acme, "admin")
+    catalog = (await client.get(f"{API}/connectors/catalog")).json()
+    entry = next(item for item in catalog if item["key"] == "linear")
+    assert (entry["category"], entry["read_only"]) == ("project", True)
+    assert entry["credentials_schema"]["properties"]["api_key"]["writeOnly"] is True
+
+    source = await _create(client, **body)
+    assert LINEAR_KEY not in json.dumps(source)
+    url = f"{API}/sources/{source['id']}"
+
+    tested = (await client.post(f"{url}/test")).json()
+    assert tested["ok"] is True
+    assert tested["result"]["account"] == "nora@acme.test"
+    assert sorted(tested["source"]["capabilities"]) == ["issues", "projects"]
+
+    offered = (await client.get(f"{url}/scope/options")).json()
+    assert [option["key"] for option in offered["options"]] == ["ENG", "OPS"]
+    scoped = await client.patch(url, json={"config": {"teams": ["eng"]}})
+    assert scoped.json()["config"]["teams"] == ["ENG"]
+
+    assert (await client.post(f"{url}/test")).json()["ok"] is True
+    assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+    assert (await client.post(f"{url}/health-check")).json()["health_status"] == "healthy"
+    # Every call was a query to Linear's one endpoint: the stand-in asserts it.
+    assert {operation for operation, _ in linear_api.asked} == {
+        "Viewer",
+        "Teams",
+        "TeamProjects",
+        "TeamIssues",
+        "Health",
+    }
+
+    _as(identity, acme, "member")
+    assert LINEAR_KEY not in (await client.get(url)).text
+    assert (await client.post(f"{url}/test")).status_code == 403
 
 
 async def test_a_refused_scope_listing_is_an_answer_with_a_diagnostic(

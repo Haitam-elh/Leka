@@ -17,6 +17,7 @@ from leka.connectors import (
     github,  # noqa: F401  — registers GitHubConnector
     gitlab,  # noqa: F401  — registers GitLabConnector
     jira,  # noqa: F401  — registers JiraConnector
+    linear,  # noqa: F401  — registers LinearConnector
 )
 from leka.connectors.base import (
     Capability,

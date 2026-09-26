@@ -592,7 +592,7 @@ const fr = {
       activated: "{name} est activée",
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
-      missingBody: "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira et Confluence.",
+      missingBody: "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence et Linear.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -628,6 +628,10 @@ const fr = {
       site: {
         label: "Site Atlassian",
         help: "Son nom, comme dans acme.atlassian.net.",
+      },
+      api_key: {
+        label: "Clé d'API",
+        help: "Une clé personnelle (lin_api_…). Elle est chiffrée, et ne sera plus jamais affichée.",
       },
     },
     events: {
@@ -1278,7 +1282,7 @@ const en: Dictionary = {
       activated: "{name} is activated",
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
-      missingBody: "LEKA connects to GitHub, GitLab, Bitbucket, Jira and Confluence today.",
+      missingBody: "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence and Linear today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -1314,6 +1318,10 @@ const en: Dictionary = {
       site: {
         label: "Atlassian site",
         help: "Its name, as in acme.atlassian.net.",
+      },
+      api_key: {
+        label: "API key",
+        help: "A personal key (lin_api_…). It is encrypted, and never shown again.",
       },
     },
     events: {

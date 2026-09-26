@@ -1,9 +1,10 @@
 # Project and documentation tools — what LEKA asks for, and what it reads
 
-Jira and Confluence, through [the connector framework](framework.md).
-LEKA-346.
-**LEKA only reads**: every call is a GET, to the customer's Atlassian Cloud
-site and nowhere else.
+Jira, Confluence and Linear, through [the connector framework](framework.md).
+LEKA-346. **LEKA only reads**: Jira and Confluence are read with GETs, to
+the customer's Atlassian Cloud site and nowhere else; Linear, which speaks
+only GraphQL, with `query` documents sent by POST to its one endpoint —
+never a mutation.
 
 ---
 
@@ -147,6 +148,75 @@ comments, attachments, archived pages.
 - **Pagination**: Confluence's next-page links are relative
   (`/wiki/api/v2/…?cursor=…`). They are read against the site, and a link
   that would leave it — another host, or plain `http` — is refused.
+
+## Linear
+
+| | |
+|---|---|
+| Endpoint | `POST https://api.linear.app/graphql` — fixed, nothing to configure |
+| Credentials | `api_key`, a personal API key (`lin_api_…`, write-only) |
+| Config | `teams` |
+| Category | `project` |
+| Capabilities | `projects`, `issues` |
+
+### What to create at Linear
+
+A personal API key belongs to a person and can do what that person can.
+So, as for Atlassian: a dedicated **member** account (not an admin), in the
+teams LEKA should read. Signed in as it, **Settings → Security & access →
+Personal API keys**: create a key, with **read** access only and limited to
+those teams where Linear offers the choice. A key whose owner administers
+the workspace is accepted, and the test says so in its warnings.
+
+### LEKA reads, over POST
+
+Linear answers GraphQL only, and GraphQL goes by POST. So Linear is the
+first connector to send a body — and the framework makes that narrow:
+
+- the client may POST to `/graphql` and nowhere else (`reads_by_post`);
+- every document is a constant in `linear/connector.py`, and is a `query`:
+  `read_only()` refuses a `mutation` or a `subscription` before sending,
+  and a test runs it over every document;
+- the stand-in Linear in the tests fails on anything but a POST of a query
+  to `/graphql`.
+
+### Scope
+
+`teams` takes team keys — `ENG`, `OPS` — kept in capitals. Absent, the
+source reads every team the key can see. The choices come from
+`GET /sources/{id}/scope/options`; the connection test fails with
+`NOT_FOUND`, naming them, when Linear does not show a team in scope.
+
+### The connection test
+
+1. `viewer` — the account, its workspace, whether it administers it.
+2. `teams(filter: {key: {in: …}})` — every team in scope is there.
+3. One page of teams: `teams_visible` in the source's metadata.
+4. One project and one issue of a team in scope, asked at once:
+   `projects` and `issues` if Linear answers.
+
+### What is read
+
+| Capability | What | Incremental |
+|---|---|---|
+| `projects` | each project of each team, archived ones too — status, lead, dates, progress, teams | whole each pass; a project shared by teams is read once |
+| `issues` | each issue of each team, archived ones too — state, assignee, project, cycle, parent, labels, relations to other issues | `updatedAt >=` the last pass, filtered by Linear |
+
+Issues are asked team by team, and known by Linear's id; the identifier
+(`ENG-42`) is in the payload, the team's key is the `container`.
+
+### Limits
+
+- **Quota**: Linear's requests per hour, per key. A refused call says
+  `RATELIMITED`, with the time until the hour resets
+  (`X-RateLimit-Requests-Reset`); health turns `degraded` under a tenth
+  left.
+- **Pagination**: Linear's cursors; a cursor Linear repeats ends the pass
+  with `PROVIDER_ERROR` rather than loop.
+- **Errors**: Linear refuses as often with a 200 and `errors` as with an
+  HTTP error. Both become the same diagnostics: `AUTHENTICATION_ERROR` →
+  `AUTH_INVALID`, `FORBIDDEN` → `PERMISSION_DENIED`, `…NOT_FOUND` →
+  `NOT_FOUND`, `RATELIMITED` → `RATE_LIMITED`, a 5xx → `PROVIDER_ERROR`.
 
 ## Diagnostics
 

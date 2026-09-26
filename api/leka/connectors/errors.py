@@ -129,6 +129,8 @@ _TOKEN_SHAPES = re.compile(
     r"|(gl(?:pat|oas|dt|rt|cbt|ptt|ft|imt|soat|ffct|agent)-[A-Za-z0-9_\-]{10,})"
     # Atlassian's: API tokens, access tokens, the retired app passwords.
     r"|(AT(?:ATT|CTT|BB)[A-Za-z0-9_\-=]{16,})"
+    # Linear's personal API keys and OAuth tokens.
+    r"|(lin_(?:api|oauth)_[A-Za-z0-9]{16,})"
 )
 REDACTED = "[redacted]"
 MAX_DETAIL = 300
