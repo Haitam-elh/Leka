@@ -28,7 +28,7 @@ class Connector[ConfigT, CredentialsT](ABC):
     manifest: ClassVar[ConnectorManifest]   # key, category, schemas, capabilities
     async def test_connection(self) -> ConnectionTestResult   # auth + access + discovery
     async def check_health(self) -> HealthResult              # light, quota-free if possible
-    def iter_resources(self, capability) -> AsyncIterator[RawRecord]   # LEKA-352
+    def iter_resources(self, capability, *, since=None) -> AsyncIterator[RawRecord]
 ```
 
 A connector receives its config and credentials **already validated and
@@ -36,9 +36,16 @@ decrypted**, and never touches the database. Every HTTP call goes through
 `self.http()`: `httpx.AsyncClient`, 10 s per call, a transport the tests
 replace. A whole connection test is bounded at **15 s** by the service.
 
-`iter_resources` is declared, documented, and raises `NotImplementedError`:
-the sync engine (LEKA-352) builds against the signature, and no connector
-has to write a fake sync to exist.
+`iter_resources` streams what a source holds for one capability, page by
+page, as `RawRecord`s: the vendor's payload untouched, its stable
+`external_id`, a `container` ("acme/api") and the vendor's `updated_at`.
+`since` is `None` for an initial pass and, for an incremental one, when the
+last successful pass started; a vendor that cannot filter by date returns
+everything, and the sync engine keeps the latest version of each
+`external_id`. A failure mid-stream raises `ConnectorError` — what was
+yielded before stays valid. A connector that does not implement it raises
+`NotImplementedError` and still exists; GitHub implements it (LEKA-345), the
+engine that calls it is LEKA-352.
 
 ## The lifecycle
 
@@ -161,7 +168,8 @@ Reading needs `source:read` (every member); everything else needs
 
 ## What is not here
 
-- **Synchronisation** — LEKA-352. `iter_resources` and the sync fields wait for it.
+- **The sync engine** — LEKA-352: the job that calls `iter_resources`, keeps
+  `since`, stores the records and fills the sync fields.
 - **KMS / Secrets Manager** — LEKA-405: another `SecretStore`.
 - **OAuth apps, GitHub App** — the MVP takes a fine-grained personal access token.
 - **The Sources page** — the frontend reads the catalogue's JSON Schemas when it comes.

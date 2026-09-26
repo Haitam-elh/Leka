@@ -9,6 +9,13 @@ own permissions; asking is the only way to know.
 check_health: GET /rate_limit, which GitHub does not count against the
 quota. Healthy, or degraded when less than a tenth of the quota is left.
 
+iter_resources: the repositories the token sees, then — repository by
+repository — their branches, commits (default branch), pull requests,
+issues and releases, following GitHub's pagination. Commits and issues are
+filtered by `since` on GitHub's side; pull requests are read newest-updated
+first and stop at `since`; branches and releases have no such filter and
+come whole.
+
 LEKA READS. A classic token that carries write scopes is accepted — GitHub
 is where it is scoped, not here — but the test says so, in its warnings.
 """
@@ -17,7 +24,9 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr
@@ -33,9 +42,13 @@ from leka.connectors.base import (
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
 from leka.connectors.models import HealthStatus, SourceKind
 from leka.connectors.registry import register_connector
+from leka.connectors.schemas import RawRecord
 
 API_VERSION = "2022-11-28"
 LOW_QUOTA_RATIO = 0.1
+PAGE_SIZE = 100  # GitHub's maximum
+# GitHub answers 409 for the commits of a repository with none yet.
+EMPTY_REPOSITORY = 409
 # Classic OAuth scopes that let a token change something. Fine-grained tokens
 # send no X-OAuth-Scopes header at all, so this only ever warns about those.
 WRITE_SCOPES = ("repo", "write:", "admin:", "delete_repo", "workflow", "delete:")
@@ -81,6 +94,7 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                 Capability.PULL_REQUESTS,
                 Capability.RELEASES,
                 Capability.ISSUES,
+                Capability.BRANCHES,
             }
         ),
     )
@@ -128,6 +142,18 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
             checked_at=datetime.now(UTC),
         )
 
+    async def iter_resources(
+        self, capability: Capability, *, since: datetime | None = None
+    ) -> AsyncIterator[RawRecord]:
+        async with self._client() as client:
+            if capability is Capability.REPOSITORIES:
+                async for repository in self._repositories(client):
+                    yield _record(capability, repository, updated=repository.get("updated_at"))
+                return
+            async for repository in self._repositories(client):
+                async for record in self._contents(client, capability, repository, since):
+                    yield record
+
     # ── inside ───────────────────────────────────────────────────────────────
 
     def _client(self) -> httpx.AsyncClient:
@@ -146,8 +172,9 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
         client: httpx.AsyncClient,
         path: str,
         *,
-        params: dict[str, int] | None = None,
+        params: dict[str, str | int] | None = None,
         missing: str = "ressource",
+        empty: int | None = None,
     ) -> httpx.Response:
         secret = self.credentials.token.get_secret_value()
         try:
@@ -162,7 +189,7 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                 detail=f"GET {path}: {type(error).__name__}",
                 secrets=[secret],
             ) from error
-        if response.is_success:
+        if response.is_success or response.status_code == empty:
             return response
         raise self._diagnose(response, path, missing, secret)
 
@@ -204,6 +231,89 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
             return build(DiagnosticCode.PROVIDER_ERROR)
         return build(DiagnosticCode.UNKNOWN)
 
+    def _repositories(self, client: httpx.AsyncClient) -> AsyncIterator[dict[str, object]]:
+        org = self.config.organization
+        return self._pages(client, f"/orgs/{org}/repos" if org else "/user/repos")
+
+    def _contents(
+        self,
+        client: httpx.AsyncClient,
+        capability: Capability,
+        repository: dict[str, object],
+        since: datetime | None,
+    ) -> AsyncIterator[RawRecord]:
+        """One repository's records for one capability."""
+        name = str(repository["full_name"])
+        after: dict[str, str | int] = {"since": since.isoformat()} if since else {}
+        if capability is Capability.BRANCHES:
+            items = self._pages(client, f"/repos/{name}/branches")
+            # A branch has no node_id: its repository's, and its own name.
+            return _records(
+                capability, items, name, key=lambda b: f"{repository['node_id']}:{b['name']}"
+            )
+        if capability is Capability.COMMITS:
+            items = self._pages(client, f"/repos/{name}/commits", after, empty=EMPTY_REPOSITORY)
+            return _records(capability, items, name, updated=_committed_at)
+        if capability is Capability.PULL_REQUESTS:
+            items = self._pages(
+                client,
+                f"/repos/{name}/pulls",
+                {"state": "all", "sort": "updated", "direction": "desc"},
+                stop_before=since,
+            )
+            return _records(capability, items, name)
+        if capability is Capability.ISSUES:
+            items = self._pages(client, f"/repos/{name}/issues", {"state": "all", **after})
+            # GitHub lists pull requests as issues too; they have their own capability.
+            only_issues = _without(items, "pull_request")
+            return _records(capability, only_issues, name)
+        if capability is Capability.RELEASES:
+            items = self._pages(client, f"/repos/{name}/releases")
+            return _records(
+                capability, items, name, updated=lambda r: r.get("published_at") or r["created_at"]
+            )
+        msg = f"GitHub does not read {capability}"
+        raise ValueError(msg)
+
+    async def _pages(
+        self,
+        client: httpx.AsyncClient,
+        path: str,
+        params: dict[str, str | int] | None = None,
+        *,
+        empty: int | None = None,
+        stop_before: datetime | None = None,
+    ) -> AsyncIterator[dict[str, object]]:
+        """Every item of a listing, following GitHub's Link header.
+
+        `stop_before`: the listing is sorted newest-updated first, and
+        nothing older than this is wanted.
+        """
+        url: str | None = path
+        query: dict[str, str | int] | None = {"per_page": PAGE_SIZE, **(params or {})}
+        while url:
+            response = await self._get(client, url, params=query, empty=empty)
+            if response.status_code == empty:
+                return
+            for item in response.json():
+                if stop_before and _parse(item.get("updated_at")) < stop_before:
+                    return
+                yield item
+            url, query = self._next_page(client, response), None  # the link carries the query
+
+    def _next_page(self, client: httpx.AsyncClient, response: httpx.Response) -> str | None:
+        """The next page — only if it is on the host the token was meant for."""
+        link = response.links.get("next", {}).get("url")
+        if link is None:
+            return None
+        if httpx.URL(link).host != client.base_url.host:
+            raise diagnose(
+                DiagnosticCode.PROVIDER_ERROR,
+                detail=f"pagination points to another host: {httpx.URL(link).host}",
+                secrets=[self.credentials.token.get_secret_value()],
+            )
+        return link
+
     async def _probe(self, client: httpx.AsyncClient, full_name: str) -> list[Capability]:
         """Which of the per-repository capabilities this token can read, at once."""
         probes = {
@@ -211,6 +321,7 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
             Capability.PULL_REQUESTS: f"/repos/{full_name}/pulls",
             Capability.RELEASES: f"/repos/{full_name}/releases",
             Capability.ISSUES: f"/repos/{full_name}/issues",
+            Capability.BRANCHES: f"/repos/{full_name}/branches",
         }
         responses = await asyncio.gather(
             *(client.get(path, params={"per_page": 1}) for path in probes.values()),
@@ -239,3 +350,61 @@ def _retry_after(response: httpx.Response) -> int | None:
         return int(response.headers["retry-after"])
     reset = response.headers.get("x-ratelimit-reset")
     return max(0, int(reset) - int(time.time())) if reset else None
+
+
+# ── records ─────────────────────────────────────────────────────────────────
+
+type Item = dict[str, object]
+
+
+def _record(
+    kind: Capability,
+    item: Item,
+    *,
+    container: str | None = None,
+    external_id: str | None = None,
+    updated: object = None,
+) -> RawRecord:
+    return RawRecord(
+        kind=kind,
+        external_id=external_id or str(item["node_id"]),
+        container=container,
+        payload=item,
+        updated_at=_parse(updated) if updated else None,
+        fetched_at=datetime.now(UTC),
+    )
+
+
+async def _records(
+    kind: Capability,
+    items: AsyncIterator[Item],
+    container: str,
+    *,
+    key: Callable[[Any], str] | None = None,
+    updated: Callable[[Any], object] = lambda item: item.get("updated_at"),
+) -> AsyncIterator[RawRecord]:
+    async for item in items:
+        yield _record(
+            kind,
+            item,
+            container=container,
+            external_id=key(item) if key else None,
+            updated=updated(item),
+        )
+
+
+async def _without(items: AsyncIterator[Item], field: str) -> AsyncIterator[Item]:
+    async for item in items:
+        if field not in item:
+            yield item
+
+
+def _committed_at(commit: Any) -> object:
+    return commit["commit"]["committer"]["date"]
+
+
+def _parse(timestamp: object) -> datetime:
+    """GitHub's ISO 8601, "2026-09-26T10:00:00Z". A missing one sorts first."""
+    if not timestamp:
+        return datetime.min.replace(tzinfo=UTC)
+    return datetime.fromisoformat(str(timestamp))
