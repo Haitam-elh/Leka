@@ -199,6 +199,11 @@ the cursor the next incremental pass starts from (when the last successful
 one started), how many records it brought, how many passes in a row failed
 and why. One row per (source, capability); the sync of LEKA-352 writes it.
 
+**`sync_runs`** — what each pass over a source did: what started it, whether
+it read in full, when it ran, how far it got batch by batch, how it ended.
+The pass that fetched a payload is the run whose times hold its fetch
+(LEKA-353).
+
 ### Tenancy
 
 Every customer shares the same tables. **Every business table carries

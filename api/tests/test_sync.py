@@ -41,7 +41,14 @@ from leka.connectors import (
     unregister_connector,
 )
 from leka.db import session_factory, system_scope, workspace_scope
-from leka.ingestion import RawPayload, SourceSync, SyncRunStatus
+from leka.ingestion import (
+    RawPayload,
+    SourceSync,
+    SyncRun,
+    SyncRunOutcome,
+    SyncRunStatus,
+    SyncTrigger,
+)
 from leka.ingestion import sync as sync_module
 from leka.ingestion.sync import RetryableSyncError, sync_source
 from leka.platform import LocalObjectStore
@@ -426,3 +433,76 @@ async def test_a_full_pass_waits_for_the_source_slot(source: Source) -> None:
     assert all(since is not None for _, since in SCRIPT.asked)
     _, rows, _, _ = await _read(source)
     assert rows["commits"].last_full_at == first_full
+
+
+# ── what each pass leaves behind (LEKA-353) ─────────────────────────────────
+
+
+async def _runs(source: Source) -> list[SyncRun]:
+    with workspace_scope(source.workspace_id):
+        async with session_factory() as session:
+            rows = await session.execute(
+                select(SyncRun).where(SyncRun.source_id == source.id).order_by(SyncRun.started_at)
+            )
+            return list(rows.scalars())
+
+
+async def test_each_pass_is_a_run_with_what_it_read(source: Source) -> None:
+    SCRIPT.records = {Capability.REPOSITORIES: 3, Capability.COMMITS: 2}
+
+    await _sync(source)
+    await sync_source(source.workspace_id, source.id, trigger=SyncTrigger.MANUAL)
+
+    first, second = await _runs(source)
+    assert (first.trigger, first.full_read, first.status) == (
+        SyncTrigger.SCHEDULE,
+        True,  # the first pass reads everything, asked or not
+        SyncRunOutcome.SUCCEEDED,
+    )
+    assert (first.records, first.payloads) == (5, 3)  # 3 → 2+1, 2 → 2
+    assert first.bytes > 0
+    assert first.finished_at is not None and first.finished_at >= first.started_at
+    assert first.capability is None and first.error is None
+    assert (second.trigger, second.full_read) == (SyncTrigger.MANUAL, False)
+
+
+async def test_a_failed_pass_keeps_how_far_it_got_and_why(source: Source) -> None:
+    SCRIPT.records = {Capability.REPOSITORIES: 1, Capability.COMMITS: 5}
+    SCRIPT.failure = (Capability.COMMITS, 3, DiagnosticCode.PROVIDER_ERROR, None)
+
+    with pytest.raises(RetryableSyncError):
+        await _sync(source)
+
+    (run,) = await _runs(source)
+    assert run.status is SyncRunOutcome.FAILED
+    assert run.records == 3  # the repository, and the first full batch of commits
+    assert run.error is not None and run.error["code"] == "PROVIDER_ERROR"
+    assert run.finished_at is not None
+
+
+async def test_a_run_left_running_by_a_dead_worker_is_closed_as_abandoned(source: Source) -> None:
+    SCRIPT.records = {Capability.COMMITS: 1}
+    await _sync(source)
+    with workspace_scope(source.workspace_id):
+        async with session_factory() as session:
+            await session.execute(
+                text(
+                    "UPDATE sync_runs SET status = 'running', finished_at = NULL "
+                    "WHERE source_id = :s"
+                ),
+                {"s": source.id},
+            )
+            await session.commit()
+
+    await _sync(source)
+
+    dead, alive = await _runs(source)
+    assert dead.status is SyncRunOutcome.ABANDONED
+    assert dead.finished_at is not None and dead.finished_at <= alive.started_at
+    assert alive.status is SyncRunOutcome.SUCCEEDED
+
+
+async def test_a_skipped_pass_leaves_no_run(source: Source) -> None:
+    await sync_source(source.workspace_id, uuid.uuid4())
+
+    assert await _runs(source) == []
