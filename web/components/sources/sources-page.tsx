@@ -94,7 +94,11 @@ export function SourcesPage() {
         <NoSources action={addButton} />
       ) : (
         <div className="flex flex-col gap-5">
-          <Stats sources={all} recordsOf={recordsOf} />
+          <Stats
+            sources={all}
+            recordsOf={recordsOf}
+            passOf={(source) => summaries.data?.get(source.id)?.pass_state}
+          />
           <Filters
             sources={all}
             category={category}
@@ -149,9 +153,11 @@ function useOwnerOf(): (source: Source) => string {
 function Stats({
   sources,
   recordsOf,
+  passOf,
 }: {
   sources: Source[];
   recordsOf: (source: Source) => number | undefined;
+  passOf: (source: Source) => string | null | undefined;
 }) {
   const t = useDictionary();
   const s = t.sources.stats;
@@ -159,7 +165,9 @@ function Stats({
   const read = sources.map(recordsOf).filter((n): n is number => n !== undefined);
   const records = read.reduce((sum, n) => sum + n, 0);
   const connected = sources.filter(isConnected).length;
-  const running = sources.filter((source) => source.sync_status === "running").length;
+  // From the job runs, not sources.sync_status: a worker that died leaves
+  // "running" behind, and only a pass a worker holds is under way.
+  const running = sources.filter((source) => passOf(source) === "running").length;
   const errors = sources.filter((source) => sourceTone(source) === "error").length;
   const toWatch = sources.filter((source) => sourceTone(source) === "attention").length;
   const synced = sources

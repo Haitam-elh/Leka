@@ -546,6 +546,7 @@ const fr = {
       full: "Relecture complète",
       fullAt: "le {date}",
       loadFailed: "Impossible de charger l'état de la synchronisation.",
+      queued: "Lecture en attente…",
     },
     page: {
       editTitle: "Modifier la source",
@@ -1247,6 +1248,7 @@ const en: Dictionary = {
       full: "Full read",
       fullAt: "on {date}",
       loadFailed: "The sync status cannot be loaded.",
+      queued: "Read waiting…",
     },
     page: {
       editTitle: "Change the source",

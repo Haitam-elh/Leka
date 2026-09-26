@@ -40,7 +40,7 @@ export function SourceSyncSection({ source }: { source: Source }) {
           <StatusBadge
             variant={`sync.${sync.status as "idle" | "running" | "failed"}`}
             size="sm"
-            live={sync.status === "running"}
+            live={false}
           />
           {sync.last_error ? (
             <p className="mt-1 max-w-72 text-xs text-state-danger">
@@ -72,7 +72,9 @@ export function SourceSyncSection({ source }: { source: Source }) {
     },
   ];
 
-  const fullAt = syncs.data
+  const rows = syncs.data?.capabilities;
+  const passState = syncs.data?.pass_state;
+  const fullAt = rows
     ?.map((sync) => sync.last_full_at)
     .filter((at): at is string => at !== null)
     .sort()
@@ -81,7 +83,15 @@ export function SourceSyncSection({ source }: { source: Source }) {
   return (
     <section className="rounded-xl border border-shell-line bg-white p-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-lg font-semibold text-brand-navy">{w.title}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-brand-navy">{w.title}</h2>
+          {passState === "running" ? <StatusBadge variant="sync.running" size="sm" live /> : null}
+          {passState === "queued" ? (
+            <span role="status" className="text-xs text-shell-muted">
+              {w.queued}
+            </span>
+          ) : null}
+        </div>
         {fullAt ? (
           <p className="text-xs text-shell-muted">
             {w.full} {fill(w.fullAt, { date: new Date(fullAt).toLocaleDateString(locale) })}
@@ -90,13 +100,13 @@ export function SourceSyncSection({ source }: { source: Source }) {
       </div>
       {syncs.isError ? (
         <p className="text-sm text-shell-muted">{w.loadFailed}</p>
-      ) : syncs.data && syncs.data.length === 0 ? (
+      ) : rows && rows.length === 0 ? (
         <p className="text-sm text-shell-muted">{w.notYet}</p>
       ) : (
         <KnowledgeTable
           caption={w.title}
           columns={columns}
-          rows={[...(syncs.data ?? [])].sort(
+          rows={[...(rows ?? [])].sort(
             (a, b) => ORDER.indexOf(a.capability) - ORDER.indexOf(b.capability),
           )}
           rowKey={(sync) => sync.capability}

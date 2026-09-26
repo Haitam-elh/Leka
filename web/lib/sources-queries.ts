@@ -58,13 +58,13 @@ export function useSourceMutation<TArgs, TResult>(run: (args: TArgs) => Promise<
   });
 }
 
-/** Where each capability of a source stands. Polled while a pass runs. */
+/** Where each capability of a source stands. Polled while a pass is
+ * queued or running — the API says which, from the job itself. */
 export function useSourceSyncs(id: string) {
   return useQuery({
     queryKey: sourceKeys.syncs(id),
     queryFn: () => sources.syncs(id),
-    refetchInterval: (query) =>
-      query.state.data?.some((sync) => sync.status === "running") ? 5_000 : false,
+    refetchInterval: (query) => (query.state.data?.pass_state ? 5_000 : false),
   });
 }
 

@@ -121,8 +121,18 @@ describe("the figures", () => {
 describe("what the sync read", () => {
   it("counts the records of each source, and all of them", async () => {
     syncSummaries.mockResolvedValue([
-      { source_id: GITHUB.id, records_total: 12430, last_succeeded_at: minutesAgo(4) },
-      { source_id: GITLAB.id, records_total: 70, last_succeeded_at: minutesAgo(9) },
+      {
+        source_id: GITHUB.id,
+        records_total: 12430,
+        last_succeeded_at: minutesAgo(4),
+        pass_state: "running",
+      },
+      {
+        source_id: GITLAB.id,
+        records_total: 70,
+        last_succeeded_at: minutesAgo(9),
+        pass_state: null,
+      },
     ]);
     renderPage();
 
@@ -134,6 +144,9 @@ describe("what the sync read", () => {
     const tile = screen.getByText("Éléments synchronisés").closest("li") as HTMLElement;
     expect(within(tile).getByText("12 500")).toBeInTheDocument();
     expect(within(tile).getByText("lus dans 2 source(s)")).toBeInTheDocument();
+    // Running is what a worker holds, not what a source's status says.
+    const running = screen.getByText("Synchronisations en cours").closest("li") as HTMLElement;
+    expect(within(running).getByText("1")).toBeInTheDocument();
   });
 });
 

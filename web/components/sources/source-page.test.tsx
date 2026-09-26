@@ -105,7 +105,7 @@ beforeEach(() => {
   api.get.mockResolvedValue(source());
   api.events.mockResolvedValue({ data: [] });
   api.catalog.mockResolvedValue([GITHUB]);
-  api.syncs.mockResolvedValue([]);
+  api.syncs.mockResolvedValue({ pass_state: null, capabilities: [] });
   api.syncSummaries.mockResolvedValue([]);
 });
 
@@ -195,32 +195,35 @@ describe("a source's page", () => {
 describe("its sync", () => {
   it("shows where each capability stands, and why the last pass failed", async () => {
     api.get.mockResolvedValue(source({ status: "active" }));
-    api.syncs.mockResolvedValue([
-      {
-        capability: "commits",
-        status: "idle",
-        since: new Date().toISOString(),
-        last_started_at: null,
-        last_succeeded_at: new Date().toISOString(),
-        last_full_at: "2026-09-20T10:00:00Z",
-        records_last_run: 10,
-        records_total: 8320,
-        consecutive_failures: 0,
-        last_error: null,
-      },
-      {
-        capability: "issues",
-        status: "failed",
-        since: null,
-        last_started_at: null,
-        last_succeeded_at: null,
-        last_full_at: null,
-        records_last_run: 0,
-        records_total: 0,
-        consecutive_failures: 3,
-        last_error: { code: "RATE_LIMITED", message: "Le quota d'appels est épuisé." },
-      },
-    ]);
+    api.syncs.mockResolvedValue({
+      pass_state: "running",
+      capabilities: [
+        {
+          capability: "commits",
+          status: "idle",
+          since: new Date().toISOString(),
+          last_started_at: null,
+          last_succeeded_at: new Date().toISOString(),
+          last_full_at: "2026-09-20T10:00:00Z",
+          records_last_run: 10,
+          records_total: 8320,
+          consecutive_failures: 0,
+          last_error: null,
+        },
+        {
+          capability: "issues",
+          status: "failed",
+          since: null,
+          last_started_at: null,
+          last_succeeded_at: null,
+          last_full_at: null,
+          records_last_run: 0,
+          records_total: 0,
+          consecutive_failures: 3,
+          last_error: { code: "RATE_LIMITED", message: "Le quota d'appels est épuisé." },
+        },
+      ],
+    });
     renderPage();
 
     const section = (await screen.findByRole("heading", { name: "Synchronisation" })).closest(
@@ -230,6 +233,8 @@ describe("its sync", () => {
     expect(await within(section).findByText("8 320")).toBeInTheDocument();
     expect(within(row("issues")).getByText("Le quota d'appels est épuisé.")).toBeInTheDocument();
     expect(within(row("issues")).getByText("3")).toBeInTheDocument();
+    // A worker holds the pass: said once, beside the title.
+    expect(within(section).getByRole("status")).toHaveTextContent("Synchronisation…");
   });
 
   it("says a source not read yet will be read, rather than an empty table", async () => {

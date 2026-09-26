@@ -23,6 +23,7 @@ export type ScopeOptions = components["schemas"]["ScopeOptionsRead"];
 export type SourceCreate = components["schemas"]["SourceCreate"];
 export type SourceUpdate = components["schemas"]["SourceUpdate"];
 export type SourceSync = components["schemas"]["SourceSyncRead"];
+export type SourceSyncs = components["schemas"]["SourceSyncs"];
 export type SyncSummary = components["schemas"]["SyncSummary"];
 
 type Page<T> = { data: T[]; next_cursor?: string | null };
@@ -70,8 +71,8 @@ export const sources = {
   /** Read it now; `queued` is false when a pass is already on its way (LEKA-352). */
   syncNow: (sourceId: string, full = false) =>
     post<{ queued: boolean }>(`/ingestion/sources/${sourceId}/sync?full=${full}`),
-  /** Where each capability stands. */
-  syncs: (sourceId: string) => apiFetch<SourceSync[]>(`/ingestion/sources/${sourceId}/syncs`),
+  /** Whether a pass is under way, and where each capability stands. */
+  syncs: (sourceId: string) => apiFetch<SourceSyncs>(`/ingestion/sources/${sourceId}/syncs`),
   /** One line per source that has been read: records so far, last success. */
   syncSummaries: () => apiFetch<SyncSummary[]>("/ingestion/syncs"),
 };
