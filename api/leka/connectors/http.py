@@ -8,6 +8,11 @@ them is a fix to all.
 
 What stays in each connector is what the vendor means: which 403 is a
 quota and which a scope (`refuse`), and how its listings are shaped.
+
+READS ONLY — AND A FEW READS ARE POSTS. Notion searches and Linear answers
+GraphQL only through POST. `post` sends a body to the paths a connector
+declared as reads when it built its client (`reads_by_post`), and to no
+other: a POST anywhere else is refused before it leaves, as a bug.
 """
 
 from __future__ import annotations
@@ -86,11 +91,15 @@ class VendorHttp:
         page_size_param: str = "per_page",
         in_body: tuple[str, str] | None = None,
         page_cursor_param: str | None = None,
+        reads_by_post: frozenset[str] = frozenset(),
     ) -> None:
         """`in_body`: for vendors that page in the body rather than the Link
         header — the fields holding the items and the next page's URL,
         ("values", "next") for Bitbucket, ("results", "_links.next") for
-        Confluence: a field may be a path."""
+        Confluence: a field may be a path.
+
+        `reads_by_post`: the paths a vendor reads through POST only, named
+        one by one — Notion's "/search", Linear's "/graphql"."""
         self._client = client
         self._secret = secret
         self._refuse = refuse
@@ -99,6 +108,7 @@ class VendorHttp:
         # Google's way: the body's field is a token, sent back as this
         # parameter on the same path — not a URL to follow.
         self._page_cursor_param = page_cursor_param
+        self._reads_by_post = reads_by_post
 
     async def __aenter__(self) -> Self:
         await self._client.__aenter__()
@@ -122,16 +132,42 @@ class VendorHttp:
     ) -> httpx.Response:
         """A successful answer, or `empty` — a status that means "nothing
         here" — or a ConnectorError with its diagnostic."""
+        return await self._send("GET", path, params=params, missing=missing, empty=empty)
+
+    async def post(
+        self, path: str, body: Mapping[str, object], *, missing: str = ""
+    ) -> httpx.Response:
+        """A read the vendor offers only as a POST, answered like `get`.
+
+        Only to a path declared in `reads_by_post`. Anything else raises
+        before a byte is sent: a connector that POSTs elsewhere is a bug,
+        and LEKA does not write to a customer's system.
+        """
+        if path not in self._reads_by_post:
+            msg = f"POST {path} is not a read this connector declared"
+            raise ValueError(msg)
+        return await self._send("POST", path, json=body, missing=missing)
+
+    async def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Params | None = None,
+        json: Mapping[str, object] | None = None,
+        missing: str = "",
+        empty: int | None = None,
+    ) -> httpx.Response:
         try:
-            response = await self._client.get(path, params=params)
+            response = await self._client.request(method, path, params=params, json=json)
         except httpx.TimeoutException as error:
             raise diagnose(
-                DiagnosticCode.TIMEOUT, detail=f"GET {path}", secrets=[self._secret]
+                DiagnosticCode.TIMEOUT, detail=f"{method} {path}", secrets=[self._secret]
             ) from error
         except httpx.TransportError as error:
             raise diagnose(
                 DiagnosticCode.NETWORK_UNREACHABLE,
-                detail=f"GET {path}: {type(error).__name__}",
+                detail=f"{method} {path}: {type(error).__name__}",
                 secrets=[self._secret],
             ) from error
         if response.is_success or response.status_code == empty:
