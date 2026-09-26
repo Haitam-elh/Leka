@@ -110,6 +110,7 @@ export function lastSeen(source: Source): string | null {
 export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
   github: "code",
   gitlab: "code",
+  bitbucket: "code",
   jira: "project",
   confluence: "docs",
   aws: "cloud",
