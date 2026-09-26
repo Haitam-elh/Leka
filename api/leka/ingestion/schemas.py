@@ -78,6 +78,19 @@ class SyncSummary(BaseModel):
     source_id: uuid.UUID
     records_total: int
     last_succeeded_at: datetime | None
+    pass_state: str | None = Field(
+        default=None,
+        description="running (a worker is reading it), queued (waiting), or null.",
+    )
+
+
+class SourceSyncs(BaseModel):
+    """A source's sync: whether a pass is under way, and each capability."""
+
+    pass_state: str | None = Field(
+        description="running (a worker is reading it), queued (waiting), or null."
+    )
+    capabilities: list[SourceSyncRead]
 
 
 class SyncRequested(BaseModel):

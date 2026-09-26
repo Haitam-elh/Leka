@@ -20,7 +20,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select, text
 
-from leka.background import Event
+from leka.background import Event, JobQueue, JobRunRepository
 from leka.connectors import Source, SourceStatus
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion import SourceSync
@@ -210,7 +210,8 @@ async def test_a_member_reads_how_far_sources_were_read_but_cannot_start_a_pass(
     summary = (await client.get(f"{API}/ingestion/syncs")).json()
     refused = await client.post(f"{API}/ingestion/sources/{source['id']}/sync")
 
-    assert [(row["capability"], row["records_total"]) for row in syncs] == [
+    assert syncs["pass_state"] is None
+    assert [(row["capability"], row["records_total"]) for row in syncs["capabilities"]] == [
         ("commits", 40),
         ("issues", 2),
     ]
@@ -234,3 +235,55 @@ def test_the_sync_does_not_read_a_source_waiting_for_a_person() -> None:
     assert SourceStatus.ERROR not in sync_module.SYNCABLE
     assert SourceStatus.DISABLED not in sync_module.SYNCABLE
     assert Source is not None and SourceSync is not None
+
+
+async def _run(workspace_id: uuid.UUID, source_id: str, status: str) -> None:
+    """A job run of the sync for this source, in this status."""
+    with system_scope():
+        async with session_factory() as session:
+            run = await JobRunRepository(session).create(
+                job="leka.ingestion.sync.run_sync",
+                args=[str(workspace_id), source_id],
+                kwargs={"full": False},
+                for_workspace_id=workspace_id,
+                request_id=None,
+                queue=JobQueue.DEFAULT,
+                concurrency_key=f"sync:{source_id}",
+            )
+            assert run is not None
+            await session.flush()
+            await session.execute(
+                text("UPDATE job_runs SET status = :st WHERE id = :id"),
+                {"st": status, "id": run.id},
+            )
+            await session.commit()
+
+
+async def test_under_way_means_a_worker_holds_it_not_that_a_row_says_so(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    left = await _activated(client)  # a row says running, no job: a worker died
+    waiting = await _activated(client)  # a pass queued, nothing read yet
+    await _set(
+        left["id"],
+        acme["acme"],
+        "INSERT INTO source_syncs (workspace_id, source_id, capability, status) "
+        "SELECT workspace_id, id, 'commits', 'running' FROM sources WHERE id = :s",
+    )
+    await _run(acme["acme"], waiting["id"], "queued")
+
+    abandoned = (await client.get(f"{API}/ingestion/sources/{left['id']}/syncs")).json()
+    summary = {row["source_id"]: row for row in (await client.get(f"{API}/ingestion/syncs")).json()}
+
+    assert abandoned["pass_state"] is None
+    (commits,) = abandoned["capabilities"]
+    assert commits["status"] == "failed"
+    assert "interrompue" in commits["last_error"]["message"]
+    assert summary[waiting["id"]]["pass_state"] == "queued"
+    assert summary[waiting["id"]]["records_total"] == 0
+
+    await _run(acme["acme"], left["id"], "running")
+    running = (await client.get(f"{API}/ingestion/sources/{left['id']}/syncs")).json()
+    assert running["pass_state"] == "running"
+    assert running["capabilities"][0]["status"] == "running"

@@ -14,6 +14,7 @@ from leka.ingestion.schemas import (
     NormalisedEntity,
     NormalisedRelationship,
     SourceSyncRead,
+    SourceSyncs,
     SyncRequested,
     SyncSummary,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "SourceSync",
     "SourceSyncRead",
     "SourceSyncRepository",
+    "SourceSyncs",
     "SyncRequested",
     "SyncRunStatus",
     "SyncSummary",

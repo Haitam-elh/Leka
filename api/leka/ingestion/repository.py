@@ -16,6 +16,7 @@ from sqlalchemy import CursorResult, Result, Select, delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.background import ACTIVE_JOB_STATUSES, JobRun, JobStatus
 from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
 from leka.ingestion.models import RawPayload, SourceSync
@@ -157,6 +158,30 @@ class SourceSyncRepository(WorkspaceScopedRepository):
             .where(SourceSync.source_id == source_id)
             .order_by(SourceSync.capability)
         )
+
+    async def passes(self, source_ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, str]:
+        """Which of these sources have a pass under way, and whether it is
+        `running` — a worker executing it — or `queued` — waiting, or waiting
+        for a retry. Read from the job runs, which know whether a worker holds
+        it; `source_syncs` only knows a pass started, not that it is alive.
+
+        job_runs belongs to no workspace, so the filter on for_workspace_id is
+        written out here, as leka.background asks of whatever reads it.
+        """
+        keys = {f"sync:{source_id}": source_id for source_id in source_ids}
+        if not keys:
+            return {}
+        rows = await self._session.execute(
+            select(JobRun.concurrency_key, JobRun.status).where(
+                JobRun.for_workspace_id == self.workspace_id,
+                JobRun.concurrency_key.in_(list(keys)),
+                JobRun.status.in_(ACTIVE_JOB_STATUSES),
+            )
+        )
+        return {
+            keys[str(key)]: "running" if status is JobStatus.RUNNING else "queued"
+            for key, status in rows.all()
+        }
 
     async def summaries(self) -> Sequence[tuple[uuid.UUID, int, datetime | None]]:
         """Per source of this workspace: records brought so far, and the last

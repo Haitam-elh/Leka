@@ -1,7 +1,7 @@
 """Pipeline runs, and the sync of each source (LEKA-352).
 
     POST /ingestion/sources/{id}/sync     "sync now" — source:manage
-    GET  /ingestion/sources/{id}/syncs    where each capability stands
+    GET  /ingestion/sources/{id}/syncs    a pass under way?, and each capability
     GET  /ingestion/syncs                 one line per source, for a list
 
 A route validates, calls one service, and returns (architecture rule 6).
@@ -23,8 +23,15 @@ from leka.background import JobQueue
 from leka.connectors import Source, SourceNotFoundError, SourceService
 from leka.core.errors import ErrorCode
 from leka.governance import Permission, Principal, require_permission
-from leka.ingestion import SourceSyncRead, SourceSyncRepository, SyncRequested, SyncSummary
-from leka.ingestion.sync import SYNCABLE, enqueue_sync
+from leka.ingestion import (
+    SourceSyncRead,
+    SourceSyncRepository,
+    SourceSyncs,
+    SyncRequested,
+    SyncRunStatus,
+    SyncSummary,
+)
+from leka.ingestion.sync import ABANDONED, SYNCABLE, enqueue_sync
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
@@ -61,21 +68,46 @@ async def sync_now(
     return SyncRequested(queued=queued)
 
 
-@router.get("/sources/{source_id}/syncs", response_model=list[SourceSyncRead])
-async def source_syncs(
-    source_id: uuid.UUID, session: SessionDep, principal: Reader
-) -> list[SourceSyncRead]:
-    """Where each capability of the source stands, in capability order."""
+@router.get("/sources/{source_id}/syncs", response_model=SourceSyncs)
+async def source_syncs(source_id: uuid.UUID, session: SessionDep, principal: Reader) -> SourceSyncs:
+    """Whether a pass is under way, and where each capability stands.
+
+    "running" only while a worker is really reading: a capability left
+    `running` by a pass whose worker died is shown as the failure the next
+    pass will record (leka/ingestion/sync.py, ABANDONED).
+    """
     await _source(session, principal, source_id)
-    rows = await SourceSyncRepository(session, principal.workspace_id).for_source(source_id)
-    return [SourceSyncRead.model_validate(row, from_attributes=True) for row in rows]
+    repository = SourceSyncRepository(session, principal.workspace_id)
+    under_way = (await repository.passes([source_id])).get(source_id)
+    capabilities = []
+    for row in await repository.for_source(source_id):
+        read = SourceSyncRead.model_validate(row, from_attributes=True)
+        if read.status == SyncRunStatus.RUNNING.value and under_way != "running":
+            read.status = SyncRunStatus.FAILED.value
+            read.last_error = ABANDONED.model_dump(mode="json")
+        capabilities.append(read)
+    return SourceSyncs(pass_state=under_way, capabilities=capabilities)
 
 
 @router.get("/syncs", response_model=list[SyncSummary])
 async def sync_summaries(session: SessionDep, principal: Reader) -> list[SyncSummary]:
-    """One line per source of the workspace that has been read at least once."""
-    rows = await SourceSyncRepository(session, principal.workspace_id).summaries()
+    """One line per source that has been read or has a pass under way."""
+    repository = SourceSyncRepository(session, principal.workspace_id)
+    read = {source_id: (total, last) for source_id, total, last in await repository.summaries()}
+    ids = [source.id for source in await _sources(session, principal)]
+    under_way = await repository.passes(ids)
     return [
-        SyncSummary(source_id=source_id, records_total=total, last_succeeded_at=last)
-        for source_id, total, last in rows
+        SyncSummary(
+            source_id=source_id,
+            records_total=read.get(source_id, (0, None))[0],
+            last_succeeded_at=read.get(source_id, (0, None))[1],
+            pass_state=under_way.get(source_id),
+        )
+        for source_id in ids
+        if source_id in read or source_id in under_way
     ]
+
+
+async def _sources(session: SessionDep, principal: Principal) -> list[Source]:
+    service = SourceService(session, principal.workspace_id, actor_user_id=principal.user_id)
+    return list(await service.repository.list(service.repository.list_statement()))

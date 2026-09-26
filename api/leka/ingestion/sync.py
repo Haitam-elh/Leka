@@ -17,9 +17,12 @@ the object store in batches, and record how far it got.
 THE CURSOR IS WHEN THE LAST SUCCESSFUL PASS STARTED (see SourceSync). A
 failed pass does not move it; the next one reads from the same place, and
 what the failed one already stored is stored again — a write, not a wrong
-answer. Every FULL_RESYNC_EVERY a pass ignores the cursor and reads
-everything: incremental reads trust every vendor's dates, and this is the
-net under that trust.
+answer. Once a week a pass ignores the cursor and reads everything:
+incremental reads trust every vendor's dates, and this is the net under
+that trust. Each source has its own slot (full_slot), at night UTC, so a
+workspace's sources and a thousand workspaces do not all read in full at
+once; a source never read in full, or whose cursor was forgotten, is read
+in full at its next pass whatever the day.
 
 FAILURES, AND WHO DEALS WITH THEM:
 
@@ -83,7 +86,9 @@ from leka.platform import from_bytes, object_key, object_store
 logger = structlog.get_logger(__name__)
 
 BATCH_SIZE = 500
-FULL_RESYNC_EVERY = timedelta(days=7)
+# The weekly full pass lands in a slot between these hours, UTC: the night
+# of the product's customers, who are in Europe. One constant to move.
+FULL_SLOT_HOURS = (1, 2, 3, 4)
 # A retryable failure asked to wait longer than this is left to the next
 # scheduled pass rather than to the runner's retries, which would all land
 # inside the wait and fail again.
@@ -363,10 +368,29 @@ def _capabilities(source: Source, offered: frozenset[Capability]) -> list[Capabi
     return sorted(found, key=lambda c: (c is not Capability.REPOSITORIES, c.value))
 
 
+def full_slot(source_id: uuid.UUID) -> tuple[int, int]:
+    """(weekday, hour UTC) of a source's weekly full pass, from its id.
+
+    Derived rather than stored: the same every week, spread evenly across
+    the week's nights, and nothing to keep in step.
+    """
+    number = source_id.int
+    return number % 7, FULL_SLOT_HOURS[(number // 7) % len(FULL_SLOT_HOURS)]
+
+
+def last_slot(source_id: uuid.UUID, now: datetime) -> datetime:
+    """The most recent occurrence of the source's slot, at or before `now`."""
+    weekday, hour = full_slot(source_id)
+    slot = now.astimezone(UTC).replace(hour=hour, minute=0, second=0, microsecond=0)
+    slot -= timedelta(days=(slot.weekday() - weekday) % 7)
+    return slot if slot <= now else slot - timedelta(days=7)
+
+
 def _due_for_full(row: SourceSync, now: datetime) -> bool:
+    """Never read in full, cursor forgotten, or its weekly slot has come since."""
     if row.since is None or row.last_full_at is None:
         return True
-    return now - row.last_full_at >= FULL_RESYNC_EVERY
+    return row.last_full_at < last_slot(row.source_id, now)
 
 
 def _succeeded(row: SourceSync, started: datetime, count: int, *, full: bool) -> None:

@@ -29,9 +29,22 @@ started.** What changes while a pass reads is at or after its start, so the
 next pass reads it again. A failed pass does not move it. Reading something
 twice costs a write; missing it would cost a wrong answer.
 
-**A full pass every 7 days** per capability ignores the cursor and reads
-everything: incremental reads trust each vendor's dates, and this is the
-net under that trust. An admin can also ask for one (`full=true`).
+**A full pass once a week** ignores the cursor and reads everything:
+incremental reads trust each vendor's dates, and this is the net under that
+trust. Each source has its own **slot**, a weekday and an hour between 01:00
+and 04:00 UTC derived from its id (`full_slot`), so sources do not all read
+in full at once; the first pass after the slot is full. A source never read
+in full, or whose cursor was forgotten, is read in full at once. So is every
+activation — changing settings or credentials sends a source back to draft,
+so a widened scope always comes back through one — and an admin can ask for
+one (`full=true`). A full pass forgets the cursor **as it starts**: one that
+fails half-way leaves the next one full.
+
+**A pass may take hours** (a large Notion workspace reads at ~3 requests a
+second). The job runner renews its lease while it runs, and RQ lets a sync
+live **12 hours** (`RQ_JOB_TIMEOUTS` in `leka/background/runner.py`; every
+other job keeps 2). A pass that dies is found `running` by the next one,
+which counts it as failed (`ABANDONED`) and reads as usual.
 
 ## When passes run
 
@@ -69,8 +82,13 @@ records; a source's page shows each capability (`GET
 
 | | |
 |---|---|
-| `GET /ingestion/syncs` | per source: records so far, last success — one call for a list |
-| `GET /ingestion/sources/{id}/syncs` | per capability: status, cursor, starts, counts, failures, last diagnostic |
+| `GET /ingestion/syncs` | per source: records so far, last success, `pass_state` — one call for a list |
+| `GET /ingestion/sources/{id}/syncs` | `pass_state`, and per capability: status, cursor, starts, counts, failures, last diagnostic |
+
+`pass_state` is `running` only while a worker executes the pass, `queued`
+while it waits (or waits for a retry), read from the job runs — not from
+`source_syncs`, which only knows a pass started. A capability `running`
+with no pass running is shown as the failure the next pass will record.
 | `POST /ingestion/sources/{id}/sync?full=` | queue a pass; 409 if the source is not activated |
 
 **For operations** — SQL, across every workspace, not for customers:
