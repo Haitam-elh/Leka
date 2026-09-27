@@ -6,6 +6,7 @@ record means nothing without it (`required`).
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -124,3 +125,62 @@ def people(
             role, "person", external_id=dig(item, id_key), name=dig(item, name_key or id_key)
         )
     return out
+
+
+# Atlassian Document Format: the blocks that end a line, and the inline
+# nodes whose text lives in their attributes.
+_ADF_BLOCKS = frozenset(
+    {"paragraph", "heading", "codeBlock", "blockquote", "tableRow", "panel", "rule"}
+)
+_ADF_INLINE = {"mention": "text", "emoji": "shortName", "status": "text", "inlineCard": "url"}
+
+
+def adf_text(document: object) -> str | None:
+    """Jira's rich text (ADF) as plain text: its words, a line per block.
+
+    Walked with a stack, not recursion: a payload decides how deep it nests,
+    and a quoted quote in a list in a panel costs nothing.
+    A plain string — an older API, a plain field — is returned as it is.
+    """
+    if isinstance(document, str):
+        return document.strip() or None
+    parts: list[str] = []
+    stack: list[object] = [document]
+    while stack:
+        node = stack.pop()
+        if node == "\n":
+            parts.append("\n")
+            continue
+        if not isinstance(node, dict):
+            continue
+        kind = node.get("type")
+        if kind == "text":
+            parts.append(str(node.get("text") or ""))
+        elif kind == "hardBreak":
+            parts.append("\n")
+        elif kind in _ADF_INLINE:
+            parts.append(string(node, "attrs", _ADF_INLINE[str(kind)]) or "")
+        if kind in _ADF_BLOCKS:
+            stack.append("\n")
+        children = node.get("content")
+        if isinstance(children, list):
+            stack.extend(reversed(children))
+    text = re.sub(r"\n{3,}", "\n\n", "".join(parts)).strip()
+    return text or None
+
+
+def tags(value: object, *path: str | int) -> list[str]:
+    """Cloud tags as 'key=value', sorted — from AWS's [{Key, Value}] or
+    Azure's and Google's {key: value}."""
+    found = dig(value, *path)
+    pairs: list[tuple[str | None, str | None]] = []
+    if isinstance(found, dict):
+        pairs = [(string(k), string(v)) for k, v in found.items()]
+    elif isinstance(found, list):
+        pairs = [(string(t, "Key"), string(t, "Value")) for t in found]
+    return sorted(f"{k}={v or ''}" for k, v in pairs if k)
+
+
+def last_segment(value: str | None) -> str | None:
+    """'…/zones/europe-west1-b/machineTypes/e2-small' → 'e2-small'."""
+    return value.rstrip("/").rsplit("/", 1)[-1] or None if value else None

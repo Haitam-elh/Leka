@@ -3,7 +3,11 @@
 Importing the package registers every strategy. Contract: docs/extraction.md.
 """
 
-from leka.ingestion.extraction import code  # noqa: F401 — registers its strategies
+from leka.ingestion.extraction import (  # noqa: F401 — importing registers the strategies
+    cloud,
+    code,
+    tickets,
+)
 from leka.ingestion.extraction.contract import (
     MAX_TEXT,
     Content,
