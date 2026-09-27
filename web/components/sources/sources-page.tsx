@@ -431,7 +431,9 @@ function SourcesTable({
 
 /** "GitHub · dépôts, commits, pull requests" — the connector, and what it reads. */
 function summary(t: Dictionary, source: Source): string {
-  const reads = source.capabilities.slice(0, 3).map((capability) => capabilityWord(t, capability));
+  const reads = source.capabilities
+    .slice(0, 3)
+    .map((capability) => capabilityWord(t, capability, source.type));
   return [sourceTitle(source.type), reads.join(", ")].filter(Boolean).join(" · ");
 }
 

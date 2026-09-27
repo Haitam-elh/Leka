@@ -44,7 +44,7 @@ export function SourceSyncSection({ source }: { source: Source }) {
     {
       id: "capability",
       header: w.capability,
-      cell: (sync) => capabilityWord(t, sync.capability),
+      cell: (sync) => capabilityWord(t, sync.capability, source.type),
       sortValue: (sync) => sync.capability,
     },
     {

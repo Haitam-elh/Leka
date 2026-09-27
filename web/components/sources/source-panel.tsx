@@ -144,7 +144,7 @@ export function SourceFacts({
                 key={capability}
                 className="rounded-md bg-brand-violet-soft px-2 py-0.5 text-xs text-shell-nav-active"
               >
-                {capabilityWord(t, capability)}
+                {capabilityWord(t, capability, source.type)}
               </li>
             ))}
           </ul>
@@ -206,6 +206,18 @@ export function timelineEvent(t: Dictionary, event: SourceEvent): TimelineEvent 
   };
 }
 
-export function capabilityWord(t: Dictionary, capability: string): string {
-  return (t.sources.capabilities as Record<string, string>)[capability] ?? capability;
+/**
+ * What a capability is called, in the vendor's own terms when the source's
+ * kind is known — "buckets S3" at AWS, "comptes de stockage" at Azure — and
+ * in general terms otherwise.
+ */
+export function capabilityWord(t: Dictionary, capability: string, kind?: string): string {
+  const ofKind = kind
+    ? (t.sources.capabilitiesOf as Record<string, Record<string, string> | undefined>)[kind]
+    : undefined;
+  return (
+    ofKind?.[capability] ??
+    (t.sources.capabilities as Record<string, string>)[capability] ??
+    capability
+  );
 }

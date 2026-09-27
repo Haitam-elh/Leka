@@ -929,7 +929,9 @@ body.nav-open .burger span:last-child { transform: translateY(-2.75px) rotate(-4
   body.nav-open .nav { opacity: 1; transform: none; pointer-events: auto; }
   .nav a { padding-block: 11px; font-size: 17px; border-bottom: 1px solid var(--rule); }
   .burger { display: grid; }
-  .header__actions .signin, .header__actions .btn { display: none; }
+  /* The demo button leaves room on a phone; "Se connecter" stays: it is
+     the only way into the platform from here. */
+  .header__actions .btn { display: none; }
   .header__inner { justify-content: space-between; gap: var(--s-4); }
 
   .connect__map { grid-template-columns: 1fr; gap: var(--s-5); }
