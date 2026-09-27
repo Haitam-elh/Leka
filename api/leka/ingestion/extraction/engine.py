@@ -94,6 +94,16 @@ def supported() -> frozenset[tuple[SourceKind, Capability]]:
     return frozenset(_STRATEGIES)
 
 
+def versions(kind: SourceKind) -> dict[str, int | None]:
+    """Per capability, the version of the strategy that extracts it for this
+    kind of source: what an extraction row is compared with."""
+    return {
+        capability.value: strategy.version
+        for (source_kind, capability), strategy in _STRATEGIES.items()
+        if source_kind is kind
+    }
+
+
 def extract(
     record: RawRecord,
     *,

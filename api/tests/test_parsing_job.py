@@ -18,19 +18,21 @@ from sqlalchemy import select, text
 from leka.connectors import Capability, Source, SourceKind
 from leka.db import session_factory, workspace_scope
 from leka.ingestion import ExtractedRecordRow, ParsedRecordRow, ParseStatus
-from leka.ingestion import sync as sync_module
 from leka.ingestion.extraction import Content, Extracted, MalformedPayloadError
 from leka.ingestion.extraction import engine as engine_module
 from leka.ingestion.extraction import job as extraction_job
 from leka.ingestion.extraction.job import extract_source
-from leka.ingestion.parsing import job as parsing_job
+from leka.ingestion.parsing import engine as parsing_engine
 from leka.ingestion.parsing.job import PARSE_JOB, parse_source
 from tests import test_sync as sync_tests
 from tests.test_sync import _index, _sync, fake, source  # noqa: F401 — fixtures
 
 pytestmark = pytest.mark.integration
 
-queued: list[str] = []
+
+def queued() -> list[str]:
+    """The jobs queued so far — by the pass and by each stage."""
+    return [job for job, _ in sync_tests.queued_purges]
 
 
 def _commit(payload: dict[str, Any], *, broken: int | None = None) -> Extracted:
@@ -54,16 +56,9 @@ def _strategy(monkeypatch: pytest.MonkeyPatch, version: int, broken: int | None 
 
 @pytest.fixture(autouse=True)
 def pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A strategy for the fake commits; what the jobs queue, captured."""
+    """A strategy for the fake commits. What the stages queue is captured by
+    test_sync's `fake`."""
     _strategy(monkeypatch, 1)
-    queued.clear()
-
-    async def capture(job: str, *args: object, **kwargs: object) -> object:
-        queued.append(job)
-        return object()
-
-    monkeypatch.setattr(extraction_job, "enqueue_job", capture)
-    monkeypatch.setattr(parsing_job, "enqueue_job", capture)
 
 
 async def _extracted(source: Source, **records: int) -> None:
@@ -90,7 +85,7 @@ async def _rows(source: Source) -> dict[str, ParsedRecordRow]:
 async def test_the_extraction_queues_the_parsing(source: Source) -> None:
     await _extracted(source, commits=2)
 
-    assert PARSE_JOB in queued
+    assert PARSE_JOB in queued()
 
 
 async def test_every_extracted_record_is_parsed_and_the_rest_is_not(source: Source) -> None:
@@ -134,7 +129,7 @@ async def test_a_new_parser_version_parses_everything_again(
 ) -> None:
     await _extracted(source, commits=2)
     await parse_source(source.workspace_id, source.id)
-    monkeypatch.setattr(parsing_job, "PARSER_VERSION", 2)
+    monkeypatch.setattr(parsing_engine, "PARSER_VERSION", 2)
 
     assert (await parse_source(source.workspace_id, source.id))["parsed"] == 2
     assert {row.parser_version for row in (await _rows(source)).values()} == {2}
@@ -146,7 +141,7 @@ async def test_only_parsing_to_do_is_queued_by_the_pass(
     await _extracted(source, commits=2)
     await parse_source(source.workspace_id, source.id)
     sync_tests.queued_purges.clear()
-    monkeypatch.setattr(sync_module, "PARSER_VERSION", 2)
+    monkeypatch.setattr(parsing_engine, "PARSER_VERSION", 2)
 
     await _sync(source)
 

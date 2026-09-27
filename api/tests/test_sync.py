@@ -52,6 +52,7 @@ from leka.ingestion import (
     SyncRunStatus,
     SyncTrigger,
 )
+from leka.ingestion import pipeline as pipeline_module
 from leka.ingestion import sync as sync_module
 from leka.ingestion.checksum import checksum
 from leka.ingestion.purge import PURGE_JOB, purge_deleted
@@ -134,7 +135,8 @@ def fake(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[LocalObjec
 
     store = LocalObjectStore(tmp_path)
     monkeypatch.setattr(storage, "_store", store)
-    # The purge job a pass queues is captured, not put on a queue.
+    # The jobs a pass queues — the purge, the processing — are captured,
+    # not put on a queue.
     queued_purges.clear()
 
     async def capture(job: str, *args: object, **kwargs: object) -> object:
@@ -142,6 +144,8 @@ def fake(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[LocalObjec
         return object()
 
     monkeypatch.setattr(sync_module, "enqueue_job", capture)
+    # And the processing stages the pipeline queues (LEKA-360).
+    monkeypatch.setattr(pipeline_module, "enqueue_job", capture)
     yield store
     unregister_connector(SourceKind.SLACK)
 
