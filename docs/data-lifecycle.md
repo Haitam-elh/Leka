@@ -27,6 +27,7 @@ same answer.
 | **Parsed records** — per extraction: facts with their confidence and a 120-character excerpt of where each was read, the text's shape, a quality score | `parsed_records` | as long as its extraction | cascade from `extracted_records` and `sources`; removed when its extraction fails. Its excerpts are customer text: they follow the record, like the extracted text (LEKA-360) |
 | **Normalised records** — per parse: the record's candidate entity under its canonical key, the people, services and teams it names (names, emails, logins), relationships between keys | `normalised_records` | as long as its parse | cascade from `parsed_records` and `sources`; removed when its parse fails. Holds personal data (names, emails) as the vendors gave them; follows the record, like the extracted text (LEKA-360) |
 | **Processing history** — one row per run of a processing stage: stage, times, counts, versions, outcome | `processing_runs` | 90 days | `leka.ingestion.lifecycle.sweep_processing`, daily; cascade from `sources`. No payload — counts, versions and an exception's type |
+| **Source settings** — versions of a source's scope rules and mapping, with their author | `source_settings` | as long as its source | cascade from `sources`; append-only, never a secret — patterns and mapping choices |
 | **Memberships, users** | `memberships`, `users` | as long as the account | cascade from `workspaces`; a user row survives, since a person may belong to several workspaces |
 
 ### Raw payload retention, by source kind

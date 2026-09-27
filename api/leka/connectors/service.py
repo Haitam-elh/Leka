@@ -20,6 +20,7 @@ from typing import Any
 import httpx
 import structlog
 from pydantic import BaseModel, ValidationError
+from sqlalchemy import Select
 from sqlalchemy.exc import IntegrityError
 
 from leka.background import publish_event
@@ -36,6 +37,7 @@ from leka.connectors.models import (
     Source,
     SourceEventType,
     SourceKind,
+    SourceSettingsVersion,
     SourceStatus,
 )
 from leka.connectors.registry import UnknownConnectorError, get_connector
@@ -43,8 +45,10 @@ from leka.connectors.repository import (
     SourceCredentialRepository,
     SourceEventRepository,
     SourceRepository,
+    SourceSettingsRepository,
 )
 from leka.connectors.secrets import DatabaseFernetSecretStore, SecretStore
+from leka.connectors.settings import Finding, SourceSettings, check
 
 logger = structlog.get_logger(__name__)
 
@@ -71,6 +75,18 @@ class DuplicateSourceError(ValueError):
 
 class NoScopeError(Exception):
     """This connector has no scope to choose from."""
+
+
+class InvalidSettingsError(ValueError):
+    """Settings with errors in them: refused, with every finding."""
+
+    def __init__(self, findings: list[Finding]) -> None:
+        super().__init__(f"{len(findings)} findings")
+        self.findings = findings
+
+
+class SettingsConflictError(Exception):
+    """Two saves of the same source's settings at once: one lost."""
 
 
 class ActivationRefusedError(Exception):
@@ -104,6 +120,7 @@ class SourceService:
         self._session = session
         self._sources = SourceRepository(session, workspace_id)
         self._events = SourceEventRepository(session, workspace_id)
+        self._settings = SourceSettingsRepository(session, workspace_id)
         self._secrets: SecretStore = secrets or DatabaseFernetSecretStore(
             SourceCredentialRepository(session, workspace_id)
         )
@@ -220,6 +237,75 @@ class SourceService:
             return None, error.diagnostic
         except TimeoutError:
             return None, diagnose(DiagnosticCode.TIMEOUT).diagnostic
+
+    # ── settings: scope rules and mapping (LEKA-351) ─────────────────────────
+
+    async def settings(self, source: Source) -> tuple[int, SourceSettings]:
+        """The current version and settings. Version 0: never set, the defaults."""
+        row = await self._settings.current(source.id)
+        if row is None:
+            return 0, SourceSettings()
+        return row.version, SourceSettings.model_validate(
+            {"scope": row.scope, "mapping": row.mapping}
+        )
+
+    def settings_history(self, source: Source) -> Select[tuple[SourceSettingsVersion]]:
+        return self._settings.history(source.id)
+
+    async def check_settings(self, source: Source, settings: SourceSettings) -> list[Finding]:
+        """What is wrong or doubtful with these settings — against what the
+        source can read and what its credentials can see, asked of the
+        vendor within the test's budget. Changes nothing."""
+        visible: list[str] | None
+        try:
+            listing, _diagnostic = await self.scope_options(source)
+            visible = [option.key for option in listing.options] if listing else None
+        except NoScopeError:
+            visible = None
+        capabilities = frozenset(c.value for c in get_connector(source.kind).manifest.capabilities)
+        return check(settings, capabilities=capabilities, visible=visible)
+
+    async def save_settings(
+        self, source: Source, settings: SourceSettings
+    ) -> tuple[int, list[Finding], list[str]]:
+        """A new version, if the settings changed and have no error in them.
+        Returns the version, the findings (warnings) and what changed:
+        `scope`, `mapping`. Raises InvalidSettingsError with every finding."""
+        findings = await self.check_settings(source, settings)
+        if any(f.level == "error" for f in findings):
+            raise InvalidSettingsError(findings)
+        version, current = await self.settings(source)
+        changed = [
+            section
+            for section, differs in (
+                ("scope", settings.scope != current.scope),
+                ("mapping", settings.mapping != current.mapping),
+            )
+            if differs
+        ]
+        if not changed:
+            return version, findings, []
+        try:
+            row = await self._settings.append(
+                source.id,
+                scope=settings.scope.model_dump(mode="json"),
+                mapping=settings.mapping.model_dump(mode="json"),
+                created_by=self._actor,
+            )
+        except IntegrityError as error:
+            raise SettingsConflictError(str(source.id)) from error
+        self._record(source, SourceEventType.SETTINGS_CHANGED, version=row.version, changed=changed)
+        if "scope" in changed and source.status is SourceStatus.ACTIVE:
+            # In this transaction, like an activation: the full pass that reads
+            # what came in and sweeps what went out starts only if this
+            # version is committed — never with the old rules.
+            await publish_event(
+                self._session,
+                source.workspace_id,
+                "source.scope_changed",
+                {"source_id": str(source.id), "version": row.version},
+            )
+        return row.version, findings, changed
 
     async def activate(self, source: Source) -> Source:
         tested = source.tested_config_fingerprint

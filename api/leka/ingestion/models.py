@@ -223,6 +223,9 @@ class SyncTrigger(enum.StrEnum):
     ACTIVATION = "activation"
     SCHEDULE = "schedule"
     MANUAL = "manual"
+    # The source's scope rules changed (LEKA-351): a full pass, to read what
+    # came in and sweep what went out.
+    SETTINGS = "settings"
 
 
 class SyncRunOutcome(enum.StrEnum):

@@ -3,6 +3,7 @@
     GET  /connectors/catalog           what can be connected, with the JSON
                                        Schemas a form is generated from
     /sources[/{id}[/...]]              the sources of the active workspace
+    /sources/{id}/settings[/check|/versions]   scope rules and mapping (LEKA-351)
 
 A route validates, calls one service, and returns (architecture rule 6).
 Permissions come from a dependency (rule 5): reading needs source:read,
@@ -34,10 +35,15 @@ from leka.connectors import (
     Diagnostic,
     DuplicateSourceError,
     HealthRead,
+    InvalidSettingsError,
     InvalidSourceInputError,
     InvalidTransitionError,
     NoScopeError,
     ScopeOptionsRead,
+    SettingsCheck,
+    SettingsConflictError,
+    SettingsSaved,
+    SettingsVersionRead,
     Source,
     SourceCreate,
     SourceEvent,
@@ -45,6 +51,10 @@ from leka.connectors import (
     SourceNotFoundError,
     SourceRead,
     SourceService,
+    SourceSettings,
+    SourceSettingsRead,
+    SourceSettingsVersion,
+    SourceStatus,
     SourceTestOutcome,
     SourceUpdate,
     UnknownConnectorError,
@@ -65,6 +75,14 @@ SOURCE_SORTS = SortCatalogue(
         SortableField("name", Source.name, "uq_sources_workspace_kind_name"),
     ),
     default="created_at",
+)
+SETTINGS_SORTS = SortCatalogue(
+    fields=(
+        SortableField(
+            "version", SourceSettingsVersion.version, "uq_source_settings_source_version"
+        ),
+    ),
+    default="version",
 )
 EVENT_SORTS = SortCatalogue(
     fields=(
@@ -165,6 +183,19 @@ def _refused(error: Exception) -> ApiError:
         )
     if isinstance(error, NoScopeError):
         return ApiError(409, ErrorCode.CONFLICT, "This connector has no scope to choose from.")
+    if isinstance(error, InvalidSettingsError):
+        return ApiError(
+            422,
+            ErrorCode.VALIDATION_FAILED,
+            "These settings have errors in them.",
+            details=[
+                FieldError(field=f.path, message=f.message)
+                for f in error.findings
+                if f.level == "error"
+            ],
+        )
+    if isinstance(error, SettingsConflictError):
+        return ApiError(409, ErrorCode.CONFLICT, "The settings were changed meanwhile: reload.")
     if isinstance(error, InvalidTransitionError):
         return ApiError(409, ErrorCode.CONFLICT, f"Not possible now: {error}.")
     raise error
@@ -177,6 +208,8 @@ _REFUSALS = (
     ActivationRefusedError,
     InvalidTransitionError,
     NoScopeError,
+    InvalidSettingsError,
+    SettingsConflictError,
 )
 
 
@@ -363,3 +396,65 @@ async def delete_source(source_id: uuid.UUID, service: ManagingService) -> Respo
     """Gone, with its credential. Its history stays, and says it was deleted."""
     await service.delete(await _source(service, source_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── settings: scope rules and mapping (LEKA-351) ─────────────────────────────
+
+
+@router.get("/sources/{source_id}/settings", response_model=SourceSettingsRead)
+async def source_settings(source_id: uuid.UUID, service: ReadingService) -> SourceSettingsRead:
+    """The source's current scope rules and mapping."""
+    source = await _source(service, source_id)
+    version, settings = await service.settings(source)
+    return SourceSettingsRead(version=version, settings=settings)
+
+
+@router.post("/sources/{source_id}/settings/check", response_model=SettingsCheck)
+async def check_source_settings(
+    source_id: uuid.UUID, settings: SourceSettings, service: ManagingService
+) -> SettingsCheck:
+    """What would be wrong or doubtful with these settings — checked against
+    what the source reads and what its credentials can see. Saves nothing."""
+    source = await _source(service, source_id)
+    return SettingsCheck(findings=await service.check_settings(source, settings))
+
+
+@router.put("/sources/{source_id}/settings", response_model=SettingsSaved)
+async def save_source_settings(
+    source_id: uuid.UUID, settings: SourceSettings, service: ManagingService
+) -> SettingsSaved:
+    """A new version of the settings — before or after activation. 422 with
+    every error; saved with its warnings. A scope changed on an active source
+    queues a full pass: what came in is read, what went out is swept."""
+    source = await _source(service, source_id)
+    try:
+        version, findings, changed = await service.save_settings(source, settings)
+    except (InvalidSettingsError, SettingsConflictError) as error:
+        raise _refused(error) from error
+    return SettingsSaved(
+        version=version,
+        changed=changed,
+        findings=findings,
+        full_sync_queued="scope" in changed and source.status is SourceStatus.ACTIVE,
+    )
+
+
+@router.get(
+    "/sources/{source_id}/settings/versions", response_model=PageEnvelope[SettingsVersionRead]
+)
+async def source_settings_versions(
+    source_id: uuid.UUID, service: ReadingService, session: SessionDep, page: PageParams
+) -> PageEnvelope[SettingsVersionRead]:
+    """Every version of the settings, newest first: who changed what, when."""
+    source = await _source(service, source_id)
+    result = await serve_page(
+        session,
+        service.settings_history(source),
+        request=page,
+        catalogue=SETTINGS_SORTS,
+        id_column=SourceSettingsVersion.id,
+    )
+    return PageEnvelope(
+        data=[SettingsVersionRead.model_validate(row) for row in result.items],
+        next_cursor=result.next_cursor,
+    )

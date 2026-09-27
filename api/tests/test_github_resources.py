@@ -74,7 +74,7 @@ async def test_repositories_are_read_across_every_page() -> None:
     records = await _stream(github, Capability.REPOSITORIES)
 
     assert [r.external_id for r in records] == ["R_api", "R_web", "R_ops"]
-    assert records[0].container is None
+    assert records[0].container == "acme/api"  # its own path: what scope rules match (LEKA-351)
     assert records[0].payload == API
     assert records[0].updated_at == datetime(2026, 9, 25, 10, tzinfo=UTC)
     assert records[2].updated_at is None

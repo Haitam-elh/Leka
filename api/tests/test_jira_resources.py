@@ -60,8 +60,9 @@ async def test_projects_are_read_across_every_page() -> None:
     records = await _stream(Jira({"/project/search": pages}), Capability.PROJECTS)
 
     assert [(r.kind, r.external_id, r.container) for r in records] == [
-        (Capability.PROJECTS, "10000", None),
-        (Capability.PROJECTS, "10001", None),
+        # Its own key as container: what scope rules match it by (LEKA-351).
+        (Capability.PROJECTS, "10000", "PAY"),
+        (Capability.PROJECTS, "10001", "OPS"),
     ]
     assert records[0].payload["name"] == "Payments"
 

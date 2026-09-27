@@ -44,4 +44,6 @@ class Route:
 ROUTES: dict[str, tuple[Route, ...]] = {
     # A source switched on is read for the first time (LEKA-352).
     "source.activated": (Route("leka.ingestion.sync.run_sync_for_event"),),
+    # Its scope rules changed (LEKA-351): a full pass, like an activation.
+    "source.scope_changed": (Route("leka.ingestion.sync.run_sync_for_event"),),
 }

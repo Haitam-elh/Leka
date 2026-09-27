@@ -65,12 +65,14 @@ from leka.connectors import (
     DiagnosticCode,
     LifecycleEvent,
     RawRecord,
+    ScopeRules,
     Source,
     SourceEventType,
     SourceNotFoundError,
     SourceService,
     SourceStatus,
     SyncStatus,
+    in_scope,
     next_status,
 )
 from leka.db import session_factory, system_scope, workspace_scope
@@ -131,6 +133,8 @@ class SyncReport:
     status: str  # "succeeded", "failed", "skipped"
     records: dict[str, int] = field(default_factory=dict)
     deleted: dict[str, int] = field(default_factory=dict)
+    # Read, then left out by the source's scope rules (LEKA-351).
+    excluded: dict[str, int] = field(default_factory=dict)
     error: str | None = None
 
     def as_dict(self) -> dict[str, object]:
@@ -139,6 +143,7 @@ class SyncReport:
             "status": self.status,
             "records": self.records,
             "deleted": self.deleted,
+            "excluded": self.excluded,
             "error": self.error,
         }
 
@@ -203,7 +208,9 @@ async def enqueue_sync(
 
 
 def run_sync_for_event(event_id: str) -> str:
-    """`source.activated` (leka/background/routes.py): a FULL pass.
+    """`source.activated`, `source.scope_changed` (leka/background/routes.py):
+    a FULL pass — the scope rules changed: what came in is read from the
+    start, what went out is swept.
 
     Published in the activation's own transaction, so it exists only if the
     activation does — a pass enqueued from the request could start before
@@ -225,9 +232,10 @@ async def _on_activated(event_id: uuid.UUID) -> str:
     if event is None:
         return "gone"
     source_id = uuid.UUID(str(event.payload["source_id"]))
-    queued = await enqueue_sync(
-        event.workspace_id, source_id, full=True, trigger=SyncTrigger.ACTIVATION
+    trigger = (
+        SyncTrigger.SETTINGS if event.type == "source.scope_changed" else SyncTrigger.ACTIVATION
     )
+    queued = await enqueue_sync(event.workspace_id, source_id, full=True, trigger=trigger)
     return "queued" if queued else "already_active"
 
 
@@ -295,6 +303,9 @@ class _Pass:
         self._records = SourceRecordRepository(session, workspace_id)
         # What each full capability's sweep found gone, for the report.
         self.deleted: dict[str, int] = {}
+        # What the scope rules left out, per capability, for the report.
+        self.excluded: dict[str, int] = {}
+        self._scope = ScopeRules()
         self._sources = SourceService(session, workspace_id, actor_user_id=None)
         self._syncs = SourceSyncRepository(session, workspace_id)
         self._payloads = RawPayloadRepository(session, workspace_id)
@@ -319,6 +330,9 @@ class _Pass:
         failure: Diagnostic | None = None
         try:
             connector = await self._sources.open_connector(source)
+            # The scope rules of this pass: read once, applied to every record.
+            _version, settings = await self._sources.settings(source)
+            self._scope = settings.scope
             for capability in _capabilities(source, connector.manifest.capabilities):
                 count, failure = await self._capability(source, connector, capability)
                 report.records[capability.value] = count
@@ -349,6 +363,7 @@ class _Pass:
         # alone when only its version changed.
         await advance(self._session, self._workspace_id, source, after=None)
         report.deleted = self.deleted
+        report.excluded = self.excluded
         report.status = "failed" if failure else "succeeded"
         report.error = failure.code.value if failure else None
         logger.info("source_synced", **report.as_dict())
@@ -399,6 +414,11 @@ class _Pass:
         try:
             stream = connector.iter_resources(capability, since=None if read_all else row.since)
             async for record in stream:
+                # Out of scope: not stored, not indexed — so not seen, and what
+                # was stored of it goes at the next full read (the sweep).
+                if not in_scope(record.container, self._scope):
+                    self.excluded[capability.value] = self.excluded.get(capability.value, 0) + 1
+                    continue
                 batch.append(record)
                 if len(batch) >= BATCH_SIZE:
                     count += await self._store(source, row, capability, batch)

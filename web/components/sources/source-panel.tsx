@@ -194,7 +194,9 @@ export function timelineEvent(t: Dictionary, event: SourceEvent): TimelineEvent 
           previous: health[String(payload.previous)] ?? String(payload.previous),
           current: health[String(payload.current)] ?? String(payload.current),
         })
-      : words[event.type];
+      : event.type === "settings_changed"
+        ? fill(words.settings_changed, { version: String(payload.version) })
+        : words[event.type];
   const failed =
     event.type === "test_failed" || event.type === "deleted" || event.type === "sync_failed";
   return {

@@ -333,6 +333,7 @@ const fr = {
       deleted: "Source supprimée",
       sync_failed: "Synchronisation en échec",
       sync_recovered: "Synchronisation rétablie",
+      settings_changed: "Périmètre ou correspondances modifiés",
     },
     eventKind: "Source",
     bannerTitle: "LEKA suit {count} source(s).",
@@ -757,6 +758,7 @@ const fr = {
       deleted: "Source supprimée",
       sync_failed: "La synchronisation échoue",
       sync_recovered: "La synchronisation fonctionne de nouveau",
+      settings_changed: "Périmètre ou correspondances modifiés (version {version})",
     },
   },
   /** The workspace settings form, and the decision step's actions. */
@@ -1176,6 +1178,7 @@ const en: Dictionary = {
       deleted: "Source deleted",
       sync_failed: "Sync failing",
       sync_recovered: "Sync recovered",
+      settings_changed: "Scope or mapping changed",
     },
     eventKind: "Source",
     bannerTitle: "LEKA follows {count} source(s).",
@@ -1588,6 +1591,7 @@ const en: Dictionary = {
       deleted: "Source deleted",
       sync_failed: "Sync is failing",
       sync_recovered: "Sync works again",
+      settings_changed: "Scope or mapping changed (version {version})",
     },
   },
   settings: {

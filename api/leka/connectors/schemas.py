@@ -30,6 +30,7 @@ from leka.connectors.models import (
     SourceStatus,
     SyncStatus,
 )
+from leka.connectors.settings import Finding, SourceSettings
 
 
 class RawRecord(BaseModel):
@@ -154,4 +155,37 @@ class SourceEventRead(BaseModel):
     type: SourceEventType
     actor_user_id: uuid.UUID | None
     payload: dict[str, object]
+    created_at: datetime
+
+
+# ── Settings: scope rules and mapping (LEKA-351) ─────────────────────────────
+
+
+class SourceSettingsRead(BaseModel):
+    """A source's current settings. Version 0: never set, the defaults."""
+
+    version: int
+    settings: SourceSettings
+
+
+class SettingsCheck(BaseModel):
+    findings: list[Finding]
+
+
+class SettingsSaved(BaseModel):
+    version: int
+    changed: list[str] = Field(description="scope, mapping — empty: nothing changed, no version.")
+    findings: list[Finding] = Field(description="Warnings: saved, but worth a look.")
+    full_sync_queued: bool = Field(
+        description="The scope changed on an active source: a full pass follows."
+    )
+
+
+class SettingsVersionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    version: int
+    scope: dict[str, object]
+    mapping: dict[str, object]
+    created_by: uuid.UUID | None
     created_at: datetime

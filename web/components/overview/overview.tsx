@@ -14,6 +14,7 @@ import {
   Power,
   ScanSearch,
   Settings2,
+  SlidersHorizontal,
   ShieldCheck,
   Sparkle,
   Sparkles,
@@ -369,6 +370,7 @@ const EVENT_LOOK: Record<SourceEvent["type"], { icon: LucideIcon; tone: TileTone
   deleted: { icon: Trash2, tone: "danger" },
   sync_failed: { icon: TriangleAlert, tone: "danger" },
   sync_recovered: { icon: CircleCheck, tone: "success" },
+  settings_changed: { icon: SlidersHorizontal, tone: "info" },
 };
 
 function ActivityCard({ load }: { load: Load }) {
