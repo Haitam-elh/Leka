@@ -12,6 +12,12 @@ a key is revoked or a role's trust policy changes.
 
 list_scope: the regions the account has enabled.
 
+iter_resources: each capability in every region of the scope — S3's bucket
+list, being global, once — page by page through boto3's paginators, each
+resource known by its ARN. AWS has no "changed since" for any of these:
+every pass reads them whole (`listed_whole`), and the index keeps a pass
+from writing what did not change and marks gone what is no longer listed.
+
 BOTO3, NOT self.http(). AWS signs every request (SigV4) and each service
 speaks its own protocol; reimplementing that over httpx would be a second
 SDK to maintain. boto3 is already LEKA's (the S3 object store). What
@@ -33,8 +39,9 @@ accepted — IAM is where it should be refused — with a warning.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -61,7 +68,19 @@ from leka.connectors.base import (
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
 from leka.connectors.models import HealthStatus, SourceKind
 from leka.connectors.registry import register_connector
+from leka.connectors.schemas import RawRecord
 
+CLOUD_CAPABILITIES = frozenset(
+    {
+        Capability.INSTANCES,
+        Capability.DB_INSTANCES,
+        Capability.BUCKETS,
+        Capability.FUNCTIONS,
+        Capability.CLUSTERS,
+        Capability.NETWORKS,
+        Capability.LOAD_BALANCERS,
+    }
+)
 # Where the calls that are not regional go (STS, the region list).
 HOME_REGION = "us-east-1"
 REGION = re.compile(r"^[a-z]{2}(-[a-z]+)+-\d$")
@@ -160,17 +179,8 @@ class AwsConnector(Connector[AwsConfig, AwsCredentials]):
         auth_type="token",
         config_schema=AwsConfig,
         credentials_schema=AwsCredentials,
-        capabilities=frozenset(
-            {
-                Capability.INSTANCES,
-                Capability.DB_INSTANCES,
-                Capability.BUCKETS,
-                Capability.FUNCTIONS,
-                Capability.CLUSTERS,
-                Capability.NETWORKS,
-                Capability.LOAD_BALANCERS,
-            }
-        ),
+        capabilities=CLOUD_CAPABILITIES,
+        listed_whole=CLOUD_CAPABILITIES,
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -224,7 +234,81 @@ class AwsConnector(Connector[AwsConfig, AwsCredentials]):
         regions = await self._enabled_regions()
         return ScopeListing(options=[ScopeOption(key=r, name=r) for r in sorted(regions)])
 
+    async def iter_resources(
+        self, capability: Capability, *, since: datetime | None = None
+    ) -> AsyncIterator[RawRecord]:
+        """`since` is not used: AWS lists these whole, and says so in the manifest."""
+        identity = await self._call("sts", HOME_REGION, lambda sts: sts.get_caller_identity())
+        account = str(identity["Account"])
+        if capability is Capability.BUCKETS:
+            # Global: one list for the account, whatever the regions in scope.
+            answer = await self._call("s3", HOME_REGION, lambda s3: s3.list_buckets())
+            for bucket in answer.get("Buckets", []):
+                yield _record(capability, f"arn:aws:s3:::{bucket['Name']}", None, bucket)
+            return
+        for region in self.config.regions or await self._enabled_regions():
+            async for record in self._in_region(capability, region, account):
+                yield record
+
     # ── inside ───────────────────────────────────────────────────────────────
+
+    async def _in_region(
+        self, capability: Capability, region: str, account: str
+    ) -> AsyncIterator[RawRecord]:
+        """One capability's resources in one region, each known by its ARN."""
+        if capability is Capability.INSTANCES:
+            async for page in self._pages("ec2", region, "describe_instances"):
+                for reservation in page.get("Reservations", []):
+                    for instance in reservation.get("Instances", []):
+                        arn = f"arn:aws:ec2:{region}:{account}:instance/{instance['InstanceId']}"
+                        yield _record(capability, arn, region, instance)
+        elif capability is Capability.NETWORKS:
+            async for page in self._pages("ec2", region, "describe_vpcs"):
+                for vpc in page.get("Vpcs", []):
+                    owner = vpc.get("OwnerId", account)
+                    arn = f"arn:aws:ec2:{region}:{owner}:vpc/{vpc['VpcId']}"
+                    yield _record(capability, arn, region, vpc)
+        elif capability is Capability.DB_INSTANCES:
+            async for page in self._pages("rds", region, "describe_db_instances"):
+                for database in page.get("DBInstances", []):
+                    yield _record(capability, database["DBInstanceArn"], region, database)
+        elif capability is Capability.FUNCTIONS:
+            async for page in self._pages("lambda", region, "list_functions"):
+                for function in page.get("Functions", []):
+                    yield _record(
+                        capability,
+                        function["FunctionArn"],
+                        region,
+                        function,
+                        updated=function.get("LastModified"),
+                    )
+        elif capability is Capability.LOAD_BALANCERS:
+            async for page in self._pages("elbv2", region, "describe_load_balancers"):
+                for balancer in page.get("LoadBalancers", []):
+                    yield _record(capability, balancer["LoadBalancerArn"], region, balancer)
+        elif capability is Capability.CLUSTERS:
+            async for page in self._pages("eks", region, "list_clusters"):
+                for name in page.get("clusters", []):
+                    described = await self._call("eks", region, _describe_cluster(str(name)))
+                    cluster = described["cluster"]
+                    yield _record(capability, cluster["arn"], region, cluster)
+        else:
+            msg = f"AWS does not read {capability}"
+            raise ValueError(msg)
+
+    async def _pages(
+        self, service: str, region: str, operation: str
+    ) -> AsyncIterator[dict[str, Any]]:
+        """A boto3 paginator, a page at a time, each fetched in a thread with
+        its failures mapped like any call."""
+        pages = await self._call(
+            service, region, lambda client: iter(client.get_paginator(operation).paginate())
+        )
+        while True:
+            page = await self._call(service, region, lambda _client: next(pages, None))
+            if page is None:
+                return
+            yield page
 
     async def _enabled_regions(self) -> list[str]:
         answer = await self._call(
@@ -347,3 +431,37 @@ class AwsConnector(Connector[AwsConfig, AwsCredentials]):
             self.credentials.access_key_id.get_secret_value(),
             self.credentials.secret_access_key.get_secret_value(),
         ]
+
+
+def _record(
+    kind: Capability,
+    arn: str,
+    region: str | None,
+    resource: dict[str, Any],
+    *,
+    updated: object = None,
+) -> RawRecord:
+    return RawRecord(
+        kind=kind,
+        external_id=arn,
+        container=region,
+        # boto3 hands back datetimes; the payload is stored as JSON.
+        payload=json.loads(json.dumps(resource, default=str)),
+        updated_at=_parse(updated),
+        fetched_at=datetime.now(UTC),
+    )
+
+
+def _parse(value: object) -> datetime | None:
+    """Lambda's LastModified, '2026-09-27T10:00:00.000+0000'."""
+    if not value:
+        return None
+    try:
+        return datetime.strptime(str(value), "%Y-%m-%dT%H:%M:%S.%f%z")
+    except ValueError:
+        return None
+
+
+def _describe_cluster(name: str) -> Callable[[Any], Any]:
+    """EKS lists names; the cluster itself — its ARN, version, endpoint — is one more call."""
+    return lambda eks: eks.describe_cluster(name=name)

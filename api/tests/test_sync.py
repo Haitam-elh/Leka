@@ -756,3 +756,23 @@ async def test_a_record_seen_again_while_a_purge_runs_keeps_its_copy(
     assert "commits-1" in await _lines(fake, str(after.payload_key))
     holding = [key for key in live if "commits-1" in await _lines(fake, key)]
     assert holding
+
+
+async def test_what_a_connector_lists_whole_is_swept_at_every_pass(
+    source: Source, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cloud inventory has no "changed since": every pass reads it whole,
+    so an instance deleted is gone at the next pass, not a week later."""
+    whole = FakeConnector.manifest.model_copy(
+        update={"listed_whole": frozenset({Capability.ISSUES})}
+    )
+    monkeypatch.setattr(FakeConnector, "manifest", whole)
+    SCRIPT.records = {Capability.ISSUES: 3, Capability.COMMITS: 3}
+    await _sync(source)
+    SCRIPT.gone = {2}
+
+    report = await _sync(source)  # an ordinary pass, not asked to be full
+
+    assert report.deleted == {"issues": 1}
+    assert (await _index(source, "issues"))["issues-2"].deleted_at is not None
+    assert (await _index(source))["commits-2"].deleted_at is None  # commits wait for the full pass

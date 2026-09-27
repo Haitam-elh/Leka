@@ -46,7 +46,10 @@ last successful pass started; a vendor that cannot filter by date returns
 everything, and the sync engine keeps the latest version of each
 `external_id`. A failure mid-stream raises `ConnectorError` — what was
 yielded before stays valid. A connector that does not implement it raises
-`NotImplementedError` and still exists; GitHub implements it (LEKA-345), the
+`NotImplementedError` and still exists. A capability the vendor can only
+list whole — no filter by date, like a cloud inventory — goes in the
+manifest's `listed_whole`: every pass of it is a full read, and its deleted
+records are found at every pass; GitHub implements it (LEKA-345), the
 engine that calls it is LEKA-352.
 
 ## Scope

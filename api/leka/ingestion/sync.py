@@ -369,6 +369,7 @@ class _Pass:
         # changes. One that never had any has nothing to catch up on.
         read_all = (
             self._full
+            or capability in connector.manifest.listed_whole
             or _due_for_full(row, started)
             or (
                 row.records_total > 0

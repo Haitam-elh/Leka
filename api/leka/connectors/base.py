@@ -80,6 +80,10 @@ class ConnectorManifest(BaseModel):
     config_schema: type[BaseModel] = Field(description="Settings that are NOT secret.")
     credentials_schema: type[BaseModel] = Field(description="Secrets, as SecretStr fields.")
     capabilities: frozenset[Capability]
+    # What the connector always lists whole — no vendor filter by date, like
+    # a cloud inventory. Every pass of these is a full read, so what was not
+    # seen is marked gone at every pass, not once a week (leka/ingestion/sync.py).
+    listed_whole: frozenset[Capability] = frozenset()
     read_only: Literal[True] = True
 
 
