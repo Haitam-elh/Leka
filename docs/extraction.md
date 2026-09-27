@@ -2,7 +2,7 @@
 
 What extraction reads, what it hands to parsing, and how it fails. LEKA-354.
 What it reads is [collection.md](collection.md); what reads it next is
-parsing (LEKA-355), then normalisation (LEKA-356).
+[parsing](parsing.md) (LEKA-355), then normalisation (LEKA-356).
 
 ```
  source_records + raw_payloads          a RawRecord: the vendor's JSON, untouched
