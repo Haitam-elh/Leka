@@ -19,7 +19,11 @@ test("the home page is the site, and its sign-in is the application's", async ({
 
   await expect(page).toHaveURL("http://localhost:3000/");
   await expect(page).toHaveTitle(/LEKA/);
-  await page.locator("header").getByRole("link", { name: "Se connecter" }).click();
+  const signIn = page.locator("header").getByRole("link", { name: "Se connecter" });
+  // Straight to the application's sign-in: not through /login.html, which a
+  // browser may still hold from the old hosting as Karim's placeholder page.
+  await expect(signIn).toHaveAttribute("href", "/login");
+  await signIn.click();
 
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
