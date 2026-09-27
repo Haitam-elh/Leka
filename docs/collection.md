@@ -77,7 +77,7 @@ run** (`last_seen_run_id`), the batch holding its latest version
   defeats it for that record: a write, not a wrong answer.
 - **Deletions.** After a **full** read of a capability **succeeds**, what
   its run did not see is marked `deleted_at` — gone at the vendor, restricted,
-  made private. By run, not by time: a retry or the quota reserve can stretch
+  made private — and purged from the stored batches (§ 8). By run, not by time: a retry or the quota reserve can stretch
   a pass. Never after an incremental read, never after a full read cut short.
 - **Scope.** A reactivation reads in full, so the same sweep removes what
   left the scope — for every connector, whatever its containers mean.
@@ -113,11 +113,27 @@ In [sync.md](sync.md): the 10 % quota reserve on bulk reads, the cap of
 passes under way (20, 3 per workspace), the three kinds of failure and who
 handles each, an abandoned pass found by the next.
 
+## 8. Purging what was deleted
+
+A record marked deleted must not stay in the store until retention — a page
+made restricted is no longer LEKA's to keep. A pass that leaves deleted
+records in some batch queues `leka.ingestion.purge.run_purge_deleted`
+(key `purge:<source_id>`, one at a time), which reads **every** live batch
+of the source — a record that changed three times is in three — and:
+
+- leaves a batch with nothing deleted untouched;
+- **withdraws** a batch holding only deleted records (its row is out of
+  every read at once; the retention sweep removes the object within the hour);
+- **rewrites** a mixed batch without them under a new key: new object, then
+  the row and the index point at it and commit, then the old object is
+  deleted (a crash leaves an orphan the reconciliation removes).
+
+Then the index forgets their batch (`payload_key` NULL). It is idempotent: a
+second run finds nothing to remove and writes nothing. The pass stays fast;
+the purge follows within minutes.
+
 ## Not yet
 
-- **Removing deleted records from the stored batches.** Marked in the index
-  now; the job that rewrites the batches without them — a restricted page
-  must not stay with us until retention — is the next PR.
 - **Checkpoints inside a capability** — a pass that fails half-way through
   a large capability re-reads it from the cursor, not from the page it
   reached; the index makes that re-read cost reads, not writes.
