@@ -66,18 +66,21 @@ export function UserMenu({
       // session — the API restarting, a dropped connection. Someone who
       // asked to leave must not be left sitting inside the application
       // because of it, so the navigation below is not conditional on the
-      // answer. If the session outlived the attempt they land on the form
-      // and sign in again, which is honest; before LEKA-337 they stayed on
-      // the page with no sign that anything had happened.
+      // answer. If the session outlived the attempt, the site's "Se
+      // connecter" shows them the form rather than letting them straight
+      // back in (markSignedOut); before LEKA-337 they stayed on the page
+      // with no sign that anything had happened.
     }
     // A full page load rather than router.push. Two reasons, one of them
     // not about tests: the App Router keeps rendered pages in a client
     // cache, and a soft navigation leaves the screens of the session we
     // just ended sitting in it, one Back away from being painted again.
-    // This drops the whole tab. It also lands on exactly /login instead of
-    // racing the /login?next= redirect lib/api.ts fires when a call 401s.
+    // This drops the whole tab.
+    //
+    // To leka-core.com's home page, the site: that is where people come
+    // from, and where "Se connecter" takes them back in.
     markSignedOut();
-    window.location.assign("/login");
+    window.location.assign("/");
   }
 
   return (

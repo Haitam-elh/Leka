@@ -17,6 +17,7 @@ import asyncio
 import re
 import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -771,3 +772,194 @@ def test_smtp_is_preferred_over_an_api_provider(
     monkeypatch.setattr(email_module, "settings", both)
 
     assert isinstance(email_module.build_email_sender(), SmtpEmailSender)
+
+
+# ── The CSRF token, for a page that cannot read the API's cookie ─────────────
+#
+# The page is served from leka-core.com, the API from api.leka-core.com: the
+# CSRF cookie is the API host's, and the page's JavaScript cannot read it.
+# Before the token came back in the body, every mutation from the browser
+# was refused in production — a sign-out included, which is how a reload
+# signed people back in. Locally it never showed: localhost:3000 and
+# localhost:8000 share their cookies, ports apart.
+
+
+async def test_signing_in_hands_the_csrf_token_back_in_the_body(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+
+    signed_in = await client.post(
+        f"{API}/login", json={"email": "nora@acme.example", "password": PASSWORD}
+    )
+    me = await client.get(f"{API}/me")
+
+    cookie = client.cookies.get(CSRF_COOKIE_NAME)
+    assert cookie
+    assert signed_in.json()["csrf_token"] == cookie
+    assert me.json()["csrf_token"] == cookie
+
+
+async def test_a_sign_out_with_the_body_s_token_ends_the_session(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    body = (
+        await client.post(f"{API}/login", json={"email": "nora@acme.example", "password": PASSWORD})
+    ).json()
+
+    # What the page sent in production: no token. Refused.
+    assert (await client.post(f"{API}/logout")).status_code == 403
+    client.headers[CSRF_HEADER_NAME] = body["csrf_token"]
+
+    assert (await client.post(f"{API}/logout")).status_code == 204
+    assert (await client.get(f"{API}/me")).status_code == 401
+
+
+async def test_a_session_that_lost_its_csrf_cookie_is_given_a_new_one(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await _sign_in(client, "nora@acme.example")
+    client.cookies.delete(CSRF_COOKIE_NAME)
+
+    token = (await client.get(f"{API}/me")).json()["csrf_token"]
+
+    assert token and token == client.cookies.get(CSRF_COOKIE_NAME)
+    client.headers[CSRF_HEADER_NAME] = token
+    assert (await client.patch(f"{API}/me", json={"job_title": "CTO"})).status_code == 200
+
+
+# ── "Se souvenir de cet appareil" ────────────────────────────────────────────
+
+
+def _session_cookie(response: Any) -> str:
+    return str(
+        next(
+            header
+            for header in response.headers.get_list("set-cookie")
+            if header.startswith(f"{settings.session_cookie_name}=")
+        )
+    )
+
+
+async def _session_expires_at() -> datetime:
+    with system_scope():
+        async with session_factory() as session:
+            found = await session.execute(text("SELECT expires_at FROM sessions"))
+            expires: datetime = found.scalar_one()
+    return expires
+
+
+async def test_a_session_nobody_asked_to_remember_ends_with_the_browser(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+
+    response = await client.post(
+        f"{API}/login",
+        json={"email": "nora@acme.example", "password": PASSWORD, "remember": False},
+    )
+
+    cookie = _session_cookie(response).lower()
+    assert "max-age" not in cookie and "expires" not in cookie
+    # And the server does not keep it for a month.
+    assert await _session_expires_at() - datetime.now(UTC) <= timedelta(hours=12)
+
+
+async def test_a_remembered_session_lasts_on_this_device(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+
+    response = await client.post(
+        f"{API}/login",
+        json={"email": "nora@acme.example", "password": PASSWORD, "remember": True},
+    )
+
+    days = settings.session_absolute_lifetime_days
+    assert f"max-age={days * 24 * 3600}" in _session_cookie(response).lower()
+    assert await _session_expires_at() - datetime.now(UTC) > timedelta(days=days - 1)
+
+
+# ── Closing an account ───────────────────────────────────────────────────────
+
+WORKSPACES = "/api/v1/workspaces"
+
+
+async def _close(client: AsyncClient, password: str) -> Any:
+    return await client.request("DELETE", f"{API}/me", json={"password": password})
+
+
+async def test_closing_an_account_asks_for_its_password(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await _sign_in(client, "nora@acme.example")
+
+    refused = await _close(client, "not the password")
+
+    assert refused.status_code == 403
+    assert (await client.get(f"{API}/me")).status_code == 200
+
+
+async def test_a_closed_account_is_gone_and_signed_out(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await _sign_in(client, "nora@acme.example")
+
+    assert (await _close(client, PASSWORD)).status_code == 204
+
+    assert (await client.get(f"{API}/me")).status_code == 401
+    again = await client.post(
+        f"{API}/login", json={"email": "nora@acme.example", "password": PASSWORD}
+    )
+    assert error_code(again) == "invalid_credentials"
+
+
+async def test_a_workspace_its_owner_was_alone_in_starts_its_deletion(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await _sign_in(client, "nora@acme.example")
+    created = await client.post(WORKSPACES, json={"name": f"Solo {uuid.uuid4().hex[:8]}"})
+    assert created.status_code == 201, created.text
+
+    assert (await _close(client, PASSWORD)).status_code == 204
+
+    with system_scope():
+        async with session_factory() as session:
+            status = await session.execute(
+                text("SELECT status FROM workspaces WHERE id = :id"),
+                {"id": created.json()["id"]},
+            )
+    assert status.scalar_one() == "pending_deletion"
+
+
+async def test_the_last_owner_of_a_shared_workspace_cannot_close_the_account(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    from leka.identity.admin import grant
+    from leka.platform import Role
+
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await _register_and_verify(client, mailbox, "bob@acme.example")
+    await _sign_in(client, "nora@acme.example")
+    name = f"Shared {uuid.uuid4().hex[:8]}"
+    assert (await client.post(WORKSPACES, json={"name": name})).status_code == 201
+    await grant("bob@acme.example", Role.MEMBER, name)
+
+    refused = await _close(client, PASSWORD)
+
+    assert refused.status_code == 409
+    assert error_code(refused) == "last_owner"
+    assert name in refused.text
+    # Nothing changed: still signed in, the workspace still active.
+    assert (await client.get(f"{API}/me")).status_code == 200
+    with system_scope():
+        async with session_factory() as session:
+            status = await session.execute(
+                text("SELECT status FROM workspaces WHERE name = :name"), {"name": name}
+            )
+    assert status.scalar_one() == "active"

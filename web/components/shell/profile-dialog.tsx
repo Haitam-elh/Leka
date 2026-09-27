@@ -22,7 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { COMPANY_SIZES, type CompanySize, auth } from "@/lib/auth";
+import { ApiError } from "@/lib/api";
+import { COMPANY_SIZES, type CompanySize, auth, markSignedOut } from "@/lib/auth";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 
 /**
@@ -53,6 +54,7 @@ export function ProfileDialog({
         {/* Mounted with the dialog, so every opening starts from what the
             API last said rather than from an abandoned draft. */}
         {open && user ? <ProfileForm user={user} onDone={() => onOpenChange(false)} /> : null}
+        {open && user ? <CloseAccount /> : null}
       </DialogContent>
     </Dialog>
   );
@@ -190,5 +192,82 @@ function ProfileForm({
         </Button>
       </DialogFooter>
     </form>
+  );
+}
+
+/**
+ * Closing the account, at the foot of the profile: out of the way, behind
+ * a second step, and the password again.
+ *
+ * What the API does is said before it is asked: a workspace the person is
+ * alone in is deleted with them, after the grace period; a workspace others
+ * use, of which they are the last owner, refuses — they hand it over first.
+ */
+function CloseAccount() {
+  const t = useDictionary().shell.closeAccount;
+  const [asked, setAsked] = useState(false);
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await auth.deleteAccount(password);
+      // Gone, and signed out: back to the site they came from.
+      markSignedOut();
+      window.location.assign("/");
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.code === "last_owner") setError(t.lastOwner);
+      else if (caught instanceof ApiError && caught.status === 403) setError(t.wrongPassword);
+      else setError(t.failed);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mt-2 border-t border-shell-line pt-4">
+      <h2 className="text-sm font-semibold text-state-danger">{t.title}</h2>
+      <p className="mt-1 text-xs text-shell-muted">{t.body}</p>
+      {asked ? (
+        <form onSubmit={onSubmit} className="mt-3 space-y-3">
+          {error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="space-y-2">
+            <Label htmlFor="close-account-password">{t.password}</Label>
+            <Input
+              id="close-account-password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setAsked(false)}>
+              {t.cancel}
+            </Button>
+            <Button type="submit" variant="destructive" disabled={busy || password === ""}>
+              {busy ? t.deleting : t.confirm}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-3 text-state-danger"
+          onClick={() => setAsked(true)}
+        >
+          {t.open}
+        </Button>
+      )}
+    </section>
   );
 }

@@ -29,6 +29,7 @@ from leka.identity.repository import (
     UserRepository,
 )
 from leka.identity.schemas import (
+    AccountDeletion,
     AccountProfile,
     AuthErrorCode,
     AuthErrorResponse,
@@ -63,6 +64,7 @@ from leka.identity.wiring import (
 )
 
 __all__ = [
+    "AccountDeletion",
     "AccountProfile",
     "AccountUnverifiedError",
     "AuthErrorCode",

@@ -69,6 +69,8 @@ class ErrorCode(enum.StrEnum):
     PASSWORD_TOO_SHORT = "password_too_short"  # noqa: S105
     PASSWORD_BREACHED = "password_breached"  # noqa: S105
     SESSION_EXPIRED = "session_expired"
+    # Closing an account that is the last owner of a workspace others use.
+    LAST_OWNER = "last_owner"
     CSRF_FAILED = "csrf_failed"
 
 

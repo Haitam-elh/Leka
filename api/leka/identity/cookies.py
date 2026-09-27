@@ -17,33 +17,41 @@ CSRF_COOKIE_NAME = "leka_csrf"
 CSRF_HEADER_NAME = "X-CSRF-Token"
 
 
-def _common() -> dict[str, object]:
+def _common(max_age: int | None) -> dict[str, object]:
     return {
         # Path=/ and no Domain: a host-only cookie. Setting a Domain would
         # share it with every subdomain, including any one we do not control.
         "path": "/",
         "secure": settings.session_cookie_secure,
         "samesite": settings.session_cookie_samesite,
-        "max_age": settings.session_absolute_lifetime_days * 24 * 3600,
+        # None: no Max-Age, a cookie the browser drops when it closes.
+        "max_age": max_age,
     }
 
 
-def set_session_cookie(response: Response, token: str) -> str:
+def set_session_cookie(response: Response, token: str, *, persistent: bool = True) -> str:
     """Attach a fresh session, and the CSRF token that goes with it.
 
-    Returns the CSRF token so the route can hand it back in the body — the
-    interface needs it for the first request it makes after signing in,
-    before it has had a chance to read the cookie.
+    `persistent`: the person asked this device to remember them. Otherwise
+    both cookies end with the browser.
+
+    Returns the CSRF token so the route hands it back in the body: the page
+    is served from another host than the API, and cannot read the cookie.
     """
+    max_age = settings.session_absolute_lifetime_days * 24 * 3600 if persistent else None
     response.set_cookie(
         settings.session_cookie_name,
         token,
         # httpOnly: JavaScript cannot read it, so an XSS that runs in the page
         # still cannot exfiltrate the session.
         httponly=True,
-        **_common(),  # type: ignore[arg-type]
+        **_common(max_age),  # type: ignore[arg-type]
     )
+    return set_csrf_cookie(response, max_age=max_age)
 
+
+def set_csrf_cookie(response: Response, *, max_age: int | None) -> str:
+    """A new CSRF token, as a cookie, returned for the body as well."""
     csrf_token = secrets.token_urlsafe(32)
     response.set_cookie(
         CSRF_COOKIE_NAME,
@@ -52,7 +60,7 @@ def set_session_cookie(response: Response, token: str) -> str:
         # copy this value into a header. It is not a secret — its value is
         # that an attacker's site cannot read it from another origin.
         httponly=False,
-        **_common(),  # type: ignore[arg-type]
+        **_common(max_age),  # type: ignore[arg-type]
     )
     return csrf_token
 

@@ -48,7 +48,9 @@ from leka.platform.secrets import DecryptionError, SecretBox, secret_box
 from leka.platform.service import (
     DELETION_GRACE_PERIOD,
     INVITATION_LIFETIME,
+    AccountClosure,
     InvitationAcceptance,
+    LastOwnerError,
     MembershipService,
     TenancyError,
     WorkspaceService,
@@ -73,6 +75,7 @@ from leka.platform.storage import (
 __all__ = [
     "DELETION_GRACE_PERIOD",
     "INVITATION_LIFETIME",
+    "AccountClosure",
     "CurrentUserProvider",
     "CurrentWorkspace",
     "DecryptionError",
@@ -84,6 +87,7 @@ __all__ = [
     "InvitationRead",
     "InvitationRepository",
     "InvitationStatus",
+    "LastOwnerError",
     "LocalObjectStore",
     "MemberRead",
     "MemberRoleUpdate",

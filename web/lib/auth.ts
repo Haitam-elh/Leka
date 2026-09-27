@@ -5,7 +5,7 @@
  * path by hand, and so that a route rename is one edit rather than five.
  */
 
-import { apiFetch } from "@/lib/api";
+import { apiFetch, rememberCsrfToken } from "@/lib/api";
 
 export interface WorkspaceMembership {
   id: string;
@@ -42,6 +42,14 @@ export interface CurrentUser {
   };
   workspaces: WorkspaceMembership[];
   active_workspace_id: string | null;
+  /** For the X-CSRF-Token header: the page cannot read the API's cookie. */
+  csrf_token?: string | null;
+}
+
+/** Keep the session's CSRF token, and hand the answer on. */
+function keepToken(me: CurrentUser): CurrentUser {
+  rememberCsrfToken(me.csrf_token);
+  return me;
 }
 
 /**
@@ -86,11 +94,13 @@ export const auth = {
       body: JSON.stringify({ email }),
     }),
 
-  login: (email: string, password: string) =>
+  /** `remember`: "Se souvenir de cet appareil". Unticked, the session
+   * ends with the browser. */
+  login: (email: string, password: string, remember = false) =>
     apiFetch<CurrentUser>("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
+      body: JSON.stringify({ email, password, remember }),
+    }).then(keepToken),
 
   // redirectOn401: false — this is the one call for which 401 is the
   // outcome asked for, not a problem. The default sends the browser to
@@ -98,10 +108,22 @@ export const auth = {
   // person straight back into the application they just left, and which
   // races whatever navigation the caller is doing. The caller decides
   // where a sign-out lands.
-  logout: () => apiFetch<void>("/auth/logout", { method: "POST", redirectOn401: false }),
+  logout: () =>
+    apiFetch<void>("/auth/logout", { method: "POST", redirectOn401: false }).finally(() =>
+      rememberCsrfToken(null),
+    ),
 
   me: (init: { redirectOn401?: boolean } = {}) =>
-    apiFetch<CurrentUser>("/auth/me", init),
+    apiFetch<CurrentUser>("/auth/me", init).then(keepToken),
+
+  /** Close the account, for good: the password again. 409 `last_owner`
+   * when it is the last owner of a workspace others use. */
+  deleteAccount: (password: string) =>
+    apiFetch<void>("/auth/me", {
+      method: "DELETE",
+      body: JSON.stringify({ password }),
+      redirectOn401: false,
+    }).then(() => rememberCsrfToken(null)),
 
   /** Only the fields given change; the answer is the whole person. */
   updateProfile: (changes: Partial<{ [K in keyof AccountProfile]: AccountProfile[K] | null }>) =>

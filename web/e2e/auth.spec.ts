@@ -72,14 +72,17 @@ test("the demo account signs in, sees its workspace, and signs out", async ({ pa
   await page.getByTestId("user-menu").last().click();
   await expect(page.getByText(DEMO_EMAIL)).toBeVisible();
   await page.getByTestId("sign-out").click();
-  await expect(page).toHaveURL(/\/login$/);
+  // Back to leka-core.com's home page, where people come in from.
+  await expect(page).toHaveURL("http://localhost:3000/");
 
-  // And the session is genuinely gone, not just navigated away from.
+  // And the session is genuinely gone, not just navigated away from — a
+  // reload, then the application, sends to sign in.
+  await page.reload();
   await page.goto("/overview");
   await expect(page).toHaveURL(/\/login$/);
 });
 
-test("signing out lands on the form even when the API call fails", async ({ page }) => {
+test("signing out leaves the application even when the API call fails", async ({ page }) => {
   // The regression behind LEKA-337's intermittent failure. Signing out used
   // to navigate only if POST /auth/logout resolved: any failure threw out of
   // the click handler, nothing caught it, and the person stayed on the page
@@ -103,8 +106,40 @@ test("signing out lands on the form even when the API call fails", async ({ page
   await page.getByTestId("user-menu").last().click();
   await page.getByTestId("sign-out").click();
 
-  // Exactly /login, with no ?next= pointing back into the application.
+  // On the site's home page, with no ?next= pointing back into the
+  // application.
+  await expect(page).toHaveURL("http://localhost:3000/");
+  // The session outlived the failed call, yet the site's "Se connecter"
+  // shows the form: someone who asked to leave is not let straight back in.
+  await page.locator("header").getByRole("link", { name: "Se connecter" }).click();
   await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("heading", { name: "Se connecter à LEKA" })).toBeVisible();
+});
+
+test("a session nobody asked to remember ends with the browser", async ({ page, context }) => {
+  await page.goto("/login");
+  await page.getByLabel("Adresse e-mail", { exact: true }).fill(DEMO_EMAIL);
+  await page.getByLabel("Mot de passe", { exact: true }).fill(DEMO_PASSWORD);
+  const answered = loginAnswer(page);
+  await page.getByRole("button", { name: "Se connecter" }).click();
+  expectSignedIn(await answered);
+
+  const session = (await context.cookies()).find((c) => c.name === "leka_session");
+  expect(session?.expires).toBe(-1); // a session cookie: gone when the browser closes
+});
+
+test("a device asked to remember keeps the session", async ({ page, context }) => {
+  await page.goto("/login");
+  await page.getByLabel("Adresse e-mail", { exact: true }).fill(DEMO_EMAIL);
+  await page.getByLabel("Mot de passe", { exact: true }).fill(DEMO_PASSWORD);
+  await page.getByLabel("Se souvenir de cet appareil").check();
+  const answered = loginAnswer(page);
+  await page.getByRole("button", { name: "Se connecter" }).click();
+  expectSignedIn(await answered);
+
+  const session = (await context.cookies()).find((c) => c.name === "leka_session");
+  const inADay = Date.now() / 1000 + 24 * 3600;
+  expect(session?.expires ?? 0).toBeGreaterThan(inADay);
 });
 
 test("the sign-in page links to registration and recovery", async ({ page }) => {
