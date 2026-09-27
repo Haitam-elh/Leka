@@ -130,6 +130,7 @@ export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
   confluence: "docs",
   aws: "cloud",
   azure: "cloud",
+  gcp: "cloud",
   datadog: "observability",
   slack: "chat",
 };

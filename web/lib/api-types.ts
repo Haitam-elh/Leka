@@ -1577,7 +1577,7 @@ export interface components {
          *     the database stopped checking this list in LEKA-344.
          * @enum {string}
          */
-        SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "aws" | "azure" | "datadog" | "slack";
+        SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "aws" | "azure" | "gcp" | "datadog" | "slack";
         /** SourceRead */
         SourceRead: {
             /**

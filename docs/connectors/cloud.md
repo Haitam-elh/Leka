@@ -1,6 +1,6 @@
 # Cloud platforms — what LEKA asks for, and what it reads
 
-AWS and Azure today; GCP next, through [the connector framework](framework.md).
+AWS, Azure and Google Cloud, through [the connector framework](framework.md).
 LEKA-347. **LEKA only reads**: every call is a `Describe`, `List` or `Get`.
 
 ---
@@ -184,3 +184,75 @@ token is asked for once per connection test or pass, never stored.
 
 Azure's own mark is not shown: Microsoft asks icon sets not to carry it. The
 Sources screen draws a plain cloud in Azure's blue.
+
+---
+
+## Google Cloud
+
+One source is one service account, and the projects it scopes.
+
+| | |
+|---|---|
+| Credentials | a **service account key**: the JSON file Google Cloud downloads, pasted whole |
+| Roles | **Cloud Asset Viewer** (`roles/cloudasset.viewer`) and **Browser** (`roles/browser`), on each project — or on the folder or organisation above them |
+| API | **Cloud Asset Inventory** (`cloudasset.googleapis.com`) enabled in each project |
+| Scope | `projects` — their ids. Empty: every project the service account can see. The Sources screen offers them |
+| Config | `projects` |
+
+Create it, per project:
+
+```bash
+gcloud iam service-accounts create leka-reader --project <PROJECT>
+SA=leka-reader@<PROJECT>.iam.gserviceaccount.com
+for role in roles/cloudasset.viewer roles/browser; do
+  gcloud projects add-iam-policy-binding <PROJECT> --member serviceAccount:$SA --role $role
+done
+gcloud services enable cloudasset.googleapis.com --project <PROJECT>
+gcloud iam service-accounts keys create leka-key.json --iam-account $SA
+```
+
+The key is checked when it is saved (a `service_account` JSON with
+`client_email` and `private_key`), encrypted, and never shown again.
+Deleted or disabled in Google Cloud, LEKA says `AUTH_INVALID` and the source
+goes to `error` at its next pass — create another key and replace it.
+
+### What is read
+
+Cloud Asset Inventory's assets (`contentType=RESOURCE`) **of the
+capability's types**, in every project of the scope, following
+`nextPageToken`. Every asset is known by its full resource name —
+`//compute.googleapis.com/projects/p/zones/z/instances/i`, unique across
+Google Cloud — with its project as container.
+
+| Capability | Google Cloud asset types |
+|---|---|
+| `instances` | `compute.googleapis.com/Instance` |
+| `db_instances` | `sqladmin.googleapis.com/Instance`, `spanner.googleapis.com/Instance` |
+| `buckets` | `storage.googleapis.com/Bucket` |
+| `functions` | `cloudfunctions.googleapis.com/CloudFunction`, `…/Function`, `run.googleapis.com/Service` |
+| `clusters` | `container.googleapis.com/Cluster` |
+| `networks` | `compute.googleapis.com/Network` |
+| `load_balancers` | `compute.googleapis.com/ForwardingRule`, `…/BackendService` |
+
+Like AWS and Azure, every capability is **listed whole** at every pass.
+Cloud Asset Inventory answers for every kind at once, or for none, so the
+connection test asks once.
+
+**Every call to Google Cloud's APIs is a GET**, under the
+`cloud-platform.read-only` scope. The one POST is the token exchange at
+`oauth2.googleapis.com`: LEKA signs a JWT with the service account's key
+(RS256) and receives a token — touching nothing of the customer's. The token
+is asked for once per connection test or pass, never stored.
+
+### Diagnostics
+
+| Google says | LEKA says |
+|---|---|
+| 400/401 at the token endpoint (key deleted or disabled) | `AUTH_INVALID` |
+| a private key that cannot be read | `CONFIG_INVALID` — download another key |
+| a project in scope it cannot see | `NOT_FOUND`, naming it — check the Browser and Cloud Asset Viewer roles |
+| Cloud Asset Inventory off, or 403 | the capabilities are left out, with a warning naming the API and the role |
+| 429 | `RATE_LIMITED`, with Google's `Retry-After` |
+
+A private key never appears in a diagnostic, even echoed back with its
+newlines escaped: the scrubber knows the shape of a PEM block.

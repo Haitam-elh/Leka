@@ -44,6 +44,7 @@ DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     SourceKind.SLACK: 30,
     SourceKind.AWS: 30,
     SourceKind.AZURE: 30,
+    SourceKind.GCP: 30,
     SourceKind.DATADOG: 30,
 }
 
