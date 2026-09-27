@@ -57,6 +57,15 @@ class Capability(enum.StrEnum):
     BRANCHES = "branches"
     # Project tools (LEKA-346). Their issues are ISSUES, as a code host's are.
     PROJECTS = "projects"
+    # Cloud and infrastructure (LEKA-347). Named for what they are, and not
+    # `databases`, which a documentation tool's databases would want too.
+    INSTANCES = "instances"
+    DB_INSTANCES = "db_instances"
+    BUCKETS = "buckets"
+    FUNCTIONS = "functions"
+    CLUSTERS = "clusters"
+    NETWORKS = "networks"
+    LOAD_BALANCERS = "load_balancers"
 
 
 class ConnectorManifest(BaseModel):

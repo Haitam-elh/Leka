@@ -507,6 +507,13 @@ const fr = {
       issues: "issues",
       branches: "branches",
       projects: "projets",
+      instances: "instances",
+      db_instances: "bases de données",
+      buckets: "buckets S3",
+      functions: "fonctions",
+      clusters: "clusters",
+      networks: "réseaux",
+      load_balancers: "load balancers",
     },
     empty: {
       title: "Aucune source connectée",
@@ -670,6 +677,22 @@ const fr = {
       email: {
         label: "E-mail du compte",
         help: "Seulement pour un jeton API Atlassian.",
+      },
+      access_key_id: {
+        label: "Access key ID",
+        help: "La clé d'un utilisateur IAM à la politique en lecture seule (voir la documentation).",
+      },
+      secret_access_key: {
+        label: "Secret access key",
+        help: "Chiffrée, et plus jamais affichée.",
+      },
+      role_arn: {
+        label: "Rôle à endosser",
+        help: "Recommandé : un rôle en lecture seule dans le compte, que la clé endosse. Vide : la clé lit elle-même.",
+      },
+      external_id: {
+        label: "External ID",
+        help: "Celui qu'exige la politique de confiance du rôle.",
       },
       site: {
         label: "Site Atlassian",
@@ -1256,6 +1279,13 @@ const en: Dictionary = {
       issues: "issues",
       branches: "branches",
       projects: "projects",
+      instances: "instances",
+      db_instances: "databases",
+      buckets: "S3 buckets",
+      functions: "functions",
+      clusters: "clusters",
+      networks: "networks",
+      load_balancers: "load balancers",
     },
     empty: {
       title: "No source connected",
@@ -1419,6 +1449,22 @@ const en: Dictionary = {
       email: {
         label: "Account email",
         help: "Only for an Atlassian API token.",
+      },
+      access_key_id: {
+        label: "Access key ID",
+        help: "The key of an IAM user with a read-only policy (see the documentation).",
+      },
+      secret_access_key: {
+        label: "Secret access key",
+        help: "Encrypted, and never shown again.",
+      },
+      role_arn: {
+        label: "Role to assume",
+        help: "Recommended: a read-only role in the account that the key assumes. Empty: the key reads itself.",
+      },
+      external_id: {
+        label: "External ID",
+        help: "The one the role's trust policy requires.",
       },
       site: {
         label: "Atlassian site",
