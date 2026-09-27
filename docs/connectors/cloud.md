@@ -1,6 +1,6 @@
 # Cloud platforms — what LEKA asks for, and what it reads
 
-AWS today; Azure and GCP next, through [the connector framework](framework.md).
+AWS and Azure today; GCP next, through [the connector framework](framework.md).
 LEKA-347. **LEKA only reads**: every call is a `Describe`, `List` or `Get`.
 
 ---
@@ -118,3 +118,69 @@ reimplementing that over httpx would be a second SDK to maintain, and boto3
 is already LEKA's (the S3 object store). What `self.http()` also guards
 against — an admin typing an address the server should not call — does not
 arise: every endpoint is AWS's own, chosen by region.
+
+
+---
+
+## Azure
+
+One source is one Microsoft Entra tenant, and the subscriptions it scopes.
+
+| | |
+|---|---|
+| Credentials | a **service principal**: its application (`client_id`) and a client secret |
+| Role | **Reader**, on each subscription LEKA should read — nothing more |
+| Scope | `subscriptions` — their ids. Empty: every subscription the service principal can see. The Sources screen offers them |
+| Config | `tenant_id`, `subscriptions` |
+
+Create it in one line, per subscription:
+
+```bash
+az ad sp create-for-rbac --name leka-reader --role Reader \
+  --scopes /subscriptions/<SUBSCRIPTION ID>
+# → appId (client_id), password (client_secret), tenant (tenant_id)
+```
+
+A secret expires (two years at most): LEKA says `AUTH_EXPIRED` when it has,
+and the source goes to `error` at its next pass — renew it and replace the
+credentials.
+
+### What is read
+
+Azure Resource Manager's resource list, **filtered by type**, in every
+subscription of the scope, following `nextLink`. Every resource is known by
+its ARM id, **lower-cased** (Azure's ids are case-insensitive), with its
+subscription as container.
+
+| Capability | Azure resource types |
+|---|---|
+| `instances` | `Microsoft.Compute/virtualMachines`, `…/virtualMachineScaleSets` |
+| `db_instances` | `Microsoft.Sql/servers/databases`, `Microsoft.DBforPostgreSQL/flexibleServers`, `Microsoft.DBforMySQL/flexibleServers`, `Microsoft.DocumentDB/databaseAccounts` |
+| `buckets` | `Microsoft.Storage/storageAccounts` |
+| `functions` | `Microsoft.Web/sites` (function and web apps) |
+| `clusters` | `Microsoft.ContainerService/managedClusters` |
+| `networks` | `Microsoft.Network/virtualNetworks` |
+| `load_balancers` | `Microsoft.Network/loadBalancers`, `…/applicationGateways` |
+
+Like AWS, every capability is **listed whole** at every pass: nothing
+unchanged is written, and a deleted resource is gone at the next pass. The
+Reader role opens the whole list at once, so the connection test asks once.
+
+**Every call to Resource Manager is a GET.** The one POST is the token
+request to Microsoft's identity platform (`login.microsoftonline.com`) — an
+exchange of the secret for a token, touching nothing of the customer's. The
+token is asked for once per connection test or pass, never stored.
+
+### Diagnostics
+
+| Microsoft says | LEKA says |
+|---|---|
+| `AADSTS7000215` (wrong secret), `AADSTS700016` (unknown application) | `AUTH_INVALID` |
+| `AADSTS7000222` (secret expired) | `AUTH_EXPIRED` |
+| `AADSTS90002` (no such tenant) | `NOT_FOUND` |
+| a subscription in scope it cannot see | `NOT_FOUND`, naming it — check the Reader role |
+| 403 on the resource list | the capabilities are left out |
+| 429 | `RATE_LIMITED`, with Azure's `Retry-After` |
+
+Azure's own mark is not shown: Microsoft asks icon sets not to carry it. The
+Sources screen draws a plain cloud in Azure's blue.

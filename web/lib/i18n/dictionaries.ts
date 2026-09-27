@@ -694,6 +694,18 @@ const fr = {
         label: "External ID",
         help: "Celui qu'exige la politique de confiance du rôle.",
       },
+      tenant_id: {
+        label: "Tenant ID",
+        help: "L'identifiant du tenant Microsoft Entra du service principal.",
+      },
+      client_id: {
+        label: "Application (client) ID",
+        help: "Celui du service principal, avec le rôle Reader sur les abonnements à lire.",
+      },
+      client_secret: {
+        label: "Secret client",
+        help: "Chiffré, et plus jamais affiché.",
+      },
       site: {
         label: "Site Atlassian",
         help: "Son nom, comme dans acme.atlassian.net.",
@@ -1465,6 +1477,18 @@ const en: Dictionary = {
       external_id: {
         label: "External ID",
         help: "The one the role's trust policy requires.",
+      },
+      tenant_id: {
+        label: "Tenant ID",
+        help: "The Microsoft Entra tenant id of the service principal.",
+      },
+      client_id: {
+        label: "Application (client) ID",
+        help: "The service principal's, with the Reader role on the subscriptions to read.",
+      },
+      client_secret: {
+        label: "Client secret",
+        help: "Encrypted, and never shown again.",
       },
       site: {
         label: "Atlassian site",
