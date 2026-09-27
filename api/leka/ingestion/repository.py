@@ -13,7 +13,17 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, Result, Select, delete, func, or_, select, update
+from sqlalchemy import (
+    CursorResult,
+    Result,
+    Select,
+    and_,
+    delete,
+    func,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +31,8 @@ from leka.background import ACTIVE_JOB_STATUSES, JobRun, JobStatus
 from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
 from leka.ingestion.models import (
+    ExtractedRecordRow,
+    ExtractionStatus,
     RawPayload,
     SourceRecord,
     SourceSync,
@@ -466,6 +478,141 @@ class SourceRecordRepository(WorkspaceScopedRepository):
             .group_by(SourceRecord.source_id, SourceRecord.kind)
         )
         return {(source_id, kind): int(count) for source_id, kind, count in rows.all()}
+
+
+class ExtractionRepository(WorkspaceScopedRepository):
+    """What extraction made of a source's records (LEKA-354).
+
+    `versions` is, per capability, the version of the strategy that extracts
+    it now — None for a capability no strategy knows. A record needs
+    extracting when it has no row yet, when its checksum moved, or when that
+    version is not the one its row was made by.
+    """
+
+    model = ExtractedRecordRow
+
+    def _stale(self, source_id: uuid.UUID, versions: dict[str, int | None]) -> Select[Any]:
+        row = ExtractedRecordRow
+        known = [k for k, v in versions.items() if v is not None]
+        version_moved = or_(
+            *(
+                and_(SourceRecord.kind == kind, row.extractor_version.is_distinct_from(version))
+                for kind, version in versions.items()
+            ),
+            # A strategy withdrawn: what it made is no longer vouched for.
+            and_(SourceRecord.kind.not_in(known), row.extractor_version.is_not(None)),
+        )
+        return (
+            select(SourceRecord)
+            .outerjoin(row, row.source_record_id == SourceRecord.id)
+            .where(
+                SourceRecord.workspace_id == self.workspace_id,
+                SourceRecord.source_id == source_id,
+                SourceRecord.deleted_at.is_(None),
+                SourceRecord.payload_key.is_not(None),
+                or_(row.id.is_(None), row.checksum != SourceRecord.checksum, version_moved),
+            )
+        )
+
+    async def stale(
+        self,
+        source_id: uuid.UUID,
+        versions: dict[str, int | None],
+        *,
+        after: uuid.UUID | None,
+        limit: int,
+    ) -> Sequence[SourceRecord]:
+        """The next `limit` records to extract, by id — a cursor, so a record
+        whose batch could not be read is passed over, not read forever."""
+        statement = self._stale(source_id, versions).order_by(SourceRecord.id).limit(limit)
+        if after is not None:
+            statement = statement.where(SourceRecord.id > after)
+        return (await self._session.execute(statement)).scalars().all()
+
+    async def has_stale(self, source_id: uuid.UUID, versions: dict[str, int | None]) -> bool:
+        found = await self._session.execute(
+            self._stale(source_id, versions).with_only_columns(SourceRecord.id).limit(1)
+        )
+        return found.first() is not None
+
+    async def save(self, rows: list[dict[str, object]]) -> None:
+        """One row per source record: made, or made again."""
+        if not rows:
+            return
+        statement = insert(ExtractedRecordRow).values(
+            [{"workspace_id": self.workspace_id, **row} for row in rows]
+        )
+        excluded = statement.excluded
+        await self._session.execute(
+            statement.on_conflict_do_update(
+                constraint="uq_extracted_records_source_record",
+                set_={
+                    column: getattr(excluded, column)
+                    for column in (
+                        "status",
+                        "extractor",
+                        "extractor_version",
+                        "checksum",
+                        "result",
+                        "failure_code",
+                        "message",
+                        "extracted_at",
+                    )
+                }
+                | {"updated_at": func.now()},
+            )
+        )
+
+    async def forget_deleted(self, source_id: uuid.UUID) -> int:
+        """Records marked deleted lose what was extracted from them."""
+        deleted = select(SourceRecord.id).where(
+            SourceRecord.workspace_id == self.workspace_id,
+            SourceRecord.source_id == source_id,
+            SourceRecord.deleted_at.is_not(None),
+        )
+        result = await self._session.execute(
+            delete(ExtractedRecordRow).where(
+                ExtractedRecordRow.workspace_id == self.workspace_id,
+                ExtractedRecordRow.source_record_id.in_(deleted),
+            )
+        )
+        return _affected_rows(result)
+
+    async def counts(self, source_id: uuid.UUID) -> list[tuple[str, str | None, str | None, int]]:
+        """(status, failure code, extractor, how many) for the source."""
+        row = ExtractedRecordRow
+        rows = await self._session.execute(
+            select(row.status, row.failure_code, row.extractor, func.count())
+            .where(row.workspace_id == self.workspace_id, row.source_id == source_id)
+            .group_by(row.status, row.failure_code, row.extractor)
+        )
+        return [(str(s), code, extractor, int(n)) for s, code, extractor, n in rows.all()]
+
+    async def latest(self, source_id: uuid.UUID) -> datetime | None:
+        found = await self._session.execute(
+            select(func.max(ExtractedRecordRow.extracted_at)).where(
+                ExtractedRecordRow.workspace_id == self.workspace_id,
+                ExtractedRecordRow.source_id == source_id,
+            )
+        )
+        return found.scalar_one()
+
+    async def failures(
+        self, source_id: uuid.UUID, *, limit: int
+    ) -> Sequence[tuple[ExtractedRecordRow, str]]:
+        """The latest failures, with the vendor id of their record."""
+        rows = await self._session.execute(
+            select(ExtractedRecordRow, SourceRecord.external_id)
+            .join(SourceRecord, SourceRecord.id == ExtractedRecordRow.source_record_id)
+            .where(
+                ExtractedRecordRow.workspace_id == self.workspace_id,
+                ExtractedRecordRow.source_id == source_id,
+                ExtractedRecordRow.status == ExtractionStatus.FAILED,
+            )
+            .order_by(ExtractedRecordRow.extracted_at.desc(), ExtractedRecordRow.id)
+            .limit(limit)
+        )
+        return [(extraction, str(external_id)) for extraction, external_id in rows.all()]
 
 
 class SyncScheduleRepository:

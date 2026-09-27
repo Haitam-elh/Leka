@@ -829,6 +829,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingestion/sources/{source_id}/extraction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Source Extraction
+         * @description What extraction made of the source's records: how many, by which
+         *     strategy, and the latest it could not — a vendor changing a payload's
+         *     shape shows here as one strategy failing all at once.
+         */
+        get: operations["source_extraction_api_v1_ingestion_sources__source_id__extraction_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1043,6 +1065,45 @@ export interface components {
          */
         ErrorEnvelope: {
             error: components["schemas"]["ErrorBody"];
+        };
+        /**
+         * ExtractionFailureRead
+         * @description One record extraction could not make sense of.
+         */
+        ExtractionFailureRead: {
+            /** Capability */
+            capability: string;
+            /** External Id */
+            external_id: string;
+            /**
+             * Extractor
+             * @description Null: no strategy for this kind of record yet.
+             */
+            extractor: string | null;
+            /**
+             * Code
+             * @description unsupported or malformed.
+             */
+            code: string;
+            /**
+             * Message
+             * @description Names a field; never quotes the payload.
+             */
+            message: string;
+            /**
+             * Extracted At
+             * Format: date-time
+             */
+            extracted_at: string;
+        };
+        /** ExtractorCount */
+        ExtractorCount: {
+            /** Extractor */
+            extractor: string | null;
+            /** Extracted */
+            extracted: number;
+            /** Failed */
+            failed: number;
         };
         /**
          * FieldError
@@ -1567,6 +1628,35 @@ export interface components {
          * @enum {string}
          */
         SourceEventType: "created" | "test_succeeded" | "test_failed" | "activated" | "reconfigured" | "credentials_rotated" | "health_changed" | "disabled" | "deleted" | "sync_failed" | "sync_recovered";
+        /**
+         * SourceExtraction
+         * @description Where a source's extraction stands.
+         */
+        SourceExtraction: {
+            /** Extracted */
+            extracted: number;
+            /** Failed */
+            failed: number;
+            /**
+             * Unsupported
+             * @description Of the failed: no strategy yet.
+             */
+            unsupported: number;
+            /**
+             * Malformed
+             * @description Of the failed: not the shape the strategy knows.
+             */
+            malformed: number;
+            /** Last Extracted At */
+            last_extracted_at: string | null;
+            /** Extractors */
+            extractors: components["schemas"]["ExtractorCount"][];
+            /**
+             * Failures
+             * @description The latest, newest first.
+             */
+            failures: components["schemas"]["ExtractionFailureRead"][];
+        };
         /**
          * SourceKind
          * @description The customer systems LEKA knows the shape of.
@@ -6129,6 +6219,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PageEnvelope_SyncRunRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    source_extraction_api_v1_ingestion_sources__source_id__extraction_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceExtraction"];
                 };
             };
             /** @description The request could not be understood. */

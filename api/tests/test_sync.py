@@ -53,6 +53,7 @@ from leka.ingestion import (
     SyncTrigger,
 )
 from leka.ingestion import sync as sync_module
+from leka.ingestion.checksum import checksum
 from leka.ingestion.purge import PURGE_JOB, purge_deleted
 from leka.ingestion.sync import RetryableSyncError, sync_source
 from leka.platform import LocalObjectStore
@@ -645,8 +646,8 @@ def test_the_checksum_does_not_depend_on_key_order() -> None:
         fetched_at=datetime.now(UTC),
     )
 
-    assert sync_module.checksum(one) == sync_module.checksum(two)
-    assert len(sync_module.checksum(one)) == 64
+    assert checksum(one) == checksum(two)
+    assert len(checksum(one)) == 64
 
 
 # ── purging deleted records from the store (LEKA-353) ───────────────────────
@@ -665,12 +666,14 @@ async def _live_payloads(source: Source) -> list[RawPayload]:
 async def test_a_pass_that_marks_records_gone_queues_their_purge(source: Source) -> None:
     SCRIPT.records = {Capability.COMMITS: 2}
     await _sync(source)
-    assert queued_purges == []
+    assert [job for job, _ in queued_purges if job == PURGE_JOB] == []
     SCRIPT.gone = {1}
 
     await _sync(source, full=True)
 
-    assert queued_purges == [(PURGE_JOB, (str(source.workspace_id), str(source.id)))]
+    assert [q for q in queued_purges if q[0] == PURGE_JOB] == [
+        (PURGE_JOB, (str(source.workspace_id), str(source.id)))
+    ]
 
 
 async def test_the_purge_rewrites_mixed_batches_and_withdraws_empty_ones(

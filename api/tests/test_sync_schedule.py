@@ -392,3 +392,67 @@ async def test_what_a_source_holds_is_counted_from_the_index(
 
     assert [row["records_total"] for row in summary if row["source_id"] == source["id"]] == [2]
     assert [row["records_total"] for row in syncs["capabilities"]] == [2]
+
+
+# ── the extraction, over the API (LEKA-354) ──────────────────────────────────
+
+
+async def test_a_member_reads_what_extraction_made_of_a_source(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+    at = datetime.now(UTC)
+    checksum = "0" * 64
+    await _set(
+        source["id"],
+        acme["acme"],
+        "INSERT INTO source_records (workspace_id, source_id, kind, external_id, checksum, "
+        "first_seen_at, last_seen_at, payload_key) SELECT workspace_id, id, 'commits', e, :c, "
+        ":at, :at, 'k' FROM sources, (VALUES ('c-1'), ('c-2'), ('c-3')) AS v(e) WHERE id = :s",
+        c=checksum,
+        at=at,
+    )
+    await _set(
+        source["id"],
+        acme["acme"],
+        "INSERT INTO extracted_records (workspace_id, source_id, source_record_id, kind, "
+        "status, extractor, extractor_version, checksum, result, failure_code, message, "
+        "extracted_at) SELECT r.workspace_id, r.source_id, r.id, r.kind, "
+        "CASE WHEN r.external_id = 'c-3' THEN 'failed' ELSE 'extracted' END, 'fake.commits', 1, "
+        ":c, CASE WHEN r.external_id = 'c-3' THEN NULL ELSE '{}'::jsonb END, "
+        "CASE WHEN r.external_id = 'c-3' THEN 'malformed' END, "
+        "CASE WHEN r.external_id = 'c-3' THEN 'missing field ''title''' END, :at "
+        "FROM source_records r WHERE r.source_id = :s",
+        c=checksum,
+        at=at,
+    )
+
+    _as(identity, acme, "member")
+    read = (await client.get(f"{API}/ingestion/sources/{source['id']}/extraction")).json()
+
+    assert (read["extracted"], read["failed"], read["malformed"], read["unsupported"]) == (
+        2,
+        1,
+        1,
+        0,
+    )
+    assert read["extractors"] == [{"extractor": "fake.commits", "extracted": 2, "failed": 1}]
+    (failure,) = read["failures"]
+    assert (failure["external_id"], failure["code"], failure["message"]) == (
+        "c-3",
+        "malformed",
+        "missing field 'title'",
+    )
+    assert read["last_extracted_at"] is not None
+
+
+async def test_another_workspace_cannot_read_a_source_s_extraction(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+
+    _as(identity, acme, "other_admin")
+    url = f"{API}/ingestion/sources/{source['id']}/extraction"
+    assert (await client.get(url)).status_code == 404
