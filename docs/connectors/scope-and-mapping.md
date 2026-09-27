@@ -51,8 +51,20 @@ they differ from what LEKA reads by default:
 | `priorities` | → `highest`, `high`, `medium`, `low`, `lowest` | `{"P0": "highest"}` |
 | `environments` | → `production`, `staging`, `development`, `test` | `{"prd": "production"}` |
 
-The mapping is stored, validated and versioned here; normalisation applies
-it ([normalisation.md](../normalisation.md)).
+Normalisation applies it to every record of the source
+([normalisation.md § 9](../normalisation.md#9-a-sources-own-mapping)):
+
+- the record's entity is of the mapped **type** — its key does not change;
+- a container matching a `services` / `owners` rule is **part of** that
+  service and **owned by** that team, with confidence 1.0 — an administrator
+  said so;
+- the company's **tag keys** say the environment (0.95), the service and the
+  team, beside the usual `env`, `service`, `team`;
+- its own **states, priorities and environments** win over LEKA's tables —
+  even over Jira's status category — and are no longer diagnostics.
+
+Every normalised row records the settings version it was mapped with
+(`normalised_records.settings_version`).
 
 ## 3. What is refused, what is said
 
@@ -93,7 +105,11 @@ health events.
   batches, and what was processed of it removed
   ([collection.md](../collection.md), [processing.md](../processing.md)).
   The pass's trigger is `settings`.
-- **Only the mapping changes**: no pass — nothing to read again.
+- **Only the mapping changes**: no pass — nothing to read again. The
+  source's records are **normalised again** with the new mapping: the rows
+  made with another settings version are stale, and `source.mapping_changed`,
+  published with the version, queues the normalisation
+  (`leka.ingestion.pipeline.run_advance_for_event`).
 
 ## 6. The API
 

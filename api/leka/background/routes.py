@@ -46,4 +46,6 @@ ROUTES: dict[str, tuple[Route, ...]] = {
     "source.activated": (Route("leka.ingestion.sync.run_sync_for_event"),),
     # Its scope rules changed (LEKA-351): a full pass, like an activation.
     "source.scope_changed": (Route("leka.ingestion.sync.run_sync_for_event"),),
+    # Only its mapping changed: normalised again, nothing read again.
+    "source.mapping_changed": (Route("leka.ingestion.pipeline.run_advance_for_event"),),
 }

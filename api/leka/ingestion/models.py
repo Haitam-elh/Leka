@@ -611,6 +611,9 @@ class NormalisedRecordRow(Base, WorkspaceScopedMixin):
     extractor_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     parser_version: Mapped[int] = mapped_column(Integer, nullable=False)
     normaliser_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The source's settings version whose mapping it was made with (LEKA-351);
+    # 0 before any. A new mapping normalises the source's records again.
+    settings_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     entity_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     entity_key: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     result: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)

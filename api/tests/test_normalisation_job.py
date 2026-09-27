@@ -17,7 +17,8 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select, text
 
-from leka.connectors import Capability, Source
+from leka.background import Event
+from leka.connectors import Capability, Mapping, Source, SourceService, SourceSettings
 from leka.db import session_factory, workspace_scope
 from leka.ingestion import (
     ExtractedRecordRow,
@@ -27,6 +28,7 @@ from leka.ingestion import (
     NormalisedRelationship,
     ParsedRecordRow,
 )
+from leka.ingestion import pipeline as pipeline_module
 from leka.ingestion.extraction import ExtractedRecord
 from leka.ingestion.extraction.job import extract_source
 from leka.ingestion.normalisation import (
@@ -48,7 +50,7 @@ from tests.test_sync import _index, _sync, fake, source  # noqa: F401 — fixtur
 pytestmark = pytest.mark.integration
 
 
-def _rule(extracted: object, parsed: object) -> Normalised:
+def _rule(extracted: object, parsed: object, mapping: object = None) -> Normalised:
     """A candidate per fake commit — `invalid` for commit 2."""
     record = ExtractedRecord.model_validate(extracted)
     parse = ParsedRecord.model_validate(parsed)
@@ -247,3 +249,46 @@ async def test_a_record_deleted_at_the_vendor_loses_its_candidates(source: Sourc
     await extract_source(source.workspace_id, source.id)  # cascade: parse, candidates
 
     assert set(await _rows(source)) == {"commits-1"}
+
+
+# ── a new mapping (LEKA-351) ─────────────────────────────────────────────────
+
+
+async def _save_mapping(source: Source, mapping: Mapping) -> None:
+    with workspace_scope(source.workspace_id):
+        async with session_factory() as session:
+            service = SourceService(session, source.workspace_id, actor_user_id=None)
+            await service.save_settings(
+                await service.get(source.id), SourceSettings(mapping=mapping)
+            )
+            await session.commit()
+
+
+@pytest.mark.usefixtures("rules")
+async def test_a_new_mapping_normalises_the_source_again(source: Source) -> None:
+    await _parsed(source, 2)
+    await normalise_source(source.workspace_id, source.id)
+    assert {row.settings_version for row in (await _rows(source)).values()} == {0}
+
+    await _save_mapping(source, Mapping(states={"frozen": "closed"}))
+    result = await normalise_source(source.workspace_id, source.id)
+
+    assert result["normalised"] == 2
+    assert {row.settings_version for row in (await _rows(source)).values()} == {1}
+
+
+async def test_a_mapping_change_queues_the_normalisation_once_committed(source: Source) -> None:
+    await _parsed(source, 1)
+    await normalise_source(source.workspace_id, source.id)
+    sync_tests.queued_purges.clear()
+
+    await _save_mapping(source, Mapping(states={"frozen": "closed"}))
+    with workspace_scope(source.workspace_id):
+        async with session_factory() as session:
+            rows = await session.execute(
+                select(Event).where(Event.type == "source.mapping_changed")
+            )
+            (event,) = [e for e in rows.scalars() if e.payload["source_id"] == str(source.id)]
+
+    assert await pipeline_module._advance_for_event(event.id) == "normalisation"
+    assert NORMALISE_JOB in queued()
