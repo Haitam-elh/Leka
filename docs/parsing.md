@@ -103,10 +103,35 @@ described.
 `PARSER_VERSION` (`parsing/engine.py`) is raised when what parsing finds
 changes: what the old version parsed is parsed again.
 
+## 6. Where results are kept, and when they are made
+
+`parsed_records` (`ParsedRecordRow`): **one row per extracted
+`extracted_records` row** — `status` (`parsed` or `failed`), the
+ParsedRecord as JSON (`result`) or `failure_code` and `message`, and what it
+was parsed from and by: the extraction's `checksum` and `extractor_version`,
+and `parser_version`. An extraction that failed has no parse; a record gone
+takes its extraction and its parse along (cascade).
+
+The job, `leka.ingestion.parsing.job.run_parsing` (key `parse:<source_id>`,
+one at a time per source), is **queued by the extraction job** when it ends
+with something to parse, and **by the end of a pass** when only parsing has
+something to do (a new `PARSER_VERSION`). It forgets the parse of
+extractions that failed since, then parses, in id order, every extraction
+never parsed or parsed from another checksum or version. Everything it reads
+is in the database. Incremental and idempotent: a second run reads nothing.
+
+```
+ pass ──▶ extraction (extract:<id>) ──▶ parsing (parse:<id>)
+   └──────────── only parsing to do ──────────▲
+```
+
+`GET /ingestion/sources/{id}/parsing` (`source:read`): how many were parsed
+and failed, how many facts of each type, the average quality, when last,
+and the 20 latest failures with their record's vendor id.
+
 ## Not yet
 
-- **Where results are kept, and when they are made**: after the extraction,
-  incremental on the extraction and `PARSER_VERSION` — the next PR.
 - **Configuration files, code** — no connector reads repository contents yet.
 - **Semantic reading** (what a ticket is about, beyond its words): with the
   AI gateway (LEKA-394).
+- **A screen**: the route is there; the Sources screen does not show it yet.

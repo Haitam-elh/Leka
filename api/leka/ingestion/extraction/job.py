@@ -9,7 +9,8 @@ Queued at the end of a pass that left something to extract (key
    their strategy — grouped by the batch holding their latest version;
 3. reads each batch once, finds each record's line by its identity AND its
    checksum, extracts it, and saves the result — or the failure — batch by
-   batch.
+   batch;
+4. queues the parsing (LEKA-355) when there is something to parse.
 
 INCREMENTAL, AND IDEMPOTENT. A record extracted from the checksum the index
 has, by the current version, is not read again: a second run finds nothing
@@ -33,13 +34,17 @@ from datetime import UTC, datetime
 import structlog
 from pydantic import ValidationError
 
+from leka.background import enqueue_job
 from leka.connectors import RawRecord, Source, SourceKind
 from leka.db import session_factory, workspace_scope
 from leka.ingestion.checksum import checksum
 from leka.ingestion.extraction.contract import ExtractedRecord
 from leka.ingestion.extraction.engine import extract, strategy_for, supported
 from leka.ingestion.models import ExtractionStatus, SourceRecord
-from leka.ingestion.repository import ExtractionRepository
+from leka.ingestion.parsing.engine import PARSER_VERSION
+from leka.ingestion.parsing.job import PARSE_JOB
+from leka.ingestion.parsing.job import concurrency_key as parse_key
+from leka.ingestion.repository import ExtractionRepository, ParsingRepository
 from leka.platform import ObjectStore, ObjectStoreError, object_store
 
 logger = structlog.get_logger(__name__)
@@ -91,6 +96,16 @@ async def extract_source(workspace_id: uuid.UUID, source_id: uuid.UUID) -> dict[
                     rows = await _extract_batch(store, source, key, batch, result)
                     await repository.save(rows)
                     await session.commit()
+
+            # What was extracted is parsed next (leka/ingestion/parsing/job.py).
+            if await ParsingRepository(session, workspace_id).has_stale(source_id, PARSER_VERSION):
+                await enqueue_job(
+                    PARSE_JOB,
+                    str(workspace_id),
+                    str(source_id),
+                    for_workspace_id=workspace_id,
+                    concurrency_key=parse_key(source_id),
+                )
 
     logger.info("source_extracted", source_id=str(source_id), **result)
     return result

@@ -19,6 +19,7 @@ from leka.db import session_factory, workspace_scope
 from leka.ingestion import ExtractedRecordRow, ExtractionStatus
 from leka.ingestion.extraction import Extracted, MalformedPayloadError
 from leka.ingestion.extraction import engine as engine_module
+from leka.ingestion.extraction import job as job_module
 from leka.ingestion.extraction.contract import FailureCode
 from leka.ingestion.extraction.job import EXTRACT_JOB, extract_source
 from leka.ingestion.models import EXTRACTION_FAILURES
@@ -36,6 +37,21 @@ def _commit(payload: dict[str, Any]) -> Extracted:
         raise MalformedPayloadError("missing field 'title'")
     edited = " (edited)" if payload["edited"] else ""
     return Extracted(title=f"commit {payload['n']}{edited}")
+
+
+queued_parses: list[tuple[str, tuple[object, ...]]] = []
+
+
+@pytest.fixture(autouse=True)
+def captured_parses(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The parsing an extraction queues is captured, not put on a queue."""
+    queued_parses.clear()
+
+    async def capture(job: str, *args: object, **kwargs: object) -> object:
+        queued_parses.append((job, args))
+        return object()
+
+    monkeypatch.setattr(job_module, "enqueue_job", capture)
 
 
 @pytest.fixture(autouse=True)

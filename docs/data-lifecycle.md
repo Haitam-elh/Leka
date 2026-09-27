@@ -24,6 +24,7 @@ same answer.
 | **Sync history** — one row per pass: trigger, times, counts, outcome | `sync_runs` | as long as its source | cascade from `sources`; no payload, diagnostics cleaned of secrets. Not pruned yet: ~9 000 rows per source a year |
 | **Record index** — per vendor object: checksum, first and last seen, the batch holding it, when it was found gone | `source_records` | as long as its source | cascade from `sources`; no payload — ids, a hash, a key. A deleted record's row stays, so a return is recognised |
 | **Extracted records** — per indexed record: what extraction made of it (title, texts capped at 100 000 characters, people, metadata), or why it could not | `extracted_records` | as long as its record is live | removed at the next extraction once its record is marked deleted; cascade from `source_records` and `sources`. **Holds customer text, and does not yet expire with the raw payload's retention** — to be decided (LEKA-354) |
+| **Parsed records** — per extraction: facts with their confidence and a 120-character excerpt of where each was read, the text's shape, a quality score | `parsed_records` | as long as its extraction | cascade from `extracted_records` and `sources`; removed when its extraction fails. Its excerpts are customer text: they follow the extracted text's retention, still to be decided (LEKA-354) |
 | **Memberships, users** | `memberships`, `users` | as long as the account | cascade from `workspaces`; a user row survives, since a person may belong to several workspaces |
 
 ### Raw payload retention, by source kind

@@ -11,7 +11,8 @@ vendor changed a payload shape.
 source's synchronisation stands, the second (LEKA-352); `sync_runs`, what
 each pass did, the third (LEKA-353); `source_records`, what was seen of
 each vendor object, the fourth; `extracted_records`, what extraction made
-of each of them, the fifth (LEKA-354). It is the row half of the split
+of each of them, the fifth (LEKA-354); `parsed_records`, what parsing read
+in each extraction, the sixth (LEKA-355). It is the row half of the split
 described in docs/adr/010-object-storage.md: the bytes live in the object
 store, and this is everything we know about them — where they came from, how
 big they are, what they hash to, and when they stop being ours to keep.
@@ -459,3 +460,70 @@ class ExtractedRecordRow(Base, WorkspaceScopedMixin):
     failure_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     extracted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ParseStatus(enum.StrEnum):
+    """What parsing made of one extraction (leka/ingestion/parsing)."""
+
+    PARSED = "parsed"
+    FAILED = "failed"
+
+
+class ParsedRecordRow(Base, WorkspaceScopedMixin):
+    """What parsing read in one extraction (LEKA-355): its ParsedRecord —
+    facts with their confidence and evidence, structure, quality — or why
+    there is none.
+
+    ONE ROW PER extracted_records ROW THAT WAS EXTRACTED, replaced when the
+    extraction changes (`checksum`, `extractor_version`) or parsing does
+    (`parser_version`). An extraction that failed, or whose record is gone,
+    has none: the cascade and the job see to it.
+    """
+
+    __tablename__ = "parsed_records"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_id"],
+            ["sources.workspace_id", "sources.id"],
+            name="fk_parsed_records_workspace_source",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("extracted_record_id", name="uq_parsed_records_extracted_record"),
+        CheckConstraint(
+            "status IN (" + ", ".join(f"'{s}'" for s in _statuses(ParseStatus)) + ")",
+            name="status",
+        ),
+        CheckConstraint("failure_code IS NULL OR failure_code = 'malformed'", name="failure_code"),
+        CheckConstraint(
+            "(status = 'parsed') = (result IS NOT NULL AND failure_code IS NULL)",
+            name="result_or_failure",
+        ),
+        CheckConstraint("length(checksum) = 64", name="checksum_is_sha256"),
+        Index("ix_parsed_records_source_status", "source_id", "status"),
+    )
+
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    extracted_record_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("extracted_records.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[ParseStatus] = mapped_column(
+        Enum(
+            ParseStatus,
+            name="status",
+            native_enum=False,
+            length=20,
+            values_callable=_statuses,
+            create_constraint=False,
+        ),
+        nullable=False,
+    )
+    # What was parsed: the extraction's checksum and extractor version, and
+    # the parser's own version.
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    extractor_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    parser_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    result: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    parsed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
