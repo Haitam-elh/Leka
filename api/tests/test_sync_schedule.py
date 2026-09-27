@@ -456,3 +456,75 @@ async def test_another_workspace_cannot_read_a_source_s_extraction(
     _as(identity, acme, "other_admin")
     url = f"{API}/ingestion/sources/{source['id']}/extraction"
     assert (await client.get(url)).status_code == 404
+
+
+# ── the parsing, over the API (LEKA-355) ─────────────────────────────────────
+
+
+async def test_a_member_reads_what_parsing_found_in_a_source(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+    at = datetime.now(UTC)
+    checksum = "0" * 64
+    await _set(
+        source["id"],
+        acme["acme"],
+        "INSERT INTO source_records (workspace_id, source_id, kind, external_id, checksum, "
+        "first_seen_at, last_seen_at, payload_key) SELECT workspace_id, id, 'commits', e, :c, "
+        ":at, :at, 'k' FROM sources, (VALUES ('c-1'), ('c-2'), ('c-3')) AS v(e) WHERE id = :s",
+        c=checksum,
+        at=at,
+    )
+    await _set(
+        source["id"],
+        acme["acme"],
+        "INSERT INTO extracted_records (workspace_id, source_id, source_record_id, kind, "
+        "status, extractor, extractor_version, checksum, result, extracted_at) "
+        "SELECT workspace_id, source_id, id, kind, 'extracted', 'fake.commits', 1, :c, "
+        "'{}'::jsonb, :at FROM source_records WHERE source_id = :s",
+        c=checksum,
+        at=at,
+    )
+    parsed = (
+        '{"facts": [{"type": "references"}, {"type": "change_type"}], "quality": {"score": %s}}'
+    )
+    await _set(
+        source["id"],
+        acme["acme"],
+        "INSERT INTO parsed_records (workspace_id, source_id, extracted_record_id, kind, status, "
+        "checksum, extractor_version, parser_version, result, failure_code, message, parsed_at) "
+        "SELECT x.workspace_id, x.source_id, x.id, x.kind, "
+        "CASE r.external_id WHEN 'c-3' THEN 'failed' ELSE 'parsed' END, :c, 1, 1, "
+        "CASE r.external_id WHEN 'c-1' THEN CAST(:one AS jsonb) "
+        "WHEN 'c-2' THEN CAST(:half AS jsonb) END, "
+        "CASE r.external_id WHEN 'c-3' THEN 'malformed' END, "
+        "CASE r.external_id WHEN 'c-3' THEN 'not an extracted record: provenance (missing)' END, "
+        ":at FROM extracted_records x JOIN source_records r ON r.id = x.source_record_id "
+        "WHERE x.source_id = :s",
+        c=checksum,
+        at=at,
+        one=parsed % "1.0",
+        half=parsed % "0.5",
+    )
+
+    _as(identity, acme, "member")
+    read = (await client.get(f"{API}/ingestion/sources/{source['id']}/parsing")).json()
+
+    assert (read["parsed"], read["failed"]) == (2, 1)
+    assert read["facts"] == {"references": 2, "change_type": 2}
+    assert read["average_quality"] == 0.75
+    ((failure),) = read["failures"]
+    assert (failure["external_id"], failure["code"]) == ("c-3", "malformed")
+
+
+async def test_another_workspace_cannot_read_a_source_s_parsing(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+
+    _as(identity, acme, "other_admin")
+    url = f"{API}/ingestion/sources/{source['id']}/parsing"
+    assert (await client.get(url)).status_code == 404

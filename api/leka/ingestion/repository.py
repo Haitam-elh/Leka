@@ -15,16 +15,19 @@ from typing import Any, cast
 
 from sqlalchemy import (
     CursorResult,
+    Float,
     Result,
     Select,
     and_,
+    column,
     delete,
     func,
     or_,
     select,
+    true,
     update,
 )
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import ACTIVE_JOB_STATUSES, JobRun, JobStatus
@@ -33,6 +36,8 @@ from leka.db import WorkspaceScopedRepository
 from leka.ingestion.models import (
     ExtractedRecordRow,
     ExtractionStatus,
+    ParsedRecordRow,
+    ParseStatus,
     RawPayload,
     SourceRecord,
     SourceSync,
@@ -613,6 +618,148 @@ class ExtractionRepository(WorkspaceScopedRepository):
             .limit(limit)
         )
         return [(extraction, str(external_id)) for extraction, external_id in rows.all()]
+
+
+class ParsingRepository(WorkspaceScopedRepository):
+    """What parsing read in a source's extractions (LEKA-355).
+
+    An extraction needs parsing when it was extracted and has no row yet,
+    or its row was parsed from another checksum, extractor version or
+    parser version.
+    """
+
+    model = ParsedRecordRow
+
+    def _stale(self, source_id: uuid.UUID, version: int) -> Select[Any]:
+        extracted, parsed = ExtractedRecordRow, ParsedRecordRow
+        return (
+            select(extracted)
+            .outerjoin(parsed, parsed.extracted_record_id == extracted.id)
+            .where(
+                extracted.workspace_id == self.workspace_id,
+                extracted.source_id == source_id,
+                extracted.status == ExtractionStatus.EXTRACTED,
+                or_(
+                    parsed.id.is_(None),
+                    parsed.checksum != extracted.checksum,
+                    parsed.extractor_version.is_distinct_from(extracted.extractor_version),
+                    parsed.parser_version != version,
+                ),
+            )
+        )
+
+    async def stale(
+        self, source_id: uuid.UUID, version: int, *, after: uuid.UUID | None, limit: int
+    ) -> Sequence[ExtractedRecordRow]:
+        statement = self._stale(source_id, version).order_by(ExtractedRecordRow.id).limit(limit)
+        if after is not None:
+            statement = statement.where(ExtractedRecordRow.id > after)
+        return (await self._session.execute(statement)).scalars().all()
+
+    async def has_stale(self, source_id: uuid.UUID, version: int) -> bool:
+        found = await self._session.execute(
+            self._stale(source_id, version).with_only_columns(ExtractedRecordRow.id).limit(1)
+        )
+        return found.first() is not None
+
+    async def forget_unparseable(self, source_id: uuid.UUID) -> int:
+        """Extractions that failed since they were parsed lose their parse."""
+        failed = select(ExtractedRecordRow.id).where(
+            ExtractedRecordRow.workspace_id == self.workspace_id,
+            ExtractedRecordRow.source_id == source_id,
+            ExtractedRecordRow.status == ExtractionStatus.FAILED,
+        )
+        result = await self._session.execute(
+            delete(ParsedRecordRow).where(
+                ParsedRecordRow.workspace_id == self.workspace_id,
+                ParsedRecordRow.extracted_record_id.in_(failed),
+            )
+        )
+        return _affected_rows(result)
+
+    async def save(self, rows: list[dict[str, object]]) -> None:
+        if not rows:
+            return
+        statement = insert(ParsedRecordRow).values(
+            [{"workspace_id": self.workspace_id, **row} for row in rows]
+        )
+        excluded = statement.excluded
+        columns = (
+            "status",
+            "checksum",
+            "extractor_version",
+            "parser_version",
+            "result",
+            "failure_code",
+            "message",
+            "parsed_at",
+        )
+        await self._session.execute(
+            statement.on_conflict_do_update(
+                constraint="uq_parsed_records_extracted_record",
+                set_={c: getattr(excluded, c) for c in columns} | {"updated_at": func.now()},
+            )
+        )
+
+    def _of(self, source_id: uuid.UUID) -> Any:
+        return and_(
+            ParsedRecordRow.workspace_id == self.workspace_id,
+            ParsedRecordRow.source_id == source_id,
+        )
+
+    async def counts(self, source_id: uuid.UUID) -> dict[str, int]:
+        rows = await self._session.execute(
+            select(ParsedRecordRow.status, func.count())
+            .where(self._of(source_id))
+            .group_by(ParsedRecordRow.status)
+        )
+        return {str(status): int(n) for status, n in rows.all()}
+
+    async def facts(self, source_id: uuid.UUID) -> dict[str, int]:
+        """How many facts of each type the source's records gave."""
+        facts = (
+            func.jsonb_array_elements(ParsedRecordRow.result["facts"])
+            .table_valued(column("value", JSONB))
+            .lateral()
+        )
+        kind = facts.c.value["type"].astext
+        rows = await self._session.execute(
+            select(kind, func.count())
+            .select_from(ParsedRecordRow)
+            .join(facts, true())
+            .where(self._of(source_id), ParsedRecordRow.status == ParseStatus.PARSED)
+            .group_by(kind)
+        )
+        return {str(kind): int(n) for kind, n in rows.all()}
+
+    async def quality(self, source_id: uuid.UUID) -> float | None:
+        score = ParsedRecordRow.result["quality"]["score"].astext.cast(Float)
+        found = await self._session.execute(
+            select(func.avg(score)).where(
+                self._of(source_id), ParsedRecordRow.status == ParseStatus.PARSED
+            )
+        )
+        average = found.scalar_one()
+        return round(float(average), 2) if average is not None else None
+
+    async def latest(self, source_id: uuid.UUID) -> datetime | None:
+        found = await self._session.execute(
+            select(func.max(ParsedRecordRow.parsed_at)).where(self._of(source_id))
+        )
+        return found.scalar_one()
+
+    async def failures(
+        self, source_id: uuid.UUID, *, limit: int
+    ) -> Sequence[tuple[ParsedRecordRow, str]]:
+        rows = await self._session.execute(
+            select(ParsedRecordRow, SourceRecord.external_id)
+            .join(ExtractedRecordRow, ExtractedRecordRow.id == ParsedRecordRow.extracted_record_id)
+            .join(SourceRecord, SourceRecord.id == ExtractedRecordRow.source_record_id)
+            .where(self._of(source_id), ParsedRecordRow.status == ParseStatus.FAILED)
+            .order_by(ParsedRecordRow.parsed_at.desc(), ParsedRecordRow.id)
+            .limit(limit)
+        )
+        return [(row, str(external_id)) for row, external_id in rows.all()]
 
 
 class SyncScheduleRepository:

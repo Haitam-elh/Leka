@@ -148,3 +148,25 @@ class SourceExtraction(BaseModel):
     last_extracted_at: datetime | None
     extractors: list[ExtractorCount]
     failures: list[ExtractionFailureRead] = Field(description="The latest, newest first.")
+
+
+# ── The parsing, over the API (LEKA-355) ─────────────────────────────────────
+
+
+class ParseFailureRead(BaseModel):
+    capability: str
+    external_id: str
+    code: str
+    message: str = Field(description="Names a field; never quotes the record.")
+    parsed_at: datetime
+
+
+class SourceParsing(BaseModel):
+    """Where a source's parsing stands."""
+
+    parsed: int
+    failed: int
+    facts: dict[str, int] = Field(description="How many facts of each type its records gave.")
+    average_quality: float | None = Field(description="0 to 1; null before anything is parsed.")
+    last_parsed_at: datetime | None
+    failures: list[ParseFailureRead] = Field(description="The latest, newest first.")

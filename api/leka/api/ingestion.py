@@ -5,6 +5,7 @@
     GET  /ingestion/sources/{id}/runs     its passes, newest first (LEKA-353)
     GET  /ingestion/syncs                 one line per source, for a list
     GET  /ingestion/sources/{id}/extraction  what extraction made of it (LEKA-354)
+    GET  /ingestion/sources/{id}/parsing     what parsing read in it (LEKA-355)
 
 A route validates, calls one service, and returns (architecture rule 6).
 Permissions come from a FastAPI dependency, never an `if` in the body
@@ -31,7 +32,10 @@ from leka.ingestion import (
     ExtractionFailureRead,
     ExtractionRepository,
     ExtractorCount,
+    ParseFailureRead,
+    ParsingRepository,
     SourceExtraction,
+    SourceParsing,
     SourceRecordRepository,
     SourceSyncRead,
     SourceSyncRepository,
@@ -208,6 +212,34 @@ async def source_extraction(
                 code=str(row.failure_code),
                 message=str(row.message),
                 extracted_at=row.extracted_at,
+            )
+            for row, external_id in await repository.failures(source_id, limit=FAILURES_SHOWN)
+        ],
+    )
+
+
+@router.get("/sources/{source_id}/parsing", response_model=SourceParsing)
+async def source_parsing(
+    source_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> SourceParsing:
+    """What parsing read in the source's records: how many, the facts they
+    gave by type, their average quality, and the latest it could not."""
+    await _source(session, principal, source_id)
+    repository = ParsingRepository(session, principal.workspace_id)
+    counts = await repository.counts(source_id)
+    return SourceParsing(
+        parsed=counts.get("parsed", 0),
+        failed=counts.get("failed", 0),
+        facts=await repository.facts(source_id),
+        average_quality=await repository.quality(source_id),
+        last_parsed_at=await repository.latest(source_id),
+        failures=[
+            ParseFailureRead(
+                capability=row.kind,
+                external_id=external_id,
+                code=str(row.failure_code),
+                message=str(row.message),
+                parsed_at=row.parsed_at,
             )
             for row, external_id in await repository.failures(source_id, limit=FAILURES_SHOWN)
         ],
