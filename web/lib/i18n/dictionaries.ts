@@ -525,6 +525,9 @@ const fr = {
       clusters: "clusters",
       networks: "réseaux",
       load_balancers: "load balancers",
+      spaces: "espaces",
+      pages: "pages",
+      databases: "bases Notion",
     },
     empty: {
       title: "Aucune source connectée",
@@ -656,7 +659,7 @@ const fr = {
       activated: "{name} est activée",
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
-      missingBody: "LEKA se connecte aujourd'hui à GitHub, GitLab et Bitbucket. Jira et Confluence arrivent.",
+      missingBody: "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear et Notion.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -724,6 +727,10 @@ const fr = {
       site: {
         label: "Site Atlassian",
         help: "Son nom, comme dans acme.atlassian.net.",
+      },
+      api_key: {
+        label: "Clé d'API",
+        help: "Une clé personnelle (lin_api_…). Elle est chiffrée, et ne sera plus jamais affichée.",
       },
     },
     events: {
@@ -1323,6 +1330,9 @@ const en: Dictionary = {
       clusters: "clusters",
       networks: "networks",
       load_balancers: "load balancers",
+      spaces: "spaces",
+      pages: "pages",
+      databases: "Notion databases",
     },
     empty: {
       title: "No source connected",
@@ -1454,7 +1464,7 @@ const en: Dictionary = {
       activated: "{name} is activated",
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
-      missingBody: "LEKA connects to GitHub, GitLab and Bitbucket today. Jira and Confluence are coming.",
+      missingBody: "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear and Notion today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -1522,6 +1532,10 @@ const en: Dictionary = {
       site: {
         label: "Atlassian site",
         help: "Its name, as in acme.atlassian.net.",
+      },
+      api_key: {
+        label: "API key",
+        help: "A personal key (lin_api_…). It is encrypted, and never shown again.",
       },
     },
     events: {

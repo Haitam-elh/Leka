@@ -520,9 +520,10 @@ class _Pass:
 
 def _capabilities(source: Source, offered: frozenset[Capability]) -> list[Capability]:
     """What the source's last test found readable and its connector can read,
-    what the others hang from first — repositories, projects."""
+    what the others hang from first — repositories, projects, and the spaces
+    and databases a documentation tool's pages sit in (LEKA-346)."""
     found = {c for c in Capability if c.value in source.capabilities and c in offered}
-    roots = (Capability.REPOSITORIES, Capability.PROJECTS)
+    roots = (Capability.REPOSITORIES, Capability.PROJECTS, Capability.SPACES, Capability.DATABASES)
     return sorted(found, key=lambda c: (c not in roots, c.value))
 
 

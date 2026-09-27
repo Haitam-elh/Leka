@@ -114,6 +114,8 @@ class JiraConnector(Connector[JiraConfig, JiraCredentials]):
         config_schema=JiraConfig,
         credentials_schema=JiraCredentials,
         capabilities=frozenset({Capability.PROJECTS, Capability.ISSUES}),
+        # Projects come whole every pass; issues by JQL `updated >=`.
+        listed_whole=frozenset({Capability.PROJECTS}),
     )
 
     # ── the contract ─────────────────────────────────────────────────────────

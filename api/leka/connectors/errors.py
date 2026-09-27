@@ -132,6 +132,10 @@ _TOKEN_SHAPES = re.compile(
     # A private key in PEM, however its newlines were escaped by the JSON it
     # was echoed in — to its end, or to the end of the text when cut short.
     r"|(-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$))"
+    # Linear's personal API keys and OAuth tokens.
+    r"|(lin_(?:api|oauth)_[A-Za-z0-9]{16,})"
+    # Notion's integration secrets, the current prefix and the retired one.
+    r"|((?:ntn|secret)_[A-Za-z0-9]{32,})"
 )
 REDACTED = "[redacted]"
 MAX_DETAIL = 300
