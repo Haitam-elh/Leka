@@ -1,0 +1,424 @@
+"""Code hosts: GitHub, GitLab, Bitbucket — six kinds of record, one shape.
+
+A pull request is a pull request whichever host it is on: the same title,
+body, state, author, branches, labels. What each host calls them stays in
+`extractor` and in the provenance; what they mean is the same field.
+
+The payloads are the ones the connectors store (leka/connectors/<kind>/):
+GitHub's REST v3, GitLab's v4, Bitbucket's 2.0.
+"""
+
+from __future__ import annotations
+
+from leka.connectors import Capability, SourceKind
+from leka.ingestion.extraction.contract import Extracted
+from leka.ingestion.extraction.engine import Payload, strategy
+from leka.ingestion.extraction.fields import (
+    content,
+    dig,
+    first_line,
+    flag,
+    lower,
+    number,
+    people,
+    ref,
+    required,
+    string,
+    strings,
+    when,
+)
+
+C = Capability
+GITHUB, GITLAB, BITBUCKET = SourceKind.GITHUB, SourceKind.GITLAB, SourceKind.BITBUCKET
+
+# ── GitHub ───────────────────────────────────────────────────────────────────
+
+
+@strategy("github.repositories", 1, (GITHUB, C.REPOSITORIES))
+def github_repository(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "full_name"),
+        url=string(p, "html_url"),
+        state="archived" if flag(p, "archived") else "active",
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "pushed_at") or when(p, "updated_at"),
+        content=content("description", dig(p, "description")),
+        references=ref("owner", "account", external_id=dig(p, "owner", "login")),
+        metadata={
+            "visibility": lower(p, "visibility") or ("private" if flag(p, "private") else "public"),
+            "default_branch": string(p, "default_branch"),
+            "fork": flag(p, "fork"),
+        },
+        signals={
+            "language": string(p, "language"),
+            "topics": strings(p, "topics"),
+            "size_kb": number(p, "size"),
+        },
+    )
+
+
+@strategy("github.commits", 1, (GITHUB, C.COMMITS))
+def github_commit(p: Payload) -> Extracted:
+    message = string(p, "commit", "message")
+    return Extracted(
+        title=first_line(message) or required(p, "sha"),
+        url=string(p, "html_url"),
+        created_at=when(p, "commit", "author", "date"),
+        updated_at=when(p, "commit", "committer", "date"),
+        content=content("message", message),
+        references=[
+            *ref(
+                "author",
+                "person",
+                external_id=dig(p, "author", "login"),
+                name=dig(p, "commit", "author", "name"),
+                email=dig(p, "commit", "author", "email"),
+            ),
+            *ref(
+                "committer",
+                "person",
+                external_id=dig(p, "committer", "login"),
+                name=dig(p, "commit", "committer", "name"),
+                email=dig(p, "commit", "committer", "email"),
+            ),
+        ],
+        metadata={"sha": required(p, "sha")},
+        signals={"merge": _parents(dig(p, "parents")) > 1},
+    )
+
+
+@strategy("github.pull_requests", 1, (GITHUB, C.PULL_REQUESTS))
+def github_pull_request(p: Payload) -> Extracted:
+    merged = string(p, "merged_at")
+    return Extracted(
+        title=required(p, "title"),
+        url=string(p, "html_url"),
+        state="merged" if merged else lower(p, "state"),
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "updated_at"),
+        content=content("body", dig(p, "body"), "markdown"),
+        references=[
+            *ref("author", "person", external_id=dig(p, "user", "login")),
+            *people("assignee", dig(p, "assignees"), id_key="login"),
+            *people("reviewer", dig(p, "requested_reviewers"), id_key="login"),
+            *ref("source_branch", "branch", name=dig(p, "head", "ref")),
+            *ref("target_branch", "branch", name=dig(p, "base", "ref")),
+        ],
+        metadata={
+            "number": number(p, "number"),
+            "draft": flag(p, "draft"),
+            "labels": strings(p, "labels", key="name"),
+            "merged_at": merged,
+            "closed_at": string(p, "closed_at"),
+        },
+    )
+
+
+@strategy("github.issues", 1, (GITHUB, C.ISSUES))
+def github_issue(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "title"),
+        url=string(p, "html_url"),
+        state=lower(p, "state"),
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "updated_at"),
+        content=content("body", dig(p, "body"), "markdown"),
+        references=[
+            *ref("author", "person", external_id=dig(p, "user", "login")),
+            *people("assignee", dig(p, "assignees"), id_key="login"),
+        ],
+        metadata={
+            "number": number(p, "number"),
+            "labels": strings(p, "labels", key="name"),
+            "closed_at": string(p, "closed_at"),
+            "state_reason": lower(p, "state_reason"),
+        },
+    )
+
+
+@strategy("github.releases", 1, (GITHUB, C.RELEASES))
+def github_release(p: Payload) -> Extracted:
+    tag = required(p, "tag_name")
+    return Extracted(
+        title=string(p, "name") or tag,
+        url=string(p, "html_url"),
+        state="draft" if flag(p, "draft") else "published",
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "published_at") or when(p, "created_at"),
+        content=content("notes", dig(p, "body"), "markdown"),
+        references=ref("author", "person", external_id=dig(p, "author", "login")),
+        metadata={"tag": tag, "prerelease": flag(p, "prerelease")},
+    )
+
+
+@strategy("github.branches", 1, (GITHUB, C.BRANCHES))
+def github_branch(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "name"),
+        references=ref("head", "commit", external_id=dig(p, "commit", "sha")),
+        metadata={"protected": flag(p, "protected")},
+    )
+
+
+# ── GitLab ───────────────────────────────────────────────────────────────────
+
+
+@strategy("gitlab.repositories", 1, (GITLAB, C.REPOSITORIES))
+def gitlab_project(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "path_with_namespace"),
+        url=string(p, "web_url"),
+        state="archived" if flag(p, "archived") else "active",
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "last_activity_at"),
+        content=content("description", dig(p, "description"), "markdown"),
+        references=ref("owner", "account", external_id=dig(p, "namespace", "full_path")),
+        metadata={
+            "visibility": lower(p, "visibility"),
+            "default_branch": string(p, "default_branch"),
+            "fork": dig(p, "forked_from_project") is not None,
+        },
+        signals={"topics": strings(p, "topics") or strings(p, "tag_list")},
+    )
+
+
+@strategy("gitlab.commits", 1, (GITLAB, C.COMMITS))
+def gitlab_commit(p: Payload) -> Extracted:
+    message = string(p, "message")
+    return Extracted(
+        title=string(p, "title") or first_line(message) or required(p, "id"),
+        url=string(p, "web_url"),
+        created_at=when(p, "authored_date"),
+        updated_at=when(p, "committed_date"),
+        content=content("message", message),
+        references=[
+            *ref("author", "person", name=dig(p, "author_name"), email=dig(p, "author_email")),
+            *ref(
+                "committer",
+                "person",
+                name=dig(p, "committer_name"),
+                email=dig(p, "committer_email"),
+            ),
+        ],
+        metadata={"sha": required(p, "id")},
+        signals={"merge": _parents(dig(p, "parent_ids")) > 1},
+    )
+
+
+@strategy("gitlab.pull_requests", 1, (GITLAB, C.PULL_REQUESTS))
+def gitlab_merge_request(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "title"),
+        url=string(p, "web_url"),
+        state=lower(p, "state"),  # opened, closed, merged, locked
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "updated_at"),
+        content=content("body", dig(p, "description"), "markdown"),
+        references=[
+            *ref(
+                "author",
+                "person",
+                external_id=dig(p, "author", "username"),
+                name=dig(p, "author", "name"),
+            ),
+            *people("assignee", dig(p, "assignees"), id_key="username", name_key="name"),
+            *people("reviewer", dig(p, "reviewers"), id_key="username", name_key="name"),
+            *ref("source_branch", "branch", name=dig(p, "source_branch")),
+            *ref("target_branch", "branch", name=dig(p, "target_branch")),
+        ],
+        metadata={
+            "number": number(p, "iid"),
+            "draft": flag(p, "draft"),
+            "labels": strings(p, "labels"),
+            "merged_at": string(p, "merged_at"),
+            "closed_at": string(p, "closed_at"),
+        },
+    )
+
+
+@strategy("gitlab.issues", 1, (GITLAB, C.ISSUES))
+def gitlab_issue(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "title"),
+        url=string(p, "web_url"),
+        state=lower(p, "state"),  # opened, closed
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "updated_at"),
+        content=content("body", dig(p, "description"), "markdown"),
+        references=[
+            *ref(
+                "author",
+                "person",
+                external_id=dig(p, "author", "username"),
+                name=dig(p, "author", "name"),
+            ),
+            *people("assignee", dig(p, "assignees"), id_key="username", name_key="name"),
+        ],
+        metadata={
+            "number": number(p, "iid"),
+            "labels": strings(p, "labels"),
+            "closed_at": string(p, "closed_at"),
+            "type": lower(p, "issue_type"),
+        },
+    )
+
+
+@strategy("gitlab.releases", 1, (GITLAB, C.RELEASES))
+def gitlab_release(p: Payload) -> Extracted:
+    tag = required(p, "tag_name")
+    return Extracted(
+        title=string(p, "name") or tag,
+        url=string(p, "_links", "self"),
+        state="upcoming" if flag(p, "upcoming_release") else "published",
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "released_at") or when(p, "created_at"),
+        content=content("notes", dig(p, "description"), "markdown"),
+        references=ref(
+            "author",
+            "person",
+            external_id=dig(p, "author", "username"),
+            name=dig(p, "author", "name"),
+        ),
+        metadata={"tag": tag},
+    )
+
+
+@strategy("gitlab.branches", 1, (GITLAB, C.BRANCHES))
+def gitlab_branch(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "name"),
+        url=string(p, "web_url"),
+        references=ref("head", "commit", external_id=dig(p, "commit", "id")),
+        metadata={"protected": flag(p, "protected"), "default": flag(p, "default")},
+    )
+
+
+# ── Bitbucket ────────────────────────────────────────────────────────────────
+
+
+@strategy("bitbucket.repositories", 1, (BITBUCKET, C.REPOSITORIES))
+def bitbucket_repository(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "full_name"),
+        url=string(p, "links", "html", "href"),
+        state="active",
+        created_at=when(p, "created_on"),
+        updated_at=when(p, "updated_on"),
+        content=content("description", dig(p, "description")),
+        references=ref(
+            "owner",
+            "account",
+            external_id=dig(p, "owner", "uuid"),
+            name=dig(p, "owner", "display_name"),
+        ),
+        metadata={
+            "visibility": "private" if flag(p, "is_private") else "public",
+            "default_branch": string(p, "mainbranch", "name"),
+            "fork": dig(p, "parent") is not None,
+        },
+        signals={"language": string(p, "language"), "size_bytes": number(p, "size")},
+    )
+
+
+@strategy("bitbucket.commits", 1, (BITBUCKET, C.COMMITS))
+def bitbucket_commit(p: Payload) -> Extracted:
+    message = string(p, "message")
+    name, email = _raw_author(string(p, "author", "raw"))
+    return Extracted(
+        title=first_line(message) or required(p, "hash"),
+        url=string(p, "links", "html", "href"),
+        created_at=when(p, "date"),
+        updated_at=when(p, "date"),
+        content=content("message", message),
+        references=ref(
+            "author",
+            "person",
+            external_id=dig(p, "author", "user", "uuid"),
+            name=dig(p, "author", "user", "display_name") or name,
+            email=email,
+        ),
+        metadata={"sha": required(p, "hash")},
+        signals={"merge": _parents(dig(p, "parents")) > 1},
+    )
+
+
+@strategy("bitbucket.pull_requests", 1, (BITBUCKET, C.PULL_REQUESTS))
+def bitbucket_pull_request(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "title"),
+        url=string(p, "links", "html", "href"),
+        state=lower(p, "state"),  # open, merged, declined, superseded
+        created_at=when(p, "created_on"),
+        updated_at=when(p, "updated_on"),
+        content=content("body", dig(p, "description"), "markdown"),
+        references=[
+            *ref(
+                "author",
+                "person",
+                external_id=dig(p, "author", "uuid"),
+                name=dig(p, "author", "display_name"),
+            ),
+            *people("reviewer", dig(p, "reviewers"), id_key="uuid", name_key="display_name"),
+            *ref("source_branch", "branch", name=dig(p, "source", "branch", "name")),
+            *ref("target_branch", "branch", name=dig(p, "destination", "branch", "name")),
+        ],
+        metadata={"number": number(p, "id"), "draft": flag(p, "draft")},
+    )
+
+
+@strategy("bitbucket.issues", 1, (BITBUCKET, C.ISSUES))
+def bitbucket_issue(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "title"),
+        url=string(p, "links", "html", "href"),
+        state=lower(
+            p, "state"
+        ),  # new, open, resolved, on hold, invalid, duplicate, wontfix, closed
+        created_at=when(p, "created_on"),
+        updated_at=when(p, "updated_on"),
+        content=content("body", dig(p, "content", "raw"), "markdown"),
+        references=[
+            *ref(
+                "author",
+                "person",
+                external_id=dig(p, "reporter", "uuid"),
+                name=dig(p, "reporter", "display_name"),
+            ),
+            *ref(
+                "assignee",
+                "person",
+                external_id=dig(p, "assignee", "uuid"),
+                name=dig(p, "assignee", "display_name"),
+            ),
+        ],
+        metadata={
+            "number": number(p, "id"),
+            "type": lower(p, "kind"),
+            "priority": lower(p, "priority"),
+        },
+    )
+
+
+@strategy("bitbucket.branches", 1, (BITBUCKET, C.BRANCHES))
+def bitbucket_branch(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "name"),
+        url=string(p, "links", "html", "href"),
+        references=ref("head", "commit", external_id=dig(p, "target", "hash")),
+    )
+
+
+# ── shared ───────────────────────────────────────────────────────────────────
+
+
+def _parents(parents: object) -> int:
+    return len(parents) if isinstance(parents, list) else 0
+
+
+def _raw_author(raw: str | None) -> tuple[str | None, str | None]:
+    """Git's 'Name <email>', as Bitbucket gives it when no account matches."""
+    if not raw:
+        return None, None
+    name, _, rest = raw.partition("<")
+    email = rest.rstrip(">").strip() or None
+    return name.strip() or None, email

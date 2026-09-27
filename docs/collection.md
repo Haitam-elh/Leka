@@ -96,6 +96,8 @@ run** (`last_seen_run_id`), the batch holding its latest version
 
 ## 6. Reading it — for the extraction (LEKA-354)
 
+What extraction does with it: [extraction.md](extraction.md).
+
 1. Take a source's live payloads (`raw_payloads`, `deleted_at IS NULL`),
    in `fetched_at` order, from where the extraction last stopped.
 2. Read each object line by line; each line is a `RawRecord`.
