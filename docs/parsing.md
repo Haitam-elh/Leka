@@ -2,7 +2,7 @@
 
 What parsing reads, what it hands to normalisation, how sure it is, and how
 it fails. LEKA-355. What it reads is [extraction.md](extraction.md); what
-reads it next is normalisation (LEKA-356).
+reads it next is [normalisation](normalisation.md) (LEKA-356).
 
 ```
  ExtractedRecord (extracted_records.result)

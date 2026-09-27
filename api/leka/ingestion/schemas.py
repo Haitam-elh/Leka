@@ -21,33 +21,45 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class NormalisedEntity(BaseModel):
-    """A candidate entity, ready for the graph but not yet in it."""
+    """A candidate entity, ready for the graph but not yet in it (LEKA-356).
 
-    model_config = ConfigDict(frozen=True)
-
-    type: str
-    external_id: str
-    source_id: uuid.UUID
-    name: str
-    attributes: dict[str, object] = Field(default_factory=dict)
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
-    observed_at: datetime
-
-
-class NormalisedRelationship(BaseModel):
-    """A candidate edge, expressed in external ids.
-
-    Ingestion does not know internal ids: it has not written the entities
-    yet. Resolving these to rows is leka.knowledge's job.
+    `key` is its CANONICAL identifier — the same for the same thing whatever
+    source names it: `github.com/acme/api#41`, `acme.atlassian.net/PAY-42`,
+    `person:email:sara@acme.io`, an ARN. `external_id` is the vendor's own
+    id when the entity is the record itself, else the key. `aliases` are its
+    other canonical identifiers (a person's login beside their email): what
+    entity resolution (LEKA-357) matches on. Rules: docs/normalisation.md.
     """
 
     model_config = ConfigDict(frozen=True)
 
     type: str
-    from_external_id: str
-    to_external_id: str
+    key: str
+    external_id: str
+    source_id: uuid.UUID
+    name: str
+    attributes: dict[str, object] = Field(default_factory=dict)
+    aliases: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    observed_at: datetime
+
+
+class NormalisedRelationship(BaseModel):
+    """A candidate edge, between canonical keys.
+
+    Ingestion does not know internal ids: it has not written the entities
+    yet. Resolving keys to rows is leka.knowledge's job — and a key may name
+    something no source has shown yet (a ticket in another tool).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    type: str
+    from_key: str
+    to_key: str
     source_id: uuid.UUID
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    evidence: str | None = Field(default=None, description="The field it was read in.")
 
 
 # ── The sync, over the API (LEKA-352) ────────────────────────────────────────
