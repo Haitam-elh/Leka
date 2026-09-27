@@ -84,8 +84,19 @@ temporary credentials are never stored.
 | `networks` | VPCs | `ec2:DescribeVpcs` |
 | `load_balancers` | Application and network load balancers | `elasticloadbalancing:DescribeLoadBalancers` |
 
-The synchronisation of these — per region in scope — is the next part of
-LEKA-347.
+### How it is read
+
+Each capability in **every region of the scope** — S3's bucket list, being
+global, once — page by page, each resource known by its **ARN** (stable,
+unique across accounts and regions), with its region as container. boto3's
+dates are stored as text.
+
+**Every pass reads them whole.** AWS has no "changed since" for any of these
+inventories, so the connector declares them `listed_whole`: the index keeps
+a pass from writing what did not change, and marks gone what is no longer
+listed **at every pass** — an instance terminated disappears within the
+hour, not at the weekly full pass. A throttled listing stops with
+`RATE_LIMITED` and is retried a minute later; what was read stands.
 
 ### Diagnostics
 

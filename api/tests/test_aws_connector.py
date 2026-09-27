@@ -22,7 +22,8 @@ from leka.connectors.aws import connector as aws_module
 KEY_ID = "AKIAABCDEFGHIJKLMNOP"
 SECRET = "wJalrXUtnFEMIK7MDENGbPxRfiCYsecretthatmustneverleak"
 
-Answer = dict[str, Any] | BaseException
+# A dict, an error, or — for a paginated operation — a list of pages.
+Answer = dict[str, Any] | BaseException | list[Any]
 
 
 def denied(operation: str, code: str = "AccessDenied", status: int = 403) -> ClientError:
@@ -57,13 +58,31 @@ class FakeClient:
     ) -> None:
         self._answers, self._calls, self._region = answers, calls, region
 
+    def get_paginator(self, operation: str) -> Any:
+        """boto3's paginator: a list answer is its pages, a dict one page;
+        a page that is an exception is raised when that page is reached."""
+        calls, answers, region = self._calls, self._answers, self._region
+
+        class Paginator:
+            def paginate(self, **_: Any) -> Any:
+                calls.append((operation, region))
+                answer = answers[operation]
+                pages = answer if isinstance(answer, list) else [answer]
+                for page in pages:
+                    if isinstance(page, BaseException):
+                        raise page
+                    yield page
+
+        return Paginator()
+
     def __getattr__(self, method: str) -> Callable[..., dict[str, Any]]:
         def call(**_: Any) -> dict[str, Any]:
             self._calls.append((method, self._region))
             answer = self._answers[method]
             if isinstance(answer, BaseException):
                 raise answer
-            return answer
+            # Called directly, a paginated answer is its first page.
+            return answer[0] if isinstance(answer, list) else answer
 
         return call
 

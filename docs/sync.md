@@ -39,7 +39,8 @@ in full at once; the first pass after the slot is full. A source never read
 in full, or whose cursor was forgotten, is read in full at once. So is every
 activation — changing settings or credentials sends a source back to draft,
 so a widened scope always comes back through one — and an admin can ask for
-one (`full=true`). A full pass forgets the cursor **as it starts**: one that
+one (`full=true`). A capability its connector lists whole (`listed_whole`,
+the cloud inventories) is read in full at **every** pass. A full pass forgets the cursor **as it starts**: one that
 fails half-way leaves the next one full.
 
 **A pass may take hours** (a large Notion workspace reads at ~3 requests a
