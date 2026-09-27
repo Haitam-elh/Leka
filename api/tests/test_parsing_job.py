@@ -63,6 +63,7 @@ def pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
         return object()
 
     monkeypatch.setattr(extraction_job, "enqueue_job", capture)
+    monkeypatch.setattr(parsing_job, "enqueue_job", capture)
 
 
 async def _extracted(source: Source, **records: int) -> None:

@@ -182,3 +182,29 @@ class SourceParsing(BaseModel):
     average_quality: float | None = Field(description="0 to 1; null before anything is parsed.")
     last_parsed_at: datetime | None
     failures: list[ParseFailureRead] = Field(description="The latest, newest first.")
+
+
+# ── The normalisation, over the API (LEKA-356) ───────────────────────────────
+
+
+class NormalisationFailureRead(BaseModel):
+    capability: str
+    external_id: str
+    code: str = Field(description="unsupported, invalid or malformed.")
+    message: str = Field(description="Names what is missing; never quotes the record.")
+    normalised_at: datetime
+
+
+class SourceNormalisation(BaseModel):
+    """Where a source's normalisation stands."""
+
+    normalised: int
+    failed: int
+    unsupported: int
+    invalid: int
+    malformed: int
+    entities: dict[str, int] = Field(description="The records' own entities, by type.")
+    relationships: dict[str, int] = Field(description="Their relationships, by type.")
+    with_diagnostics: int = Field(description="Normalised, with something kept as the vendor said.")
+    last_normalised_at: datetime | None
+    failures: list[NormalisationFailureRead] = Field(description="The latest, newest first.")

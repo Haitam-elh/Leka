@@ -872,6 +872,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingestion/sources/{source_id}/normalisation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Source Normalisation
+         * @description The candidates normalisation made of the source's records: how many,
+         *     their entities and relationships by type, how many kept something as
+         *     the vendor wrote it, and the latest it could not make.
+         */
+        get: operations["source_normalisation_api_v1_ingestion_sources__source_id__normalisation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1357,6 +1379,28 @@ export interface components {
         MemberRoleUpdate: {
             role: components["schemas"]["Role"];
         };
+        /** NormalisationFailureRead */
+        NormalisationFailureRead: {
+            /** Capability */
+            capability: string;
+            /** External Id */
+            external_id: string;
+            /**
+             * Code
+             * @description unsupported, invalid or malformed.
+             */
+            code: string;
+            /**
+             * Message
+             * @description Names what is missing; never quotes the record.
+             */
+            message: string;
+            /**
+             * Normalised At
+             * Format: date-time
+             */
+            normalised_at: string;
+        };
         /** PageEnvelope[JobRunRead] */
         PageEnvelope_JobRunRead_: {
             /**
@@ -1708,6 +1752,48 @@ export interface components {
          * @enum {string}
          */
         SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "aws" | "azure" | "gcp" | "datadog" | "slack";
+        /**
+         * SourceNormalisation
+         * @description Where a source's normalisation stands.
+         */
+        SourceNormalisation: {
+            /** Normalised */
+            normalised: number;
+            /** Failed */
+            failed: number;
+            /** Unsupported */
+            unsupported: number;
+            /** Invalid */
+            invalid: number;
+            /** Malformed */
+            malformed: number;
+            /**
+             * Entities
+             * @description The records' own entities, by type.
+             */
+            entities: {
+                [key: string]: number;
+            };
+            /**
+             * Relationships
+             * @description Their relationships, by type.
+             */
+            relationships: {
+                [key: string]: number;
+            };
+            /**
+             * With Diagnostics
+             * @description Normalised, with something kept as the vendor said.
+             */
+            with_diagnostics: number;
+            /** Last Normalised At */
+            last_normalised_at: string | null;
+            /**
+             * Failures
+             * @description The latest, newest first.
+             */
+            failures: components["schemas"]["NormalisationFailureRead"][];
+        };
         /**
          * SourceParsing
          * @description Where a source's parsing stands.
@@ -6476,6 +6562,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SourceParsing"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    source_normalisation_api_v1_ingestion_sources__source_id__normalisation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceNormalisation"];
                 };
             };
             /** @description The request could not be understood. */

@@ -8,7 +8,8 @@ source. It:
 1. forgets the parse of extractions that failed since;
 2. reads, in id order, the extractions that need parsing — never parsed, or
    parsed from another checksum, extractor version or parser version;
-3. parses each from its stored result and saves the rows chunk by chunk.
+3. parses each from its stored result and saves the rows chunk by chunk;
+4. queues the normalisation (LEKA-356) when there is something to normalise.
 
 Everything it reads is in the database: no object store, nothing to pass
 over. Incremental and idempotent like the extraction: a second run reads
@@ -23,12 +24,16 @@ from datetime import UTC, datetime
 
 import structlog
 
+from leka.background import enqueue_job
 from leka.connectors import Source
 from leka.db import session_factory, workspace_scope
 from leka.ingestion.models import ExtractedRecordRow, ParseStatus
+from leka.ingestion.normalisation.engine import NORMALISER_VERSION
+from leka.ingestion.normalisation.job import NORMALISE_JOB
+from leka.ingestion.normalisation.job import concurrency_key as normalise_key
 from leka.ingestion.parsing.contract import ParsedRecord
 from leka.ingestion.parsing.engine import PARSER_VERSION, parse_stored
-from leka.ingestion.repository import ParsingRepository
+from leka.ingestion.repository import NormalisationRepository, ParsingRepository
 
 logger = structlog.get_logger(__name__)
 
@@ -63,6 +68,17 @@ async def parse_source(workspace_id: uuid.UUID, source_id: uuid.UUID) -> dict[st
                 after = extractions[-1].id
                 await repository.save([_row(e, result) for e in extractions])
                 await session.commit()
+
+            # What was parsed is normalised next (leka/ingestion/normalisation/job.py).
+            normalisation = NormalisationRepository(session, workspace_id)
+            if await normalisation.has_stale(source_id, NORMALISER_VERSION):
+                await enqueue_job(
+                    NORMALISE_JOB,
+                    str(workspace_id),
+                    str(source_id),
+                    for_workspace_id=workspace_id,
+                    concurrency_key=normalise_key(source_id),
+                )
 
     logger.info("source_parsed", source_id=str(source_id), **result)
     return result
