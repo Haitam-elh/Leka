@@ -15,7 +15,15 @@ import { apiFetch } from "@/lib/api";
 import type { components } from "@/lib/api-types";
 
 export type CurrentWorkspace = components["schemas"]["CurrentWorkspace"];
+export type WorkspaceRead = components["schemas"]["WorkspaceRead"];
 
 export const workspace = {
   current: () => apiFetch<CurrentWorkspace>("/workspaces/current", { redirectOn401: false }),
+  /** A workspace of one's own, its creator as owner: what someone who
+   * belongs to none does first. */
+  create: (name: string) =>
+    apiFetch<WorkspaceRead>("/workspaces", { method: "POST", body: JSON.stringify({ name }) }),
+  /** Make it the workspace this browser works in. */
+  enter: (workspaceId: string) =>
+    apiFetch<unknown>(`/workspaces/${workspaceId}/switch`, { method: "POST" }),
 };
