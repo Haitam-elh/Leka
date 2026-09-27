@@ -14,6 +14,7 @@ import { AddSourceDialog } from "@/components/sources/add-source-dialog";
 import { SourceFacts, SourceHistory } from "@/components/sources/source-panel";
 import { SourceLogo } from "@/components/sources/source-logo";
 import { SourceRunsSection } from "@/components/sources/source-runs";
+import { SourceSettingsSection } from "@/components/sources/source-settings";
 import { SourceSyncSection } from "@/components/sources/source-sync";
 import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
@@ -84,6 +85,7 @@ export function SourcePage({ sourceId }: { sourceId: string }) {
           <SourceSyncSection source={source} />
           <SourceRunsSection source={source} />
           <Configuration source={source} />
+          <SourceSettingsSection source={source} />
         </div>
         <section className="self-start rounded-xl border border-shell-line bg-white p-4">
           <h2 className="mb-3 text-lg font-semibold text-brand-navy">{t.sources.page.history}</h2>

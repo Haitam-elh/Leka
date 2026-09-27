@@ -41,6 +41,16 @@ vi.mock("@/lib/sources", async (original) => ({
   sources: api,
 }));
 vi.mock("@/lib/notify", () => ({ notify }));
+// The settings section (LEKA-351) has its own tests: here, a source never set.
+vi.mock("@/lib/source-settings", async (original) => ({
+  ...(await original<typeof import("@/lib/source-settings")>()),
+  sourceSettings: {
+    get: vi.fn().mockResolvedValue({ version: 0, settings: {} }),
+    versions: vi.fn().mockResolvedValue({ data: [] }),
+    check: vi.fn(),
+    save: vi.fn(),
+  },
+}));
 vi.mock("@/components/shell/shell-provider", () => ({
   useCurrentUser: () => ({ id: "me" }),
   usePermissions: () => permissions,
