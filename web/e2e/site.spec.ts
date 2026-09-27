@@ -26,7 +26,7 @@ test("the home page is the site, and its sign-in is the application's", async ({
   await signIn.click();
 
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Se connecter à LEKA" })).toBeVisible();
 });
 
 test("the site's own addresses lead where they should", async ({ page }) => {
@@ -60,5 +60,5 @@ test("the language chosen on the site carries into the application", async ({ pa
 
   await page.goto("/login");
 
-  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to LEKA" })).toBeVisible();
 });

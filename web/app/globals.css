@@ -41,6 +41,14 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* leka-core.com's own palette, for the screens before signing in */
+  --color-site-ink: var(--site-ink);
+  --color-site-slate: var(--site-slate);
+  --color-site-mist: var(--site-mist);
+  --color-site-rule: var(--site-rule);
+  --color-site-rule-strong: var(--site-rule-strong);
+  --color-site-violet: var(--site-violet);
+  --color-site-violet-wash: var(--site-violet-wash);
   /* LEKA shell — see docs/frontend/app-shell.md */
   --color-brand-navy: var(--brand-navy);
   --color-brand-violet: var(--brand-violet);
@@ -150,6 +158,21 @@
   --shell-badge: #fcdcdd;         /* the counter beside "To approve" */
   /* Same story: the mockup's #db4e55 on that pink reads 3.1:1. */
   --shell-badge-foreground: #c2272f;
+
+  /* ── leka-core.com ─────────────────────────────────────────────────────
+   *
+   * Karim's site, served by this app since the two became one address:
+   * the values of its own stylesheet (public/style.css, :root), so that the
+   * sign-in, registration and recovery screens — reached from its
+   * "Se connecter" — look like the site that sent the person there.
+   */
+  --site-ink: #0a0f2b;            /* text, the dark button */
+  --site-slate: #5b6485;          /* secondary text, the header's links */
+  --site-mist: #f5f6fb;           /* the page behind the card */
+  --site-rule: #e4e7f2;           /* the card's border, the footer's line */
+  --site-rule-strong: #d3d8ea;    /* a field's border */
+  --site-violet: #4b33ff;         /* links, the eyebrow, a focused field */
+  --site-violet-wash: #f1efff;    /* a focused field's halo */
 
   /* ── System states (LEKA-343) ────────────────────────────────────────
    *

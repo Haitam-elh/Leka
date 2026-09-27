@@ -87,6 +87,7 @@ export default function RegisterPage() {
 
   return (
     <AuthCard
+      wide
       title={t.auth.registerTitle}
       description={t.auth.registerDescription}
       footer={
