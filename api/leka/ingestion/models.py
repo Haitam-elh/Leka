@@ -13,8 +13,9 @@ each pass did, the third (LEKA-353); `source_records`, what was seen of
 each vendor object, the fourth; `extracted_records`, what extraction made
 of each of them, the fifth (LEKA-354); `parsed_records`, what parsing read
 in each extraction, the sixth (LEKA-355); `normalised_records`, the
-candidates normalisation made of each, the seventh (LEKA-356). It is the
-row half of the split
+candidates normalisation made of each, the seventh (LEKA-356);
+`processing_runs`, each run of those three stages, the eighth (LEKA-360).
+It is the row half of the split
 described in docs/adr/010-object-storage.md: the bytes live in the object
 store, and this is everything we know about them — where they came from, how
 big they are, what they hash to, and when they stop being ours to keep.
@@ -613,3 +614,87 @@ class NormalisedRecordRow(Base, WorkspaceScopedMixin):
     failure_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     normalised_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ProcessingStage(enum.StrEnum):
+    """The stages after collection, in their order (leka/ingestion/pipeline.py)."""
+
+    EXTRACTION = "extraction"
+    PARSING = "parsing"
+    NORMALISATION = "normalisation"
+
+
+class ProcessingRunStatus(enum.StrEnum):
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    # Left `running` by a worker that died: found by the stage's next run.
+    ABANDONED = "abandoned"
+
+
+class ProcessingRun(Base, WorkspaceScopedMixin):
+    """One run of one processing stage over one source (LEKA-360).
+
+    What each run did, and with which versions: the history of a source's
+    processing, and what its processed rows are traced to — one run of a
+    stage at a time per source (its concurrency key), so a row's
+    `extracted_at`, `parsed_at` or `normalised_at` falls inside exactly one
+    run of its stage.
+    """
+
+    __tablename__ = "processing_runs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_id"],
+            ["sources.workspace_id", "sources.id"],
+            name="fk_processing_runs_workspace_source",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "stage IN (" + ", ".join(f"'{s}'" for s in _statuses(ProcessingStage)) + ")",
+            name="stage",
+        ),
+        CheckConstraint(
+            "status IN (" + ", ".join(f"'{s}'" for s in _statuses(ProcessingRunStatus)) + ")",
+            name="status",
+        ),
+        CheckConstraint(
+            "finished_at IS NULL OR finished_at >= started_at", name="finished_after_started"
+        ),
+        # A source's history per stage, newest first; and the run under way.
+        Index("ix_processing_runs_source_stage_started", "source_id", "stage", "started_at"),
+    )
+
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    stage: Mapped[ProcessingStage] = mapped_column(
+        Enum(
+            ProcessingStage,
+            name="stage",
+            native_enum=False,
+            length=20,
+            values_callable=_statuses,
+            create_constraint=False,
+        ),
+        nullable=False,
+    )
+    status: Mapped[ProcessingRunStatus] = mapped_column(
+        Enum(
+            ProcessingRunStatus,
+            name="status",
+            native_enum=False,
+            length=20,
+            values_callable=_statuses,
+            create_constraint=False,
+        ),
+        nullable=False,
+        server_default=ProcessingRunStatus.RUNNING.value,
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # What the run did: extracted, parsed, failed, forgotten, passed_over, …
+    counts: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # The versions it ran with: the stage's, or each strategy's for extraction.
+    versions: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # Why it stopped: the exception's type — its details are in the logs,
+    # a database error's may quote a record.
+    error: Mapped[str | None] = mapped_column(String(200), nullable=True)

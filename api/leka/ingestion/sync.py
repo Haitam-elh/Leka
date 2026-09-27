@@ -75,9 +75,6 @@ from leka.connectors import (
 )
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion.checksum import checksum
-from leka.ingestion.extraction.job import EXTRACT_JOB
-from leka.ingestion.extraction.job import concurrency_key as extract_key
-from leka.ingestion.extraction.job import versions as extraction_versions
 from leka.ingestion.models import (
     SourceSync,
     SyncRun,
@@ -85,18 +82,10 @@ from leka.ingestion.models import (
     SyncRunStatus,
     SyncTrigger,
 )
-from leka.ingestion.normalisation.engine import NORMALISER_VERSION
-from leka.ingestion.normalisation.job import NORMALISE_JOB
-from leka.ingestion.normalisation.job import concurrency_key as normalise_key
-from leka.ingestion.parsing.engine import PARSER_VERSION
-from leka.ingestion.parsing.job import PARSE_JOB
-from leka.ingestion.parsing.job import concurrency_key as parse_key
+from leka.ingestion.pipeline import advance
 from leka.ingestion.purge import PURGE_JOB
 from leka.ingestion.purge import concurrency_key as purge_key
 from leka.ingestion.repository import (
-    ExtractionRepository,
-    NormalisationRepository,
-    ParsingRepository,
     RawPayloadRepository,
     Seen,
     SourceRecordRepository,
@@ -355,41 +344,10 @@ class _Pass:
                 for_workspace_id=self._workspace_id,
                 concurrency_key=purge_key(source.id),
             )
-        # Records to extract — stored now, or passed over by an extraction
-        # that ran beside a purge: the extraction follows (extraction/job.py).
-        # Each stage queues the next when it ends (extraction → parsing →
-        # normalisation); a later stage alone has something to do when only
-        # its own version changed.
-        if await ExtractionRepository(self._session, self._workspace_id).has_stale(
-            source.id, extraction_versions(source.kind)
-        ):
-            await enqueue_job(
-                EXTRACT_JOB,
-                str(self._workspace_id),
-                str(source.id),
-                for_workspace_id=self._workspace_id,
-                concurrency_key=extract_key(source.id),
-            )
-        elif await ParsingRepository(self._session, self._workspace_id).has_stale(
-            source.id, PARSER_VERSION
-        ):
-            await enqueue_job(
-                PARSE_JOB,
-                str(self._workspace_id),
-                str(source.id),
-                for_workspace_id=self._workspace_id,
-                concurrency_key=parse_key(source.id),
-            )
-        elif await NormalisationRepository(self._session, self._workspace_id).has_stale(
-            source.id, NORMALISER_VERSION
-        ):
-            await enqueue_job(
-                NORMALISE_JOB,
-                str(self._workspace_id),
-                str(source.id),
-                for_workspace_id=self._workspace_id,
-                concurrency_key=normalise_key(source.id),
-            )
+        # What was stored is processed next: the first stage with work
+        # (leka/ingestion/pipeline.py) — the extraction, or a later stage
+        # alone when only its version changed.
+        await advance(self._session, self._workspace_id, source, after=None)
         report.deleted = self.deleted
         report.status = "failed" if failure else "succeeded"
         report.error = failure.code.value if failure else None

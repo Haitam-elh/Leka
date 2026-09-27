@@ -40,6 +40,9 @@ from leka.ingestion.models import (
     NormalisedRecordRow,
     ParsedRecordRow,
     ParseStatus,
+    ProcessingRun,
+    ProcessingRunStatus,
+    ProcessingStage,
     RawPayload,
     SourceRecord,
     SourceSync,
@@ -929,6 +932,70 @@ class NormalisationRepository(WorkspaceScopedRepository):
             .limit(limit)
         )
         return [(row, str(external_id)) for row, external_id in rows.all()]
+
+
+class ProcessingRunRepository(WorkspaceScopedRepository):
+    """Each run of a processing stage over a source (LEKA-360)."""
+
+    model = ProcessingRun
+
+    def start(
+        self,
+        source_id: uuid.UUID,
+        stage: ProcessingStage,
+        *,
+        versions: dict[str, object],
+        at: datetime,
+    ) -> ProcessingRun:
+        run = ProcessingRun(
+            workspace_id=self.workspace_id,
+            source_id=source_id,
+            stage=stage,
+            status=ProcessingRunStatus.RUNNING,
+            started_at=at,
+            versions=versions,
+            counts={},
+        )
+        self._session.add(run)
+        return run
+
+    async def abandon_running(
+        self, source_id: uuid.UUID, stage: ProcessingStage, *, at: datetime
+    ) -> int:
+        """Runs of this stage still `running` when another starts: one run of
+        a stage at a time per source, so their worker died."""
+        result = await self._session.execute(
+            update(ProcessingRun)
+            .where(
+                ProcessingRun.workspace_id == self.workspace_id,
+                ProcessingRun.source_id == source_id,
+                ProcessingRun.stage == stage,
+                ProcessingRun.status == ProcessingRunStatus.RUNNING,
+            )
+            .values(status=ProcessingRunStatus.ABANDONED, finished_at=at, updated_at=func.now())
+        )
+        return _affected_rows(result)
+
+    async def latest(self, source_id: uuid.UUID) -> dict[ProcessingStage, ProcessingRun]:
+        """The last run of each stage of the source."""
+        newest = (
+            select(ProcessingRun)
+            .where(
+                ProcessingRun.workspace_id == self.workspace_id,
+                ProcessingRun.source_id == source_id,
+            )
+            .distinct(ProcessingRun.stage)
+            .order_by(ProcessingRun.stage, ProcessingRun.started_at.desc())
+        )
+        rows = (await self._session.execute(newest)).scalars().all()
+        return {row.stage: row for row in rows}
+
+    def history(self, source_id: uuid.UUID) -> Select[tuple[ProcessingRun]]:
+        """The source's runs, every stage, newest first: for serve_page."""
+        return select(ProcessingRun).where(
+            ProcessingRun.workspace_id == self.workspace_id,
+            ProcessingRun.source_id == source_id,
+        )
 
 
 class SyncScheduleRepository:

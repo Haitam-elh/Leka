@@ -27,7 +27,6 @@ from leka.ingestion import (
     NormalisedRelationship,
     ParsedRecordRow,
 )
-from leka.ingestion import sync as sync_module
 from leka.ingestion.extraction import ExtractedRecord
 from leka.ingestion.extraction.job import extract_source
 from leka.ingestion.normalisation import (
@@ -37,13 +36,13 @@ from leka.ingestion.normalisation import (
     Normalised,
     NormalisedRecord,
 )
-from leka.ingestion.normalisation import job as normalisation_job
+from leka.ingestion.normalisation import engine as normalisation_engine
 from leka.ingestion.normalisation.job import NORMALISE_JOB, normalise_source
 from leka.ingestion.parsing import ParsedRecord
-from leka.ingestion.parsing import job as parsing_job
-from leka.ingestion.parsing.job import parse_source
+from leka.ingestion.parsing import engine as parsing_engine
+from leka.ingestion.parsing.job import PARSE_JOB, parse_source
 from tests import test_sync as sync_tests
-from tests.test_parsing_job import _strategy, pipeline, queued  # noqa: F401 — fixture
+from tests.test_parsing_job import pipeline, queued  # noqa: F401 — fixture
 from tests.test_sync import _index, _sync, fake, source  # noqa: F401 — fixtures
 
 pytestmark = pytest.mark.integration
@@ -88,7 +87,7 @@ def _rule(extracted: object, parsed: object) -> Normalised:
 
 @pytest.fixture
 def rules(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(normalisation_job, "normalise_stored", _rule)
+    monkeypatch.setattr(normalisation_engine, "normalise_stored", _rule)
 
 
 async def _parsed(source: Source, commits: int) -> None:
@@ -117,7 +116,7 @@ async def _rows(source: Source) -> dict[str, NormalisedRecordRow]:
 async def test_the_parsing_queues_the_normalisation(source: Source) -> None:
     await _parsed(source, 1)
 
-    assert NORMALISE_JOB in queued
+    assert NORMALISE_JOB in queued()
 
 
 async def test_a_vendor_no_rule_knows_is_unsupported_record_by_record(source: Source) -> None:
@@ -189,7 +188,7 @@ async def test_new_rules_normalise_everything_again(
 ) -> None:
     await _parsed(source, 2)
     await normalise_source(source.workspace_id, source.id)
-    monkeypatch.setattr(normalisation_job, "NORMALISER_VERSION", 2)
+    monkeypatch.setattr(normalisation_engine, "NORMALISER_VERSION", 2)
 
     assert (await normalise_source(source.workspace_id, source.id))["normalised"] == 2
     assert {row.normaliser_version for row in (await _rows(source)).values()} == {2}
@@ -202,13 +201,13 @@ async def test_only_normalisation_to_do_is_queued_by_the_pass(
     await _parsed(source, 1)
     await normalise_source(source.workspace_id, source.id)
     sync_tests.queued_purges.clear()
-    monkeypatch.setattr(sync_module, "NORMALISER_VERSION", 2)
+    monkeypatch.setattr(normalisation_engine, "NORMALISER_VERSION", 2)
 
     await _sync(source)
 
     jobs = [job for job, _ in sync_tests.queued_purges]
     assert NORMALISE_JOB in jobs
-    assert parsing_job.PARSE_JOB not in jobs
+    assert PARSE_JOB not in jobs
 
 
 @pytest.mark.usefixtures("rules")
@@ -229,7 +228,7 @@ async def test_a_parse_that_now_fails_loses_its_candidates(
                 {"s": source.id},
             )
             await session.commit()
-    monkeypatch.setattr(parsing_job, "PARSER_VERSION", 2)
+    monkeypatch.setattr(parsing_engine, "PARSER_VERSION", 2)
     await parse_source(source.workspace_id, source.id)  # commits-0 now fails to parse
 
     result = await normalise_source(source.workspace_id, source.id)
