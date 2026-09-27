@@ -10,6 +10,7 @@ fails in each of the three ways a vendor can.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import uuid
 from collections.abc import AsyncIterator, Iterator
@@ -776,3 +777,27 @@ async def test_what_a_connector_lists_whole_is_swept_at_every_pass(
     assert report.deleted == {"issues": 1}
     assert (await _index(source, "issues"))["issues-2"].deleted_at is not None
     assert (await _index(source))["commits-2"].deleted_at is None  # commits wait for the full pass
+
+
+@pytest.mark.parametrize(
+    "code",
+    [DiagnosticCode.PERMISSION_DENIED, DiagnosticCode.RATE_LIMITED, DiagnosticCode.PROVIDER_ERROR],
+    ids=["a-region-refuses", "throttled-halfway", "provider-down"],
+)
+async def test_what_is_listed_whole_is_not_swept_when_the_listing_is_cut_short(
+    source: Source, monkeypatch: pytest.MonkeyPatch, code: DiagnosticCode
+) -> None:
+    """A region that refuses, a 429 halfway: what was not reached is not
+    gone. Never a sweep on a partial read — listed whole or not."""
+    whole = FakeConnector.manifest.model_copy(
+        update={"listed_whole": frozenset({Capability.ISSUES})}
+    )
+    monkeypatch.setattr(FakeConnector, "manifest", whole)
+    SCRIPT.records = {Capability.ISSUES: 3}
+    await _sync(source)
+    SCRIPT.failure = (Capability.ISSUES, 1, code, 3600)
+
+    with contextlib.suppress(RetryableSyncError):
+        await _sync(source)
+
+    assert all(row.deleted_at is None for row in (await _index(source, "issues")).values())
