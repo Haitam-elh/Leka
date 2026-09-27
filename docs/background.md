@@ -109,6 +109,7 @@ recorded as a run, and is not started again while the previous one is still acti
 | `purge-sessions` | `leka.identity.tasks.run_purge` | hourly, :30 | low |
 | `reconcile-orphans` | `leka.ingestion.tasks.run_reconcile` | Sundays 03:00 | low |
 | `prune-events` | `leka.background.tasks.run_prune_events` | daily 03:30 | low |
+| `processing-sweep` | `leka.ingestion.lifecycle.run_processing_sweep` — processed data, see [processing.md](processing.md) | daily 03:45 | low |
 | `source-health` | `leka.connectors.health.run_health_checks` | :05 :20 :35 :50 | low |
 | `source-sync` | `leka.ingestion.sync.run_enqueue_due_syncs` — queues the passes, see [sync.md](sync.md) | :10 :25 :40 :55 | low |
 

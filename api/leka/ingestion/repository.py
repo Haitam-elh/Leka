@@ -997,6 +997,46 @@ class ProcessingRunRepository(WorkspaceScopedRepository):
             ProcessingRun.source_id == source_id,
         )
 
+    async def job_states(self, keys: dict[str, ProcessingStage]) -> dict[ProcessingStage, str]:
+        """Which stages have a job under way — `running` on a worker, or
+        `queued` — read from the job runs by their concurrency keys, like
+        a pass's (SourceSyncRepository.passes)."""
+        if not keys:
+            return {}
+        rows = await self._session.execute(
+            select(JobRun.concurrency_key, JobRun.status).where(
+                JobRun.for_workspace_id == self.workspace_id,
+                JobRun.concurrency_key.in_(list(keys)),
+                JobRun.status.in_(ACTIVE_JOB_STATUSES),
+            )
+        )
+        return {
+            keys[str(key)]: "running" if status is JobStatus.RUNNING else "queued"
+            for key, status in rows.all()
+        }
+
+    async def delete_rows(self, source_id: uuid.UUID, stage: ProcessingStage) -> int:
+        """Every row the stage made for the source — and, by cascade, what
+        the later stages made from them. For a reprocess, on request."""
+        statement: Any
+        if stage is ProcessingStage.EXTRACTION:
+            statement = delete(ExtractedRecordRow).where(
+                ExtractedRecordRow.workspace_id == self.workspace_id,
+                ExtractedRecordRow.source_id == source_id,
+            )
+        elif stage is ProcessingStage.PARSING:
+            statement = delete(ParsedRecordRow).where(
+                ParsedRecordRow.workspace_id == self.workspace_id,
+                ParsedRecordRow.source_id == source_id,
+            )
+        else:
+            statement = delete(NormalisedRecordRow).where(
+                NormalisedRecordRow.workspace_id == self.workspace_id,
+                NormalisedRecordRow.source_id == source_id,
+            )
+        result = await self._session.execute(statement)
+        return _affected_rows(result)
+
 
 class SyncScheduleRepository:
     """Which sources are due a pass, across every workspace. For the scheduler.

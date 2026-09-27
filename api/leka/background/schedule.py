@@ -72,6 +72,11 @@ SCHEDULE: tuple[Scheduled, ...] = (
         kwargs={"dry_run": not settings.reconcile_deletes},
     ),
     Scheduled("prune-events", "leka.background.tasks.run_prune_events", cron="30 3 * * *"),
+    # Processed data (LEKA-360): runs a dead worker left, history past 90
+    # days, what deleted records gave to sources no longer extracted.
+    Scheduled(
+        "processing-sweep", "leka.ingestion.lifecycle.run_processing_sweep", cron="45 3 * * *"
+    ),
     # Every activated source, a light call each (LEKA-344). Off the hour's
     # busy minutes, like the rest.
     Scheduled(
