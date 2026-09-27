@@ -22,19 +22,21 @@ from leka.identity.email import (
     SmtpEmailSender,
     build_email_sender,
 )
-from leka.identity.models import EmailToken, Session, TokenPurpose, User
+from leka.identity.models import CompanySize, EmailToken, Session, TokenPurpose, User
 from leka.identity.repository import (
     EmailTokenRepository,
     SessionRepository,
     UserRepository,
 )
 from leka.identity.schemas import (
+    AccountProfile,
     AuthErrorCode,
     AuthErrorResponse,
     ChangePasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
     MeResponse,
+    ProfileUpdate,
     RecoveryAccepted,
     RegisterRequest,
     RegistrationAccepted,
@@ -61,12 +63,14 @@ from leka.identity.wiring import (
 )
 
 __all__ = [
+    "AccountProfile",
     "AccountUnverifiedError",
     "AuthErrorCode",
     "AuthErrorResponse",
     "AuthService",
     "AuthenticationError",
     "ChangePasswordRequest",
+    "CompanySize",
     "ConsoleEmailSender",
     "DatabaseSessionStore",
     "DeferredEmailSender",
@@ -79,6 +83,7 @@ __all__ = [
     "LoginResult",
     "MeResponse",
     "PasswordRejectedError",
+    "ProfileUpdate",
     "RecoveryAccepted",
     "RegisterRequest",
     "RegistrationAccepted",

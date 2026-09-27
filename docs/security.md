@@ -158,6 +158,19 @@ The question a session row answers is "was this roughly the same network",
 not "where exactly were you". User agents are kept to 400 characters, enough
 to recognise a device and not enough to fingerprint a person.
 
+An account holds what its owner typed when registering: first and last
+name and company, required; role and company size, if they chose to say.
+Nothing else is asked. They are kept on `users`, shown to that person and to
+whoever runs `python -m leka.identity.admin accounts` — to know who is asking
+for access before granting it — and never rewritten by a later registration
+with the same address, which anyone can type. Its owner changes it, signed
+in, from the account menu (`PATCH /auth/me`): the only way an account made
+before registration asked gets a name. The address is not changeable there —
+a new one would have to be proven first. Control and formatting
+characters are refused: a name travels into e-mails and into an operator's
+terminal, where an escape sequence would be a stranger typing on their
+screen.
+
 Deleting a workspace cascades to everything it owns. Deleting a user cascades
 to their sessions and tokens. Both are single DELETEs, which is what makes a
 GDPR erasure request answerable in practice rather than in principle.

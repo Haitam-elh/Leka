@@ -33,6 +33,8 @@ pytestmark = pytest.mark.integration
 
 API = "/api/v1/auth"
 PASSWORD = "correct horse battery staple"
+# Who registers: what the form requires, and nothing it leaves optional.
+PROFILE = {"first_name": "Nora", "last_name": "Diallo", "company": "Acme"}
 
 
 class CapturingEmailSender:
@@ -112,7 +114,9 @@ async def clean_users() -> AsyncIterator[None]:
 async def _register_and_verify(
     client: AsyncClient, mailbox: CapturingEmailSender, email: str
 ) -> None:
-    registered = await client.post(f"{API}/register", json={"email": email, "password": PASSWORD})
+    registered = await client.post(
+        f"{API}/register", json={"email": email, "password": PASSWORD, **PROFILE}
+    )
     assert registered.status_code == 202, registered.text
     token = mailbox.last_link(r"/verify/(\S+)")
     verified = await client.post(f"{API}/verify/{token}")
@@ -135,7 +139,9 @@ async def _sign_in(client: AsyncClient, email: str) -> dict[str, Any]:
 async def test_a_new_account_must_verify_before_signing_in(
     client: AsyncClient, mailbox: CapturingEmailSender
 ) -> None:
-    await client.post(f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD})
+    await client.post(
+        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
+    )
 
     refused = await client.post(
         f"{API}/login", json={"email": "nora@acme.example", "password": PASSWORD}
@@ -148,7 +154,9 @@ async def test_a_new_account_must_verify_before_signing_in(
 async def test_a_verification_token_works_once(
     client: AsyncClient, mailbox: CapturingEmailSender
 ) -> None:
-    await client.post(f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD})
+    await client.post(
+        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
+    )
     token = mailbox.last_link(r"/verify/(\S+)")
 
     first = await client.post(f"{API}/verify/{token}")
@@ -168,7 +176,9 @@ async def test_a_verification_token_survives_no_race(
     by a write: nothing runs between the two. This one fires both together,
     which is what a double-click or a retrying mail client actually does.
     """
-    await client.post(f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD})
+    await client.post(
+        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
+    )
     token = mailbox.last_link(r"/verify/(\S+)")
 
     first, second = await asyncio.gather(
@@ -189,11 +199,11 @@ async def test_registering_a_taken_address_looks_exactly_like_success(
     """Otherwise the registration form becomes a way to ask "does this person
     have an account here?"."""
     first = await client.post(
-        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD}
+        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
     )
     await client.post(f"{API}/verify/{mailbox.last_link(r'/verify/(\S+)')}")
     second = await client.post(
-        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD}
+        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
     )
 
     assert first.status_code == second.status_code == 202
@@ -201,6 +211,175 @@ async def test_registering_a_taken_address_looks_exactly_like_success(
     # The owner is told, which is both the safe answer and the useful one.
     # (An owner who never verified gets a new link instead: test_auth_emails.)
     assert mailbox.sent[-1].subject == "Une inscription a été tentée avec votre adresse"
+
+
+# ── Who registers ────────────────────────────────────────────────────────────
+
+
+async def test_the_profile_given_at_registration_is_the_account_s(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    profile = {
+        **PROFILE,
+        "first_name": "  Nora  Aïcha ",
+        "job_title": "CTO",
+        "company_size": "51-200",
+    }
+    registered = await client.post(
+        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD, **profile}
+    )
+    assert registered.status_code == 202, registered.text
+    await client.post(f"{API}/verify/{mailbox.last_link(r'/verify/(\S+)')}")
+    await _sign_in(client, "nora@acme.example")
+
+    user = (await client.get(f"{API}/me")).json()["user"]
+
+    assert (user["first_name"], user["last_name"], user["company"]) == (
+        "Nora Aïcha",
+        "Diallo",
+        "Acme",
+    )
+    assert (user["job_title"], user["company_size"]) == ("CTO", "51-200")
+
+
+async def test_the_role_and_the_company_size_may_be_left_out(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await _sign_in(client, "nora@acme.example")
+
+    user = (await client.get(f"{API}/me")).json()["user"]
+
+    assert (user["job_title"], user["company_size"]) == (None, None)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"first_name": None},
+        {"last_name": None},
+        {"company": None},
+        {"first_name": "   "},
+        {"company": "x" * 201},
+        {"company_size": "10-20"},
+        {"first_name": "Nora\x1b[31m"},
+        {"last_name": "Diallo\u202e"},
+        {"job_title": "CTO\x07"},
+    ],
+)
+async def test_a_profile_the_form_would_not_send_is_refused(
+    client: AsyncClient, mailbox: CapturingEmailSender, change: dict[str, object]
+) -> None:
+    body: dict[str, object] = {"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
+    body.update(change)
+    body = {key: value for key, value in body.items() if value is not None}
+
+    response = await client.post(f"{API}/register", json=body)
+
+    assert response.status_code == 422
+    assert mailbox.sent == []
+
+
+@pytest.mark.parametrize("verified", [True, False])
+async def test_registering_again_never_rewrites_who_the_owner_said_they_were(
+    client: AsyncClient, mailbox: CapturingEmailSender, verified: bool
+) -> None:
+    """Anyone can type someone else's address into the form."""
+    await client.post(
+        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
+    )
+    if verified:
+        await client.post(f"{API}/verify/{mailbox.last_link(r'/verify/(\S+)')}")
+    stranger = {"first_name": "Mallory", "last_name": "X", "company": "Evil Corp"}
+    await client.post(
+        f"{API}/register",
+        json={"email": "nora@acme.example", "password": PASSWORD, **stranger},
+    )
+
+    with system_scope():
+        async with session_factory() as session:
+            found = await session.execute(
+                text("SELECT first_name, company FROM users WHERE email = 'nora@acme.example'")
+            )
+    assert found.one() == ("Nora", "Acme")
+
+
+async def test_someone_signed_in_changes_only_what_they_send(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await _sign_in(client, "nora@acme.example")
+
+    changed = await client.patch(
+        f"{API}/me", json={"first_name": " Nora-Aïcha ", "job_title": "CTO"}
+    )
+
+    assert changed.status_code == 200, changed.text
+    user = (await client.get(f"{API}/me")).json()["user"]
+    assert (user["first_name"], user["last_name"], user["company"]) == (
+        "Nora-Aïcha",
+        "Diallo",
+        "Acme",
+    )
+    assert user["job_title"] == "CTO"
+
+    cleared = await client.patch(f"{API}/me", json={"job_title": None})
+    assert cleared.json()["job_title"] is None
+
+
+async def test_an_account_from_before_names_gets_one(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    """The accounts made before registration asked: how they get a name."""
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    with system_scope():
+        async with session_factory() as session:
+            await session.execute(
+                text("UPDATE users SET first_name = NULL, last_name = NULL, company = NULL")
+            )
+            await session.commit()
+    await _sign_in(client, "nora@acme.example")
+
+    await client.patch(
+        f"{API}/me", json={"first_name": "Haitam", "last_name": "E.", "company": "LEKA"}
+    )
+
+    user = (await client.get(f"{API}/me")).json()["user"]
+    assert (user["first_name"], user["last_name"], user["company"]) == ("Haitam", "E.", "LEKA")
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"first_name": None},
+        {"company": "   "},
+        {"last_name": "D\x1b[2J"},
+        {"company_size": "tiny"},
+        {"email": "mallory@evil.example"},
+        {"password": "a brand new passphrase"},
+    ],
+)
+async def test_a_change_that_would_empty_or_widen_the_profile_is_refused(
+    client: AsyncClient, mailbox: CapturingEmailSender, body: dict[str, object]
+) -> None:
+    await _register_and_verify(client, mailbox, "nora@acme.example")
+    await _sign_in(client, "nora@acme.example")
+
+    response = await client.patch(f"{API}/me", json=body)
+
+    assert response.status_code == 422
+    user = (await client.get(f"{API}/me")).json()["user"]
+    assert (user["email"], user["first_name"], user["company"]) == (
+        "nora@acme.example",
+        "Nora",
+        "Acme",
+    )
+
+
+async def test_nobody_changes_a_profile_without_a_session(client: AsyncClient) -> None:
+    response = await client.patch(f"{API}/me", json={"first_name": "Mallory"})
+
+    assert response.status_code == 401
 
 
 async def test_addresses_are_case_insensitive(

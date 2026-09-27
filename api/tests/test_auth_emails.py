@@ -32,6 +32,7 @@ from leka.identity.models import EmailToken
 from tests.test_auth_api import (
     API,
     PASSWORD,
+    PROFILE,
     CapturingEmailSender,
     _delete_all_accounts,
     _service_with,
@@ -134,7 +135,9 @@ def _link(message: EmailMessage) -> str:
 async def test_the_verification_email_works_from_the_inbox(
     client: AsyncClient, mailbox: CapturingEmailSender
 ) -> None:
-    await client.post(f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD})
+    await client.post(
+        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
+    )
 
     message = mailbox.sent[-1]
     link = urlparse(_link(message))
@@ -153,7 +156,9 @@ async def test_the_verification_email_works_from_the_inbox(
 async def test_the_reset_email_leads_to_the_reset_page(
     client: AsyncClient, mailbox: CapturingEmailSender
 ) -> None:
-    await client.post(f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD})
+    await client.post(
+        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
+    )
     await client.post(f"{API}/verify/{urlparse(_link(mailbox.sent[-1])).path.rsplit('/', 1)[1]}")
 
     await client.post(f"{API}/password/forgot", json={"email": "nora@acme.example"})
@@ -214,7 +219,7 @@ async def test_registering_again_before_verifying_sends_a_new_link(
     """The first email was lost; the person registers again. They used to be
     told "you already have an account" — and then refused at sign-in for not
     having verified it. Now they get what they need: a new link."""
-    body = {"email": "nora@acme.example", "password": PASSWORD}
+    body = {"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
     first = await client.post(f"{API}/register", json=body)
     again = await client.post(f"{API}/register", json=body)
 
@@ -232,7 +237,9 @@ async def test_asking_for_a_new_link_sends_one_that_works(
     """The first link expired, or never arrived: "Renvoyer le lien" must send
     one. It sent nothing — the route was unreachable — while the page said a
     link was on its way."""
-    await client.post(f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD})
+    await client.post(
+        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
+    )
     first = urlparse(_link(mailbox.sent[-1])).path.rsplit("/", 1)[1]
 
     resent = await client.post(f"{API}/verify/resend", json={"email": "nora@acme.example"})
@@ -260,7 +267,7 @@ async def test_asking_for_a_link_for_an_unknown_address_looks_the_same(
 async def test_registering_a_verified_address_warns_its_owner(
     client: AsyncClient, mailbox: CapturingEmailSender
 ) -> None:
-    body = {"email": "nora@acme.example", "password": PASSWORD}
+    body = {"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
     await client.post(f"{API}/register", json=body)
     await client.post(f"{API}/verify/{urlparse(_link(mailbox.sent[-1])).path.rsplit('/', 1)[1]}")
 
@@ -303,7 +310,9 @@ async def test_the_email_leaves_only_once_its_token_is_committed(
     """Sent before the commit, a link can name a token the database then
     never keeps: the person clicks, and is told the link is invalid."""
     email = f"n-{uuid.uuid4().hex[:6]}@acme.example"
-    response = await client.post(f"{API}/register", json={"email": email, "password": PASSWORD})
+    response = await client.post(
+        f"{API}/register", json={"email": email, "password": PASSWORD, **PROFILE}
+    )
 
     assert response.status_code == 202
     assert probe == [True]
@@ -352,7 +361,9 @@ async def test_dates_leave_the_api_with_their_offset(
 ) -> None:
     """The "two hours late" in psql is psql showing UTC. The API must say
     which instant it means, so the browser can show it in local time."""
-    await client.post(f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD})
+    await client.post(
+        f"{API}/register", json={"email": "nora@acme.example", "password": PASSWORD, **PROFILE}
+    )
     token = urlparse(_link(mailbox.sent[-1])).path.rsplit("/", 1)[1]
 
     verified = (await client.post(f"{API}/verify/{token}")).json()["email_verified_at"]

@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demander une démo, LEKA</title>
+<meta name="description" content="Décrivez votre entreprise, un expert LEKA vous recontacte pour organiser une démonstration adaptée à votre contexte.">
+<meta name="theme-color" content="#0a0f2b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body data-title-key="demo.meta_title">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo-leka" viewBox="0 0 1933 461">
+    <path fill="#0a0f2b" d="M1 0 L138 1 L138 362 L375 363 L375 461 L0 460Z M414 0 L816 0 L816 96 L538 98 L540 181 L790 182 L791 230 L790 276 L540 276 L539 362 L820 363 L820 461 L414 461Z M872 0 L1013 0 L1013 178 L1018 179 L1212 0 L1381 0 L1133 225 L1353 459 L1182 461 L1014 284 L1013 460 L873 461Z"/>
+    <path fill="url(#gLeka)" d="M1571 1 L1685 0 L1933 460 L1783 461 L1626 161 L1462 461 L1309 461Z"/>
+  </symbol>
+  <linearGradient id="gLeka" x1="1571" y1="0" x2="1933" y2="461" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#4B33FF"/><stop offset="1" stop-color="#6A46FF"/>
+  </linearGradient>
+</svg>
+
+<header class="header" id="header">
+  <div class="header__inner">
+    <a class="brand" href="./index.html" aria-label="LEKA, accueil">
+      <svg viewBox="0 0 1933 461" role="img" aria-label="LEKA" style="height:19px;width:auto"><use href="#logo-leka"/></svg>
+    </a>
+    <nav class="nav" id="nav" aria-label="Navigation principale">
+      <a href="./index.html#plateforme" data-i18n="nav.plateforme">Plateforme</a>
+      <a href="./index.html#methode" data-i18n="nav.methode">Méthode</a>
+      <a href="./index.html#cas" data-i18n="nav.cas">Cas d'usage</a>
+      <a href="./index.html#securite" data-i18n="nav.securite">Sécurité</a>
+    </nav>
+    <div class="header__actions">
+      <a class="signin" href="./login.html" data-i18n="nav.signin">Se connecter</a>
+      <a class="btn btn--primary btn--sm" href="./demo.html?type=demo" data-i18n="cta.demo">Demander une démo</a>
+      <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="nav">
+        <span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="form-page">
+    <div class="shell">
+      <div class="form-card">
+        <div class="form-head">
+          <p class="label" id="formLabel">Nous contacter</p>
+          <h1 id="formTitle">Une question&nbsp;? Écrivez-nous.</h1>
+          <p id="formIntro">Laissez-nous vos coordonnées, nous revenons vers vous rapidement.</p>
+        </div>
+
+        <form id="prospectForm" action="https://formsubmit.co/support@leka-core.com" method="POST">
+          <input type="hidden" name="_subject" id="formSubjectField" value="Nouvelle demande, LEKA">
+          <input type="hidden" name="_template" value="table">
+          <input type="hidden" name="_captcha" value="false">
+          <input type="hidden" name="_next" id="formNextField" value="">
+          <input type="hidden" name="Type de demande" id="formTypeField" value="">
+          <input type="text" name="_honey" style="display:none" tabindex="-1" autocomplete="off">
+          <div class="form-grid">
+            <div class="form-grid form-grid--2">
+              <div class="field">
+                <label for="fullName" data-i18n="demo.f.name">Nom complet</label>
+                <input id="fullName" name="Nom complet" type="text" autocomplete="name" required>
+              </div>
+              <div class="field">
+                <label for="workEmail" data-i18n="demo.f.email">Email professionnel</label>
+                <input id="workEmail" name="Email professionnel" type="email" autocomplete="email" required>
+              </div>
+            </div>
+
+            <div class="form-grid form-grid--2">
+              <div class="field">
+                <label for="company" data-i18n="demo.f.company">Entreprise</label>
+                <input id="company" name="Entreprise" type="text" autocomplete="organization" required>
+              </div>
+              <div class="field">
+                <label for="role"><span data-i18n="demo.f.role">Fonction</span> <span class="optional" data-i18n="demo.f.optional">(facultatif)</span></label>
+                <input id="role" name="Fonction" type="text" autocomplete="organization-title">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="companySize"><span data-i18n="demo.f.size">Taille de l'entreprise</span> <span class="optional" data-i18n="demo.f.optional">(facultatif)</span></label>
+              <select id="companySize" name="Taille de l'entreprise">
+                <option value="" data-i18n="demo.f.select">Sélectionner…</option>
+                <option data-i18n="demo.f.size1">1 à 10 personnes</option>
+                <option data-i18n="demo.f.size2">11 à 50 personnes</option>
+                <option data-i18n="demo.f.size3">51 à 200 personnes</option>
+                <option data-i18n="demo.f.size4">201 à 1000 personnes</option>
+                <option data-i18n="demo.f.size5">Plus de 1000 personnes</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="message" id="messageLabel">Votre besoin</label>
+              <textarea id="message" name="Message" required></textarea>
+            </div>
+          </div>
+
+          <button class="btn btn--primary btn--block" type="submit" id="submitBtn" style="margin-top:24px">Envoyer</button>
+
+          <p class="form-note" data-i18n="demo.f.note">
+            En envoyant ce formulaire, votre demande est transmise directement à notre équipe à
+            <a href="mailto:support@leka-core.com">support@leka-core.com</a>.
+          </p>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="shell">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <svg viewBox="0 0 1933 461" role="img" aria-label="LEKA" style="height:20px;width:auto">
+          <use href="#logo-leka"/>
+        </svg>
+        <p data-i18n="footer.tagline">L'intelligence qui comprend votre entreprise avant de vous répondre.</p>
+      </div>
+      <div>
+        <h4 data-i18n="footer.product">Produit</h4>
+        <ul>
+          <li><a href="./index.html#plateforme" data-i18n="nav.plateforme">Plateforme</a></li>
+          <li><a href="./index.html#methode" data-i18n="nav.methode">Méthode</a></li>
+          <li><a href="./index.html#cas" data-i18n="nav.cas">Cas d'usage</a></li>
+          <li><a href="./index.html#securite" data-i18n="nav.securite">Sécurité</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-i18n="footer.resources">Ressources</h4>
+        <ul>
+          <li><a href="./documentation.html" data-i18n="footer.documentation">Documentation</a></li>
+          <li><a href="./connecteurs.html" data-i18n="footer.connecteurs">Connecteurs</a></li>
+          <li><a href="./changelog.html" data-i18n="footer.changelog">Journal des versions</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-i18n="footer.company">Entreprise</h4>
+        <ul>
+          <li><a href="./demo.html?type=contact" data-i18n="footer.contact">Nous contacter</a></li>
+          <li><a href="./mentions-legales.html" data-i18n="footer.legal">Mentions légales</a></li>
+          <li><a href="./confidentialite.html" data-i18n="footer.privacy">Confidentialité</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span data-i18n="footer.rights">© 2026 LEKA. Tous droits réservés.</span>
+      <span class="footer__lang"><select class="lang-select" aria-label="Language / Langue"></select></span>
+    </div>
+  </div>
+</footer>
+
+<script src="./script.js"></script>
+<script src="./i18n.js"></script>
+<script>
+(() => {
+  const CONFIG = {
+    demo: {
+      fr: {
+        label: "Demander une démo",
+        title: "Voyons comment LEKA s'intègre chez vous.",
+        intro: "Décrivez votre contexte, un expert LEKA vous recontacte pour organiser une démonstration adaptée à votre entreprise.",
+        messageLabel: "Votre contexte",
+        placeholder: "Vos outils actuels, la taille de vos équipes techniques, ce que vous cherchez à résoudre…",
+        button: "Envoyer la demande de démo",
+        subject: "Demande de démo, LEKA"
+      },
+      en: {
+        label: "Request a demo",
+        title: "Let's see how LEKA fits into your stack.",
+        intro: "Tell us about your context, and a LEKA expert will get back to you to set up a demo tailored to your business.",
+        messageLabel: "Your context",
+        placeholder: "Your current tools, the size of your technical teams, what you're trying to solve…",
+        button: "Send demo request",
+        subject: "Demo request, LEKA"
+      },
+      de: {
+        label: "Demo anfordern",
+        title: "Sehen wir, wie LEKA zu Ihrem Stack passt.",
+        intro: "Beschreiben Sie Ihren Kontext, ein LEKA-Experte meldet sich, um eine passende Demo zu organisieren.",
+        messageLabel: "Ihr Kontext",
+        placeholder: "Ihre aktuellen Tools, die Größe Ihrer technischen Teams, was Sie lösen möchten…",
+        button: "Demo-Anfrage senden",
+        subject: "Demo-Anfrage, LEKA"
+      },
+      es: {
+        label: "Solicitar una demo",
+        title: "Veamos cómo LEKA encaja en su stack.",
+        intro: "Cuéntenos su contexto, un experto de LEKA se pondrá en contacto para organizar una demo adaptada a su empresa.",
+        messageLabel: "Su contexto",
+        placeholder: "Sus herramientas actuales, el tamaño de sus equipos técnicos, lo que busca resolver…",
+        button: "Enviar solicitud de demo",
+        subject: "Solicitud de demo, LEKA"
+      },
+      it: {
+        label: "Richiedi una demo",
+        title: "Vediamo come LEKA si adatta al tuo stack.",
+        intro: "Descrivici il tuo contesto, un esperto LEKA ti ricontatterà per organizzare una demo su misura per la tua azienda.",
+        messageLabel: "Il tuo contesto",
+        placeholder: "I tuoi strumenti attuali, la dimensione dei tuoi team tecnici, cosa vuoi risolvere…",
+        button: "Invia richiesta di demo",
+        subject: "Richiesta di demo, LEKA"
+      },
+      nl: {
+        label: "Demo aanvragen",
+        title: "Laten we bekijken hoe LEKA in uw stack past.",
+        intro: "Vertel ons over uw context, een LEKA-expert neemt contact op om een demo op maat te organiseren.",
+        messageLabel: "Uw context",
+        placeholder: "Uw huidige tools, de omvang van uw technische teams, wat u wilt oplossen…",
+        button: "Demoaanvraag verzenden",
+        subject: "Demoaanvraag, LEKA"
+      },
+      pt: {
+        label: "Solicitar uma demo",
+        title: "Vamos ver como a LEKA se encaixa na sua stack.",
+        intro: "Descreva o seu contexto, um especialista da LEKA entrará em contacto para organizar uma demo adaptada à sua empresa.",
+        messageLabel: "O seu contexto",
+        placeholder: "As suas ferramentas atuais, o tamanho das suas equipas técnicas, o que procura resolver…",
+        button: "Enviar pedido de demo",
+        subject: "Pedido de demo, LEKA"
+      }
+    },
+    team: {
+      fr: {
+        label: "Parler à l'équipe",
+        title: "Discutons de votre projet.",
+        intro: "Expliquez-nous votre besoin, l'équipe LEKA vous répond sous 24 h ouvrées.",
+        messageLabel: "Votre besoin",
+        placeholder: "Ce que vous aimeriez aborder avec l'équipe…",
+        button: "Envoyer le message",
+        subject: "Demande d'échange avec l'équipe, LEKA"
+      },
+      en: {
+        label: "Talk to the team",
+        title: "Let's talk about your project.",
+        intro: "Tell us what you need, the LEKA team replies within 24 business hours.",
+        messageLabel: "Your request",
+        placeholder: "What you'd like to discuss with the team…",
+        button: "Send message",
+        subject: "Request to talk to the team, LEKA"
+      },
+      de: {
+        label: "Mit dem Team sprechen",
+        title: "Sprechen wir über Ihr Projekt.",
+        intro: "Beschreiben Sie uns Ihr Anliegen, das LEKA-Team antwortet innerhalb von 24 Werkstunden.",
+        messageLabel: "Ihr Anliegen",
+        placeholder: "Worüber Sie mit dem Team sprechen möchten…",
+        button: "Nachricht senden",
+        subject: "Anfrage für ein Gespräch mit dem Team, LEKA"
+      },
+      es: {
+        label: "Hablar con el equipo",
+        title: "Hablemos de su proyecto.",
+        intro: "Cuéntenos lo que necesita, el equipo de LEKA responde en un plazo de 24 horas laborables.",
+        messageLabel: "Su solicitud",
+        placeholder: "Lo que le gustaría tratar con el equipo…",
+        button: "Enviar mensaje",
+        subject: "Solicitud para hablar con el equipo, LEKA"
+      },
+      it: {
+        label: "Parla con il team",
+        title: "Parliamo del tuo progetto.",
+        intro: "Spiegaci di cosa hai bisogno, il team LEKA risponde entro 24 ore lavorative.",
+        messageLabel: "La tua richiesta",
+        placeholder: "Di cosa vorresti parlare con il team…",
+        button: "Invia messaggio",
+        subject: "Richiesta di contatto con il team, LEKA"
+      },
+      nl: {
+        label: "Praat met het team",
+        title: "Laten we het over uw project hebben.",
+        intro: "Vertel ons wat u nodig heeft, het LEKA-team reageert binnen 24 werkuren.",
+        messageLabel: "Uw verzoek",
+        placeholder: "Waarover u met het team wilt praten…",
+        button: "Bericht verzenden",
+        subject: "Verzoek om met het team te praten, LEKA"
+      },
+      pt: {
+        label: "Falar com a equipa",
+        title: "Vamos falar sobre o seu projeto.",
+        intro: "Diga-nos do que precisa, a equipa LEKA responde no prazo de 24 horas úteis.",
+        messageLabel: "O seu pedido",
+        placeholder: "O que gostaria de discutir com a equipa…",
+        button: "Enviar mensagem",
+        subject: "Pedido para falar com a equipa, LEKA"
+      }
+    },
+    contact: {
+      fr: {
+        label: "Nous contacter",
+        title: "Une question\u00a0? Écrivez-nous.",
+        intro: "Laissez-nous vos coordonnées, nous revenons vers vous rapidement.",
+        messageLabel: "Votre message",
+        placeholder: "Votre question ou votre message…",
+        button: "Envoyer",
+        subject: "Message depuis le site, LEKA"
+      },
+      en: {
+        label: "Contact us",
+        title: "A question\u00a0? Get in touch.",
+        intro: "Leave us your details and we'll get back to you shortly.",
+        messageLabel: "Your message",
+        placeholder: "Your question or your message…",
+        button: "Send",
+        subject: "Message from the website, LEKA"
+      },
+      de: {
+        label: "Kontaktieren Sie uns",
+        title: "Eine Frage\u00a0? Schreiben Sie uns.",
+        intro: "Hinterlassen Sie uns Ihre Angaben, wir melden uns zeitnah bei Ihnen.",
+        messageLabel: "Ihre Nachricht",
+        placeholder: "Ihre Frage oder Ihre Nachricht…",
+        button: "Senden",
+        subject: "Nachricht von der Website, LEKA"
+      },
+      es: {
+        label: "Contáctenos",
+        title: "¿Una pregunta\u00a0? Escríbanos.",
+        intro: "Déjenos sus datos, nos pondremos en contacto con usted en breve.",
+        messageLabel: "Su mensaje",
+        placeholder: "Su pregunta o su mensaje…",
+        button: "Enviar",
+        subject: "Mensaje desde el sitio web, LEKA"
+      },
+      it: {
+        label: "Contattaci",
+        title: "Una domanda\u00a0? Scrivici.",
+        intro: "Lasciaci i tuoi dati, ti risponderemo a breve.",
+        messageLabel: "Il tuo messaggio",
+        placeholder: "La tua domanda o il tuo messaggio…",
+        button: "Invia",
+        subject: "Messaggio dal sito, LEKA"
+      },
+      nl: {
+        label: "Neem contact op",
+        title: "Een vraag\u00a0? Schrijf ons.",
+        intro: "Laat ons uw gegevens achter, we nemen spoedig contact op.",
+        messageLabel: "Uw bericht",
+        placeholder: "Uw vraag of uw bericht…",
+        button: "Verzenden",
+        subject: "Bericht vanaf de website, LEKA"
+      },
+      pt: {
+        label: "Contacte-nos",
+        title: "Uma questão\u00a0? Escreva-nos.",
+        intro: "Deixe-nos os seus dados, entraremos em contacto brevemente.",
+        messageLabel: "A sua mensagem",
+        placeholder: "A sua questão ou a sua mensagem…",
+        button: "Enviar",
+        subject: "Mensagem a partir do site, LEKA"
+      }
+    }
+  };
+
+  const FIELD_LABELS = {
+    fr: ['Type de demande', 'Nom complet', 'Email professionnel', 'Entreprise', 'Fonction', "Taille de l'entreprise"],
+    en: ['Request type', 'Full name', 'Work email', 'Company', 'Role', 'Company size'],
+    de: ['Anfrageart', 'Vollständiger Name', 'Geschäftliche E-Mail', 'Unternehmen', 'Position', 'Unternehmensgröße'],
+    es: ['Tipo de solicitud', 'Nombre completo', 'Correo profesional', 'Empresa', 'Cargo', 'Tamaño de la empresa'],
+    it: ['Tipo di richiesta', 'Nome completo', 'Email di lavoro', 'Azienda', 'Ruolo', "Dimensione dell'azienda"],
+    nl: ['Type aanvraag', 'Volledige naam', 'Zakelijk e-mailadres', 'Bedrijf', 'Functie', 'Bedrijfsgrootte'],
+    pt: ['Tipo de pedido', 'Nome completo', 'Email profissional', 'Empresa', 'Cargo', 'Dimensão da empresa']
+  };
+
+  const params = new URLSearchParams(window.location.search);
+  const type = CONFIG[params.get('type')] ? params.get('type') : 'contact';
+
+  const form = document.getElementById('prospectForm');
+  const subjectField = document.getElementById('formSubjectField');
+  const nextField = document.getElementById('formNextField');
+
+  // L'URL de retour après envoi doit être absolue (exigence de FormSubmit) ;
+  // on la calcule à partir de l'URL réelle de la page, quel que soit le domaine.
+  nextField.value = new URL(`merci.html?type=${type}`, window.location.href).href;
+
+  function currentLang() {
+    const lang = document.documentElement.lang;
+    return CONFIG[type][lang] ? lang : 'fr';
+  }
+
+  function render() {
+    const lang = currentLang();
+    const cfg = CONFIG[type][lang];
+    document.getElementById('formLabel').textContent = cfg.label;
+    document.getElementById('formTitle').textContent = cfg.title;
+    document.getElementById('formIntro').textContent = cfg.intro;
+    document.getElementById('messageLabel').textContent = cfg.messageLabel;
+    document.getElementById('message').setAttribute('placeholder', cfg.placeholder);
+    document.getElementById('submitBtn').textContent = cfg.button;
+    document.title = `${cfg.label}, LEKA`;
+  }
+
+  render();
+  document.addEventListener('leka:langchange', render);
+
+  // Au moment de l'envoi (avant que le navigateur ne poste le formulaire),
+  // on adapte les libellés de champs et l'objet de l'email à la langue en cours.
+  form.addEventListener('submit', () => {
+    const lang = currentLang();
+    const cfg = CONFIG[type][lang];
+    const labels = FIELD_LABELS[lang] || FIELD_LABELS.fr;
+    const company = document.getElementById('company').value;
+
+    document.getElementById('fullName').name = labels[1];
+    document.getElementById('workEmail').name = labels[2];
+    document.getElementById('company').name = labels[3];
+    document.getElementById('role').name = labels[4];
+    document.getElementById('companySize').name = labels[5];
+    document.getElementById('message').name = cfg.messageLabel;
+    document.getElementById('formTypeField').name = labels[0];
+    document.getElementById('formTypeField').value = cfg.label;
+    subjectField.value = `${cfg.subject}, ${company}`;
+    // Pas de preventDefault : le formulaire part réellement vers FormSubmit,
+    // qui transmet l'email puis redirige vers la page de remerciement.
+  });
+})();
+</script>
+</body>
+</html>

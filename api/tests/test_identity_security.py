@@ -86,8 +86,12 @@ def test_the_password_floor_is_twelve_characters(attempt: str) -> None:
 
     from leka.identity import RegisterRequest
 
-    with pytest.raises(ValidationError):
-        RegisterRequest(email="a@b.com", password=attempt)
+    with pytest.raises(ValidationError) as caught:
+        RegisterRequest(
+            email="a@b.com", password=attempt, first_name="Nora", last_name="D", company="Acme"
+        )
+    # Refused for the password, not for something else missing.
+    assert [error["loc"] for error in caught.value.errors()] == [("password",)]
 
 
 def test_no_composition_rules() -> None:
@@ -95,7 +99,13 @@ def test_no_composition_rules() -> None:
     Password1! and nothing stronger. Length is what matters."""
     from leka.identity import RegisterRequest
 
-    accepted = RegisterRequest(email="a@b.com", password="all lowercase words here")
+    accepted = RegisterRequest(
+        email="a@b.com",
+        password="all lowercase words here",
+        first_name="Nora",
+        last_name="D",
+        company="Acme",
+    )
 
     assert accepted.password == "all lowercase words here"
 

@@ -29,6 +29,7 @@ vi.mock("@/lib/auth", () => ({
     }),
     logout: vi.fn().mockResolvedValue(undefined),
   },
+  markSignedOut: vi.fn(),
 }));
 
 // The shell asks the API what this person may do, as well as who they are.

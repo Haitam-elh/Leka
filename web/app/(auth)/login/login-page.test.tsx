@@ -32,7 +32,10 @@ vi.mock("@/lib/auth", () => ({
   auth: {
     login: (...args: unknown[]) => login(...args),
     resendVerification: (...args: unknown[]) => resendVerification(...args),
+    // Nobody signed in yet: the form stays.
+    me: () => Promise.reject(new Error("401")),
   },
+  justSignedOut: () => false,
 }));
 
 const SENT = "Si cette adresse doit être confirmée, un nouveau lien est en route.";

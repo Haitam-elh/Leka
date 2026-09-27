@@ -14,22 +14,67 @@ export interface WorkspaceMembership {
   role: string;
 }
 
+/** The brackets the site's forms have always offered. */
+export const COMPANY_SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"] as const;
+export type CompanySize = (typeof COMPANY_SIZES)[number];
+
+/** Who is registering: the first three are required, the rest optional. */
+export interface AccountProfile {
+  first_name: string;
+  last_name: string;
+  company: string;
+  job_title?: string;
+  company_size?: CompanySize;
+}
+
 export interface CurrentUser {
   user: {
     id: string;
     email: string;
     email_verified_at: string | null;
     last_login_at: string | null;
+    // Null for an account made before registration asked.
+    first_name?: string | null;
+    last_name?: string | null;
+    company?: string | null;
+    job_title?: string | null;
+    company_size?: CompanySize | null;
   };
   workspaces: WorkspaceMembership[];
   active_workspace_id: string | null;
 }
 
+/**
+ * Set by signing out, read once by the sign-in page: someone who just asked
+ * to leave lands on the form even when the call failed and the session
+ * outlived it — rather than being sent straight back inside because a
+ * session is still there. Per tab, and gone on first read.
+ */
+const SIGNED_OUT = "leka.signedOut";
+
+export function markSignedOut(): void {
+  try {
+    window.sessionStorage.setItem(SIGNED_OUT, "1");
+  } catch {
+    // Storage refused: the page may send them back in; the menu still works.
+  }
+}
+
+export function justSignedOut(): boolean {
+  try {
+    const was = window.sessionStorage.getItem(SIGNED_OUT) === "1";
+    window.sessionStorage.removeItem(SIGNED_OUT);
+    return was;
+  } catch {
+    return false;
+  }
+}
+
 export const auth = {
-  register: (email: string, password: string) =>
+  register: (email: string, password: string, profile: AccountProfile) =>
     apiFetch<{ detail: string }>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, ...profile }),
     }),
 
   verify: (token: string) =>
@@ -57,6 +102,10 @@ export const auth = {
 
   me: (init: { redirectOn401?: boolean } = {}) =>
     apiFetch<CurrentUser>("/auth/me", init),
+
+  /** Only the fields given change; the answer is the whole person. */
+  updateProfile: (changes: Partial<{ [K in keyof AccountProfile]: AccountProfile[K] | null }>) =>
+    apiFetch<CurrentUser["user"]>("/auth/me", { method: "PATCH", body: JSON.stringify(changes) }),
 
   forgotPassword: (email: string) =>
     apiFetch<{ detail: string }>("/auth/password/forgot", {

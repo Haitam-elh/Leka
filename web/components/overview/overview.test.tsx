@@ -21,8 +21,14 @@ vi.mock("@/lib/sources", async (original) => ({
   sources: { list: () => list(), events: (id: string) => events(id) },
 }));
 
+// An account from before registration asked for names, unless a test
+// gives it one.
+let currentUser: { id: string; email: string; first_name?: string | null } = {
+  id: "u1",
+  email: "nora@acme.example",
+};
 vi.mock("@/components/shell/shell-provider", () => ({
-  useCurrentUser: () => ({ id: "u1", email: "nora@acme.example" }),
+  useCurrentUser: () => currentUser,
 }));
 
 // The box has its own tests; here it is only a place on the page.
@@ -102,6 +108,19 @@ describe("the overview", () => {
     mount();
 
     expect(screen.getByRole("heading", { level: 1, name: "Bonjour Nora," })).toBeVisible();
+    expect(await screen.findByText("1 source(s) demandent votre attention.")).toBeVisible();
+  });
+
+  it("greets by the first name given at registration, not the address", async () => {
+    currentUser = { id: "u2", email: "halimi.ha13@acme.example", first_name: "Haitam" };
+    try {
+      mount();
+
+      expect(screen.getByRole("heading", { level: 1, name: "Bonjour Haitam," })).toBeVisible();
+    } finally {
+      currentUser = { id: "u1", email: "nora@acme.example" };
+    }
+    // Let the page's own loading settle before the next test mounts.
     expect(await screen.findByText("1 source(s) demandent votre attention.")).toBeVisible();
   });
 

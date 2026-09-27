@@ -26,6 +26,7 @@ from tests.conftest import error_code, error_message
 from .test_auth_api import (
     API,
     PASSWORD,
+    PROFILE,
     CapturingEmailSender,
     _register_and_verify,
     _sign_in,
@@ -106,7 +107,7 @@ async def test_a_throttled_response_says_how_long_to_wait(
     for _ in range(REGISTER_PER_IP.attempts + 1):
         response = await client.post(
             f"{API}/register",
-            json={"email": f"{uuid.uuid4().hex}@acme.example", "password": PASSWORD},
+            json={"email": f"{uuid.uuid4().hex}@acme.example", "password": PASSWORD, **PROFILE},
         )
 
     assert response.status_code == 429

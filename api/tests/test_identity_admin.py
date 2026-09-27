@@ -42,7 +42,9 @@ async def clean_everything() -> AsyncIterator[None]:
     await _wipe()
 
 
-async def _account(email: str, *, verified: bool = True) -> None:
+async def _account(
+    email: str, *, verified: bool = True, name: tuple[str, str] | None = None, company: str = ""
+) -> None:
     with system_scope():
         async with session_factory() as session:
             session.add(
@@ -50,6 +52,9 @@ async def _account(email: str, *, verified: bool = True) -> None:
                     email=email,
                     password_hash=hash_password("a long enough passphrase"),
                     email_verified_at=datetime.now(UTC) if verified else None,
+                    first_name=name[0] if name else None,
+                    last_name=name[1] if name else None,
+                    company=company or None,
                 )
             )
             await session.commit()
@@ -146,7 +151,7 @@ async def test_accounts_lists_who_registered_and_where_they_sit(
     """What an operator asks first: did they register, did they confirm, are
     they in. Never a password hash — only what the operator needs."""
     await _account("haitam@acme.example")
-    await _account("karim@acme.example", verified=False)
+    await _account("karim@acme.example", verified=False, name=("Karim", "B."), company="LEKA")
     await grant("haitam@acme.example", Role.OWNER)
 
     assert await main(["accounts"]) == 0
@@ -156,4 +161,8 @@ async def test_accounts_lists_who_registered_and_where_they_sit(
     karim = next(line for line in out.splitlines() if "karim@acme.example" in line)
     assert "confirmed" in haitam and "LEKA (owner)" in haitam
     assert "NOT confirmed" in karim and "no workspace" in karim
+    # Who they said they are, for whoever decides to let them in; an
+    # account from before registration asked shows a dash.
+    assert "Karim B." in karim and "LEKA" in karim
+    assert haitam.split()[1:3] == ["-", "-"]
     assert "$argon2" not in out

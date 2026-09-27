@@ -3,8 +3,9 @@
     python -m leka.identity.admin accounts
     python -m leka.identity.admin grant karim@example.com --role admin
 
-`accounts` lists who registered, whether they confirmed their address, and
-which workspaces they sit in — never a password hash. `grant` seats one.
+`accounts` lists who registered — their name and company, as they gave
+them — whether they confirmed their address, and which workspaces they sit
+in — never a password hash. `grant` seats one.
 
 On the production box:
 
@@ -119,12 +120,16 @@ async def grant(email: str, role: Role, workspace_name: str = DEFAULT_WORKSPACE)
 
 
 async def accounts() -> str:
-    """Every account, oldest first: address, confirmed or not, workspaces."""
+    """Every account, oldest first: address, who they said they are,
+    confirmed or not, workspaces."""
     with system_scope():
         async with session_factory() as session:
             rows = await session.execute(
                 select(
                     User.email,
+                    User.first_name,
+                    User.last_name,
+                    User.company,
                     User.email_verified_at,
                     User.created_at,
                     Workspace.name,
@@ -134,21 +139,32 @@ async def accounts() -> str:
                 .outerjoin(Workspace, Workspace.id == Membership.workspace_id)
                 .order_by(User.created_at, User.email)
             )
-            people: dict[str, tuple[str, str, list[str]]] = {}
-            for email, verified_at, created_at, workspace, role in rows.tuples():
+            people: dict[str, tuple[str, str, str, str, list[str]]] = {}
+            for email, first, last, company, verified_at, created_at, workspace, role in rows:
+                who = " ".join(part for part in (first, last) if part) or "-"
                 confirmed = "confirmed" if verified_at else "NOT confirmed"
                 registered = created_at.strftime("%Y-%m-%d %H:%M UTC")
-                seats = people.setdefault(email, (confirmed, registered, []))[2]
+                seats = people.setdefault(email, (who, company or "-", confirmed, registered, []))[
+                    4
+                ]
                 if workspace is not None and role is not None:
                     seats.append(f"{workspace} ({role.value})")
 
     if not people:
         return "No account yet."
-    width = max(len(email) for email in people) + 2
-    lines = [f"{'EMAIL':<{width}}{'CONFIRMED':<16}{'REGISTERED':<22}WORKSPACES"]
-    for email, (confirmed, registered, seats) in people.items():
+    email_w = max(len(email) for email in people) + 2
+    name_w = max(len("NAME"), *(len(p[0]) for p in people.values())) + 2
+    company_w = max(len("COMPANY"), *(len(p[1]) for p in people.values())) + 2
+    lines = [
+        f"{'EMAIL':<{email_w}}{'NAME':<{name_w}}{'COMPANY':<{company_w}}"
+        f"{'CONFIRMED':<16}{'REGISTERED':<22}WORKSPACES"
+    ]
+    for email, (who, company, confirmed, registered, seats) in people.items():
         where = ", ".join(seats) if seats else "no workspace"
-        lines.append(f"{email:<{width}}{confirmed:<16}{registered:<22}{where}")
+        lines.append(
+            f"{email:<{email_w}}{who:<{name_w}}{company:<{company_w}}"
+            f"{confirmed:<16}{registered:<22}{where}"
+        )
     return "\n".join(lines)
 
 
