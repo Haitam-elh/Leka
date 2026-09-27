@@ -116,3 +116,35 @@ class SyncRunRead(BaseModel):
     payloads: int
     bytes: int
     error: dict[str, object] | None = Field(description="The diagnostic it ended on.")
+
+
+# ── The extraction, over the API (LEKA-354) ──────────────────────────────────
+
+
+class ExtractionFailureRead(BaseModel):
+    """One record extraction could not make sense of."""
+
+    capability: str
+    external_id: str
+    extractor: str | None = Field(description="Null: no strategy for this kind of record yet.")
+    code: str = Field(description="unsupported or malformed.")
+    message: str = Field(description="Names a field; never quotes the payload.")
+    extracted_at: datetime
+
+
+class ExtractorCount(BaseModel):
+    extractor: str | None
+    extracted: int
+    failed: int
+
+
+class SourceExtraction(BaseModel):
+    """Where a source's extraction stands."""
+
+    extracted: int
+    failed: int
+    unsupported: int = Field(description="Of the failed: no strategy yet.")
+    malformed: int = Field(description="Of the failed: not the shape the strategy knows.")
+    last_extracted_at: datetime | None
+    extractors: list[ExtractorCount]
+    failures: list[ExtractionFailureRead] = Field(description="The latest, newest first.")

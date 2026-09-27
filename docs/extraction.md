@@ -136,10 +136,45 @@ the name a person gave it — AWS's `Name` tag, the resource's name — else its
 id; `metadata.id` is always the provider's id; a VPC or network is a
 `network` reference.
 
+## 5. Where results are kept, and when they are made
+
+`extracted_records` (`ExtractedRecordRow`): **one row per `source_records`
+row** — `status` (`extracted` or `failed`), the strategy and its version,
+the `checksum` extracted from, the ExtractedRecord as JSON (`result`) or the
+`failure_code` and `message`. A result exactly when extracted, a failure code
+exactly when not: the database checks it.
+
+The job, `leka.ingestion.extraction.job.run_extraction` (key
+`extract:<source_id>`, one at a time per source), is **queued at the end of
+a pass** that left something to extract — succeeded or not: what a failed
+pass stored is worth extracting. It:
+
+1. forgets what was extracted from records marked deleted;
+2. reads, **in id order**, the live records that need it: no row yet, a
+   checksum that moved, or a strategy version that is not the current one
+   (a capability that gains a strategy is extracted then; one that loses it
+   is extracted again, as `unsupported`);
+3. reads each batch once, finds each record's line by its identity **and**
+   its checksum, extracts it, and saves the rows batch by batch.
+
+| | |
+|---|---|
+| **Incremental, idempotent** | A record extracted from the index's checksum by the current version is not read again: a second run reads nothing |
+| **Beside a pass** | A record changed since is found with its old checksum, or not at all: its row does not match the index, and the next run extracts it again |
+| **Beside a purge** | A batch rewritten since is not found: its records are passed over (`passed_over`), and read from their new batch at the next run |
+| **Isolated failures** | A failure is a row; the batch, the run and the next records go on |
+
+`GET /ingestion/sources/{id}/extraction` (`source:read`): how many records
+were extracted and failed — `unsupported`, `malformed` — per strategy, when
+last, and the 20 latest failures with their record's vendor id. A vendor
+changing a payload's shape shows here as one strategy failing at once.
+
 ## Not yet
 
-- **The job and where results are kept**: extraction after each pass,
-  incremental on `checksum` + `extractor_version`, its status and failures
-  observable per source — the table is to be agreed with Haitam.
+- **Retention of extracted text.** A row keeps its record's texts (capped)
+  as long as the record is live, while its raw payload expires after 30–90
+  days ([data-lifecycle.md](data-lifecycle.md)). Whether extracted text should
+  follow the payload's retention is to be decided.
+- **A screen**: the route is there; the Sources screen does not show it yet.
 - **Code itself** (files, READMEs): no connector reads repository contents
   yet.

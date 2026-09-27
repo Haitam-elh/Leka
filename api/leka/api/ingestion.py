@@ -4,6 +4,7 @@
     GET  /ingestion/sources/{id}/syncs    a pass under way?, and each capability
     GET  /ingestion/sources/{id}/runs     its passes, newest first (LEKA-353)
     GET  /ingestion/syncs                 one line per source, for a list
+    GET  /ingestion/sources/{id}/extraction  what extraction made of it (LEKA-354)
 
 A route validates, calls one service, and returns (architecture rule 6).
 Permissions come from a FastAPI dependency, never an `if` in the body
@@ -27,6 +28,10 @@ from leka.core.errors import ErrorCode
 from leka.db import SortableField
 from leka.governance import Permission, Principal, require_permission
 from leka.ingestion import (
+    ExtractionFailureRead,
+    ExtractionRepository,
+    ExtractorCount,
+    SourceExtraction,
     SourceRecordRepository,
     SourceSyncRead,
     SourceSyncRepository,
@@ -163,4 +168,47 @@ async def source_runs(
     return PageEnvelope(
         data=[SyncRunRead.model_validate(run, from_attributes=True) for run in result.items],
         next_cursor=result.next_cursor,
+    )
+
+
+FAILURES_SHOWN = 20
+
+
+@router.get("/sources/{source_id}/extraction", response_model=SourceExtraction)
+async def source_extraction(
+    source_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> SourceExtraction:
+    """What extraction made of the source's records: how many, by which
+    strategy, and the latest it could not — a vendor changing a payload's
+    shape shows here as one strategy failing all at once."""
+    await _source(session, principal, source_id)
+    repository = ExtractionRepository(session, principal.workspace_id)
+    counts = await repository.counts(source_id)
+    per_extractor: dict[str | None, ExtractorCount] = {}
+    for status_, _code, extractor, n in counts:
+        line = per_extractor.setdefault(
+            extractor, ExtractorCount(extractor=extractor, extracted=0, failed=0)
+        )
+        if status_ == "extracted":
+            line.extracted += n
+        else:
+            line.failed += n
+    return SourceExtraction(
+        extracted=sum(n for s, _, _, n in counts if s == "extracted"),
+        failed=sum(n for s, _, _, n in counts if s == "failed"),
+        unsupported=sum(n for _, code, _, n in counts if code == "unsupported"),
+        malformed=sum(n for _, code, _, n in counts if code == "malformed"),
+        last_extracted_at=await repository.latest(source_id),
+        extractors=sorted(per_extractor.values(), key=lambda c: c.extractor or ""),
+        failures=[
+            ExtractionFailureRead(
+                capability=row.kind,
+                external_id=external_id,
+                extractor=row.extractor,
+                code=str(row.failure_code),
+                message=str(row.message),
+                extracted_at=row.extracted_at,
+            )
+            for row, external_id in await repository.failures(source_id, limit=FAILURES_SHOWN)
+        ],
     )

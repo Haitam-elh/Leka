@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from leka.connectors import Capability, RawRecord, SourceKind
+from leka.ingestion.checksum import checksum
 from leka.ingestion.extraction.contract import (
     Extracted,
     ExtractedRecord,
@@ -27,7 +28,6 @@ from leka.ingestion.extraction.contract import (
     FailureCode,
     Provenance,
 )
-from leka.ingestion.sync import checksum
 
 Payload = dict[str, object]
 

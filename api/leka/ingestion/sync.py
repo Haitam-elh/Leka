@@ -48,8 +48,6 @@ run twice: a second pass reads again from the same cursor.
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -76,6 +74,10 @@ from leka.connectors import (
     next_status,
 )
 from leka.db import session_factory, system_scope, workspace_scope
+from leka.ingestion.checksum import checksum
+from leka.ingestion.extraction.job import EXTRACT_JOB
+from leka.ingestion.extraction.job import concurrency_key as extract_key
+from leka.ingestion.extraction.job import versions as extraction_versions
 from leka.ingestion.models import (
     SourceSync,
     SyncRun,
@@ -86,6 +88,7 @@ from leka.ingestion.models import (
 from leka.ingestion.purge import PURGE_JOB
 from leka.ingestion.purge import concurrency_key as purge_key
 from leka.ingestion.repository import (
+    ExtractionRepository,
     RawPayloadRepository,
     Seen,
     SourceRecordRepository,
@@ -344,6 +347,18 @@ class _Pass:
                 for_workspace_id=self._workspace_id,
                 concurrency_key=purge_key(source.id),
             )
+        # Records to extract — stored now, or passed over by an extraction
+        # that ran beside a purge: the extraction follows (extraction/job.py).
+        if await ExtractionRepository(self._session, self._workspace_id).has_stale(
+            source.id, extraction_versions(source.kind)
+        ):
+            await enqueue_job(
+                EXTRACT_JOB,
+                str(self._workspace_id),
+                str(source.id),
+                for_workspace_id=self._workspace_id,
+                concurrency_key=extract_key(source.id),
+            )
         report.deleted = self.deleted
         report.status = "failed" if failure else "succeeded"
         report.error = failure.code.value if failure else None
@@ -512,15 +527,6 @@ class _Pass:
             source.status = next_status(source.status, LifecycleEvent.UNHEALTHY)
         if not was_failing:
             self._sources.record(source, SourceEventType.SYNC_FAILED, code=failure.code.value)
-
-
-def checksum(record: RawRecord) -> str:
-    """sha256 of the payload's canonical JSON — keys sorted, no spacing — so
-    the same object read twice has the same checksum. A vendor field that
-    changes on every read (a signed URL) defeats it for that record, which
-    costs a write, not a wrong answer."""
-    canonical = json.dumps(record.payload, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def _capabilities(source: Source, offered: frozenset[Capability]) -> list[Capability]:

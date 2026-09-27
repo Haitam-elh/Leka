@@ -10,7 +10,8 @@ vendor changed a payload shape.
 `raw_payloads` is the first of those tables; `source_syncs`, where each
 source's synchronisation stands, the second (LEKA-352); `sync_runs`, what
 each pass did, the third (LEKA-353); `source_records`, what was seen of
-each vendor object, the fourth. It is the row half of the split
+each vendor object, the fourth; `extracted_records`, what extraction made
+of each of them, the fifth (LEKA-354). It is the row half of the split
 described in docs/adr/010-object-storage.md: the bytes live in the object
 store, and this is everything we know about them — where they came from, how
 big they are, what they hash to, and when they stop being ours to keep.
@@ -371,3 +372,90 @@ class SourceRecord(Base, WorkspaceScopedMixin):
     )
     payload_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ExtractionStatus(enum.StrEnum):
+    """What extraction made of one record (leka/ingestion/extraction)."""
+
+    EXTRACTED = "extracted"
+    FAILED = "failed"
+
+
+# FailureCode's values (leka/ingestion/extraction/contract.py), repeated
+# rather than imported: this module is below the extraction package.
+EXTRACTION_FAILURES = ("unsupported", "malformed")
+
+
+class ExtractedRecordRow(Base, WorkspaceScopedMixin):
+    """What extraction made of one indexed record (LEKA-354): its
+    ExtractedRecord, or why there is none.
+
+    ONE ROW PER source_records ROW, replaced when the record changes
+    (`checksum`) or its strategy does (`extractor_version`) — that is what
+    makes extraction incremental. A record marked deleted loses its row at
+    the next extraction; a source, or a record, deleted takes it along.
+
+    `result` is the ExtractedRecord as JSON, provenance included: what
+    parsing (LEKA-355) reads. Its texts are capped at 100 000 characters by
+    the contract; the whole payload stays in the object store.
+
+    A failure is a row too — `failure_code`, and a `message` that names a
+    field and never quotes the payload: that is how a vendor changing a
+    payload's shape is seen, one strategy failing all at once.
+    """
+
+    __tablename__ = "extracted_records"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_id"],
+            ["sources.workspace_id", "sources.id"],
+            name="fk_extracted_records_workspace_source",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("source_record_id", name="uq_extracted_records_source_record"),
+        CheckConstraint(
+            "status IN (" + ", ".join(f"'{s}'" for s in _statuses(ExtractionStatus)) + ")",
+            name="status",
+        ),
+        CheckConstraint(
+            "failure_code IS NULL OR failure_code IN ("
+            + ", ".join(f"'{c}'" for c in EXTRACTION_FAILURES)
+            + ")",
+            name="failure_code",
+        ),
+        # A result exactly when extracted, a failure code exactly when not.
+        CheckConstraint(
+            "(status = 'extracted') = (result IS NOT NULL AND failure_code IS NULL)",
+            name="result_or_failure",
+        ),
+        CheckConstraint("length(checksum) = 64", name="checksum_is_sha256"),
+        # A source's extraction at a glance, and its failures.
+        Index("ix_extracted_records_source_status", "source_id", "status"),
+    )
+
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # Single-column, like last_seen_run_id: a record goes only with its source.
+    source_record_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source_records.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[ExtractionStatus] = mapped_column(
+        Enum(
+            ExtractionStatus,
+            name="status",
+            native_enum=False,
+            length=20,
+            values_callable=_statuses,
+            create_constraint=False,
+        ),
+        nullable=False,
+    )
+    # The strategy and its version; none when no strategy knows the record.
+    extractor: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    extractor_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # The source record's checksum when it was extracted.
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    result: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    extracted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

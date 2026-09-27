@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 from leka.connectors import Capability, RawRecord, SourceKind, get_connector
+from leka.ingestion.checksum import checksum
 from leka.ingestion.extraction import (
     MAX_TEXT,
     ExtractedRecord,
@@ -22,7 +23,6 @@ from leka.ingestion.extraction import (
     extract,
     strategy_for,
 )
-from leka.ingestion.sync import checksum
 
 SOURCE = uuid.UUID("00000000-0000-0000-0000-00000000c0de")
 FETCHED = datetime(2026, 9, 27, 12, tzinfo=UTC)

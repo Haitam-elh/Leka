@@ -665,12 +665,14 @@ async def _live_payloads(source: Source) -> list[RawPayload]:
 async def test_a_pass_that_marks_records_gone_queues_their_purge(source: Source) -> None:
     SCRIPT.records = {Capability.COMMITS: 2}
     await _sync(source)
-    assert queued_purges == []
+    assert [job for job, _ in queued_purges if job == PURGE_JOB] == []
     SCRIPT.gone = {1}
 
     await _sync(source, full=True)
 
-    assert queued_purges == [(PURGE_JOB, (str(source.workspace_id), str(source.id)))]
+    assert [q for q in queued_purges if q[0] == PURGE_JOB] == [
+        (PURGE_JOB, (str(source.workspace_id), str(source.id)))
+    ]
 
 
 async def test_the_purge_rewrites_mixed_batches_and_withdraws_empty_ones(

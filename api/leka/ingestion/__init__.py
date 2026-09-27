@@ -5,6 +5,8 @@ about how the graph is queried or how answers are built.
 """
 
 from leka.ingestion.models import (
+    ExtractedRecordRow,
+    ExtractionStatus,
     RawPayload,
     SourceRecord,
     SourceSync,
@@ -14,6 +16,7 @@ from leka.ingestion.models import (
     SyncTrigger,
 )
 from leka.ingestion.repository import (
+    ExtractionRepository,
     IngestionRunRepository,
     RawPayloadRepository,
     SourceRecordRepository,
@@ -21,8 +24,11 @@ from leka.ingestion.repository import (
     SyncRunRepository,
 )
 from leka.ingestion.schemas import (
+    ExtractionFailureRead,
+    ExtractorCount,
     NormalisedEntity,
     NormalisedRelationship,
+    SourceExtraction,
     SourceSyncRead,
     SourceSyncs,
     SyncRequested,
@@ -32,12 +38,18 @@ from leka.ingestion.schemas import (
 from leka.ingestion.service import IngestionService
 
 __all__ = [
+    "ExtractedRecordRow",
+    "ExtractionFailureRead",
+    "ExtractionRepository",
+    "ExtractionStatus",
+    "ExtractorCount",
     "IngestionRunRepository",
     "IngestionService",
     "NormalisedEntity",
     "NormalisedRelationship",
     "RawPayload",
     "RawPayloadRepository",
+    "SourceExtraction",
     "SourceRecord",
     "SourceRecordRepository",
     "SourceSync",
