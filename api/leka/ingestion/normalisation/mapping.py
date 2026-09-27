@@ -14,11 +14,12 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from leka.connectors import Capability
+from leka.connectors import Capability, Mapping, first_match
 from leka.ingestion.extraction import ExtractedRecord, Reference
 from leka.ingestion.normalisation import identifiers as ids
 from leka.ingestion.normalisation import values
 from leka.ingestion.parsing import Fact, FactType, ParsedRecord, Target
+from leka.ingestion.parsing.rules import ENVIRONMENTS
 from leka.ingestion.schemas import NormalisedEntity, NormalisedRelationship
 
 C = Capability
@@ -86,6 +87,8 @@ class Build:
     diagnostics: list[str] = field(default_factory=list)
     # The record's own other keys: a Jira ticket is also its bare key.
     aliases: list[str] = field(default_factory=list)
+    # The source's mapping (LEKA-351): its own words, applied over the rules.
+    mapping: Mapping = field(default_factory=Mapping)
 
     @property
     def kind(self) -> str:
@@ -168,8 +171,9 @@ def entity(build: Build) -> NormalisedEntity:
         key, attributes = _cloud(build)
     else:
         key, attributes = _work(build)
+    _mapped_containers(build, key)
     return NormalisedEntity(
-        type=ENTITY_TYPES[capability],
+        type=build.mapping.entity_types.get(capability.value, ENTITY_TYPES[capability]),
         key=key,
         external_id=record.provenance.external_id,
         source_id=build.source_id,
@@ -215,7 +219,8 @@ def _work(build: Build) -> tuple[str, dict[str, object]]:
     attributes = _common(build)
     raw_priority = meta.get("priority")
     if isinstance(raw_priority, str):
-        attributes["priority"], known = values.priority(raw_priority)
+        own = _own(build.mapping.priorities, raw_priority)
+        attributes["priority"], known = (own, True) if own else values.priority(raw_priority)
         attributes["priority_raw"] = raw_priority
         if not known:
             build.diagnostics.append("unknown priority: kept as the vendor wrote it")
@@ -319,6 +324,11 @@ def _cloud(build: Build) -> tuple[str, dict[str, object]]:
         if best is not None:
             attributes[fact_type.value] = best.value
             attributes[f"{fact_type.value}_confidence"] = best.confidence
+    _mapped_tags(build, key, attributes)
+    if isinstance(attributes.get("environment"), str):
+        # 'prd' read in a tag: the company says it is production.
+        own = _own(build.mapping.environments, str(attributes["environment"]))
+        attributes["environment"] = own or attributes["environment"]
     for fact in build.parsed.facts:
         if fact.type is FactType.SERVICE and fact.value:
             service = _named(build, "service", ids.service(fact.value), fact.value, fact.confidence)
@@ -389,8 +399,11 @@ def _common(build: Build, *, resource: bool = False) -> dict[str, object]:
     capability = record.provenance.capability
     if record.state is not None and (resource or capability in (C.ISSUES, C.PULL_REQUESTS)):
         category = record.metadata.get("status_category")
+        own = _own(build.mapping.states, record.state)
         state, known = (
-            values.resource_state(record.state)
+            (own, True)
+            if own  # the company's own word for it wins, even over Jira's category
+            else values.resource_state(record.state)
             if resource
             else values.work_state(
                 record.state, category=category if isinstance(category, str) else None
@@ -403,6 +416,56 @@ def _common(build: Build, *, resource: bool = False) -> dict[str, object]:
         attributes["state"] = record.state  # archived, published, draft: already one word
     attributes["quality"] = build.parsed.quality.score
     return {k: v for k, v in attributes.items() if v is not None}
+
+
+def _own(table: dict[str, str], raw: str | None) -> str | None:
+    """The source's own mapping of a vendor word, case-insensitive."""
+    if not raw or not table:
+        return None
+    word = raw.strip().lower()
+    return next((v for k, v in table.items() if k.strip().lower() == word), None)
+
+
+def _mapped_containers(build: Build, key: str) -> None:
+    """The service and the team the source's mapping gives the record's
+    container — surer than any tag: an administrator said so."""
+    container = build.record.provenance.container
+    service = first_match(container, build.mapping.services)
+    if service:
+        target = _named(build, "service", ids.service(service), service, 1.0)
+        build.relate("part_of", key, target, 1.0, "mapping.services")
+    team = first_match(container, build.mapping.owners)
+    if team:
+        target = _named(build, "team", ids.team(team), team, 1.0)
+        build.relate("owned_by", key, target, 1.0, "mapping.owners")
+
+
+def _mapped_tags(build: Build, key: str, attributes: dict[str, object]) -> None:
+    """The company's own tag keys: `stage` for the environment, `app` for
+    the service, `squad` for the team."""
+    tags = attributes.get("tags")
+    if not isinstance(tags, dict):
+        return
+    by_key = {str(k).strip().lower(): str(v) for k, v in tags.items() if str(v).strip()}
+    keys = build.mapping.tag_keys
+    for tag in keys.environment:
+        value = by_key.get(tag.strip().lower())
+        if value:
+            word = value.strip().lower()
+            known = next((env for env, words in ENVIRONMENTS.items() if word in words), None)
+            attributes["environment"] = _own(build.mapping.environments, value) or known or word
+            attributes["environment_confidence"] = 0.95
+            break
+    for tag in keys.service:
+        value = by_key.get(tag.strip().lower())
+        if value:
+            target = _named(build, "service", ids.service(value), value, 0.95)
+            build.relate("part_of", key, target, 0.95, "mapping.tag_keys.service")
+    for tag in keys.owner:
+        value = by_key.get(tag.strip().lower())
+        if value:
+            target = _named(build, "team", ids.team(value), value, 0.95)
+            build.relate("owned_by", key, target, 0.95, "mapping.tag_keys.owner")
 
 
 def _best(parsed: ParsedRecord, kind: FactType) -> Fact | None:

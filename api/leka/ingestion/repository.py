@@ -777,7 +777,7 @@ class NormalisationRepository(WorkspaceScopedRepository):
 
     model = NormalisedRecordRow
 
-    def _stale(self, source_id: uuid.UUID, version: int) -> Select[Any]:
+    def _stale(self, source_id: uuid.UUID, version: int, settings_version: int = 0) -> Select[Any]:
         parsed, extracted, row = ParsedRecordRow, ExtractedRecordRow, NormalisedRecordRow
         return (
             select(parsed, extracted)
@@ -793,22 +793,37 @@ class NormalisationRepository(WorkspaceScopedRepository):
                     row.extractor_version.is_distinct_from(parsed.extractor_version),
                     row.parser_version != parsed.parser_version,
                     row.normaliser_version != version,
+                    row.settings_version != settings_version,
                 ),
             )
         )
 
     async def stale(
-        self, source_id: uuid.UUID, version: int, *, after: uuid.UUID | None, limit: int
+        self,
+        source_id: uuid.UUID,
+        version: int,
+        *,
+        after: uuid.UUID | None,
+        limit: int,
+        settings_version: int = 0,
     ) -> list[tuple[ParsedRecordRow, ExtractedRecordRow]]:
-        statement = self._stale(source_id, version).order_by(ParsedRecordRow.id).limit(limit)
+        statement = (
+            self._stale(source_id, version, settings_version)
+            .order_by(ParsedRecordRow.id)
+            .limit(limit)
+        )
         if after is not None:
             statement = statement.where(ParsedRecordRow.id > after)
         rows = await self._session.execute(statement)
         return [(parsed, extracted) for parsed, extracted in rows.all()]
 
-    async def has_stale(self, source_id: uuid.UUID, version: int) -> bool:
+    async def has_stale(
+        self, source_id: uuid.UUID, version: int, settings_version: int = 0
+    ) -> bool:
         found = await self._session.execute(
-            self._stale(source_id, version).with_only_columns(ParsedRecordRow.id).limit(1)
+            self._stale(source_id, version, settings_version)
+            .with_only_columns(ParsedRecordRow.id)
+            .limit(1)
         )
         return found.first() is not None
 
@@ -840,6 +855,7 @@ class NormalisationRepository(WorkspaceScopedRepository):
             "extractor_version",
             "parser_version",
             "normaliser_version",
+            "settings_version",
             "entity_type",
             "entity_key",
             "result",

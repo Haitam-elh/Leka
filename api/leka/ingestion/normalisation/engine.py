@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pydantic import ValidationError
 
+from leka.connectors import Mapping
 from leka.ingestion.extraction import ExtractedRecord
 from leka.ingestion.normalisation.contract import (
     NormalisationFailure,
@@ -32,7 +33,9 @@ from leka.ingestion.parsing import ParsedRecord
 NORMALISER_VERSION = 1
 
 
-def normalise(extracted: ExtractedRecord, parsed: ParsedRecord) -> Normalised:
+def normalise(
+    extracted: ExtractedRecord, parsed: ParsedRecord, mapping: Mapping | None = None
+) -> Normalised:
     """One record's candidates — or why there are none."""
     if extracted.provenance != parsed.provenance:
         return _failure(
@@ -40,7 +43,7 @@ def normalise(extracted: ExtractedRecord, parsed: ParsedRecord) -> Normalised:
             NormalisationFailureCode.MALFORMED,
             "the parse is not of this extraction (provenance differs)",
         )
-    build = Build(record=extracted, parsed=parsed)
+    build = Build(record=extracted, parsed=parsed, mapping=mapping or Mapping())
     try:
         main = entity(build)
     except UnsupportedRecordError as error:
@@ -65,7 +68,9 @@ def normalise(extracted: ExtractedRecord, parsed: ParsedRecord) -> Normalised:
     )
 
 
-def normalise_stored(extracted: object, parsed: object) -> Normalised:
+def normalise_stored(
+    extracted: object, parsed: object, mapping: Mapping | None = None
+) -> Normalised:
     """From an extraction row's and a parse row's `result`. Inputs that no
     longer read are a failure, named by field, never quoted."""
     try:
@@ -81,7 +86,7 @@ def normalise_stored(extracted: object, parsed: object) -> Normalised:
             code=NormalisationFailureCode.MALFORMED,
             message=("inputs do not read: " + ", ".join(where))[:500],
         )
-    return normalise(record, parse)
+    return normalise(record, parse, mapping)
 
 
 def _failure(

@@ -28,6 +28,7 @@ Contract: docs/processing.md.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -37,9 +38,9 @@ from datetime import UTC, datetime
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.background import enqueue_job
-from leka.connectors import Source
-from leka.db import session_factory
+from leka.background import Event, enqueue_job
+from leka.connectors import Mapping, Source, SourceService
+from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion.extraction.engine import versions as extraction_versions
 from leka.ingestion.models import ProcessingRunStatus, ProcessingStage
 from leka.ingestion.normalisation import engine as normalisation_engine
@@ -98,9 +99,20 @@ async def pending(
         return await ParsingRepository(session, workspace_id).has_stale(
             source.id, parsing_engine.PARSER_VERSION
         )
+    settings_version, _mapping = await source_mapping(session, workspace_id, source)
     return await NormalisationRepository(session, workspace_id).has_stale(
-        source.id, normalisation_engine.NORMALISER_VERSION
+        source.id, normalisation_engine.NORMALISER_VERSION, settings_version
     )
+
+
+async def source_mapping(
+    session: AsyncSession, workspace_id: uuid.UUID, source: Source
+) -> tuple[int, Mapping]:
+    """The source's settings version and its mapping (LEKA-351); 0 and the
+    defaults before any is saved."""
+    service = SourceService(session, workspace_id, actor_user_id=None)
+    version, settings = await service.settings(source)
+    return version, settings.mapping
 
 
 async def advance(
@@ -129,7 +141,11 @@ async def advance(
 
 @asynccontextmanager
 async def stage_run(
-    workspace_id: uuid.UUID, source: Source, stage: ProcessingStage
+    workspace_id: uuid.UUID,
+    source: Source,
+    stage: ProcessingStage,
+    *,
+    versions_used: dict[str, object] | None = None,
 ) -> AsyncIterator[dict[str, int]]:
     """Record one run of a stage, in a session of its own: `running` now,
     then `succeeded` with the counts the body filled in, or `failed` with the
@@ -142,7 +158,9 @@ async def stage_run(
         abandoned = await runs.abandon_running(source.id, stage, at=now)
         if abandoned:
             logger.warning("processing_run_abandoned", source_id=str(source.id), stage=stage.value)
-        run = runs.start(source.id, stage, versions=versions(stage, source), at=now)
+        run = runs.start(
+            source.id, stage, versions=versions_used or versions(stage, source), at=now
+        )
         await session.commit()
         try:
             yield counts
@@ -157,3 +175,27 @@ async def stage_run(
         run.counts = dict(counts)
         run.finished_at = datetime.now(UTC)
         await session.commit()
+
+
+def run_advance_for_event(event_id: str) -> str:
+    """`source.mapping_changed` (leka/background/routes.py): the source's
+    records are normalised again with its new mapping — no pass: nothing to
+    read again. Published with the settings version, so it never runs with
+    the old mapping."""
+    return asyncio.run(_advance_for_event(uuid.UUID(event_id)))
+
+
+async def _advance_for_event(event_id: uuid.UUID) -> str:
+    with system_scope():
+        async with session_factory() as session:
+            event = await session.get(Event, event_id)
+    if event is None:
+        return "gone"
+    workspace_id = event.workspace_id
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            source = await session.get(Source, uuid.UUID(str(event.payload["source_id"])))
+            if source is None:
+                return "gone"
+            queued = await advance(session, workspace_id, source, after=None)
+    return queued.value if queued else "nothing"

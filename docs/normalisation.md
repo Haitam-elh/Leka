@@ -164,6 +164,16 @@ normalised and failed (`unsupported`, `invalid`, `malformed`), the records'
 entities and their relationships by type, how many kept something as the
 vendor wrote it, when last, and the 20 latest failures.
 
+## 9. A source's own mapping
+
+An administrator's mapping for the source (LEKA-351,
+[scope-and-mapping.md](connectors/scope-and-mapping.md)) is applied over
+these rules: the entity type of a capability, the service and team of a
+container (confidence 1.0), the company's tag keys (0.95), its own words for
+states, priorities and environments — which win over the tables of § 4.
+`normalised_records.settings_version` is the version it was applied with; a
+new mapping makes the source's rows stale, and they are made again.
+
 ## Not yet
 
 - **Writing the graph**: entity resolution (LEKA-357) and leka.knowledge.

@@ -295,6 +295,15 @@ class SourceService:
         except IntegrityError as error:
             raise SettingsConflictError(str(source.id)) from error
         self._record(source, SourceEventType.SETTINGS_CHANGED, version=row.version, changed=changed)
+        if changed == ["mapping"]:
+            # Only the mapping: the records are normalised again with it —
+            # once this version is committed, never with the old one.
+            await publish_event(
+                self._session,
+                source.workspace_id,
+                "source.mapping_changed",
+                {"source_id": str(source.id), "version": row.version},
+            )
         if "scope" in changed and source.status is SourceStatus.ACTIVE:
             # In this transaction, like an activation: the full pass that reads
             # what came in and sweeps what went out starts only if this

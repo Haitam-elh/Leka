@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 
 import structlog
 
-from leka.connectors import Source
+from leka.connectors import Mapping, Source
 from leka.db import session_factory, workspace_scope
 from leka.ingestion.models import (
     ExtractedRecordRow,
@@ -32,7 +32,7 @@ from leka.ingestion.models import (
 )
 from leka.ingestion.normalisation import engine
 from leka.ingestion.normalisation.contract import NormalisedRecord
-from leka.ingestion.pipeline import BY_NAME, stage_run
+from leka.ingestion.pipeline import BY_NAME, source_mapping, stage_run
 from leka.ingestion.repository import NormalisationRepository
 
 logger = structlog.get_logger(__name__)
@@ -54,7 +54,16 @@ async def normalise_source(workspace_id: uuid.UUID, source_id: uuid.UUID) -> dic
             source = await session.get(Source, source_id)
             if source is None:  # deleted since the job was queued
                 return {}
-            async with stage_run(workspace_id, source, ProcessingStage.NORMALISATION) as result:
+            settings_version, mapping = await source_mapping(session, workspace_id, source)
+            async with stage_run(
+                workspace_id,
+                source,
+                ProcessingStage.NORMALISATION,
+                versions_used={
+                    "normaliser": engine.NORMALISER_VERSION,
+                    "settings": settings_version,
+                },
+            ) as result:
                 result.update(normalised=0, failed=0, forgotten=0)
                 repository = NormalisationRepository(session, workspace_id)
                 result["forgotten"] = await repository.forget_unnormalisable(source_id)
@@ -62,11 +71,18 @@ async def normalise_source(workspace_id: uuid.UUID, source_id: uuid.UUID) -> dic
 
                 after: uuid.UUID | None = None
                 while pairs := await repository.stale(
-                    source_id, engine.NORMALISER_VERSION, after=after, limit=CHUNK
+                    source_id,
+                    engine.NORMALISER_VERSION,
+                    after=after,
+                    limit=CHUNK,
+                    settings_version=settings_version,
                 ):
                     after = pairs[-1][0].id
                     await repository.save(
-                        [_row(parsed, extracted, result) for parsed, extracted in pairs]
+                        [
+                            _row(parsed, extracted, result, mapping, settings_version)
+                            for parsed, extracted in pairs
+                        ]
                     )
                     await session.commit()
 
@@ -75,9 +91,13 @@ async def normalise_source(workspace_id: uuid.UUID, source_id: uuid.UUID) -> dic
 
 
 def _row(
-    parsed: ParsedRecordRow, extracted: ExtractedRecordRow, result: dict[str, int]
+    parsed: ParsedRecordRow,
+    extracted: ExtractedRecordRow,
+    result: dict[str, int],
+    mapping: Mapping,
+    settings_version: int,
 ) -> dict[str, object]:
-    outcome = engine.normalise_stored(extracted.result, parsed.result)
+    outcome = engine.normalise_stored(extracted.result, parsed.result, mapping)
     row: dict[str, object] = {
         "source_id": parsed.source_id,
         "parsed_record_id": parsed.id,
@@ -86,6 +106,7 @@ def _row(
         "extractor_version": parsed.extractor_version,
         "parser_version": parsed.parser_version,
         "normaliser_version": engine.NORMALISER_VERSION,
+        "settings_version": settings_version,
         "normalised_at": datetime.now(UTC),
     }
     if isinstance(outcome, NormalisedRecord):
