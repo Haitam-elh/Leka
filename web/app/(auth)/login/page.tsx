@@ -133,15 +133,7 @@ function LoginForm() {
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">{t.auth.password}</Label>
-            <Link
-              href="/forgot-password"
-              className="text-xs text-muted-foreground underline underline-offset-4"
-            >
-              {t.auth.forgot}
-            </Link>
-          </div>
+          <Label htmlFor="password">{t.auth.password}</Label>
           <Input
             id="password"
             type="password"
@@ -150,6 +142,15 @@ function LoginForm() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
+          {/* Under the field, on the right, as the site's own form has it. */}
+          <div className="flex justify-end">
+            <Link
+              href="/forgot-password"
+              className="text-[13.5px] font-semibold tracking-[-0.01em] text-site-violet"
+            >
+              {t.auth.forgot}
+            </Link>
+          </div>
         </div>
 
         <Button type="submit" className="w-full" disabled={busy}>

@@ -29,7 +29,7 @@ test("an anonymous visitor is sent to sign in", async ({ page }) => {
   await page.goto("/overview");
 
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("heading", { name: "Connexion" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Se connecter à LEKA" })).toBeVisible();
 });
 
 test("a wrong password shows one message and reveals nothing", async ({ page }) => {
@@ -113,7 +113,8 @@ test("the sign-in page links to registration and recovery", async ({ page }) => 
   await page.getByRole("link", { name: "En créer un" }).click();
   await expect(page.getByRole("heading", { name: "Créer un compte" })).toBeVisible();
 
-  await page.getByRole("link", { name: "Se connecter" }).click();
+  // The card's own link: the site's header above has a "Se connecter" too.
+  await page.getByRole("main").getByRole("link", { name: "Se connecter" }).click();
   await page.getByRole("link", { name: "Mot de passe oublié ?" }).click();
   await expect(
     page.getByRole("heading", { name: "Réinitialiser votre mot de passe" }),

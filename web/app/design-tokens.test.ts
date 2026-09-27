@@ -76,6 +76,13 @@ const PAIRS: readonly [label: string, foreground: string, background: string][] 
   // The default button and every other surface styled with the shadcn
   // "primary" pair (LEKA-339): brand navy, not shadcn's stock near-black.
   ["primary button label", token("primary-foreground"), token("primary")],
+  // leka-core.com's screens before signing in.
+  ["site text on the card", token("site-ink"), "#FFFFFF"],
+  ["site secondary text on the card", token("site-slate"), "#FFFFFF"],
+  ["site secondary text on the page", token("site-slate"), token("site-mist")],
+  ["site link on the card", token("site-violet"), "#FFFFFF"],
+  ["site button label", "#FFFFFF", token("site-ink")],
+  ["site button label, hovered", "#FFFFFF", token("site-violet")],
 ];
 
 describe("the shell's text is readable", () => {
