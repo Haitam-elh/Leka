@@ -31,6 +31,9 @@ function LoginForm() {
   const target = next && next.startsWith("/") && !next.startsWith("//") ? next : routes.overview();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // "Se souvenir de cet appareil", unticked as on the site: a shared or
+  // borrowed computer must not stay signed in by default.
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unverified, setUnverified] = useState(false);
   const [resent, setResent] = useState(false);
@@ -63,7 +66,7 @@ function LoginForm() {
     setUnverified(false);
 
     try {
-      await auth.login(email, password);
+      await auth.login(email, password, remember);
       router.push(target);
     } catch (caught) {
       // The one case where the interface can offer a way forward: the
@@ -142,8 +145,19 @@ function LoginForm() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
-          {/* Under the field, on the right, as the site's own form has it. */}
-          <div className="flex justify-end">
+          {/* Under the field, as the site's own form has it: remember on the
+              left, recovery on the right. */}
+          <div className="flex items-center justify-between gap-3 text-[13.5px] tracking-[-0.01em] text-site-slate">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="remember"
+                checked={remember}
+                onChange={(event) => setRemember(event.target.checked)}
+                className="size-4 accent-site-violet"
+              />
+              {t.auth.remember}
+            </label>
             <Link
               href="/forgot-password"
               className="text-[13.5px] font-semibold tracking-[-0.01em] text-site-violet"

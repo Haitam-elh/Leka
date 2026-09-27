@@ -66,7 +66,24 @@ export class ApiError extends Error {
 }
 
 /**
- * Read the CSRF token the API set at sign-in.
+ * The CSRF token the API handed back in a body — /auth/login, /auth/me.
+ *
+ * In production the page is served from leka-core.com and the API from
+ * api.leka-core.com: the CSRF cookie is the API host's, and this page's
+ * JavaScript cannot read it. Every mutation used to go without its token
+ * and be refused — a sign-out included, so a reload signed people back in.
+ * The API now returns the token in those two bodies, readable only by this
+ * origin (CORS), and it is kept here, in memory, for the page's life.
+ */
+let tokenFromApi: string | null = null;
+
+export function rememberCsrfToken(token: string | null | undefined): void {
+  tokenFromApi = token ?? null;
+}
+
+/**
+ * The CSRF token to send: the cookie, when this page can read it (the API
+ * on the same host, as in development), else the one the API handed back.
  *
  * Deliberately readable by JavaScript: the double-submit pattern needs the
  * page to copy it into a header. Its value is not that it is secret, but
@@ -74,9 +91,9 @@ export class ApiError extends Error {
  * httpOnly and invisible here — which is why an XSS cannot steal it.
  */
 function readCsrfToken(): string | null {
-  if (typeof document === "undefined") return null;
+  if (typeof document === "undefined") return tokenFromApi;
   const match = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
+  return match ? decodeURIComponent(match[1]) : tokenFromApi;
 }
 
 /**

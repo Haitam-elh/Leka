@@ -197,15 +197,27 @@ export interface paths {
         };
         /**
          * Read Me
-         * @description Who I am, where I may go, and where I currently am.
+         * @description Who I am, where I may go, and where I currently am — and this
+         *     session's CSRF token, which the page cannot read from its cookie.
          *
          *     One call: three round-trips for this would show as a flicker on every
-         *     page load.
+         *     page load. A session from before the token was handed back in the body
+         *     may have lost its cookie: it gets a new one, for as long as it lives.
          */
         get: operations["read_me_api_v1_auth_me_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Me
+         * @description Close my account, for good.
+         *
+         *     The password again, first. Then what the account owns: a workspace it
+         *     is alone in starts its deletion (its grace period, then its erasure); a
+         *     workspace others use, of which it is the last owner, refuses the whole
+         *     thing, by name — nothing is changed. Then the person: sessions, tokens
+         *     and seats go with them, and the cookies are cleared.
+         */
+        delete: operations["delete_me_api_v1_auth_me_delete"];
         options?: never;
         head?: never;
         /**
@@ -983,6 +995,15 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AccountDeletion
+         * @description Closing one's own account: the password again, as for any act that
+         *     cannot be undone by the person who did it.
+         */
+        AccountDeletion: {
+            /** Password */
+            password: string;
+        };
+        /**
          * Capability
          * @description What a source can be read for. Declared by the connector, then
          *     discovered for each source: a token may see repositories and not issues.
@@ -1185,7 +1206,7 @@ export interface components {
          *     them and a rename would be a breaking change for nothing.
          * @enum {string}
          */
-        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "csrf_failed";
+        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed";
         /**
          * ErrorEnvelope
          * @description Every error response the API returns, whatever the status.
@@ -1425,6 +1446,11 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+            /**
+             * Remember
+             * @default false
+             */
+            remember: boolean;
         };
         /**
          * MeResponse
@@ -1439,6 +1465,8 @@ export interface components {
             workspaces: components["schemas"]["WorkspaceMembershipRead"][];
             /** Active Workspace Id */
             active_workspace_id: string | null;
+            /** Csrf Token */
+            csrf_token?: string | null;
         };
         /** MemberRead */
         MemberRead: {
@@ -3201,6 +3229,100 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MeResponse"];
                 };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    delete_me_api_v1_auth_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountDeletion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description The request could not be understood. */
             400: {

@@ -155,6 +155,11 @@ class MembershipRepository(WorkspaceScopedRepository):
         )
         return result.scalar_one_or_none()
 
+    async def count_members(self) -> int:
+        """Everyone seated here, whatever their role."""
+        result = await self._session.execute(self.select(Membership))
+        return len(result.scalars().all())
+
     async def count_owners(self) -> int:
         """Used to refuse the last owner being demoted or removed.
 

@@ -48,6 +48,12 @@ export default defineConfig({
     // and a SameSite=Lax cookie set by one is never sent to the other.
     baseURL: "http://localhost:3000",
     trace: "retain-on-failure",
+    // The suite reads French words, so the browser speaks French. Left to
+    // itself it says en-US, and leka-core.com's own pages (public/i18n.js)
+    // translate themselves to match: "Se connecter" becomes "Sign in" a
+    // moment after the page loads. A laptop clicked before that moment and
+    // passed; CI, slower, clicked after and timed out.
+    locale: "fr-FR",
   },
 
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],

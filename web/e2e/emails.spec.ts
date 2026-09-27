@@ -59,6 +59,32 @@ test("a new account is confirmed from its email, then signs in", async ({ page }
   await expect(page.getByTestId("nav-sources").last()).toBeVisible();
 });
 
+test("an account is closed from its profile, and cannot sign in again", async ({ page }) => {
+  const email = `e2e-${Date.now()}@leka.example`;
+  await register(page, email);
+  await page.goto((await linkFromEmail(email, "Confirmez votre adresse e-mail LEKA")).href);
+  await expect(page.getByText("Adresse confirmée")).toBeVisible();
+  await signIn(page, email, PASSWORD);
+  await page.getByRole("button", { name: "Créer l'espace" }).click();
+  await expect(page).toHaveURL(/\/sources$/);
+
+  await page.getByTestId("user-menu").last().click();
+  await page.getByTestId("profile").click();
+  await page.getByRole("button", { name: "Supprimer mon compte…" }).click();
+  await page.getByLabel("Votre mot de passe, pour confirmer").fill(PASSWORD);
+  await page.getByRole("button", { name: "Supprimer définitivement" }).click();
+
+  // Gone, signed out, back on the site.
+  await expect(page).toHaveURL("http://localhost:3000/");
+  await page.goto("/login");
+  await page.getByLabel("Adresse e-mail", { exact: true }).fill(email);
+  await page.getByLabel("Mot de passe", { exact: true }).fill(PASSWORD);
+  await page.getByRole("button", { name: "Se connecter" }).click();
+  await expect(page.locator('[data-slot="alert"]')).toHaveText(
+    "Adresse e-mail ou mot de passe incorrect.",
+  );
+});
+
 test("a forgotten password is reset from its email", async ({ page }) => {
   const email = `e2e-${Date.now()}@leka.example`;
   await register(page, email);

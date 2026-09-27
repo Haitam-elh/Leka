@@ -57,6 +57,10 @@ class UserRepository:
     def add(self, user: User) -> None:
         self._session.add(user)
 
+    async def delete(self, user: User) -> None:
+        await self._session.delete(user)
+        await self._session.flush()
+
     async def flush(self) -> None:
         await self._session.flush()
 

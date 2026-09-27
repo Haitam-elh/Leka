@@ -176,6 +176,61 @@ class WorkspaceService:
         await enqueue("leka.platform.tasks.run_purge_workspace_objects", workspace_id)
 
 
+class LastOwnerError(TenancyError):
+    """Closing this account would leave a workspace others use with no owner."""
+
+    def __init__(self, workspace_name: str) -> None:
+        super().__init__(f"last owner of {workspace_name!r}")
+        self.workspace_name = workspace_name
+
+
+class AccountClosure:
+    """What a person leaves behind when they close their account.
+
+    Their seats go with them (memberships cascade from users). What needs
+    deciding first is what they OWN:
+
+    - a workspace they are alone in is theirs alone: it starts its deletion,
+      the same grace period and the same erasure as any deletion
+      (WorkspaceService.request_deletion), so a mistake is still reversible
+      by support for DELETION_GRACE_PERIOD;
+    - a workspace others use, of which they are the last owner, would be
+      left with nobody who can administer it: refused, by name, until they
+      hand it over.
+
+    Nothing is written before every workspace has been checked: a refusal
+    leaves the account and all its workspaces exactly as they were.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._workspaces = WorkspaceService(WorkspaceRepository(session), session)
+
+    async def close(self, user_id: uuid.UUID) -> list[Workspace]:
+        """Check, then start the deletion of the workspaces left empty.
+        Returns them. Raises LastOwnerError, having changed nothing."""
+        with system_scope():
+            result = await self._session.execute(
+                select(Workspace, Membership)
+                .join(Membership, Membership.workspace_id == Workspace.id)
+                .where(Membership.user_id == user_id)
+            )
+            seats = list(result.tuples())
+        alone: list[Workspace] = []
+        for workspace, membership in seats:
+            if membership.role is not Role.OWNER:
+                continue
+            with workspace_scope(workspace.id):
+                memberships = MembershipRepository(self._session, workspace.id)
+                if await memberships.count_members() == 1:
+                    alone.append(workspace)
+                elif await memberships.count_owners() == 1:
+                    raise LastOwnerError(workspace.name)
+        for workspace in alone:
+            await self._workspaces.request_deletion(workspace)
+        return alone
+
+
 class InvitationAcceptance:
     """Accepting an invitation, from outside every workspace.
 

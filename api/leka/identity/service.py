@@ -80,6 +80,11 @@ class PasswordRejectedError(Exception):
         self.reason = reason
 
 
+# A session no device was asked to remember: its cookie ends with the
+# browser, and the server gives it up after a working day.
+UNREMEMBERED_LIFETIME = timedelta(hours=12)
+
+
 @dataclass(frozen=True)
 class LoginResult:
     user: User
@@ -240,6 +245,7 @@ class AuthService:
         *,
         user_agent: str | None = None,
         ip: str | None = None,
+        remember: bool = True,
     ) -> LoginResult:
         """Verify credentials and open a new session.
 
@@ -272,18 +278,32 @@ class AuthService:
 
         user.failed_login_count = 0
         user.last_login_at = datetime.now(UTC)
-        return await self.open_session(user, user_agent=user_agent, ip=ip)
+        return await self.open_session(user, user_agent=user_agent, ip=ip, remember=remember)
 
     async def open_session(
-        self, user: User, *, user_agent: str | None = None, ip: str | None = None
+        self,
+        user: User,
+        *,
+        user_agent: str | None = None,
+        ip: str | None = None,
+        remember: bool = True,
     ) -> LoginResult:
+        """A new session. `remember`: the device was asked to keep it —
+        its absolute lifetime. Otherwise UNREMEMBERED_LIFETIME: the cookie
+        ends with the browser, and the server does not keep a session
+        nobody will come back for."""
         token = generate_token()
         now = datetime.now(UTC)
+        lifetime = (
+            timedelta(days=settings.session_absolute_lifetime_days)
+            if remember
+            else UNREMEMBERED_LIFETIME
+        )
         session = Session(
             user_id=user.id,
             token_hash=hash_token(token),
             last_seen_at=now,
-            expires_at=now + timedelta(days=settings.session_absolute_lifetime_days),
+            expires_at=now + lifetime,
             user_agent=(user_agent or "")[:400] or None,
             ip_prefix=truncate_ip(ip),
         )
@@ -293,6 +313,22 @@ class AuthService:
 
     async def logout(self, session: Session) -> None:
         await self._sessions.revoke(session)
+
+    # ── Closing an account ───────────────────────────────────────────────────
+
+    async def confirm_password(self, user: User, password: str) -> None:
+        """Raise AuthenticationError unless this is the account's password."""
+        if not user.can_sign_in_with_password or not verify_password(
+            password, user.password_hash or ""
+        ):
+            msg = "password does not match"
+            raise AuthenticationError(msg)
+
+    async def delete_account(self, user: User) -> None:
+        """Delete the person: their sessions, tokens and seats go with the
+        row (ON DELETE CASCADE). What they owned alone is the platform's to
+        close first — see leka.platform.AccountClosure."""
+        await self._users.delete(user)
 
     async def logout_everywhere(self, user: User, *, keep: uuid.UUID | None = None) -> int:
         return await self._sessions.revoke_all_for_user(user.id, except_session_id=keep)

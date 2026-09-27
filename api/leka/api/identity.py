@@ -19,6 +19,7 @@ anything they do not know.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
@@ -27,6 +28,7 @@ from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_p
 from leka.core import ratelimit
 from leka.db import DatabaseSession, SortableField
 from leka.identity import (
+    AccountDeletion,
     AccountUnverifiedError,
     AuthenticationError,
     AuthErrorCode,
@@ -54,8 +56,13 @@ from leka.identity import (
     load_session,
     truncate_ip,
 )
-from leka.identity.cookies import clear_session_cookie, set_session_cookie
-from leka.platform import MembershipResolver
+from leka.identity.cookies import (
+    CSRF_COOKIE_NAME,
+    clear_session_cookie,
+    set_csrf_cookie,
+    set_session_cookie,
+)
+from leka.platform import AccountClosure, LastOwnerError, MembershipResolver
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -216,6 +223,7 @@ async def login(
             payload.password,
             user_agent=request.headers.get("user-agent"),
             ip=ip,
+            remember=payload.remember,
         )
     except AccountUnverifiedError as error:
         raise _refuse(
@@ -246,8 +254,8 @@ async def login(
     if len(pairs) == 1:
         result.session.active_workspace_id = pairs[0][0].id
 
-    set_session_cookie(response, result.token)
-    return await _me(result.user, result.session, memberships)
+    csrf_token = set_session_cookie(response, result.token, persistent=payload.remember)
+    return await _me(result.user, result.session, memberships, csrf_token)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -273,18 +281,65 @@ async def logout_everywhere(
 
 @router.get("/me", response_model=MeResponse)
 async def read_me(
+    request: Request,
+    response: Response,
     current: RequiredSession,
     db: SessionDep,
 ) -> MeResponse:
-    """Who I am, where I may go, and where I currently am.
+    """Who I am, where I may go, and where I currently am — and this
+    session's CSRF token, which the page cannot read from its cookie.
 
     One call: three round-trips for this would show as a flicker on every
-    page load.
+    page load. A session from before the token was handed back in the body
+    may have lost its cookie: it gets a new one, for as long as it lives.
     """
     user = await UserRepository(db).get(current.user_id)
     if user is None:  # pragma: no cover - cascade makes this unreachable
         raise _refuse(AuthErrorCode.SESSION_EXPIRED, "Your session has expired.")
-    return await _me(user, current, MembershipResolver(db))
+    csrf_token = request.cookies.get(CSRF_COOKIE_NAME)
+    if not csrf_token:
+        left = int((current.expires_at - datetime.now(UTC)).total_seconds())
+        csrf_token = set_csrf_cookie(response, max_age=max(left, 0))
+    return await _me(user, current, MembershipResolver(db), csrf_token)
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_me(
+    payload: AccountDeletion,
+    response: Response,
+    current: RequiredSession,
+    auth: AuthDep,
+    db: SessionDep,
+) -> Response:
+    """Close my account, for good.
+
+    The password again, first. Then what the account owns: a workspace it
+    is alone in starts its deletion (its grace period, then its erasure); a
+    workspace others use, of which it is the last owner, refuses the whole
+    thing, by name — nothing is changed. Then the person: sessions, tokens
+    and seats go with them, and the cookies are cleared.
+    """
+    user = await UserRepository(db).get(current.user_id)
+    if user is None:  # pragma: no cover - cascade makes this unreachable
+        raise _refuse(AuthErrorCode.SESSION_EXPIRED, "Your session has expired.")
+    try:
+        await auth.confirm_password(user, payload.password)
+    except AuthenticationError as error:
+        raise _refuse(
+            AuthErrorCode.INVALID_CREDENTIALS, "Your password is not correct.", 403
+        ) from error
+    try:
+        await AccountClosure(db).close(user.id)
+    except LastOwnerError as error:
+        raise _refuse(
+            AuthErrorCode.LAST_OWNER,
+            f"You are the last owner of {error.workspace_name!r}, which others use: "
+            "make someone else its owner first.",
+            status.HTTP_409_CONFLICT,
+        ) from error
+    await auth.delete_account(user)
+    clear_session_cookie(response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch("/me", response_model=UserRead)
@@ -308,7 +363,9 @@ async def update_me(
     return UserRead.model_validate(user)
 
 
-async def _me(user: User, session: Session, memberships: MembershipResolver) -> MeResponse:
+async def _me(
+    user: User, session: Session, memberships: MembershipResolver, csrf_token: str | None = None
+) -> MeResponse:
     pairs = await memberships.list_workspaces_for_user(user.id)
     return MeResponse(
         user=UserRead.model_validate(user),
@@ -322,6 +379,7 @@ async def _me(user: User, session: Session, memberships: MembershipResolver) -> 
             for workspace, membership in pairs
         ],
         active_workspace_id=session.active_workspace_id,
+        csrf_token=csrf_token,
     )
 
 

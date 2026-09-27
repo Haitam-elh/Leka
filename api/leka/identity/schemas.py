@@ -43,6 +43,8 @@ class AuthErrorCode(enum.StrEnum):
     TOKEN_EXPIRED = "token_expired"  # noqa: S105
     PASSWORD_TOO_SHORT = "password_too_short"  # noqa: S105
     PASSWORD_BREACHED = "password_breached"  # noqa: S105
+    # Closing an account that is the last owner of a workspace others use.
+    LAST_OWNER = "last_owner"
     NOT_AUTHENTICATED = "not_authenticated"
     SESSION_EXPIRED = "session_expired"
 
@@ -166,6 +168,10 @@ class LoginRequest(_EmailField):
     # by the same path with the same message, never by a 422 that tells the
     # caller their guess was the wrong shape.
     password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+    # "Se souvenir de cet appareil". Unticked, the session ends when the
+    # browser closes, and the server forgets it within hours; ticked, it
+    # lasts as long as sessions do. See AuthService.open_session.
+    remember: bool = False
 
 
 class ForgotPasswordRequest(_EmailField):
@@ -174,6 +180,13 @@ class ForgotPasswordRequest(_EmailField):
 
 class ResetPasswordRequest(_PasswordField):
     token: str = Field(min_length=20, max_length=256)
+
+
+class AccountDeletion(BaseModel):
+    """Closing one's own account: the password again, as for any act that
+    cannot be undone by the person who did it."""
+
+    password: str = Field(max_length=PASSWORD_MAX_LENGTH)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -237,6 +250,12 @@ class MeResponse(BaseModel):
     user: UserRead
     workspaces: list[WorkspaceMembershipRead]
     active_workspace_id: uuid.UUID | None
+    # The CSRF token of this session, for the interface to send back in the
+    # X-CSRF-Token header. It is also in a cookie, but a host-only cookie of
+    # the API's host: the page, served from leka-core.com, cannot read it.
+    # Only the page's origin can read this body (CORS), which is what makes
+    # the double submit hold — see leka/identity/csrf.py.
+    csrf_token: str | None = None
 
 
 class RegistrationAccepted(BaseModel):
