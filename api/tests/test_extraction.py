@@ -89,8 +89,10 @@ def _record(capability: Capability, payload: dict[str, Any], **extra: Any) -> Ra
     )
 
 
-def _extract(kind: SourceKind, capability: Capability, payload: dict[str, Any]) -> ExtractedRecord:
-    result = extract(_record(capability, payload), source_id=SOURCE, source_kind=kind)
+def _extract(
+    kind: SourceKind, capability: Capability, payload: dict[str, Any], **extra: Any
+) -> ExtractedRecord:
+    result = extract(_record(capability, payload, **extra), source_id=SOURCE, source_kind=kind)
     assert isinstance(result, ExtractedRecord), result
     return result
 
@@ -107,8 +109,22 @@ def _failure(
 # ── coverage ─────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("kind", [SourceKind.GITHUB, SourceKind.GITLAB, SourceKind.BITBUCKET])
-def test_every_capability_a_code_host_reads_has_a_strategy(kind: SourceKind) -> None:
+EXTRACTED_KINDS = [
+    SourceKind.GITHUB,
+    SourceKind.GITLAB,
+    SourceKind.BITBUCKET,
+    SourceKind.JIRA,
+    SourceKind.AWS,
+    SourceKind.AZURE,
+    SourceKind.GCP,
+]
+
+
+@pytest.mark.parametrize("kind", EXTRACTED_KINDS)
+def test_every_capability_these_connectors_read_has_a_strategy(kind: SourceKind) -> None:
+    """A capability added to one of these connectors needs its strategy. A
+    new connector's records are `unsupported` until it has them — observable,
+    not blocking."""
     for capability in get_connector(kind).manifest.capabilities:
         assert strategy_for(kind, capability) is not None, (kind, capability)
 
@@ -321,3 +337,250 @@ def test_one_malformed_record_does_not_stop_its_neighbours() -> None:
     ]
 
     assert [r.status for r in results] == ["extracted", "failed", "extracted"]
+
+
+# ── Jira ─────────────────────────────────────────────────────────────────────
+
+
+def _adf(*blocks: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "doc", "version": 1, "content": list(blocks)}
+
+
+def _paragraph(*inline: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "paragraph", "content": list(inline)}
+
+
+def _text(text: str) -> dict[str, Any]:
+    return {"type": "text", "text": text}
+
+
+JIRA_ISSUE: dict[str, Any] = {
+    "id": "10042",
+    "key": "PAY-42",
+    "self": "https://acme.atlassian.net/rest/api/3/issue/10042",
+    "fields": {
+        "summary": "Payment webhook lost under load",
+        "description": _adf(
+            _paragraph(
+                _text("Seen by "), {"type": "mention", "attrs": {"id": "u1", "text": "@Omar"}}
+            ),
+            {
+                "type": "bulletList",
+                "content": [
+                    {"type": "listItem", "content": [_paragraph(_text("retry"))]},
+                    {"type": "listItem", "content": [_paragraph(_text("alert"))]},
+                ],
+            },
+        ),
+        "status": {"name": "In Progress", "statusCategory": {"key": "indeterminate"}},
+        "issuetype": {"name": "Bug"},
+        "priority": {"name": "High"},
+        "assignee": {"accountId": "u1", "displayName": "Omar B."},
+        "reporter": {"accountId": "u2", "displayName": "Sara K."},
+        "labels": ["payments"],
+        "components": [{"name": "webhooks"}],
+        "project": {"key": "PAY", "name": "Payments"},
+        "parent": {"key": "PAY-1"},
+        "created": "2026-09-18T08:00:00.000+0200",
+        "updated": "2026-09-20T10:00:00.000+0200",
+        "comment": {"comments": [{"body": _adf(_paragraph(_text("Reproduced on staging.")))}]},
+    },
+}
+
+
+def test_a_jira_issue_comes_out_with_its_text_people_and_links() -> None:
+    issue = _extract(SourceKind.JIRA, Capability.ISSUES, JIRA_ISSUE, container="PAY")
+
+    assert issue.title == "Payment webhook lost under load"
+    assert issue.url == "https://acme.atlassian.net/browse/PAY-42"
+    assert issue.state == "in progress"
+    assert issue.content[0].text == "Seen by @Omar\nretry\nalert"
+    assert issue.content[1].role == "comment"
+    roles = {(r.role, r.external_id) for r in issue.references}
+    assert {
+        ("assignee", "u1"),
+        ("reporter", "u2"),
+        ("project", "PAY"),
+        ("parent", "PAY-1"),
+    } <= roles
+    assert issue.metadata["status_category"] == "indeterminate"
+    assert issue.metadata["components"] == ["webhooks"]
+    assert issue.updated_at is not None and issue.updated_at.utcoffset() is not None
+
+
+def test_a_jira_project() -> None:
+    project = _extract(
+        SourceKind.JIRA,
+        Capability.PROJECTS,
+        {
+            "id": "1",
+            "key": "PAY",
+            "name": "Payments",
+            "description": "All things money",
+            "projectTypeKey": "software",
+            "self": "https://acme.atlassian.net/rest/api/3/project/1",
+        },
+    )
+
+    assert (project.title, project.url) == ("Payments", "https://acme.atlassian.net/browse/PAY")
+    assert project.content[0].text == "All things money"
+
+
+def test_deeply_nested_rich_text_is_read() -> None:
+    deep: dict[str, Any] = _text("bottom")
+    for _ in range(300):
+        deep = {"type": "blockquote", "content": [deep]}
+    payload = {**JIRA_ISSUE, "fields": {**JIRA_ISSUE["fields"], "description": _adf(deep)}}
+
+    issue = _extract(SourceKind.JIRA, Capability.ISSUES, payload)
+
+    assert issue.content[0].text == "bottom"
+
+
+# ── Cloud ────────────────────────────────────────────────────────────────────
+
+
+def test_an_aws_instance_is_named_by_its_tag_and_placed_in_its_region() -> None:
+    instance = _extract(
+        SourceKind.AWS,
+        Capability.INSTANCES,
+        {
+            "InstanceId": "i-0abc",
+            "InstanceType": "t3.small",
+            "State": {"Name": "running"},
+            "LaunchTime": "2026-09-01 08:00:00+00:00",
+            "VpcId": "vpc-1",
+            "Placement": {"AvailabilityZone": "eu-west-3a"},
+            "Tags": [{"Key": "Name", "Value": "api-1"}, {"Key": "team", "Value": "payments"}],
+        },
+        container="eu-west-3",
+    )
+
+    assert (instance.title, instance.state) == ("api-1", "running")
+    assert instance.signals["region"] == "eu-west-3"
+    assert instance.signals["instance_type"] == "t3.small"
+    assert instance.signals["tags"] == ["Name=api-1", "team=payments"]
+    assert instance.references[0].external_id == "vpc-1"
+    assert instance.created_at is not None
+
+
+def test_an_aws_database_says_its_engine() -> None:
+    database = _extract(
+        SourceKind.AWS,
+        Capability.DB_INSTANCES,
+        {
+            "DBInstanceIdentifier": "payments-db",
+            "Engine": "postgres",
+            "EngineVersion": "16.3",
+            "DBInstanceClass": "db.t4g.medium",
+            "DBInstanceStatus": "available",
+            "MultiAZ": True,
+            "TagList": [{"Key": "env", "Value": "prod"}],
+        },
+        container="eu-west-3",
+    )
+
+    assert database.signals["engine"] == "postgres"
+    assert database.signals["multi_az"] is True
+    assert database.signals["tags"] == ["env=prod"]
+
+
+def test_an_s3_bucket_has_no_region_in_a_global_list() -> None:
+    bucket = _extract(
+        SourceKind.AWS,
+        Capability.BUCKETS,
+        {"Name": "acme-invoices", "CreationDate": "2025-01-01 00:00:00+00:00"},
+        container=None,
+    )
+
+    assert bucket.title == "acme-invoices"
+    assert "region" not in bucket.signals
+
+
+def test_an_azure_resource() -> None:
+    vm = _extract(
+        SourceKind.AZURE,
+        Capability.INSTANCES,
+        {
+            "id": "/subscriptions/s1/resourceGroups/Prod/providers/"
+            "Microsoft.Compute/virtualMachines/api-1",
+            "name": "api-1",
+            "type": "Microsoft.Compute/virtualMachines",
+            "location": "westeurope",
+            "tags": {"team": "payments"},
+        },
+        container="s1",
+    )
+
+    assert vm.title == "api-1"
+    assert vm.metadata["resource_group"] == "Prod"
+    assert vm.signals["resource_type"] == "microsoft.compute/virtualmachines"
+    assert vm.signals["tags"] == ["team=payments"]
+
+
+def test_a_google_cloud_asset() -> None:
+    vm = _extract(
+        SourceKind.GCP,
+        Capability.INSTANCES,
+        {
+            "name": "//compute.googleapis.com/projects/acme-prod"
+            "/zones/europe-west1-b/instances/api-1",
+            "assetType": "compute.googleapis.com/Instance",
+            "updateTime": "2026-09-20T10:00:00.123456Z",
+            "resource": {
+                "location": "europe-west1-b",
+                "data": {
+                    "name": "api-1",
+                    "status": "RUNNING",
+                    "machineType": "https://www.googleapis.com/compute/v1/projects/acme-prod/zones/europe-west1-b/machineTypes/e2-small",
+                    "creationTimestamp": "2026-01-01T00:00:00.000-08:00",
+                    "labels": {"team": "payments"},
+                },
+            },
+        },
+        container="acme-prod",
+    )
+
+    assert (vm.title, vm.state) == ("api-1", "running")
+    assert vm.signals["instance_type"] == "e2-small"
+    assert vm.metadata["project"] == "acme-prod"
+
+
+def test_an_instance_has_the_same_signals_on_every_cloud() -> None:
+    aws = _extract(
+        SourceKind.AWS,
+        Capability.INSTANCES,
+        {"InstanceId": "i-1", "InstanceType": "t3.small", "Tags": [{"Key": "team", "Value": "x"}]},
+        container="eu-west-3",
+    )
+    azure = _extract(
+        SourceKind.AZURE,
+        Capability.INSTANCES,
+        {
+            "id": "/subscriptions/s/resourceGroups/g/providers/p/t/vm",
+            "name": "vm",
+            "type": "t",
+            "location": "westeurope",
+            "tags": {"team": "x"},
+        },
+    )
+    gcp = _extract(
+        SourceKind.GCP,
+        Capability.INSTANCES,
+        {
+            "name": "//compute.googleapis.com/projects/p/zones/z/instances/vm",
+            "assetType": "compute.googleapis.com/Instance",
+            "resource": {"location": "z", "data": {"labels": {"team": "x"}}},
+        },
+    )
+
+    for resource in (aws, azure, gcp):
+        assert {"provider", "resource_type", "region", "tags"} <= set(resource.signals)
+        assert resource.signals["tags"] == ["team=x"]
+    assert [r.signals["provider"] for r in (aws, azure, gcp)] == ["aws", "azure", "gcp"]
+
+
+def test_a_cloud_resource_without_its_id_is_malformed() -> None:
+    failure = _failure(SourceKind.AWS, Capability.INSTANCES, {"InstanceType": SECRET})
+
+    assert failure.message == "missing field 'InstanceId'"
