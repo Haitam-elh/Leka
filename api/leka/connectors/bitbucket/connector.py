@@ -212,6 +212,8 @@ class BitbucketConnector(Connector[BitbucketConfig, BitbucketCredentials]):
                         capability,
                         repository,
                         external_id=str(repository["uuid"]),
+                        # Its own path: what scope rules match it by (LEKA-351).
+                        container=str(repository["full_name"]),
                         updated=repository.get("updated_on"),
                     )
                     continue

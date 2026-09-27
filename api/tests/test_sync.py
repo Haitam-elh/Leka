@@ -83,6 +83,8 @@ class Script:
         self.edited: set[int] = set()
         # Records the vendor no longer returns (deleted, or out of reach).
         self.gone: set[int] = set()
+        # Where each record lives, when it matters (scope rules, LEKA-351).
+        self.containers: dict[int, str] = {}
 
 
 SCRIPT = Script()
@@ -120,6 +122,7 @@ class FakeConnector(Connector[FakeConfig, FakeCredentials]):
             yield RawRecord(
                 kind=capability,
                 external_id=f"{capability.value}-{index}",
+                container=SCRIPT.containers.get(index),
                 payload={"n": index, "edited": index in SCRIPT.edited},
                 fetched_at=datetime.now(UTC),
             )

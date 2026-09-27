@@ -13,13 +13,14 @@ import uuid
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, Result, Select, select, update
+from sqlalchemy import CursorResult, Result, Select, func, select, update
 
 from leka.connectors.models import (
     Source,
     SourceCredential,
     SourceEvent,
     SourceEventType,
+    SourceSettingsVersion,
     SourceStatus,
 )
 from leka.db import WorkspaceScopedRepository
@@ -172,3 +173,49 @@ class SourceCredentialSweeper:
             .values(ciphertext=new, key_version=key_version)
         )
         return _affected_rows(result) == 1
+
+
+class SourceSettingsRepository(WorkspaceScopedRepository):
+    """Versions of a source's settings. Only ever inserted (LEKA-351)."""
+
+    async def current(self, source_id: uuid.UUID) -> SourceSettingsVersion | None:
+        found = await self._session.execute(
+            self.select(SourceSettingsVersion)
+            .where(SourceSettingsVersion.source_id == source_id)
+            .order_by(SourceSettingsVersion.version.desc())
+            .limit(1)
+        )
+        return found.scalars().first()
+
+    async def append(
+        self,
+        source_id: uuid.UUID,
+        *,
+        scope: dict[str, object],
+        mapping: dict[str, object],
+        created_by: uuid.UUID | None,
+    ) -> SourceSettingsVersion:
+        """The next version. Two saves at once: the unique (source, version)
+        refuses the second, which the caller reports as a conflict."""
+        latest = await self._session.execute(
+            select(func.max(SourceSettingsVersion.version)).where(
+                SourceSettingsVersion.workspace_id == self.workspace_id,
+                SourceSettingsVersion.source_id == source_id,
+            )
+        )
+        row = SourceSettingsVersion(
+            workspace_id=self.workspace_id,
+            source_id=source_id,
+            version=(latest.scalar_one() or 0) + 1,
+            scope=scope,
+            mapping=mapping,
+            created_by=created_by,
+        )
+        self.add(row)
+        await self._session.flush()
+        return row
+
+    def history(self, source_id: uuid.UUID) -> Select[tuple[SourceSettingsVersion]]:
+        return self.select(SourceSettingsVersion).where(
+            SourceSettingsVersion.source_id == source_id
+        )

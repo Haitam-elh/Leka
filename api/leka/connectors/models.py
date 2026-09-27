@@ -23,11 +23,13 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     LargeBinary,
     String,
     UniqueConstraint,
@@ -116,6 +118,8 @@ class SourceEventType(enum.StrEnum):
     # recovers — not on every pass, or an hourly sync would bury the rest.
     SYNC_FAILED = "sync_failed"
     SYNC_RECOVERED = "sync_recovered"
+    # A new version of the source's scope rules or mapping (LEKA-351).
+    SETTINGS_CHANGED = "settings_changed"
 
 
 class Source(Base, WorkspaceScopedMixin):
@@ -226,3 +230,34 @@ class SourceEvent(Base, WorkspaceScopedMixin):
     )
     # Never a secret: built by the service from diagnostics and statuses.
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+class SourceSettingsVersion(Base, WorkspaceScopedMixin):
+    """One version of a source's scope rules and mapping (LEKA-351).
+
+    APPEND-ONLY: a change is a new version, never an edit — the current
+    settings are the highest version, and the history of who changed what,
+    when, is the table itself (with a `settings_changed` event beside it).
+    A source with no version has the defaults: no rules, no mapping.
+    Contract: leka/connectors/settings.py.
+    """
+
+    __tablename__ = "source_settings"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_id"],
+            ["sources.workspace_id", "sources.id"],
+            name="fk_source_settings_workspace_source",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("source_id", "version", name="uq_source_settings_source_version"),
+        CheckConstraint("version >= 1", name="version_positive"),
+    )
+
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    scope: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    mapping: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )

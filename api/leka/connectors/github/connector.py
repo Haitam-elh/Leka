@@ -222,6 +222,8 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                         capability,
                         repository,
                         external_id=str(repository["node_id"]),
+                        # Its own path: what scope rules match it by (LEKA-351).
+                        container=str(repository["full_name"]),
                         updated=repository.get("updated_at"),
                     )
                     continue

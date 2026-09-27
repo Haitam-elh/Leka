@@ -190,7 +190,13 @@ class JiraConnector(Connector[JiraConfig, JiraCredentials]):
         async with self._client() as client:
             if capability is Capability.PROJECTS:
                 async for project in self._projects(client):
-                    yield record(capability, project, external_id=str(project["id"]))
+                    # Its own key: what scope rules match it by (LEKA-351).
+                    yield record(
+                        capability,
+                        project,
+                        external_id=str(project["id"]),
+                        container=str(project["key"]),
+                    )
                 return
 
             after = await self._jql_date(client, since) if since else None

@@ -220,6 +220,8 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
                         capability,
                         project,
                         external_id=str(project["id"]),
+                        # Its own path: what scope rules match it by (LEKA-351).
+                        container=str(project["path_with_namespace"]),
                         updated=project.get("last_activity_at"),
                     )
                     continue
