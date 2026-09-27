@@ -53,6 +53,7 @@ from leka.ingestion import (
     SyncTrigger,
 )
 from leka.ingestion import sync as sync_module
+from leka.ingestion.checksum import checksum
 from leka.ingestion.purge import PURGE_JOB, purge_deleted
 from leka.ingestion.sync import RetryableSyncError, sync_source
 from leka.platform import LocalObjectStore
@@ -645,8 +646,8 @@ def test_the_checksum_does_not_depend_on_key_order() -> None:
         fetched_at=datetime.now(UTC),
     )
 
-    assert sync_module.checksum(one) == sync_module.checksum(two)
-    assert len(sync_module.checksum(one)) == 64
+    assert checksum(one) == checksum(two)
+    assert len(checksum(one)) == 64
 
 
 # ── purging deleted records from the store (LEKA-353) ───────────────────────

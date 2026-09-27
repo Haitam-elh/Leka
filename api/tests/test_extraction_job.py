@@ -89,8 +89,10 @@ async def test_every_record_gets_a_result_or_the_reason_it_has_none(source: Sour
     )
     assert ok.result is not None
     assert ok.result["title"] == "commit 0"
-    assert ok.result["provenance"]["external_id"] == "commits-0"
-    assert ok.result["provenance"]["checksum"] == ok.checksum
+    provenance = ok.result["provenance"]
+    assert isinstance(provenance, dict)
+    assert provenance["external_id"] == "commits-0"
+    assert provenance["checksum"] == ok.checksum
     malformed = rows["commits-2"]
     assert (malformed.status, malformed.failure_code, malformed.result) == (
         ExtractionStatus.FAILED,
