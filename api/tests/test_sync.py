@@ -44,6 +44,7 @@ from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion import (
     RawPayload,
     SourceRecord,
+    SourceRecordRepository,
     SourceSync,
     SyncRun,
     SyncRunOutcome,
@@ -718,3 +719,40 @@ async def test_the_purge_is_idempotent(source: Source) -> None:
     again = await purge_deleted(source.workspace_id, source.id)
 
     assert again == {"examined": 0, "rewritten": 0, "withdrawn": 0, "records_removed": 0}
+
+
+async def test_a_record_seen_again_while_a_purge_runs_keeps_its_copy(
+    source: Source, fake: LocalObjectStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Haitam's review of #89: a pass and a purge can run side by side on a
+    source. A record deleted, then seen again — same checksum — while a purge
+    that listed it as deleted is under way, must keep its line."""
+    SCRIPT.records = {Capability.COMMITS: 2}
+    await _sync(source)
+    SCRIPT.gone = {1}
+    await _sync(source, full=True)
+    listed_before_it_came_back = {("commits", "commits-1")}
+
+    SCRIPT.gone = set()
+    await _sync(source)  # seen again, unchanged
+
+    revived = (await _index(source))["commits-1"]
+    assert revived.deleted_at is None
+    # Written again although its checksum did not change: it was not live.
+    assert "commits-1" in await _lines(fake, str(revived.payload_key))
+
+    async def stale(self: SourceRecordRepository, source_id: uuid.UUID) -> set[tuple[str, str]]:
+        return listed_before_it_came_back
+
+    monkeypatch.setattr(SourceRecordRepository, "pending_purge", stale)
+    await purge_deleted(source.workspace_id, source.id)
+
+    after = (await _index(source))["commits-1"]
+    assert after.deleted_at is None
+    # Its batch is still live — not withdrawn, not rewritten without it —
+    # and it is the batch the index names.
+    live = {payload.object_key: payload for payload in await _live_payloads(source)}
+    assert after.payload_key in live
+    assert "commits-1" in await _lines(fake, str(after.payload_key))
+    holding = [key for key in live if "commits-1" in await _lines(fake, key)]
+    assert holding

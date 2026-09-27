@@ -7,6 +7,12 @@ only marks it; this job, queued at the end of a pass that left something to
 purge, rewrites the batches without it. The pass stays fast and can be run
 again; the purge follows within minutes.
 
+WHAT IS REMOVED IS CHECKED AGAIN, batch by batch, with the index rows
+locked until that batch commits: a pass (sync:<source_id>) can run beside
+this job (purge:<source_id>), and a record seen again since the job started
+must keep its line — otherwise its only copy would go, and the index would
+point at a batch that no longer holds it.
+
 EVERY live batch of the source is read, not only the one holding a record's
 latest version: a record that changed three times is in three batches, and
 all three hold what is no longer ours to keep. It runs only when there is
@@ -73,8 +79,16 @@ async def purge_deleted(workspace_id: uuid.UUID, source_id: uuid.UUID) -> dict[s
                 lines = (
                     b"".join([chunk async for chunk in store.get(payload.object_key)])
                 ).splitlines()
-                kept = [line for line in lines if _identity(line) not in gone]
+                candidates = {_identity(line) for line in lines} & gone
+                if not candidates:
+                    continue
+                # Checked again now, rows locked until this batch commits: one
+                # seen again by a pass since `gone` was read keeps its line —
+                # and the pass that revives it waits for this batch.
+                removing = await records.still_deleted(source_id, candidates)
+                kept = [line for line in lines if _identity(line) not in removing]
                 if len(kept) == len(lines):
+                    await session.commit()  # release the locks
                     continue
                 result["records_removed"] += len(lines) - len(kept)
 
