@@ -6,6 +6,7 @@
     GET  /ingestion/syncs                 one line per source, for a list
     GET  /ingestion/sources/{id}/extraction  what extraction made of it (LEKA-354)
     GET  /ingestion/sources/{id}/parsing     what parsing read in it (LEKA-355)
+    GET  /ingestion/sources/{id}/normalisation  the candidates made of it (LEKA-356)
 
 A route validates, calls one service, and returns (architecture rule 6).
 Permissions come from a FastAPI dependency, never an `if` in the body
@@ -32,9 +33,12 @@ from leka.ingestion import (
     ExtractionFailureRead,
     ExtractionRepository,
     ExtractorCount,
+    NormalisationFailureRead,
+    NormalisationRepository,
     ParseFailureRead,
     ParsingRepository,
     SourceExtraction,
+    SourceNormalisation,
     SourceParsing,
     SourceRecordRepository,
     SourceSyncRead,
@@ -240,6 +244,39 @@ async def source_parsing(
                 code=str(row.failure_code),
                 message=str(row.message),
                 parsed_at=row.parsed_at,
+            )
+            for row, external_id in await repository.failures(source_id, limit=FAILURES_SHOWN)
+        ],
+    )
+
+
+@router.get("/sources/{source_id}/normalisation", response_model=SourceNormalisation)
+async def source_normalisation(
+    source_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> SourceNormalisation:
+    """The candidates normalisation made of the source's records: how many,
+    their entities and relationships by type, how many kept something as
+    the vendor wrote it, and the latest it could not make."""
+    await _source(session, principal, source_id)
+    repository = NormalisationRepository(session, principal.workspace_id)
+    counts = await repository.counts(source_id)
+    return SourceNormalisation(
+        normalised=sum(n for s, _, n in counts if s == "normalised"),
+        failed=sum(n for s, _, n in counts if s == "failed"),
+        unsupported=sum(n for _, code, n in counts if code == "unsupported"),
+        invalid=sum(n for _, code, n in counts if code == "invalid"),
+        malformed=sum(n for _, code, n in counts if code == "malformed"),
+        entities=await repository.entity_types(source_id),
+        relationships=await repository.relationship_types(source_id),
+        with_diagnostics=await repository.with_diagnostics(source_id),
+        last_normalised_at=await repository.latest(source_id),
+        failures=[
+            NormalisationFailureRead(
+                capability=row.kind,
+                external_id=external_id,
+                code=str(row.failure_code),
+                message=str(row.message),
+                normalised_at=row.normalised_at,
             )
             for row, external_id in await repository.failures(source_id, limit=FAILURES_SHOWN)
         ],

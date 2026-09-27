@@ -36,6 +36,8 @@ from leka.db import WorkspaceScopedRepository
 from leka.ingestion.models import (
     ExtractedRecordRow,
     ExtractionStatus,
+    NormalisationStatus,
+    NormalisedRecordRow,
     ParsedRecordRow,
     ParseStatus,
     RawPayload,
@@ -757,6 +759,173 @@ class ParsingRepository(WorkspaceScopedRepository):
             .join(SourceRecord, SourceRecord.id == ExtractedRecordRow.source_record_id)
             .where(self._of(source_id), ParsedRecordRow.status == ParseStatus.FAILED)
             .order_by(ParsedRecordRow.parsed_at.desc(), ParsedRecordRow.id)
+            .limit(limit)
+        )
+        return [(row, str(external_id)) for row, external_id in rows.all()]
+
+
+class NormalisationRepository(WorkspaceScopedRepository):
+    """The candidates normalisation made of a source's parses (LEKA-356).
+
+    A parse needs normalising when it was parsed and has no row yet, or its
+    row was made from another checksum, extractor, parser or normaliser
+    version. Normalising needs the extraction too: `stale` returns both.
+    """
+
+    model = NormalisedRecordRow
+
+    def _stale(self, source_id: uuid.UUID, version: int) -> Select[Any]:
+        parsed, extracted, row = ParsedRecordRow, ExtractedRecordRow, NormalisedRecordRow
+        return (
+            select(parsed, extracted)
+            .join(extracted, extracted.id == parsed.extracted_record_id)
+            .outerjoin(row, row.parsed_record_id == parsed.id)
+            .where(
+                parsed.workspace_id == self.workspace_id,
+                parsed.source_id == source_id,
+                parsed.status == ParseStatus.PARSED,
+                or_(
+                    row.id.is_(None),
+                    row.checksum != parsed.checksum,
+                    row.extractor_version.is_distinct_from(parsed.extractor_version),
+                    row.parser_version != parsed.parser_version,
+                    row.normaliser_version != version,
+                ),
+            )
+        )
+
+    async def stale(
+        self, source_id: uuid.UUID, version: int, *, after: uuid.UUID | None, limit: int
+    ) -> list[tuple[ParsedRecordRow, ExtractedRecordRow]]:
+        statement = self._stale(source_id, version).order_by(ParsedRecordRow.id).limit(limit)
+        if after is not None:
+            statement = statement.where(ParsedRecordRow.id > after)
+        rows = await self._session.execute(statement)
+        return [(parsed, extracted) for parsed, extracted in rows.all()]
+
+    async def has_stale(self, source_id: uuid.UUID, version: int) -> bool:
+        found = await self._session.execute(
+            self._stale(source_id, version).with_only_columns(ParsedRecordRow.id).limit(1)
+        )
+        return found.first() is not None
+
+    async def forget_unnormalisable(self, source_id: uuid.UUID) -> int:
+        """Parses that failed since they were normalised lose their candidates."""
+        failed = select(ParsedRecordRow.id).where(
+            ParsedRecordRow.workspace_id == self.workspace_id,
+            ParsedRecordRow.source_id == source_id,
+            ParsedRecordRow.status == ParseStatus.FAILED,
+        )
+        result = await self._session.execute(
+            delete(NormalisedRecordRow).where(
+                NormalisedRecordRow.workspace_id == self.workspace_id,
+                NormalisedRecordRow.parsed_record_id.in_(failed),
+            )
+        )
+        return _affected_rows(result)
+
+    async def save(self, rows: list[dict[str, object]]) -> None:
+        if not rows:
+            return
+        statement = insert(NormalisedRecordRow).values(
+            [{"workspace_id": self.workspace_id, **row} for row in rows]
+        )
+        excluded = statement.excluded
+        columns = (
+            "status",
+            "checksum",
+            "extractor_version",
+            "parser_version",
+            "normaliser_version",
+            "entity_type",
+            "entity_key",
+            "result",
+            "failure_code",
+            "message",
+            "normalised_at",
+        )
+        await self._session.execute(
+            statement.on_conflict_do_update(
+                constraint="uq_normalised_records_parsed_record",
+                set_={c: getattr(excluded, c) for c in columns} | {"updated_at": func.now()},
+            )
+        )
+
+    def _of(self, source_id: uuid.UUID) -> Any:
+        return and_(
+            NormalisedRecordRow.workspace_id == self.workspace_id,
+            NormalisedRecordRow.source_id == source_id,
+        )
+
+    def _normalised(self, source_id: uuid.UUID) -> Any:
+        return and_(
+            self._of(source_id), NormalisedRecordRow.status == NormalisationStatus.NORMALISED
+        )
+
+    async def counts(self, source_id: uuid.UUID) -> list[tuple[str, str | None, int]]:
+        """(status, failure code, how many)."""
+        row = NormalisedRecordRow
+        rows = await self._session.execute(
+            select(row.status, row.failure_code, func.count())
+            .where(self._of(source_id))
+            .group_by(row.status, row.failure_code)
+        )
+        return [(str(status), code, int(n)) for status, code, n in rows.all()]
+
+    async def entity_types(self, source_id: uuid.UUID) -> dict[str, int]:
+        rows = await self._session.execute(
+            select(NormalisedRecordRow.entity_type, func.count())
+            .where(
+                self._of(source_id), NormalisedRecordRow.status == NormalisationStatus.NORMALISED
+            )
+            .group_by(NormalisedRecordRow.entity_type)
+        )
+        return {str(kind): int(n) for kind, n in rows.all()}
+
+    async def relationship_types(self, source_id: uuid.UUID) -> dict[str, int]:
+        edges = (
+            func.jsonb_array_elements(NormalisedRecordRow.result["relationships"])
+            .table_valued(column("value", JSONB))
+            .lateral()
+        )
+        kind = edges.c.value["type"].astext
+        rows = await self._session.execute(
+            select(kind, func.count())
+            .select_from(NormalisedRecordRow)
+            .join(edges, true())
+            .where(
+                self._of(source_id), NormalisedRecordRow.status == NormalisationStatus.NORMALISED
+            )
+            .group_by(kind)
+        )
+        return {str(k): int(n) for k, n in rows.all()}
+
+    async def with_diagnostics(self, source_id: uuid.UUID) -> int:
+        found = await self._session.execute(
+            select(func.count()).where(
+                self._of(source_id),
+                NormalisedRecordRow.status == NormalisationStatus.NORMALISED,
+                func.jsonb_array_length(NormalisedRecordRow.result["diagnostics"]) > 0,
+            )
+        )
+        return int(found.scalar_one())
+
+    async def latest(self, source_id: uuid.UUID) -> datetime | None:
+        found = await self._session.execute(
+            select(func.max(NormalisedRecordRow.normalised_at)).where(self._of(source_id))
+        )
+        return found.scalar_one()
+
+    async def failures(
+        self, source_id: uuid.UUID, *, limit: int
+    ) -> Sequence[tuple[NormalisedRecordRow, str]]:
+        rows = await self._session.execute(
+            select(NormalisedRecordRow, SourceRecord.external_id)
+            .join(ParsedRecordRow, ParsedRecordRow.id == NormalisedRecordRow.parsed_record_id)
+            .join(ExtractedRecordRow, ExtractedRecordRow.id == ParsedRecordRow.extracted_record_id)
+            .join(SourceRecord, SourceRecord.id == ExtractedRecordRow.source_record_id)
+            .where(self._of(source_id), NormalisedRecordRow.status == NormalisationStatus.FAILED)
+            .order_by(NormalisedRecordRow.normalised_at.desc(), NormalisedRecordRow.id)
             .limit(limit)
         )
         return [(row, str(external_id)) for row, external_id in rows.all()]

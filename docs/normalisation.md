@@ -133,10 +133,40 @@ metadata.number` — never a value. Its neighbours are normalised.
 `NORMALISER_VERSION` (`normalisation/engine.py`) is raised when a rule
 changes: what the old rules normalised is normalised again.
 
+## 8. Where results are kept, and when they are made
+
+`normalised_records` (`NormalisedRecordRow`): **one row per parsed
+`parsed_records` row** — `status` (`normalised` or `failed`), the
+NormalisedRecord as JSON (`result`) or `failure_code` and `message`, what it
+was made from and by (the parse's `checksum`, extractor and parser versions,
+`normaliser_version`), and the record's own **`entity_type` and
+`entity_key`**, indexed per workspace: every record naming one key, found
+without reading the JSON — what entity resolution (LEKA-357) starts from.
+A parse that failed has no candidates; a record gone takes them along
+(cascade).
+
+The job, `leka.ingestion.normalisation.job.run_normalisation` (key
+`normalise:<source_id>`), is **queued by the parsing job** when it ends
+with something to normalise, and **by the end of a pass** when only
+normalisation has something to do (a new `NORMALISER_VERSION`). It forgets
+the candidates of parses that failed since, then normalises, in id order,
+every parse never normalised or normalised from another checksum or
+version, with its extraction. Everything it reads is in the database.
+Incremental and idempotent.
+
+```
+ pass ──▶ extraction ──▶ parsing ──▶ normalisation
+   └────── only a later stage to do ─────▲
+```
+
+`GET /ingestion/sources/{id}/normalisation` (`source:read`): how many were
+normalised and failed (`unsupported`, `invalid`, `malformed`), the records'
+entities and their relationships by type, how many kept something as the
+vendor wrote it, when last, and the 20 latest failures.
+
 ## Not yet
 
-- **Where results are kept, and when they are made**: after the parsing,
-  incremental on the parse and `NORMALISER_VERSION` — the next PR.
 - **Writing the graph**: entity resolution (LEKA-357) and leka.knowledge.
 - **A Jira link's site**: a link to `acme.atlassian.net/browse/PAY-7` found in
   GitHub comes out as `ticket:PAY-7` — parsing keeps the key, not the site.
+- **A screen**: the route is there; the Sources screen does not show it yet.

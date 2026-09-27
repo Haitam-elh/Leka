@@ -85,6 +85,9 @@ from leka.ingestion.models import (
     SyncRunStatus,
     SyncTrigger,
 )
+from leka.ingestion.normalisation.engine import NORMALISER_VERSION
+from leka.ingestion.normalisation.job import NORMALISE_JOB
+from leka.ingestion.normalisation.job import concurrency_key as normalise_key
 from leka.ingestion.parsing.engine import PARSER_VERSION
 from leka.ingestion.parsing.job import PARSE_JOB
 from leka.ingestion.parsing.job import concurrency_key as parse_key
@@ -92,6 +95,7 @@ from leka.ingestion.purge import PURGE_JOB
 from leka.ingestion.purge import concurrency_key as purge_key
 from leka.ingestion.repository import (
     ExtractionRepository,
+    NormalisationRepository,
     ParsingRepository,
     RawPayloadRepository,
     Seen,
@@ -353,8 +357,9 @@ class _Pass:
             )
         # Records to extract — stored now, or passed over by an extraction
         # that ran beside a purge: the extraction follows (extraction/job.py).
-        # The extraction queues the parsing when it ends; parsing alone has
-        # something to do when only its version changed.
+        # Each stage queues the next when it ends (extraction → parsing →
+        # normalisation); a later stage alone has something to do when only
+        # its own version changed.
         if await ExtractionRepository(self._session, self._workspace_id).has_stale(
             source.id, extraction_versions(source.kind)
         ):
@@ -374,6 +379,16 @@ class _Pass:
                 str(source.id),
                 for_workspace_id=self._workspace_id,
                 concurrency_key=parse_key(source.id),
+            )
+        elif await NormalisationRepository(self._session, self._workspace_id).has_stale(
+            source.id, NORMALISER_VERSION
+        ):
+            await enqueue_job(
+                NORMALISE_JOB,
+                str(self._workspace_id),
+                str(source.id),
+                for_workspace_id=self._workspace_id,
+                concurrency_key=normalise_key(source.id),
             )
         report.deleted = self.deleted
         report.status = "failed" if failure else "succeeded"

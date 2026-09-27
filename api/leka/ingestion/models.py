@@ -12,7 +12,9 @@ source's synchronisation stands, the second (LEKA-352); `sync_runs`, what
 each pass did, the third (LEKA-353); `source_records`, what was seen of
 each vendor object, the fourth; `extracted_records`, what extraction made
 of each of them, the fifth (LEKA-354); `parsed_records`, what parsing read
-in each extraction, the sixth (LEKA-355). It is the row half of the split
+in each extraction, the sixth (LEKA-355); `normalised_records`, the
+candidates normalisation made of each, the seventh (LEKA-356). It is the
+row half of the split
 described in docs/adr/010-object-storage.md: the bytes live in the object
 store, and this is everything we know about them — where they came from, how
 big they are, what they hash to, and when they stop being ours to keep.
@@ -527,3 +529,87 @@ class ParsedRecordRow(Base, WorkspaceScopedMixin):
     failure_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     parsed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class NormalisationStatus(enum.StrEnum):
+    """What normalisation made of one parse (leka/ingestion/normalisation)."""
+
+    NORMALISED = "normalised"
+    FAILED = "failed"
+
+
+# NormalisationFailureCode's values, repeated: this module is below the
+# normalisation package.
+NORMALISATION_FAILURES = ("unsupported", "invalid", "malformed")
+
+
+class NormalisedRecordRow(Base, WorkspaceScopedMixin):
+    """The candidates normalisation made of one parse (LEKA-356): the
+    NormalisedRecord — the record's entity under its canonical key, the
+    people, services and teams it names, relationships between keys — or
+    why there are none.
+
+    ONE ROW PER parsed_records ROW THAT WAS PARSED, replaced when the parse
+    changes (its checksum, extractor or parser version) or the rules do
+    (`normaliser_version`). `entity_key` and `entity_type` repeat the
+    record's own entity, for entity resolution (LEKA-357) to find every
+    record naming one key without reading the JSON.
+    """
+
+    __tablename__ = "normalised_records"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_id"],
+            ["sources.workspace_id", "sources.id"],
+            name="fk_normalised_records_workspace_source",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("parsed_record_id", name="uq_normalised_records_parsed_record"),
+        CheckConstraint(
+            "status IN (" + ", ".join(f"'{s}'" for s in _statuses(NormalisationStatus)) + ")",
+            name="status",
+        ),
+        CheckConstraint(
+            "failure_code IS NULL OR failure_code IN ("
+            + ", ".join(f"'{c}'" for c in NORMALISATION_FAILURES)
+            + ")",
+            name="failure_code",
+        ),
+        CheckConstraint(
+            "(status = 'normalised') = "
+            "(result IS NOT NULL AND entity_key IS NOT NULL AND failure_code IS NULL)",
+            name="result_or_failure",
+        ),
+        CheckConstraint("length(checksum) = 64", name="checksum_is_sha256"),
+        Index("ix_normalised_records_source_status", "source_id", "status"),
+        # Every record naming one entity, across the workspace's sources.
+        Index("ix_normalised_records_entity_key", "workspace_id", "entity_key"),
+    )
+
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    parsed_record_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("parsed_records.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[NormalisationStatus] = mapped_column(
+        Enum(
+            NormalisationStatus,
+            name="status",
+            native_enum=False,
+            length=20,
+            values_callable=_statuses,
+            create_constraint=False,
+        ),
+        nullable=False,
+    )
+    # What was normalised: the parse's checksum and versions, and the rules'.
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    extractor_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    parser_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    normaliser_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    entity_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    entity_key: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    result: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    failure_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    normalised_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

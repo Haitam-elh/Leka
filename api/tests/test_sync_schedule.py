@@ -528,3 +528,71 @@ async def test_another_workspace_cannot_read_a_source_s_parsing(
     _as(identity, acme, "other_admin")
     url = f"{API}/ingestion/sources/{source['id']}/parsing"
     assert (await client.get(url)).status_code == 404
+
+
+# ── the normalisation, over the API (LEKA-356) ───────────────────────────────
+
+
+async def test_a_member_reads_the_candidates_made_of_a_source(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+    at = datetime.now(UTC)
+    checksum = "0" * 64
+    steps = [
+        "INSERT INTO source_records (workspace_id, source_id, kind, external_id, checksum, "
+        "first_seen_at, last_seen_at, payload_key) SELECT workspace_id, id, 'commits', e, :c, "
+        ":at, :at, 'k' FROM sources, (VALUES ('c-1'), ('c-2'), ('c-3')) AS v(e) WHERE id = :s",
+        "INSERT INTO extracted_records (workspace_id, source_id, source_record_id, kind, "
+        "status, extractor, extractor_version, checksum, result, extracted_at) "
+        "SELECT workspace_id, source_id, id, kind, 'extracted', 'x', 1, :c, '{}'::jsonb, :at "
+        "FROM source_records WHERE source_id = :s",
+        "INSERT INTO parsed_records (workspace_id, source_id, extracted_record_id, kind, status, "
+        "checksum, extractor_version, parser_version, result, parsed_at) "
+        "SELECT workspace_id, source_id, id, kind, 'parsed', :c, 1, 1, '{}'::jsonb, :at "
+        "FROM extracted_records WHERE source_id = :s",
+        "INSERT INTO normalised_records (workspace_id, source_id, parsed_record_id, kind, status, "
+        "checksum, extractor_version, parser_version, normaliser_version, entity_type, "
+        "entity_key, result, failure_code, message, normalised_at) "
+        "SELECT p.workspace_id, p.source_id, p.id, p.kind, "
+        "CASE r.external_id WHEN 'c-3' THEN 'failed' ELSE 'normalised' END, :c, 1, 1, 1, "
+        "CASE r.external_id WHEN 'c-3' THEN NULL ELSE 'commit' END, "
+        "CASE r.external_id WHEN 'c-3' THEN NULL ELSE 'k/' || r.external_id END, "
+        "CASE r.external_id WHEN 'c-1' THEN CAST(:one AS jsonb) "
+        "WHEN 'c-2' THEN CAST(:two AS jsonb) END, "
+        "CASE r.external_id WHEN 'c-3' THEN 'invalid' END, "
+        "CASE r.external_id WHEN 'c-3' THEN 'no sha: the extraction has no metadata.sha' END, :at "
+        "FROM parsed_records p JOIN extracted_records x ON x.id = p.extracted_record_id "
+        "JOIN source_records r ON r.id = x.source_record_id WHERE p.source_id = :s",
+    ]
+    one = '{"relationships": [{"type": "part_of"}, {"type": "resolves"}], "diagnostics": ["d"]}'
+    two = '{"relationships": [{"type": "part_of"}], "diagnostics": []}'
+    for sql in steps:
+        await _set(source["id"], acme["acme"], sql, c=checksum, at=at, one=one, two=two)
+
+    _as(identity, acme, "member")
+    read = (await client.get(f"{API}/ingestion/sources/{source['id']}/normalisation")).json()
+
+    assert (read["normalised"], read["failed"], read["invalid"], read["unsupported"]) == (
+        2,
+        1,
+        1,
+        0,
+    )
+    assert read["entities"] == {"commit": 2}
+    assert read["relationships"] == {"part_of": 2, "resolves": 1}
+    assert read["with_diagnostics"] == 1
+    ((failure),) = read["failures"]
+    assert (failure["external_id"], failure["code"]) == ("c-3", "invalid")
+
+
+async def test_another_workspace_cannot_read_a_source_s_normalisation(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+
+    _as(identity, acme, "other_admin")
+    url = f"{API}/ingestion/sources/{source['id']}/normalisation"
+    assert (await client.get(url)).status_code == 404
