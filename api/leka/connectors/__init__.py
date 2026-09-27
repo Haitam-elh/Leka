@@ -12,6 +12,7 @@ imported below; there is no other discovery (ADR 015).
 """
 
 from leka.connectors import (
+    aws,  # noqa: F401  — registers AwsConnector
     bitbucket,  # noqa: F401  — registers BitbucketConnector
     github,  # noqa: F401  — registers GitHubConnector
     gitlab,  # noqa: F401  — registers GitLabConnector

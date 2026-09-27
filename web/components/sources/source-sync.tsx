@@ -18,6 +18,13 @@ const ORDER = [
   "pull_requests",
   "issues",
   "releases",
+  "networks",
+  "instances",
+  "clusters",
+  "load_balancers",
+  "functions",
+  "db_instances",
+  "buckets",
 ];
 
 /**
