@@ -49,6 +49,14 @@ test("a new account is confirmed from its email, then signs in", async ({ page }
   await expect(page.getByText("Adresse confirmée")).toBeVisible();
 
   await signIn(page, email, PASSWORD);
+
+  // A new account belongs to no workspace: it is asked to create one, named
+  // after the company it gave, and lands where its tools are connected.
+  await expect(page.getByRole("heading", { name: "Créez votre espace de travail" })).toBeVisible();
+  await expect(page.getByLabel("Nom de l'espace")).toHaveValue("Acme");
+  await page.getByRole("button", { name: "Créer l'espace" }).click();
+  await expect(page).toHaveURL(/\/sources$/);
+  await expect(page.getByTestId("nav-sources").last()).toBeVisible();
 });
 
 test("a forgotten password is reset from its email", async ({ page }) => {

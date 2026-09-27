@@ -6,6 +6,7 @@ import { DocumentTitle } from "@/components/shell/document-title";
 import { RouteGuard } from "@/components/shell/route-guard";
 import { useNavBadges } from "@/lib/nav-badges";
 import { ShellProvider } from "@/components/shell/shell-provider";
+import { WorkspaceGate } from "@/components/shell/workspace-gate";
 import { Toaster } from "@/components/ui/toast";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { QueryProvider } from "@/lib/query";
@@ -39,7 +40,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           then — the red dot on the bell was a mocked "1" for everyone. */}
         <ConfirmProvider>
           <AppShell badges={badges} notificationCount={0}>
-            <RouteGuard>{children}</RouteGuard>
+            {/* Before the guard: with no workspace open every page is refused,
+                and a new account needs a way in, not a refusal. */}
+            <WorkspaceGate>
+              <RouteGuard>{children}</RouteGuard>
+            </WorkspaceGate>
           </AppShell>
         </ConfirmProvider>
       </ShellProvider>
