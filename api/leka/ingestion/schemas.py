@@ -208,3 +208,41 @@ class SourceNormalisation(BaseModel):
     with_diagnostics: int = Field(description="Normalised, with something kept as the vendor said.")
     last_normalised_at: datetime | None
     failures: list[NormalisationFailureRead] = Field(description="The latest, newest first.")
+
+
+# ── The pipeline, over the API (LEKA-360) ────────────────────────────────────
+
+
+class ProcessingRunRead(BaseModel):
+    """One run of one stage over a source."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    stage: str
+    status: str = Field(description="running, succeeded, failed or abandoned.")
+    started_at: datetime
+    finished_at: datetime | None
+    counts: dict[str, object]
+    versions: dict[str, object]
+    error: str | None = Field(description="The exception's type; its details are in the logs.")
+
+
+class StageState(BaseModel):
+    stage: str
+    job: str | None = Field(description="running (a worker has it), queued, or null.")
+    pending: bool = Field(description="Whether it has rows to make or make again.")
+    last_run: ProcessingRunRead | None
+
+
+class SourcePipeline(BaseModel):
+    """Where a source's processing stands, stage by stage, in order."""
+
+    stages: list[StageState]
+    processed_through: bool = Field(
+        description="Nothing pending and nothing under way: every stage is up to date."
+    )
+
+
+class PipelineQueued(BaseModel):
+    queued: str | None = Field(description="The stage queued, or null when none had work.")

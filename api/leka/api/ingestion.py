@@ -7,6 +7,10 @@
     GET  /ingestion/sources/{id}/extraction  what extraction made of it (LEKA-354)
     GET  /ingestion/sources/{id}/parsing     what parsing read in it (LEKA-355)
     GET  /ingestion/sources/{id}/normalisation  the candidates made of it (LEKA-356)
+    GET  /ingestion/sources/{id}/pipeline       each stage: under way, pending, last run (LEKA-360)
+    GET  /ingestion/sources/{id}/processing-runs  every run, newest first
+    POST /ingestion/sources/{id}/pipeline/resume     queue what has work — source:manage
+    POST /ingestion/sources/{id}/pipeline/reprocess  drop a stage's rows, redo — source:manage
 
 A route validates, calls one service, and returns (architecture rule 6).
 Permissions come from a FastAPI dependency, never an `if` in the body
@@ -37,13 +41,20 @@ from leka.ingestion import (
     NormalisationRepository,
     ParseFailureRead,
     ParsingRepository,
+    PipelineQueued,
+    ProcessingRun,
+    ProcessingRunRead,
+    ProcessingRunRepository,
+    ProcessingStage,
     SourceExtraction,
     SourceNormalisation,
     SourceParsing,
+    SourcePipeline,
     SourceRecordRepository,
     SourceSyncRead,
     SourceSyncRepository,
     SourceSyncs,
+    StageState,
     SyncRequested,
     SyncRun,
     SyncRunRead,
@@ -52,6 +63,8 @@ from leka.ingestion import (
     SyncSummary,
     SyncTrigger,
 )
+from leka.ingestion.lifecycle import reprocess
+from leka.ingestion.pipeline import STAGES, advance, pending
 from leka.ingestion.sync import ABANDONED, SYNCABLE, enqueue_sync
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
@@ -281,3 +294,90 @@ async def source_normalisation(
             for row, external_id in await repository.failures(source_id, limit=FAILURES_SHOWN)
         ],
     )
+
+
+@router.get("/sources/{source_id}/pipeline", response_model=SourcePipeline)
+async def source_pipeline(
+    source_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> SourcePipeline:
+    """Each processing stage of the source, in order: whether a job has it,
+    whether it has work, and how its last run went."""
+    source = await _source(session, principal, source_id)
+    runs = ProcessingRunRepository(session, principal.workspace_id)
+    jobs = await runs.job_states({stage.key(source.id): stage.name for stage in STAGES})
+    last = await runs.latest(source.id)
+    stages = [
+        StageState(
+            stage=stage.name.value,
+            job=jobs.get(stage.name),
+            pending=await pending(session, principal.workspace_id, source, stage.name),
+            last_run=ProcessingRunRead.model_validate(last[stage.name])
+            if stage.name in last
+            else None,
+        )
+        for stage in STAGES
+    ]
+    return SourcePipeline(
+        stages=stages,
+        processed_through=not any(s.pending or s.job for s in stages),
+    )
+
+
+PROCESSING_RUN_SORTS = SortCatalogue(
+    fields=(
+        SortableField(
+            "started_at", ProcessingRun.started_at, "ix_processing_runs_source_stage_started"
+        ),
+    ),
+    default="started_at",
+)
+
+
+@router.get("/sources/{source_id}/processing-runs", response_model=PageEnvelope[ProcessingRunRead])
+async def source_processing_runs(
+    source_id: uuid.UUID, session: SessionDep, principal: Reader, page: PageParams
+) -> PageEnvelope[ProcessingRunRead]:
+    """Every run of every stage over the source, newest first."""
+    await _source(session, principal, source_id)
+    result = await serve_page(
+        session,
+        ProcessingRunRepository(session, principal.workspace_id).history(source_id),
+        request=page,
+        catalogue=PROCESSING_RUN_SORTS,
+        id_column=ProcessingRun.id,
+    )
+    return PageEnvelope(
+        data=[ProcessingRunRead.model_validate(run) for run in result.items],
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.post(
+    "/sources/{source_id}/pipeline/resume",
+    response_model=PipelineQueued,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def resume_pipeline(
+    source_id: uuid.UUID, session: SessionDep, principal: Manager
+) -> PipelineQueued:
+    """Queue the first stage that has work — after a failure that used up its
+    retries, or to catch up now rather than after the next pass."""
+    source = await _source(session, principal, source_id)
+    queued = await advance(session, principal.workspace_id, source, after=None)
+    return PipelineQueued(queued=queued.value if queued else None)
+
+
+@router.post(
+    "/sources/{source_id}/pipeline/reprocess",
+    response_model=PipelineQueued,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def reprocess_pipeline(
+    source_id: uuid.UUID, session: SessionDep, principal: Manager, stage: ProcessingStage
+) -> PipelineQueued:
+    """Drop what `stage` made for the source — and what the later stages made
+    from it — then queue it again. Until it has run, the source has none of
+    that stage's rows: a deliberate act, for a manager."""
+    source = await _source(session, principal, source_id)
+    queued = await reprocess(session, principal.workspace_id, source, stage)
+    return PipelineQueued(queued=queued.value if queued else None)

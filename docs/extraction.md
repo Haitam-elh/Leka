@@ -171,10 +171,8 @@ changing a payload's shape shows here as one strategy failing at once.
 
 ## Not yet
 
-- **Retention of extracted text.** A row keeps its record's texts (capped)
-  as long as the record is live, while its raw payload expires after 30–90
-  days ([data-lifecycle.md](data-lifecycle.md)). Whether extracted text should
-  follow the payload's retention is to be decided.
+- **Retention of extracted text**: it follows its record, not the raw
+  payload — decided in LEKA-360 ([processing.md](processing.md#6-lifecycle-policies)).
 - **A screen**: the route is there; the Sources screen does not show it yet.
 - **Code itself** (files, READMEs): no connector reads repository contents
   yet.

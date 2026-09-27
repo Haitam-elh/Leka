@@ -24,6 +24,7 @@ from leka.background import Event, JobQueue, JobRunRepository
 from leka.connectors import Source, SourceStatus
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion import SourceSync
+from leka.ingestion import pipeline as pipeline_module
 from leka.ingestion import sync as sync_module
 from tests.conftest import FakeIdentity, error_code
 from tests.test_sources_api import _as, _create, acme, fake_connector  # noqa: F401 — fixtures
@@ -596,3 +597,136 @@ async def test_another_workspace_cannot_read_a_source_s_normalisation(
     _as(identity, acme, "other_admin")
     url = f"{API}/ingestion/sources/{source['id']}/normalisation"
     assert (await client.get(url)).status_code == 404
+
+
+# ── the pipeline, over the API (LEKA-360) ────────────────────────────────────
+
+
+@pytest.fixture
+def stages_queued(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """The stages the pipeline would have queued, instead of the queue."""
+    calls: list[str] = []
+
+    async def capture(job: str, *args: object, **kwargs: Any) -> object:
+        calls.append(job)
+        return object()
+
+    monkeypatch.setattr(pipeline_module, "enqueue_job", capture)
+    return calls
+
+
+async def _stage_job(workspace_id: uuid.UUID, source_id: str, key: str, status: str) -> None:
+    with system_scope():
+        async with session_factory() as session:
+            run = await JobRunRepository(session).create(
+                job="leka.ingestion.extraction.job.run_extraction",
+                args=[str(workspace_id), source_id],
+                kwargs=None,
+                for_workspace_id=workspace_id,
+                request_id=None,
+                queue=JobQueue.DEFAULT,
+                concurrency_key=f"{key}:{source_id}",
+            )
+            assert run is not None
+            await session.flush()
+            await session.execute(
+                text("UPDATE job_runs SET status = :st WHERE id = :id"),
+                {"st": status, "id": run.id},
+            )
+            await session.commit()
+
+
+async def test_a_member_reads_each_stage_of_a_source_s_pipeline(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+    url = f"{API}/ingestion/sources/{source['id']}/pipeline"
+    _as(identity, acme, "member")
+
+    fresh = (await client.get(url)).json()
+
+    assert [s["stage"] for s in fresh["stages"]] == ["extraction", "parsing", "normalisation"]
+    assert all(
+        not s["pending"] and s["job"] is None and s["last_run"] is None for s in fresh["stages"]
+    )
+    assert fresh["processed_through"] is True
+
+    at = datetime.now(UTC)
+    await _set(
+        source["id"],
+        acme["acme"],
+        "INSERT INTO source_records (workspace_id, source_id, kind, external_id, checksum, "
+        "first_seen_at, last_seen_at, payload_key) SELECT workspace_id, id, 'commits', 'c-1', "
+        ":c, :at, :at, 'k' FROM sources WHERE id = :s",
+        c="0" * 64,
+        at=at,
+    )
+    await _set(
+        source["id"],
+        acme["acme"],
+        "INSERT INTO processing_runs (workspace_id, source_id, stage, status, started_at, "
+        "finished_at, counts, versions) SELECT workspace_id, id, 'extraction', 'failed', :at, "
+        ":at, '{\"extracted\": 3}', '{\"commits\": 1}' FROM sources WHERE id = :s",
+        at=at,
+    )
+    await _stage_job(acme["acme"], source["id"], "extract", "running")
+
+    read = (await client.get(url)).json()
+
+    extraction = read["stages"][0]
+    assert (extraction["pending"], extraction["job"]) == (True, "running")
+    assert extraction["last_run"]["status"] == "failed"
+    assert extraction["last_run"]["counts"] == {"extracted": 3}
+    assert read["processed_through"] is False
+    runs = (await client.get(f"{API}/ingestion/sources/{source['id']}/processing-runs")).json()
+    assert [(r["stage"], r["status"]) for r in runs["data"]] == [("extraction", "failed")]
+
+
+async def test_an_admin_resumes_or_reprocesses_a_member_cannot(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    stages_queued: list[str],
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+    base = f"{API}/ingestion/sources/{source['id']}/pipeline"
+    await _set(
+        source["id"],
+        acme["acme"],
+        "INSERT INTO source_records (workspace_id, source_id, kind, external_id, checksum, "
+        "first_seen_at, last_seen_at, payload_key) SELECT workspace_id, id, 'commits', 'c-1', "
+        ":c, now(), now(), 'k' FROM sources WHERE id = :s",
+        c="0" * 64,
+    )
+
+    resumed = await client.post(f"{base}/resume")
+    redone = await client.post(f"{base}/reprocess", params={"stage": "parsing"})
+    unknown = await client.post(f"{base}/reprocess", params={"stage": "everything"})
+
+    assert (resumed.status_code, resumed.json()) == (202, {"queued": "extraction"})
+    # Parsing depends on an extraction that has work of its own: that first.
+    assert (redone.status_code, redone.json()) == (202, {"queued": "extraction"})
+    assert unknown.status_code == 422
+    assert stages_queued == [
+        "leka.ingestion.extraction.job.run_extraction",
+        "leka.ingestion.extraction.job.run_extraction",
+    ]
+
+    _as(identity, acme, "member")
+    assert (await client.post(f"{base}/resume")).status_code == 403
+    assert (await client.post(f"{base}/reprocess", params={"stage": "parsing"})).status_code == 403
+
+
+async def test_another_workspace_cannot_read_or_drive_a_source_s_pipeline(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _activated(client)
+
+    _as(identity, acme, "other_admin")
+    base = f"{API}/ingestion/sources/{source['id']}"
+    assert (await client.get(f"{base}/pipeline")).status_code == 404
+    assert (await client.get(f"{base}/processing-runs")).status_code == 404
+    assert (await client.post(f"{base}/pipeline/resume")).status_code == 404
