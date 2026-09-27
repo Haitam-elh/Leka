@@ -68,6 +68,7 @@ class SourceKind(enum.StrEnum):
     CONFLUENCE = "confluence"
     AWS = "aws"
     AZURE = "azure"
+    GCP = "gcp"
     DATADOG = "datadog"
     SLACK = "slack"
 

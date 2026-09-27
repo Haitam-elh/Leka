@@ -15,6 +15,7 @@ from leka.connectors import (
     aws,  # noqa: F401  — registers AwsConnector
     azure,  # noqa: F401  — registers AzureConnector
     bitbucket,  # noqa: F401  — registers BitbucketConnector
+    gcp,  # noqa: F401  — registers GcpConnector
     github,  # noqa: F401  — registers GitHubConnector
     gitlab,  # noqa: F401  — registers GitLabConnector
     jira,  # noqa: F401  — registers JiraConnector

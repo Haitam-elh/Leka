@@ -706,6 +706,10 @@ const fr = {
         label: "Secret client",
         help: "Chiffré, et plus jamais affiché.",
       },
+      service_account_key: {
+        label: "Clé du compte de service",
+        help: "Le fichier JSON téléchargé depuis Google Cloud, en entier. Chiffré, et plus jamais affiché.",
+      },
       site: {
         label: "Site Atlassian",
         help: "Son nom, comme dans acme.atlassian.net.",
@@ -1489,6 +1493,10 @@ const en: Dictionary = {
       client_secret: {
         label: "Client secret",
         help: "Encrypted, and never shown again.",
+      },
+      service_account_key: {
+        label: "Service account key",
+        help: "The JSON file downloaded from Google Cloud, whole. Encrypted, and never shown again.",
       },
       site: {
         label: "Atlassian site",

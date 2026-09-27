@@ -129,6 +129,9 @@ _TOKEN_SHAPES = re.compile(
     r"|(gl(?:pat|oas|dt|rt|cbt|ptt|ft|imt|soat|ffct|agent)-[A-Za-z0-9_\-]{10,})"
     # Atlassian's: API tokens, access tokens, the retired app passwords.
     r"|(AT(?:ATT|CTT|BB)[A-Za-z0-9_\-=]{16,})"
+    # A private key in PEM, however its newlines were escaped by the JSON it
+    # was echoed in — to its end, or to the end of the text when cut short.
+    r"|(-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$))"
 )
 REDACTED = "[redacted]"
 MAX_DETAIL = 300

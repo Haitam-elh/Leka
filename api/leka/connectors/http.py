@@ -85,6 +85,7 @@ class VendorHttp:
         page_size: int,
         page_size_param: str = "per_page",
         in_body: tuple[str, str] | None = None,
+        page_cursor_param: str | None = None,
     ) -> None:
         """`in_body`: for vendors that page in the body rather than the Link
         header — the fields holding the items and the next page's URL,
@@ -94,6 +95,9 @@ class VendorHttp:
         self._refuse = refuse
         self._page = {page_size_param: page_size}
         self._in_body = in_body
+        # Google's way: the body's field is a token, sent back as this
+        # parameter on the same path — not a URL to follow.
+        self._page_cursor_param = page_cursor_param
 
     async def __aenter__(self) -> Self:
         await self._client.__aenter__()
@@ -180,7 +184,12 @@ class VendorHttp:
                 yield item
             if skip_before and page and skipped == len(page):
                 return
-            url, query = self._next_page(response, body), None  # the link carries the query
+            if self._page_cursor_param and self._in_body:
+                token = body.get(self._in_body[1])
+                url = path if token else None
+                query = {**self._page, **(params or {}), self._page_cursor_param: str(token)}
+            else:
+                url, query = self._next_page(response, body), None  # the link carries the query
             if url:
                 self._spare_the_quota(response)
 
