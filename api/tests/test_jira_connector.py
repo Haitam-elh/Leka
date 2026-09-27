@@ -335,3 +335,11 @@ async def test_a_page_link_to_another_host_is_not_followed_with_the_token() -> N
 
     assert caught.value.diagnostic.code is DiagnosticCode.PROVIDER_ERROR
     assert "evil.example" in (caught.value.diagnostic.detail or "")
+
+
+def test_jira_says_what_it_lists_whole_so_a_pass_sweeps_it() -> None:
+    """Projects come whole every pass, so what a pass did not see is gone;
+    issues are asked by JQL `updated >=`, so those wait for the weekly full pass."""
+    manifest = next(m for m in manifests() if m.key == "jira")
+
+    assert manifest.listed_whole == {Capability.PROJECTS}

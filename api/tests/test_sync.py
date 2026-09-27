@@ -808,3 +808,24 @@ async def test_what_is_listed_whole_is_not_swept_when_the_listing_is_cut_short(
         await _sync(source)
 
     assert all(row.deleted_at is None for row in (await _index(source, "issues")).values())
+
+
+@pytest.mark.parametrize(
+    ("offered", "expected"),
+    [
+        # Jira, Linear: projects before the issues that name them.
+        ({"projects", "issues"}, ["projects", "issues"]),
+        # Confluence: spaces before their pages.
+        ({"spaces", "pages"}, ["spaces", "pages"]),
+        # Notion: databases before the pages that are their rows.
+        ({"pages", "databases"}, ["databases", "pages"]),
+    ],
+)
+def test_what_the_others_hang_from_is_read_first(offered: set[str], expected: list[str]) -> None:
+    from types import SimpleNamespace
+    from typing import Any, cast
+
+    source = cast(Any, SimpleNamespace(capabilities=sorted(offered)))
+    order = sync_module._capabilities(source, frozenset(Capability(c) for c in offered))
+
+    assert [c.value for c in order] == expected

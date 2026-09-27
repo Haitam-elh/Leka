@@ -334,3 +334,11 @@ async def test_a_listing_too_long_to_offer_says_so(monkeypatch: pytest.MonkeyPat
 
     assert [o.key for o in listing.options] == ["ENG"]
     assert listing.truncated is True
+
+
+def test_linear_says_what_it_lists_whole_so_a_pass_sweeps_it() -> None:
+    """Projects come whole every pass, so what a pass did not see is gone;
+    issues are filtered by `updatedAt`, so those wait for the weekly full pass."""
+    manifest = next(m for m in manifests() if m.key == "linear")
+
+    assert manifest.listed_whole == {Capability.PROJECTS}

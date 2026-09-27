@@ -309,3 +309,11 @@ async def test_a_listing_too_long_to_offer_says_so(monkeypatch: pytest.MonkeyPat
 
     assert [o.key for o in listing.options] == ["ENG"]
     assert listing.truncated is True
+
+
+def test_confluence_says_what_it_lists_whole_so_a_pass_sweeps_it() -> None:
+    """Spaces come whole every pass, so what a pass did not see is gone;
+    pages stop at the last pass, so those wait for the weekly full pass."""
+    manifest = next(m for m in manifests() if m.key == "confluence")
+
+    assert manifest.listed_whole == {Capability.SPACES}

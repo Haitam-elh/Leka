@@ -181,6 +181,8 @@ class LinearConnector(Connector[LinearConfig, LinearCredentials]):
         config_schema=LinearConfig,
         credentials_schema=LinearCredentials,
         capabilities=frozenset({Capability.PROJECTS, Capability.ISSUES}),
+        # Projects come whole every pass; issues filtered by `updatedAt`.
+        listed_whole=frozenset({Capability.PROJECTS}),
     )
 
     # ── the contract ─────────────────────────────────────────────────────────

@@ -101,6 +101,8 @@ class ConfluenceConnector(Connector[ConfluenceConfig, ConfluenceCredentials]):
         config_schema=ConfluenceConfig,
         credentials_schema=ConfluenceCredentials,
         capabilities=frozenset({Capability.SPACES, Capability.PAGES}),
+        # Spaces come whole every pass; pages stop at the last pass.
+        listed_whole=frozenset({Capability.SPACES}),
     )
 
     # ── the contract ─────────────────────────────────────────────────────────
