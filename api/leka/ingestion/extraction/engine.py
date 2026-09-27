@@ -41,7 +41,7 @@ class MalformedPayloadError(ValueError):
 class Strategy:
     name: str
     version: int
-    extract: Callable[[Payload], Extracted]
+    extract: Callable[[RawRecord], Extracted]
 
 
 _STRATEGIES: dict[tuple[SourceKind, Capability], Strategy] = {}
@@ -50,17 +50,40 @@ _STRATEGIES: dict[tuple[SourceKind, Capability], Strategy] = {}
 def strategy(
     name: str, version: int, *targets: tuple[SourceKind, Capability]
 ) -> Callable[[Callable[[Payload], Extracted]], Callable[[Payload], Extracted]]:
-    """Register a function as the strategy for these (kind, capability) pairs."""
+    """Register a function of the payload as the strategy for these
+    (kind, capability) pairs."""
 
     def register(function: Callable[[Payload], Extracted]) -> Callable[[Payload], Extracted]:
-        for target in targets:
-            if target in _STRATEGIES:
-                msg = f"{target} already has the strategy {_STRATEGIES[target].name}"
-                raise ValueError(msg)
-            _STRATEGIES[target] = Strategy(name, version, function)
+        _register(name, version, targets, lambda record: function(record.payload))
         return function
 
     return register
+
+
+def record_strategy(
+    name: str, version: int, *targets: tuple[SourceKind, Capability]
+) -> Callable[[Callable[[RawRecord], Extracted]], Callable[[RawRecord], Extracted]]:
+    """The same, for a strategy that needs what the connector said beside the
+    payload — the container: an AWS resource's region is not in its payload."""
+
+    def register(function: Callable[[RawRecord], Extracted]) -> Callable[[RawRecord], Extracted]:
+        _register(name, version, targets, function)
+        return function
+
+    return register
+
+
+def _register(
+    name: str,
+    version: int,
+    targets: tuple[tuple[SourceKind, Capability], ...],
+    function: Callable[[RawRecord], Extracted],
+) -> None:
+    for target in targets:
+        if target in _STRATEGIES:
+            msg = f"{target} already has the strategy {_STRATEGIES[target].name}"
+            raise ValueError(msg)
+        _STRATEGIES[target] = Strategy(name, version, function)
 
 
 def strategy_for(kind: SourceKind, capability: Capability) -> Strategy | None:
@@ -100,7 +123,7 @@ def extract(
             message=f"no extraction for {source_kind.value} {record.kind.value} yet",
         )
     try:
-        fields = found.extract(record.payload)
+        fields = found.extract(record)
         return ExtractedRecord(
             provenance=provenance,
             extractor=found.name,
