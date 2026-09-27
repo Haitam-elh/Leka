@@ -404,6 +404,28 @@ class SourceRecordRepository(WorkspaceScopedRepository):
         )
         return {(kind, external_id) for kind, external_id in rows.all()}
 
+    async def still_deleted(
+        self, source_id: uuid.UUID, identities: set[tuple[str, str]]
+    ) -> set[tuple[str, str]]:
+        """Which of these are STILL deleted, their index rows locked until the
+        caller commits. A pass that sees one again waits for that commit
+        rather than reviving it while its lines are being removed."""
+        still: set[tuple[str, str]] = set()
+        for kind in {kind for kind, _ in identities}:
+            rows = await self._session.execute(
+                select(SourceRecord.kind, SourceRecord.external_id)
+                .where(
+                    SourceRecord.workspace_id == self.workspace_id,
+                    SourceRecord.source_id == source_id,
+                    SourceRecord.kind == kind,
+                    SourceRecord.external_id.in_([e for k, e in identities if k == kind]),
+                    SourceRecord.deleted_at.is_not(None),
+                )
+                .with_for_update()
+            )
+            still.update((k, e) for k, e in rows.all())
+        return still
+
     async def move_payload(self, source_id: uuid.UUID, old_key: str, new_key: str) -> None:
         """Records whose latest version was in a rewritten batch now point at
         its new object."""

@@ -128,12 +128,21 @@ of the source — a record that changed three times is in three — and:
   the row and the index point at it and commit, then the old object is
   deleted (a crash leaves an orphan the reconciliation removes).
 
+Before each batch is rewritten, what it would remove is **checked again**,
+the index rows locked until that batch commits: a pass can run beside the
+purge, and a record seen again since the purge started keeps its line — a
+pass that revives one waits for the batch's commit.
+
 Then the index forgets their batch (`payload_key` NULL). It is idempotent: a
 second run finds nothing to remove and writes nothing. The pass stays fast;
 the purge follows within minutes.
 
 ## Not yet
 
+- **A purge that reads only the batches concerned** — each purge reads every
+  live batch of the source. Fine today; a source of hundreds of thousands of
+  commits will need the index to know every batch a record is in, not only
+  the latest (Haitam, review of #89).
 - **Checkpoints inside a capability** — a pass that fails half-way through
   a large capability re-reads it from the cursor, not from the page it
   reached; the index makes that re-read cost reads, not writes.
