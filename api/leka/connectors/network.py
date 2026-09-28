@@ -84,6 +84,38 @@ class PublicTransport(httpx.AsyncBaseTransport):
         await self._inner.aclose()
 
 
+class PrivateAddressError(ValueError):
+    """A host — not a URL: a database's — that leads somewhere a connector
+    must not go."""
+
+
+async def public_address(host: str, port: int, *, resolve: Resolve = _resolve) -> str:
+    """The address to connect to for `host`: resolved now, every address it
+    has public, the first of them. Connect to it, not to the name — the name
+    cannot then change target between this check and the connection. The
+    same rule as PublicTransport's, for what does not speak HTTP.
+
+    A name that does not resolve raises the resolver's OSError: a network
+    failure, not a refusal."""
+    try:
+        addresses = [ipaddress.ip_address(host.strip("[]"))]
+    except ValueError:
+        addresses = [ipaddress.ip_address(a) for a in await resolve(host, port)]
+    if not addresses or not all(is_public(address) for address in addresses):
+        msg = f"{host} is not a public address"
+        raise PrivateAddressError(msg)
+    return str(addresses[0])
+
+
+def obviously_private(host: str) -> bool:
+    """A literal address that is not public: 10.0.0.5, ::1. For the form's
+    early answer — a name is checked when connecting, by public_address."""
+    try:
+        return not is_public(ipaddress.ip_address(host.strip().strip("[]")))
+    except ValueError:
+        return False
+
+
 def _https_and_not_an_obvious_private_address(url: HttpUrl) -> HttpUrl:
     """Early, readable feedback in the form. Not the protection — the
     transport is: a name can point anywhere once it has been saved."""

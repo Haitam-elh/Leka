@@ -13,7 +13,14 @@ from pydantic import HttpUrl, SecretStr, ValidationError
 from leka.connectors import ConnectorError, DiagnosticCode
 from leka.connectors.github import GitHubConfig, GitHubConnector, GitHubCredentials
 from leka.connectors.gitlab import GitLabConfig
-from leka.connectors.network import BlockedAddressError, PublicTransport
+from leka.connectors.network import (
+    BlockedAddressError,
+    PrivateAddressError,
+    PublicTransport,
+    Resolve,
+    obviously_private,
+    public_address,
+)
 
 PUBLIC = "140.82.112.6"
 
@@ -120,3 +127,63 @@ async def test_a_connector_on_the_network_is_guarded_and_says_why() -> None:
 
     assert caught.value.diagnostic.code is DiagnosticCode.CONFIG_INVALID
     assert "public" in caught.value.diagnostic.message
+
+
+# ── what does not speak HTTP: a database's host (LEKA-349) ───────────────────
+
+
+def _names(names: dict[str, list[str]]) -> Resolve:
+    async def resolve(host: str, port: int) -> list[str]:
+        if host not in names:
+            raise OSError(8, "nodename nor servname provided")
+        return names[host]
+
+    return resolve
+
+
+async def test_a_public_name_gives_the_address_to_connect_to() -> None:
+    resolve = _names({"db.acme.example": [PUBLIC, "140.82.112.7"]})
+
+    assert await public_address("db.acme.example", 5432, resolve=resolve) == PUBLIC
+
+
+@pytest.mark.parametrize(
+    "addresses", [["10.0.0.5"], [PUBLIC, "192.168.1.10"], ["::ffff:127.0.0.1"], []]
+)
+async def test_a_name_with_one_address_that_is_not_public_is_refused(
+    addresses: list[str],
+) -> None:
+    resolve = _names({"db.acme.example": addresses})
+
+    with pytest.raises(PrivateAddressError):
+        await public_address("db.acme.example", 5432, resolve=resolve)
+
+
+async def test_a_literal_address_is_judged_without_asking_the_dns() -> None:
+    nothing = _names({})
+
+    assert await public_address(PUBLIC, 5432, resolve=nothing) == PUBLIC
+    with pytest.raises(PrivateAddressError):
+        await public_address("[::1]", 5432, resolve=nothing)
+
+
+async def test_a_name_that_does_not_resolve_is_a_network_failure_not_a_refusal() -> None:
+    with pytest.raises(OSError) as caught:
+        await public_address("nowhere.acme.example", 5432, resolve=_names({}))
+
+    assert not isinstance(caught.value, PrivateAddressError)
+
+
+@pytest.mark.parametrize(
+    ("host", "private"),
+    [
+        ("10.0.0.5", True),
+        ("[::1]", True),
+        ("169.254.169.254", True),
+        (PUBLIC, False),
+        ("db.acme.example", False),
+        ("localhost", False),
+    ],
+)
+def test_only_a_literal_address_is_obviously_private(host: str, private: bool) -> None:
+    assert obviously_private(host) is private

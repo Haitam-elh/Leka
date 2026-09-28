@@ -84,6 +84,8 @@ class SourceKind(enum.StrEnum):
     DATADOG = "datadog"
     PAGERDUTY = "pagerduty"
     GRAFANA = "grafana"
+    POSTGRESQL = "postgresql"
+    MYSQL = "mysql"
     SLACK = "slack"
 
 

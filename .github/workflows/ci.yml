@@ -42,6 +42,21 @@ jobs:
           --health-timeout 3s
           --health-retries 12
 
+      mysql:
+        # A customer's MySQL, for tests/test_mysql_connector.py (LEKA-349):
+        # the connector reads a real server's catalogue, over the TLS the
+        # image sets up by itself. Same image as docker-compose.yml.
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: leka
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pleka"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 24
+          --health-start-period 20s
+
     env:
       LEKA_DATABASE_URL: postgresql+asyncpg://leka:leka@127.0.0.1:5432/leka_test
       LEKA_REDIS_URL: redis://127.0.0.1:6379/0
@@ -54,6 +69,9 @@ jobs:
       # server answers, which is right on a laptop and wrong in a pipeline
       # that reports the adapter as verified.
       LEKA_REQUIRE_S3_TESTS: "1"
+      # The same for MySQL: its tests skip on a laptop with no server, and
+      # must not here.
+      LEKA_REQUIRE_MYSQL_TESTS: "1"
 
     defaults:
       run:

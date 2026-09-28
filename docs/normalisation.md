@@ -61,6 +61,8 @@ extracted and parsed, but are not entities: they are the evidence about
 incidents and services, not things of the company model. Nor are the
 containers of documents — spaces, Notion databases, topics, collections,
 drives: a document names what it is part of. Both stay `unsupported`.
+So do a database's schemas and tables (PostgreSQL, MySQL): representing them in
+the company model is LEKA-364.
 
 A GitLab merge request is a `pull_request`; a Jira issue and a GitHub issue
 are both `issue`. The strings are ingestion's; leka.knowledge maps them onto

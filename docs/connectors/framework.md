@@ -8,7 +8,8 @@ for and read: [code-platforms.md](code-platforms.md); Jira, Confluence,
 Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace
 and Microsoft 365:
 [project-and-documentation.md](project-and-documentation.md); Datadog,
-PagerDuty and Grafana: [observability.md](observability.md).
+PagerDuty and Grafana: [observability.md](observability.md); PostgreSQL and
+MySQL: [databases.md](databases.md).
 
 **LEKA only reads.** No connector writes to a customer's system: the
 manifest says `read_only: True` as a literal, and every call a connector
@@ -17,7 +18,9 @@ Monday's and Slab's GraphQL queries, Notion's search). Those go through
 `VendorHttp.post`, to the paths the connector declared in `reads_by_post`
 and nowhere else; a POST anywhere else is refused before it is sent. A
 GraphQL connector sends `query` documents only, checked before sending by
-`leka/connectors/graphql.py` and by a test over all of them.
+`leka/connectors/graphql.py` and by a test over all of them. PostgreSQL and
+MySQL speak no HTTP: each reads its catalogue in a session opened
+read-only ([databases.md](databases.md)).
 
 ---
 

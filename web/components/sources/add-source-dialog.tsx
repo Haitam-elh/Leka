@@ -348,7 +348,8 @@ function SchemaField({
       label={known?.label ?? field.title}
       description={help || undefined}
       optional={!field.required || (keepSecret && field.kind === "password")}
-      type={field.kind}
+      type={field.kind === "number" ? "text" : field.kind}
+      inputMode={field.kind === "number" ? "numeric" : undefined}
       autoComplete={field.kind === "password" ? "off" : undefined}
     />
   );

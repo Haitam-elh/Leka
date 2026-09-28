@@ -54,6 +54,10 @@ DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     # Incidents and the services they are about: small, and what a
     # post-mortem reads weeks later.
     SourceKind.PAGERDUTY: 90,
+    # A database's catalogue: small, and what explains a table for as long
+    # as the table lives.
+    SourceKind.POSTGRESQL: 90,
+    SourceKind.MYSQL: 90,
     SourceKind.SLACK: 30,
     SourceKind.AWS: 30,
     SourceKind.AZURE: 30,
