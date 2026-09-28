@@ -576,6 +576,7 @@ const fr = {
         networks: "réseaux virtuels",
         load_balancers: "load balancers et Application Gateway",
       },
+      gitlab: { pull_requests: "merge requests" },
       notion: { databases: "bases Notion" },
       asana: { issues: "tâches" },
       trello: { projects: "tableaux", issues: "cartes" },
@@ -800,6 +801,18 @@ const fr = {
      * back to `fields`.
      */
     fieldsOf: {
+      jira: {
+        token: {
+          label: "Jeton d'API",
+          help: "Un jeton Atlassian ne peut pas être limité à la lecture : créez-le sur un compte dédié, sans droits d'administration, qui ne voit que ce que LEKA doit lire. Chiffré, et plus jamais affiché.",
+        },
+      },
+      confluence: {
+        token: {
+          label: "Jeton d'API",
+          help: "Un jeton Atlassian ne peut pas être limité à la lecture : créez-le sur un compte dédié, sans droits d'administration, qui ne voit que ce que LEKA doit lire. Chiffré, et plus jamais affiché.",
+        },
+      },
       linear: {
         api_key: {
           label: "Clé d'API",
@@ -1528,6 +1541,7 @@ const en: Dictionary = {
         networks: "virtual networks",
         load_balancers: "load balancers and Application Gateway",
       },
+      gitlab: { pull_requests: "merge requests" },
       notion: { databases: "Notion databases" },
       asana: { issues: "tasks" },
       trello: { projects: "boards", issues: "cards" },
@@ -1747,6 +1761,18 @@ const en: Dictionary = {
       },
     },
     fieldsOf: {
+      jira: {
+        token: {
+          label: "API token",
+          help: "An Atlassian token cannot be limited to reading: create it on a dedicated account, with no admin rights, that sees only what LEKA should read. Encrypted, and never shown again.",
+        },
+      },
+      confluence: {
+        token: {
+          label: "API token",
+          help: "An Atlassian token cannot be limited to reading: create it on a dedicated account, with no admin rights, that sees only what LEKA should read. Encrypted, and never shown again.",
+        },
+      },
       linear: {
         api_key: {
           label: "API key",
