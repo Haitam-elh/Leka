@@ -541,6 +541,8 @@ const fr = {
       spaces: "espaces",
       pages: "pages",
       databases: "bases",
+      drives: "drives",
+      files: "fichiers",
     },
     /**
      * The same words, in each vendor's own terms where it has them: what
@@ -575,7 +577,19 @@ const fr = {
         networks: "réseaux virtuels",
         load_balancers: "load balancers et Application Gateway",
       },
+      gitlab: { pull_requests: "merge requests" },
       notion: { databases: "bases Notion" },
+      asana: { issues: "tâches" },
+      trello: { projects: "tableaux", issues: "cartes" },
+      clickup: { projects: "listes", issues: "tâches" },
+      monday: { projects: "tableaux", issues: "éléments" },
+      slab: { spaces: "sujets", pages: "articles" },
+      guru: { spaces: "collections", pages: "fiches" },
+      google_workspace: { drives: "Drive partagés", files: "fichiers (Docs, Sheets, Slides…)" },
+      microsoft_365: {
+        drives: "bibliothèques SharePoint et OneDrive",
+        files: "fichiers (Word, Excel, PowerPoint…)",
+      },
     },
     empty: {
       title: "Aucune source connectée",
@@ -754,7 +768,8 @@ const fr = {
       activated: "{name} est activée",
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
-      missingBody: "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear et Notion.",
+      missingBody:
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace et Microsoft 365.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -825,7 +840,96 @@ const fr = {
       },
       api_key: {
         label: "Clé d'API",
-        help: "Une clé personnelle (lin_api_…). Elle est chiffrée, et ne sera plus jamais affichée.",
+        help: "Chiffrée, et plus jamais affichée.",
+      },
+    },
+    /**
+     * The same fields, in a tool's own terms where its secret is its own: a
+     * Linear key is not a Trello key. A kind or a field not listed falls
+     * back to `fields`.
+     */
+    fieldsOf: {
+      jira: {
+        token: {
+          label: "Jeton d'API",
+          help: "Un jeton Atlassian ne peut pas être limité à la lecture : créez-le sur un compte dédié, sans droits d'administration, qui ne voit que ce que LEKA doit lire. Chiffré, et plus jamais affiché.",
+        },
+      },
+      confluence: {
+        token: {
+          label: "Jeton d'API",
+          help: "Un jeton Atlassian ne peut pas être limité à la lecture : créez-le sur un compte dédié, sans droits d'administration, qui ne voit que ce que LEKA doit lire. Chiffré, et plus jamais affiché.",
+        },
+      },
+      linear: {
+        api_key: {
+          label: "Clé d'API",
+          help: "Une clé personnelle (lin_api_…). Elle est chiffrée, et ne sera plus jamais affichée.",
+        },
+      },
+      asana: {
+        token: {
+          label: "Jeton d'accès personnel",
+          help: "Celui d'un membre dédié, pas d'un administrateur : Paramètres → Applications → Applications de développement. Chiffré, et plus jamais affiché.",
+        },
+      },
+      trello: {
+        token: {
+          label: "Jeton",
+          help: "Autorisé en lecture seule (scope=read) par le propriétaire de la clé. Chiffré, et plus jamais affiché.",
+        },
+        api_key: {
+          label: "Clé d'API",
+          help: "Celle d'un Power-Up, sur trello.com/power-ups/admin. Chiffrée, et plus jamais affichée.",
+        },
+      },
+      clickup: {
+        token: {
+          label: "Jeton personnel",
+          help: "pk_…, celui d'un membre dédié : Paramètres → Applications → Jeton d'API. Chiffré, et plus jamais affiché.",
+        },
+      },
+      monday: {
+        token: {
+          label: "Jeton d'API",
+          help: "Celui d'un membre dédié, pas d'un administrateur : avatar → Développeurs → Jeton d'API. Chiffré, et plus jamais affiché.",
+        },
+      },
+      slab: {
+        token: {
+          label: "Jeton d'API",
+          help: "Celui de l'espace, dans Team settings → Developer (offres Business et Enterprise). Il lit comme le Slab Bot. Chiffré, et plus jamais affiché.",
+        },
+      },
+      guru: {
+        token: {
+          label: "Jeton d'API",
+          help: "De préférence un jeton de collection, en lecture seule ; sinon celui d'un utilisateur dédié. Chiffré, et plus jamais affiché.",
+        },
+        username: {
+          label: "Identifiant",
+          help: "Pour un jeton de collection : l'identifiant de la collection. Pour un jeton d'utilisateur : son e-mail.",
+        },
+      },
+      google_workspace: {
+        service_account_key: {
+          label: "Clé du compte de service",
+          help: "Le fichier JSON téléchargé depuis Google Cloud, en entier, d'un projet où l'API Google Drive est activée. Chiffré, et plus jamais affiché.",
+        },
+        subject: {
+          label: "Utilisateur délégué",
+          help: "Le compte, dédié et en lecture, pour lequel le compte de service agit — par la délégation au niveau du domaine, avec le scope drive.readonly. Vide : le compte de service lui-même, qui ne voit que ce qui est partagé avec son adresse.",
+        },
+      },
+      microsoft_365: {
+        tenant_id: {
+          label: "Tenant ID",
+          help: "L'identifiant du tenant Microsoft Entra de l'application.",
+        },
+        client_id: {
+          label: "Application (client) ID",
+          help: "Celui de l'application, avec les permissions d'application Sites.Read.All, Files.Read.All et User.Read.All de Microsoft Graph, consenties par un administrateur.",
+        },
       },
     },
     events: {
@@ -1456,6 +1560,8 @@ const en: Dictionary = {
       spaces: "spaces",
       pages: "pages",
       databases: "databases",
+      drives: "drives",
+      files: "files",
     },
     capabilitiesOf: {
       aws: {
@@ -1485,7 +1591,19 @@ const en: Dictionary = {
         networks: "virtual networks",
         load_balancers: "load balancers and Application Gateway",
       },
+      gitlab: { pull_requests: "merge requests" },
       notion: { databases: "Notion databases" },
+      asana: { issues: "tasks" },
+      trello: { projects: "boards", issues: "cards" },
+      clickup: { projects: "lists", issues: "tasks" },
+      monday: { projects: "boards", issues: "items" },
+      slab: { spaces: "topics", pages: "posts" },
+      guru: { spaces: "collections", pages: "cards" },
+      google_workspace: { drives: "shared drives", files: "files (Docs, Sheets, Slides…)" },
+      microsoft_365: {
+        drives: "SharePoint libraries and OneDrives",
+        files: "files (Word, Excel, PowerPoint…)",
+      },
     },
     empty: {
       title: "No source connected",
@@ -1663,7 +1781,8 @@ const en: Dictionary = {
       activated: "{name} is activated",
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
-      missingBody: "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear and Notion today.",
+      missingBody:
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace and Microsoft 365 today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -1734,7 +1853,91 @@ const en: Dictionary = {
       },
       api_key: {
         label: "API key",
-        help: "A personal key (lin_api_…). It is encrypted, and never shown again.",
+        help: "Encrypted, and never shown again.",
+      },
+    },
+    fieldsOf: {
+      jira: {
+        token: {
+          label: "API token",
+          help: "An Atlassian token cannot be limited to reading: create it on a dedicated account, with no admin rights, that sees only what LEKA should read. Encrypted, and never shown again.",
+        },
+      },
+      confluence: {
+        token: {
+          label: "API token",
+          help: "An Atlassian token cannot be limited to reading: create it on a dedicated account, with no admin rights, that sees only what LEKA should read. Encrypted, and never shown again.",
+        },
+      },
+      linear: {
+        api_key: {
+          label: "API key",
+          help: "A personal key (lin_api_…). It is encrypted, and never shown again.",
+        },
+      },
+      asana: {
+        token: {
+          label: "Personal access token",
+          help: "A dedicated member's, not an admin's: My settings → Apps → Developer apps. Encrypted, and never shown again.",
+        },
+      },
+      trello: {
+        token: {
+          label: "Token",
+          help: "Authorised read-only (scope=read) by the key's owner. Encrypted, and never shown again.",
+        },
+        api_key: {
+          label: "API key",
+          help: "A Power-Up's, from trello.com/power-ups/admin. Encrypted, and never shown again.",
+        },
+      },
+      clickup: {
+        token: {
+          label: "Personal token",
+          help: "pk_…, a dedicated member's: Settings → Apps → API Token. Encrypted, and never shown again.",
+        },
+      },
+      monday: {
+        token: {
+          label: "API token",
+          help: "A dedicated member's, not an admin's: avatar → Developers → API token. Encrypted, and never shown again.",
+        },
+      },
+      slab: {
+        token: {
+          label: "API token",
+          help: "The workspace's, from Team settings → Developer (Business and Enterprise plans). It reads as the Slab Bot. Encrypted, and never shown again.",
+        },
+      },
+      guru: {
+        token: {
+          label: "API token",
+          help: "Preferably a collection token, read-only; else a dedicated user's. Encrypted, and never shown again.",
+        },
+        username: {
+          label: "Username",
+          help: "For a collection token: the collection's id. For a user token: the user's email.",
+        },
+      },
+      google_workspace: {
+        service_account_key: {
+          label: "Service account key",
+          help: "The JSON file downloaded from Google Cloud, whole, from a project with the Google Drive API on. Encrypted, and never shown again.",
+        },
+        subject: {
+          label: "Delegated user",
+          help: "The account, dedicated and read-only, the service account acts as — by domain-wide delegation, with the drive.readonly scope. Empty: the service account itself, which sees only what is shared with its address.",
+        },
+      },
+      microsoft_365: {
+        tenant_id: {
+          label: "Tenant ID",
+          help: "The Microsoft Entra tenant id of the application.",
+        },
+        client_id: {
+          label: "Application (client) ID",
+          help: "The application's, with Microsoft Graph's application permissions Sites.Read.All, Files.Read.All and User.Read.All, consented by an admin.",
+        },
       },
     },
     events: {

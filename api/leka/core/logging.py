@@ -170,6 +170,13 @@ def configure_logging(settings: Settings) -> None:
         stream=sys.stdout,
         level=getattr(logging, settings.log_level),
     )
+    # httpx writes every URL it calls, at INFO. A connector's URLs are the
+    # customer's, and some carry a credential for as long as they live — a
+    # pre-authenticated download link, Microsoft Graph's for a file's
+    # content. A connector's failures reach the logs as diagnostics, cleaned
+    # of secrets; its requests do not reach them at all.
+    for chatty in ("httpx", "httpcore"):
+        logging.getLogger(chatty).setLevel(logging.WARNING)
 
     renderer: structlog.typing.Processor = (
         structlog.processors.JSONRenderer()

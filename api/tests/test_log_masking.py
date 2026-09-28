@@ -13,6 +13,7 @@ whether the masking worked or not.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 
 import pytest
@@ -110,3 +111,10 @@ def test_a_short_value_is_not_masked(capsys: pytest.CaptureFixture[str]) -> None
         configure_logging(settings)
 
     assert "leka_starting" in capsys.readouterr().out
+
+
+def test_the_urls_a_connector_calls_stay_out_of_the_logs(configured: Settings) -> None:
+    """httpx logs each URL at INFO — the customer's, and at times a
+    pre-authenticated download link, a credential while it lives."""
+    for chatty in ("httpx", "httpcore"):
+        assert logging.getLogger(chatty).getEffectiveLevel() >= logging.WARNING

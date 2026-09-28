@@ -136,6 +136,13 @@ _TOKEN_SHAPES = re.compile(
     r"|(lin_(?:api|oauth)_[A-Za-z0-9]{16,})"
     # Notion's integration secrets, the current prefix and the retired one.
     r"|((?:ntn|secret)_[A-Za-z0-9]{32,})"
+    # Asana's personal access tokens: "2/1204…/1209…:9f3c…".
+    r"|(\b[0-9]/[0-9]{6,}(?:/[0-9]{6,})?:[0-9a-f]{32}\b)"
+    # Trello's tokens, and ClickUp's personal ones.
+    r"|(ATTA[A-Fa-f0-9]{60,})"
+    r"|(pk_[0-9]+_[A-Za-z0-9]{20,})"
+    # A JSON Web Token — Monday's API tokens are one — whoever issued it.
+    r"|(eyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,})"
 )
 REDACTED = "[redacted]"
 MAX_DETAIL = 300

@@ -12,16 +12,24 @@ imported below; there is no other discovery (ADR 015).
 """
 
 from leka.connectors import (
+    asana,  # noqa: F401  — registers AsanaConnector
     aws,  # noqa: F401  — registers AwsConnector
     azure,  # noqa: F401  — registers AzureConnector
     bitbucket,  # noqa: F401  — registers BitbucketConnector
+    clickup,  # noqa: F401  — registers ClickUpConnector
     confluence,  # noqa: F401  — registers ConfluenceConnector
     gcp,  # noqa: F401  — registers GcpConnector
     github,  # noqa: F401  — registers GitHubConnector
     gitlab,  # noqa: F401  — registers GitLabConnector
+    google_workspace,  # noqa: F401  — registers GoogleWorkspaceConnector
+    guru,  # noqa: F401  — registers GuruConnector
     jira,  # noqa: F401  — registers JiraConnector
     linear,  # noqa: F401  — registers LinearConnector
+    microsoft_365,  # noqa: F401  — registers Microsoft365Connector
+    monday,  # noqa: F401  — registers MondayConnector
     notion,  # noqa: F401  — registers NotionConnector
+    slab,  # noqa: F401  — registers SlabConnector
+    trello,  # noqa: F401  — registers TrelloConnector
 )
 from leka.connectors.base import (
     Capability,

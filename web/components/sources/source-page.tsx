@@ -11,7 +11,7 @@ import { PageContainer, PageHeader } from "@/components/shell/page-container";
 import { RouteState } from "@/components/shell/route-state";
 import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
 import { AddSourceDialog } from "@/components/sources/add-source-dialog";
-import { SourceFacts, SourceHistory } from "@/components/sources/source-panel";
+import { fieldWords, SourceFacts, SourceHistory } from "@/components/sources/source-panel";
 import { SourceLogo } from "@/components/sources/source-logo";
 import { SourceRunsSection } from "@/components/sources/source-runs";
 import { SourceSettingsSection } from "@/components/sources/source-settings";
@@ -121,12 +121,11 @@ function Configuration({ source }: { source: Source }) {
   const catalog = useCatalog();
   const entry = catalog.data?.find((e) => e.key === source.type);
   const scopeField = entry ? scopeFieldOf(entry.config_schema) : null;
-  const known = t.sources.fields as Record<string, { label: string }>;
 
   const items: MetadataItem[] = Object.entries(source.config)
     .filter(([key]) => key !== scopeField)
     .map(([key, value]) => ({
-      label: known[key]?.label ?? key,
+      label: fieldWords(t, key, source.type)?.label ?? key,
       value: value === null || value === "" ? t.sources.page.defaultValue : String(value),
     }));
   const scope = scopeField ? source.config[scopeField] : undefined;

@@ -92,6 +92,7 @@ class VendorHttp:
         in_body: tuple[str, str] | None = None,
         page_cursor_param: str | None = None,
         reads_by_post: frozenset[str] = frozenset(),
+        next_rel: str = "next",
     ) -> None:
         """`in_body`: for vendors that page in the body rather than the Link
         header — the fields holding the items and the next page's URL,
@@ -99,16 +100,21 @@ class VendorHttp:
         Confluence: a field may be a path.
 
         `reads_by_post`: the paths a vendor reads through POST only, named
-        one by one — Notion's "/search", Linear's "/graphql"."""
+        one by one — Notion's "/search", Linear's "/graphql".
+
+        `next_rel`: the Link header's relation for the next page — "next",
+        or Guru's "next-page"."""
         self._client = client
         self._secret = secret
         self._refuse = refuse
         self._page = {page_size_param: page_size}
         self._in_body = in_body
-        # Google's way: the body's field is a token, sent back as this
-        # parameter on the same path — not a URL to follow.
+        # Google's and Asana's way: the body's field is a token, sent back
+        # as this parameter on the same path — not a URL to follow. The
+        # field may be a path: Asana's is "next_page.offset".
         self._page_cursor_param = page_cursor_param
         self._reads_by_post = reads_by_post
+        self._next_rel = next_rel
 
     async def __aenter__(self) -> Self:
         await self._client.__aenter__()
@@ -211,7 +217,7 @@ class VendorHttp:
             if response.status_code == empty:
                 return
             body = response.json()
-            page = (dig(body, self._in_body[0]) or []) if self._in_body else body
+            page = (field(body, self._in_body[0]) or []) if self._in_body else body
             skipped = 0
             for item in page:
                 updated = parse_timestamp(dig(item, updated_field))
@@ -224,7 +230,7 @@ class VendorHttp:
             if skip_before and page and skipped == len(page):
                 return
             if self._page_cursor_param and self._in_body:
-                token = body.get(self._in_body[1])
+                token = field(body, self._in_body[1])
                 url = path if token else None
                 query = {**self._page, **(params or {}), self._page_cursor_param: str(token)}
             else:
@@ -266,9 +272,9 @@ class VendorHttp:
         "//elsewhere", must land on the same host all the same.
         """
         if self._in_body:
-            found = dig(body, self._in_body[1])
+            found = field(body, self._in_body[1])
         else:
-            found = response.links.get("next", {}).get("url")
+            found = response.links.get(self._next_rel, {}).get("url")
         if not found:
             return None
         base = self._client.base_url
@@ -295,6 +301,25 @@ class VendorHttp:
             for capability, response in zip(paths, responses, strict=True)
             if isinstance(response, httpx.Response) and response.is_success
         ]
+
+
+class Pace:
+    """At most one request every `interval` seconds, for one client — for
+    a vendor that allows a few a second on average (Notion, Slab) and is
+    better kept to than refused halfway through a pass. An httpx request
+    hook."""
+
+    def __init__(self, interval: float) -> None:
+        self._interval = interval
+        self._next = 0.0
+        self._lock = asyncio.Lock()
+
+    async def __call__(self, request: httpx.Request) -> None:
+        async with self._lock:
+            now = time.monotonic()
+            if self._next > now:
+                await asyncio.sleep(self._next - now)
+            self._next = max(now, self._next) + self._interval
 
 
 def refusal(
@@ -348,6 +373,14 @@ def dig(item: Any, path: str) -> Any:
             return None
         item = item.get(step)
     return item
+
+
+def field(body: Any, path: str) -> Any:
+    """A field of an answer: a key as it is, dots and all — Microsoft
+    Graph's "@odata.nextLink" — else a path, as `dig` reads it."""
+    if isinstance(body, dict) and path in body:
+        return body[path]
+    return dig(body, path)
 
 
 def parse_timestamp(value: object) -> datetime | None:

@@ -33,6 +33,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
+from leka.connectors import microsoft
 from leka.connectors.base import (
     Capability,
     ConnectionTestResult,
@@ -56,7 +57,6 @@ from leka.connectors.models import HealthStatus, SourceKind
 from leka.connectors.registry import register_connector
 from leka.connectors.schemas import RawRecord
 
-LOGIN = "https://login.microsoftonline.com"
 ARM = "https://management.azure.com"
 ARM_SCOPE = "https://management.azure.com/.default"
 SUBSCRIPTIONS_API = "2022-12-01"
@@ -232,50 +232,18 @@ class AzureConnector(Connector[AzureConfig, AzureCredentials]):
         )
 
     async def _access_token(self) -> str:
-        """The client-credentials token, once per connector. The only POST:
-        to Microsoft's identity platform, never to the customer's resources."""
-        if self._token is not None:
-            return self._token
-        secret = self.credentials.client_secret.get_secret_value()
-        async with self.http(LOGIN) as login:
-            try:
-                response = await login.post(
-                    f"/{self.config.tenant_id}/oauth2/v2.0/token",
-                    data={
-                        "grant_type": "client_credentials",
-                        "client_id": self.credentials.client_id,
-                        "client_secret": secret,
-                        "scope": ARM_SCOPE,
-                    },
-                )
-            except httpx.TimeoutException as error:
-                raise diagnose(DiagnosticCode.TIMEOUT, detail="token") from error
-            except httpx.TransportError as error:
-                raise diagnose(
-                    DiagnosticCode.NETWORK_UNREACHABLE, detail=f"token: {type(error).__name__}"
-                ) from error
-        if not response.is_success:
-            raise self._refuse_token(response)
-        self._token = str(response.json()["access_token"])
-        return self._token
-
-    def _refuse_token(self, response: httpx.Response) -> ConnectorError:
-        """Microsoft identity's AADSTS codes, as diagnostics."""
-        body = response.text[:300]
-        secret = self.credentials.client_secret.get_secret_value()
-        if "AADSTS90002" in body or "AADSTS900023" in body:  # no such tenant
-            return refusal(
-                response,
-                "token",
-                secret,
-                DiagnosticCode.NOT_FOUND,
-                message="Ce tenant Microsoft Entra n'existe pas.",
+        """The client-credentials token, once per connector
+        (leka/connectors/microsoft.py). The only POST: to Microsoft's
+        identity platform, never to the customer's resources."""
+        if self._token is None:
+            self._token = await microsoft.client_credentials_token(
+                self.http,
+                self.config.tenant_id,
+                self.credentials.client_id,
+                self.credentials.client_secret.get_secret_value(),
+                ARM_SCOPE,
             )
-        if "AADSTS7000222" in body:  # the secret has expired
-            return refusal(response, "token", secret, DiagnosticCode.AUTH_EXPIRED)
-        if response.status_code in (400, 401):  # a wrong secret, an unknown app
-            return refusal(response, "token", secret, DiagnosticCode.AUTH_INVALID)
-        return refusal(response, "token", secret, usual_code(response.status_code))
+        return self._token
 
     def _refuse(self, response: httpx.Response, path: str, missing: str) -> ConnectorError:
         """Azure Resource Manager's answers, as diagnostics."""
