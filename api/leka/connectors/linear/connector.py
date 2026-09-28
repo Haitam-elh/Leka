@@ -35,6 +35,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
+from leka.connectors import graphql
 from leka.connectors.base import (
     Capability,
     ConnectionTestResult,
@@ -46,6 +47,7 @@ from leka.connectors.base import (
     ScopeOption,
 )
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
+from leka.connectors.graphql import errors_of
 from leka.connectors.http import Item, VendorHttp, dig, parse_timestamp, record, refusal
 from leka.connectors.models import HealthStatus, SourceKind
 from leka.connectors.registry import register_connector
@@ -126,13 +128,8 @@ DOCUMENTS = (VIEWER, HEALTH, TEAMS, TEAM_PROJECTS, TEAM_ISSUES)
 
 
 def read_only(document: str) -> str:
-    """The document, if it only reads: one `query`, no `mutation`, no
-    `subscription`, not even in a comment."""
-    text = re.sub(r"#[^\n]*", "", document).strip()
-    if not text.startswith("query") or re.search(r"\b(mutation|subscription)\b", text):
-        msg = "LEKA sends Linear queries only: no mutation, no subscription"
-        raise ValueError(msg)
-    return text
+    """The document, if it only reads (leka/connectors/graphql.py)."""
+    return graphql.read_only(document, "Linear")
 
 
 # ── configuration ────────────────────────────────────────────────────────────
@@ -381,7 +378,7 @@ class LinearConnector(Connector[LinearConfig, LinearCredentials]):
     def _raise_errors(self, response: httpx.Response) -> None:
         """Linear answers a refused query with 200 and `errors` as often as
         with an HTTP error: both end the same way."""
-        errors = _errors(response)
+        errors = errors_of(response)
         if errors:
             raise self._refuse(response, GRAPHQL, "")
 
@@ -389,7 +386,7 @@ class LinearConnector(Connector[LinearConfig, LinearCredentials]):
         """Linear's refusals, as diagnostics: its `extensions.code` first,
         the HTTP status when it says nothing."""
         secret = self.credentials.api_key.get_secret_value()
-        codes = {str(dig(error, "extensions.code") or "").upper() for error in _errors(response)}
+        codes = {str(dig(error, "extensions.code") or "").upper() for error in errors_of(response)}
         status = response.status_code
         if "RATELIMITED" in codes or status == 429:
             return refusal(
@@ -406,14 +403,6 @@ class LinearConnector(Connector[LinearConfig, LinearCredentials]):
         if status >= 500:
             return refusal(response, path, secret, DiagnosticCode.PROVIDER_ERROR)
         return refusal(response, path, secret, DiagnosticCode.UNKNOWN)
-
-
-def _errors(response: httpx.Response) -> list[Any]:
-    try:
-        errors = response.json().get("errors")
-    except (ValueError, AttributeError):
-        return []
-    return errors if isinstance(errors, list) else []
 
 
 def _reset(response: httpx.Response) -> int | None:

@@ -575,6 +575,10 @@ const fr = {
         load_balancers: "load balancers et Application Gateway",
       },
       notion: { databases: "bases Notion" },
+      asana: { issues: "tâches" },
+      trello: { projects: "tableaux", issues: "cartes" },
+      clickup: { projects: "listes", issues: "tâches" },
+      monday: { projects: "tableaux", issues: "éléments" },
     },
     empty: {
       title: "Aucune source connectée",
@@ -706,7 +710,8 @@ const fr = {
       activated: "{name} est activée",
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
-      missingBody: "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear et Notion.",
+      missingBody:
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp et Monday.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -777,7 +782,48 @@ const fr = {
       },
       api_key: {
         label: "Clé d'API",
-        help: "Une clé personnelle (lin_api_…). Elle est chiffrée, et ne sera plus jamais affichée.",
+        help: "Chiffrée, et plus jamais affichée.",
+      },
+    },
+    /**
+     * The same fields, in a tool's own terms where its secret is its own: a
+     * Linear key is not a Trello key. A kind or a field not listed falls
+     * back to `fields`.
+     */
+    fieldsOf: {
+      linear: {
+        api_key: {
+          label: "Clé d'API",
+          help: "Une clé personnelle (lin_api_…). Elle est chiffrée, et ne sera plus jamais affichée.",
+        },
+      },
+      asana: {
+        token: {
+          label: "Jeton d'accès personnel",
+          help: "Celui d'un membre dédié, pas d'un administrateur : Paramètres → Applications → Applications de développement. Chiffré, et plus jamais affiché.",
+        },
+      },
+      trello: {
+        token: {
+          label: "Jeton",
+          help: "Autorisé en lecture seule (scope=read) par le propriétaire de la clé. Chiffré, et plus jamais affiché.",
+        },
+        api_key: {
+          label: "Clé d'API",
+          help: "Celle d'un Power-Up, sur trello.com/power-ups/admin. Chiffrée, et plus jamais affichée.",
+        },
+      },
+      clickup: {
+        token: {
+          label: "Jeton personnel",
+          help: "pk_…, celui d'un membre dédié : Paramètres → Applications → Jeton d'API. Chiffré, et plus jamais affiché.",
+        },
+      },
+      monday: {
+        token: {
+          label: "Jeton d'API",
+          help: "Celui d'un membre dédié, pas d'un administrateur : avatar → Développeurs → Jeton d'API. Chiffré, et plus jamais affiché.",
+        },
       },
     },
     events: {
@@ -1436,6 +1482,10 @@ const en: Dictionary = {
         load_balancers: "load balancers and Application Gateway",
       },
       notion: { databases: "Notion databases" },
+      asana: { issues: "tasks" },
+      trello: { projects: "boards", issues: "cards" },
+      clickup: { projects: "lists", issues: "tasks" },
+      monday: { projects: "boards", issues: "items" },
     },
     empty: {
       title: "No source connected",
@@ -1567,7 +1617,8 @@ const en: Dictionary = {
       activated: "{name} is activated",
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
-      missingBody: "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear and Notion today.",
+      missingBody:
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp and Monday today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -1638,7 +1689,43 @@ const en: Dictionary = {
       },
       api_key: {
         label: "API key",
-        help: "A personal key (lin_api_…). It is encrypted, and never shown again.",
+        help: "Encrypted, and never shown again.",
+      },
+    },
+    fieldsOf: {
+      linear: {
+        api_key: {
+          label: "API key",
+          help: "A personal key (lin_api_…). It is encrypted, and never shown again.",
+        },
+      },
+      asana: {
+        token: {
+          label: "Personal access token",
+          help: "A dedicated member's, not an admin's: My settings → Apps → Developer apps. Encrypted, and never shown again.",
+        },
+      },
+      trello: {
+        token: {
+          label: "Token",
+          help: "Authorised read-only (scope=read) by the key's owner. Encrypted, and never shown again.",
+        },
+        api_key: {
+          label: "API key",
+          help: "A Power-Up's, from trello.com/power-ups/admin. Encrypted, and never shown again.",
+        },
+      },
+      clickup: {
+        token: {
+          label: "Personal token",
+          help: "pk_…, a dedicated member's: Settings → Apps → API Token. Encrypted, and never shown again.",
+        },
+      },
+      monday: {
+        token: {
+          label: "API token",
+          help: "A dedicated member's, not an admin's: avatar → Developers → API token. Encrypted, and never shown again.",
+        },
       },
     },
     events: {

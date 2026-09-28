@@ -221,3 +221,17 @@ export function capabilityWord(t: Dictionary, capability: string, kind?: string)
     capability
   );
 }
+
+type FieldWords = { label: string; help: string };
+
+/**
+ * A setting's label and help, in its tool's terms when the source's kind
+ * has them — Trello's `api_key` is not Linear's — and in general terms
+ * otherwise. Undefined for a field nobody named: the schema's title shows.
+ */
+export function fieldWords(t: Dictionary, field: string, kind?: string): FieldWords | undefined {
+  const ofKind = kind
+    ? (t.sources.fieldsOf as Record<string, Record<string, FieldWords> | undefined>)[kind]
+    : undefined;
+  return ofKind?.[field] ?? (t.sources.fields as Record<string, FieldWords>)[field];
+}

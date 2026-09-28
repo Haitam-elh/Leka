@@ -8,7 +8,7 @@ import { FormProvider } from "react-hook-form";
 import { cn } from "cn";
 import { FormAlert } from "@/components/forms/form-alert";
 import { TextField } from "@/components/forms/text-field";
-import { capabilityWord } from "@/components/sources/source-panel";
+import { capabilityWord, fieldWords } from "@/components/sources/source-panel";
 import { SourceLogo } from "@/components/sources/source-logo";
 import { LoadingState } from "@/components/states/loading-state";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -294,10 +294,16 @@ function SettingsStep({
           description={t.sources.add.nameHelp}
         />
         {secretFields.map((field) => (
-          <SchemaField key={field.name} field={field} part="credentials" keepSecret={editing} />
+          <SchemaField
+            key={field.name}
+            kind={entry.key}
+            field={field}
+            part="credentials"
+            keepSecret={editing}
+          />
         ))}
         {configFields.map((field) => (
-          <SchemaField key={field.name} field={field} part="config" />
+          <SchemaField key={field.name} kind={entry.key} field={field} part="config" />
         ))}
         <div className="flex justify-between gap-2">
           {onBack ? (
@@ -317,16 +323,18 @@ function SettingsStep({
 }
 
 function SchemaField({
+  kind,
   field,
   part,
   keepSecret = false,
 }: {
+  kind: string;
   field: FieldSpec;
   part: "config" | "credentials";
   keepSecret?: boolean;
 }) {
   const t = useDictionary();
-  const known = (t.sources.fields as Record<string, { label: string; help: string }>)[field.name];
+  const known = fieldWords(t, field.name, kind);
   const help = [
     known?.help,
     keepSecret && field.kind === "password" ? t.sources.add.keepSecret : null,

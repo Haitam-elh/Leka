@@ -105,8 +105,9 @@ class VendorHttp:
         self._refuse = refuse
         self._page = {page_size_param: page_size}
         self._in_body = in_body
-        # Google's way: the body's field is a token, sent back as this
-        # parameter on the same path — not a URL to follow.
+        # Google's and Asana's way: the body's field is a token, sent back
+        # as this parameter on the same path — not a URL to follow. The
+        # field may be a path: Asana's is "next_page.offset".
         self._page_cursor_param = page_cursor_param
         self._reads_by_post = reads_by_post
 
@@ -224,7 +225,7 @@ class VendorHttp:
             if skip_before and page and skipped == len(page):
                 return
             if self._page_cursor_param and self._in_body:
-                token = body.get(self._in_body[1])
+                token = dig(body, self._in_body[1])
                 url = path if token else None
                 query = {**self._page, **(params or {}), self._page_cursor_param: str(token)}
             else:

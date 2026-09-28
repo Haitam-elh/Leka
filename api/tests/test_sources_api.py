@@ -40,6 +40,10 @@ from leka.db import session_factory, system_scope
 from leka.main import app
 from leka.platform import secret_box
 from tests.conftest import FakeIdentity, error_code
+from tests.test_asana_connector import TOKEN as ASANA_TOKEN
+from tests.test_asana_connector import Asana
+from tests.test_clickup_connector import TOKEN as CLICKUP_TOKEN
+from tests.test_clickup_connector import ClickUp
 from tests.test_confluence_connector import Confluence
 from tests.test_github_connector import github
 from tests.test_jira_connector import EMAIL as JIRA_EMAIL
@@ -47,8 +51,14 @@ from tests.test_jira_connector import TOKEN as JIRA_TOKEN
 from tests.test_jira_connector import Jira
 from tests.test_linear_connector import KEY as LINEAR_KEY
 from tests.test_linear_connector import Linear
+from tests.test_monday_connector import TOKEN as MONDAY_TOKEN
+from tests.test_monday_connector import Monday
 from tests.test_notion_connector import TOKEN as NOTION_TOKEN
 from tests.test_notion_connector import WIKI, Notion
+from tests.test_trello_connector import KEY as TRELLO_KEY
+from tests.test_trello_connector import ROADMAP as TRELLO_ROADMAP
+from tests.test_trello_connector import TOKEN as TRELLO_TOKEN
+from tests.test_trello_connector import Trello
 
 pytestmark = pytest.mark.integration
 
@@ -716,6 +726,101 @@ async def test_notion_end_to_end(
     _as(identity, acme, "member")
     assert NOTION_TOKEN not in (await client.get(url)).text
     assert (await client.post(f"{url}/test")).status_code == 403
+
+
+# ── Asana, Trello, ClickUp, Monday, end to end ───────────────────────────────
+
+# kind, the stand-in, its secrets, the scope's field, what an admin pastes in
+# it and what is kept, the first option offered.
+PROJECT_TOOLS = [
+    (
+        "asana",
+        Asana,
+        {"token": ASANA_TOKEN},
+        "projects",
+        "https://app.asana.com/1/100/project/2001/list/9",
+        "2001",
+        "1001",
+    ),
+    (
+        "trello",
+        Trello,
+        {"token": TRELLO_TOKEN, "api_key": TRELLO_KEY},
+        "boards",
+        "https://trello.com/b/AbCd1234/roadmap",
+        "AbCd1234",
+        TRELLO_ROADMAP["id"],
+    ),
+    ("clickup", ClickUp, {"token": CLICKUP_TOKEN}, "spaces", " 902 ", "902", "901"),
+    (
+        "monday",
+        Monday,
+        {"token": MONDAY_TOKEN},
+        "boards",
+        "https://acme.monday.com/boards/222",
+        "222",
+        "111",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("kind", "stand_in", "secrets", "field", "pasted", "kept", "first"), PROJECT_TOOLS
+)
+async def test_a_project_tool_end_to_end(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    kind: str,
+    stand_in: Any,
+    secrets: dict[str, str],
+    field: str,
+    pasted: str,
+    kept: str,
+    first: str,
+) -> None:
+    """Only an admin connects it; the secrets never come back; a pasted link
+    is kept as the vendor's id; test, activation and health go through."""
+    vendor = stand_in()
+    app.dependency_overrides[get_connector_transport] = lambda: httpx.MockTransport(vendor)
+    try:
+        _as(identity, acme, "member")
+        body = {"type": kind, "display_name": kind.title(), "credentials": secrets}
+        assert (await client.post(f"{API}/sources", json=body)).status_code == 403
+
+        _as(identity, acme, "admin")
+        catalog = (await client.get(f"{API}/connectors/catalog")).json()
+        entry = next(item for item in catalog if item["key"] == kind)
+        assert (entry["category"], entry["read_only"]) == ("project", True)
+        for name in secrets:
+            assert entry["credentials_schema"]["properties"][name]["writeOnly"] is True
+
+        source = await _create(client, **body)
+        for secret in secrets.values():
+            assert secret not in json.dumps(source)
+        url = f"{API}/sources/{source['id']}"
+
+        tested = (await client.post(f"{url}/test")).json()
+        assert tested["ok"] is True, tested
+        assert sorted(tested["source"]["capabilities"]) == ["issues", "projects"]
+
+        offered = (await client.get(f"{url}/scope/options")).json()
+        assert offered["options"][0]["key"] == first
+        scoped = await client.patch(url, json={"config": {field: [pasted]}})
+        assert scoped.json()["config"][field] == [kept]
+        wrong = await client.patch(url, json={"config": {field: ["http://10.0.0.1/admin"]}})
+        assert wrong.status_code == 422
+
+        assert (await client.post(f"{url}/test")).json()["ok"] is True
+        assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+        assert (await client.post(f"{url}/health-check")).json()["health_status"] == "healthy"
+
+        _as(identity, acme, "member")
+        page = (await client.get(url)).text
+        assert all(secret not in page for secret in secrets.values())
+        assert (await client.post(f"{url}/test")).status_code == 403
+    finally:
+        app.dependency_overrides.pop(get_connector_transport, None)
 
 
 async def test_a_refused_scope_listing_is_an_answer_with_a_diagnostic(

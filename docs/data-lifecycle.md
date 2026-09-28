@@ -38,7 +38,7 @@ the one still holding data past what was promised.
 
 | Source | Days | Why |
 |---|---|---|
-| GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion | 90 | Describe structure. Small, slow-moving, and how "when did this change?" gets answered |
+| GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday | 90 | Describe structure. Small, slow-moving, and how "when did this change?" gets answered |
 | Slack, AWS, Azure, Google Cloud (`gcp`), Datadog | 30 | Observability and chatter. Enormous, and worthless within days |
 
 A source kind nobody has thought about falls back to **30 days**, the

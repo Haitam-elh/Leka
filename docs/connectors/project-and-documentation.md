@@ -1,11 +1,20 @@
 # Project and documentation tools — what LEKA asks for, and what it reads
 
-Jira, Confluence, Linear and Notion, through
+Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp and Monday, through
 [the connector framework](framework.md). LEKA-346. **LEKA only reads**: Jira
 and Confluence are read with GETs, to the customer's Atlassian Cloud site
-and nowhere else; Linear, which speaks only GraphQL, with `query` documents
-sent by POST to its one endpoint — never a mutation; Notion with GETs, and
-its search, which it offers only as a POST.
+and nowhere else; Linear and Monday, which speak only GraphQL, with `query`
+documents sent by POST to their one endpoint — never a mutation; Notion
+with GETs, and its search, which it offers only as a POST; Asana, Trello
+and ClickUp with GETs.
+
+**A personal token can do what its owner can.** Asana, ClickUp, Monday and
+Linear cannot narrow a personal token to reading; Trello can. For each, the
+boundary is the account the token belongs to: create a **dedicated member**
+— not an owner, not an admin — in the projects, boards or spaces LEKA
+should read, and nothing more. What that member cannot see, LEKA cannot
+see. The connection test warns when the token belongs to an admin
+(Linear, ClickUp, Monday).
 
 ---
 
@@ -324,6 +333,241 @@ sit in is their `container` (none at the top of the workspace).
 - **Not read yet**: comments, files' contents, users' names (the payload
   keeps their ids), deleted pages — those leave with the next full pass.
 
+## Asana
+
+| | |
+|---|---|
+| Endpoint | `https://app.asana.com/api/1.0` — fixed, nothing to configure |
+| Credentials | `token`, a personal access token (write-only), sent as Bearer |
+| Config | `projects` |
+| Category | `project` |
+| Capabilities | `projects`, `issues` (Asana's tasks) |
+
+### What to create at Asana
+
+Signed in as the dedicated member, **My settings → Apps → Developer apps →
+Create new token**. The token sees every workspace and project its member
+sees; Asana cannot make it read-only.
+
+### Scope
+
+`projects` takes project gids — `1204567890123456` — or a pasted link to
+the project (`https://app.asana.com/1/<workspace>/project/<gid>/…`, or the
+older `https://app.asana.com/0/<gid>/…`), kept as the gid. Absent, the
+source reads every project of every workspace the member belongs to. The
+choices come from `GET /sources/{id}/scope/options`: every project of every
+workspace, archived ones too (said in the description), at most 1 000. The
+connection test fails with `NOT_FOUND`, naming them, when Asana does not
+show a project in scope.
+
+### The connection test
+
+1. `GET /users/me` — the account, and its workspaces.
+2. `GET /projects/{gid}` for each project in scope, at once.
+3. One page of projects of the first workspace: `projects_visible`.
+4. One project and one page of its tasks: `projects` and `issues`.
+
+### What is read
+
+| Capability | What | Incremental |
+|---|---|---|
+| `projects` | each project, archived ones too — notes, owner, team, dates, status | whole each pass |
+| `issues` | each task of each project — notes, assignee, sections, tags, custom fields, parent, subtasks' count | `modified_since` the last pass, filtered by Asana |
+
+A task in several projects is read once per pass, under the first project
+that holds it (its `container`); its `memberships` list them all. Not read
+yet: subtasks that sit in no project, comments (stories), attachments,
+dependencies (a feature of paid plans).
+
+### Limits
+
+- **Quota**: Asana's requests per minute, per token; a refusal is
+  `RATE_LIMITED` with `Retry-After`. Asana sends no quota headers, so
+  health is `healthy` or failed.
+- **Pagination**: Asana's `offset`, sent back with the same query.
+- **Errors**: 401 → `AUTH_INVALID`, 402 (a paid plan's feature) and 403 →
+  `PERMISSION_DENIED`, 404 → `NOT_FOUND`, 429 → `RATE_LIMITED`, 5xx →
+  `PROVIDER_ERROR`.
+
+## Trello
+
+| | |
+|---|---|
+| Endpoint | `https://api.trello.com/1` — fixed, nothing to configure |
+| Credentials | `token` (write-only, first so the stored hint is the token's), `api_key` of a Power-Up (write-only) |
+| Config | `boards` |
+| Category | `project` |
+| Capabilities | `projects` (boards), `issues` (cards) |
+
+### What to create at Trello
+
+1. Signed in as the dedicated member, at
+   [trello.com/power-ups/admin](https://trello.com/power-ups/admin), create a
+   Power-Up (any workspace) and generate its **API key**.
+2. Authorise a token for that key, **read only** and without expiry or
+   with the one you choose:
+   `https://trello.com/1/authorize?key=<key>&scope=read&expiration=never&name=LEKA&response_type=token`.
+3. In LEKA, **Sources → Add → Trello**: the token and the key.
+
+The key and the token go in the `Authorization` header, never in a URL:
+the HTTP client writes every URL it calls to the logs. Trello tells what a
+token may do only at a URL holding the token (`/tokens/{token}`), so the
+connection test does not ask, and cannot warn about a token that may
+write: authorising it with `scope=read`, as above, is what keeps it to
+reading.
+
+### Scope
+
+`boards` takes board ids (24 hexadecimal digits), short links (`AbCd1234`)
+or pasted links (`https://trello.com/b/AbCd1234/roadmap`), kept as the id
+or the short link. Absent, the source reads every board of the member,
+closed ones too. The choices come from `GET /sources/{id}/scope/options`:
+every board of the member, closed ones said so.
+
+### The connection test
+
+1. `GET /members/me` — the member.
+2. `GET /members/me/boards` — once: Trello allows only 100 calls to
+   `/members/` every fifteen minutes. Every board in scope must be there;
+   `boards_visible` counts the open ones.
+3. One open board and one of its cards: `projects` and `issues`.
+
+### What is read
+
+| Capability | What | Incremental |
+|---|---|---|
+| `projects` | each board with its lists, labels, members and workspace | whole each pass |
+| `issues` | each card, archived ones too — list, labels, members, dates, due | every card read, those active since the last pass kept |
+
+Cards are read board by board, newest first, 500 a page, the next page
+being the cards created `before` the last one read. Trello cannot filter
+cards by their last activity, so an incremental pass reads them all and
+keeps those whose `dateLastActivity` is after the last pass, less two
+minutes. A card deleted leaves at the weekly full pass. Not read yet:
+comments and other actions, checklists, attachments, custom fields.
+
+### Limits
+
+- **Quota**: 100 requests every 10 seconds per token. A refusal is
+  `RATE_LIMITED`, with the length of Trello's window as the wait; health
+  reads `x-rate-limit-api-token-*` and turns `degraded` under a tenth left.
+- **Errors**: Trello answers in plain text. `invalid token` or `invalid
+  key` → `AUTH_INVALID`, `unauthorized … permission requested` →
+  `PERMISSION_DENIED`, 404 → `NOT_FOUND`, 429 → `RATE_LIMITED`.
+
+## ClickUp
+
+| | |
+|---|---|
+| Endpoint | `https://api.clickup.com/api/v2` — fixed, nothing to configure |
+| Credentials | `token`, a personal token (`pk_…`, write-only), sent as it is |
+| Config | `spaces` |
+| Category | `project` |
+| Capabilities | `projects` (Lists), `issues` (Tasks) |
+
+### What to create at ClickUp
+
+Signed in as the dedicated member, **Settings → Apps → API Token →
+Generate**. ClickUp nests Workspaces, Spaces, Folders, Lists and Tasks; the
+token sees the Workspaces and the Spaces its member sees.
+
+### Scope
+
+`spaces` takes Space ids — `90123456`. Absent, the source reads every Space
+of every Workspace the token sees. The choices come from
+`GET /sources/{id}/scope/options`, private Spaces said so.
+
+### The connection test
+
+1. `GET /user` — the account.
+2. `GET /team` — its Workspaces, and its role in each: a warning for an
+   owner or an admin.
+3. `GET /team/{id}/space` — every Space; every Space in scope must be there.
+4. One Space's Lists and one page of its Tasks: `projects` and `issues`.
+
+### What is read
+
+| Capability | What | Incremental |
+|---|---|---|
+| `projects` | each List, in a Folder (said in `folder`) or not | whole each pass |
+| `issues` | each Task, closed ones and subtasks too — status, assignees, tags, custom fields, dependencies, description in Markdown | `date_updated_gt` the last pass, filtered by ClickUp |
+
+Tasks are asked Workspace by Workspace, for the Spaces in scope
+(`/team/{id}/task?space_ids[]=…`), 100 a page in the order they were
+created — an order an edit during the pass cannot shuffle. Their List is
+their `container`. Not read yet: comments, docs, archived Lists.
+
+### Limits
+
+- **Quota**: 100 requests a minute per token on most plans. A refusal is
+  `RATE_LIMITED`, with the time until `X-RateLimit-Reset`; health turns
+  `degraded` under a tenth left.
+- **Errors**: ClickUp's `ECODE` first: `OAUTH_023`, `026`, `027`, `029`–`045`
+  (a Workspace not authorised for the token) → `PERMISSION_DENIED`; any
+  other 401 → `AUTH_INVALID`; 404 → `NOT_FOUND`.
+
+## Monday
+
+| | |
+|---|---|
+| Endpoint | `POST https://api.monday.com/v2`, `API-Version: 2026-07` — fixed, nothing to configure |
+| Credentials | `token`, a personal API token (write-only), sent as it is |
+| Config | `boards` |
+| Category | `project` |
+| Capabilities | `projects` (boards), `issues` (items) |
+
+### What to create at Monday
+
+Signed in as the dedicated member (not an admin), **avatar → Developers →
+API token → Show**. The token can do what its member can; Monday cannot
+narrow it.
+
+### LEKA reads, over POST
+
+Like Linear: Monday answers GraphQL only. The client may POST to `/v2` and
+nowhere else; every document is a constant in `monday/connector.py` and a
+`query`, checked before sending and by a test over all of them; the
+stand-in Monday fails on anything else. The API version is pinned, so
+Monday's next version cannot change an answer under LEKA.
+
+### Scope
+
+`boards` takes board ids or pasted links
+(`https://acme.monday.com/boards/1234567890`), kept as the id. Absent, the
+source reads every active board the token sees. Monday lists subitem
+boards and docs as boards too; LEKA offers and reads boards only.
+
+### The connection test
+
+1. `me` — the account, whether it administers it.
+2. The boards in scope (`boards(ids: …)`), or one page of boards:
+   `boards_visible`.
+3. One item of one board: `issues`.
+
+### What is read
+
+| Capability | What | Incremental |
+|---|---|---|
+| `projects` | each board with its workspace, owners, groups and columns | whole each pass |
+| `issues` | each item with its group, creator, column values (text and raw value) and subitems | every item read, those updated since the last pass kept |
+
+Items are read board by board with Monday's cursors (`items_page`, then
+`next_items_page`), 100 a page. Monday filters items by date only through
+a rule per board, so an incremental pass reads them all and keeps those
+updated after the last pass, less two minutes. Not read yet: updates
+(comments), archived boards, docs.
+
+### Limits
+
+- **Budget**: Monday's complexity points per minute. A refusal —
+  `COMPLEXITY_BUDGET_EXHAUSTED`, `RATE_LIMIT_EXCEEDED`, a 429 — is
+  `RATE_LIMITED`, with Monday's `retry_in_seconds`.
+- **Errors**: Monday refuses with a 200 and `errors` as often as with an
+  HTTP error, and an older form (`error_code`) still appears. All become
+  the same diagnostics: `Unauthorized` → `AUTH_INVALID`,
+  `UserUnauthorizedException` → `PERMISSION_DENIED`,
+  `ResourceNotFoundException`, `InvalidBoardIdException` → `NOT_FOUND`.
+
 ## Diagnostics
 
 | Jira or Confluence answers | Diagnostic |
@@ -338,5 +582,7 @@ sit in is their `container` (none at the top of the workspace).
 | 5xx | `PROVIDER_ERROR` |
 
 The token is removed from every detail, and so is anything shaped like an
-`Authorization` header — or like a Linear key (`lin_api_…`) or a Notion
-secret (`ntn_…`, `secret_…`), whoever's it is.
+`Authorization` header — or like a Linear key (`lin_api_…`), a Notion
+secret (`ntn_…`, `secret_…`), an Asana token (`2/…:…`), a Trello token
+(`ATTA…`), a ClickUp token (`pk_…`) or a JSON Web Token (Monday's),
+whoever's it is.

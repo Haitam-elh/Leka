@@ -1928,7 +1928,7 @@ export interface components {
          *     the database stopped checking this list in LEKA-344.
          * @enum {string}
          */
-        SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "linear" | "notion" | "aws" | "azure" | "gcp" | "datadog" | "slack";
+        SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "linear" | "notion" | "asana" | "trello" | "clickup" | "monday" | "aws" | "azure" | "gcp" | "datadog" | "slack";
         /**
          * SourceNormalisation
          * @description Where a source's normalisation stands.
