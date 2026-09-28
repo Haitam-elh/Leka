@@ -28,7 +28,7 @@ container:
 | AWS | the region: `eu-west-3` | `exclude: ["us-*"]` |
 | Azure | the subscription id | |
 | Google Cloud | the project id: `acme-prod` | `include: ["*-prod"]` |
-| PostgreSQL, Supabase, MySQL, MariaDB, SQL Server, MongoDB | the schema — a MySQL, MariaDB or MongoDB database: `billing` — a schema record is its own container | `exclude: ["*_archive", "tmp"]` |
+| PostgreSQL, Supabase, MySQL, MariaDB, SQL Server, Oracle, MongoDB | the schema — a MySQL, MariaDB or MongoDB database, an Oracle user: `billing` — a schema record is its own container | `exclude: ["*_archive", "tmp"]` |
 
 A record is **kept** unless an exclude rule matches it, and — when there are
 include rules — unless none of them does. **Exclude wins.** A record with no

@@ -31,6 +31,10 @@ dependencies = [
     # Its wheels carry FreeTDS and OpenSSL: nothing to install on the
     # system, TLS included. LGPL, used as a library.
     "pymssql>=2.4.2,<3",
+    # A customer's Oracle, read by leka/connectors/oracle (LEKA-349): Oracle's
+    # own driver, in its thin mode — pure Python, no Oracle client to
+    # install, asynchronous, TLS by the ssl module.
+    "oracledb>=26.0.1,<27",
     "alembic>=1.13.3",
     "pgvector>=0.3.6",
     # Configuration and validation

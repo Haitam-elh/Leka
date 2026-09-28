@@ -9,7 +9,7 @@ Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace
 and Microsoft 365:
 [project-and-documentation.md](project-and-documentation.md); Datadog,
 PagerDuty and Grafana: [observability.md](observability.md); PostgreSQL,
-Supabase, MySQL, MariaDB, SQL Server and MongoDB:
+Supabase, MySQL, MariaDB, SQL Server, Oracle and MongoDB:
 [databases.md](databases.md).
 
 **LEKA only reads.** No connector writes to a customer's system: the

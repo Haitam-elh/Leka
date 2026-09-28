@@ -33,6 +33,7 @@ from leka.connectors import (
     mongodb,  # noqa: F401  — registers MongoDBConnector
     mysql,  # noqa: F401  — registers MySQLConnector
     notion,  # noqa: F401  — registers NotionConnector
+    oracle,  # noqa: F401  — registers OracleConnector
     pagerduty,  # noqa: F401  — registers PagerDutyConnector
     postgresql,  # noqa: F401  — registers PostgreSQLConnector
     slab,  # noqa: F401  — registers SlabConnector

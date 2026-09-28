@@ -131,17 +131,21 @@ None of this changes where YOUR payloads go during development: the default
 is still `LEKA_OBJECT_STORE=local`, writing under `var/objects/`. MinIO is
 there for the tests.
 
-**MySQL, MariaDB, SQL Server and MongoDB are off by default**, in the
-`connectors` profile: they stand for a customer's databases, for their
+**MySQL, MariaDB, SQL Server, Oracle and MongoDB are off by default**, in
+the `connectors` profile: they stand for a customer's databases, for their
 connectors' tests (`tests/test_mysql_connector.py`,
 `tests/test_mariadb_connector.py`, `tests/test_sqlserver_connector.py`,
-`tests/test_mongodb_connector.py`), which skip without them. Start them
-when working on those connectors — every start is a clean server; MariaDB
-listens on 3307, beside MySQL:
+`tests/test_oracle_connector.py`, `tests/test_mongodb_connector.py`), which
+skip without them. Start them when working on those connectors — every
+start is a clean server; MariaDB listens on 3307, beside MySQL; Oracle on
+1521, and with TLS on 2484:
 
 ```bash
-docker compose up -d mysql mariadb mongodb sqlserver
+docker compose up -d mysql mariadb mongodb sqlserver oracle
 ```
+
+Oracle's image is some 6 GB, and wants about 2 GB of memory: give Docker
+room for it.
 
 **SQL Server on an ARM Mac.** Microsoft builds it for x86 only, and QEMU's
 emulation cannot run it (`Invalid mapping of address … in reserved address

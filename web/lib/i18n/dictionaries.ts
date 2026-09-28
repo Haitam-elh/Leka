@@ -793,7 +793,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Supabase et MongoDB.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase et MongoDB.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -1048,6 +1048,25 @@ const fr = {
           help: "Une connexion SQL dédiée, avec un utilisateur dans la base et VIEW DEFINITION sur les schémas à décrire. Aucun SELECT n'est nécessaire.",
         },
         password: { label: "Mot de passe", help: "Celui de la connexion. Chiffré, et plus jamais affiché." },
+      },
+      oracle: {
+        host: {
+          label: "Hôte",
+          help: "Le nom ou l'adresse publique du serveur, accessible depuis Internet : db.acme.com. Une adresse privée est refusée.",
+        },
+        port: {
+          label: "Port TLS",
+          help: "Celui de TCPS : 2484 d'ordinaire, 1522 sur Autonomous Database. LEKA exige TLS ; le chiffrement natif d'Oracle ne suffit pas.",
+        },
+        service_name: {
+          label: "Service",
+          help: "Le service de la base : ORCLPDB1, ou celui de la base pluggable à décrire.",
+        },
+        username: {
+          label: "Utilisateur",
+          help: "Un utilisateur dédié, avec CREATE SESSION et REFERENCES sur chaque table et vue à décrire. Aucun SELECT n'est nécessaire.",
+        },
+        password: { label: "Mot de passe", help: "Celui de l'utilisateur. Chiffré, et plus jamais affiché." },
       },
       supabase: {
         host: {
@@ -1952,7 +1971,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Supabase and MongoDB today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase and MongoDB today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -2202,6 +2221,25 @@ const en: Dictionary = {
           help: "A dedicated SQL login, with a user in the database and VIEW DEFINITION on the schemas to describe. No SELECT is needed.",
         },
         password: { label: "Password", help: "The login's. Encrypted, and never shown again." },
+      },
+      oracle: {
+        host: {
+          label: "Host",
+          help: "The server's name or public address, reachable from the internet: db.acme.com. A private address is refused.",
+        },
+        port: {
+          label: "TLS port",
+          help: "TCPS's: usually 2484, 1522 on Autonomous Database. LEKA requires TLS; Oracle's native encryption is not enough.",
+        },
+        service_name: {
+          label: "Service",
+          help: "The database's service: ORCLPDB1, or that of the pluggable database to describe.",
+        },
+        username: {
+          label: "User",
+          help: "A dedicated user, with CREATE SESSION and REFERENCES on each table and view to describe. No SELECT is needed.",
+        },
+        password: { label: "Password", help: "The user's. Encrypted, and never shown again." },
       },
       supabase: {
         host: {
