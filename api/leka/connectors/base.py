@@ -71,6 +71,10 @@ class Capability(enum.StrEnum):
     SPACES = "spaces"
     PAGES = "pages"
     DATABASES = "databases"
+    # Office suites (LEKA-346): a drive — a shared drive, a SharePoint
+    # library, a OneDrive — and the files in it, with their text.
+    DRIVES = "drives"
+    FILES = "files"
 
 
 class ConnectorManifest(BaseModel):

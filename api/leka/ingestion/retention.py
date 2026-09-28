@@ -49,6 +49,8 @@ DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     SourceKind.MONDAY: 90,
     SourceKind.SLAB: 90,
     SourceKind.GURU: 90,
+    SourceKind.GOOGLE_WORKSPACE: 90,
+    SourceKind.MICROSOFT_365: 90,
     SourceKind.SLACK: 30,
     SourceKind.AWS: 30,
     SourceKind.AZURE: 30,

@@ -217,7 +217,7 @@ class VendorHttp:
             if response.status_code == empty:
                 return
             body = response.json()
-            page = (dig(body, self._in_body[0]) or []) if self._in_body else body
+            page = (field(body, self._in_body[0]) or []) if self._in_body else body
             skipped = 0
             for item in page:
                 updated = parse_timestamp(dig(item, updated_field))
@@ -230,7 +230,7 @@ class VendorHttp:
             if skip_before and page and skipped == len(page):
                 return
             if self._page_cursor_param and self._in_body:
-                token = dig(body, self._in_body[1])
+                token = field(body, self._in_body[1])
                 url = path if token else None
                 query = {**self._page, **(params or {}), self._page_cursor_param: str(token)}
             else:
@@ -272,7 +272,7 @@ class VendorHttp:
         "//elsewhere", must land on the same host all the same.
         """
         if self._in_body:
-            found = dig(body, self._in_body[1])
+            found = field(body, self._in_body[1])
         else:
             found = response.links.get(self._next_rel, {}).get("url")
         if not found:
@@ -373,6 +373,14 @@ def dig(item: Any, path: str) -> Any:
             return None
         item = item.get(step)
     return item
+
+
+def field(body: Any, path: str) -> Any:
+    """A field of an answer: a key as it is, dots and all — Microsoft
+    Graph's "@odata.nextLink" — else a path, as `dig` reads it."""
+    if isinstance(body, dict) and path in body:
+        return body[path]
+    return dig(body, path)
 
 
 def parse_timestamp(value: object) -> datetime | None:

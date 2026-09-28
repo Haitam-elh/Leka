@@ -30,6 +30,8 @@ describe("a capability's word", () => {
     ["monday", "issues", "éléments"],
     ["slab", "pages", "articles"],
     ["guru", "pages", "fiches"],
+    ["google_workspace", "drives", "Drive partagés"],
+    ["microsoft_365", "drives", "bibliothèques SharePoint et OneDrive"],
   ])("is %s's own for its %s", (kind, capability, word) => {
     expect(capabilityWord(fr, capability, kind)).toBe(word);
   });
@@ -52,6 +54,9 @@ describe("a setting's words", () => {
     expect(fieldWords(fr, "api_key", "linear")?.help).toContain("lin_api_");
     expect(fieldWords(fr, "api_key", "trello")?.help).toContain("Power-Up");
     expect(fieldWords(fr, "token", "clickup")?.label).toBe("Jeton personnel");
+    // Azure's client id has the Reader role; Microsoft 365's has Graph's permissions.
+    expect(fieldWords(fr, "client_id", "microsoft_365")?.help).toContain("Files.Read.All");
+    expect(fieldWords(fr, "client_id", "azure")?.help).toContain("Reader");
   });
 
   it("fall back to the general words, which name no vendor", () => {

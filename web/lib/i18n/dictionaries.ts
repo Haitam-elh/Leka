@@ -540,6 +540,8 @@ const fr = {
       spaces: "espaces",
       pages: "pages",
       databases: "bases",
+      drives: "drives",
+      files: "fichiers",
     },
     /**
      * The same words, in each vendor's own terms where it has them: what
@@ -581,6 +583,11 @@ const fr = {
       monday: { projects: "tableaux", issues: "éléments" },
       slab: { spaces: "sujets", pages: "articles" },
       guru: { spaces: "collections", pages: "fiches" },
+      google_workspace: { drives: "Drive partagés", files: "fichiers (Docs, Sheets, Slides…)" },
+      microsoft_365: {
+        drives: "bibliothèques SharePoint et OneDrive",
+        files: "fichiers (Word, Excel, PowerPoint…)",
+      },
     },
     empty: {
       title: "Aucune source connectée",
@@ -713,7 +720,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab et Guru.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace et Microsoft 365.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -841,6 +848,26 @@ const fr = {
         username: {
           label: "Identifiant",
           help: "Pour un jeton de collection : l'identifiant de la collection. Pour un jeton d'utilisateur : son e-mail.",
+        },
+      },
+      google_workspace: {
+        service_account_key: {
+          label: "Clé du compte de service",
+          help: "Le fichier JSON téléchargé depuis Google Cloud, en entier, d'un projet où l'API Google Drive est activée. Chiffré, et plus jamais affiché.",
+        },
+        subject: {
+          label: "Utilisateur délégué",
+          help: "Le compte, dédié et en lecture, pour lequel le compte de service agit — par la délégation au niveau du domaine, avec le scope drive.readonly. Vide : le compte de service lui-même, qui ne voit que ce qui est partagé avec son adresse.",
+        },
+      },
+      microsoft_365: {
+        tenant_id: {
+          label: "Tenant ID",
+          help: "L'identifiant du tenant Microsoft Entra de l'application.",
+        },
+        client_id: {
+          label: "Application (client) ID",
+          help: "Celui de l'application, avec les permissions d'application Sites.Read.All, Files.Read.All et User.Read.All de Microsoft Graph, consenties par un administrateur.",
         },
       },
     },
@@ -1470,6 +1497,8 @@ const en: Dictionary = {
       spaces: "spaces",
       pages: "pages",
       databases: "databases",
+      drives: "drives",
+      files: "files",
     },
     capabilitiesOf: {
       aws: {
@@ -1506,6 +1535,11 @@ const en: Dictionary = {
       monday: { projects: "boards", issues: "items" },
       slab: { spaces: "topics", pages: "posts" },
       guru: { spaces: "collections", pages: "cards" },
+      google_workspace: { drives: "shared drives", files: "files (Docs, Sheets, Slides…)" },
+      microsoft_365: {
+        drives: "SharePoint libraries and OneDrives",
+        files: "files (Word, Excel, PowerPoint…)",
+      },
     },
     empty: {
       title: "No source connected",
@@ -1638,7 +1672,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab and Guru today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace and Microsoft 365 today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -1761,6 +1795,26 @@ const en: Dictionary = {
         username: {
           label: "Username",
           help: "For a collection token: the collection's id. For a user token: the user's email.",
+        },
+      },
+      google_workspace: {
+        service_account_key: {
+          label: "Service account key",
+          help: "The JSON file downloaded from Google Cloud, whole, from a project with the Google Drive API on. Encrypted, and never shown again.",
+        },
+        subject: {
+          label: "Delegated user",
+          help: "The account, dedicated and read-only, the service account acts as — by domain-wide delegation, with the drive.readonly scope. Empty: the service account itself, which sees only what is shared with its address.",
+        },
+      },
+      microsoft_365: {
+        tenant_id: {
+          label: "Tenant ID",
+          help: "The Microsoft Entra tenant id of the application.",
+        },
+        client_id: {
+          label: "Application (client) ID",
+          help: "The application's, with Microsoft Graph's application permissions Sites.Read.All, Files.Read.All and User.Read.All, consented by an admin.",
         },
       },
     },

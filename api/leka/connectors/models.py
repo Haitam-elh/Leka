@@ -74,6 +74,8 @@ class SourceKind(enum.StrEnum):
     MONDAY = "monday"
     SLAB = "slab"
     GURU = "guru"
+    GOOGLE_WORKSPACE = "google_workspace"
+    MICROSOFT_365 = "microsoft_365"
     AWS = "aws"
     AZURE = "azure"
     GCP = "gcp"

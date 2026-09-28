@@ -45,7 +45,9 @@ from tests.test_asana_connector import Asana
 from tests.test_clickup_connector import TOKEN as CLICKUP_TOKEN
 from tests.test_clickup_connector import ClickUp
 from tests.test_confluence_connector import Confluence
+from tests.test_gcp_connector import KEY as GOOGLE_KEY
 from tests.test_github_connector import github
+from tests.test_google_workspace_connector import Google as GoogleWorkspace
 from tests.test_guru_connector import TOKEN as GURU_TOKEN
 from tests.test_guru_connector import USERNAME as GURU_USERNAME
 from tests.test_guru_connector import Guru
@@ -54,6 +56,11 @@ from tests.test_jira_connector import TOKEN as JIRA_TOKEN
 from tests.test_jira_connector import Jira
 from tests.test_linear_connector import KEY as LINEAR_KEY
 from tests.test_linear_connector import Linear
+from tests.test_microsoft_365_connector import CLIENT as M365_CLIENT
+from tests.test_microsoft_365_connector import DOCS as M365_DOCS
+from tests.test_microsoft_365_connector import SECRET as M365_SECRET
+from tests.test_microsoft_365_connector import TENANT as M365_TENANT
+from tests.test_microsoft_365_connector import Microsoft
 from tests.test_monday_connector import TOKEN as MONDAY_TOKEN
 from tests.test_monday_connector import Monday
 from tests.test_notion_connector import TOKEN as NOTION_TOKEN
@@ -900,6 +907,93 @@ async def test_a_knowledge_base_end_to_end(
 
         _as(identity, acme, "member")
         assert token not in (await client.get(url)).text
+        assert (await client.post(f"{url}/test")).status_code == 403
+    finally:
+        app.dependency_overrides.pop(get_connector_transport, None)
+
+
+# ── Google Workspace, Microsoft 365, end to end ──────────────────────────────
+
+# kind, the stand-in, its config and credentials, the secret that must never
+# come back, the scope's field, what an admin gives it and what is kept.
+OFFICE_SUITES = [
+    (
+        "google_workspace",
+        GoogleWorkspace,
+        {"subject": "Reader@Acme.test"},
+        {"service_account_key": GOOGLE_KEY},
+        "PRIVATE KEY",
+        "drives",
+        "https://drive.google.com/drive/folders/0AEngineeringDrive",
+        "0AEngineeringDrive",
+    ),
+    (
+        "microsoft_365",
+        Microsoft,
+        {"tenant_id": M365_TENANT},
+        {"client_id": M365_CLIENT, "client_secret": M365_SECRET},
+        M365_SECRET,
+        "drives",
+        f" {M365_DOCS} ",
+        M365_DOCS,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("kind", "stand_in", "config", "credentials", "secret", "field", "given", "kept"),
+    OFFICE_SUITES,
+)
+async def test_an_office_suite_end_to_end(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    kind: str,
+    stand_in: Any,
+    config: dict[str, str],
+    credentials: dict[str, str],
+    secret: str,
+    field: str,
+    given: str,
+    kept: str,
+) -> None:
+    """Only an admin connects it; the secret never comes back; test,
+    activation and health go through, and the scope keeps the vendor's ids."""
+    vendor = stand_in()
+    app.dependency_overrides[get_connector_transport] = lambda: httpx.MockTransport(vendor)
+    try:
+        _as(identity, acme, "member")
+        body = {"type": kind, "display_name": kind, "config": config, "credentials": credentials}
+        assert (await client.post(f"{API}/sources", json=body)).status_code == 403
+
+        _as(identity, acme, "admin")
+        catalog = (await client.get(f"{API}/connectors/catalog")).json()
+        entry = next(item for item in catalog if item["key"] == kind)
+        assert (entry["category"], entry["read_only"]) == ("docs", True)
+
+        source = await _create(client, **body)
+        assert secret not in json.dumps(source)
+        url = f"{API}/sources/{source['id']}"
+
+        tested = (await client.post(f"{url}/test")).json()
+        assert tested["ok"] is True, tested
+        assert sorted(tested["source"]["capabilities"]) == ["drives", "files"]
+
+        offered = (await client.get(f"{url}/scope/options")).json()
+        assert kept in [option["key"] for option in offered["options"]]
+        scoped = await client.patch(url, json={"config": {**config, field: [given]}})
+        assert scoped.json()["config"][field] == [kept]
+        wrong = await client.patch(
+            url, json={"config": {**config, field: ["http://10.0.0.1/admin"]}}
+        )
+        assert wrong.status_code == 422
+
+        assert (await client.post(f"{url}/test")).json()["ok"] is True
+        assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+        assert (await client.post(f"{url}/health-check")).json()["health_status"] == "healthy"
+
+        _as(identity, acme, "member")
+        assert secret not in (await client.get(url)).text
         assert (await client.post(f"{url}/test")).status_code == 403
     finally:
         app.dependency_overrides.pop(get_connector_transport, None)

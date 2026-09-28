@@ -64,6 +64,19 @@ const MARKS: Record<SourceKind, { title: string; color: string; path: string }> 
     color: "#7B4FE0",
     path: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM7 7v2h10V7ZM7 11v2h10v-2ZM7 15v2h6v-2Z",
   },
+  google_workspace: {
+    // Google Drive's mark: Drive is what LEKA reads of Google Workspace.
+    title: "Google Workspace",
+    color: "#4285F4",
+    path: "M12.01 1.485c-2.082 0-3.754.02-3.743.047.01.02 1.708 3.001 3.774 6.62l3.76 6.574h3.76c2.081 0 3.753-.02 3.742-.047-.005-.02-1.708-3.001-3.775-6.62l-3.76-6.574zm-4.76 1.73a789.828 789.861 0 0 0-3.63 6.319L0 15.868l1.89 3.298 1.885 3.297 3.62-6.335 3.618-6.33-1.88-3.287C8.1 4.704 7.255 3.22 7.25 3.214zm2.259 12.653-.203.348c-.114.198-.96 1.672-1.88 3.287a423.93 423.948 0 0 1-1.698 2.97c-.01.026 3.24.042 7.222.042h7.244l1.796-3.157c.992-1.734 1.85-3.23 1.906-3.323l.104-.167h-7.249z",
+  },
+  microsoft_365: {
+    // Not Microsoft's mark, for the reason Azure's is not: two documents,
+    // in Microsoft's blue.
+    title: "Microsoft 365",
+    color: "#0078D4",
+    path: "M8 2h7l5 5v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm6 1.5V8h4.5ZM3 7h1.5v13A1.5 1.5 0 0 0 6 21.5h10V23H6a3 3 0 0 1-3-3Z",
+  },
   jira: {
     title: "Jira",
     color: "#0052CC",

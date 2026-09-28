@@ -819,6 +819,8 @@ async def test_what_is_listed_whole_is_not_swept_when_the_listing_is_cut_short(
         ({"spaces", "pages"}, ["spaces", "pages"]),
         # Notion: databases before the pages that are their rows.
         ({"pages", "databases"}, ["databases", "pages"]),
+        # Google Workspace, Microsoft 365: drives before their files.
+        ({"files", "drives"}, ["drives", "files"]),
     ],
 )
 def test_what_the_others_hang_from_is_read_first(offered: set[str], expected: list[str]) -> None:

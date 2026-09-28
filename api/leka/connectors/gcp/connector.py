@@ -25,19 +25,15 @@ account needs Cloud Asset Viewer and Browser, nothing more
 
 from __future__ import annotations
 
-import base64
-import json
 import re
-import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
+from leka.connectors import google
 from leka.connectors.base import (
     Capability,
     ConnectionTestResult,
@@ -54,8 +50,6 @@ from leka.connectors.models import HealthStatus, SourceKind
 from leka.connectors.registry import register_connector
 from leka.connectors.schemas import RawRecord
 
-GOOGLE_OAUTH = "https://oauth2.googleapis.com"
-TOKEN_URL = f"{GOOGLE_OAUTH}/token"
 READ_ONLY_SCOPE = "https://www.googleapis.com/auth/cloud-platform.read-only"
 RESOURCE_MANAGER = "https://cloudresourcemanager.googleapis.com"
 CLOUD_ASSET = "https://cloudasset.googleapis.com"
@@ -117,15 +111,7 @@ class GcpCredentials(BaseModel):
 
     @model_validator(mode="after")
     def _is_a_service_account_key(self) -> GcpCredentials:
-        try:
-            key = json.loads(self.service_account_key.get_secret_value())
-        except json.JSONDecodeError as error:
-            msg = "not a JSON key: paste the whole file Google Cloud downloaded"
-            raise ValueError(msg) from error
-        missing = {"type", "client_email", "private_key"} - set(key)
-        if key.get("type") != "service_account" or missing:
-            msg = "not a service account key (type, client_email, private_key)"
-            raise ValueError(msg)
+        google.service_account_key(self.service_account_key.get_secret_value())
         return self
 
 
@@ -240,49 +226,16 @@ class GcpConnector(Connector[GcpConfig, GcpCredentials]):
         )
 
     def _key(self) -> dict[str, str]:
-        key: dict[str, str] = json.loads(self.credentials.service_account_key.get_secret_value())
-        return key
+        return google.service_account_key(self.credentials.service_account_key.get_secret_value())
 
     async def _access_token(self) -> str:
-        """A token for the service account, once per connector: a JWT it
-        signs with its own key, exchanged at Google's token endpoint — the
-        only POST, touching nothing of the customer's."""
-        if self._token is not None:
-            return self._token
-        key = self._key()
-        now = int(time.time())
-        claims = {
-            "iss": key["client_email"],
-            "scope": READ_ONLY_SCOPE,
-            "aud": TOKEN_URL,
-            "iat": now,
-            "exp": now + 3600,
-        }
-        assertion = _signed_jwt(claims, key["private_key"])
-        async with self.http(GOOGLE_OAUTH) as google:
-            try:
-                response = await google.post(
-                    "/token",
-                    data={
-                        "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-                        "assertion": assertion,
-                    },
-                )
-            except httpx.TimeoutException as error:
-                raise diagnose(DiagnosticCode.TIMEOUT, detail="token") from error
-            except httpx.TransportError as error:
-                raise diagnose(
-                    DiagnosticCode.NETWORK_UNREACHABLE, detail=f"token: {type(error).__name__}"
-                ) from error
-        if not response.is_success:
-            # invalid_grant: a key deleted or disabled, a clock far off.
-            code = (
-                DiagnosticCode.AUTH_INVALID
-                if response.status_code in (400, 401)
-                else usual_code(response.status_code)
+        """A token for the service account, once per connector
+        (leka/connectors/google.py) — the only POST, touching nothing of the
+        customer's."""
+        if self._token is None:
+            self._token = await google.service_account_token(
+                self.http, self._key(), READ_ONLY_SCOPE
             )
-            raise refusal(response, "token", self._secrets()[0], code)
-        self._token = str(response.json()["access_token"])
         return self._token
 
     def _refuse(self, response: httpx.Response, path: str, missing: str) -> ConnectorError:
@@ -295,28 +248,3 @@ class GcpConnector(Connector[GcpConfig, GcpCredentials]):
 
     def _secrets(self) -> list[str]:
         return [self._key()["private_key"], self.credentials.service_account_key.get_secret_value()]
-
-
-def _b64(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
-
-
-def _signed_jwt(claims: dict[str, Any], private_key: str) -> str:
-    """RS256, as Google's token endpoint requires for a service account."""
-    header = _b64(json.dumps({"alg": "RS256", "typ": "JWT"}).encode())
-    payload = _b64(json.dumps(claims).encode())
-    signing_input = f"{header}.{payload}".encode()
-    try:
-        key = serialization.load_pem_private_key(private_key.encode(), password=None)
-    except (ValueError, TypeError) as error:
-        raise diagnose(
-            DiagnosticCode.CONFIG_INVALID,
-            message="La clé privée du compte de service est illisible : téléchargez-en une autre.",
-        ) from error
-    if not isinstance(key, rsa.RSAPrivateKey):
-        raise diagnose(
-            DiagnosticCode.CONFIG_INVALID,
-            message="La clé du compte de service n'est pas une clé RSA.",
-        )
-    signature = key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
-    return f"{header}.{payload}.{_b64(signature)}"

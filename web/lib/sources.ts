@@ -136,6 +136,8 @@ export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
   notion: "docs",
   slab: "docs",
   guru: "docs",
+  google_workspace: "docs",
+  microsoft_365: "docs",
   aws: "cloud",
   azure: "cloud",
   gcp: "cloud",
