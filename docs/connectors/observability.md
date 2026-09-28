@@ -116,8 +116,12 @@ a title, a state (`alert`, `ok`, `warn`, `no data`; an incident's
 `active`, `stable`, `resolved`; a log's status), dates, the message as
 text, and the signals an operations question needs — `service`, `env`,
 `team`, `host`, `tags`, an incident's `severity` and `services`. Parsing
-reads their text like any other. Normalising them into the company model
-is LEKA-356's.
+reads their text like any other. Normalisation
+([normalisation.md](../normalisation.md)) makes Datadog's and PagerDuty's
+incidents `incident` entities — state and priority on LEKA's scales, the
+commander as a person, the services they affect — and PagerDuty's services
+`service` entities, on the same key as Datadog's `service:` tags. Alerts,
+events, metrics, logs and dashboards stay evidence, not entities.
 
 ### Retention
 

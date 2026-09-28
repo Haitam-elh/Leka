@@ -30,7 +30,8 @@ from leka.ingestion.normalisation.mapping import (
 )
 from leka.ingestion.parsing import ParsedRecord
 
-NORMALISER_VERSION = 1
+# 2: incidents and services of the operations tools (LEKA-348).
+NORMALISER_VERSION = 2
 
 
 def normalise(

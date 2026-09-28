@@ -25,6 +25,8 @@ from leka.ingestion.schemas import NormalisedEntity, NormalisedRelationship
 C = Capability
 CODE_HOSTS = frozenset({"github", "gitlab", "bitbucket"})
 CLOUDS = frozenset({"aws", "azure", "gcp"})
+# The operations tools whose incidents and services are mapped (LEKA-348).
+OPERATIONS = frozenset({"datadog", "pagerduty"})
 
 ENTITY_TYPES = {
     C.REPOSITORIES: "repository",
@@ -41,6 +43,8 @@ ENTITY_TYPES = {
     C.CLUSTERS: "infra_resource",
     C.NETWORKS: "infra_resource",
     C.LOAD_BALANCERS: "infra_resource",
+    C.INCIDENTS: "incident",
+    C.SERVICES: "service",
 }
 RESOURCE_KINDS = {
     C.INSTANCES: "instance",
@@ -60,6 +64,7 @@ PERSON_ROLES = {
     "reporter": "reported_by",
     "creator": "created_by",
     "lead": "led_by",
+    "commander": "led_by",
 }
 # How parsing said one thing points at another.
 REFERENCE_TYPES = {
@@ -169,6 +174,8 @@ def entity(build: Build) -> NormalisedEntity:
         if build.kind not in CLOUDS:
             raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
         key, attributes = _cloud(build)
+    elif capability in (C.INCIDENTS, C.SERVICES):
+        key, attributes = _operations(build)
     else:
         key, attributes = _work(build)
     _mapped_containers(build, key)
@@ -304,6 +311,66 @@ def _target_key(build: Build, target: Target) -> str | None:
         site = ids.site_of(build.record.url) if build.kind == "jira" else None
         return ids.ticket(target.key, site=site)
     return None
+
+
+# ── operations: incidents and services (LEKA-348) ────────────────────────────
+
+
+def _operations(build: Build) -> tuple[str, dict[str, object]]:
+    """An incident — keyed by its tool and that tool's id, its state and
+    priority on LEKA's scales, its people, the services it affects — or a
+    service, keyed by its name: the same key as a `service:` tag's, so a
+    PagerDuty service and a Datadog monitor's tag meet."""
+    record, capability = build.record, build.record.provenance.capability
+    if build.kind not in OPERATIONS:
+        raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
+    attributes = _common(build)
+    if capability is C.SERVICES:
+        key = ids.service(str(record.title))
+        for team in _names(record.signals.get("teams")):
+            owner = _named(build, "team", ids.team(team), team, 1.0)
+            build.relate("owned_by", key, owner, 1.0, "signals")
+        return key, attributes
+
+    key = ids.incident(build.kind, record.provenance.external_id)
+    if record.state is not None:
+        own = _own(build.mapping.states, record.state)
+        state, known = (own, True) if own else values.incident_state(record.state)
+        attributes["state"], attributes["state_raw"] = state, record.state
+        if not known:
+            build.diagnostics.append("unknown state: kept as the vendor wrote it")
+    raw_priority = next(
+        (
+            value
+            for value in (record.metadata.get("priority"), record.metadata.get("severity"))
+            if isinstance(value, str) and value
+        ),
+        None,
+    )
+    if raw_priority is not None:
+        own = _own(build.mapping.priorities, raw_priority)
+        attributes["priority"], known = (own, True) if own else values.priority(raw_priority)
+        attributes["priority_raw"] = raw_priority
+        if not known:
+            build.diagnostics.append("unknown priority: kept as the vendor wrote it")
+    for reference in record.references:
+        if reference.kind == "person" and reference.role in PERSON_ROLES:
+            person = build.person(reference)
+            if person:
+                build.relate(PERSON_ROLES[reference.role], key, person, 1.0, "references")
+    services = [
+        *(r.name for r in record.references if r.kind == "service" and r.name),
+        *_names(record.signals.get("services")),
+    ]
+    for name in dict.fromkeys(services):
+        service = _named(build, "service", ids.service(name), name, 1.0)
+        build.relate("affects", key, service, 1.0, "references")
+    _references(build, key)
+    return key, attributes
+
+
+def _names(value: object) -> list[str]:
+    return [str(v) for v in value if v] if isinstance(value, list) else []
 
 
 # ── cloud resources ──────────────────────────────────────────────────────────

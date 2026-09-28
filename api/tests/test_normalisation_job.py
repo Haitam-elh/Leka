@@ -152,7 +152,7 @@ async def test_every_parse_gets_its_candidates_or_the_reason_it_has_none(source:
     assert ok.result is not None
     provenance = ok.result["provenance"]
     assert isinstance(provenance, dict) and provenance["external_id"] == "commits-0"
-    assert (ok.normaliser_version, ok.parser_version) == (1, 1)
+    assert (ok.normaliser_version, ok.parser_version) == (NORMALISER_VERSION, 1)
     bad = rows["commits-2"]
     assert (bad.failure_code, bad.message) == (
         "invalid",
@@ -190,10 +190,12 @@ async def test_new_rules_normalise_everything_again(
 ) -> None:
     await _parsed(source, 2)
     await normalise_source(source.workspace_id, source.id)
-    monkeypatch.setattr(normalisation_engine, "NORMALISER_VERSION", 2)
+    monkeypatch.setattr(normalisation_engine, "NORMALISER_VERSION", NORMALISER_VERSION + 1)
 
     assert (await normalise_source(source.workspace_id, source.id))["normalised"] == 2
-    assert {row.normaliser_version for row in (await _rows(source)).values()} == {2}
+    assert {row.normaliser_version for row in (await _rows(source)).values()} == {
+        NORMALISER_VERSION + 1
+    }
 
 
 @pytest.mark.usefixtures("rules")
@@ -203,7 +205,7 @@ async def test_only_normalisation_to_do_is_queued_by_the_pass(
     await _parsed(source, 1)
     await normalise_source(source.workspace_id, source.id)
     sync_tests.queued_purges.clear()
-    monkeypatch.setattr(normalisation_engine, "NORMALISER_VERSION", 2)
+    monkeypatch.setattr(normalisation_engine, "NORMALISER_VERSION", NORMALISER_VERSION + 1)
 
     await _sync(source)
 

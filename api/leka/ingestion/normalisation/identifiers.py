@@ -18,6 +18,7 @@ from what every mention of the thing carries, spelled one way:
                       person:github.com:sara                   else the account on its host
     cloud resource    aws:arn:…, azure:/subscriptions/…, gcp://…   the provider's global id
     service, team     service:billing, team:payments           a slug of the name
+    incident          incident:pagerduty:Q1ABC…                the tool and its own id
 """
 
 from __future__ import annotations
@@ -97,6 +98,12 @@ def slug(name: str) -> str:
     """'Billing API ' → 'billing-api'; accents dropped, anything else a dash."""
     ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
+
+
+def incident(system: str, incident_id: str) -> str:
+    """An incident by the tool that holds it and that tool's id: PagerDuty's
+    are global, Datadog's a uuid — not their per-account numbers."""
+    return f"incident:{system}:{incident_id.strip()}"
 
 
 def service(name: str) -> str:

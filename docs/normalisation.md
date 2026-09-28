@@ -50,7 +50,14 @@ something no source has shown yet — a ticket in a tool not connected.
 | repositories, pull_requests, issues, commits, branches, releases, projects | `repository`, `pull_request`, `issue`, `commit`, `branch`, `release`, `project` |
 | db_instances | `database` |
 | instances, buckets, functions, clusters, networks, load_balancers | `infra_resource`, with `attributes.resource_kind`: `instance`, `bucket`, `function`, `cluster`, `network`, `load_balancer` |
+| incidents (Datadog, PagerDuty) | `incident` |
+| services (PagerDuty) | `service` |
 | named by a record | `person`, `service`, `team` |
+
+Alerts, events, metrics, logs and dashboards (Datadog, Grafana) are
+extracted and parsed, but are not entities: they are the evidence about
+incidents and services, not things of the company model. They stay
+`unsupported` here.
 
 A GitLab merge request is a `pull_request`; a Jira issue and a GitHub issue
 are both `issue`. The strings are ingestion's; leka.knowledge maps them onto
@@ -73,7 +80,8 @@ One thing, one key — built from what every mention of it carries
 | a ticket named where its site is unknown | `ticket:PAY-42` |
 | person | `person:email:sara@acme.io` when an email is known, **alias** `person:github.com:sara`; else the account: `person:github.com:sara`, `person:acme.atlassian.net:<account id>` |
 | cloud resource | `aws:<ARN>`, `azure:<ARM id, lower-cased>`, `gcp:<full resource name>` |
-| service, team | `service:billing-api`, `team:payments` — a slug of the tag's value |
+| service, team | `service:billing-api`, `team:payments` — a slug of the tag's value, or of a PagerDuty service's name: the same service meets on one key |
+| incident | `incident:pagerduty:Q1ABC…`, `incident:datadog:<uuid>` — the tool and its own id, not its per-account number |
 
 The host is the record's link's (a self-hosted GitLab keeps its own), else
 the vendor's public host. **Aliases** are what entity resolution joins on:
@@ -90,8 +98,9 @@ Every entity carries the extraction's `metadata` and `signals`, plus:
 | `created_at`, `updated_at`, any `*_at` | ISO 8601 **in UTC**, to the second: `2026-09-20T08:00:00Z` |
 | `state` (issues, pull requests) | `open`, `in_progress`, `closed`, `merged` — GitLab `opened` → open, Bitbucket `declined` → closed; **Jira's status category** (`new`, `indeterminate`, `done`) wins over its status name |
 | `state` (cloud resources) | `running`, `starting`, `stopping`, `stopped`, `deleting`, `failed` — EC2 `running`, RDS `available`, Azure `Succeeded`, GCE `RUNNING` → running |
+| `state` (incidents) | `open`, `in_progress`, `closed` — PagerDuty `triggered` and Datadog `active` → open, `acknowledged` and `stable` → in_progress, `resolved` → closed |
 | `state_raw` | the vendor's word, always kept |
-| `priority`, `priority_raw` | `highest`, `high`, `medium`, `low`, `lowest` — `blocker`/`critical` → highest, `major` → high, `normal` → medium, `minor` → low, `trivial` → lowest |
+| `priority`, `priority_raw` | `highest`, `high`, `medium`, `low`, `lowest` — `blocker`/`critical` → highest, `major` → high, `normal` → medium, `minor` → low, `trivial` → lowest; an incident's priority (PagerDuty `P1`…`P5`) or severity (Datadog `SEV-0`…`SEV-5`): P1, SEV-0 and SEV-1 → highest, P2 and SEV-2 → high, and so on |
 | `change_type`, `scope`, `category`, `breaking` | the surest fact of each (parsing), with `<name>_confidence` |
 | `environment`, `exposure` (cloud) | the surest fact, with its confidence — a tag's 0.95, a name's 0.5 |
 | `tags` (cloud) | a `{key: value}` object |
@@ -108,10 +117,11 @@ A state or a priority no table knows is **kept**, lower-cased, and said in
 |---|---|---|
 | `part_of` | an item → its repository; a Jira issue → its project; a resource → its service | the container; a `service` tag |
 | `child_of` | a Jira issue → its parent | the extraction's `parent` |
-| `authored_by`, `committed_by`, `assigned_to`, `reviewed_by`, `reported_by`, `created_by`, `led_by` | an item → a person | the extraction's references |
+| `authored_by`, `committed_by`, `assigned_to`, `reviewed_by`, `reported_by`, `created_by`, `led_by` | an item → a person — an incident's commander leads it | the extraction's references |
+| `affects` | an incident → a service | PagerDuty's service, Datadog's *services* field |
 | `resolves`, `mentions`, `implements`, `merges` | an item → an item | parsing's references: "Fixes #41", a link, a branch name, a merge commit |
 | `mentions` | an item → a person | `@handle` on a code host |
-| `owned_by` | a resource → a team | a `team` / `owner` tag |
+| `owned_by` | a resource → a team; a PagerDuty service → its teams | a `team` / `owner` tag; the service's teams |
 | `in_network` | a resource → its VPC or network, by that record's own key | the extraction's `network` |
 
 Confidence is the fact's: 1.0 for what the vendor said, the parse's
