@@ -27,6 +27,7 @@ from leka.connectors import (
     guru,  # noqa: F401  — registers GuruConnector
     jira,  # noqa: F401  — registers JiraConnector
     linear,  # noqa: F401  — registers LinearConnector
+    mariadb,  # noqa: F401  — registers MariaDBConnector
     microsoft_365,  # noqa: F401  — registers Microsoft365Connector
     monday,  # noqa: F401  — registers MondayConnector
     mongodb,  # noqa: F401  — registers MongoDBConnector

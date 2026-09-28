@@ -1,6 +1,6 @@
 # Databases — what LEKA asks for, and what it reads
 
-PostgreSQL, Supabase, MySQL and MongoDB, through
+PostgreSQL, Supabase, MySQL, MariaDB and MongoDB, through
 [the connector framework](framework.md). LEKA-349.
 **LEKA reads the catalogue, never the rows**: what the database says about
 itself — its schemas, tables, views, columns, keys, indexes, and what each
@@ -19,6 +19,7 @@ and one extraction reads them all (`extraction/data.py`).
 | [PostgreSQL](#postgresql) | PostgreSQL | `CONNECT`, `USAGE` on the schemas | refused |
 | [Supabase](#supabase) | PostgreSQL, through the session pooler | the same | refused |
 | [MySQL](#mysql) | MySQL 8.0+ | `REFERENCES` on the databases | refused |
+| [MariaDB](#mariadb) | MariaDB 10.6+ | the same | refused |
 | [MongoDB](#mongodb) | MongoDB | a role with `listCollections`, `listIndexes`, `collStats`, `dbStats` | refused |
 
 ---
@@ -221,15 +222,15 @@ PostgreSQL.
 
 | | |
 |---|---|
-| Server | MySQL 8.0 or later — self-hosted, or managed (Amazon RDS, Aurora MySQL 3, Google Cloud SQL, Azure Database for MySQL, PlanetScale…) — reachable from the internet |
+| Server | MySQL 8.0 or later — self-hosted, or managed (Amazon RDS, Aurora MySQL 3, Google Cloud SQL, Azure Database for MySQL…) — reachable from the internet |
 | Credentials | `username` (first, so the stored hint is the account's name), `password` — write-only |
 | Config | `host`, `port` (3306), `schemas` — the databases to describe |
 | Category | `data` |
 | Capabilities | `schemas` (in MySQL, a schema is a database), `tables` (tables and views) |
 | Code | `leka/connectors/mysql/`, with the `asyncmy` driver |
 
-MariaDB speaks a different `information_schema` (no `VIEW_TABLE_USAGE`, no
-index expressions), and is **not supported** yet.
+MariaDB speaks another dialect of `information_schema`: it has
+[its own connector](#mariadb), this one with MariaDB's queries.
 
 ### What to create in MySQL
 
@@ -285,7 +286,7 @@ attributes (`performance_schema.session_connect_attrs`).
 
 ### What is read
 
-Eleven queries, all of `information_schema` (a test checks that none
+Twelve queries, all of `information_schema` (a test checks that none
 reads anything else):
 
 | Capability | What | Id | Container |
@@ -311,7 +312,7 @@ marked gone; at most 20 000 tables and views a pass. Kept **90 days**.
 | A database in scope the account cannot see | `NOT_FOUND`, naming it |
 | A privilege missing (1044, 1142, 1143, 1227) | `PERMISSION_DENIED` |
 | A query too slow (3024), or the connection | `TIMEOUT` |
-| No TLS; an address that is not public; too many tables | `CONFIG_INVALID` |
+| No TLS; an address that is not public; too many tables; a MariaDB server | `CONFIG_INVALID` |
 | The host unreachable or unknown (2002, 2003, 2006, 2013) | `NETWORK_UNREACHABLE` |
 | Anything else MySQL says | `PROVIDER_ERROR` |
 
@@ -321,7 +322,80 @@ marked gone; at most 20 000 tables and views a pass. Kept **90 days**.
   estimates rounded, schemas and tables not yet entities (LEKA-364).
 - A view's definition and dependencies need `SELECT` on it (above).
 - Routines, triggers, events, users and grants are not read.
-- MariaDB is not supported.
+- PlanetScale is not supported: its roles cannot be kept to `REFERENCES`,
+  and its `information_schema` is Vitess's, untested.
+
+---
+
+## MariaDB
+
+The **MySQL connector with MariaDB's dialect** (`leka/connectors/mariadb/`):
+the same account, the same boundary, the same payload, the same security
+— and the queries and settings where MariaDB differs. Everything said of
+MySQL above holds, checked against MariaDB 10.6, 10.11 and 11.8.
+
+| | |
+|---|---|
+| Server | MariaDB 10.6 or later — self-hosted, or managed (Amazon RDS for MariaDB…) — reachable from the internet, with TLS |
+| Credentials | `username`, `password` — write-only |
+| Config | `host`, `port` (3306), `schemas` — the databases to describe |
+| Category | `data` |
+| Capabilities | `schemas` (the databases), `tables` (tables, system-versioned tables, views) |
+| Code | `leka/connectors/mariadb/`, on `leka/connectors/mysql/` and its `asyncmy` driver |
+
+### What to create in MariaDB
+
+As in MySQL — an account with `REFERENCES` alone on the databases to
+describe:
+
+```sql
+CREATE USER 'leka_reader'@'%' IDENTIFIED BY '…';
+GRANT REFERENCES ON billing.* TO 'leka_reader'@'%';
+```
+
+MariaDB, too, shows in `information_schema` only what the account holds a
+privilege on; with `REFERENCES`, the tables, columns, keys, checks and
+indexes, and a `SELECT` is refused (`tests/test_mariadb_connector.py`). A
+view's definition needs `SELECT` on the view, granted by the admin or not
+read, as in MySQL.
+
+**TLS.** MariaDB sets it up by itself since 11.4; before, the server needs
+its certificate configured (`ssl_cert`, `ssl_key`). Amazon RDS for MariaDB
+has TLS. A server without it is refused (`CONFIG_INVALID`).
+
+### What MariaDB says otherwise
+
+| | MySQL | MariaDB, and so the connector |
+|---|---|---|
+| A query's bound | `MAX_EXECUTION_TIME`, in ms | `max_statement_time`, in seconds — 15; too slow is error 1969 |
+| Tables | `BASE TABLE`, `VIEW` | also `SYSTEM VERSIONED` — a table that keeps its history, kind `system_versioned_table`; a `SEQUENCE` is not read, as PostgreSQL's are not |
+| An index's parts | columns or expressions | columns: `STATISTICS` has no `EXPRESSION` |
+| A check's name | once in its database | once in its table — a check on a column takes the column's name, so two tables may each have `amount`: `CHECK_CONSTRAINTS` says which table |
+| A column's default | the value | SQL: `'free'` quoted, `current_timestamp()`; `NULL` for none, read as no default |
+| What a view reads | `VIEW_TABLE_USAGE` | no such table: read from the view's definition, which MariaDB writes back normalised — every table after a `from` or a `join`, as `` `schema`.`table` ``, a literal's content left aside |
+
+Eleven queries, all of `information_schema` (a test checks). A column's type
+is written as MariaDB writes it, display width included: `bigint(20)`.
+
+**The wrong connector.** A MariaDB server added as MySQL, or a MySQL server
+as MariaDB, fails the connection test with what it is, and which connector
+to use (`CONFIG_INVALID`): every MariaDB writes its name in its version
+(`11.8.2-MariaDB-log`), which is checked before any setting is sent.
+
+### Synchronisation, retention, errors
+
+As MySQL's: whole each pass, only what changed written; at most 20 000
+tables a pass; kept 90 days. The errors are MySQL's, but a query too slow
+is **1969** (`TIMEOUT`).
+
+### Limits
+
+- As MySQL's: no private network, the certificate not verified, a view's
+  definition and dependencies need `SELECT` on it, schemas and tables not
+  yet entities (LEKA-364).
+- What a view reads is found in its definition, as MariaDB writes it back:
+  a table named only inside a stored function the view calls is not seen.
+- Sequences, routines, triggers, events, users and grants are not read.
 
 ---
 

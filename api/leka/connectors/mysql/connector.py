@@ -26,17 +26,20 @@ Safe by construction, as the PostgreSQL connector:
   SELECT bounded by MAX_EXECUTION_TIME.
 
 MySQL 8.0 and later — Aurora MySQL 3, Percona Server, the managed ones.
-MariaDB speaks a different information_schema, and is not supported yet.
+MariaDB speaks another dialect of information_schema: its connector
+(leka/connectors/mariadb) is this one with MariaDB's queries and settings,
+the class attributes below. Pointed at the other engine's server, each
+says so rather than fail on a setting it does not know.
 """
 
 from __future__ import annotations
 
 import ssl
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, ClassVar
 
 import asyncmy
 from asyncmy.cursors import DictCursor
@@ -82,6 +85,8 @@ STRUCTURE_ONLY = frozenset({"USAGE", "REFERENCES", "SHOW VIEW"})
 # escape, never formatted in.
 
 WHO = "SELECT CURRENT_USER() AS account, VERSION() AS version"
+
+VERSION = "SELECT VERSION() AS version"
 
 PRIVILEGES = """
 SELECT PRIVILEGE_TYPE AS privilege FROM information_schema.USER_PRIVILEGES WHERE GRANTEE = %s
@@ -133,10 +138,16 @@ WHERE TABLE_SCHEMA IN ({in})
 ORDER BY TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION
 """
 
+# A check's table is in TABLE_CONSTRAINTS: MySQL names a check once in its
+# database, so the two meet on the name.
 CHECKS = """
-SELECT CONSTRAINT_SCHEMA AS `schema`, CONSTRAINT_NAME AS name, CHECK_CLAUSE AS clause
-FROM information_schema.CHECK_CONSTRAINTS
-WHERE CONSTRAINT_SCHEMA IN ({in})
+SELECT c.CONSTRAINT_SCHEMA AS `schema`, t.TABLE_NAME AS `table`, c.CONSTRAINT_NAME AS name,
+       c.CHECK_CLAUSE AS clause
+FROM information_schema.CHECK_CONSTRAINTS c
+JOIN information_schema.TABLE_CONSTRAINTS t
+  ON t.CONSTRAINT_SCHEMA = c.CONSTRAINT_SCHEMA AND t.CONSTRAINT_NAME = c.CONSTRAINT_NAME
+ AND t.CONSTRAINT_TYPE = 'CHECK'
+WHERE c.CONSTRAINT_SCHEMA IN ({in})
 """
 
 INDEXES = """
@@ -166,6 +177,7 @@ CIPHER = "SHOW SESSION STATUS LIKE 'Ssl_cipher'"
 
 QUERIES = (
     WHO,
+    VERSION,
     PRIVILEGES,
     SCHEMAS,
     TABLES,
@@ -244,6 +256,16 @@ class NoTlsError(ConnectionError):
     """Connected, and the session is not encrypted."""
 
 
+class OtherEngineError(ConnectionError):
+    """Connected, to the other engine's server: MariaDB's for the MySQL
+    connector, or the reverse."""
+
+    def __init__(self, engine: str, version: str) -> None:
+        super().__init__(engine, version)
+        self.engine = engine
+        self.version = version
+
+
 @register_connector
 class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
     manifest = ConnectorManifest(
@@ -257,6 +279,17 @@ class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
         # The catalogue has no "changed since": both come whole each pass.
         listed_whole=frozenset({C.SCHEMAS, C.TABLES}),
     )
+
+    # MySQL's dialect. MariaDB's connector replaces these, and the methods
+    # that say what a default is, what a view reads, which engine is not
+    # this one's; the rest — the privileges, the boundary, the payload — is
+    # the same.
+    session: ClassVar[tuple[str, ...]] = SESSION
+    tables_query: ClassVar[str] = TABLES
+    checks_query: ClassVar[str] = CHECKS
+    indexes_query: ClassVar[str] = INDEXES
+    kinds: ClassVar[Mapping[str, str]] = KINDS
+    too_slow: ClassVar[int] = TOO_SLOW
 
     # ── the contract ─────────────────────────────────────────────────────────
 
@@ -273,7 +306,7 @@ class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
             self._require_scope(schemas)
             in_scope = self._in_scope(schemas)
             if in_scope:
-                await _fetch(db, _in(TABLES, in_scope), *in_scope, 1)
+                await _fetch(db, _in(self.tables_query, in_scope), *in_scope, 1)
         warnings: list[str] = []
         if "SELECT" in privileges:
             warnings.append(
@@ -317,7 +350,7 @@ class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
         self, capability: Capability, *, since: datetime | None = None
     ) -> AsyncIterator[RawRecord]:
         if capability not in self.manifest.capabilities:
-            msg = f"MySQL does not read {capability}"
+            msg = f"{self.manifest.display_name} does not read {capability}"
             raise ValueError(msg)
         fetched = datetime.now(UTC)
         async with self._session() as db:
@@ -370,7 +403,11 @@ class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
                 [cipher] = await _fetch(db, CIPHER)
                 if not cipher.get("Value"):
                     raise NoTlsError("the session is not encrypted")
-                for statement in SESSION:
+                [server] = await _fetch(db, VERSION)
+                version = str(server["version"])
+                if (other := self._other_engine(version)) is not None:
+                    raise OtherEngineError(other, version)
+                for statement in self.session:
                     await _fetch(db, statement)
                 yield db
             except ConnectorError:
@@ -385,12 +422,12 @@ class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
         says of each — asked for all of them at once, not one by one."""
         if not schemas:
             return []
-        rows = await _fetch(db, _in(TABLES, schemas), *schemas, MAX_TABLES + 1)
+        rows = await _fetch(db, _in(self.tables_query, schemas), *schemas, MAX_TABLES + 1)
         if len(rows) > MAX_TABLES:
             raise too_many_tables()
         tables: dict[tuple[str, str], dict[str, Any]] = {}
         for row in rows:
-            kind = KINDS[str(row["kind"])]
+            kind = self.kinds[str(row["kind"])]
             comment = row["comment"] or None
             tables[(str(row["schema"]), str(row["name"]))] = {
                 "schema": row["schema"],
@@ -420,13 +457,13 @@ class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
                         "name": row["name"],
                         "type": row["type"],
                         "nullable": bool(row["nullable"]),
-                        "default": row["default"],
+                        "default": self._default(row["default"]),
                         "comment": row["comment"] or None,
                     }
                 )
         checks = {
-            (str(row["schema"]), str(row["name"])): str(row["clause"])
-            for row in await _fetch(db, _in(CHECKS, schemas), *args)
+            (str(row["schema"]), str(row["table"]), str(row["name"])): str(row["clause"])
+            for row in await _fetch(db, _in(self.checks_query, schemas), *args)
         }
         keys: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
         for row in await _fetch(db, _in(KEY_COLUMNS, schemas), *args):
@@ -435,17 +472,12 @@ class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
             )
         for row in await _fetch(db, _in(CONSTRAINTS, schemas), *args):
             if (table := table_of(row)) is not None:
-                schema, name = str(row["schema"]), str(row["name"])
+                key = (str(row["schema"]), str(row["table"]), str(row["name"]))
                 table["constraints"].append(
-                    _constraint(
-                        name,
-                        str(row["type"]),
-                        keys.get((schema, str(row["table"]), name), []),
-                        checks.get((schema, name)),
-                    )
+                    _constraint(key[2], str(row["type"]), keys.get(key, []), checks.get(key))
                 )
         indexes: dict[tuple[str, str, str], dict[str, Any]] = {}
-        for row in await _fetch(db, _in(INDEXES, schemas), *args):
+        for row in await _fetch(db, _in(self.indexes_query, schemas), *args):
             key = (str(row["schema"]), str(row["table"]), str(row["name"]))
             index = indexes.setdefault(
                 key,
@@ -465,11 +497,30 @@ class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
             view = tables.get((str(row["schema"]), str(row["name"])))
             if view is not None:
                 view["definition"] = row["definition"] or None  # empty without SELECT
-        for row in await _fetch(db, _in(VIEW_SOURCES, schemas), *args):
+        await self._view_sources(db, schemas, tables)
+        return list(tables.values())
+
+    # ── what the dialects say otherwise ──────────────────────────────────────
+
+    async def _view_sources(
+        self, db: Any, schemas: list[str], tables: dict[tuple[str, str], dict[str, Any]]
+    ) -> None:
+        """Each view's `reads_from`: VIEW_TABLE_USAGE's rows, which MySQL
+        shows for a view the account may SELECT from, as its definition."""
+        for row in await _fetch(db, _in(VIEW_SOURCES, schemas), *schemas):
             view = tables.get((str(row["schema"]), str(row["name"])))
             if view is not None:
                 view["reads_from"].append(f"{row['ref_schema']}.{row['ref_table']}")
-        return list(tables.values())
+
+    def _default(self, value: object) -> object:
+        """A column's default as the catalogue writes it: MySQL's is the
+        value, a string unquoted, and None when there is none."""
+        return value
+
+    def _other_engine(self, version: str) -> str | None:
+        """The engine this server is, when it is not this connector's: every
+        MariaDB writes its name in its version, 11.8.2-MariaDB-log."""
+        return "MariaDB" if "MariaDB" in version else None
 
     def _in_scope(self, visible: list[str]) -> list[str]:
         if not self.config.schemas:
@@ -499,6 +550,14 @@ class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
                 detail=detail,
                 secrets=secrets,
             )
+        if isinstance(error, OtherEngineError):
+            return diagnose(
+                DiagnosticCode.CONFIG_INVALID,
+                message=f"Ce serveur est {error.engine} ({error.version}) : ajoutez-le avec "
+                f"le connecteur {error.engine}.",
+                detail=detail,
+                secrets=secrets,
+            )
         if isinstance(error, NoTlsError | ssl.SSLError) or "SSL" in str(error):
             return diagnose(
                 DiagnosticCode.CONFIG_INVALID,
@@ -509,13 +568,13 @@ class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
         if code == ACCESS_DENIED:
             return diagnose(
                 DiagnosticCode.AUTH_INVALID,
-                message="MySQL refuse ce compte ou ce mot de passe.",
+                message=f"{self.manifest.display_name} refuse ce compte ou ce mot de passe.",
                 detail=detail,
                 secrets=secrets,
             )
         if code == DATABASE_ACCESS_DENIED or code in COMMAND_DENIED:
             return diagnose(DiagnosticCode.PERMISSION_DENIED, detail=detail, secrets=secrets)
-        if code == TOO_SLOW or isinstance(error, TimeoutError):
+        if code == self.too_slow or isinstance(error, TimeoutError):
             return diagnose(DiagnosticCode.TIMEOUT, detail=detail, secrets=secrets)
         if code in UNREACHABLE or isinstance(error, OSError):
             return diagnose(DiagnosticCode.NETWORK_UNREACHABLE, detail=detail, secrets=secrets)

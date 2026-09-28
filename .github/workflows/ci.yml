@@ -57,6 +57,20 @@ jobs:
           --health-retries 24
           --health-start-period 20s
 
+      mariadb:
+        # A customer's MariaDB, for tests/test_mariadb_connector.py
+        # (LEKA-349), on 3307 beside MySQL. Same image as docker-compose.yml.
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: leka
+        ports: ["3307:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 24
+          --health-start-period 20s
+
       mongodb:
         # A customer's MongoDB, for tests/test_mongodb_connector.py
         # (LEKA-349). Same image as docker-compose.yml.
@@ -88,6 +102,7 @@ jobs:
       # must not here.
       LEKA_REQUIRE_MYSQL_TESTS: "1"
       LEKA_REQUIRE_MONGODB_TESTS: "1"
+      LEKA_REQUIRE_MARIADB_TESTS: "1"
 
     defaults:
       run:

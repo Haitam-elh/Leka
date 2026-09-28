@@ -48,6 +48,7 @@ from leka.connectors import (
     manifests,
     network,
 )
+from leka.connectors.mariadb import MariaDBConfig, MariaDBConnector, MariaDBCredentials
 from leka.connectors.mysql import MySQLConfig, MySQLConnector, MySQLCredentials
 from leka.connectors.mysql import connector as my
 from leka.db import session_factory, system_scope, workspace_scope
@@ -250,6 +251,18 @@ async def test_a_wrong_password_is_refused_and_never_repeated(catalogue: Catalog
     assert wrong not in error.diagnostic.model_dump_json()
 
 
+async def test_the_mariadb_connector_pointed_at_mysql_says_so(catalogue: Catalogue) -> None:
+    mariadb = MariaDBConnector(
+        MariaDBConfig(host=HOST, port=PORT),
+        MariaDBCredentials(username=catalogue.reader, password=SecretStr(catalogue.password)),
+    )
+
+    error = await _failure(mariadb)
+
+    assert error.diagnostic.code is DiagnosticCode.CONFIG_INVALID
+    assert "connecteur MySQL" in error.diagnostic.message
+
+
 async def test_health_is_a_connection_that_answers(catalogue: Catalogue) -> None:
     assert (await _reader(catalogue).check_health()).status is HealthStatus.HEALTHY
 
@@ -403,6 +416,7 @@ async def test_an_address_that_is_not_public_is_refused(monkeypatch: pytest.Monk
     [
         (network.PrivateAddressError("10.0.0.5"), DiagnosticCode.CONFIG_INVALID),
         (my.NoTlsError("not encrypted"), DiagnosticCode.CONFIG_INVALID),
+        (my.OtherEngineError("MariaDB", "11.8.2-MariaDB"), DiagnosticCode.CONFIG_INVALID),
         (ssl.SSLError("wrong version number"), DiagnosticCode.CONFIG_INVALID),
         # What the driver says to a server without TLS (checked by hand
         # against one started with --tls-version=''): a 2003, read as TLS.

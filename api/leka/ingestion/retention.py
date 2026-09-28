@@ -58,6 +58,7 @@ DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     # as the table lives.
     SourceKind.POSTGRESQL: 90,
     SourceKind.MYSQL: 90,
+    SourceKind.MARIADB: 90,
     SourceKind.MONGODB: 90,
     SourceKind.SUPABASE: 90,
     SourceKind.SLACK: 30,

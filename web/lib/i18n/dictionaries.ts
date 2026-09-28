@@ -592,6 +592,7 @@ const fr = {
       grafana: { alerts: "règles d'alerte et leur état", events: "annotations" },
       notion: { databases: "bases Notion" },
       mysql: { schemas: "bases" },
+      mariadb: { schemas: "bases" },
       mongodb: { schemas: "bases", tables: "collections et vues" },
       asana: { issues: "tâches" },
       trello: { projects: "tableaux", issues: "cartes" },
@@ -792,7 +793,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, Supabase et MongoDB.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, Supabase et MongoDB.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -1012,6 +1013,18 @@ const fr = {
         host: {
           label: "Hôte",
           help: "Le nom ou l'adresse publique du serveur, accessible depuis Internet : db.acme.com. Une adresse privée est refusée.",
+        },
+        port: { label: "Port", help: "3306, sauf si votre serveur écoute ailleurs." },
+        username: {
+          label: "Compte",
+          help: "Un compte dédié, avec le seul privilège REFERENCES sur les bases à décrire : il en montre la structure, pas les lignes.",
+        },
+        password: { label: "Mot de passe", help: "Celui du compte. Chiffré, et plus jamais affiché." },
+      },
+      mariadb: {
+        host: {
+          label: "Hôte",
+          help: "Le nom ou l'adresse publique du serveur, accessible depuis Internet : db.acme.com. Une adresse privée est refusée. Le serveur doit accepter TLS : c'est le cas par défaut depuis MariaDB 11.4 et sur Amazon RDS.",
         },
         port: { label: "Port", help: "3306, sauf si votre serveur écoute ailleurs." },
         username: {
@@ -1723,6 +1736,7 @@ const en: Dictionary = {
       grafana: { alerts: "alert rules and their state", events: "annotations" },
       notion: { databases: "Notion databases" },
       mysql: { schemas: "databases" },
+      mariadb: { schemas: "databases" },
       mongodb: { schemas: "databases", tables: "collections and views" },
       asana: { issues: "tasks" },
       trello: { projects: "boards", issues: "cards" },
@@ -1922,7 +1936,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, Supabase and MongoDB today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, Supabase and MongoDB today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -2137,6 +2151,18 @@ const en: Dictionary = {
         host: {
           label: "Host",
           help: "The server's name or public address, reachable from the internet: db.acme.com. A private address is refused.",
+        },
+        port: { label: "Port", help: "3306, unless your server listens elsewhere." },
+        username: {
+          label: "Account",
+          help: "A dedicated account, with only the REFERENCES privilege on the databases to describe: it shows their structure, not their rows.",
+        },
+        password: { label: "Password", help: "The account's. Encrypted, and never shown again." },
+      },
+      mariadb: {
+        host: {
+          label: "Host",
+          help: "The server's name or public address, reachable from the internet: db.acme.com. A private address is refused. The server must accept TLS: it does by default since MariaDB 11.4, and on Amazon RDS.",
         },
         port: { label: "Port", help: "3306, unless your server listens elsewhere." },
         username: {
