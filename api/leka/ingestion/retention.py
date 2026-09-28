@@ -51,11 +51,15 @@ DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     SourceKind.GURU: 90,
     SourceKind.GOOGLE_WORKSPACE: 90,
     SourceKind.MICROSOFT_365: 90,
+    # Incidents and the services they are about: small, and what a
+    # post-mortem reads weeks later.
+    SourceKind.PAGERDUTY: 90,
     SourceKind.SLACK: 30,
     SourceKind.AWS: 30,
     SourceKind.AZURE: 30,
     SourceKind.GCP: 30,
     SourceKind.DATADOG: 30,
+    SourceKind.GRAFANA: 30,
 }
 
 # A source kind nobody thought about must not mean "keep for ever". The
@@ -78,8 +82,12 @@ def retention_days(kind: SourceKind) -> int:
     return DEFAULT_RETENTION_DAYS.get(kind, FALLBACK_RETENTION_DAYS)
 
 
-def expires_at(kind: SourceKind, fetched_at: datetime) -> datetime:
+def expires_at(kind: SourceKind, fetched_at: datetime, *, days: int | None = None) -> datetime:
     """When this payload stops being ours to keep.
+
+    `days` is the source's own retention (its settings, LEKA-348): a source
+    may keep less than its kind's policy, never more — the policy is what
+    was promised.
 
     Computed once, at write time, and stored as a column rather than worked
     out again by every reader. Two things follow from that, and both matter:
@@ -88,7 +96,8 @@ def expires_at(kind: SourceKind, fetched_at: datetime) -> datetime:
     what was collected under the old one — which is the behaviour you want
     when a customer asks what happened to data they still expected to find.
     """
-    return fetched_at + timedelta(days=retention_days(kind))
+    policy = retention_days(kind)
+    return fetched_at + timedelta(days=min(days, policy) if days else policy)
 
 
 __all__ = [

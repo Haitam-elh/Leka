@@ -548,6 +548,8 @@ const fr = {
       incidents: "incidents",
       metrics: "métriques",
       logs: "logs",
+      services: "services",
+      dashboards: "tableaux de bord",
     },
     /**
      * The same words, in each vendor's own terms where it has them: what
@@ -584,6 +586,7 @@ const fr = {
       },
       gitlab: { pull_requests: "merge requests" },
       datadog: { alerts: "moniteurs et leurs alertes", metrics: "définitions de métriques" },
+      grafana: { alerts: "règles d'alerte et leur état", events: "annotations" },
       notion: { databases: "bases Notion" },
       asana: { issues: "tâches" },
       trello: { projects: "tableaux", issues: "cartes" },
@@ -711,6 +714,15 @@ const fr = {
       failed: "Les réglages n'ont pas pu être enregistrés",
       error: "Erreur",
       warning: "À vérifier",
+      retention: "Rétention des données brutes",
+      retentionKept: "{days} jours",
+      retentionPolicy: "Politique de LEKA : {days} jours",
+      retentionDefault: "Politique de LEKA",
+      retentionDays: "Rétention (jours)",
+      retentionHelp:
+        "Combien de jours LEKA garde ce qu'il lit de cette source : moins que sa politique ({days} jours), jamais plus. Vide : la politique.",
+      retentionHelpDefault:
+        "Combien de jours LEKA garde ce qu'il lit de cette source, au plus sa politique. Vide : la politique.",
     },
     page: {
       editTitle: "Modifier la source",
@@ -775,7 +787,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365 et Datadog.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty et Grafana.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -855,6 +867,26 @@ const fr = {
      * back to `fields`.
      */
     fieldsOf: {
+      grafana: {
+        base_url: {
+          label: "Adresse du Grafana",
+          help: "https://acme.grafana.net, ou celle de votre Grafana — en https, accessible depuis Internet.",
+        },
+        token: {
+          label: "Jeton de compte de service",
+          help: "glsa_…, d'un compte de service au rôle Viewer (Administration → Service accounts). Chiffré, et plus jamais affiché.",
+        },
+      },
+      pagerduty: {
+        api_key: {
+          label: "Clé d'API",
+          help: "Une clé d'API REST en lecture seule (Integrations → API Access Keys, case « Read-only »). Chiffrée, et plus jamais affichée.",
+        },
+        region: {
+          label: "Région",
+          help: "us, ou eu si votre compte PagerDuty est hébergé en Europe.",
+        },
+      },
       datadog: {
         site: {
           label: "Site Datadog",
@@ -1591,6 +1623,8 @@ const en: Dictionary = {
       incidents: "incidents",
       metrics: "metrics",
       logs: "logs",
+      services: "services",
+      dashboards: "dashboards",
     },
     capabilitiesOf: {
       aws: {
@@ -1622,6 +1656,7 @@ const en: Dictionary = {
       },
       gitlab: { pull_requests: "merge requests" },
       datadog: { alerts: "monitors and their alerts", metrics: "metric definitions" },
+      grafana: { alerts: "alert rules and their state", events: "annotations" },
       notion: { databases: "Notion databases" },
       asana: { issues: "tasks" },
       trello: { projects: "boards", issues: "cards" },
@@ -1748,6 +1783,15 @@ const en: Dictionary = {
       failed: "The settings could not be saved",
       error: "Error",
       warning: "To check",
+      retention: "Raw data retention",
+      retentionKept: "{days} days",
+      retentionPolicy: "LEKA's policy: {days} days",
+      retentionDefault: "LEKA's policy",
+      retentionDays: "Retention (days)",
+      retentionHelp:
+        "How many days LEKA keeps what it reads of this source: less than its policy ({days} days), never more. Empty: the policy.",
+      retentionHelpDefault:
+        "How many days LEKA keeps what it reads of this source, at most its policy. Empty: the policy.",
     },
     page: {
       editTitle: "Change the source",
@@ -1812,7 +1856,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365 and Datadog today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty and Grafana today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -1887,6 +1931,26 @@ const en: Dictionary = {
       },
     },
     fieldsOf: {
+      grafana: {
+        base_url: {
+          label: "Grafana address",
+          help: "https://acme.grafana.net, or your own Grafana's — https, reachable from the internet.",
+        },
+        token: {
+          label: "Service account token",
+          help: "glsa_…, a service account's with the Viewer role (Administration → Service accounts). Encrypted, and never shown again.",
+        },
+      },
+      pagerduty: {
+        api_key: {
+          label: "API key",
+          help: "A read-only REST API key (Integrations → API Access Keys, “Read-only” ticked). Encrypted, and never shown again.",
+        },
+        region: {
+          label: "Region",
+          help: "us, or eu if your PagerDuty account is hosted in Europe.",
+        },
+      },
       datadog: {
         site: {
           label: "Datadog site",

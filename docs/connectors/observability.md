@@ -1,15 +1,16 @@
 # Observability and operations — what LEKA asks for, and what it reads
 
-Datadog, through [the connector framework](framework.md). LEKA-348.
-**LEKA only reads**: every call to Datadog is a GET, with keys that can
-only read. What each source contributes then goes through extraction
+Datadog, PagerDuty and Grafana, through
+[the connector framework](framework.md). LEKA-348. **LEKA only reads**: every call is a GET, with keys that can only
+read. What each source contributes then goes through extraction
 ([extraction.md](../extraction.md)), parsing and normalisation like any
 other.
 
 What observability data is, for LEKA: **alerts** (monitors and their
 state), **events** (the stream of what happened: an alert that fired, a
 deploy, a change), **incidents**, **metrics** (their definitions, not
-their points) and **logs** (a chosen few). Every record keeps the vendor's
+their points), **logs** (a chosen few), and the **services** an incident
+tool knows. Every record keeps the vendor's
 own **identifier** — its `external_id` — and its own **timestamp** — its
 `updated_at`, and in the payload as the vendor wrote it.
 
@@ -121,8 +122,11 @@ is LEKA-356's.
 ### Retention
 
 Datadog's raw payloads are kept **30 days** — observability is enormous
-and stale in days ([data-lifecycle.md](../data-lifecycle.md)). A contract
-can move it without a deploy (`LEKA_RAW_PAYLOAD_RETENTION_DAYS`).
+and stale in days ([data-lifecycle.md](../data-lifecycle.md)). A source may
+keep less — its own retention, in its settings
+([scope-and-mapping.md § 2 bis](scope-and-mapping.md#2-bis-retention)); a
+contract can move the policy without a deploy
+(`LEKA_RAW_PAYLOAD_RETENTION_DAYS`).
 
 ### Limits
 
@@ -148,3 +152,145 @@ can move it without a deploy (`LEKA_RAW_PAYLOAD_RETENTION_DAYS`).
 | 5xx | `PROVIDER_ERROR` |
 
 Both keys are removed from every detail.
+
+## PagerDuty
+
+| | |
+|---|---|
+| Endpoint | `https://api.pagerduty.com`, or `https://api.eu.pagerduty.com` for an account in PagerDuty's EU region |
+| Credentials | `api_key`, a **read-only** REST API key (write-only here), sent as `Token token=…` |
+| Config | `region` (`us`, `eu`), `services` |
+| Category | `observability` |
+| Capabilities | `services`, `incidents` |
+
+### What to create at PagerDuty
+
+An account admin, in **Integrations → API Access Keys → Create New API
+Key**: a description (`LEKA`), and **Read-only API Key** ticked. That is
+the boundary — the key cannot acknowledge, resolve or change anything.
+Then, in LEKA, **Sources → Add → PagerDuty**: the key, and `eu` as region
+if the account's address ends in `eu.pagerduty.com`.
+
+### Scope
+
+`services` takes service ids (`PXXXXXX`), typed or pasted as the link to
+the service; kept in capitals. Absent, every service. The choices come from
+`GET /sources/{id}/scope/options`: every service of the account. The
+connection test fails with `NOT_FOUND`, naming them, when the key does not
+see a service in scope.
+
+### The connection test
+
+1. `GET /abilities` — the key reads the account. Refused: `AUTH_INVALID`
+   (the key, or the region).
+2. `GET /services` — every service; those in scope must be there.
+3. One page of incidents: `incidents` if PagerDuty answers.
+
+### What is read
+
+| Capability | What (PagerDuty API) | Incremental | Id, timestamp |
+|---|---|---|---|
+| `services` | each service: name, description, status, teams, escalation policy, last incident (`GET /services`) | whole each pass | service id, `updated_at` |
+| `incidents` | each incident: title, status, urgency, priority, service, assignees, escalation policy, teams, number, link (`GET /incidents`) | every pass reads the incidents **created in the last 90 days** again — PagerDuty lists by creation, not by change | incident id, `updated_at` |
+
+An incident's **container** is its service; the sync reads services
+before the incidents about them. Incidents older than 90 days stay as they
+were last read, until their retention ends. Not read: log entries, notes,
+alerts inside an incident, on-call schedules.
+
+Extraction (`extraction/observability.py`): an incident's title, status,
+urgency, priority, number, its assignees as people and its service as a
+reference; a service's name, status, teams and last incident.
+
+### Retention
+
+Kept **90 days**, like tickets: incidents are small, and what a
+post-mortem reads weeks later.
+
+### Limits
+
+- **Quota**: 960 requests a minute per key, in `ratelimit-*` headers
+  (their reset in seconds). A bulk read stops before the last tenth; a 429
+  is `RATE_LIMITED` with the seconds to wait; health turns `degraded`
+  under a tenth left.
+- **Pagination**: PagerDuty's offsets, while it says `more`.
+- **Errors**: 401 → `AUTH_INVALID`, 403 → `PERMISSION_DENIED`, 404 →
+  `NOT_FOUND`, 5xx → `PROVIDER_ERROR`. The key is removed from every
+  detail.
+
+## Grafana
+
+| | |
+|---|---|
+| Endpoint | the Grafana's address — Grafana Cloud (`https://acme.grafana.net`) or one of the customer's own |
+| Credentials | `token`, a service account's token (`glsa_…`, write-only), as Bearer |
+| Config | `base_url` |
+| Category | `observability` |
+| Capabilities | `dashboards`, `alerts` (alert rules and their state), `events` (annotations) |
+
+### What to create at Grafana
+
+In Grafana, **Administration → Users and access → Service accounts → Add
+service account**, with the **Viewer** role — nothing more — then **Add
+service account token**, with an expiry date. What a Viewer cannot see,
+LEKA cannot. In LEKA, **Sources → Add → Grafana**: the address and the
+token. Test, activate.
+
+### The address
+
+`base_url` is typed by the admin, and LEKA's server calls it. So it must
+be **https**, and lead to a **public address**: checked when the source is
+saved (plain `http`, `127.0.0.1`, `10.x`, `169.254.169.254`… are refused
+at once) and again **when connecting** — the name is resolved, every
+address must be public, and the connection goes to the address checked
+(`leka/connectors/network.py`, every connector's transport). A Grafana only
+reachable inside the customer's network cannot be read from LEKA's
+server.
+
+### Scope
+
+Grafana has no scope to choose in the form: the service account's role is
+the boundary. The source's **scope rules**
+([scope-and-mapping.md](scope-and-mapping.md)) apply to each record's
+container — a dashboard's or an alert rule's folder, an annotation's
+dashboard.
+
+### The connection test
+
+1. `GET /api/org` — the organisation's name is the account.
+2. One small read of each capability, at once — a dashboard, the alert
+   rules, an annotation. A refusal leaves that capability out; none
+   readable is a pass with a warning naming the role to give.
+
+### What is read
+
+| Capability | What (Grafana HTTP API) | Incremental | Id, timestamp |
+|---|---|---|---|
+| `dashboards` | each dashboard: title, tags, folder, link (`GET /api/search?type=dash-db`) | whole each pass | dashboard uid, — |
+| `alerts` | each Grafana-managed alert rule with its **state** (`firing`, `pending`, `inactive`), health, query, labels, summary, group, folder (`GET /api/prometheus/grafana/api/v1/rules`) | whole each pass | rule uid (else folder/group/name), last evaluation |
+| `events` | annotations — deploys, alert state changes, notes: text, tags, dashboard, panel, time and end (`GET /api/annotations`) | from the last pass less 5 minutes; an initial pass reads 30 days; newest first, at most 10 000 a pass | annotation id, `updated` (else `time`) |
+
+Grafana's times in annotations are milliseconds since the epoch; they are
+kept so in the payload and read as dates. Recording rules are not alerts,
+and are left out. Not read: panels' queries and their data, data
+sources, alert notification history beyond annotations, OnCall and
+Incident (Grafana IRM).
+
+Extraction (`extraction/observability.py`): a dashboard's title, folder,
+tags; an alert rule's name, state, health, query, summary, and its labels
+as tags, `service`, `env`, `team`, `severity`; an annotation's first line,
+text, time and dashboard.
+
+### Retention
+
+Kept **30 days**, like Datadog.
+
+### Limits
+
+- **Quota**: Grafana Cloud limits by organisation; a 429 is
+  `RATE_LIMITED` with `Retry-After`. Grafana sends no quota headers, so
+  health is `healthy` or failed.
+- **Errors**: 401 → `AUTH_INVALID`, 403 → `PERMISSION_DENIED` naming the
+  Viewer role, 404 → `NOT_FOUND` (often: the address is not a Grafana),
+  an address refused by the transport → `CONFIG_INVALID`. The token is
+  removed from every detail.

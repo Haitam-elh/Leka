@@ -166,6 +166,10 @@ class SourceSettingsRead(BaseModel):
 
     version: int
     settings: SourceSettings
+    retention_policy_days: int | None = Field(
+        default=None,
+        description="LEKA's retention for this kind of source: the most a source may keep.",
+    )
 
 
 class SettingsCheck(BaseModel):
@@ -174,7 +178,9 @@ class SettingsCheck(BaseModel):
 
 class SettingsSaved(BaseModel):
     version: int
-    changed: list[str] = Field(description="scope, mapping — empty: nothing changed, no version.")
+    changed: list[str] = Field(
+        description="scope, mapping, retention — empty: nothing changed, no version."
+    )
     findings: list[Finding] = Field(description="Warnings: saved, but worth a look.")
     full_sync_queued: bool = Field(
         description="The scope changed on an active source: a full pass follows."
@@ -187,5 +193,6 @@ class SettingsVersionRead(BaseModel):
     version: int
     scope: dict[str, object]
     mapping: dict[str, object]
+    retention: dict[str, object]
     created_by: uuid.UUID | None
     created_at: datetime

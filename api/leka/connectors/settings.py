@@ -14,6 +14,9 @@ A source's SETTINGS, beside its connector config, versioned:
               the tag keys this company uses, its own words for states,
               priorities and environments (applied by leka.ingestion's
               normalisation).
+    retention how many days its raw payloads are kept — shorter than LEKA's
+              policy for its kind, never longer (applied by the sync, when a
+              payload is written; LEKA-348).
 
 The connector config chooses what the connector reads (an organisation, a
 list of projects); the scope rules filter what it read, the same way for
@@ -53,6 +56,8 @@ PRIORITIES = frozenset({"highest", "high", "medium", "low", "lowest"})
 ENVIRONMENTS = frozenset({"production", "staging", "development", "test"})
 
 Pattern = str
+# The longest a source may ask for; its kind's policy is the real bound.
+MAX_RETENTION_DAYS = 365
 
 
 class ScopeRules(BaseModel):
@@ -110,11 +115,24 @@ class Mapping(BaseModel):
     environments: dict[str, str] = Field(default_factory=dict, description="'prd' → production.")
 
 
+class Retention(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    days: int | None = Field(
+        default=None,
+        ge=1,
+        le=MAX_RETENTION_DAYS,
+        description="How long the raw payloads are kept, in days — at most LEKA's policy "
+        "for this kind of source. Empty: the policy.",
+    )
+
+
 class SourceSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     scope: ScopeRules = Field(default_factory=ScopeRules)
     mapping: Mapping = Field(default_factory=Mapping)
+    retention: Retention = Field(default_factory=Retention)
 
 
 class Finding(BaseModel):
@@ -161,13 +179,26 @@ def check(
     *,
     capabilities: frozenset[str],
     visible: list[str] | None,
+    longest: int | None = None,
 ) -> list[Finding]:
     """Everything wrong or doubtful with these settings. `visible` is the
     containers the credentials can see (the connector's scope options), or
     None when they could not be listed: a rule that matches none of them is
-    a warning — it may be a typo, or a container not created yet."""
+    a warning — it may be a typo, or a container not created yet. `longest`
+    is LEKA's retention policy for the source's kind: a retention above it is
+    a warning — the policy applies."""
     findings: list[Finding] = []
     scope, mapping = settings.scope, settings.mapping
+    days = settings.retention.days
+    if days is not None and longest is not None and days > longest:
+        findings.append(
+            Finding(
+                level="warning",
+                path="retention.days",
+                message=f"LEKA keeps this kind of source {longest} days at most: "
+                f"{longest} will apply",
+            )
+        )
 
     patterns = [
         *((f"scope.include[{i}]", p) for i, p in enumerate(scope.include)),

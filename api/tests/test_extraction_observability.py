@@ -1,4 +1,5 @@
-"""Datadog's records, extracted for what comes after (LEKA-348 → LEKA-354).
+"""Datadog's, PagerDuty's and Grafana's records, extracted for what comes
+after (LEKA-348 → LEKA-354).
 
 The payloads are the ones the Datadog connector stores — its stand-in's,
 in tests/test_datadog_*.py. What matters: Datadog's own id and timestamp
@@ -15,6 +16,11 @@ from leka.ingestion.extraction import FailureCode
 from tests.test_datadog_connector import CHECKOUT
 from tests.test_datadog_resources import event, incident, log
 from tests.test_extraction import SECRET, _extract, _failure
+from tests.test_grafana_connector import FIRING as GRAFANA_FIRING
+from tests.test_grafana_connector import LATENCY as GRAFANA_LATENCY
+from tests.test_grafana_connector import annotation as grafana_annotation
+from tests.test_pagerduty_connector import CHECKOUT as PAGERDUTY_CHECKOUT
+from tests.test_pagerduty_connector import incident as pagerduty_incident
 
 C = Capability
 DATADOG = SourceKind.DATADOG
@@ -92,3 +98,72 @@ def test_a_monitor_without_a_name_is_malformed_and_nothing_of_it_leaks() -> None
     failure = _failure(DATADOG, C.ALERTS, {"id": 9, "message": SECRET})
 
     assert failure.code is FailureCode.MALFORMED
+
+
+# ── PagerDuty ────────────────────────────────────────────────────────────────
+
+
+def test_a_pagerduty_incident_names_its_service_and_who_is_on_it() -> None:
+    payload = {
+        **pagerduty_incident(3),
+        "priority": {"summary": "P1"},
+        "teams": [{"summary": "Payments"}],
+        "resolved_at": "2026-09-21T13:00:00Z",
+    }
+
+    found = _extract(SourceKind.PAGERDUTY, C.INCIDENTS, payload, container="PCHKOUT")
+
+    assert (found.title, found.state) == ("Checkout errors 3", "resolved")
+    assert found.url == payload["html_url"]
+    assert found.updated_at == datetime(2026, 9, 21, 13, tzinfo=UTC)
+    assert (found.metadata["urgency"], found.metadata["priority"]) == ("high", "P1")
+    assert found.metadata["incident_number"] == 3
+    assert found.signals["teams"] == ["Payments"]
+    roles = {(r.role, r.kind, r.name) for r in found.references}
+    assert roles == {("assignee", "person", "Nora"), ("service", "service", "Checkout")}
+    assert found.extractor == "pagerduty.incidents"
+
+
+def test_a_pagerduty_service_is_its_name_status_and_last_incident() -> None:
+    found = _extract(SourceKind.PAGERDUTY, C.SERVICES, PAGERDUTY_CHECKOUT)
+
+    assert (found.title, found.state) == ("Checkout", "active")
+    assert found.content[0].text == "Payments at checkout"
+    assert found.metadata["last_incident_at"] == "2026-09-24T08:00:00+00:00"
+
+
+# ── Grafana ──────────────────────────────────────────────────────────────────
+
+
+def test_a_grafana_rule_is_an_alert_with_its_state_labels_and_summary() -> None:
+    payload = {**GRAFANA_FIRING, "group": "checkout", "folder": "Payments"}
+
+    found = _extract(SourceKind.GRAFANA, C.ALERTS, payload, external_id="rule-1")
+
+    assert (found.title, found.state) == ("Checkout 5xx", "firing")
+    assert found.content[0].text == "Checkout is failing"
+    assert found.updated_at == datetime(2026, 9, 25, 9, tzinfo=UTC)
+    assert (found.signals["service"], found.signals["severity"]) == ("checkout", "critical")
+    assert found.signals["tags"] == ["service:checkout", "severity:critical"]
+    assert (found.metadata["group"], found.metadata["folder"]) == ("checkout", "Payments")
+
+
+def test_a_grafana_dashboard_is_its_title_folder_and_tags() -> None:
+    payload = {**GRAFANA_LATENCY, "web_url": "https://acme.grafana.net/d/abc123/checkout-latency"}
+
+    found = _extract(SourceKind.GRAFANA, C.DASHBOARDS, payload)
+
+    assert found.title == "Checkout latency"
+    assert found.url == payload["web_url"]
+    assert found.metadata["folder"] == "Payments"
+    assert found.signals["tags"] == ["checkout", "slo"]
+
+
+def test_a_grafana_annotation_keeps_its_time_from_milliseconds() -> None:
+    when = datetime(2026, 9, 21, 12, tzinfo=UTC)
+
+    found = _extract(SourceKind.GRAFANA, C.EVENTS, grafana_annotation(7, when))
+
+    assert found.title == "Deploy 7"
+    assert found.created_at == found.updated_at == when
+    assert found.metadata["dashboard_uid"] == "abc123"

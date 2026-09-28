@@ -1,4 +1,6 @@
-"""Observability: Datadog — its monitors, events, incidents, metrics and logs.
+"""Observability: Datadog's monitors, events, incidents, metrics and logs;
+PagerDuty's services and incidents; Grafana's dashboards, alert rules and
+annotations.
 
 What an operations question needs, the same way whatever the tool: the
 record's `title`, its `state` (a monitor's, an incident's, a log's
@@ -6,8 +8,10 @@ status), when it happened, its text, and technical `signals` — `service`,
 `env`, `host`, `tags` ('key:value', as Datadog writes them), `severity`.
 Datadog's own id stays the record's id, and its timestamp its date.
 
-The payloads are the ones leka/connectors/datadog stores: the API's
-answers, with `web_url` beside them, and an incident's people resolved.
+The payloads are the ones leka/connectors/{datadog,pagerduty,grafana}
+store: the APIs' answers — Datadog's and Grafana's with `web_url` beside
+them, Datadog's incidents with their people resolved, Grafana's rules with
+their group and folder.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from leka.ingestion.extraction.fields import (
     flag,
     lower,
     number,
+    people,
     ref,
     required,
     string,
@@ -33,6 +38,8 @@ from leka.ingestion.extraction.fields import (
 
 C = Capability
 DATADOG = SourceKind.DATADOG
+PAGERDUTY = SourceKind.PAGERDUTY
+GRAFANA = SourceKind.GRAFANA
 
 
 @strategy("datadog.alerts", 1, (DATADOG, C.ALERTS))
@@ -150,6 +157,122 @@ def datadog_log(p: Payload) -> Extracted:
             "host": string(a, "host") or _tag(tags, "host"),
         },
     )
+
+
+@strategy("pagerduty.incidents", 1, (PAGERDUTY, C.INCIDENTS))
+def pagerduty_incident(p: Payload) -> Extracted:
+    assignments = dig(p, "assignments")
+    assignees = [dig(a, "assignee") for a in assignments] if isinstance(assignments, list) else []
+    return Extracted(
+        title=required(p, "title"),
+        url=string(p, "html_url"),
+        state=lower(p, "status"),
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "updated_at") or when(p, "last_status_change_at"),
+        content=content("description", string(p, "description")),
+        references=[
+            *people("assignee", assignees, id_key="id", name_key="summary"),
+            *ref(
+                "service",
+                "service",
+                external_id=dig(p, "service", "id"),
+                name=dig(p, "service", "summary"),
+            ),
+        ],
+        metadata={
+            "incident_number": number(p, "incident_number"),
+            "urgency": lower(p, "urgency"),
+            "priority": string(p, "priority", "summary"),
+            "resolved_at": _iso(when(p, "resolved_at")),
+        },
+        signals={
+            "service": string(p, "service", "summary"),
+            "escalation_policy": string(p, "escalation_policy", "summary"),
+            "teams": strings(p, "teams", key="summary"),
+        },
+    )
+
+
+@strategy("pagerduty.services", 1, (PAGERDUTY, C.SERVICES))
+def pagerduty_service(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "name"),
+        url=string(p, "html_url"),
+        state=lower(p, "status"),
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "updated_at"),
+        content=content("description", string(p, "description")),
+        metadata={"last_incident_at": _iso(when(p, "last_incident_timestamp"))},
+        signals={
+            "escalation_policy": string(p, "escalation_policy", "summary"),
+            "teams": strings(p, "teams", key="summary"),
+        },
+    )
+
+
+@strategy("grafana.dashboards", 1, (GRAFANA, C.DASHBOARDS))
+def grafana_dashboard(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "title"),
+        url=string(p, "web_url"),
+        metadata={"uid": string(p, "uid"), "folder": string(p, "folderTitle")},
+        signals={"tags": sorted(strings(p, "tags"))},
+    )
+
+
+@strategy("grafana.alerts", 1, (GRAFANA, C.ALERTS))
+def grafana_rule(p: Payload) -> Extracted:
+    labels = dig(p, "labels")
+    label_tags = sorted(f"{k}:{v}" for k, v in labels.items()) if isinstance(labels, dict) else []
+    return Extracted(
+        title=required(p, "name"),
+        state=lower(p, "state"),
+        updated_at=when(p, "lastEvaluation"),
+        content=[
+            *content("summary", string(p, "annotations", "summary")),
+            *content("description", string(p, "annotations", "description")),
+        ],
+        metadata={
+            "query": string(p, "query"),
+            "health": lower(p, "health"),
+            "group": string(p, "group"),
+            "folder": string(p, "folder"),
+        },
+        signals={
+            "tags": label_tags,
+            "service": string(labels, "service"),
+            "env": string(labels, "env") or string(labels, "environment"),
+            "team": string(labels, "team"),
+            "severity": lower(labels, "severity"),
+        },
+    )
+
+
+@strategy("grafana.events", 1, (GRAFANA, C.EVENTS))
+def grafana_annotation(p: Payload) -> Extracted:
+    text = string(p, "text")
+    happened = _from_ms(number(p, "time"))
+    tags = strings(p, "tags")
+    return Extracted(
+        title=first_line(text) or f"annotation {required(p, 'id')}",
+        state=lower(p, "newState"),
+        created_at=happened,
+        updated_at=_from_ms(number(p, "updated")) or happened,
+        content=content("text", text),
+        metadata={
+            "dashboard_uid": string(p, "dashboardUID"),
+            "panel_id": number(p, "panelId"),
+            "ends_at": _iso(_from_ms(number(p, "timeEnd"))),
+        },
+        signals={"tags": sorted(tags)},
+    )
+
+
+def _from_ms(value: int | float | None) -> datetime | None:
+    """Grafana's times: milliseconds since the epoch."""
+    if value is None or value <= 0:
+        return None
+    return datetime.fromtimestamp(value / 1000, tz=UTC)
 
 
 def _signals(tags: list[str]) -> dict[str, str | list[str] | None]:

@@ -80,11 +80,18 @@ export function SourceSettingsSection({ source }: { source: Source }) {
           </Button>
         ) : null}
       </div>
-      {read ? <Summary settings={read.settings} never={read.version === 0} /> : null}
+      {read ? (
+        <Summary
+          settings={read.settings}
+          never={read.version === 0}
+          policy={read.retention_policy_days ?? null}
+        />
+      ) : null}
       {editing && read ? (
         <SettingsDialog
           source={source}
           settings={read.settings}
+          policy={read.retention_policy_days ?? null}
           onClose={() => setEditing(false)}
         />
       ) : null}
@@ -92,10 +99,34 @@ export function SourceSettingsSection({ source }: { source: Source }) {
   );
 }
 
-function Summary({ settings, never }: { settings: SourceSettings; never: boolean }) {
+function Summary({
+  settings,
+  never,
+  policy,
+}: {
+  settings: SourceSettings;
+  never: boolean;
+  policy: number | null;
+}) {
   const t = useDictionary();
   const w = t.sources.settings;
-  if (never) return <p className="text-sm text-shell-muted">{w.never}</p>;
+  const kept = settings.retention?.days;
+  const retention =
+    kept && (policy === null || kept <= policy)
+      ? fill(w.retentionKept, { days: kept })
+      : policy
+        ? fill(w.retentionPolicy, { days: policy })
+        : w.retentionDefault;
+  if (never) {
+    return (
+      <div className="flex flex-col gap-2 text-sm">
+        <p className="text-shell-muted">{w.never}</p>
+        <p className="text-shell-muted">
+          {w.retention} : {retention}
+        </p>
+      </div>
+    );
+  }
   const scope = settings.scope ?? { include: [], exclude: [] };
   const m = settings.mapping ?? {};
   const rows: [string, string][] = [
@@ -132,6 +163,7 @@ function Summary({ settings, never }: { settings: SourceSettings; never: boolean
   } else {
     rows.push([w.mapping, w.noMapping]);
   }
+  rows.push([w.retention, retention]);
   return (
     <dl className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
       {rows.map(([label, value]) => (
@@ -160,10 +192,12 @@ const TAG_FIELDS: (keyof SettingsDraft)[] = ["tagEnvironment", "tagService", "ta
 function SettingsDialog({
   source,
   settings,
+  policy,
   onClose,
 }: {
   source: Source;
   settings: SourceSettings;
+  policy: number | null;
   onClose: () => void;
 }) {
   const t = useDictionary();
@@ -253,6 +287,22 @@ function SettingsDialog({
               <p className="text-xs text-shell-muted">{w.tagsHelp}</p>
             </div>
           ))}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="settings-retentionDays">{w.retentionDays}</Label>
+          <Input
+            id="settings-retentionDays"
+            inputMode="numeric"
+            className="w-32"
+            value={draft.retentionDays}
+            placeholder={policy ? String(policy) : undefined}
+            onChange={(event) => set("retentionDays", event.target.value)}
+            aria-describedby="settings-retentionDays-help"
+          />
+          <p id="settings-retentionDays-help" className="text-xs text-shell-muted">
+            {policy ? fill(w.retentionHelp, { days: policy }) : w.retentionHelpDefault}
+          </p>
         </div>
 
         {source.capabilities.length > 0 ? (

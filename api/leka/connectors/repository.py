@@ -193,6 +193,7 @@ class SourceSettingsRepository(WorkspaceScopedRepository):
         *,
         scope: dict[str, object],
         mapping: dict[str, object],
+        retention: dict[str, object],
         created_by: uuid.UUID | None,
     ) -> SourceSettingsVersion:
         """The next version. Two saves at once: the unique (source, version)
@@ -209,6 +210,7 @@ class SourceSettingsRepository(WorkspaceScopedRepository):
             version=(latest.scalar_one() or 0) + 1,
             scope=scope,
             mapping=mapping,
+            retention=retention,
             created_by=created_by,
         )
         self.add(row)

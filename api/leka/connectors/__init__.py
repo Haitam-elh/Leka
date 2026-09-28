@@ -23,12 +23,14 @@ from leka.connectors import (
     github,  # noqa: F401  — registers GitHubConnector
     gitlab,  # noqa: F401  — registers GitLabConnector
     google_workspace,  # noqa: F401  — registers GoogleWorkspaceConnector
+    grafana,  # noqa: F401  — registers GrafanaConnector
     guru,  # noqa: F401  — registers GuruConnector
     jira,  # noqa: F401  — registers JiraConnector
     linear,  # noqa: F401  — registers LinearConnector
     microsoft_365,  # noqa: F401  — registers Microsoft365Connector
     monday,  # noqa: F401  — registers MondayConnector
     notion,  # noqa: F401  — registers NotionConnector
+    pagerduty,  # noqa: F401  — registers PagerDutyConnector
     slab,  # noqa: F401  — registers SlabConnector
     trello,  # noqa: F401  — registers TrelloConnector
 )
@@ -96,6 +98,7 @@ from leka.connectors.service import (
 from leka.connectors.settings import (
     Finding,
     Mapping,
+    Retention,
     ScopeRules,
     SourceSettings,
     first_match,
@@ -135,6 +138,7 @@ __all__ = [
     "Mapping",
     "NoScopeError",
     "RawRecord",
+    "Retention",
     "RotationRefusedError",
     "RotationReport",
     "ScopeListing",

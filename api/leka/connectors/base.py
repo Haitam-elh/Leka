@@ -84,6 +84,10 @@ class Capability(enum.StrEnum):
     INCIDENTS = "incidents"
     METRICS = "metrics"
     LOGS = "logs"
+    # What an incident is about, in an incident tool's own catalogue.
+    SERVICES = "services"
+    # What is watched, and how: a monitoring tool's dashboards.
+    DASHBOARDS = "dashboards"
 
 
 class ConnectorManifest(BaseModel):

@@ -187,6 +187,19 @@ def test_the_expiry_is_computed_from_the_policy(monkeypatch: pytest.MonkeyPatch)
     assert expires_at(SourceKind.GITHUB, fetched) == fetched + timedelta(days=7)
 
 
+def test_a_source_may_keep_less_than_its_kind_never_more() -> None:
+    """A source's own retention (its settings, LEKA-348) shortens the
+    policy; asking for more than the policy gets the policy."""
+    fetched = datetime(2026, 1, 1, tzinfo=UTC)
+    policy = retention_days(SourceKind.DATADOG)
+
+    assert expires_at(SourceKind.DATADOG, fetched, days=7) == fetched + timedelta(days=7)
+    assert expires_at(SourceKind.DATADOG, fetched, days=policy + 60) == fetched + timedelta(
+        days=policy
+    )
+    assert expires_at(SourceKind.DATADOG, fetched, days=None) == fetched + timedelta(days=policy)
+
+
 def test_an_unknown_kind_falls_back_to_the_shortest_policy() -> None:
     """Keeping too little is a resync. Keeping too much is a broken promise."""
     assert min(DEFAULT_RETENTION_DAYS.values()) == FALLBACK_RETENTION_DAYS

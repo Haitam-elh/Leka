@@ -39,8 +39,8 @@ the one still holding data past what was promised.
 
 | Source | Days | Why |
 |---|---|---|
-| GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace (`google_workspace`), Microsoft 365 (`microsoft_365`) | 90 | Describe structure. Small, slow-moving, and how "when did this change?" gets answered |
-| Slack, AWS, Azure, Google Cloud (`gcp`), Datadog | 30 | Observability and chatter. Enormous, and worthless within days |
+| GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace (`google_workspace`), Microsoft 365 (`microsoft_365`), PagerDuty | 90 | Describe structure. Small, slow-moving, and how "when did this change?" gets answered |
+| Slack, AWS, Azure, Google Cloud (`gcp`), Datadog, Grafana | 30 | Observability and chatter. Enormous, and worthless within days |
 
 A source kind nobody has thought about falls back to **30 days**, the
 shortest policy, because keeping too little means a resync and keeping too
@@ -55,6 +55,11 @@ LEKA_RAW_PAYLOAD_RETENTION_DAYS={"datadog": 14, "github": 180}
 
 A value outside `[1, 3650]` stops the process at startup. `0` reads as
 "disabled" to whoever typed it and means "delete on arrival" to the sweep.
+
+A source may keep **less** than its kind's policy — its own retention, in
+its settings, set by an admin on its page
+([scope-and-mapping.md § 2 bis](connectors/scope-and-mapping.md#2-bis-retention)).
+Never more: asking for more gets the policy. LEKA-348.
 
 The expiry is computed **once, at write time**, and stored as a column. Two
 things follow. The sweep is an indexed range scan rather than a walk of every

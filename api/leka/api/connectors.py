@@ -63,6 +63,7 @@ from leka.connectors import (
 from leka.core.errors import ErrorCode, FieldError
 from leka.db import SortableField
 from leka.governance import Permission, Principal, require_permission
+from leka.ingestion import retention_days
 
 router = APIRouter(tags=["connectors"])
 
@@ -403,10 +404,13 @@ async def delete_source(source_id: uuid.UUID, service: ManagingService) -> Respo
 
 @router.get("/sources/{source_id}/settings", response_model=SourceSettingsRead)
 async def source_settings(source_id: uuid.UUID, service: ReadingService) -> SourceSettingsRead:
-    """The source's current scope rules and mapping."""
+    """The source's current scope rules, mapping and retention — and LEKA's
+    retention policy for its kind, the most it may keep."""
     source = await _source(service, source_id)
     version, settings = await service.settings(source)
-    return SourceSettingsRead(version=version, settings=settings)
+    return SourceSettingsRead(
+        version=version, settings=settings, retention_policy_days=retention_days(source.kind)
+    )
 
 
 @router.post("/sources/{source_id}/settings/check", response_model=SettingsCheck)
@@ -416,7 +420,9 @@ async def check_source_settings(
     """What would be wrong or doubtful with these settings — checked against
     what the source reads and what its credentials can see. Saves nothing."""
     source = await _source(service, source_id)
-    return SettingsCheck(findings=await service.check_settings(source, settings))
+    return SettingsCheck(
+        findings=await service.check_settings(source, settings, longest=retention_days(source.kind))
+    )
 
 
 @router.put("/sources/{source_id}/settings", response_model=SettingsSaved)
@@ -428,7 +434,9 @@ async def save_source_settings(
     queues a full pass: what came in is read, what went out is swept."""
     source = await _source(service, source_id)
     try:
-        version, findings, changed = await service.save_settings(source, settings)
+        version, findings, changed = await service.save_settings(
+            source, settings, longest=retention_days(source.kind)
+        )
     except (InvalidSettingsError, SettingsConflictError) as error:
         raise _refused(error) from error
     return SettingsSaved(

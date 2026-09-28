@@ -50,6 +50,8 @@ export type SettingsDraft = {
   states: string;
   priorities: string;
   environments: string;
+  /** Days, or empty for LEKA's policy (LEKA-348). */
+  retentionDays: string;
 };
 
 /** A line that could not be read: which field, which line (1-based). */
@@ -109,7 +111,17 @@ export function toDraft(settings: SourceSettings): SettingsDraft {
     states: table(mapping.states),
     priorities: table(mapping.priorities),
     environments: table(mapping.environments),
+    retentionDays: settings.retention?.days ? String(settings.retention.days) : "",
   };
+}
+
+/** The days a draft keeps, null for the policy — or undefined, unreadable. */
+function days(text: string): number | null | undefined {
+  const trimmed = text.trim();
+  if (trimmed === "") return null;
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const value = Number(trimmed);
+  return value >= 1 && value <= 365 ? value : undefined;
 }
 
 /** The settings the draft says — or the lines it could not read. */
@@ -122,7 +134,9 @@ export function fromDraft(
   const states = pairs("states", draft.states, EQUALS, errors);
   const priorities = pairs("priorities", draft.priorities, EQUALS, errors);
   const environments = pairs("environments", draft.environments, EQUALS, errors);
-  if (errors.length > 0) return { settings: null, errors };
+  const retention = days(draft.retentionDays);
+  if (retention === undefined) errors.push({ field: "retentionDays", line: 1 });
+  if (errors.length > 0 || retention === undefined) return { settings: null, errors };
   const entityTypes = Object.fromEntries(
     Object.entries(draft.entityTypes).filter(([, type]) => type.length > 0),
   );
@@ -143,6 +157,7 @@ export function fromDraft(
         priorities: Object.fromEntries(priorities),
         environments: Object.fromEntries(environments),
       },
+      retention: { days: retention },
     },
   };
 }

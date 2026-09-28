@@ -1,15 +1,16 @@
 # Scope and mapping — what a source contributes, and how it is read
 
 What an administrator decides about each source: which of what it can read
-LEKA keeps, and how its records map into the company model. LEKA-351.
-Contract: `leka/connectors/settings.py`.
+LEKA keeps, how its records map into the company model, and how long its raw
+payloads are kept. LEKA-351, and LEKA-348 for the retention. Contract:
+`leka/connectors/settings.py`.
 
 Two layers, one after the other:
 
 | | Where | What it decides |
 |---|---|---|
 | **Connector config** | `sources.config` — per connector: an organisation, a list of repositories, Jira projects, AWS regions, Azure subscriptions, Google Cloud projects | what the connector **reads**. Changing it sends the source back to a test and an activation ([framework.md](framework.md)) |
-| **Settings** — scope rules and mapping | `source_settings`, versioned | what LEKA **keeps** of what was read, and how it is **mapped** — the same way for every connector |
+| **Settings** — scope rules, mapping, retention | `source_settings`, versioned | what LEKA **keeps** of what was read, how it is **mapped**, and **how long** — the same way for every connector |
 
 ---
 
@@ -66,6 +67,21 @@ Normalisation applies it to every record of the source
 Every normalised row records the settings version it was mapped with
 (`normalised_records.settings_version`).
 
+## 2 bis. Retention
+
+`retention.days`: how many days the source's **raw payloads** are kept — the
+batches the sync stores. Empty: LEKA's policy for its kind of source
+([data-lifecycle.md](../data-lifecycle.md)): 90 days for code, tickets and
+documents, 30 for observability. A source may keep **less** than its
+policy — Datadog logs a customer wants gone in a week — **never more**: the
+policy is what was promised. A number above it is saved with a warning, and
+the policy applies. Between 1 and 365.
+
+Applied by the sync when it writes a payload: its expiry is the shorter of
+the two, computed then and stored (`raw_payloads.expires_at`), and the daily
+sweep deletes it when it is reached. A change applies to what is read from
+then on; what was stored keeps the expiry it was written with.
+
 ## 3. What is refused, what is said
 
 `POST /sources/{id}/settings/check` answers every **finding** without saving;
@@ -82,6 +98,7 @@ Every normalised row records the settings version it was mapped with
 | warning | a rule that matches **nothing the credentials can see** — asked of the vendor, like the scope options: a typo, or a repository not created yet |
 | warning | include and exclude rules that leave nothing |
 | warning | the credentials' containers could not be listed: the rules were not checked against them |
+| warning | a retention longer than LEKA's policy for the source's kind: the policy applies |
 
 ## 4. Versions and audit
 
@@ -91,8 +108,8 @@ settings are the highest version; a source never set has the defaults
 (version 0). Saving the same settings again makes no version.
 
 Each version also writes a `settings_changed` event on the source (its
-version, what changed: `scope`, `mapping`), beside its test, activation and
-health events.
+version, what changed: `scope`, `mapping`, `retention`), beside its test,
+activation and health events.
 
 ## 5. Changing them safely
 
@@ -115,7 +132,7 @@ health events.
 
 | Route | Permission | |
 |---|---|---|
-| `GET /sources/{id}/settings` | `source:read` | `{version, settings: {scope, mapping}}` |
+| `GET /sources/{id}/settings` | `source:read` | `{version, settings: {scope, mapping, retention}, retention_policy_days}` |
 | `POST /sources/{id}/settings/check` | `source:manage` | `{findings}` — asks the vendor what the credentials can see |
 | `PUT /sources/{id}/settings` | `source:manage` | `{version, changed, findings, full_sync_queued}` |
 | `GET /sources/{id}/settings/versions` | `source:read` | every version, newest first |
