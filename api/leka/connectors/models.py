@@ -85,6 +85,7 @@ class SourceKind(enum.StrEnum):
     PAGERDUTY = "pagerduty"
     GRAFANA = "grafana"
     POSTGRESQL = "postgresql"
+    MYSQL = "mysql"
     SLACK = "slack"
 
 

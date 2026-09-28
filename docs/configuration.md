@@ -207,6 +207,8 @@ masked.
 | `LEKA_S3_TEST_ENDPOINT` | Where that suite finds its server |
 | `LEKA_S3_TEST_ACCESS_KEY` | |
 | `LEKA_S3_TEST_SECRET_KEY` | |
+| `LEKA_REQUIRE_MYSQL_TESTS` | `1` turns a skipped MySQL connector test into a failure. CI sets it |
+| `LEKA_MYSQL_TEST_URL` | The MySQL those tests connect to as an admin: `mysql://root:leka@127.0.0.1:3306` by default, `docker compose up -d mysql` |
 | `LEKA_PYTHON` | The interpreter Playwright starts the API with |
 
 ## Adding a setting

@@ -591,6 +591,7 @@ const fr = {
       datadog: { alerts: "moniteurs et leurs alertes", metrics: "définitions de métriques" },
       grafana: { alerts: "règles d'alerte et leur état", events: "annotations" },
       notion: { databases: "bases Notion" },
+      mysql: { schemas: "bases" },
       asana: { issues: "tâches" },
       trello: { projects: "tableaux", issues: "cartes" },
       clickup: { projects: "listes", issues: "tâches" },
@@ -790,7 +791,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana et PostgreSQL.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL et MySQL.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -1005,6 +1006,18 @@ const fr = {
           help: "Un rôle dédié, avec CONNECT sur la base et USAGE sur les schémas à décrire. Aucun SELECT n'est nécessaire.",
         },
         password: { label: "Mot de passe", help: "Celui du rôle. Chiffré, et plus jamais affiché." },
+      },
+      mysql: {
+        host: {
+          label: "Hôte",
+          help: "Le nom ou l'adresse publique du serveur, accessible depuis Internet : db.acme.com. Une adresse privée est refusée.",
+        },
+        port: { label: "Port", help: "3306, sauf si votre serveur écoute ailleurs." },
+        username: {
+          label: "Compte",
+          help: "Un compte dédié, avec le seul privilège REFERENCES sur les bases à décrire : il en montre la structure, pas les lignes.",
+        },
+        password: { label: "Mot de passe", help: "Celui du compte. Chiffré, et plus jamais affiché." },
       },
     },
     events: {
@@ -1680,6 +1693,7 @@ const en: Dictionary = {
       datadog: { alerts: "monitors and their alerts", metrics: "metric definitions" },
       grafana: { alerts: "alert rules and their state", events: "annotations" },
       notion: { databases: "Notion databases" },
+      mysql: { schemas: "databases" },
       asana: { issues: "tasks" },
       trello: { projects: "boards", issues: "cards" },
       clickup: { projects: "lists", issues: "tasks" },
@@ -1878,7 +1892,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana and PostgreSQL today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL and MySQL today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -2088,6 +2102,18 @@ const en: Dictionary = {
           help: "A dedicated role, with CONNECT on the database and USAGE on the schemas to describe. No SELECT is needed.",
         },
         password: { label: "Password", help: "The role's. Encrypted, and never shown again." },
+      },
+      mysql: {
+        host: {
+          label: "Host",
+          help: "The server's name or public address, reachable from the internet: db.acme.com. A private address is refused.",
+        },
+        port: { label: "Port", help: "3306, unless your server listens elsewhere." },
+        username: {
+          label: "Account",
+          help: "A dedicated account, with only the REFERENCES privilege on the databases to describe: it shows their structure, not their rows.",
+        },
+        password: { label: "Password", help: "The account's. Encrypted, and never shown again." },
       },
     },
     events: {

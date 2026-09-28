@@ -1,6 +1,6 @@
 # Databases — what LEKA asks for, and what it reads
 
-PostgreSQL, through [the connector framework](framework.md). LEKA-349.
+PostgreSQL and MySQL, through [the connector framework](framework.md). LEKA-349.
 **LEKA reads the catalogue, never the rows**: what the database says about
 itself — its schemas, tables, views, columns, keys, indexes, and what each
 view reads from — and not one value of the data. What it contributes then
@@ -8,7 +8,10 @@ goes through extraction ([extraction.md](../extraction.md)) like any other
 source. Becoming entities of the company model — a table, its schema, its
 dependencies — is LEKA-364.
 
-MySQL is next; it needs a driver the project does not have yet.
+Both hand over their tables in the same shape
+(`leka/connectors/databases.py`), within the same bounds — a session
+read-only, over TLS, to a public address; 20 000 tables a pass; estimates
+rounded — and one extraction reads both (`extraction/data.py`).
 
 ---
 
@@ -158,3 +161,111 @@ Kept **90 days**, like the other sources that describe structure.
   last `ANALYZE`), rounded.
 - Functions, triggers, sequences, types, roles and grants are not read.
 - Schemas and tables are extracted, not yet entities (LEKA-364).
+
+---
+
+## MySQL
+
+| | |
+|---|---|
+| Server | MySQL 8.0 or later — self-hosted, or managed (Amazon RDS, Aurora MySQL 3, Google Cloud SQL, Azure Database for MySQL, PlanetScale…) — reachable from the internet |
+| Credentials | `username` (first, so the stored hint is the account's name), `password` — write-only |
+| Config | `host`, `port` (3306), `schemas` — the databases to describe |
+| Category | `data` |
+| Capabilities | `schemas` (in MySQL, a schema is a database), `tables` (tables and views) |
+| Code | `leka/connectors/mysql/`, with the `asyncmy` driver |
+
+MariaDB speaks a different `information_schema` (no `VIEW_TABLE_USAGE`, no
+index expressions), and is **not supported** yet.
+
+### What to create in MySQL
+
+An account of its own, with one privilege on the databases to describe:
+
+```sql
+CREATE USER 'leka_reader'@'%' IDENTIFIED BY '…';
+GRANT REFERENCES ON billing.* TO 'leka_reader'@'%';
+GRANT REFERENCES ON ops.* TO 'leka_reader'@'%';
+```
+
+Unlike PostgreSQL, **MySQL shows in `information_schema` only what the
+account holds a privilege on**: the boundary is the server's own, and an
+account with none sees nothing. `REFERENCES` is the one that shows the
+structure and not the data — checked against a real server, privilege by
+privilege:
+
+| Granted on the database | What `information_schema` shows | A row |
+|---|---|---|
+| nothing | nothing | refused |
+| `SHOW VIEW` | the tables' names, not their columns | refused |
+| **`REFERENCES`** | tables, columns, keys, foreign keys, checks, indexes | **refused** |
+| `SELECT` | all of it, and a view's definition | read |
+
+`REFERENCES` lets an account declare a foreign key towards these tables —
+which it cannot do without also being allowed to create or alter a table,
+and LEKA's account is not.
+
+**A view** is described by its name and its columns. Its definition, and
+the tables it reads, MySQL shows only to an account that may `SELECT` from
+it — and so read its rows. LEKA reads them when the admin chose to grant
+that, view by view, knowing what it opens:
+
+```sql
+GRANT SELECT, SHOW VIEW ON billing.unpaid TO 'leka_reader'@'%';
+```
+
+The connection test warns of an account that can read rows (`SELECT`) or
+do more than read (`INSERT`, `ALTER`, `SUPER`…). The connector's tests run
+with an account that has `REFERENCES` alone, and describe everything
+(`tests/test_mysql_connector.py`).
+
+### The connection — security
+
+As PostgreSQL's (above): a public address, resolved when connecting and
+connected to; **TLS required** — the driver refuses a server without it
+(`CONFIG_INVALID`, checked against a server started without TLS), and
+the session's cipher (`Ssl_cipher`) is checked once connected, whatever
+the driver did; the certificate is not verified. Every session is
+**read-only** (`SET SESSION TRANSACTION READ ONLY`), each query bounded by
+`MAX_EXECUTION_TIME` (15 seconds), and named `LEKA` in the connection's
+attributes (`performance_schema.session_connect_attrs`).
+
+### What is read
+
+Eleven queries, all of `information_schema` (a test checks that none
+reads anything else):
+
+| Capability | What | Id | Container |
+|---|---|---|---|
+| `schemas` | each database: name, character set, collation | its name | itself |
+| `tables` | database, name, kind (`table`, `view`), storage engine, comment, estimated rows, size (data and indexes); each **column** — name, type as written (`decimal(12,2)`), nullable, default, comment; each **constraint** — primary key, unique, foreign key with what it references, check with its clause; each **index**, with its columns or expressions and method; a view's definition and the tables it reads, when visible (above) | `database.table` | the database |
+
+MySQL has no owner of a table, and no comment on a database. The row
+counts and sizes are `information_schema`'s, which MySQL 8 caches for up
+to a day (`information_schema_stats_expiry`) — and rounded, as
+PostgreSQL's.
+
+### Synchronisation, retention
+
+As PostgreSQL's: whole each pass, only what changed written, a table gone
+marked gone; at most 20 000 tables and views a pass. Kept **90 days**.
+
+### Errors
+
+| What | Diagnostic |
+|---|---|
+| Wrong account or password (1045) | `AUTH_INVALID` |
+| A database in scope the account cannot see | `NOT_FOUND`, naming it |
+| A privilege missing (1044, 1142, 1143, 1227) | `PERMISSION_DENIED` |
+| A query too slow (3024), or the connection | `TIMEOUT` |
+| No TLS; an address that is not public; too many tables | `CONFIG_INVALID` |
+| The host unreachable or unknown (2002, 2003, 2006, 2013) | `NETWORK_UNREACHABLE` |
+| Anything else MySQL says | `PROVIDER_ERROR` |
+
+### Limits
+
+- As PostgreSQL's: no private network, the certificate not verified,
+  estimates rounded, schemas and tables not yet entities (LEKA-364).
+- A view's definition and dependencies need `SELECT` on it (above).
+- Routines, triggers, events, users and grants are not read.
+- MariaDB is not supported.

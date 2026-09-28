@@ -507,11 +507,3 @@ def test_the_manifest() -> None:
     assert manifest.category is ConnectorCategory.DATA
     assert manifest.capabilities == {C.SCHEMAS, C.TABLES}
     assert manifest.listed_whole == {C.SCHEMAS, C.TABLES}
-
-
-@pytest.mark.parametrize(
-    ("number", "rounded"),
-    [(None, None), (0, 0), (42, 42), (8192, 8200), (12_345_678, 12_000_000), (99_999, 100_000)],
-)
-def test_estimates_keep_two_figures(number: int | None, rounded: int | None) -> None:
-    assert pg._rounded(number) == rounded

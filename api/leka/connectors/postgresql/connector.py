@@ -54,19 +54,23 @@ from leka.connectors.base import (
     ScopeListing,
     ScopeOption,
 )
+from leka.connectors.databases import (
+    CONNECT_TIMEOUT,
+    HOST,
+    MAX_SCOPE_OPTIONS,
+    MAX_TABLES,
+    STATEMENT_TIMEOUT_MS,
+    public_host,
+    rounded,
+    schema_names,
+    too_many_tables,
+)
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
 from leka.connectors.models import HealthStatus, SourceKind
 from leka.connectors.registry import register_connector
 from leka.connectors.schemas import RawRecord
 
 C = Capability
-CONNECT_TIMEOUT = 10.0  # seconds
-STATEMENT_TIMEOUT_MS = 15_000
-MAX_SCOPE_OPTIONS = 1000
-# A pass, all schemas together. Beyond it, the pass fails and says so: a
-# list read whole and cut would mark the rest gone.
-MAX_TABLES = 20_000
-HOST = r"^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$|^\[?[0-9A-Fa-f:.]+\]?$"
 IDENTIFIER_MAX = 63  # PostgreSQL's NAMEDATALEN - 1
 
 # ── the catalogue queries — reads, and only of the catalogue ────────────────
@@ -179,23 +183,12 @@ class PostgreSQLConfig(BaseModel):
     @field_validator("host")
     @classmethod
     def _not_obviously_private(cls, value: str) -> str:
-        host = value.strip().lower()
-        if network.obviously_private(host):
-            msg = f"{value!r} is not a public address"
-            raise ValueError(msg)
-        return host
+        return public_host(value)
 
     @field_validator("schemas")
     @classmethod
     def _names(cls, value: list[str] | None) -> list[str] | None:
-        if value is None:
-            return None
-        names = [schema.strip() for schema in value]
-        for name in names:
-            if not name or len(name) > IDENTIFIER_MAX or "\x00" in name:
-                msg = f"{name!r} is not a schema name"
-                raise ValueError(msg)
-        return list(dict.fromkeys(names))
+        return schema_names(value, IDENTIFIER_MAX)
 
 
 class PostgreSQLCredentials(BaseModel):
@@ -353,12 +346,7 @@ class PostgreSQLConnector(Connector[PostgreSQLConfig, PostgreSQLCredentials]):
         says of each — asked for all of them at once, not one by one."""
         tables = [dict(row) for row in await db.fetch(TABLES, schemas, MAX_TABLES + 1)]
         if len(tables) > MAX_TABLES:
-            most = f"{MAX_TABLES:,}".replace(",", "\u202f")  # 20 000, as French writes it
-            raise diagnose(
-                DiagnosticCode.CONFIG_INVALID,
-                message=f"Plus de {most} tables et vues dans le périmètre : choisissez les "
-                "schémas à décrire.",
-            )
+            raise too_many_tables()
         oids = [table["oid"] for table in tables]
         by_oid: dict[int, dict[str, Any]] = {}
         for table in tables:
@@ -374,10 +362,8 @@ class PostgreSQLConnector(Connector[PostgreSQLConfig, PostgreSQLCredentials]):
             by_oid[row["table_oid"]]["reads_from"].append(f"{row['schema']}.{row['name']}")
         for table in tables:
             del table["oid"]  # the server's, not stable across a dump and restore
-            # Estimates that move with every write, kept to two significant
-            # figures: a pass that changed no schema changes no checksum.
-            table["estimated_rows"] = _rounded(table["estimated_rows"])
-            table["size_bytes"] = _rounded(table["size_bytes"])
+            table["estimated_rows"] = rounded(table["estimated_rows"])
+            table["size_bytes"] = rounded(table["size_bytes"])
         return tables
 
     def _in_scope(self, visible: list[str]) -> list[str]:
@@ -477,10 +463,3 @@ def _constraint(row: Any) -> dict[str, Any]:
             "columns": list(row["ref_columns"] or []),
         }
     return found
-
-
-def _rounded(number: int | None) -> int | None:
-    """12 345 678 → 12 000 000: the order of a table, not its last write."""
-    if not number or number < 100:
-        return number
-    return int(float(f"{number:.2g}"))

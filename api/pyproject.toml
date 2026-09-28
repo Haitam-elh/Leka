@@ -20,6 +20,9 @@ dependencies = [
     # on the morning of a release.
     "sqlalchemy[asyncio]>=2.0.35,<2.1",
     "asyncpg>=0.30.0",
+    # A customer's MySQL, read by leka/connectors/mysql (LEKA-349). Wheels
+    # for 3.12 on Linux and macOS, x86 and ARM: nothing to compile.
+    "asyncmy>=0.2.15,<0.3",
     "alembic>=1.13.3",
     "pgvector>=0.3.6",
     # Configuration and validation

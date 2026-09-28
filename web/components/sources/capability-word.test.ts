@@ -38,6 +38,7 @@ describe("a capability's word", () => {
     ["microsoft_365", "drives", "bibliothèques SharePoint et OneDrive"],
     ["postgresql", "schemas", "schémas"],
     ["postgresql", "tables", "tables et vues"],
+    ["mysql", "schemas", "bases"],
   ])("is %s's own for its %s", (kind, capability, word) => {
     expect(capabilityWord(fr, capability, kind)).toBe(word);
   });

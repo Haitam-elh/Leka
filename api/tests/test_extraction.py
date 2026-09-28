@@ -132,6 +132,7 @@ EXTRACTED_KINDS = [
     SourceKind.GOOGLE_WORKSPACE,
     SourceKind.MICROSOFT_365,
     SourceKind.POSTGRESQL,
+    SourceKind.MYSQL,
 ]
 
 

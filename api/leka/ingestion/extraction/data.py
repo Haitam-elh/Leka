@@ -1,4 +1,5 @@
-"""Databases: PostgreSQL's schemas, and its tables and views (LEKA-349).
+"""Databases: PostgreSQL's and MySQL's schemas, and their tables and views
+(LEKA-349).
 
 What a question about data needs: a table's name as it is written in a
 query (`billing.invoices`), what it is (a table, a view…), its columns as a
@@ -7,8 +8,10 @@ to, its comment — and what it is tied to: the tables its foreign keys
 reference and the ones a view reads from, as references. The sizes are the
 catalogue's estimates, rounded by the connector.
 
-The payloads are the ones leka/connectors/postgresql stores: the
-catalogue's answers, one object per schema and per table.
+The payloads are the ones leka/connectors/postgresql and mysql store: the
+catalogue's answers, one object per schema and per table — a table's in
+the same shape whichever the engine (leka/connectors/databases.py), so one
+reading serves both. A MySQL schema is a database, and has no comment.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from leka.ingestion.extraction.fields import content, number, ref, required, str
 
 C = Capability
 POSTGRESQL = SourceKind.POSTGRESQL
+MYSQL = SourceKind.MYSQL
 
 
 @strategy("postgresql.schemas", 1, (POSTGRESQL, C.SCHEMAS))
@@ -35,8 +39,26 @@ def postgresql_schema(p: Payload) -> Extracted:
     )
 
 
+@strategy("mysql.schemas", 1, (MYSQL, C.SCHEMAS))
+def mysql_schema(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "name"),
+        metadata={"charset": string(p, "charset"), "collation": string(p, "collation")},
+        signals={"engine": "mysql"},
+    )
+
+
 @strategy("postgresql.tables", 1, (POSTGRESQL, C.TABLES))
 def postgresql_table(p: Payload) -> Extracted:
+    return _table(p, "postgresql")
+
+
+@strategy("mysql.tables", 1, (MYSQL, C.TABLES))
+def mysql_table(p: Payload) -> Extracted:
+    return _table(p, "mysql")
+
+
+def _table(p: Payload, engine: str) -> Extracted:
     schema = required(p, "schema")
     columns = _dicts(p, "columns")
     constraints = _dicts(p, "constraints")
@@ -66,7 +88,7 @@ def postgresql_table(p: Payload) -> Extracted:
             "estimated_rows": number(p, "estimated_rows"),
             "size_bytes": number(p, "size_bytes"),
         },
-        signals={"engine": "postgresql"},
+        signals={"engine": engine, "storage_engine": string(p, "engine")},
     )
 
 

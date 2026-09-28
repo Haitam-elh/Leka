@@ -100,6 +100,30 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  mysql:
+    # A customer's MySQL, for tests/test_mysql_connector.py (LEKA-349): the
+    # connector reads a real server's catalogue, not a stand-in's idea of
+    # it. Not LEKA's own database — nothing of LEKA's is stored in it.
+    #
+    # In a profile: `docker compose up -d` leaves it off; `docker compose
+    # up -d mysql` starts it. Without it, those tests skip locally; CI starts
+    # its own and requires them. No volume: every start is a clean server.
+    image: mysql:8.4
+    container_name: leka-mysql
+    profiles: ["connectors"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-leka}
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-leka}"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 20s
+
 volumes:
   postgres-data:
   redis-data:
