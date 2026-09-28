@@ -117,6 +117,7 @@ EXTRACTED_KINDS = [
     SourceKind.AWS,
     SourceKind.AZURE,
     SourceKind.GCP,
+    SourceKind.DATADOG,
 ]
 
 

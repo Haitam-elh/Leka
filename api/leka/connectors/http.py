@@ -40,6 +40,10 @@ type Item = dict[str, object]
 QUOTA_RESERVE = 0.10
 # When a vendor only says "near the limit" and not when it resets (Bitbucket).
 UNKNOWN_RESET_SECONDS = 600
+# A reset below this is a number of seconds from now (Datadog's), not a
+# moment since the epoch (GitHub's, GitLab's): no epoch is that small since
+# 2001.
+EPOCH_FLOOR = 1_000_000_000
 
 
 @dataclass(frozen=True)
@@ -55,15 +59,18 @@ class Quota:
 
 def quota_of(response: httpx.Response) -> Quota | None:
     """What a response says of the quota: GitHub's x-ratelimit-*, GitLab's
-    ratelimit-*, Bitbucket's x-ratelimit-nearlimit. None when it says nothing."""
+    ratelimit-*, Bitbucket's x-ratelimit-nearlimit, Datadog's x-ratelimit-*
+    whose reset is in seconds from now. None when it says nothing."""
     headers = response.headers
     for prefix in ("x-ratelimit-", "ratelimit-"):
         remaining, limit = headers.get(f"{prefix}remaining"), headers.get(f"{prefix}limit")
         if remaining is None or limit is None:
             continue
         try:
-            reset = headers.get(f"{prefix}reset")
-            return Quota(int(remaining), int(limit), int(reset) if reset else None)
+            reset = int(headers[f"{prefix}reset"]) if headers.get(f"{prefix}reset") else None
+            if reset is not None and reset < EPOCH_FLOOR:
+                reset += int(time.time())
+            return Quota(int(remaining), int(limit), reset)
         except ValueError:
             return None
     if headers.get("x-ratelimit-nearlimit", "").lower() == "true":
@@ -236,15 +243,16 @@ class VendorHttp:
             else:
                 url, query = self._next_page(response, body), None  # the link carries the query
             if url:
-                self._spare_the_quota(response)
+                self.spare_the_quota(response)
 
-    def _spare_the_quota(self, response: httpx.Response) -> None:
+    def spare_the_quota(self, response: httpx.Response) -> None:
         """Stop a bulk read before the next page when the token's quota is low.
 
-        Only in `pages`: a connection test or a health check is a handful of
-        calls, and refusing it for a quota at 9 % would say the source is
-        broken when it is only busy. What was read so far stands; the pass
-        records RATE_LIMITED with when to come back.
+        Only in bulk reads — `pages`, and a connector's own page loops: a
+        connection test or a health check is a handful of calls, and refusing
+        it for a quota at 9 % would say the source is broken when it is only
+        busy. What was read so far stands; the pass records RATE_LIMITED with
+        when to come back.
         """
         quota = quota_of(response)
         if quota is None or not quota.low:

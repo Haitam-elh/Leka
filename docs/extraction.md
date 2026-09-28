@@ -89,6 +89,7 @@ no clock — registered for the (source kind, capability) pairs it knows
 | AWS | instances, db_instances, buckets, functions, clusters, networks, load_balancers — one strategy per service | `extraction/cloud.py` |
 | Azure | the same seven — one strategy: Resource Manager's list has one shape | `extraction/cloud.py` |
 | Google Cloud | the same seven — one strategy: an asset around each API's resource | `extraction/cloud.py` |
+| Datadog | alerts (monitors), events, incidents, metrics, logs — `service`, `env`, `host`, `tags` as signals; Datadog's id and timestamp kept | `extraction/observability.py` |
 
 A test fails if one of these connectors reads a capability no strategy
 extracts. A connector with no strategy yet (Confluence, Notion, Linear…)

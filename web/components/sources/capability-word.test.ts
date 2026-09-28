@@ -30,6 +30,7 @@ describe("a capability's word", () => {
     ["monday", "issues", "éléments"],
     ["slab", "pages", "articles"],
     ["gitlab", "pull_requests", "merge requests"],
+    ["datadog", "alerts", "moniteurs et leurs alertes"],
     ["bitbucket", "pull_requests", "pull requests"],
     ["guru", "pages", "fiches"],
     ["google_workspace", "drives", "Drive partagés"],
@@ -58,6 +59,9 @@ describe("a setting's words", () => {
     expect(fieldWords(fr, "token", "clickup")?.label).toBe("Jeton personnel");
     // An Atlassian token cannot be read-only; a GitHub one can.
     expect(fieldWords(fr, "token", "jira")?.help).toContain("compte dédié");
+    // Datadog's site is not Atlassian's, nor its api_key Linear's.
+    expect(fieldWords(fr, "site", "datadog")?.label).toBe("Site Datadog");
+    expect(fieldWords(fr, "api_key", "datadog")?.help).not.toContain("lin_api_");
     expect(fieldWords(fr, "token", "github")?.help).toContain("lecture seule suffit");
     // Azure's client id has the Reader role; Microsoft 365's has Graph's permissions.
     expect(fieldWords(fr, "client_id", "microsoft_365")?.help).toContain("Files.Read.All");

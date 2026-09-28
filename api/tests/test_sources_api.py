@@ -45,6 +45,9 @@ from tests.test_asana_connector import Asana
 from tests.test_clickup_connector import TOKEN as CLICKUP_TOKEN
 from tests.test_clickup_connector import ClickUp
 from tests.test_confluence_connector import Confluence
+from tests.test_datadog_connector import API_KEY as DATADOG_API_KEY
+from tests.test_datadog_connector import APP_KEY as DATADOG_APP_KEY
+from tests.test_datadog_connector import Datadog
 from tests.test_gcp_connector import KEY as GOOGLE_KEY
 from tests.test_github_connector import github
 from tests.test_google_workspace_connector import Google as GoogleWorkspace
@@ -310,10 +313,14 @@ async def test_the_input_is_checked_against_the_connector(
     assert bad_config.status_code == 422
     assert FAKE_KEY not in bad_config.text
 
-    # A kind LEKA knows but has no connector for yet.
-    unknown = await client.post(
-        f"{API}/sources", json={"type": "datadog", "display_name": "X", "credentials": {"k": "v"}}
-    )
+    # A kind LEKA knows but has no connector for: Slack, without the stand-in.
+    unregister_connector(SourceKind.SLACK)
+    try:
+        unknown = await client.post(
+            f"{API}/sources", json={"type": "slack", "display_name": "X", "credentials": {"k": "v"}}
+        )
+    finally:
+        register_connector(FakeConnector)
     assert unknown.status_code == 422
     assert "No connector exists" in unknown.text
 
@@ -994,6 +1001,73 @@ async def test_an_office_suite_end_to_end(
 
         _as(identity, acme, "member")
         assert secret not in (await client.get(url)).text
+        assert (await client.post(f"{url}/test")).status_code == 403
+    finally:
+        app.dependency_overrides.pop(get_connector_transport, None)
+
+
+# ── Datadog, end to end ──────────────────────────────────────────────────────
+
+
+async def test_datadog_end_to_end(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    """Only an admin connects it; neither key comes back; the site is kept
+    as Datadog names it and nothing else is accepted; test, scope,
+    activation and health go through."""
+    datadog = Datadog()
+    app.dependency_overrides[get_connector_transport] = lambda: httpx.MockTransport(datadog)
+    keys = {"application_key": DATADOG_APP_KEY, "api_key": DATADOG_API_KEY}
+    try:
+        _as(identity, acme, "member")
+        body = {
+            "type": "datadog",
+            "display_name": "Datadog EU",
+            "config": {"site": "https://app.datadoghq.eu/monitors/manage"},
+            "credentials": keys,
+        }
+        assert (await client.post(f"{API}/sources", json=body)).status_code == 403
+
+        _as(identity, acme, "admin")
+        catalog = (await client.get(f"{API}/connectors/catalog")).json()
+        entry = next(item for item in catalog if item["key"] == "datadog")
+        assert (entry["category"], entry["read_only"]) == ("observability", True)
+
+        source = await _create(client, **body)
+        assert source["config"]["site"] == "datadoghq.eu"
+        assert all(key not in json.dumps(source) for key in keys.values())
+        url = f"{API}/sources/{source['id']}"
+        elsewhere = await client.patch(url, json={"config": {"site": "10.0.0.1"}})
+        assert elsewhere.status_code == 422
+
+        tested = (await client.post(f"{url}/test")).json()
+        assert tested["ok"] is True, tested
+        assert sorted(tested["source"]["capabilities"]) == [
+            "alerts",
+            "events",
+            "incidents",
+            "logs",
+            "metrics",
+        ]
+
+        offered = (await client.get(f"{url}/scope/options")).json()
+        assert [option["key"] for option in offered["options"]] == [
+            "billing",
+            "checkout",
+            "search",
+        ]
+        scoped = await client.patch(
+            url, json={"config": {"site": "datadoghq.eu", "services": ["Checkout"]}}
+        )
+        assert scoped.json()["config"]["services"] == ["checkout"]
+
+        assert (await client.post(f"{url}/test")).json()["ok"] is True
+        assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+        assert (await client.post(f"{url}/health-check")).json()["health_status"] == "healthy"
+
+        _as(identity, acme, "member")
+        page = (await client.get(url)).text
+        assert all(key not in page for key in keys.values())
         assert (await client.post(f"{url}/test")).status_code == 403
     finally:
         app.dependency_overrides.pop(get_connector_transport, None)
