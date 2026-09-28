@@ -120,6 +120,7 @@ jobs:
       LEKA_REQUIRE_MONGODB_TESTS: "1"
       LEKA_REQUIRE_MARIADB_TESTS: "1"
       LEKA_REQUIRE_SQLSERVER_TESTS: "1"
+      LEKA_REQUIRE_ORACLE_TESTS: "1"
 
     defaults:
       run:
@@ -176,6 +177,42 @@ jobs:
         # Catches the classic mistake: a column changed on the model with no
         # migration written for it.
         run: alembic check
+
+      - name: Make room on the disk
+        # The runner has some 14 GB free once the services are pulled, and
+        # Oracle's image unpacks to 6 GB, then copies its datafiles as it
+        # writes them. On 2026-09-29 (PR #129) that filled the disk: MinIO
+        # and MongoDB could no longer write, and 20 of their tests failed.
+        # The runner carries toolchains nothing here uses — .NET, Android,
+        # GHC, CodeQL — some 20 GB of them.
+        working-directory: .
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Start Oracle
+        # A customer's Oracle, for tests/test_oracle_connector.py (LEKA-349).
+        # A step, not a service container: its TLS is set up by
+        # tests/oracle/tcps.sh, mounted from the checkout, which a service
+        # starts before. Oracle Database Free, packaged for containers by
+        # Gerald Venzl — the image Testcontainers uses; a third party's, so
+        # pinned by digest, as MinIO below. Same as docker-compose.yml.
+        working-directory: .
+        run: |
+          docker run -d --name oracle -p 1521:1521 -p 2484:2484 \
+            -e ORACLE_PASSWORD=Leka-local-1 \
+            -v "$PWD/api/tests/oracle:/container-entrypoint-startdb.d:ro" \
+            gvenzl/oracle-free:23-slim-faststart@sha256:f5ff19033860d662c821cb04eb10483fa94f14f78eae252d054291ea07028093
+          for _ in $(seq 1 120); do
+            if docker logs oracle 2>&1 | grep -q "DATABASE IS READY TO USE" \
+              && (echo > /dev/tcp/127.0.0.1/2484) 2>/dev/null; then
+              echo "Oracle is up, TLS on 2484"; df -h /; exit 0
+            fi
+            sleep 2
+          done
+          echo "Oracle did not become ready in 240s"; docker logs oracle; exit 1
 
       - name: Start MinIO
         # Not a service container: those cannot pass a command, and MinIO

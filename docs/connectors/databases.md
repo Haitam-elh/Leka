@@ -1,7 +1,7 @@
 # Databases — what LEKA asks for, and what it reads
 
-PostgreSQL, Supabase, MySQL, MariaDB, SQL Server and MongoDB, through
-[the connector framework](framework.md). LEKA-349.
+PostgreSQL, Supabase, MySQL, MariaDB, SQL Server, Oracle and MongoDB,
+through [the connector framework](framework.md). LEKA-349.
 **LEKA reads the catalogue, never the rows**: what the database says about
 itself — its schemas, tables, views, columns, keys, indexes, and what each
 view reads from — and not one value of the data. What it contributes then
@@ -21,6 +21,7 @@ and one extraction reads them all (`extraction/data.py`).
 | [MySQL](#mysql) | MySQL 8.0+ | `REFERENCES` on the databases | refused |
 | [MariaDB](#mariadb) | MariaDB 10.6+ | the same | refused |
 | [SQL Server](#sql-server) | SQL Server 2016+ | `VIEW DEFINITION` on the schemas | refused |
+| [Oracle](#oracle) | Oracle 19c+, over TCPS | `REFERENCES` on each table and view | refused |
 | [MongoDB](#mongodb) | MongoDB | a role with `listCollections`, `listIndexes`, `collStats`, `dbStats` | refused |
 
 ---
@@ -515,6 +516,112 @@ tables a pass; kept 90 days.
 - Azure SQL Database and Managed Instance are SQL Server, but not tried
   yet; the tests run against SQL Server 2022.
 - Sequences, procedures, functions, triggers, synonyms, users and grants
+  are not read.
+
+---
+
+## Oracle
+
+| | |
+|---|---|
+| Server | Oracle Database 19c or later — self-hosted, or managed (Amazon RDS for Oracle, Oracle Base Database, Autonomous Database with TLS…) — reachable from the internet, over TLS (TCPS) |
+| Credentials | `username`, `password` — write-only |
+| Config | `host`, `port` (2484, TCPS's), `service_name`, `schemas` — users, as Oracle writes them: `BILLING` |
+| Category | `data` |
+| Capabilities | `schemas` (in Oracle, a schema is a user), `tables` (tables, partitioned, temporary and external tables, views, materialized views) |
+| Code | `leka/connectors/oracle/`, with `oracledb`, Oracle's driver, in its thin mode — no Oracle client to install |
+
+### What to create in Oracle
+
+A user of its own, that can connect, with one object privilege on each
+table and view to describe:
+
+```sql
+CREATE USER leka_reader IDENTIFIED BY "…";
+GRANT CREATE SESSION TO leka_reader;
+BEGIN
+  FOR o IN (SELECT object_name FROM dba_objects
+            WHERE owner = 'BILLING' AND object_type IN ('TABLE', 'VIEW')) LOOP
+    EXECUTE IMMEDIATE 'GRANT REFERENCES ON BILLING."' || o.object_name || '" TO leka_reader';
+  END LOOP;
+END;
+/
+```
+
+Like MySQL, **Oracle shows in its `ALL_*` views only what the account holds
+a privilege on**, and `REFERENCES` is the one that shows the structure and
+not the data — checked against Oracle 26ai:
+
+| Granted | What `ALL_*` shows | A row |
+|---|---|---|
+| `CREATE SESSION` alone | nothing | refused |
+| **`REFERENCES` on a table or a view** | the table, its columns, keys, checks, indexes, comments, row count; a view **with its definition** | **refused** (`ORA-41900`) |
+| `SELECT_CATALOG_ROLE` | nothing in `ALL_*` — every schema in `DBA_*`, and more (sessions, SQL texts) | refused |
+| `SELECT` or `READ` | the rows | read |
+
+`REFERENCES` is granted **object by object**: a table created later is not
+seen until it is granted too — rerun the block above, or grant it with the
+table. The connection test warns of an account that can read rows
+(`SELECT`, `READ`, `SELECT ANY TABLE`…) or do more (`CREATE TABLE`, `DBA`…).
+The connector's tests run with an account holding `REFERENCES` alone, and
+describe everything (`tests/test_oracle_connector.py`).
+
+### The connection — security
+
+- **A public address**, resolved when connecting and connected to, as the
+  others.
+- **TLS required**: the connection is TCPS, and the session's own
+  `NETWORK_PROTOCOL` is checked once connected (`tcps`). A port that
+  speaks plain TCP is refused (`CONFIG_INVALID`), checked against a real
+  one. Oracle's **native network encryption** (`SQLNET.ENCRYPTION_SERVER`)
+  is not TLS, and the thin driver does not speak it: a server that offers
+  only that must add a TCPS listener — a wallet with a certificate, a
+  `(PROTOCOL = TCPS)` address in `listener.ora`. The certificate is not
+  verified, as the others'.
+- **Read-only**: every session is one transaction, `SET TRANSACTION READ
+  ONLY` — a write in it is refused (`ORA-01456`), even as `SYSTEM` — rolled
+  back when it closes. Each call is bounded (15 seconds), the session named
+  `LEKA` (`v$session.program`).
+
+### What is read
+
+Eleven queries, all of the catalogue's `ALL_*`, `USER_*` and `SESSION_*`
+views (a test checks):
+
+| Capability | What | Id | Container |
+|---|---|---|---|
+| `schemas` | each user that owns a table or view the account may see — Oracle's own left out — and the database | the user's name | itself |
+| `tables` | schema, name, kind (`table`, `partitioned_table`, `temporary_table`, `external_table`, `view`, `materialized_view`), comment, rows as of the last statistics (`NUM_ROWS`); each **column** — name, type as Oracle writes it (`VARCHAR2(200)`, `VARCHAR2(20 CHAR)`, `NUMBER(12,2)`, `TIMESTAMP(3)`), nullable, default, a virtual column's `AS (…)`, an identity's `GENERATED ALWAYS AS IDENTITY`, comment; each **constraint** — primary key, unique, foreign key with what it references and `ON DELETE`, check (a `NOT NULL`, which Oracle keeps as a check, is the column's); each **index** as `CREATE INDEX` would write it, an expression or a descending column as Oracle keeps it; a view's or a materialized view's **definition** | `SCHEMA.TABLE` | the schema |
+
+No size: a segment's is in `DBA_SEGMENTS`, not the account's to read. No
+`reads_from`: what a view reads Oracle shows only to its owner
+(`ALL_DEPENDENCIES`), and LEKA does not guess it from the text.
+
+### Synchronisation, retention, errors
+
+As the others: whole each pass, only what changed written; at most 20 000
+tables and views a pass; kept 90 days.
+
+| What | Diagnostic |
+|---|---|
+| Wrong user or password, locked, expired (`ORA-01017`, `28000`, `28001`) | `AUTH_INVALID` |
+| An unknown service (`DPY-6001`, `ORA-12514`); a schema in scope the account cannot see | `NOT_FOUND`, naming it |
+| A privilege missing (`ORA-41900`, `01031`, `00942`, `01045`) | `PERMISSION_DENIED` |
+| A call too slow (`DPY-4024`, or the connection closed on a timeout) | `TIMEOUT` |
+| No TLS on the port, a session that is not `tcps`; an address that is not public; too many tables | `CONFIG_INVALID` |
+| No server on the port | `NETWORK_UNREACHABLE` |
+| Anything else Oracle says | `PROVIDER_ERROR` |
+
+### Limits
+
+- As the others: no private network, the certificate not verified,
+  schemas and tables not yet entities (LEKA-364).
+- `REFERENCES` object by object: a new table is not seen until granted.
+- Tested against Oracle 26ai; 19c has the same `ALL_*` views, not tried.
+- A view's dependencies and a table's size are not read (above).
+- Autonomous Database with mutual TLS (a client wallet) is not supported;
+  with TLS alone and an access list letting LEKA in, it is, untried.
+- Sequences, procedures, packages, triggers, synonyms, users and grants
   are not read.
 
 ---

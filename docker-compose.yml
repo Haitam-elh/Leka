@@ -167,6 +167,29 @@ services:
       retries: 30
       start_period: 20s
 
+  oracle:
+    # A customer's Oracle, for tests/test_oracle_connector.py (LEKA-349), as
+    # `mysql` above. Oracle Database Free, packaged for containers by Gerald
+    # Venzl — a third party's image, so pinned, as CI pins it. It serves no
+    # TLS: tests/oracle/tcps.sh, mounted where the image runs a script at
+    # every start, adds TCPS on 2484. Native on ARM.
+    image: gvenzl/oracle-free:23-slim-faststart@sha256:f5ff19033860d662c821cb04eb10483fa94f14f78eae252d054291ea07028093
+    container_name: leka-oracle
+    profiles: ["connectors"]
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-Leka-local-1}
+    ports:
+      - "127.0.0.1:${ORACLE_PORT:-1521}:1521"
+      - "127.0.0.1:${ORACLE_TLS_PORT:-2484}:2484"
+    volumes:
+      - ./api/tests/oracle:/container-entrypoint-startdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
   mongodb:
     # A customer's MongoDB, for tests/test_mongodb_connector.py (LEKA-349),
     # as `mysql` above: in the `connectors` profile, off by default,

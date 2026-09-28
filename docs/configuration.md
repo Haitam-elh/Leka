@@ -213,6 +213,8 @@ masked.
 | `LEKA_MARIADB_TEST_URL` | The MariaDB they connect to as an admin: `mysql://root:leka@127.0.0.1:3307` by default, `docker compose up -d mariadb` |
 | `LEKA_REQUIRE_SQLSERVER_TESTS` | The same for the SQL Server connector's tests |
 | `LEKA_SQLSERVER_TEST_URL` | The SQL Server they connect to as an admin: `mssql://sa:Leka-local-1@127.0.0.1:1433` by default, `docker compose up -d sqlserver` |
+| `LEKA_REQUIRE_ORACLE_TESTS` | The same for the Oracle connector's tests |
+| `LEKA_ORACLE_TEST_URL` | The Oracle they connect to as an admin, over plain TCP: `oracle://system:Leka-local-1@127.0.0.1:1521/FREEPDB1` by default, `docker compose up -d oracle`. The connector's own sessions use TCPS on 2484 |
 | `LEKA_REQUIRE_MONGODB_TESTS` | The same for the MongoDB connector's tests |
 | `LEKA_MONGODB_TEST_URL` | The MongoDB they connect to as an admin: `mongodb://root:leka@127.0.0.1:27017` by default, `docker compose up -d mongodb` |
 | `LEKA_PYTHON` | The interpreter Playwright starts the API with |

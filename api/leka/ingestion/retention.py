@@ -60,6 +60,7 @@ DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     SourceKind.MYSQL: 90,
     SourceKind.MARIADB: 90,
     SourceKind.SQLSERVER: 90,
+    SourceKind.ORACLE: 90,
     SourceKind.MONGODB: 90,
     SourceKind.SUPABASE: 90,
     SourceKind.SLACK: 30,

@@ -70,6 +70,7 @@ URL = os.environ.get("LEKA_MONGODB_TEST_URL", "mongodb://root:leka@127.0.0.1:270
 # guard resolves — to the local server, which the tests let it accept.
 ADDRESS = "mongodb://localhost:" + URL.rsplit(":", 1)[1].split("/")[0]
 REQUIRED = os.environ.get("LEKA_REQUIRE_MONGODB_TESTS") == "1"
+USER_NOT_FOUND, ROLE_NOT_FOUND = 11, 31  # MongoDB's codes
 HOW_TO_START = (
     f"no MongoDB at {URL.rpartition('@')[2]}. Start one with `docker compose up -d mongodb`, "
     "or point LEKA_MONGODB_TEST_URL at another."
@@ -108,6 +109,18 @@ class Commands(monitoring.CommandListener):
 
 def _admin() -> AsyncMongoClient[dict[str, Any]]:
     return AsyncMongoClient(URL, serverSelectionTimeoutMS=3000)
+
+
+async def _drop(admin: Any, command: dict[str, str]) -> None:
+    """A user or a role dropped — and one already gone let be: when the
+    setup failed half-way, its failure is the one worth reading, not this.
+    (On 2026-09-29 a full disk in CI failed a createUser; the dropUser
+    after it said UserNotFound, and hid why.)"""
+    try:
+        await admin.command(command)
+    except OperationFailure as error:
+        if error.code not in (USER_NOT_FOUND, ROLE_NOT_FOUND):
+            raise
 
 
 @pytest.fixture(scope="session")
@@ -213,8 +226,8 @@ async def catalogue(server: None, local: Commands) -> AsyncIterator[Catalogue]:
     finally:
         await client.drop_database(made.billing)
         await client.drop_database(made.secret)
-        await admin.command({"dropUser": made.reader})
-        await admin.command({"dropRole": made.role})
+        await _drop(admin, {"dropUser": made.reader})
+        await _drop(admin, {"dropRole": made.role})
         await client.close()
 
 

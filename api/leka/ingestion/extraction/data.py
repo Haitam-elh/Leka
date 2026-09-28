@@ -1,6 +1,6 @@
-"""Databases: PostgreSQL's, MySQL's, MariaDB's and SQL Server's schemas, and
-their tables and views; MongoDB's databases, and their collections and
-views (LEKA-349).
+"""Databases: PostgreSQL's, MySQL's, MariaDB's, SQL Server's and Oracle's
+schemas, and their tables and views; MongoDB's databases, and their
+collections and views (LEKA-349).
 
 What a question about data needs: a table's name as it is written in a
 query (`billing.invoices`), what it is (a table, a view…), its columns as a
@@ -30,6 +30,7 @@ POSTGRESQL = SourceKind.POSTGRESQL
 MYSQL = SourceKind.MYSQL
 MARIADB = SourceKind.MARIADB
 SQLSERVER = SourceKind.SQLSERVER
+ORACLE = SourceKind.ORACLE
 MONGODB = SourceKind.MONGODB
 SUPABASE = SourceKind.SUPABASE  # PostgreSQL, read by its connector
 
@@ -42,6 +43,11 @@ def postgresql_schema(p: Payload) -> Extracted:
 @strategy("sqlserver.schemas", 1, (SQLSERVER, C.SCHEMAS))
 def sqlserver_schema(p: Payload) -> Extracted:
     return _schema(p, "sqlserver")
+
+
+@strategy("oracle.schemas", 1, (ORACLE, C.SCHEMAS))
+def oracle_schema(p: Payload) -> Extracted:
+    return _schema(p, "oracle")
 
 
 @strategy("mysql.schemas", 1, (MYSQL, C.SCHEMAS))
@@ -87,14 +93,19 @@ def sqlserver_table(p: Payload) -> Extracted:
     return _table(p, "sqlserver")
 
 
+@strategy("oracle.tables", 1, (ORACLE, C.TABLES))
+def oracle_table(p: Payload) -> Extracted:
+    return _table(p, "oracle")
+
+
 @strategy("mongodb.tables", 1, (MONGODB, C.TABLES))
 def mongodb_collection(p: Payload) -> Extracted:
     return _table(p, "mongodb")
 
 
 def _schema(p: Payload, engine: str) -> Extracted:
-    """A schema inside a database — PostgreSQL's, SQL Server's: its name,
-    owner, comment, and the database it is in."""
+    """A schema inside a database — PostgreSQL's, SQL Server's, Oracle's: its
+    name, owner, comment, and the database it is in."""
     return Extracted(
         title=required(p, "name"),
         content=content("description", string(p, "comment")),

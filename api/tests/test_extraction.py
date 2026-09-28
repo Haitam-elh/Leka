@@ -135,6 +135,7 @@ EXTRACTED_KINDS = [
     SourceKind.MYSQL,
     SourceKind.MARIADB,
     SourceKind.SQLSERVER,
+    SourceKind.ORACLE,
     SourceKind.MONGODB,
     SourceKind.SUPABASE,
 ]
