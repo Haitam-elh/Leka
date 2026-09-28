@@ -12,8 +12,16 @@ import pytest
 from sqlalchemy import select
 
 from leka.background import Event
-from leka.connectors import Capability, ScopeRules, Source, SourceService, SourceSettings
+from leka.connectors import (
+    Capability,
+    Retention,
+    ScopeRules,
+    Source,
+    SourceService,
+    SourceSettings,
+)
 from leka.db import session_factory, workspace_scope
+from leka.ingestion.models import RawPayload
 from tests import test_sync as sync_tests
 from tests.test_sync import _index, _sync, fake, source  # noqa: F401 — fixtures
 
@@ -22,13 +30,15 @@ pytestmark = pytest.mark.integration
 API, LEGACY = "acme/api", "acme/legacy"
 
 
-async def _save(source: Source, scope: ScopeRules) -> tuple[int, list[str]]:
+async def _save(
+    source: Source, scope: ScopeRules, retention: Retention | None = None
+) -> tuple[int, list[str]]:
     with workspace_scope(source.workspace_id):
         async with session_factory() as session:
             service = SourceService(session, source.workspace_id, actor_user_id=None)
             fresh = await service.get(source.id)
             version, _findings, changed = await service.save_settings(
-                fresh, SourceSettings(scope=scope)
+                fresh, SourceSettings(scope=scope, retention=retention or Retention())
             )
             await session.commit()
             return version, changed
@@ -93,3 +103,20 @@ async def test_a_scope_change_on_an_active_source_queues_a_full_pass_once_commit
 
     (event,) = await _events(source)
     assert event.payload["version"] == 1
+
+
+async def test_a_source_s_own_retention_is_its_payloads_expiry(source: Source) -> None:
+    """LEKA-348: the sync writes each payload's expiry with the source's own
+    retention when it is shorter than its kind's."""
+    _spread()
+    await _save(source, ScopeRules(), Retention(days=3))
+
+    await _sync(source)
+
+    with workspace_scope(source.workspace_id):
+        async with session_factory() as session:
+            rows = (
+                await session.execute(select(RawPayload).where(RawPayload.source_id == source.id))
+            ).scalars()
+            kept = {(row.expires_at - row.fetched_at).days for row in rows}
+    assert kept == {3}

@@ -306,6 +306,7 @@ class _Pass:
         # What the scope rules left out, per capability, for the report.
         self.excluded: dict[str, int] = {}
         self._scope = ScopeRules()
+        self._retention_days: int | None = None
         self._sources = SourceService(session, workspace_id, actor_user_id=None)
         self._syncs = SourceSyncRepository(session, workspace_id)
         self._payloads = RawPayloadRepository(session, workspace_id)
@@ -330,9 +331,11 @@ class _Pass:
         failure: Diagnostic | None = None
         try:
             connector = await self._sources.open_connector(source)
-            # The scope rules of this pass: read once, applied to every record.
+            # The scope rules and the retention of this pass: read once,
+            # applied to every record, to every payload written.
             _version, settings = await self._sources.settings(source)
             self._scope = settings.scope
+            self._retention_days = settings.retention.days
             for capability in _capabilities(source, connector.manifest.capabilities):
                 count, failure = await self._capability(source, connector, capability)
                 report.records[capability.value] = count
@@ -490,7 +493,7 @@ class _Pass:
                 size_bytes=stored.size_bytes,
                 checksum_sha256=stored.checksum_sha256,
                 fetched_at=fetched_at,
-                expires_at=expires_at(source.kind, fetched_at),
+                expires_at=expires_at(source.kind, fetched_at, days=self._retention_days),
             )
         written = {record.external_id for record in changed}
         if self._run is not None:

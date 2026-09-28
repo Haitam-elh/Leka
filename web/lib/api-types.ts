@@ -763,7 +763,8 @@ export interface paths {
         };
         /**
          * Source Settings
-         * @description The source's current scope rules and mapping.
+         * @description The source's current scope rules, mapping and retention — and LEKA's
+         *     retention policy for its kind, the most it may keep.
          */
         get: operations["source_settings_api_v1_sources__source_id__settings_get"];
         /**
@@ -1899,6 +1900,14 @@ export interface components {
             /** Token */
             token: string;
         };
+        /** Retention */
+        Retention: {
+            /**
+             * Days
+             * @description How long the raw payloads are kept, in days — at most LEKA's policy for this kind of source. Empty: the policy.
+             */
+            days?: number | null;
+        };
         /**
          * Role
          * @description What a member may do in a workspace.
@@ -2022,7 +2031,7 @@ export interface components {
             version: number;
             /**
              * Changed
-             * @description scope, mapping — empty: nothing changed, no version.
+             * @description scope, mapping, retention — empty: nothing changed, no version.
              */
             changed: string[];
             /**
@@ -2046,6 +2055,10 @@ export interface components {
             };
             /** Mapping */
             mapping: {
+                [key: string]: unknown;
+            };
+            /** Retention */
+            retention: {
                 [key: string]: unknown;
             };
             /** Created By */
@@ -2268,6 +2281,7 @@ export interface components {
         SourceSettings: {
             scope?: components["schemas"]["ScopeRules"];
             mapping?: components["schemas"]["Mapping"];
+            retention?: components["schemas"]["Retention"];
         };
         /**
          * SourceSettingsRead
@@ -2277,6 +2291,11 @@ export interface components {
             /** Version */
             version: number;
             settings: components["schemas"]["SourceSettings"];
+            /**
+             * Retention Policy Days
+             * @description LEKA's retention for this kind of source: the most a source may keep.
+             */
+            retention_policy_days?: number | null;
         };
         /**
          * SourceStatus

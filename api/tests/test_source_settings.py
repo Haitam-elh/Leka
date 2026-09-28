@@ -9,7 +9,14 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from leka.connectors import Mapping, ScopeRules, SourceSettings, first_match, in_scope
+from leka.connectors import (
+    Mapping,
+    Retention,
+    ScopeRules,
+    SourceSettings,
+    first_match,
+    in_scope,
+)
 from leka.connectors import settings as settings_module
 from leka.connectors.settings import OwnerRule, ServiceRule, TagKeys, check
 from leka.ingestion.normalisation import mapping as normalisation_mapping
@@ -167,3 +174,22 @@ def test_the_vocabularies_are_normalisation_s() -> None:
     assert set(values.PRIORITIES.values()) == settings_module.PRIORITIES
     assert set(parsing_rules.ENVIRONMENTS) == settings_module.ENVIRONMENTS
     assert set(normalisation_mapping.ENTITY_TYPES.values()) <= settings_module.ENTITY_TYPES
+
+
+# ── retention (LEKA-348) ─────────────────────────────────────────────────────
+
+
+def test_a_retention_within_the_policy_is_fine_a_longer_one_a_warning() -> None:
+    within = SourceSettings(retention=Retention(days=14))
+    longer = SourceSettings(retention=Retention(days=60))
+
+    assert check(within, capabilities=frozenset(), visible=None, longest=30) == []
+    findings = check(longer, capabilities=frozenset(), visible=None, longest=30)
+    assert [(f.level, f.path) for f in findings] == [("warning", "retention.days")]
+    assert "30" in findings[0].message
+
+
+@pytest.mark.parametrize("days", [0, -3, 366])
+def test_a_retention_out_of_bounds_is_refused(days: int) -> None:
+    with pytest.raises(ValidationError):
+        Retention(days=days)

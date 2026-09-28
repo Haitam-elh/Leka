@@ -174,4 +174,40 @@ describe("the scope and mapping section", () => {
     );
     expect(notify.error).toHaveBeenCalledWith({ title: "Ces réglages ont des erreurs" });
   });
+
+  it("says the retention kept, and LEKA's policy when there is none (LEKA-348)", async () => {
+    permissions = ["source:read"];
+    settingsApi.get.mockResolvedValue({
+      version: 1,
+      settings: { scope: {}, mapping: {} },
+      retention_policy_days: 30,
+    });
+
+    renderSection();
+
+    expect(await screen.findByText("Politique de LEKA : 30 jours")).toBeInTheDocument();
+  });
+
+  it("sends a retention of its own, and refuses one it cannot read", async () => {
+    settingsApi.get.mockResolvedValue({ version: 0, settings: {}, retention_policy_days: 30 });
+    settingsApi.save.mockResolvedValue({
+      version: 1,
+      changed: ["retention"],
+      findings: [],
+      full_sync_queued: false,
+    });
+    const dialog = await openEditor();
+    const field = within(dialog).getByLabelText("Rétention (jours)");
+
+    await userEvent.type(field, "two weeks");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Enregistrer" }));
+    expect(await within(dialog).findByText("Rétention (jours) : ligne 1 illisible")).toBeVisible();
+    expect(settingsApi.save).not.toHaveBeenCalled();
+
+    await userEvent.clear(field);
+    await userEvent.type(field, "14");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Enregistrer" }));
+    const [, sent] = settingsApi.save.mock.calls[0];
+    expect(sent.retention).toEqual({ days: 14 });
+  });
 });

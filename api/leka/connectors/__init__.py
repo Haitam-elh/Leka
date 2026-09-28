@@ -98,6 +98,7 @@ from leka.connectors.service import (
 from leka.connectors.settings import (
     Finding,
     Mapping,
+    Retention,
     ScopeRules,
     SourceSettings,
     first_match,
@@ -137,6 +138,7 @@ __all__ = [
     "Mapping",
     "NoScopeError",
     "RawRecord",
+    "Retention",
     "RotationRefusedError",
     "RotationReport",
     "ScopeListing",

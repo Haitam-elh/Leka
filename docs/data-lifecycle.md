@@ -56,6 +56,11 @@ LEKA_RAW_PAYLOAD_RETENTION_DAYS={"datadog": 14, "github": 180}
 A value outside `[1, 3650]` stops the process at startup. `0` reads as
 "disabled" to whoever typed it and means "delete on arrival" to the sweep.
 
+A source may keep **less** than its kind's policy — its own retention, in
+its settings, set by an admin on its page
+([scope-and-mapping.md § 2 bis](connectors/scope-and-mapping.md#2-bis-retention)).
+Never more: asking for more gets the policy. LEKA-348.
+
 The expiry is computed **once, at write time**, and stored as a column. Two
 things follow. The sweep is an indexed range scan rather than a walk of every
 row through a Python function. And changing the policy does not retroactively

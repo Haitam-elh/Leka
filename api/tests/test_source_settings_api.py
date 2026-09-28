@@ -104,6 +104,27 @@ async def test_settings_are_saved_as_versions_with_their_author_and_an_event(
     assert [e["payload"]["version"] for e in changed] == [2, 1]
 
 
+async def test_a_retention_of_its_own_is_a_version_and_the_policy_is_said(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    _as(identity, acme, "admin")
+    source = await _create(client)
+
+    read = (await client.get(_url(source))).json()
+    shorter = await client.put(_url(source), json={"retention": {"days": 14}})
+    longer = await client.put(_url(source), json={"retention": {"days": 60}})
+    refused = await client.put(_url(source), json={"retention": {"days": 0}})
+
+    assert read["retention_policy_days"] == 30  # the fake's kind, Slack
+    assert read["settings"]["retention"] == {"days": None}
+    assert (shorter.json()["changed"], shorter.json()["findings"]) == (["retention"], [])
+    assert longer.status_code == 200
+    assert [f["path"] for f in longer.json()["findings"]] == ["retention.days"]
+    assert refused.status_code == 422
+    versions = (await client.get(_url(source, "/versions"))).json()["data"]
+    assert [v["retention"] for v in versions] == [{"days": 60}, {"days": 14}]
+
+
 async def test_errors_are_refused_each_one_named(
     client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
 ) -> None:

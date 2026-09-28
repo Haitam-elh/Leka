@@ -246,16 +246,19 @@ class SourceService:
         if row is None:
             return 0, SourceSettings()
         return row.version, SourceSettings.model_validate(
-            {"scope": row.scope, "mapping": row.mapping}
+            {"scope": row.scope, "mapping": row.mapping, "retention": row.retention}
         )
 
     def settings_history(self, source: Source) -> Select[tuple[SourceSettingsVersion]]:
         return self._settings.history(source.id)
 
-    async def check_settings(self, source: Source, settings: SourceSettings) -> list[Finding]:
+    async def check_settings(
+        self, source: Source, settings: SourceSettings, *, longest: int | None = None
+    ) -> list[Finding]:
         """What is wrong or doubtful with these settings — against what the
         source can read and what its credentials can see, asked of the
-        vendor within the test's budget. Changes nothing."""
+        vendor within the test's budget, and against `longest`, LEKA's
+        retention policy for its kind. Changes nothing."""
         visible: list[str] | None
         try:
             listing, _diagnostic = await self.scope_options(source)
@@ -263,15 +266,16 @@ class SourceService:
         except NoScopeError:
             visible = None
         capabilities = frozenset(c.value for c in get_connector(source.kind).manifest.capabilities)
-        return check(settings, capabilities=capabilities, visible=visible)
+        return check(settings, capabilities=capabilities, visible=visible, longest=longest)
 
     async def save_settings(
-        self, source: Source, settings: SourceSettings
+        self, source: Source, settings: SourceSettings, *, longest: int | None = None
     ) -> tuple[int, list[Finding], list[str]]:
         """A new version, if the settings changed and have no error in them.
         Returns the version, the findings (warnings) and what changed:
-        `scope`, `mapping`. Raises InvalidSettingsError with every finding."""
-        findings = await self.check_settings(source, settings)
+        `scope`, `mapping`, `retention`. Raises InvalidSettingsError with
+        every finding."""
+        findings = await self.check_settings(source, settings, longest=longest)
         if any(f.level == "error" for f in findings):
             raise InvalidSettingsError(findings)
         version, current = await self.settings(source)
@@ -280,6 +284,7 @@ class SourceService:
             for section, differs in (
                 ("scope", settings.scope != current.scope),
                 ("mapping", settings.mapping != current.mapping),
+                ("retention", settings.retention != current.retention),
             )
             if differs
         ]
@@ -290,6 +295,7 @@ class SourceService:
                 source.id,
                 scope=settings.scope.model_dump(mode="json"),
                 mapping=settings.mapping.model_dump(mode="json"),
+                retention=settings.retention.model_dump(mode="json", exclude_none=True),
                 created_by=self._actor,
             )
         except IntegrityError as error:

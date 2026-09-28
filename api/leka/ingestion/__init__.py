@@ -33,6 +33,7 @@ from leka.ingestion.repository import (
     SourceSyncRepository,
     SyncRunRepository,
 )
+from leka.ingestion.retention import retention_days
 from leka.ingestion.schemas import (
     ExtractionFailureRead,
     ExtractorCount,
@@ -100,4 +101,5 @@ __all__ = [
     "SyncRunStatus",
     "SyncSummary",
     "SyncTrigger",
+    "retention_days",
 ]

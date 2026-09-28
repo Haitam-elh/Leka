@@ -122,8 +122,11 @@ is LEKA-356's.
 ### Retention
 
 Datadog's raw payloads are kept **30 days** — observability is enormous
-and stale in days ([data-lifecycle.md](../data-lifecycle.md)). A contract
-can move it without a deploy (`LEKA_RAW_PAYLOAD_RETENTION_DAYS`).
+and stale in days ([data-lifecycle.md](../data-lifecycle.md)). A source may
+keep less — its own retention, in its settings
+([scope-and-mapping.md § 2 bis](scope-and-mapping.md#2-bis-retention)); a
+contract can move the policy without a deploy
+(`LEKA_RAW_PAYLOAD_RETENTION_DAYS`).
 
 ### Limits
 

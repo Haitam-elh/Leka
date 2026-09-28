@@ -714,6 +714,15 @@ const fr = {
       failed: "Les réglages n'ont pas pu être enregistrés",
       error: "Erreur",
       warning: "À vérifier",
+      retention: "Rétention des données brutes",
+      retentionKept: "{days} jours",
+      retentionPolicy: "Politique de LEKA : {days} jours",
+      retentionDefault: "Politique de LEKA",
+      retentionDays: "Rétention (jours)",
+      retentionHelp:
+        "Combien de jours LEKA garde ce qu'il lit de cette source : moins que sa politique ({days} jours), jamais plus. Vide : la politique.",
+      retentionHelpDefault:
+        "Combien de jours LEKA garde ce qu'il lit de cette source, au plus sa politique. Vide : la politique.",
     },
     page: {
       editTitle: "Modifier la source",
@@ -1774,6 +1783,15 @@ const en: Dictionary = {
       failed: "The settings could not be saved",
       error: "Error",
       warning: "To check",
+      retention: "Raw data retention",
+      retentionKept: "{days} days",
+      retentionPolicy: "LEKA's policy: {days} days",
+      retentionDefault: "LEKA's policy",
+      retentionDays: "Retention (days)",
+      retentionHelp:
+        "How many days LEKA keeps what it reads of this source: less than its policy ({days} days), never more. Empty: the policy.",
+      retentionHelpDefault:
+        "How many days LEKA keeps what it reads of this source, at most its policy. Empty: the policy.",
     },
     page: {
       editTitle: "Change the source",

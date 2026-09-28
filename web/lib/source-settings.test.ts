@@ -21,6 +21,7 @@ const SETTINGS: SourceSettings = {
     priorities: { P0: "highest" },
     environments: { prd: "production" },
   },
+  retention: { days: 14 },
 };
 
 describe("the editor's lines", () => {
@@ -30,7 +31,19 @@ describe("the editor's lines", () => {
     expect(draft.exclude).toBe("acme/legacy-*\n*/sandbox");
     expect(draft.services).toBe("acme/pay* → billing");
     expect(draft.states).toBe("QA Review = in_progress");
+    expect(draft.retentionDays).toBe("14");
     expect(fromDraft(draft)).toEqual({ settings: SETTINGS, errors: [] });
+  });
+
+  it("read a retention in days, empty for LEKA's policy (LEKA-348)", () => {
+    const empty = fromDraft({ ...toDraft(SETTINGS), retentionDays: " " });
+
+    expect(empty.settings?.retention).toEqual({ days: null });
+    for (const wrong of ["0", "-3", "400", "two weeks", "7.5"]) {
+      expect(fromDraft({ ...toDraft(SETTINGS), retentionDays: wrong }).errors).toEqual([
+        { field: "retentionDays", line: 1 },
+      ]);
+    }
   });
 
   it("read every way of writing an arrow, and ignore blank lines and spaces", () => {

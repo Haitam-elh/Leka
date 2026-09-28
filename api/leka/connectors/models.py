@@ -268,6 +268,8 @@ class SourceSettingsVersion(Base, WorkspaceScopedMixin):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     scope: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
     mapping: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # How long its raw payloads are kept (LEKA-348): {"days": 14}, or {}.
+    retention: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
