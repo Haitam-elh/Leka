@@ -28,6 +28,8 @@ describe("a capability's word", () => {
     ["clickup", "projects", "listes"],
     ["asana", "issues", "tâches"],
     ["monday", "issues", "éléments"],
+    ["slab", "pages", "articles"],
+    ["guru", "pages", "fiches"],
   ])("is %s's own for its %s", (kind, capability, word) => {
     expect(capabilityWord(fr, capability, kind)).toBe(word);
   });

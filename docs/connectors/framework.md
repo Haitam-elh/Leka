@@ -5,13 +5,13 @@ rest next — through one model. LEKA-344. The decisions behind it are in
 [ADR 015](../adr/015-connector-framework.md); adding a connector is
 [a tutorial of its own](adding-a-connector.md). What GitHub and GitLab ask
 for and read: [code-platforms.md](code-platforms.md); Jira, Confluence,
-Linear, Notion, Asana, Trello, ClickUp and Monday:
+Linear, Notion, Asana, Trello, ClickUp, Monday, Slab and Guru:
 [project-and-documentation.md](project-and-documentation.md).
 
 **LEKA only reads.** No connector writes to a customer's system: the
 manifest says `read_only: True` as a literal, and every call a connector
-makes is a GET — except the reads a vendor offers only as POST (Linear's
-and Monday's GraphQL queries, Notion's search). Those go through
+makes is a GET — except the reads a vendor offers only as POST (Linear's,
+Monday's and Slab's GraphQL queries, Notion's search). Those go through
 `VendorHttp.post`, to the paths the connector declared in `reads_by_post`
 and nowhere else; a POST anywhere else is refused before it is sent. A
 GraphQL connector sends `query` documents only, checked before sending by

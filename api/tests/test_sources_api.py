@@ -46,6 +46,9 @@ from tests.test_clickup_connector import TOKEN as CLICKUP_TOKEN
 from tests.test_clickup_connector import ClickUp
 from tests.test_confluence_connector import Confluence
 from tests.test_github_connector import github
+from tests.test_guru_connector import TOKEN as GURU_TOKEN
+from tests.test_guru_connector import USERNAME as GURU_USERNAME
+from tests.test_guru_connector import Guru
 from tests.test_jira_connector import EMAIL as JIRA_EMAIL
 from tests.test_jira_connector import TOKEN as JIRA_TOKEN
 from tests.test_jira_connector import Jira
@@ -55,6 +58,8 @@ from tests.test_monday_connector import TOKEN as MONDAY_TOKEN
 from tests.test_monday_connector import Monday
 from tests.test_notion_connector import TOKEN as NOTION_TOKEN
 from tests.test_notion_connector import WIKI, Notion
+from tests.test_slab_connector import TOKEN as SLAB_TOKEN
+from tests.test_slab_connector import Slab
 from tests.test_trello_connector import KEY as TRELLO_KEY
 from tests.test_trello_connector import ROADMAP as TRELLO_ROADMAP
 from tests.test_trello_connector import TOKEN as TRELLO_TOKEN
@@ -818,6 +823,83 @@ async def test_a_project_tool_end_to_end(
         _as(identity, acme, "member")
         page = (await client.get(url)).text
         assert all(secret not in page for secret in secrets.values())
+        assert (await client.post(f"{url}/test")).status_code == 403
+    finally:
+        app.dependency_overrides.pop(get_connector_transport, None)
+
+
+# ── Slab, Guru, end to end ─────────────────────────────────────────────────
+
+# kind, the stand-in, its credentials, the scope's field, what an admin
+# gives it and what is kept, the first option offered.
+KNOWLEDGE_BASES = [
+    ("slab", Slab, {"token": SLAB_TOKEN}, "topics", " t-people ", "t-people", "t-eng"),
+    (
+        "guru",
+        Guru,
+        {"token": GURU_TOKEN, "username": GURU_USERNAME},
+        "collections",
+        "C-Sales",
+        "c-sales",
+        "c-onboard",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("kind", "stand_in", "credentials", "field", "given", "kept", "first"), KNOWLEDGE_BASES
+)
+async def test_a_knowledge_base_end_to_end(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+    stand_in: Any,
+    credentials: dict[str, str],
+    field: str,
+    given: str,
+    kept: str,
+    first: str,
+) -> None:
+    """Only an admin connects it; the token never comes back; test,
+    activation and health go through."""
+    monkeypatch.setattr("leka.connectors.slab.connector.MIN_INTERVAL", 0.0)
+    vendor = stand_in()
+    app.dependency_overrides[get_connector_transport] = lambda: httpx.MockTransport(vendor)
+    token = credentials["token"]
+    try:
+        _as(identity, acme, "member")
+        body = {"type": kind, "display_name": kind.title(), "credentials": credentials}
+        assert (await client.post(f"{API}/sources", json=body)).status_code == 403
+
+        _as(identity, acme, "admin")
+        catalog = (await client.get(f"{API}/connectors/catalog")).json()
+        entry = next(item for item in catalog if item["key"] == kind)
+        assert (entry["category"], entry["read_only"]) == ("docs", True)
+        assert entry["credentials_schema"]["properties"]["token"]["writeOnly"] is True
+
+        source = await _create(client, **body)
+        assert token not in json.dumps(source)
+        url = f"{API}/sources/{source['id']}"
+
+        tested = (await client.post(f"{url}/test")).json()
+        assert tested["ok"] is True, tested
+        assert sorted(tested["source"]["capabilities"]) == ["pages", "spaces"]
+
+        offered = (await client.get(f"{url}/scope/options")).json()
+        assert offered["options"][0]["key"] == first
+        scoped = await client.patch(url, json={"config": {field: [given]}})
+        assert scoped.json()["config"][field] == [kept]
+        wrong = await client.patch(url, json={"config": {field: ["http://10.0.0.1/admin"]}})
+        assert wrong.status_code == 422
+
+        assert (await client.post(f"{url}/test")).json()["ok"] is True
+        assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+        assert (await client.post(f"{url}/health-check")).json()["health_status"] == "healthy"
+
+        _as(identity, acme, "member")
+        assert token not in (await client.get(url)).text
         assert (await client.post(f"{url}/test")).status_code == 403
     finally:
         app.dependency_overrides.pop(get_connector_transport, None)

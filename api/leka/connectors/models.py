@@ -72,6 +72,8 @@ class SourceKind(enum.StrEnum):
     TRELLO = "trello"
     CLICKUP = "clickup"
     MONDAY = "monday"
+    SLAB = "slab"
+    GURU = "guru"
     AWS = "aws"
     AZURE = "azure"
     GCP = "gcp"

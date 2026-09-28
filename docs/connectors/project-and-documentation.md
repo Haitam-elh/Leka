@@ -1,12 +1,12 @@
 # Project and documentation tools — what LEKA asks for, and what it reads
 
-Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp and Monday, through
-[the connector framework](framework.md). LEKA-346. **LEKA only reads**: Jira
-and Confluence are read with GETs, to the customer's Atlassian Cloud site
-and nowhere else; Linear and Monday, which speak only GraphQL, with `query`
-documents sent by POST to their one endpoint — never a mutation; Notion
-with GETs, and its search, which it offers only as a POST; Asana, Trello
-and ClickUp with GETs.
+Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab and
+Guru, through [the connector framework](framework.md). LEKA-346. **LEKA only
+reads**: Jira and Confluence are read with GETs, to the customer's
+Atlassian Cloud site and nowhere else; Linear, Monday and Slab, which speak
+only GraphQL, with `query` documents sent by POST to their one endpoint —
+never a mutation; Notion with GETs, and its search, which it offers only as
+a POST; Asana, Trello, ClickUp and Guru with GETs.
 
 **A personal token can do what its owner can.** Asana, ClickUp, Monday and
 Linear cannot narrow a personal token to reading; Trello can. For each, the
@@ -567,6 +567,119 @@ updated after the last pass, less two minutes. Not read yet: updates
   the same diagnostics: `Unauthorized` → `AUTH_INVALID`,
   `UserUnauthorizedException` → `PERMISSION_DENIED`,
   `ResourceNotFoundException`, `InvalidBoardIdException` → `NOT_FOUND`.
+
+## Slab
+
+| | |
+|---|---|
+| Endpoint | `POST https://api.slab.com/v1/graphql` — fixed, nothing to configure |
+| Credentials | `token`, the workspace's API token (write-only), sent as it is |
+| Config | `topics` |
+| Category | `docs` |
+| Capabilities | `spaces` (topics), `pages` (posts) |
+
+### What to create at Slab
+
+Slab's API belongs to its **Business and Enterprise** plans. A workspace
+admin copies the token from **Team settings → Developer**. The token reads
+as the **Slab Bot**: it sees the topics and posts the bot was given, and no
+more — that is the boundary. Give the bot access to what LEKA should read,
+and to nothing secret.
+
+### LEKA reads, over POST
+
+Like Linear and Monday: the client may POST to `/v1/graphql` and nowhere
+else; every document is a constant in `slab/connector.py` and a `query`,
+checked before sending and by a test over all of them.
+
+### Scope
+
+`topics` takes topic ids. Absent, the source reads every post the bot sees.
+The choices come from `GET /sources/{id}/scope/options`: every topic, with
+its description as text. The connection test fails with `NOT_FOUND`,
+naming them, when the bot does not see a topic in scope.
+
+### The connection test
+
+1. `organization` — its name is the account.
+2. Its topics — every topic in scope must be there — and its posts:
+   `topics_visible`, `posts_visible`.
+3. One post, content included: `pages` if Slab answers. A bot that sees
+   nothing passes, with a warning saying how to give it access.
+
+### What is read
+
+| Capability | What | Incremental |
+|---|---|---|
+| `spaces` | each topic, with its description | whole each pass |
+| `pages` | each post with its content (Quill delta, as JSON), title, dates, link access | the list whole; the content of those updated since the last pass, less two minutes |
+
+Slab gives a post's content only one post at a time, so a pass lists the
+posts, then asks each one it needs. With `topics`, a post is read when one
+of its topics is in scope, and that topic is its `container`.
+
+### Limits
+
+- **Pace**: Slab does not publish its limit; the client keeps to four
+  requests a second. A refusal for the rate — a 429, or an error that says
+  so — is `RATE_LIMITED`.
+- **Errors**: Slab's errors have no code. A 401 or an error saying
+  "unauthorized" → `AUTH_INVALID`; "forbidden" → `PERMISSION_DENIED`
+  (often: the plan has no API); "not found" → `NOT_FOUND`.
+
+## Guru
+
+| | |
+|---|---|
+| Endpoint | `https://api.getguru.com/api/v1` — fixed, nothing to configure |
+| Credentials | `token` (write-only, first so the stored hint is the token's), `username` — HTTP Basic |
+| Config | `collections` |
+| Category | `docs` |
+| Capabilities | `spaces` (collections), `pages` (cards) |
+
+### What to create at Guru
+
+Two kinds of token fit, from **Settings → API Access**:
+
+- **A collection token** — read-only by Guru's own design, for one
+  collection. Its username is the collection's id. The narrowest, and the
+  one to prefer.
+- **A user token** — its username is the user's email; it can do what the
+  user can. Then use a dedicated user with read access only to the
+  collections LEKA should read.
+
+### Scope
+
+`collections` takes collection ids, kept in small letters. Absent, the
+source reads every collection the token sees. The choices come from
+`GET /sources/{id}/scope/options`.
+
+### The connection test
+
+1. `GET /whoami` — the account: a user's email, or a collection's name.
+2. `GET /collections` — every collection in scope must be there:
+   `collections_visible`.
+3. One search of cards: `pages` if Guru answers.
+
+### What is read
+
+| Capability | What | Incremental |
+|---|---|---|
+| `spaces` | each collection | whole each pass |
+| `pages` | each card — title, content (HTML), collection, verification state, dates | most recently modified first, stops at the last pass less two minutes |
+
+Cards come from `GET /search/query`, sorted by Guru on `lastModified`,
+newest first, 50 a page. Guru pages with a `Link` header whose relation is
+`next-page`, not `next`; the link is followed only on Guru's host. With
+`collections`, a card is read when its collection is in scope, and that
+collection is its `container`. Archived cards are not read.
+
+### Limits
+
+- **Quota**: a refusal for the rate is `RATE_LIMITED`, with `Retry-After`.
+  Guru sends no quota headers, so health is `healthy` or failed.
+- **Errors**: 401 → `AUTH_INVALID` (the username or the token), 403 →
+  `PERMISSION_DENIED`, 404 → `NOT_FOUND`, 5xx → `PROVIDER_ERROR`.
 
 ## Diagnostics
 

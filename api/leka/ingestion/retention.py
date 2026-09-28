@@ -47,6 +47,8 @@ DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     SourceKind.TRELLO: 90,
     SourceKind.CLICKUP: 90,
     SourceKind.MONDAY: 90,
+    SourceKind.SLAB: 90,
+    SourceKind.GURU: 90,
     SourceKind.SLACK: 30,
     SourceKind.AWS: 30,
     SourceKind.AZURE: 30,

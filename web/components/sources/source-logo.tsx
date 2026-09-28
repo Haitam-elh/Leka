@@ -52,6 +52,18 @@ const MARKS: Record<SourceKind, { title: string; color: string; path: string }> 
     color: "#6161FF",
     path: "M3 3h3a1.5 1.5 0 0 1 1.5 1.5v15A1.5 1.5 0 0 1 6 21H3a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 3 3ZM10.5 3h3A1.5 1.5 0 0 1 15 4.5v9a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-9A1.5 1.5 0 0 1 10.5 3ZM18 3h3a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 21 11h-3a1.5 1.5 0 0 1-1.5-1.5v-5A1.5 1.5 0 0 1 18 3Z",
   },
+  slab: {
+    // Not in Simple Icons. Not Slab's mark either: three slabs, stacked.
+    title: "Slab",
+    color: "#4E5BF2",
+    path: "M5 4h14a2 2 0 0 1 0 4H5a2 2 0 0 1 0-4ZM5 10h14a2 2 0 0 1 0 4H5a2 2 0 0 1 0-4ZM5 16h14a2 2 0 0 1 0 4H5a2 2 0 0 1 0-4Z",
+  },
+  guru: {
+    // Not in Simple Icons. Not Guru's mark either: a card and its lines.
+    title: "Guru",
+    color: "#7B4FE0",
+    path: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM7 7v2h10V7ZM7 11v2h10v-2ZM7 15v2h6v-2Z",
+  },
   jira: {
     title: "Jira",
     color: "#0052CC",
