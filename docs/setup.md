@@ -131,13 +131,14 @@ None of this changes where YOUR payloads go during development: the default
 is still `LEKA_OBJECT_STORE=local`, writing under `var/objects/`. MinIO is
 there for the tests.
 
-**MySQL is off by default**, in the `connectors` profile: it stands for a
-customer's database, for the MySQL connector's tests
-(`tests/test_mysql_connector.py`), which skip without it. Start it when
-working on that connector — every start is a clean server:
+**MySQL and MongoDB are off by default**, in the `connectors` profile:
+they stand for a customer's databases, for their connectors' tests
+(`tests/test_mysql_connector.py`, `tests/test_mongodb_connector.py`), which
+skip without them. Start them when working on those connectors — every
+start is a clean server:
 
 ```bash
-docker compose up -d mysql
+docker compose up -d mysql mongodb
 ```
 
 ---

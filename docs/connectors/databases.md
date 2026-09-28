@@ -1,6 +1,7 @@
 # Databases — what LEKA asks for, and what it reads
 
-PostgreSQL and MySQL, through [the connector framework](framework.md). LEKA-349.
+PostgreSQL, Supabase, MySQL and MongoDB, through
+[the connector framework](framework.md). LEKA-349.
 **LEKA reads the catalogue, never the rows**: what the database says about
 itself — its schemas, tables, views, columns, keys, indexes, and what each
 view reads from — and not one value of the data. What it contributes then
@@ -8,10 +9,17 @@ goes through extraction ([extraction.md](../extraction.md)) like any other
 source. Becoming entities of the company model — a table, its schema, its
 dependencies — is LEKA-364.
 
-Both hand over their tables in the same shape
-(`leka/connectors/databases.py`), within the same bounds — a session
-read-only, over TLS, to a public address; 20 000 tables a pass; estimates
-rounded — and one extraction reads both (`extraction/data.py`).
+All hand over their tables — a MongoDB collection is one — in the same
+shape (`leka/connectors/databases.py`), within the same bounds — over TLS,
+to a public address, read-only; 20 000 tables a pass; estimates rounded —
+and one extraction reads them all (`extraction/data.py`).
+
+| | Engine | What LEKA's account needs | A row, a document |
+|---|---|---|---|
+| [PostgreSQL](#postgresql) | PostgreSQL | `CONNECT`, `USAGE` on the schemas | refused |
+| [Supabase](#supabase) | PostgreSQL, through the session pooler | the same | refused |
+| [MySQL](#mysql) | MySQL 8.0+ | `REFERENCES` on the databases | refused |
+| [MongoDB](#mongodb) | MongoDB | a role with `listCollections`, `listIndexes`, `collStats`, `dbStats` | refused |
 
 ---
 
@@ -84,8 +92,11 @@ unread. So:
   machine that intercepted the name could present its own certificate.
   Verifying against the provider's CA (`verify-full`) is to come.
 - **A read-only session**, whatever the role could do:
-  `default_transaction_read_only = on`, a `statement_timeout` of 15
-  seconds, a 10-second connection timeout, and `application_name = LEKA`,
+  `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`, a
+  `statement_timeout` of 15 seconds, a 10-second connection timeout, and
+  `application_name = LEKA` — set once connected, not at the handshake, so
+  a pooler in front of the server (Supabase's, PgBouncer's) lets them
+  through,
   so the session is recognisable in `pg_stat_activity`. One connection at a
   time, opened for one call and closed after it.
 - The **password** is encrypted at rest like every credential, never
@@ -161,6 +172,48 @@ Kept **90 days**, like the other sources that describe structure.
   last `ANALYZE`), rounded.
 - Functions, triggers, sequences, types, roles and grants are not read.
 - Schemas and tables are extracted, not yet entities (LEKA-364).
+
+---
+
+## Supabase
+
+A Supabase project's database is PostgreSQL: the **PostgreSQL connector**,
+under Supabase's name and defaults (`leka/connectors/supabase/`). Everything
+said of PostgreSQL above holds — the catalogue read and never the rows, the
+role, TLS, the public address, the read-only session.
+
+| | |
+|---|---|
+| Server | the project's **session pooler**: `aws-0-<region>.pooler.supabase.com`, port 5432 |
+| Credentials | `username` — `leka_reader.<project-ref>`, through the pooler — and `password` |
+| Config | `host`, `port` (5432), `database` (`postgres`), `schemas` |
+| Category, capabilities | `data`; `schemas`, `tables` |
+
+**Why the pooler.** The project's direct host, `db.<project-ref>.supabase.co`,
+has an IPv6 address only; a server without IPv6 cannot reach it. The
+session pooler (Supabase → the project → **Connect** → Session pooler) has
+IPv4, TLS, and keeps a session whole, which the read-only settings need.
+Not the transaction pooler (port 6543): it hands each statement to another
+session.
+
+### What to create in Supabase
+
+In the project's **SQL editor**:
+
+```sql
+create role leka_reader login password '…';
+grant usage on schema public to leka_reader;
+```
+
+`CONNECT` on `postgres` is every role's already. Through the pooler, the
+role signs in as `leka_reader.<project-ref>` — the pooler reads the project
+from the name. Supabase's own schemas (`auth`, `storage`, `realtime`…) are
+described only if the role is given `USAGE` on them, or left out by the
+scope.
+
+Not yet tried against a live Supabase project: the pooler's behaviour is
+Supabase's documentation's, and the connector's tests run against a plain
+PostgreSQL.
 
 ---
 
@@ -269,3 +322,93 @@ marked gone; at most 20 000 tables and views a pass. Kept **90 days**.
 - A view's definition and dependencies need `SELECT` on it (above).
 - Routines, triggers, events, users and grants are not read.
 - MariaDB is not supported.
+
+---
+
+## MongoDB
+
+| | |
+|---|---|
+| Server | MongoDB — Atlas, or self-hosted — reachable from the internet |
+| Credentials | `username`, `password` — write-only |
+| Config | `address` (`mongodb+srv://…` or `mongodb://host:port,…`), `auth_database` (`admin`), `databases` |
+| Category | `data` |
+| Capabilities | `schemas` (the databases), `tables` (collections, views, time series) |
+| Code | `leka/connectors/mongodb/`, with `pymongo`, MongoDB's own driver |
+
+The address is kept to its scheme and hosts: a user and password pasted
+with it — as Atlas's "Connect" gives it — are dropped, never stored in the
+settings; they go in the credentials. So are the options after `?`.
+
+### What to create in MongoDB
+
+A role with four actions on the databases to describe, and an account
+with only that role. In `mongosh`, as an admin:
+
+```js
+use admin
+db.createRole({
+  role: "leka_catalogue", roles: [],
+  privileges: [{ resource: { db: "billing", collection: "" },
+                 actions: ["listCollections", "listIndexes", "collStats", "dbStats"] }],
+})
+db.createUser({ user: "leka_reader", pwd: "…", roles: ["leka_catalogue"] })
+```
+
+On Atlas: **Database Access → Custom Roles**, the same four actions on the
+databases, then a database user with that role alone.
+
+What that role sees, checked against a real server: the databases it has a
+privilege on and no other; each collection with its validator; **each view
+with its definition**; the indexes; the counts and sizes. A `find`, a
+`count`, an `insert` are refused. The connection test warns of an account
+that can read documents (`find`) or write.
+
+### The connection — security
+
+- **Every address the driver connects to is checked.** A MongoDB
+  deployment names its own hosts — an SRV record, the members a replica
+  set announces — so checking the address typed is not enough. The
+  connector wraps the driver's own address resolution: every host is
+  resolved there, each of its addresses must be public, and the
+  connection goes to what was checked; a Unix socket is refused. This
+  leans on a `pymongo` internal: an upgrade that moves it fails the
+  import and a test, never connects unguarded.
+- **TLS required**, the certificate not verified, as the others.
+- **Read-only by the role**: MongoDB has no read-only session; the
+  account's role is the boundary, and the connector sends only commands
+  that read — a test watches every command it sends. Each operation is
+  bounded (15 seconds), the client named `LEKA` (`appname`), reads sent
+  to a secondary where there is one.
+
+### What is read
+
+| Capability | What | Id | Container |
+|---|---|---|---|
+| `schemas` | each database: its collections and views counted, its size | its name | itself |
+| `tables` | each collection or view: kind (`collection`, `view`, `timeseries`), estimated documents and size (`$collStats`), its **validator's fields** as columns — name, BSON type, required, description; `_id` as its key, each unique index as a unique constraint, a validator beyond `$jsonSchema` as a check; each index (fields, direction, unique, sparse, TTL, partial); a view's pipeline, and the collections it reads — the one it is on, and those its `$lookup`, `$graphLookup`, `$unionWith` name | `database.collection` | the database |
+
+**A collection without a validator** is its name, indexes and size: its
+fields are nowhere but in its documents, and LEKA reads none.
+
+### Synchronisation, retention, errors
+
+As the others: whole each pass, only what changed written; at most 20 000
+collections a pass; kept 90 days.
+
+| What | Diagnostic |
+|---|---|
+| Wrong account or password (18) | `AUTH_INVALID` |
+| A database in scope the account cannot see | `NOT_FOUND`, naming it |
+| An action missing (13) | `PERMISSION_DENIED` |
+| Too slow (50) | `TIMEOUT` |
+| No TLS; a host, or one it announced, not public; an address that leads nowhere | `CONFIG_INVALID` |
+| No server answers | `NETWORK_UNREACHABLE` |
+| Anything else MongoDB says | `PROVIDER_ERROR` |
+
+### Limits
+
+- No private network, the certificate not verified, collections not yet
+  entities (LEKA-364) — as the others.
+- Fields are the validator's, not inferred from documents.
+- Not read: users, roles, the oplog, sharding.

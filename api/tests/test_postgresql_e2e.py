@@ -24,7 +24,6 @@ from sqlalchemy import select, text
 
 from leka.connectors import Capability, Source, SourceKind, SourceService
 from leka.connectors.postgresql import PostgreSQLConnector
-from leka.connectors.postgresql import connector as pg
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion import pipeline as pipeline_module
 from leka.ingestion import sync as sync_module
@@ -51,7 +50,6 @@ def local(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
             user=self.credentials.username,
             password=self.credentials.password.get_secret_value(),
             database=self.config.database,
-            server_settings=pg.SESSION,
         )
 
     monkeypatch.setattr(PostgreSQLConnector, "_open", open_local)

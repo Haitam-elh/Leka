@@ -124,6 +124,27 @@ services:
       retries: 24
       start_period: 20s
 
+  mongodb:
+    # A customer's MongoDB, for tests/test_mongodb_connector.py (LEKA-349),
+    # as `mysql` above: in the `connectors` profile, off by default,
+    # `docker compose up -d mongodb` to start it, a clean server each time.
+    image: mongo:8.0
+    container_name: leka-mongodb
+    profiles: ["connectors"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_ROOT_PASSWORD:-leka}
+    ports:
+      - "127.0.0.1:${MONGODB_PORT:-27017}:27017"
+    tmpfs:
+      - /data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+
 volumes:
   postgres-data:
   redis-data:

@@ -23,6 +23,10 @@ dependencies = [
     # A customer's MySQL, read by leka/connectors/mysql (LEKA-349). Wheels
     # for 3.12 on Linux and macOS, x86 and ARM: nothing to compile.
     "asyncmy>=0.2.15,<0.3",
+    # A customer's MongoDB, read by leka/connectors/mongodb (LEKA-349). The
+    # official driver; below 5 because the connector guards its address
+    # resolution, an internal (see guard_the_driver there).
+    "pymongo>=4.18,<5",
     "alembic>=1.13.3",
     "pgvector>=0.3.6",
     # Configuration and validation

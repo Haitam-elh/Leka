@@ -39,6 +39,7 @@ describe("a capability's word", () => {
     ["postgresql", "schemas", "schémas"],
     ["postgresql", "tables", "tables et vues"],
     ["mysql", "schemas", "bases"],
+    ["mongodb", "tables", "collections et vues"],
   ])("is %s's own for its %s", (kind, capability, word) => {
     expect(capabilityWord(fr, capability, kind)).toBe(word);
   });
