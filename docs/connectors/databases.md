@@ -1,6 +1,6 @@
 # Databases — what LEKA asks for, and what it reads
 
-PostgreSQL, Supabase, MySQL and MongoDB, through
+PostgreSQL, Supabase, MySQL, MariaDB, SQL Server and MongoDB, through
 [the connector framework](framework.md). LEKA-349.
 **LEKA reads the catalogue, never the rows**: what the database says about
 itself — its schemas, tables, views, columns, keys, indexes, and what each
@@ -19,6 +19,8 @@ and one extraction reads them all (`extraction/data.py`).
 | [PostgreSQL](#postgresql) | PostgreSQL | `CONNECT`, `USAGE` on the schemas | refused |
 | [Supabase](#supabase) | PostgreSQL, through the session pooler | the same | refused |
 | [MySQL](#mysql) | MySQL 8.0+ | `REFERENCES` on the databases | refused |
+| [MariaDB](#mariadb) | MariaDB 10.6+ | the same | refused |
+| [SQL Server](#sql-server) | SQL Server 2016+ | `VIEW DEFINITION` on the schemas | refused |
 | [MongoDB](#mongodb) | MongoDB | a role with `listCollections`, `listIndexes`, `collStats`, `dbStats` | refused |
 
 ---
@@ -221,15 +223,15 @@ PostgreSQL.
 
 | | |
 |---|---|
-| Server | MySQL 8.0 or later — self-hosted, or managed (Amazon RDS, Aurora MySQL 3, Google Cloud SQL, Azure Database for MySQL, PlanetScale…) — reachable from the internet |
+| Server | MySQL 8.0 or later — self-hosted, or managed (Amazon RDS, Aurora MySQL 3, Google Cloud SQL, Azure Database for MySQL…) — reachable from the internet |
 | Credentials | `username` (first, so the stored hint is the account's name), `password` — write-only |
 | Config | `host`, `port` (3306), `schemas` — the databases to describe |
 | Category | `data` |
 | Capabilities | `schemas` (in MySQL, a schema is a database), `tables` (tables and views) |
 | Code | `leka/connectors/mysql/`, with the `asyncmy` driver |
 
-MariaDB speaks a different `information_schema` (no `VIEW_TABLE_USAGE`, no
-index expressions), and is **not supported** yet.
+MariaDB speaks another dialect of `information_schema`: it has
+[its own connector](#mariadb), this one with MariaDB's queries.
 
 ### What to create in MySQL
 
@@ -285,7 +287,7 @@ attributes (`performance_schema.session_connect_attrs`).
 
 ### What is read
 
-Eleven queries, all of `information_schema` (a test checks that none
+Twelve queries, all of `information_schema` (a test checks that none
 reads anything else):
 
 | Capability | What | Id | Container |
@@ -311,7 +313,7 @@ marked gone; at most 20 000 tables and views a pass. Kept **90 days**.
 | A database in scope the account cannot see | `NOT_FOUND`, naming it |
 | A privilege missing (1044, 1142, 1143, 1227) | `PERMISSION_DENIED` |
 | A query too slow (3024), or the connection | `TIMEOUT` |
-| No TLS; an address that is not public; too many tables | `CONFIG_INVALID` |
+| No TLS; an address that is not public; too many tables; a MariaDB server | `CONFIG_INVALID` |
 | The host unreachable or unknown (2002, 2003, 2006, 2013) | `NETWORK_UNREACHABLE` |
 | Anything else MySQL says | `PROVIDER_ERROR` |
 
@@ -321,7 +323,199 @@ marked gone; at most 20 000 tables and views a pass. Kept **90 days**.
   estimates rounded, schemas and tables not yet entities (LEKA-364).
 - A view's definition and dependencies need `SELECT` on it (above).
 - Routines, triggers, events, users and grants are not read.
-- MariaDB is not supported.
+- PlanetScale is not supported: its roles cannot be kept to `REFERENCES`,
+  and its `information_schema` is Vitess's, untested.
+
+---
+
+## MariaDB
+
+The **MySQL connector with MariaDB's dialect** (`leka/connectors/mariadb/`):
+the same account, the same boundary, the same payload, the same security
+— and the queries and settings where MariaDB differs. Everything said of
+MySQL above holds, checked against MariaDB 10.6, 10.11 and 11.8.
+
+| | |
+|---|---|
+| Server | MariaDB 10.6 or later — self-hosted, or managed (Amazon RDS for MariaDB…) — reachable from the internet, with TLS |
+| Credentials | `username`, `password` — write-only |
+| Config | `host`, `port` (3306), `schemas` — the databases to describe |
+| Category | `data` |
+| Capabilities | `schemas` (the databases), `tables` (tables, system-versioned tables, views) |
+| Code | `leka/connectors/mariadb/`, on `leka/connectors/mysql/` and its `asyncmy` driver |
+
+### What to create in MariaDB
+
+As in MySQL — an account with `REFERENCES` alone on the databases to
+describe:
+
+```sql
+CREATE USER 'leka_reader'@'%' IDENTIFIED BY '…';
+GRANT REFERENCES ON billing.* TO 'leka_reader'@'%';
+```
+
+MariaDB, too, shows in `information_schema` only what the account holds a
+privilege on; with `REFERENCES`, the tables, columns, keys, checks and
+indexes, and a `SELECT` is refused (`tests/test_mariadb_connector.py`). A
+view's definition needs `SELECT` on the view, granted by the admin or not
+read, as in MySQL.
+
+**TLS.** MariaDB sets it up by itself since 11.4; before, the server needs
+its certificate configured (`ssl_cert`, `ssl_key`). Amazon RDS for MariaDB
+has TLS. A server without it is refused (`CONFIG_INVALID`).
+
+### What MariaDB says otherwise
+
+| | MySQL | MariaDB, and so the connector |
+|---|---|---|
+| A query's bound | `MAX_EXECUTION_TIME`, in ms | `max_statement_time`, in seconds — 15; too slow is error 1969 |
+| Tables | `BASE TABLE`, `VIEW` | also `SYSTEM VERSIONED` — a table that keeps its history, kind `system_versioned_table`; a `SEQUENCE` is not read, as PostgreSQL's are not |
+| An index's parts | columns or expressions | columns: `STATISTICS` has no `EXPRESSION` |
+| A check's name | once in its database | once in its table — a check on a column takes the column's name, so two tables may each have `amount`: `CHECK_CONSTRAINTS` says which table |
+| A column's default | the value | SQL: `'free'` quoted, `current_timestamp()`; `NULL` for none, read as no default |
+| What a view reads | `VIEW_TABLE_USAGE` | no such table: read from the view's definition, which MariaDB writes back normalised — every table after a `from` or a `join`, as `` `schema`.`table` ``, a literal's content left aside |
+
+Eleven queries, all of `information_schema` (a test checks). A column's type
+is written as MariaDB writes it, display width included: `bigint(20)`.
+
+**The wrong connector.** A MariaDB server added as MySQL, or a MySQL server
+as MariaDB, fails the connection test with what it is, and which connector
+to use (`CONFIG_INVALID`): every MariaDB writes its name in its version
+(`11.8.2-MariaDB-log`), which is checked before any setting is sent.
+
+### Synchronisation, retention, errors
+
+As MySQL's: whole each pass, only what changed written; at most 20 000
+tables a pass; kept 90 days. The errors are MySQL's, but a query too slow
+is **1969** (`TIMEOUT`).
+
+### Limits
+
+- As MySQL's: no private network, the certificate not verified, a view's
+  definition and dependencies need `SELECT` on it, schemas and tables not
+  yet entities (LEKA-364).
+- What a view reads is found in its definition, as MariaDB writes it back:
+  a table named only inside a stored function the view calls is not seen.
+- Sequences, routines, triggers, events, users and grants are not read.
+
+---
+
+## SQL Server
+
+| | |
+|---|---|
+| Server | SQL Server 2016 or later — self-hosted, or managed (Amazon RDS for SQL Server, Azure SQL Managed Instance, Azure SQL Database…) — reachable from the internet |
+| Credentials | `username` — a SQL login, first so the stored hint is its name — and `password`, write-only |
+| Config | `host`, `port` (1433), `database`, `schemas` |
+| Category | `data` |
+| Capabilities | `schemas`, `tables` (tables, system-versioned tables and their history tables, external tables, views) |
+| Code | `leka/connectors/sqlserver/`, with `pymssql` (FreeTDS inside its wheels) |
+
+A source is **one database**, as PostgreSQL's: a login is the server's,
+but a user — and its permissions — is each database's. A named instance
+(`host\instance`) is reached by its port.
+
+### What to create in SQL Server
+
+A login, a user for it in the database, and one permission:
+
+```sql
+-- on the server
+CREATE LOGIN leka_reader WITH PASSWORD = '…';
+-- in the database to describe
+CREATE USER leka_reader FOR LOGIN leka_reader;
+GRANT VIEW DEFINITION ON SCHEMA::billing TO leka_reader;
+```
+
+On Azure SQL Database, where logins may be the database's own, the user
+alone: `CREATE USER leka_reader WITH PASSWORD = '…'`.
+
+Like MySQL, and unlike PostgreSQL, **SQL Server shows in its catalogue only
+what the account holds a permission on**: the boundary is the server's.
+`VIEW DEFINITION` is the permission that shows the structure and not the
+data — checked against SQL Server 2022:
+
+| Granted | What the catalogue shows | A row |
+|---|---|---|
+| nothing | the schemas' names, no table | refused |
+| **`VIEW DEFINITION` on a schema** | its tables and views, columns, keys, checks, indexes, comments, row counts and sizes, a view's definition and what it reads | **refused** |
+| `VIEW DEFINITION` on the database | the same, for every schema | refused |
+| `SELECT` | the rows | read |
+
+Only the schemas the login holds `VIEW DEFINITION` on are read
+(`HAS_PERMS_BY_NAME`), and among them those chosen in the scope. A foreign
+key pointing into a schema the login may not see is not read: the table it
+points to is not named. The connection test warns of a login that can read
+rows (`SELECT` on the database, or on a schema in scope) or do more
+(`db_owner`, `ALTER`, `CONTROL`…). The connector's tests run with a login
+holding `VIEW DEFINITION` on one schema, and describe everything
+(`tests/test_sqlserver_connector.py`).
+
+### The connection — security
+
+- **A public address**, resolved when connecting and connected to, as the
+  others.
+- **TLS required, for the whole session.** `pymssql` does not pass its
+  `encryption` argument on to FreeTDS: with it alone, only the login was
+  encrypted — the server's `sys.dm_exec_connections` said
+  `encrypt_option FALSE` for the session. The connector gives FreeTDS its
+  own configuration instead (`leka/connectors/sqlserver/freetds.conf`,
+  named by `FREETDSCONF`): `encryption = require`. A test asks the server,
+  as an admin, whether the connector's session is encrypted; another
+  shows that a server answering the prelogin without TLS is refused
+  before the login — and so the password — is sent. The certificate is
+  not verified, as the others'.
+- **Nothing written stays.** SQL Server has no read-only session: every
+  session is **one transaction, rolled back** when it closes — a row or a
+  table written in it is gone after it, which a test checks as `sa`. The
+  login's permissions remain the first boundary.
+- **Bounded**: 15 seconds a query, 15 seconds a lock wait
+  (`LOCK_TIMEOUT`), and LEKA's session the one to give way in a deadlock
+  (`DEADLOCK_PRIORITY LOW`); a 10-second login. `ApplicationIntent=ReadOnly`
+  sends it to a readable replica where there is one. The session is named
+  `LEKA` (`program_name`).
+- FreeTDS keeps its timeouts, its configuration file and its last error's
+  number **for the whole process**, not the connection: the timeouts are
+  always the same, and a failure to connect is read from FreeTDS's
+  messages, not its number, which may be an earlier failure's.
+
+### What is read
+
+Ten queries, all of `sys.*` and `INFORMATION_SCHEMA` (a test checks):
+
+| Capability | What | Id | Container |
+|---|---|---|---|
+| `schemas` | name, owner, comment, and the database | the schema's name | itself |
+| `tables` | schema, name, kind (`table`, `system_versioned_table`, `history_table`, `external_table`, `view`), owner, comment, rows and size (`sys.partitions`, `sys.allocation_units`); each **column** — name, type as SQL Server writes it (`nvarchar(200)`, `decimal(12,2)`, `datetime2(3)`), nullable, default (`'free'`, `sysutcdatetime()` — the parentheses SQL Server adds taken off), a computed column's `AS …`, an identity's `IDENTITY(1,1)`, a period's `GENERATED ALWAYS AS ROW START`, comment; each **constraint** — primary key, unique, foreign key with what it references and `ON DELETE`, check; each **index** as `CREATE … INDEX` would write it, with its `INCLUDE` and `WHERE`; a view's **definition** and the tables it **reads from** | `schema.table` | the schema |
+
+A comment is the `MS_Description` extended property, as SQL Server's own
+tools write it.
+
+### Synchronisation, retention, errors
+
+As the others: whole each pass, only what changed written; at most 20 000
+tables a pass; kept 90 days.
+
+| What | Diagnostic |
+|---|---|
+| The login refused — its password, or a database it has no user in (FreeTDS 20018 then 20002) | `AUTH_INVALID` |
+| A schema in scope the login cannot see | `NOT_FOUND`, naming it |
+| A permission missing (229, 230, 262, 297, 300) | `PERMISSION_DENIED` |
+| Too slow (FreeTDS 20003), a lock waited for too long (1222) | `TIMEOUT` |
+| No TLS, or not a SQL Server (20002 alone); an address that is not public; too many tables | `CONFIG_INVALID` |
+| No server on the port (20009) | `NETWORK_UNREACHABLE` |
+| Anything else SQL Server says | `PROVIDER_ERROR` |
+
+### Limits
+
+- As the others: no private network, the certificate not verified,
+  schemas and tables not yet entities (LEKA-364).
+- A SQL login only: Microsoft Entra ID and Windows sign-in are not
+  supported.
+- Azure SQL Database and Managed Instance are SQL Server, but not tried
+  yet; the tests run against SQL Server 2022.
+- Sequences, procedures, functions, triggers, synonyms, users and grants
+  are not read.
 
 ---
 

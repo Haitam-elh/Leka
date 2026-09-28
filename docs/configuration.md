@@ -209,6 +209,10 @@ masked.
 | `LEKA_S3_TEST_SECRET_KEY` | |
 | `LEKA_REQUIRE_MYSQL_TESTS` | `1` turns a skipped MySQL connector test into a failure. CI sets it |
 | `LEKA_MYSQL_TEST_URL` | The MySQL those tests connect to as an admin: `mysql://root:leka@127.0.0.1:3306` by default, `docker compose up -d mysql` |
+| `LEKA_REQUIRE_MARIADB_TESTS` | The same for the MariaDB connector's tests |
+| `LEKA_MARIADB_TEST_URL` | The MariaDB they connect to as an admin: `mysql://root:leka@127.0.0.1:3307` by default, `docker compose up -d mariadb` |
+| `LEKA_REQUIRE_SQLSERVER_TESTS` | The same for the SQL Server connector's tests |
+| `LEKA_SQLSERVER_TEST_URL` | The SQL Server they connect to as an admin: `mssql://sa:Leka-local-1@127.0.0.1:1433` by default, `docker compose up -d sqlserver` |
 | `LEKA_REQUIRE_MONGODB_TESTS` | The same for the MongoDB connector's tests |
 | `LEKA_MONGODB_TEST_URL` | The MongoDB they connect to as an admin: `mongodb://root:leka@127.0.0.1:27017` by default, `docker compose up -d mongodb` |
 | `LEKA_PYTHON` | The interpreter Playwright starts the API with |

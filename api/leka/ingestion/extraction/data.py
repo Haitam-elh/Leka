@@ -1,5 +1,6 @@
-"""Databases: PostgreSQL's and MySQL's schemas, and their tables and views;
-MongoDB's databases, and their collections and views (LEKA-349).
+"""Databases: PostgreSQL's, MySQL's, MariaDB's and SQL Server's schemas, and
+their tables and views; MongoDB's databases, and their collections and
+views (LEKA-349).
 
 What a question about data needs: a table's name as it is written in a
 query (`billing.invoices`), what it is (a table, a view…), its columns as a
@@ -8,11 +9,11 @@ to, its comment — and what it is tied to: the tables its foreign keys
 reference and the ones a view reads from, as references. The sizes are the
 catalogue's estimates, rounded by the connector.
 
-The payloads are the ones leka/connectors/postgresql and mysql store: the
-catalogue's answers, one object per schema and per table — a table's in
-the same shape whichever the engine (leka/connectors/databases.py), so one
-reading serves them all. A MySQL schema is a database, and has no comment;
-a MongoDB collection's columns are its validator's fields, when it has one.
+The payloads are the ones the database connectors store: the catalogue's
+answers, one object per schema and per table — a table's in the same shape
+whichever the engine (leka/connectors/databases.py), so one reading serves
+them all. A MySQL or MariaDB schema is a database, and has no comment; a
+MongoDB collection's columns are its validator's fields, when it has one.
 """
 
 from __future__ import annotations
@@ -27,28 +28,30 @@ from leka.ingestion.extraction.fields import content, number, ref, required, str
 C = Capability
 POSTGRESQL = SourceKind.POSTGRESQL
 MYSQL = SourceKind.MYSQL
+MARIADB = SourceKind.MARIADB
+SQLSERVER = SourceKind.SQLSERVER
 MONGODB = SourceKind.MONGODB
 SUPABASE = SourceKind.SUPABASE  # PostgreSQL, read by its connector
 
 
 @strategy("postgresql.schemas", 1, (POSTGRESQL, C.SCHEMAS), (SUPABASE, C.SCHEMAS))
 def postgresql_schema(p: Payload) -> Extracted:
-    return Extracted(
-        title=required(p, "name"),
-        content=content("description", string(p, "comment")),
-        references=ref("database", "database", external_id=string(p, "database")),
-        metadata={"owner": string(p, "owner"), "database": string(p, "database")},
-        signals={"engine": "postgresql"},
-    )
+    return _schema(p, "postgresql")
+
+
+@strategy("sqlserver.schemas", 1, (SQLSERVER, C.SCHEMAS))
+def sqlserver_schema(p: Payload) -> Extracted:
+    return _schema(p, "sqlserver")
 
 
 @strategy("mysql.schemas", 1, (MYSQL, C.SCHEMAS))
 def mysql_schema(p: Payload) -> Extracted:
-    return Extracted(
-        title=required(p, "name"),
-        metadata={"charset": string(p, "charset"), "collation": string(p, "collation")},
-        signals={"engine": "mysql"},
-    )
+    return _database(p, "mysql")
+
+
+@strategy("mariadb.schemas", 1, (MARIADB, C.SCHEMAS))
+def mariadb_schema(p: Payload) -> Extracted:
+    return _database(p, "mariadb")
 
 
 @strategy("mongodb.schemas", 1, (MONGODB, C.SCHEMAS))
@@ -74,9 +77,40 @@ def mysql_table(p: Payload) -> Extracted:
     return _table(p, "mysql")
 
 
+@strategy("mariadb.tables", 1, (MARIADB, C.TABLES))
+def mariadb_table(p: Payload) -> Extracted:
+    return _table(p, "mariadb")
+
+
+@strategy("sqlserver.tables", 1, (SQLSERVER, C.TABLES))
+def sqlserver_table(p: Payload) -> Extracted:
+    return _table(p, "sqlserver")
+
+
 @strategy("mongodb.tables", 1, (MONGODB, C.TABLES))
 def mongodb_collection(p: Payload) -> Extracted:
     return _table(p, "mongodb")
+
+
+def _schema(p: Payload, engine: str) -> Extracted:
+    """A schema inside a database — PostgreSQL's, SQL Server's: its name,
+    owner, comment, and the database it is in."""
+    return Extracted(
+        title=required(p, "name"),
+        content=content("description", string(p, "comment")),
+        references=ref("database", "database", external_id=string(p, "database")),
+        metadata={"owner": string(p, "owner"), "database": string(p, "database")},
+        signals={"engine": engine},
+    )
+
+
+def _database(p: Payload, engine: str) -> Extracted:
+    """A MySQL or MariaDB database: a name, its character set and collation."""
+    return Extracted(
+        title=required(p, "name"),
+        metadata={"charset": string(p, "charset"), "collation": string(p, "collation")},
+        signals={"engine": engine},
+    )
 
 
 def _table(p: Payload, engine: str) -> Extracted:

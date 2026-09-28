@@ -133,6 +133,8 @@ EXTRACTED_KINDS = [
     SourceKind.MICROSOFT_365,
     SourceKind.POSTGRESQL,
     SourceKind.MYSQL,
+    SourceKind.MARIADB,
+    SourceKind.SQLSERVER,
     SourceKind.MONGODB,
     SourceKind.SUPABASE,
 ]

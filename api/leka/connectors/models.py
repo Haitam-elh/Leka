@@ -86,6 +86,8 @@ class SourceKind(enum.StrEnum):
     GRAFANA = "grafana"
     POSTGRESQL = "postgresql"
     MYSQL = "mysql"
+    MARIADB = "mariadb"
+    SQLSERVER = "sqlserver"
     MONGODB = "mongodb"
     SUPABASE = "supabase"
     SLACK = "slack"

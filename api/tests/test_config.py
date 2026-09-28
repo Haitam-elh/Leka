@@ -323,16 +323,20 @@ def test_every_declared_field_belongs_to_a_domain() -> None:
 # their own section of docs/configuration.md.
 TEST_ONLY_VARIABLES = frozenset(
     {
+        "LEKA_MARIADB_TEST_URL",
         "LEKA_MONGODB_TEST_URL",
         "LEKA_MYSQL_TEST_URL",
         "LEKA_PYTHON",
+        "LEKA_REQUIRE_MARIADB_TESTS",
         "LEKA_REQUIRE_MONGODB_TESTS",
         "LEKA_REQUIRE_MYSQL_TESTS",
         "LEKA_REQUIRE_S3_TESTS",
+        "LEKA_REQUIRE_SQLSERVER_TESTS",
         "LEKA_S3_TEST_ACCESS_KEY",
         "LEKA_S3_TEST_ENDPOINT",
         "LEKA_S3_TEST_SECRET_KEY",
         "LEKA_S3_TEST_TARGET",
+        "LEKA_SQLSERVER_TEST_URL",
     }
 )
 

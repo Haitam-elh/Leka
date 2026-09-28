@@ -27,6 +27,7 @@ from leka.connectors import (
     guru,  # noqa: F401  — registers GuruConnector
     jira,  # noqa: F401  — registers JiraConnector
     linear,  # noqa: F401  — registers LinearConnector
+    mariadb,  # noqa: F401  — registers MariaDBConnector
     microsoft_365,  # noqa: F401  — registers Microsoft365Connector
     monday,  # noqa: F401  — registers MondayConnector
     mongodb,  # noqa: F401  — registers MongoDBConnector
@@ -35,6 +36,7 @@ from leka.connectors import (
     pagerduty,  # noqa: F401  — registers PagerDutyConnector
     postgresql,  # noqa: F401  — registers PostgreSQLConnector
     slab,  # noqa: F401  — registers SlabConnector
+    sqlserver,  # noqa: F401  — registers SQLServerConnector
     supabase,  # noqa: F401  — registers SupabaseConnector
     trello,  # noqa: F401  — registers TrelloConnector
 )
