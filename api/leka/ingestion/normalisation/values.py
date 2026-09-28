@@ -82,6 +82,32 @@ PRIORITIES = {
     "minor": "low",
     "lowest": "lowest",
     "trivial": "lowest",
+    # Incident severities (Datadog's SEV-n) and priorities (PagerDuty's Pn).
+    "sev-0": "highest",
+    "sev-1": "highest",
+    "sev-2": "high",
+    "sev-3": "medium",
+    "sev-4": "low",
+    "sev-5": "lowest",
+    "p1": "highest",
+    "p2": "high",
+    "p3": "medium",
+    "p4": "low",
+    "p5": "lowest",
+}
+
+# An incident's life on the work scale: open, being handled, over.
+INCIDENT_STATES = {
+    "triggered": "open",
+    "active": "open",
+    "open": "open",
+    "acknowledged": "in_progress",
+    "stable": "in_progress",
+    "investigating": "in_progress",
+    "mitigated": "in_progress",
+    "resolved": "closed",
+    "closed": "closed",
+    "completed": "closed",
 }
 
 
@@ -90,6 +116,10 @@ def work_state(raw: str | None, *, category: str | None = None) -> tuple[str | N
     if category and category in STATUS_CATEGORIES:
         return STATUS_CATEGORIES[category], True
     return _lookup(WORK_STATES, raw)
+
+
+def incident_state(raw: str | None) -> tuple[str | None, bool]:
+    return _lookup(INCIDENT_STATES, raw)
 
 
 def resource_state(raw: str | None) -> tuple[str | None, bool]:

@@ -24,7 +24,11 @@ from leka.ingestion.normalisation import (
 )
 from leka.ingestion.normalisation import identifiers as ids
 from leka.ingestion.parsing import ParsedRecord, parse
+from tests.test_datadog_connector import CHECKOUT as DATADOG_MONITOR
+from tests.test_datadog_resources import incident as datadog_incident
 from tests.test_extraction import BITBUCKET_PR, GITHUB_PR, GITLAB_MR, JIRA_ISSUE, _extract
+from tests.test_pagerduty_connector import CHECKOUT as PAGERDUTY_CHECKOUT
+from tests.test_pagerduty_connector import incident as pagerduty_incident
 
 ARN = "arn:aws:ec2:eu-west-3:123456789012"
 
@@ -369,3 +373,86 @@ def test_one_invalid_record_does_not_stop_its_neighbours() -> None:
         "failed",
         "normalised",
     ]
+
+
+# ── operations: incidents and services (LEKA-348) ────────────────────────────
+
+
+def test_a_pagerduty_incident_is_an_incident_on_leka_s_scales() -> None:
+    payload = {
+        **pagerduty_incident(3),
+        "priority": {"summary": "P1"},
+        "teams": [{"summary": "Payments"}],
+    }
+
+    record = _normalised(
+        SourceKind.PAGERDUTY,
+        Capability.INCIDENTS,
+        payload,
+        external_id=payload["id"],
+        container="PCHKOUT",
+    )
+
+    assert record.entity.type == "incident"
+    assert record.entity.key == "incident:pagerduty:Q0000000000003"
+    attributes = record.entity.attributes
+    assert (attributes["state"], attributes["state_raw"]) == ("closed", "resolved")
+    assert (attributes["priority"], attributes["priority_raw"]) == ("highest", "P1")
+    assert ("affects", "service:checkout") in _edges(record)
+    assert ("assigned_to", "person:acme.pagerduty.com:puser1") in _edges(record)
+    assert not record.diagnostics
+
+
+def test_a_datadog_incident_says_its_severity_commander_and_services() -> None:
+    payload = {
+        **datadog_incident(4, "checkout", "billing"),
+        "people": {"commander_user": {"name": "Nora", "email": "Nora@Acme.test"}},
+        "web_url": "https://app.datadoghq.eu/incidents/4",
+    }
+
+    record = _normalised(
+        SourceKind.DATADOG, Capability.INCIDENTS, payload, external_id=payload["id"]
+    )
+
+    assert record.entity.key == f"incident:datadog:{payload['id']}"
+    assert (record.entity.attributes["state"], record.entity.attributes["priority"]) == (
+        "open",
+        "high",
+    )
+    assert _edges(record) >= {
+        ("led_by", "person:email:nora@acme.test"),
+        ("affects", "service:checkout"),
+        ("affects", "service:billing"),
+    }
+
+
+def test_a_pagerduty_service_meets_a_datadog_service_tag_on_one_key() -> None:
+    service = _normalised(
+        SourceKind.PAGERDUTY,
+        Capability.SERVICES,
+        {**PAGERDUTY_CHECKOUT, "teams": [{"summary": "Payments"}]},
+    )
+    incident = _normalised(
+        SourceKind.DATADOG, Capability.INCIDENTS, datadog_incident(5, "checkout")
+    )
+
+    assert (service.entity.type, service.entity.key) == ("service", "service:checkout")
+    assert ("owned_by", "team:payments") in _edges(service)
+    assert ("affects", service.entity.key) in _edges(incident)
+
+
+def test_an_unknown_incident_state_is_kept_and_said() -> None:
+    payload = {**pagerduty_incident(6), "status": "snoozed"}
+
+    record = _normalised(SourceKind.PAGERDUTY, Capability.INCIDENTS, payload)
+
+    assert record.entity.attributes["state"] == "snoozed"
+    assert "unknown state: kept as the vendor wrote it" in record.diagnostics
+
+
+def test_alerts_events_and_logs_are_not_entities_yet() -> None:
+    extracted, parsed = _pipeline(SourceKind.DATADOG, Capability.ALERTS, DATADOG_MONITOR)
+
+    failure = _failure(normalise(extracted, parsed))
+
+    assert failure.code.value == "unsupported"
