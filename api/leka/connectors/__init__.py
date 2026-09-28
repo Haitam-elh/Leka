@@ -21,10 +21,12 @@ from leka.connectors import (
     gcp,  # noqa: F401  — registers GcpConnector
     github,  # noqa: F401  — registers GitHubConnector
     gitlab,  # noqa: F401  — registers GitLabConnector
+    guru,  # noqa: F401  — registers GuruConnector
     jira,  # noqa: F401  — registers JiraConnector
     linear,  # noqa: F401  — registers LinearConnector
     monday,  # noqa: F401  — registers MondayConnector
     notion,  # noqa: F401  — registers NotionConnector
+    slab,  # noqa: F401  — registers SlabConnector
     trello,  # noqa: F401  — registers TrelloConnector
 )
 from leka.connectors.base import (

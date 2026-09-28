@@ -579,6 +579,8 @@ const fr = {
       trello: { projects: "tableaux", issues: "cartes" },
       clickup: { projects: "listes", issues: "tâches" },
       monday: { projects: "tableaux", issues: "éléments" },
+      slab: { spaces: "sujets", pages: "articles" },
+      guru: { spaces: "collections", pages: "fiches" },
     },
     empty: {
       title: "Aucune source connectée",
@@ -711,7 +713,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp et Monday.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab et Guru.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -823,6 +825,22 @@ const fr = {
         token: {
           label: "Jeton d'API",
           help: "Celui d'un membre dédié, pas d'un administrateur : avatar → Développeurs → Jeton d'API. Chiffré, et plus jamais affiché.",
+        },
+      },
+      slab: {
+        token: {
+          label: "Jeton d'API",
+          help: "Celui de l'espace, dans Team settings → Developer (offres Business et Enterprise). Il lit comme le Slab Bot. Chiffré, et plus jamais affiché.",
+        },
+      },
+      guru: {
+        token: {
+          label: "Jeton d'API",
+          help: "De préférence un jeton de collection, en lecture seule ; sinon celui d'un utilisateur dédié. Chiffré, et plus jamais affiché.",
+        },
+        username: {
+          label: "Identifiant",
+          help: "Pour un jeton de collection : l'identifiant de la collection. Pour un jeton d'utilisateur : son e-mail.",
         },
       },
     },
@@ -1486,6 +1504,8 @@ const en: Dictionary = {
       trello: { projects: "boards", issues: "cards" },
       clickup: { projects: "lists", issues: "tasks" },
       monday: { projects: "boards", issues: "items" },
+      slab: { spaces: "topics", pages: "posts" },
+      guru: { spaces: "collections", pages: "cards" },
     },
     empty: {
       title: "No source connected",
@@ -1618,7 +1638,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp and Monday today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab and Guru today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -1725,6 +1745,22 @@ const en: Dictionary = {
         token: {
           label: "API token",
           help: "A dedicated member's, not an admin's: avatar → Developers → API token. Encrypted, and never shown again.",
+        },
+      },
+      slab: {
+        token: {
+          label: "API token",
+          help: "The workspace's, from Team settings → Developer (Business and Enterprise plans). It reads as the Slab Bot. Encrypted, and never shown again.",
+        },
+      },
+      guru: {
+        token: {
+          label: "API token",
+          help: "Preferably a collection token, read-only; else a dedicated user's. Encrypted, and never shown again.",
+        },
+        username: {
+          label: "Username",
+          help: "For a collection token: the collection's id. For a user token: the user's email.",
         },
       },
     },

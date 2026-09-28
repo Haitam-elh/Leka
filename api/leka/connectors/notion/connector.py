@@ -34,9 +34,7 @@ to it rather than be refused halfway through a pass.
 
 from __future__ import annotations
 
-import asyncio
 import re
-import time
 from collections.abc import AsyncIterator, Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -57,6 +55,7 @@ from leka.connectors.base import (
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
 from leka.connectors.http import (
     Item,
+    Pace,
     VendorHttp,
     dig,
     parse_timestamp,
@@ -251,7 +250,7 @@ class NotionConnector(Connector[NotionConfig, NotionCredentials]):
                 "Notion-Version": VERSION,
             },
         )
-        client.event_hooks = {"request": [_Pace()], "response": []}
+        client.event_hooks = {"request": [Pace(MIN_INTERVAL)], "response": []}
         return VendorHttp(
             client,
             secret=secret,
@@ -374,21 +373,6 @@ class NotionConnector(Connector[NotionConfig, NotionCredentials]):
             message = f"Notion ne trouve pas {what}, ou ne la partage pas avec cette intégration."
             return refusal(response, path, secret, DiagnosticCode.NOT_FOUND, message=message)
         return refusal(response, path, secret, usual_code(status))
-
-
-class _Pace:
-    """At most one request every MIN_INTERVAL seconds, for one client."""
-
-    def __init__(self) -> None:
-        self._next = 0.0
-        self._lock = asyncio.Lock()
-
-    async def __call__(self, request: httpx.Request) -> None:
-        async with self._lock:
-            now = time.monotonic()
-            if self._next > now:
-                await asyncio.sleep(self._next - now)
-            self._next = max(now, self._next) + MIN_INTERVAL
 
 
 class _Ancestry:
