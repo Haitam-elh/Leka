@@ -1,7 +1,7 @@
 # Observability and operations — what LEKA asks for, and what it reads
 
-Datadog and PagerDuty, through [the connector framework](framework.md).
-LEKA-348. **LEKA only reads**: every call is a GET, with keys that can only
+Datadog, PagerDuty and Grafana, through
+[the connector framework](framework.md). LEKA-348. **LEKA only reads**: every call is a GET, with keys that can only
 read. What each source contributes then goes through extraction
 ([extraction.md](../extraction.md)), parsing and normalisation like any
 other.
@@ -214,3 +214,80 @@ post-mortem reads weeks later.
 - **Errors**: 401 → `AUTH_INVALID`, 403 → `PERMISSION_DENIED`, 404 →
   `NOT_FOUND`, 5xx → `PROVIDER_ERROR`. The key is removed from every
   detail.
+
+## Grafana
+
+| | |
+|---|---|
+| Endpoint | the Grafana's address — Grafana Cloud (`https://acme.grafana.net`) or one of the customer's own |
+| Credentials | `token`, a service account's token (`glsa_…`, write-only), as Bearer |
+| Config | `base_url` |
+| Category | `observability` |
+| Capabilities | `dashboards`, `alerts` (alert rules and their state), `events` (annotations) |
+
+### What to create at Grafana
+
+In Grafana, **Administration → Users and access → Service accounts → Add
+service account**, with the **Viewer** role — nothing more — then **Add
+service account token**, with an expiry date. What a Viewer cannot see,
+LEKA cannot. In LEKA, **Sources → Add → Grafana**: the address and the
+token. Test, activate.
+
+### The address
+
+`base_url` is typed by the admin, and LEKA's server calls it. So it must
+be **https**, and lead to a **public address**: checked when the source is
+saved (plain `http`, `127.0.0.1`, `10.x`, `169.254.169.254`… are refused
+at once) and again **when connecting** — the name is resolved, every
+address must be public, and the connection goes to the address checked
+(`leka/connectors/network.py`, every connector's transport). A Grafana only
+reachable inside the customer's network cannot be read from LEKA's
+server.
+
+### Scope
+
+Grafana has no scope to choose in the form: the service account's role is
+the boundary. The source's **scope rules**
+([scope-and-mapping.md](scope-and-mapping.md)) apply to each record's
+container — a dashboard's or an alert rule's folder, an annotation's
+dashboard.
+
+### The connection test
+
+1. `GET /api/org` — the organisation's name is the account.
+2. One small read of each capability, at once — a dashboard, the alert
+   rules, an annotation. A refusal leaves that capability out; none
+   readable is a pass with a warning naming the role to give.
+
+### What is read
+
+| Capability | What (Grafana HTTP API) | Incremental | Id, timestamp |
+|---|---|---|---|
+| `dashboards` | each dashboard: title, tags, folder, link (`GET /api/search?type=dash-db`) | whole each pass | dashboard uid, — |
+| `alerts` | each Grafana-managed alert rule with its **state** (`firing`, `pending`, `inactive`), health, query, labels, summary, group, folder (`GET /api/prometheus/grafana/api/v1/rules`) | whole each pass | rule uid (else folder/group/name), last evaluation |
+| `events` | annotations — deploys, alert state changes, notes: text, tags, dashboard, panel, time and end (`GET /api/annotations`) | from the last pass less 5 minutes; an initial pass reads 30 days; newest first, at most 10 000 a pass | annotation id, `updated` (else `time`) |
+
+Grafana's times in annotations are milliseconds since the epoch; they are
+kept so in the payload and read as dates. Recording rules are not alerts,
+and are left out. Not read: panels' queries and their data, data
+sources, alert notification history beyond annotations, OnCall and
+Incident (Grafana IRM).
+
+Extraction (`extraction/observability.py`): a dashboard's title, folder,
+tags; an alert rule's name, state, health, query, summary, and its labels
+as tags, `service`, `env`, `team`, `severity`; an annotation's first line,
+text, time and dashboard.
+
+### Retention
+
+Kept **30 days**, like Datadog.
+
+### Limits
+
+- **Quota**: Grafana Cloud limits by organisation; a 429 is
+  `RATE_LIMITED` with `Retry-After`. Grafana sends no quota headers, so
+  health is `healthy` or failed.
+- **Errors**: 401 → `AUTH_INVALID`, 403 → `PERMISSION_DENIED` naming the
+  Viewer role, 404 → `NOT_FOUND` (often: the address is not a Grafana),
+  an address refused by the transport → `CONFIG_INVALID`. The token is
+  removed from every detail.

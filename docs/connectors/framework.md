@@ -7,8 +7,8 @@ rest next — through one model. LEKA-344. The decisions behind it are in
 for and read: [code-platforms.md](code-platforms.md); Jira, Confluence,
 Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace
 and Microsoft 365:
-[project-and-documentation.md](project-and-documentation.md); Datadog and
-PagerDuty: [observability.md](observability.md).
+[project-and-documentation.md](project-and-documentation.md); Datadog,
+PagerDuty and Grafana: [observability.md](observability.md).
 
 **LEKA only reads.** No connector writes to a customer's system: the
 manifest says `read_only: True` as a literal, and every call a connector

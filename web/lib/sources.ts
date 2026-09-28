@@ -143,6 +143,7 @@ export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
   gcp: "cloud",
   datadog: "observability",
   pagerduty: "observability",
+  grafana: "observability",
   slack: "chat",
 };
 

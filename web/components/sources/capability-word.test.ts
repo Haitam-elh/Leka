@@ -31,6 +31,7 @@ describe("a capability's word", () => {
     ["slab", "pages", "articles"],
     ["gitlab", "pull_requests", "merge requests"],
     ["datadog", "alerts", "moniteurs et leurs alertes"],
+    ["grafana", "events", "annotations"],
     ["bitbucket", "pull_requests", "pull requests"],
     ["guru", "pages", "fiches"],
     ["google_workspace", "drives", "Drive partagés"],

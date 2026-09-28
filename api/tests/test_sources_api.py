@@ -51,6 +51,9 @@ from tests.test_datadog_connector import Datadog
 from tests.test_gcp_connector import KEY as GOOGLE_KEY
 from tests.test_github_connector import github
 from tests.test_google_workspace_connector import Google as GoogleWorkspace
+from tests.test_grafana_connector import HOST as GRAFANA_HOST
+from tests.test_grafana_connector import TOKEN as GRAFANA_TOKEN
+from tests.test_grafana_connector import Grafana
 from tests.test_guru_connector import TOKEN as GURU_TOKEN
 from tests.test_guru_connector import USERNAME as GURU_USERNAME
 from tests.test_guru_connector import Guru
@@ -1118,6 +1121,52 @@ async def test_pagerduty_end_to_end(
 
         _as(identity, acme, "member")
         assert PAGERDUTY_KEY not in (await client.get(url)).text
+    finally:
+        app.dependency_overrides.pop(get_connector_transport, None)
+
+
+async def test_grafana_end_to_end(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    """Only an admin connects it; the token never comes back; an address
+    that is not public https is refused on save; test, activation and health
+    go through; there is no scope to choose."""
+    grafana = Grafana()
+    app.dependency_overrides[get_connector_transport] = lambda: httpx.MockTransport(grafana)
+    try:
+        _as(identity, acme, "admin")
+        for address in ("http://grafana.acme.test", "https://10.0.0.5", "https://127.0.0.1"):
+            refused = await client.post(
+                f"{API}/sources",
+                json={
+                    "type": "grafana",
+                    "display_name": "Grafana",
+                    "config": {"base_url": address},
+                    "credentials": {"token": GRAFANA_TOKEN},
+                },
+            )
+            assert refused.status_code == 422, address
+
+        source = await _create(
+            client,
+            type="grafana",
+            display_name="Grafana",
+            config={"base_url": f"https://{GRAFANA_HOST}"},
+            credentials={"token": GRAFANA_TOKEN},
+        )
+        assert GRAFANA_TOKEN not in json.dumps(source)
+        url = f"{API}/sources/{source['id']}"
+
+        tested = (await client.post(f"{url}/test")).json()
+        assert tested["ok"] is True, tested
+        assert sorted(tested["source"]["capabilities"]) == ["alerts", "dashboards", "events"]
+        assert (await client.get(f"{url}/scope/options")).status_code == 409
+
+        assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+        assert (await client.post(f"{url}/health-check")).json()["health_status"] == "healthy"
+
+        _as(identity, acme, "member")
+        assert GRAFANA_TOKEN not in (await client.get(url)).text
     finally:
         app.dependency_overrides.pop(get_connector_transport, None)
 

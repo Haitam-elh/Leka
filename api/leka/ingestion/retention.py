@@ -59,6 +59,7 @@ DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     SourceKind.AZURE: 30,
     SourceKind.GCP: 30,
     SourceKind.DATADOG: 30,
+    SourceKind.GRAFANA: 30,
 }
 
 # A source kind nobody thought about must not mean "keep for ever". The
