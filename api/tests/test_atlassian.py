@@ -115,7 +115,7 @@ def test_a_refused_sign_in_names_both_halves() -> None:
     code, message = _refusal(httpx.Response(401, text="Unauthorized"))
 
     assert code is DiagnosticCode.AUTH_INVALID
-    assert "adresse e-mail ou ce jeton" in message
+    assert "adresse e-mail ou ce token" in message
 
 
 def test_a_token_short_of_a_scope_says_so() -> None:

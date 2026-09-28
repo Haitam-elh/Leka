@@ -117,7 +117,7 @@ async function fillConnection() {
   await userEvent.click(await screen.findByRole("button", { name: /GitHub/ }));
   await userEvent.clear(screen.getByLabelText(/Nom de la source/));
   await userEvent.type(screen.getByLabelText(/Nom de la source/), "Acme GitHub");
-  await userEvent.type(screen.getByLabelText(/Jeton d'accès/), TOKEN);
+  await userEvent.type(screen.getByLabelText(/Token d'accès/), TOKEN);
   await userEvent.type(screen.getByLabelText(/Organisation/), "acme");
   await userEvent.click(screen.getByRole("button", { name: "Enregistrer et continuer" }));
 }
@@ -184,7 +184,7 @@ describe("adding a source", () => {
   it("refuses a short token before asking the API", async () => {
     open();
     await userEvent.click(await screen.findByRole("button", { name: /GitHub/ }));
-    await userEvent.type(screen.getByLabelText(/Jeton d'accès/), "short");
+    await userEvent.type(screen.getByLabelText(/Token d'accès/), "short");
     await userEvent.click(screen.getByRole("button", { name: "Enregistrer et continuer" }));
 
     expect(await screen.findByText(/20 caractères/)).toBeInTheDocument();
@@ -211,7 +211,7 @@ describe("adding a source", () => {
       diagnostic: {
         code: "AUTH_INVALID",
         retryable: false,
-        message: "Le jeton a été refusé par le fournisseur.",
+        message: "Le token a été refusé par le fournisseur.",
         remediation: "Vérifiez qu'il a été copié en entier, puis remplacez les identifiants.",
       },
     });
@@ -219,12 +219,12 @@ describe("adding a source", () => {
     await fillConnection();
 
     expect(
-      await screen.findByText("Le jeton a été refusé par le fournisseur."),
+      await screen.findByText("Le token a été refusé par le fournisseur."),
     ).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Modifier la connexion" }));
 
     // The token may now stay empty: the stored one is kept.
-    expect(screen.getByText(/Laissez vide pour garder le jeton enregistré/)).toBeInTheDocument();
+    expect(screen.getByText(/Laissez vide pour garder le token enregistré/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Continuer" }));
     expect(api.create).toHaveBeenCalledTimes(1);
     expect(api.update).toHaveBeenCalled();
@@ -258,7 +258,7 @@ describe("adding a source", () => {
     api.scopeOptions.mockRejectedValue(new ApiError(409, "/scope", "No scope.", "conflict"));
     open();
     await userEvent.click(await screen.findByRole("button", { name: /Slack/ }));
-    await userEvent.type(screen.getByLabelText(/Jeton d'accès/), TOKEN);
+    await userEvent.type(screen.getByLabelText(/Token d'accès/), TOKEN);
     await userEvent.click(screen.getByRole("button", { name: "Enregistrer et continuer" }));
 
     expect(await screen.findByText("Connexion réussie")).toBeInTheDocument();

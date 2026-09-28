@@ -164,7 +164,7 @@ class BitbucketConnector(Connector[BitbucketConfig, BitbucketCredentials]):
                     self._per_repository(sample), params={"pagelen": 1}
                 )
             else:
-                warnings.append("Aucun dépôt n'est visible avec ce jeton.")
+                warnings.append("Aucun dépôt n'est visible avec ce token.")
 
         return ConnectionTestResult(
             account=str(metadata.get("login") or metadata["workspace"]),
@@ -258,7 +258,7 @@ class BitbucketConnector(Connector[BitbucketConfig, BitbucketCredentials]):
             return refusal(response, path, secret, code, retry_after=retry_after(response))
         if code is DiagnosticCode.NOT_FOUND:
             what = missing or "cette ressource"
-            message = f"Bitbucket ne trouve pas {what}, ou le jeton ne le voit pas."
+            message = f"Bitbucket ne trouve pas {what}, ou le token ne le voit pas."
             return refusal(response, path, secret, code, message=message)
         return refusal(response, path, secret, code)
 
@@ -334,6 +334,6 @@ def _write_warnings(response: httpx.Response) -> list[str]:
     if not writing:
         return []
     return [
-        "Ce jeton permet d'écrire (" + ", ".join(writing) + "). LEKA ne fait que lire : "
+        "Ce token permet d'écrire (" + ", ".join(writing) + "). LEKA ne fait que lire : "
         "des permissions de lecture suffisent et limitent l'exposition."
     ]

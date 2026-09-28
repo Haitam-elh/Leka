@@ -140,7 +140,7 @@ class GuruConnector(Connector[GuruConfig, GuruCredentials]):
                 pass  # a capability left out, not a failed test
         warnings: list[str] = []
         if not collections:
-            warnings.append("Aucune collection n'est visible avec ce jeton.")
+            warnings.append("Aucune collection n'est visible avec ce token.")
         return ConnectionTestResult(
             account=_account(me) or self.credentials.username,
             metadata={
@@ -240,7 +240,7 @@ class GuruConnector(Connector[GuruConfig, GuruCredentials]):
             named = ", ".join(missing[:10]) + ("…" if len(missing) > 10 else "")
             raise diagnose(
                 DiagnosticCode.NOT_FOUND,
-                message=f"Guru ne montre pas ces collections à ce jeton : {named}.",
+                message=f"Guru ne montre pas ces collections à ce token : {named}.",
             )
 
     def _refuse(self, response: httpx.Response, path: str, missing: str) -> ConnectorError:
@@ -255,11 +255,11 @@ class GuruConnector(Connector[GuruConfig, GuruCredentials]):
                 retry_after=retry_after(response),
             )
         if status == 401:
-            message = "Guru refuse cet identifiant ou ce jeton."
+            message = "Guru refuse cet identifiant ou ce token."
             return refusal(response, path, secret, DiagnosticCode.AUTH_INVALID, message=message)
         if status == 404:
             what = missing or "cette collection"
-            message = f"Guru ne trouve pas {what}, ou ce jeton ne la voit pas."
+            message = f"Guru ne trouve pas {what}, ou ce token ne la voit pas."
             return refusal(response, path, secret, DiagnosticCode.NOT_FOUND, message=message)
         return refusal(response, path, secret, usual_code(status))
 

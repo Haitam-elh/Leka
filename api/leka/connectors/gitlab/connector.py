@@ -171,7 +171,7 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
                     params={"per_page": 1},
                 )
             else:
-                warnings.append("Aucun projet n'est visible avec ce jeton.")
+                warnings.append("Aucun projet n'est visible avec ce token.")
 
         return ConnectionTestResult(
             account=str(metadata["login"]),
@@ -254,7 +254,7 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
             return refusal(response, path, secret, code, retry_after=wait)
         if code is DiagnosticCode.NOT_FOUND:
             what = missing or "cette ressource"
-            message = f"GitLab ne trouve pas {what}, ou le jeton ne le voit pas."
+            message = f"GitLab ne trouve pas {what}, ou le token ne le voit pas."
             return refusal(response, path, secret, code, message=message)
         return refusal(response, path, secret, code)
 
@@ -280,8 +280,8 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
         if not writing:
             return []
         return [
-            "Ce jeton permet d'écrire (" + ", ".join(writing) + "). LEKA ne fait que lire : "
-            "un jeton limité à read_api suffit et limite l'exposition."
+            "Ce token permet d'écrire (" + ", ".join(writing) + "). LEKA ne fait que lire : "
+            "un token limité à read_api suffit et limite l'exposition."
         ]
 
     async def _projects(self, client: VendorHttp) -> AsyncIterator[Item]:

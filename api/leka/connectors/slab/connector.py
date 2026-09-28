@@ -325,7 +325,7 @@ class SlabConnector(Connector[SlabConfig, SlabCredentials]):
                 retry_after=retry_after(response) or 60,
             )
         if status == 401 or UNAUTHENTICATED.search(said):
-            message = "Slab refuse ce jeton d'API."
+            message = "Slab refuse ce token d'API."
             return refusal(response, path, secret, DiagnosticCode.AUTH_INVALID, message=message)
         if status == 403 or FORBIDDEN.search(said):
             message = "Slab refuse cette lecture : l'API demande une offre Business ou Enterprise."

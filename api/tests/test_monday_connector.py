@@ -232,14 +232,14 @@ async def test_a_token_that_sees_no_board_is_told_so() -> None:
     result = await _connector(Monday({"Boards": data({"boards": []})})).test_connection()
 
     assert result.capabilities == []
-    assert result.warnings == ["Aucun tableau n'est visible avec ce jeton."]
+    assert result.warnings == ["Aucun tableau n'est visible avec ce token."]
 
 
 async def test_a_board_in_scope_that_monday_does_not_show_fails_the_test() -> None:
     error = await _failure(Monday(), boards=["111", "333", "999"])
 
     assert error.diagnostic.code is DiagnosticCode.NOT_FOUND
-    assert error.diagnostic.message == "Monday ne montre pas ces tableaux à ce jeton : 333, 999."
+    assert error.diagnostic.message == "Monday ne montre pas ces tableaux à ce token : 333, 999."
 
 
 @pytest.mark.parametrize(

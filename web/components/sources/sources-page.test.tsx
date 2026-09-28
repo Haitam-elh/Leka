@@ -73,7 +73,7 @@ const GITLAB = source({
     code: "AUTH_INVALID",
     retryable: false,
     retry_after: null,
-    message: "Le jeton a été refusé par le fournisseur.",
+    message: "Le token a été refusé par le fournisseur.",
     remediation: "Vérifiez qu'il a été copié en entier, puis remplacez les identifiants.",
     provider_status: 401,
     detail: null,
@@ -204,7 +204,7 @@ describe("the panel", () => {
 
     const panel = screen.getByRole("complementary", { name: "Détail de Acme GitLab" });
     const alert = within(panel).getByRole("alert");
-    expect(alert).toHaveTextContent("Le jeton a été refusé par le fournisseur.");
+    expect(alert).toHaveTextContent("Le token a été refusé par le fournisseur.");
     expect(alert).toHaveTextContent("remplacez les identifiants");
 
     await userEvent.click(within(panel).getByRole("button", { name: "Fermer le détail" }));

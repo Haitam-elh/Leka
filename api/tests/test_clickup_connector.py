@@ -171,14 +171,14 @@ async def test_a_token_that_sees_no_space_is_told_so() -> None:
     result = await _connector(ClickUp({"/team/9001/space": {"spaces": []}})).test_connection()
 
     assert result.capabilities == []
-    assert result.warnings == ["Aucun espace (Space) n'est visible avec ce jeton."]
+    assert result.warnings == ["Aucun espace (Space) n'est visible avec ce token."]
 
 
 async def test_a_space_in_scope_that_clickup_does_not_show_fails_the_test() -> None:
     error = await _failure(ClickUp(), spaces=["901", "999"])
 
     assert error.diagnostic.code is DiagnosticCode.NOT_FOUND
-    assert error.diagnostic.message == "ClickUp ne montre pas ces espaces à ce jeton : 999."
+    assert error.diagnostic.message == "ClickUp ne montre pas ces espaces à ce token : 999."
 
 
 @pytest.mark.parametrize(

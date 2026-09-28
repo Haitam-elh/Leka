@@ -215,8 +215,8 @@ class MondayConnector(Connector[MondayConfig, MondayCredentials]):
             warnings: list[str] = []
             if me.get("is_admin"):
                 warnings.append(
-                    "Ce jeton appartient à un administrateur du compte Monday. LEKA ne fait que "
-                    "lire : le jeton d'un membre suffit."
+                    "Ce token appartient à un administrateur du compte Monday. LEKA ne fait que "
+                    "lire : le token d'un membre suffit."
                 )
             if self.config.boards:
                 chosen = await self._require_scope(client)
@@ -235,7 +235,7 @@ class MondayConnector(Connector[MondayConfig, MondayCredentials]):
                 except ConnectorError:
                     pass  # a capability left out, not a failed test
             else:
-                warnings.append("Aucun tableau n'est visible avec ce jeton.")
+                warnings.append("Aucun tableau n'est visible avec ce token.")
 
         return ConnectionTestResult(
             account=str(me.get("email") or me.get("name") or "Monday"),
@@ -383,7 +383,7 @@ class MondayConnector(Connector[MondayConfig, MondayCredentials]):
             named = ", ".join(missing[:10]) + ("…" if len(missing) > 10 else "")
             raise diagnose(
                 DiagnosticCode.NOT_FOUND,
-                message=f"Monday ne montre pas ces tableaux à ce jeton : {named}.",
+                message=f"Monday ne montre pas ces tableaux à ce token : {named}.",
             )
         return [found[board] for board in wanted]
 
@@ -399,12 +399,12 @@ class MondayConnector(Connector[MondayConfig, MondayCredentials]):
                 response, path, secret, DiagnosticCode.RATE_LIMITED, retry_after=_wait(response)
             )
         if codes & AUTH_CODES or status == 401:
-            message = "Monday refuse ce jeton d'API."
+            message = "Monday refuse ce token d'API."
             return refusal(response, path, secret, DiagnosticCode.AUTH_INVALID, message=message)
         if codes & FORBIDDEN_CODES or status == 403:
             return refusal(response, path, secret, DiagnosticCode.PERMISSION_DENIED)
         if codes & NOT_FOUND_CODES or status == 404:
-            message = "Monday ne trouve pas ce tableau, ou ce jeton ne le voit pas."
+            message = "Monday ne trouve pas ce tableau, ou ce token ne le voit pas."
             return refusal(response, path, secret, DiagnosticCode.NOT_FOUND, message=message)
         if status >= 500:
             return refusal(response, path, secret, DiagnosticCode.PROVIDER_ERROR)

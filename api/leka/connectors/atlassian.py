@@ -109,7 +109,7 @@ def refuser(product: str, credentials: AtlassianCredentials) -> Refuse:
             message = "Ce site Atlassian n'existe pas, ou n'est pas un site Atlassian Cloud."
             return refusal(response, path, secret, DiagnosticCode.NOT_FOUND, message=message)
         if status == 401:
-            message = f"{product} refuse cette adresse e-mail ou ce jeton."
+            message = f"{product} refuse cette adresse e-mail ou ce token."
             return refusal(response, path, secret, code, message=message)
         if status == 403 and "scope" in body:
             code = DiagnosticCode.INSUFFICIENT_SCOPE

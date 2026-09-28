@@ -380,7 +380,7 @@ class Microsoft365Connector(Connector[Microsoft365Config, Microsoft365Credential
                 retry_after=retry_after(response),
             )
         if status == 401:
-            message = "Microsoft Graph refuse le jeton de cette application."
+            message = "Microsoft Graph refuse le token de cette application."
             return refusal(response, path, secret, DiagnosticCode.AUTH_INVALID, message=message)
         if status == 403 or code in ("accessDenied", "Authorization_RequestDenied"):
             message = (

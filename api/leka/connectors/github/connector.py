@@ -173,7 +173,7 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                     params={"per_page": 1},
                 )
             else:
-                warnings.append("Aucun dépôt n'est visible avec ce jeton.")
+                warnings.append("Aucun dépôt n'est visible avec ce token.")
 
         return ConnectionTestResult(
             account=str(metadata["login"]),
@@ -261,7 +261,7 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
             return refusal(response, path, secret, code, retry_after=wait)
         if code is DiagnosticCode.NOT_FOUND:
             message = (
-                f"GitHub ne trouve pas cette {missing or 'ressource'}, ou le jeton ne la voit pas."
+                f"GitHub ne trouve pas cette {missing or 'ressource'}, ou le token ne la voit pas."
             )
             return refusal(response, path, secret, code, message=message)
         return refusal(response, path, secret, code)
@@ -332,8 +332,8 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
         if not writing:
             return []
         return [
-            "Ce jeton permet d'écrire (" + ", ".join(writing) + "). LEKA ne fait que lire : "
-            "un jeton fine-grained en lecture seule suffit et limite l'exposition."
+            "Ce token permet d'écrire (" + ", ".join(writing) + "). LEKA ne fait que lire : "
+            "un token fine-grained en lecture seule suffit et limite l'exposition."
         ]
 
 

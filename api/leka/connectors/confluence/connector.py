@@ -113,7 +113,7 @@ class ConfluenceConnector(Connector[ConfluenceConfig, ConfluenceCredentials]):
             if me.get("type") == "anonymous":
                 raise diagnose(
                     DiagnosticCode.AUTH_INVALID,
-                    message="Confluence refuse cette adresse e-mail ou ce jeton.",
+                    message="Confluence refuse cette adresse e-mail ou ce token.",
                 )
             metadata: dict[str, object] = {"site": f"{self.config.site}{atlassian.SUFFIX}"}
             if self.config.spaces:
