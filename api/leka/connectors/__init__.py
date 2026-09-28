@@ -29,11 +29,13 @@ from leka.connectors import (
     linear,  # noqa: F401  — registers LinearConnector
     microsoft_365,  # noqa: F401  — registers Microsoft365Connector
     monday,  # noqa: F401  — registers MondayConnector
+    mongodb,  # noqa: F401  — registers MongoDBConnector
     mysql,  # noqa: F401  — registers MySQLConnector
     notion,  # noqa: F401  — registers NotionConnector
     pagerduty,  # noqa: F401  — registers PagerDutyConnector
     postgresql,  # noqa: F401  — registers PostgreSQLConnector
     slab,  # noqa: F401  — registers SlabConnector
+    supabase,  # noqa: F401  — registers SupabaseConnector
     trello,  # noqa: F401  — registers TrelloConnector
 )
 from leka.connectors.base import (

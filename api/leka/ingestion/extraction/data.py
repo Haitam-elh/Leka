@@ -1,5 +1,5 @@
-"""Databases: PostgreSQL's and MySQL's schemas, and their tables and views
-(LEKA-349).
+"""Databases: PostgreSQL's and MySQL's schemas, and their tables and views;
+MongoDB's databases, and their collections and views (LEKA-349).
 
 What a question about data needs: a table's name as it is written in a
 query (`billing.invoices`), what it is (a table, a view…), its columns as a
@@ -11,7 +11,8 @@ catalogue's estimates, rounded by the connector.
 The payloads are the ones leka/connectors/postgresql and mysql store: the
 catalogue's answers, one object per schema and per table — a table's in
 the same shape whichever the engine (leka/connectors/databases.py), so one
-reading serves both. A MySQL schema is a database, and has no comment.
+reading serves them all. A MySQL schema is a database, and has no comment;
+a MongoDB collection's columns are its validator's fields, when it has one.
 """
 
 from __future__ import annotations
@@ -26,9 +27,11 @@ from leka.ingestion.extraction.fields import content, number, ref, required, str
 C = Capability
 POSTGRESQL = SourceKind.POSTGRESQL
 MYSQL = SourceKind.MYSQL
+MONGODB = SourceKind.MONGODB
+SUPABASE = SourceKind.SUPABASE  # PostgreSQL, read by its connector
 
 
-@strategy("postgresql.schemas", 1, (POSTGRESQL, C.SCHEMAS))
+@strategy("postgresql.schemas", 1, (POSTGRESQL, C.SCHEMAS), (SUPABASE, C.SCHEMAS))
 def postgresql_schema(p: Payload) -> Extracted:
     return Extracted(
         title=required(p, "name"),
@@ -48,7 +51,20 @@ def mysql_schema(p: Payload) -> Extracted:
     )
 
 
-@strategy("postgresql.tables", 1, (POSTGRESQL, C.TABLES))
+@strategy("mongodb.schemas", 1, (MONGODB, C.SCHEMAS))
+def mongodb_database(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "name"),
+        metadata={
+            "collections": number(p, "collections"),
+            "views": number(p, "views"),
+            "size_bytes": number(p, "size_bytes"),
+        },
+        signals={"engine": "mongodb"},
+    )
+
+
+@strategy("postgresql.tables", 1, (POSTGRESQL, C.TABLES), (SUPABASE, C.TABLES))
 def postgresql_table(p: Payload) -> Extracted:
     return _table(p, "postgresql")
 
@@ -56,6 +72,11 @@ def postgresql_table(p: Payload) -> Extracted:
 @strategy("mysql.tables", 1, (MYSQL, C.TABLES))
 def mysql_table(p: Payload) -> Extracted:
     return _table(p, "mysql")
+
+
+@strategy("mongodb.tables", 1, (MONGODB, C.TABLES))
+def mongodb_collection(p: Payload) -> Extracted:
+    return _table(p, "mongodb")
 
 
 def _table(p: Payload, engine: str) -> Extracted:

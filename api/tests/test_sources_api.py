@@ -39,7 +39,6 @@ from leka.connectors import (
     unregister_connector,
 )
 from leka.connectors.postgresql import PostgreSQLConnector
-from leka.connectors.postgresql.connector import SESSION as PG_SESSION
 from leka.db import session_factory, system_scope
 from leka.main import app
 from leka.platform import secret_box
@@ -1240,7 +1239,6 @@ async def _local_postgresql(self: PostgreSQLConnector) -> asyncpg.Connection:
         user=self.credentials.username,
         password=self.credentials.password.get_secret_value(),
         database=self.config.database,
-        server_settings=PG_SESSION,
     )
 
 

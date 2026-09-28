@@ -57,6 +57,21 @@ jobs:
           --health-retries 24
           --health-start-period 20s
 
+      mongodb:
+        # A customer's MongoDB, for tests/test_mongodb_connector.py
+        # (LEKA-349). Same image as docker-compose.yml.
+        image: mongo:8.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: leka
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping: 1}).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 24
+          --health-start-period 20s
+
     env:
       LEKA_DATABASE_URL: postgresql+asyncpg://leka:leka@127.0.0.1:5432/leka_test
       LEKA_REDIS_URL: redis://127.0.0.1:6379/0
@@ -72,6 +87,7 @@ jobs:
       # The same for MySQL: its tests skip on a laptop with no server, and
       # must not here.
       LEKA_REQUIRE_MYSQL_TESTS: "1"
+      LEKA_REQUIRE_MONGODB_TESTS: "1"
 
     defaults:
       run:

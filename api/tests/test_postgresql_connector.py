@@ -146,7 +146,6 @@ def _connector(
             user=user,
             password=password,
             database=config.database,
-            server_settings=pg.SESSION,
         )
 
     connector._open = local  # type: ignore[method-assign]

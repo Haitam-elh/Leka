@@ -206,11 +206,11 @@ class PostgreSQLCredentials(BaseModel):
 
 
 # Every session: named, read-only whatever the role may do, and bounded.
-SESSION = {
-    "application_name": "LEKA",
-    "default_transaction_read_only": "on",
-    "statement_timeout": str(STATEMENT_TIMEOUT_MS),
-}
+SESSION = (
+    "SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY",
+    f"SET statement_timeout = {STATEMENT_TIMEOUT_MS}",
+    "SET application_name = 'LEKA'",
+)
 
 
 @register_connector
@@ -320,7 +320,6 @@ class PostgreSQLConnector(Connector[PostgreSQLConfig, PostgreSQLCredentials]):
             timeout=CONNECT_TIMEOUT,
             # The server's statement_timeout first; this if the network hangs.
             command_timeout=STATEMENT_TIMEOUT_MS / 1000 + CONNECT_TIMEOUT,
-            server_settings=SESSION,
         )
         return connection
 
@@ -333,6 +332,10 @@ class PostgreSQLConnector(Connector[PostgreSQLConfig, PostgreSQLCredentials]):
         except Exception as error:
             raise self._diagnose(error) from error
         try:
+            # Set once connected, not at the handshake: a pooler in front of
+            # the server (Supabase's, PgBouncer) may refuse settings there.
+            for statement in SESSION:
+                await db.execute(statement)
             yield db
         except ConnectorError:
             raise

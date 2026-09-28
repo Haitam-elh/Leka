@@ -592,6 +592,7 @@ const fr = {
       grafana: { alerts: "règles d'alerte et leur état", events: "annotations" },
       notion: { databases: "bases Notion" },
       mysql: { schemas: "bases" },
+      mongodb: { schemas: "bases", tables: "collections et vues" },
       asana: { issues: "tâches" },
       trello: { projects: "tableaux", issues: "cartes" },
       clickup: { projects: "listes", issues: "tâches" },
@@ -791,7 +792,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL et MySQL.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, Supabase et MongoDB.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -1016,6 +1017,34 @@ const fr = {
         username: {
           label: "Compte",
           help: "Un compte dédié, avec le seul privilège REFERENCES sur les bases à décrire : il en montre la structure, pas les lignes.",
+        },
+        password: { label: "Mot de passe", help: "Celui du compte. Chiffré, et plus jamais affiché." },
+      },
+      supabase: {
+        host: {
+          label: "Hôte du pooler",
+          help: "Celui du « Session pooler » du projet (Connect, dans Supabase) : aws-0-<région>.pooler.supabase.com. L'hôte direct db.<projet>.supabase.co n'a qu'une adresse IPv6.",
+        },
+        port: { label: "Port", help: "5432, celui du mode session." },
+        database: { label: "Base", help: "postgres, celle d'un projet Supabase." },
+        username: {
+          label: "Rôle",
+          help: "Un rôle dédié, créé dans l'éditeur SQL, suivi de l'identifiant du projet : leka_reader.<projet>. Il lui faut USAGE sur les schémas à décrire, aucun SELECT.",
+        },
+        password: { label: "Mot de passe", help: "Celui du rôle. Chiffré, et plus jamais affiché." },
+      },
+      mongodb: {
+        address: {
+          label: "Adresse",
+          help: "Celle que MongoDB donne, sans identifiant ni mot de passe : mongodb+srv://cluster0.abcd.mongodb.net pour Atlas, mongodb://db.acme.com:27017 sinon. Accessible depuis Internet.",
+        },
+        auth_database: {
+          label: "Base d'authentification",
+          help: "Là où le compte est défini : admin, sur Atlas et la plupart des serveurs.",
+        },
+        username: {
+          label: "Compte",
+          help: "Un compte dédié, avec un rôle limité à listCollections, listIndexes, collStats et dbStats sur les bases à décrire : il en voit la structure, jamais les documents.",
         },
         password: { label: "Mot de passe", help: "Celui du compte. Chiffré, et plus jamais affiché." },
       },
@@ -1694,6 +1723,7 @@ const en: Dictionary = {
       grafana: { alerts: "alert rules and their state", events: "annotations" },
       notion: { databases: "Notion databases" },
       mysql: { schemas: "databases" },
+      mongodb: { schemas: "databases", tables: "collections and views" },
       asana: { issues: "tasks" },
       trello: { projects: "boards", issues: "cards" },
       clickup: { projects: "lists", issues: "tasks" },
@@ -1892,7 +1922,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL and MySQL today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, Supabase and MongoDB today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -2112,6 +2142,34 @@ const en: Dictionary = {
         username: {
           label: "Account",
           help: "A dedicated account, with only the REFERENCES privilege on the databases to describe: it shows their structure, not their rows.",
+        },
+        password: { label: "Password", help: "The account's. Encrypted, and never shown again." },
+      },
+      supabase: {
+        host: {
+          label: "Pooler host",
+          help: "The project's Session pooler (Connect, in Supabase): aws-0-<region>.pooler.supabase.com. The direct host, db.<project>.supabase.co, has an IPv6 address only.",
+        },
+        port: { label: "Port", help: "5432, the session mode's." },
+        database: { label: "Database", help: "postgres, a Supabase project's." },
+        username: {
+          label: "Role",
+          help: "A dedicated role, created in the SQL editor, followed by the project's id: leka_reader.<project>. It needs USAGE on the schemas to describe, no SELECT.",
+        },
+        password: { label: "Password", help: "The role's. Encrypted, and never shown again." },
+      },
+      mongodb: {
+        address: {
+          label: "Address",
+          help: "The one MongoDB gives, without user or password: mongodb+srv://cluster0.abcd.mongodb.net for Atlas, mongodb://db.acme.com:27017 otherwise. Reachable from the internet.",
+        },
+        auth_database: {
+          label: "Authentication database",
+          help: "Where the account is defined: admin, on Atlas and most servers.",
+        },
+        username: {
+          label: "Account",
+          help: "A dedicated account, with a role limited to listCollections, listIndexes, collStats and dbStats on the databases to describe: it sees their structure, never a document.",
         },
         password: { label: "Password", help: "The account's. Encrypted, and never shown again." },
       },
