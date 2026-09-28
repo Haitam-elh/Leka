@@ -255,6 +255,7 @@ const CATEGORY_ORDER: Category[] = [
   "docs",
   "cloud",
   "observability",
+  "data",
   "chat",
   "other",
 ];

@@ -31,6 +31,7 @@ from leka.connectors import (
     monday,  # noqa: F401  — registers MondayConnector
     notion,  # noqa: F401  — registers NotionConnector
     pagerduty,  # noqa: F401  — registers PagerDutyConnector
+    postgresql,  # noqa: F401  — registers PostgreSQLConnector
     slab,  # noqa: F401  — registers SlabConnector
     trello,  # noqa: F401  — registers TrelloConnector
 )

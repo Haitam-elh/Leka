@@ -45,6 +45,7 @@ class ConnectorCategory(enum.StrEnum):
     DOCS = "docs"
     CLOUD = "cloud"
     OBSERVABILITY = "observability"
+    DATA = "data"
     CHAT = "chat"
 
 
@@ -88,6 +89,10 @@ class Capability(enum.StrEnum):
     SERVICES = "services"
     # What is watched, and how: a monitoring tool's dashboards.
     DASHBOARDS = "dashboards"
+    # Databases (LEKA-349): what a server's catalogue describes — schemas,
+    # and their tables and views — never the rows.
+    SCHEMAS = "schemas"
+    TABLES = "tables"
 
 
 class ConnectorManifest(BaseModel):

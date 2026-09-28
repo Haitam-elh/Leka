@@ -12,7 +12,8 @@
  *
  * The list fields — `repositories`, `projects` — are not typed here: they
  * are the scope, chosen from what the vendor lists, in the wizard's next
- * step.
+ * step. A whole number — a database's port — is typed as text, with the
+ * phone's digit keyboard, and sent as text: the API reads "5432" as 5432.
  */
 
 import { z } from "@/lib/validation";
@@ -24,6 +25,8 @@ type JsonSchema = {
   default?: unknown;
   minLength?: number;
   maxLength?: number;
+  minimum?: number;
+  maximum?: number;
   writeOnly?: boolean;
   anyOf?: JsonSchema[];
   items?: JsonSchema;
@@ -32,11 +35,13 @@ type JsonSchema = {
 export interface FieldSpec {
   name: string;
   title: string;
-  kind: "text" | "url" | "password";
+  kind: "text" | "url" | "password" | "number";
   required: boolean;
   default: string;
   minLength?: number;
   maxLength?: number;
+  minimum?: number;
+  maximum?: number;
 }
 
 /** `str | None` arrives as anyOf [string, null]: the string is the field. */
@@ -52,18 +57,23 @@ function propertiesOf(schema: Record<string, unknown>): [string, JsonSchema][] {
 export function fieldsOf(schema: Record<string, unknown>): FieldSpec[] {
   const required = new Set((schema.required as string[] | undefined) ?? []);
   return propertiesOf(schema)
-    .filter(([, property]) => concrete(property).type === "string")
+    .filter(([, property]) => ["string", "integer"].includes(concrete(property).type ?? ""))
     .map(([name, property]) => {
       const inner = concrete(property);
       const secret = inner.format === "password" || inner.writeOnly === true;
+      const whole = inner.type === "integer";
       return {
         name,
         title: property.title ?? name,
-        kind: secret ? "password" : inner.format === "uri" ? "url" : "text",
+        kind: whole ? "number" : secret ? "password" : inner.format === "uri" ? "url" : "text",
         required: required.has(name),
-        default: typeof property.default === "string" ? property.default : "",
+        default: ["string", "number"].includes(typeof property.default)
+          ? String(property.default)
+          : "",
         minLength: inner.minLength,
         maxLength: inner.maxLength,
+        minimum: inner.minimum,
+        maximum: inner.maximum,
       };
     });
 }
@@ -88,11 +98,45 @@ export function zodOf(fields: FieldSpec[], { keepSecrets = false } = {}) {
       shape[field.name] = mayBeEmpty ? z.union([z.literal(""), z.url()]) : z.url();
       continue;
     }
+    if (field.kind === "number") {
+      const whole = wholeNumber(field.minimum, field.maximum);
+      shape[field.name] = mayBeEmpty ? z.union([z.literal(""), whole]) : whole;
+      continue;
+    }
     const least = field.minLength ?? 1;
     // An empty value is allowed, or a long enough one — never a short one.
     shape[field.name] = mayBeEmpty ? z.union([z.literal(""), rule.min(least)]) : rule.min(least);
   }
   return z.object(shape);
+}
+
+/** Digits, within the schema's bounds — said as a number's bounds are. */
+function wholeNumber(minimum?: number, maximum?: number) {
+  return z
+    .string()
+    .trim()
+    .regex(/^\d{1,15}$/)
+    .superRefine((value, context) => {
+      const number = Number(value);
+      if (minimum !== undefined && number < minimum) {
+        context.addIssue({
+          code: "too_small",
+          origin: "number",
+          minimum,
+          inclusive: true,
+          input: value,
+        });
+      }
+      if (maximum !== undefined && number > maximum) {
+        context.addIssue({
+          code: "too_big",
+          origin: "number",
+          maximum,
+          inclusive: true,
+          input: value,
+        });
+      }
+    });
 }
 
 export function defaultsOf(fields: FieldSpec[]): Record<string, string> {

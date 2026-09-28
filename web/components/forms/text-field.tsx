@@ -16,11 +16,13 @@ import { Input } from "@/components/ui/input";
  */
 export function TextField<TFieldValues extends FieldValues, TName extends Path<TFieldValues>>({
   type = "text",
+  inputMode,
   placeholder,
   autoComplete,
   ...props
 }: Omit<FormFieldProps<TFieldValues, TName>, "children"> & {
   type?: "text" | "email" | "url" | "password";
+  inputMode?: "numeric";
   placeholder?: string;
   autoComplete?: string;
 }) {
@@ -34,6 +36,7 @@ export function TextField<TFieldValues extends FieldValues, TName extends Path<T
           // with no default for this field starts exactly there.
           value={field.value ?? ""}
           type={type}
+          inputMode={inputMode}
           placeholder={placeholder}
           autoComplete={autoComplete}
           aria-invalid={invalid || undefined}

@@ -6,6 +6,7 @@ end to end, its API answered by httpx.MockTransport. Nothing here touches
 the network.
 """
 
+# ruff: noqa: F811 — the fixture of test_postgresql_connector is imported to be requested by name.
 from __future__ import annotations
 
 import json
@@ -13,6 +14,7 @@ import uuid
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
+import asyncpg
 import httpx
 import pytest
 from httpx import AsyncClient
@@ -36,6 +38,8 @@ from leka.connectors import (
     register_connector,
     unregister_connector,
 )
+from leka.connectors.postgresql import PostgreSQLConnector
+from leka.connectors.postgresql.connector import SESSION as PG_SESSION
 from leka.db import session_factory, system_scope
 from leka.main import app
 from leka.platform import secret_box
@@ -73,6 +77,8 @@ from tests.test_notion_connector import TOKEN as NOTION_TOKEN
 from tests.test_notion_connector import WIKI, Notion
 from tests.test_pagerduty_connector import KEY as PAGERDUTY_KEY
 from tests.test_pagerduty_connector import PagerDuty
+from tests.test_postgresql_connector import SERVER as PG_SERVER
+from tests.test_postgresql_connector import Catalogue, catalogue  # noqa: F401 — fixture
 from tests.test_slab_connector import TOKEN as SLAB_TOKEN
 from tests.test_slab_connector import Slab
 from tests.test_trello_connector import KEY as TRELLO_KEY
@@ -1169,6 +1175,73 @@ async def test_grafana_end_to_end(
         assert GRAFANA_TOKEN not in (await client.get(url)).text
     finally:
         app.dependency_overrides.pop(get_connector_transport, None)
+
+
+async def test_postgresql_end_to_end(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    catalogue: Catalogue,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An address that is not public is refused on save; the password never
+    comes back, the hint names the role; test, scope, activation and health
+    go through with a role that may read no row."""
+    monkeypatch.setattr(PostgreSQLConnector, "_open", _local_postgresql)
+    _as(identity, acme, "admin")
+    for host in ("10.0.0.5", "127.0.0.1", "[::1]"):
+        refused = await client.post(
+            f"{API}/sources",
+            json={
+                "type": "postgresql",
+                "display_name": "Billing",
+                "config": {"host": host, "database": catalogue.database},
+                "credentials": {"username": catalogue.reader, "password": catalogue.password},
+            },
+        )
+        assert refused.status_code == 422, host
+
+    source = await _create(
+        client,
+        type="postgresql",
+        display_name="Billing",
+        config={"host": "db.acme.example", "database": catalogue.database},
+        credentials={"username": catalogue.reader, "password": catalogue.password},
+    )
+    assert catalogue.password not in json.dumps(source)
+    assert source["credentials"]["hint"].startswith(catalogue.reader[:4])
+    url = f"{API}/sources/{source['id']}"
+
+    tested = (await client.post(f"{url}/test")).json()
+    assert tested["ok"] is True, tested
+    assert sorted(tested["source"]["capabilities"]) == ["schemas", "tables"]
+    offered = (await client.get(f"{url}/scope/options")).json()
+    assert catalogue.billing in [option["key"] for option in offered["options"]]
+    assert catalogue.secret not in [option["key"] for option in offered["options"]]
+    config = {"host": "db.acme.example", "database": catalogue.database}
+    scoped = await client.patch(url, json={"config": {**config, "schemas": [catalogue.billing]}})
+    assert scoped.json()["config"]["schemas"] == [catalogue.billing]
+    wrong = await client.patch(url, json={"config": {**config, "host": "169.254.169.254"}})
+    assert wrong.status_code == 422
+
+    assert (await client.post(f"{url}/test")).json()["ok"] is True
+    assert (await client.post(f"{url}/activate")).json()["status"] == "active"
+    assert (await client.post(f"{url}/health-check")).json()["health_status"] == "healthy"
+
+    _as(identity, acme, "member")
+    assert catalogue.password not in (await client.get(url)).text
+
+
+async def _local_postgresql(self: PostgreSQLConnector) -> asyncpg.Connection:
+    """The tests' server, as tests/test_postgresql_connector.py reaches it."""
+    return await asyncpg.connect(
+        host=PG_SERVER.hostname,
+        port=PG_SERVER.port or 5432,
+        user=self.credentials.username,
+        password=self.credentials.password.get_secret_value(),
+        database=self.config.database,
+        server_settings=PG_SESSION,
+    )
 
 
 async def test_a_refused_scope_listing_is_an_answer_with_a_diagnostic(

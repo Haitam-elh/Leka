@@ -508,6 +508,7 @@ const fr = {
       docs: "Documentation",
       cloud: "Infrastructure",
       observability: "Observabilité",
+      data: "Données",
       chat: "Communication",
       other: "Autres",
     },
@@ -550,6 +551,8 @@ const fr = {
       logs: "logs",
       services: "services",
       dashboards: "tableaux de bord",
+      schemas: "schémas",
+      tables: "tables et vues",
     },
     /**
      * The same words, in each vendor's own terms where it has them: what
@@ -787,7 +790,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty et Grafana.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana et PostgreSQL.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -986,6 +989,22 @@ const fr = {
           label: "Application (client) ID",
           help: "Celui de l'application, avec les permissions d'application Sites.Read.All, Files.Read.All et User.Read.All de Microsoft Graph, consenties par un administrateur.",
         },
+      },
+      postgresql: {
+        host: {
+          label: "Hôte",
+          help: "Le nom ou l'adresse publique du serveur, accessible depuis Internet : db.acme.com. Une adresse privée est refusée.",
+        },
+        port: { label: "Port", help: "5432, sauf si votre serveur écoute ailleurs." },
+        database: {
+          label: "Base",
+          help: "La base à décrire. LEKA en lit le catalogue — schémas, tables, colonnes, clés — jamais les lignes.",
+        },
+        username: {
+          label: "Rôle",
+          help: "Un rôle dédié, avec CONNECT sur la base et USAGE sur les schémas à décrire. Aucun SELECT n'est nécessaire.",
+        },
+        password: { label: "Mot de passe", help: "Celui du rôle. Chiffré, et plus jamais affiché." },
       },
     },
     events: {
@@ -1583,6 +1602,7 @@ const en: Dictionary = {
       docs: "Documentation",
       cloud: "Infrastructure",
       observability: "Observability",
+      data: "Data",
       chat: "Communication",
       other: "Other",
     },
@@ -1625,6 +1645,8 @@ const en: Dictionary = {
       logs: "logs",
       services: "services",
       dashboards: "dashboards",
+      schemas: "schemas",
+      tables: "tables and views",
     },
     capabilitiesOf: {
       aws: {
@@ -1856,7 +1878,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty and Grafana today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana and PostgreSQL today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -2050,6 +2072,22 @@ const en: Dictionary = {
           label: "Application (client) ID",
           help: "The application's, with Microsoft Graph's application permissions Sites.Read.All, Files.Read.All and User.Read.All, consented by an admin.",
         },
+      },
+      postgresql: {
+        host: {
+          label: "Host",
+          help: "The server's name or public address, reachable from the internet: db.acme.com. A private address is refused.",
+        },
+        port: { label: "Port", help: "5432, unless your server listens elsewhere." },
+        database: {
+          label: "Database",
+          help: "The database to describe. LEKA reads its catalogue — schemas, tables, columns, keys — never its rows.",
+        },
+        username: {
+          label: "Role",
+          help: "A dedicated role, with CONNECT on the database and USAGE on the schemas to describe. No SELECT is needed.",
+        },
+        password: { label: "Password", help: "The role's. Encrypted, and never shown again." },
       },
     },
     events: {

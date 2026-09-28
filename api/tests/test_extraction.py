@@ -131,6 +131,7 @@ EXTRACTED_KINDS = [
     SourceKind.GURU,
     SourceKind.GOOGLE_WORKSPACE,
     SourceKind.MICROSOFT_365,
+    SourceKind.POSTGRESQL,
 ]
 
 
