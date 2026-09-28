@@ -1,4 +1,5 @@
-"""Observability: Datadog — its monitors, events, incidents, metrics and logs.
+"""Observability: Datadog's monitors, events, incidents, metrics and logs;
+PagerDuty's services and incidents.
 
 What an operations question needs, the same way whatever the tool: the
 record's `title`, its `state` (a monitor's, an incident's, a log's
@@ -6,8 +7,9 @@ status), when it happened, its text, and technical `signals` — `service`,
 `env`, `host`, `tags` ('key:value', as Datadog writes them), `severity`.
 Datadog's own id stays the record's id, and its timestamp its date.
 
-The payloads are the ones leka/connectors/datadog stores: the API's
-answers, with `web_url` beside them, and an incident's people resolved.
+The payloads are the ones leka/connectors/{datadog,pagerduty} store: the
+APIs' answers — Datadog's with `web_url` beside them, and an incident's
+people resolved.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from leka.ingestion.extraction.fields import (
     flag,
     lower,
     number,
+    people,
     ref,
     required,
     string,
@@ -33,6 +36,7 @@ from leka.ingestion.extraction.fields import (
 
 C = Capability
 DATADOG = SourceKind.DATADOG
+PAGERDUTY = SourceKind.PAGERDUTY
 
 
 @strategy("datadog.alerts", 1, (DATADOG, C.ALERTS))
@@ -148,6 +152,57 @@ def datadog_log(p: Payload) -> Extracted:
             **_signals(tags),
             "service": string(a, "service") or _tag(tags, "service"),
             "host": string(a, "host") or _tag(tags, "host"),
+        },
+    )
+
+
+@strategy("pagerduty.incidents", 1, (PAGERDUTY, C.INCIDENTS))
+def pagerduty_incident(p: Payload) -> Extracted:
+    assignments = dig(p, "assignments")
+    assignees = [dig(a, "assignee") for a in assignments] if isinstance(assignments, list) else []
+    return Extracted(
+        title=required(p, "title"),
+        url=string(p, "html_url"),
+        state=lower(p, "status"),
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "updated_at") or when(p, "last_status_change_at"),
+        content=content("description", string(p, "description")),
+        references=[
+            *people("assignee", assignees, id_key="id", name_key="summary"),
+            *ref(
+                "service",
+                "service",
+                external_id=dig(p, "service", "id"),
+                name=dig(p, "service", "summary"),
+            ),
+        ],
+        metadata={
+            "incident_number": number(p, "incident_number"),
+            "urgency": lower(p, "urgency"),
+            "priority": string(p, "priority", "summary"),
+            "resolved_at": _iso(when(p, "resolved_at")),
+        },
+        signals={
+            "service": string(p, "service", "summary"),
+            "escalation_policy": string(p, "escalation_policy", "summary"),
+            "teams": strings(p, "teams", key="summary"),
+        },
+    )
+
+
+@strategy("pagerduty.services", 1, (PAGERDUTY, C.SERVICES))
+def pagerduty_service(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "name"),
+        url=string(p, "html_url"),
+        state=lower(p, "status"),
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "updated_at"),
+        content=content("description", string(p, "description")),
+        metadata={"last_incident_at": _iso(when(p, "last_incident_timestamp"))},
+        signals={
+            "escalation_policy": string(p, "escalation_policy", "summary"),
+            "teams": strings(p, "teams", key="summary"),
         },
     )
 

@@ -82,6 +82,7 @@ class SourceKind(enum.StrEnum):
     AZURE = "azure"
     GCP = "gcp"
     DATADOG = "datadog"
+    PAGERDUTY = "pagerduty"
     SLACK = "slack"
 
 

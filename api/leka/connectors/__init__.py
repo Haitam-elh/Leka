@@ -29,6 +29,7 @@ from leka.connectors import (
     microsoft_365,  # noqa: F401  — registers Microsoft365Connector
     monday,  # noqa: F401  — registers MondayConnector
     notion,  # noqa: F401  — registers NotionConnector
+    pagerduty,  # noqa: F401  — registers PagerDutyConnector
     slab,  # noqa: F401  — registers SlabConnector
     trello,  # noqa: F401  — registers TrelloConnector
 )

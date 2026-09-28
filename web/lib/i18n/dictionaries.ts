@@ -548,6 +548,7 @@ const fr = {
       incidents: "incidents",
       metrics: "métriques",
       logs: "logs",
+      services: "services",
     },
     /**
      * The same words, in each vendor's own terms where it has them: what
@@ -775,7 +776,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365 et Datadog.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog et PagerDuty.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -855,6 +856,16 @@ const fr = {
      * back to `fields`.
      */
     fieldsOf: {
+      pagerduty: {
+        api_key: {
+          label: "Clé d'API",
+          help: "Une clé d'API REST en lecture seule (Integrations → API Access Keys, case « Read-only »). Chiffrée, et plus jamais affichée.",
+        },
+        region: {
+          label: "Région",
+          help: "us, ou eu si votre compte PagerDuty est hébergé en Europe.",
+        },
+      },
       datadog: {
         site: {
           label: "Site Datadog",
@@ -1591,6 +1602,7 @@ const en: Dictionary = {
       incidents: "incidents",
       metrics: "metrics",
       logs: "logs",
+      services: "services",
     },
     capabilitiesOf: {
       aws: {
@@ -1812,7 +1824,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365 and Datadog today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog and PagerDuty today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -1887,6 +1899,16 @@ const en: Dictionary = {
       },
     },
     fieldsOf: {
+      pagerduty: {
+        api_key: {
+          label: "API key",
+          help: "A read-only REST API key (Integrations → API Access Keys, “Read-only” ticked). Encrypted, and never shown again.",
+        },
+        region: {
+          label: "Region",
+          help: "us, or eu if your PagerDuty account is hosted in Europe.",
+        },
+      },
       datadog: {
         site: {
           label: "Datadog site",

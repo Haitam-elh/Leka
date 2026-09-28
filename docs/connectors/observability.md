@@ -1,15 +1,16 @@
 # Observability and operations — what LEKA asks for, and what it reads
 
-Datadog, through [the connector framework](framework.md). LEKA-348.
-**LEKA only reads**: every call to Datadog is a GET, with keys that can
-only read. What each source contributes then goes through extraction
+Datadog and PagerDuty, through [the connector framework](framework.md).
+LEKA-348. **LEKA only reads**: every call is a GET, with keys that can only
+read. What each source contributes then goes through extraction
 ([extraction.md](../extraction.md)), parsing and normalisation like any
 other.
 
 What observability data is, for LEKA: **alerts** (monitors and their
 state), **events** (the stream of what happened: an alert that fired, a
 deploy, a change), **incidents**, **metrics** (their definitions, not
-their points) and **logs** (a chosen few). Every record keeps the vendor's
+their points), **logs** (a chosen few), and the **services** an incident
+tool knows. Every record keeps the vendor's
 own **identifier** — its `external_id` — and its own **timestamp** — its
 `updated_at`, and in the payload as the vendor wrote it.
 
@@ -148,3 +149,68 @@ can move it without a deploy (`LEKA_RAW_PAYLOAD_RETENTION_DAYS`).
 | 5xx | `PROVIDER_ERROR` |
 
 Both keys are removed from every detail.
+
+## PagerDuty
+
+| | |
+|---|---|
+| Endpoint | `https://api.pagerduty.com`, or `https://api.eu.pagerduty.com` for an account in PagerDuty's EU region |
+| Credentials | `api_key`, a **read-only** REST API key (write-only here), sent as `Token token=…` |
+| Config | `region` (`us`, `eu`), `services` |
+| Category | `observability` |
+| Capabilities | `services`, `incidents` |
+
+### What to create at PagerDuty
+
+An account admin, in **Integrations → API Access Keys → Create New API
+Key**: a description (`LEKA`), and **Read-only API Key** ticked. That is
+the boundary — the key cannot acknowledge, resolve or change anything.
+Then, in LEKA, **Sources → Add → PagerDuty**: the key, and `eu` as region
+if the account's address ends in `eu.pagerduty.com`.
+
+### Scope
+
+`services` takes service ids (`PXXXXXX`), typed or pasted as the link to
+the service; kept in capitals. Absent, every service. The choices come from
+`GET /sources/{id}/scope/options`: every service of the account. The
+connection test fails with `NOT_FOUND`, naming them, when the key does not
+see a service in scope.
+
+### The connection test
+
+1. `GET /abilities` — the key reads the account. Refused: `AUTH_INVALID`
+   (the key, or the region).
+2. `GET /services` — every service; those in scope must be there.
+3. One page of incidents: `incidents` if PagerDuty answers.
+
+### What is read
+
+| Capability | What (PagerDuty API) | Incremental | Id, timestamp |
+|---|---|---|---|
+| `services` | each service: name, description, status, teams, escalation policy, last incident (`GET /services`) | whole each pass | service id, `updated_at` |
+| `incidents` | each incident: title, status, urgency, priority, service, assignees, escalation policy, teams, number, link (`GET /incidents`) | every pass reads the incidents **created in the last 90 days** again — PagerDuty lists by creation, not by change | incident id, `updated_at` |
+
+An incident's **container** is its service; the sync reads services
+before the incidents about them. Incidents older than 90 days stay as they
+were last read, until their retention ends. Not read: log entries, notes,
+alerts inside an incident, on-call schedules.
+
+Extraction (`extraction/observability.py`): an incident's title, status,
+urgency, priority, number, its assignees as people and its service as a
+reference; a service's name, status, teams and last incident.
+
+### Retention
+
+Kept **90 days**, like tickets: incidents are small, and what a
+post-mortem reads weeks later.
+
+### Limits
+
+- **Quota**: 960 requests a minute per key, in `ratelimit-*` headers
+  (their reset in seconds). A bulk read stops before the last tenth; a 429
+  is `RATE_LIMITED` with the seconds to wait; health turns `degraded`
+  under a tenth left.
+- **Pagination**: PagerDuty's offsets, while it says `more`.
+- **Errors**: 401 → `AUTH_INVALID`, 403 → `PERMISSION_DENIED`, 404 →
+  `NOT_FOUND`, 5xx → `PROVIDER_ERROR`. The key is removed from every
+  detail.

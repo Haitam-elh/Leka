@@ -118,6 +118,7 @@ EXTRACTED_KINDS = [
     SourceKind.AZURE,
     SourceKind.GCP,
     SourceKind.DATADOG,
+    SourceKind.PAGERDUTY,
 ]
 
 

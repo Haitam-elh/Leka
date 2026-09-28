@@ -1,4 +1,5 @@
-"""Datadog's records, extracted for what comes after (LEKA-348 → LEKA-354).
+"""Datadog's and PagerDuty's records, extracted for what comes after
+(LEKA-348 → LEKA-354).
 
 The payloads are the ones the Datadog connector stores — its stand-in's,
 in tests/test_datadog_*.py. What matters: Datadog's own id and timestamp
@@ -15,6 +16,8 @@ from leka.ingestion.extraction import FailureCode
 from tests.test_datadog_connector import CHECKOUT
 from tests.test_datadog_resources import event, incident, log
 from tests.test_extraction import SECRET, _extract, _failure
+from tests.test_pagerduty_connector import CHECKOUT as PAGERDUTY_CHECKOUT
+from tests.test_pagerduty_connector import incident as pagerduty_incident
 
 C = Capability
 DATADOG = SourceKind.DATADOG
@@ -92,3 +95,35 @@ def test_a_monitor_without_a_name_is_malformed_and_nothing_of_it_leaks() -> None
     failure = _failure(DATADOG, C.ALERTS, {"id": 9, "message": SECRET})
 
     assert failure.code is FailureCode.MALFORMED
+
+
+# ── PagerDuty ────────────────────────────────────────────────────────────────
+
+
+def test_a_pagerduty_incident_names_its_service_and_who_is_on_it() -> None:
+    payload = {
+        **pagerduty_incident(3),
+        "priority": {"summary": "P1"},
+        "teams": [{"summary": "Payments"}],
+        "resolved_at": "2026-09-21T13:00:00Z",
+    }
+
+    found = _extract(SourceKind.PAGERDUTY, C.INCIDENTS, payload, container="PCHKOUT")
+
+    assert (found.title, found.state) == ("Checkout errors 3", "resolved")
+    assert found.url == payload["html_url"]
+    assert found.updated_at == datetime(2026, 9, 21, 13, tzinfo=UTC)
+    assert (found.metadata["urgency"], found.metadata["priority"]) == ("high", "P1")
+    assert found.metadata["incident_number"] == 3
+    assert found.signals["teams"] == ["Payments"]
+    roles = {(r.role, r.kind, r.name) for r in found.references}
+    assert roles == {("assignee", "person", "Nora"), ("service", "service", "Checkout")}
+    assert found.extractor == "pagerduty.incidents"
+
+
+def test_a_pagerduty_service_is_its_name_status_and_last_incident() -> None:
+    found = _extract(SourceKind.PAGERDUTY, C.SERVICES, PAGERDUTY_CHECKOUT)
+
+    assert (found.title, found.state) == ("Checkout", "active")
+    assert found.content[0].text == "Payments at checkout"
+    assert found.metadata["last_incident_at"] == "2026-09-24T08:00:00+00:00"

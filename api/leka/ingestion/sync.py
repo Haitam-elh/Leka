@@ -542,7 +542,8 @@ def _capabilities(source: Source, offered: frozenset[Capability]) -> list[Capabi
     """What the source's last test found readable and its connector can read,
     what the others hang from first — repositories, projects, and the spaces,
     databases and drives a documentation tool's pages and files sit in
-    (LEKA-346)."""
+    (LEKA-346), the services an incident tool's incidents are about
+    (LEKA-348)."""
     found = {c for c in Capability if c.value in source.capabilities and c in offered}
     roots = (
         Capability.REPOSITORIES,
@@ -550,6 +551,7 @@ def _capabilities(source: Source, offered: frozenset[Capability]) -> list[Capabi
         Capability.SPACES,
         Capability.DATABASES,
         Capability.DRIVES,
+        Capability.SERVICES,
     )
     return sorted(found, key=lambda c: (c not in roots, c.value))
 
