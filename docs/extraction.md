@@ -90,10 +90,18 @@ no clock — registered for the (source kind, capability) pairs it knows
 | Azure | the same seven — one strategy: Resource Manager's list has one shape | `extraction/cloud.py` |
 | Google Cloud | the same seven — one strategy: an asset around each API's resource | `extraction/cloud.py` |
 | Datadog | alerts (monitors), events, incidents, metrics, logs — `service`, `env`, `host`, `tags` as signals; Datadog's id and timestamp kept | `extraction/observability.py` |
+| PagerDuty, Grafana | services, incidents; dashboards, alert rules, annotations | `extraction/observability.py` |
+| Linear, Asana, Trello, ClickUp, Monday | projects, and their issues — a task, a card, an item — with the tool's `key`, `status_category` when it has one (Linear's workflow type, ClickUp's status type), priority, labels, people, project, parent | `extraction/projects.py` |
+| Confluence, Notion, Slab, Guru | spaces, databases, topics, collections; pages, posts, cards — their **text** read out of Confluence's storage XHTML, Guru's HTML, Notion's blocks, Slab's Quill delta | `extraction/documents.py` |
+| Google Workspace, Microsoft 365 | drives; files, with the text the connector read | `extraction/documents.py` |
 
 A test fails if one of these connectors reads a capability no strategy
-extracts. A connector with no strategy yet (Confluence, Notion, Linear…)
-has its records `unsupported`: counted, not blocking.
+extracts. Every connector has its strategies now; a connector added later
+without them has its records `unsupported`: counted, not blocking.
+
+Markup is **read, never run**: `fields.markup_text` takes the text out of
+HTML and XHTML by expressions — scripts and styles dropped, HTML's own
+entities unescaped, nothing else expanded, nothing fetched.
 
 A strategy reads the payload (`@strategy`), or the whole record when it
 needs what the connector put beside it (`@record_strategy`): an AWS

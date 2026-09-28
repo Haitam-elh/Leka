@@ -174,7 +174,7 @@ class ConfluenceConnector(Connector[ConfluenceConfig, ConfluenceCredentials]):
         async with self._client() as client:
             async for space in self._spaces(client):
                 if capability is Capability.SPACES:
-                    yield record(capability, space, external_id=str(space["id"]))
+                    yield record(capability, self._linked(space), external_id=str(space["id"]))
                     continue
                 pages = client.pages(
                     f"/api/v2/spaces/{space['id']}/pages",
@@ -184,7 +184,7 @@ class ConfluenceConnector(Connector[ConfluenceConfig, ConfluenceCredentials]):
                 )
                 async for page in records(
                     capability,
-                    pages,
+                    self._each_linked(pages),
                     str(space["key"]),
                     key=lambda page: str(page["id"]),
                     updated=lambda page: dig(page, "version.createdAt"),
@@ -192,6 +192,17 @@ class ConfluenceConnector(Connector[ConfluenceConfig, ConfluenceCredentials]):
                     yield page
 
     # ── inside ───────────────────────────────────────────────────────────────
+
+    def _linked(self, item: Item) -> Item:
+        """The item, with the link to open it: Confluence gives a path only."""
+        path = dig(item, "_links.webui")
+        if not path:
+            return item
+        return {**item, "web_url": f"{atlassian.site_url(self.config.site)}{WIKI}{path}"}
+
+    async def _each_linked(self, items: AsyncIterator[Item]) -> AsyncIterator[Item]:
+        async for item in items:
+            yield self._linked(item)
 
     def _client(self) -> VendorHttp:
         client = self.http(

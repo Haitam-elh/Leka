@@ -19,6 +19,10 @@ from what every mention of the thing carries, spelled one way:
     cloud resource    aws:arn:…, azure:/subscriptions/…, gcp://…   the provider's global id
     service, team     service:billing, team:payments           a slug of the name
     incident          incident:pagerduty:Q1ABC…                the tool and its own id
+    Linear issue      linear.app/acme/ENG-42                   its workspace, its identifier;
+                                                               alias ticket:ENG-42
+    another tool's    asana:issue:1204…, trello:project:5f1e…  the tool, what it is, its id
+    document          notion:document:1a2b…, acme.atlassian.net/wiki/pages/1001
 """
 
 from __future__ import annotations
@@ -104,6 +108,12 @@ def incident(system: str, incident_id: str) -> str:
     """An incident by the tool that holds it and that tool's id: PagerDuty's
     are global, Datadog's a uuid — not their per-account numbers."""
     return f"incident:{system}:{incident_id.strip()}"
+
+
+def item(system: str, what: str, item_id: str) -> str:
+    """A project, an issue or a document of a tool whose ids are its own —
+    global, or at least the tool's: asana:issue:1204…"""
+    return f"{system}:{what}:{item_id.strip()}"
 
 
 def service(name: str) -> str:

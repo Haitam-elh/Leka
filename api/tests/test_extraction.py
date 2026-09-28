@@ -120,6 +120,17 @@ EXTRACTED_KINDS = [
     SourceKind.DATADOG,
     SourceKind.PAGERDUTY,
     SourceKind.GRAFANA,
+    SourceKind.CONFLUENCE,
+    SourceKind.LINEAR,
+    SourceKind.NOTION,
+    SourceKind.ASANA,
+    SourceKind.TRELLO,
+    SourceKind.CLICKUP,
+    SourceKind.MONDAY,
+    SourceKind.SLAB,
+    SourceKind.GURU,
+    SourceKind.GOOGLE_WORKSPACE,
+    SourceKind.MICROSOFT_365,
 ]
 
 
