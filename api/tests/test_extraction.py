@@ -134,6 +134,7 @@ EXTRACTED_KINDS = [
     SourceKind.POSTGRESQL,
     SourceKind.MYSQL,
     SourceKind.MARIADB,
+    SourceKind.SQLSERVER,
     SourceKind.MONGODB,
     SourceKind.SUPABASE,
 ]

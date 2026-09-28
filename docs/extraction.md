@@ -94,7 +94,7 @@ no clock — registered for the (source kind, capability) pairs it knows
 | Linear, Asana, Trello, ClickUp, Monday | projects, and their issues — a task, a card, an item — with the tool's `key`, `status_category` when it has one (Linear's workflow type, ClickUp's status type), priority, labels, people, project, parent | `extraction/projects.py` |
 | Confluence, Notion, Slab, Guru | spaces, databases, topics, collections; pages, posts, cards — their **text** read out of Confluence's storage XHTML, Guru's HTML, Notion's blocks, Slab's Quill delta | `extraction/documents.py` |
 | Google Workspace, Microsoft 365 | drives; files, with the text the connector read | `extraction/documents.py` |
-| PostgreSQL, Supabase, MySQL, MariaDB, MongoDB | schemas (a MySQL, MariaDB or MongoDB database); tables, views, collections — the name as a query writes it, the columns one line each with their type, keys and comment, a view's definition; the tables a foreign key references and a view reads from as references | `extraction/data.py` |
+| PostgreSQL, Supabase, MySQL, MariaDB, SQL Server, MongoDB | schemas (a MySQL, MariaDB or MongoDB database); tables, views, collections — the name as a query writes it, the columns one line each with their type, keys and comment, a view's definition; the tables a foreign key references and a view reads from as references | `extraction/data.py` |
 
 A test fails if one of these connectors reads a capability no strategy
 extracts. Every connector has its strategies now; a connector added later

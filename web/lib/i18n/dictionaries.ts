@@ -793,7 +793,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, Supabase et MongoDB.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Supabase et MongoDB.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -1032,6 +1032,22 @@ const fr = {
           help: "Un compte dédié, avec le seul privilège REFERENCES sur les bases à décrire : il en montre la structure, pas les lignes.",
         },
         password: { label: "Mot de passe", help: "Celui du compte. Chiffré, et plus jamais affiché." },
+      },
+      sqlserver: {
+        host: {
+          label: "Hôte",
+          help: "Le nom ou l'adresse publique du serveur, accessible depuis Internet : db.acme.com. Une adresse privée est refusée. Une instance nommée se désigne par son port, pas par hôte\\instance.",
+        },
+        port: { label: "Port", help: "1433, sauf si votre serveur écoute ailleurs." },
+        database: {
+          label: "Base",
+          help: "La base à décrire. LEKA en lit le catalogue — schémas, tables, colonnes, clés — jamais les lignes.",
+        },
+        username: {
+          label: "Connexion",
+          help: "Une connexion SQL dédiée, avec un utilisateur dans la base et VIEW DEFINITION sur les schémas à décrire. Aucun SELECT n'est nécessaire.",
+        },
+        password: { label: "Mot de passe", help: "Celui de la connexion. Chiffré, et plus jamais affiché." },
       },
       supabase: {
         host: {
@@ -1936,7 +1952,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, Supabase and MongoDB today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Supabase and MongoDB today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -2170,6 +2186,22 @@ const en: Dictionary = {
           help: "A dedicated account, with only the REFERENCES privilege on the databases to describe: it shows their structure, not their rows.",
         },
         password: { label: "Password", help: "The account's. Encrypted, and never shown again." },
+      },
+      sqlserver: {
+        host: {
+          label: "Host",
+          help: "The server's name or public address, reachable from the internet: db.acme.com. A private address is refused. A named instance is reached by its port, not host\\instance.",
+        },
+        port: { label: "Port", help: "1433, unless your server listens elsewhere." },
+        database: {
+          label: "Database",
+          help: "The database to describe. LEKA reads its catalogue — schemas, tables, columns, keys — never its rows.",
+        },
+        username: {
+          label: "Login",
+          help: "A dedicated SQL login, with a user in the database and VIEW DEFINITION on the schemas to describe. No SELECT is needed.",
+        },
+        password: { label: "Password", help: "The login's. Encrypted, and never shown again." },
       },
       supabase: {
         host: {

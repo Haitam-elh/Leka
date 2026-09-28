@@ -36,6 +36,7 @@ from leka.connectors import (
     pagerduty,  # noqa: F401  — registers PagerDutyConnector
     postgresql,  # noqa: F401  — registers PostgreSQLConnector
     slab,  # noqa: F401  — registers SlabConnector
+    sqlserver,  # noqa: F401  — registers SQLServerConnector
     supabase,  # noqa: F401  — registers SupabaseConnector
     trello,  # noqa: F401  — registers TrelloConnector
 )

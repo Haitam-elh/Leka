@@ -87,6 +87,7 @@ class SourceKind(enum.StrEnum):
     POSTGRESQL = "postgresql"
     MYSQL = "mysql"
     MARIADB = "mariadb"
+    SQLSERVER = "sqlserver"
     MONGODB = "mongodb"
     SUPABASE = "supabase"
     SLACK = "slack"

@@ -1,5 +1,6 @@
-"""Databases: PostgreSQL's, MySQL's and MariaDB's schemas, and their tables
-and views; MongoDB's databases, and their collections and views (LEKA-349).
+"""Databases: PostgreSQL's, MySQL's, MariaDB's and SQL Server's schemas, and
+their tables and views; MongoDB's databases, and their collections and
+views (LEKA-349).
 
 What a question about data needs: a table's name as it is written in a
 query (`billing.invoices`), what it is (a table, a view…), its columns as a
@@ -28,19 +29,19 @@ C = Capability
 POSTGRESQL = SourceKind.POSTGRESQL
 MYSQL = SourceKind.MYSQL
 MARIADB = SourceKind.MARIADB
+SQLSERVER = SourceKind.SQLSERVER
 MONGODB = SourceKind.MONGODB
 SUPABASE = SourceKind.SUPABASE  # PostgreSQL, read by its connector
 
 
 @strategy("postgresql.schemas", 1, (POSTGRESQL, C.SCHEMAS), (SUPABASE, C.SCHEMAS))
 def postgresql_schema(p: Payload) -> Extracted:
-    return Extracted(
-        title=required(p, "name"),
-        content=content("description", string(p, "comment")),
-        references=ref("database", "database", external_id=string(p, "database")),
-        metadata={"owner": string(p, "owner"), "database": string(p, "database")},
-        signals={"engine": "postgresql"},
-    )
+    return _schema(p, "postgresql")
+
+
+@strategy("sqlserver.schemas", 1, (SQLSERVER, C.SCHEMAS))
+def sqlserver_schema(p: Payload) -> Extracted:
+    return _schema(p, "sqlserver")
 
 
 @strategy("mysql.schemas", 1, (MYSQL, C.SCHEMAS))
@@ -81,9 +82,26 @@ def mariadb_table(p: Payload) -> Extracted:
     return _table(p, "mariadb")
 
 
+@strategy("sqlserver.tables", 1, (SQLSERVER, C.TABLES))
+def sqlserver_table(p: Payload) -> Extracted:
+    return _table(p, "sqlserver")
+
+
 @strategy("mongodb.tables", 1, (MONGODB, C.TABLES))
 def mongodb_collection(p: Payload) -> Extracted:
     return _table(p, "mongodb")
+
+
+def _schema(p: Payload, engine: str) -> Extracted:
+    """A schema inside a database — PostgreSQL's, SQL Server's: its name,
+    owner, comment, and the database it is in."""
+    return Extracted(
+        title=required(p, "name"),
+        content=content("description", string(p, "comment")),
+        references=ref("database", "database", external_id=string(p, "database")),
+        metadata={"owner": string(p, "owner"), "database": string(p, "database")},
+        signals={"engine": engine},
+    )
 
 
 def _database(p: Payload, engine: str) -> Extracted:

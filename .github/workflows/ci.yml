@@ -71,6 +71,22 @@ jobs:
           --health-retries 24
           --health-start-period 20s
 
+      sqlserver:
+        # A customer's SQL Server, for tests/test_sqlserver_connector.py
+        # (LEKA-349): its Developer edition, free for tests. Same image as
+        # docker-compose.yml.
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Leka-local-1
+        ports: ["1433:1433"]
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Leka-local-1 -C -b -Q 'SELECT 1' -o /dev/null"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+          --health-start-period 20s
+
       mongodb:
         # A customer's MongoDB, for tests/test_mongodb_connector.py
         # (LEKA-349). Same image as docker-compose.yml.
@@ -103,6 +119,7 @@ jobs:
       LEKA_REQUIRE_MYSQL_TESTS: "1"
       LEKA_REQUIRE_MONGODB_TESTS: "1"
       LEKA_REQUIRE_MARIADB_TESTS: "1"
+      LEKA_REQUIRE_SQLSERVER_TESTS: "1"
 
     defaults:
       run:

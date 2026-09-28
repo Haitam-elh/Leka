@@ -131,16 +131,32 @@ None of this changes where YOUR payloads go during development: the default
 is still `LEKA_OBJECT_STORE=local`, writing under `var/objects/`. MinIO is
 there for the tests.
 
-**MySQL, MariaDB and MongoDB are off by default**, in the `connectors`
-profile: they stand for a customer's databases, for their connectors'
-tests (`tests/test_mysql_connector.py`, `tests/test_mariadb_connector.py`,
+**MySQL, MariaDB, SQL Server and MongoDB are off by default**, in the
+`connectors` profile: they stand for a customer's databases, for their
+connectors' tests (`tests/test_mysql_connector.py`,
+`tests/test_mariadb_connector.py`, `tests/test_sqlserver_connector.py`,
 `tests/test_mongodb_connector.py`), which skip without them. Start them
 when working on those connectors — every start is a clean server; MariaDB
 listens on 3307, beside MySQL:
 
 ```bash
-docker compose up -d mysql mariadb mongodb
+docker compose up -d mysql mariadb mongodb sqlserver
 ```
+
+**SQL Server on an ARM Mac.** Microsoft builds it for x86 only, and QEMU's
+emulation cannot run it (`Invalid mapping of address … in reserved address
+space`). It runs under Rosetta. With Docker Desktop: Settings → General →
+*Use Rosetta for x86_64/amd64 emulation*. With Colima, a second machine
+keeps the everyday one as it is:
+
+```bash
+colima start leka-x86 --vm-type vz --vz-rosetta --cpu 2 --memory 4
+docker context use colima                  # colima start switched to the new one
+docker --context colima-leka-x86 compose up -d sqlserver
+```
+
+Its port is forwarded to `127.0.0.1:1433` like the others'. `colima stop
+leka-x86` when done.
 
 ---
 
