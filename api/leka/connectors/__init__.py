@@ -23,6 +23,7 @@ from leka.connectors import (
     github,  # noqa: F401  — registers GitHubConnector
     gitlab,  # noqa: F401  — registers GitLabConnector
     google_workspace,  # noqa: F401  — registers GoogleWorkspaceConnector
+    grafana,  # noqa: F401  — registers GrafanaConnector
     guru,  # noqa: F401  — registers GuruConnector
     jira,  # noqa: F401  — registers JiraConnector
     linear,  # noqa: F401  — registers LinearConnector

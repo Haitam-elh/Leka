@@ -55,6 +55,7 @@ from leka.connectors.http import (
     without,
 )
 from leka.connectors.models import HealthStatus, SourceKind
+from leka.connectors.network import PublicHttpsUrl
 from leka.connectors.registry import register_connector
 from leka.connectors.schemas import RawRecord
 
@@ -80,7 +81,7 @@ class GitHubConfig(BaseModel):
         max_length=100,
         description="The organisation to read. Empty: what the token's owner can see.",
     )
-    base_url: HttpUrl = Field(
+    base_url: PublicHttpsUrl = Field(
         default=HttpUrl("https://api.github.com"),
         description="Change only for GitHub Enterprise Server.",
     )

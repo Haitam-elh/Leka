@@ -119,6 +119,7 @@ EXTRACTED_KINDS = [
     SourceKind.GCP,
     SourceKind.DATADOG,
     SourceKind.PAGERDUTY,
+    SourceKind.GRAFANA,
 ]
 
 

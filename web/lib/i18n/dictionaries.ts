@@ -549,6 +549,7 @@ const fr = {
       metrics: "métriques",
       logs: "logs",
       services: "services",
+      dashboards: "tableaux de bord",
     },
     /**
      * The same words, in each vendor's own terms where it has them: what
@@ -585,6 +586,7 @@ const fr = {
       },
       gitlab: { pull_requests: "merge requests" },
       datadog: { alerts: "moniteurs et leurs alertes", metrics: "définitions de métriques" },
+      grafana: { alerts: "règles d'alerte et leur état", events: "annotations" },
       notion: { databases: "bases Notion" },
       asana: { issues: "tâches" },
       trello: { projects: "tableaux", issues: "cartes" },
@@ -776,7 +778,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog et PagerDuty.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty et Grafana.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -856,6 +858,16 @@ const fr = {
      * back to `fields`.
      */
     fieldsOf: {
+      grafana: {
+        base_url: {
+          label: "Adresse du Grafana",
+          help: "https://acme.grafana.net, ou celle de votre Grafana — en https, accessible depuis Internet.",
+        },
+        token: {
+          label: "Jeton de compte de service",
+          help: "glsa_…, d'un compte de service au rôle Viewer (Administration → Service accounts). Chiffré, et plus jamais affiché.",
+        },
+      },
       pagerduty: {
         api_key: {
           label: "Clé d'API",
@@ -1603,6 +1615,7 @@ const en: Dictionary = {
       metrics: "metrics",
       logs: "logs",
       services: "services",
+      dashboards: "dashboards",
     },
     capabilitiesOf: {
       aws: {
@@ -1634,6 +1647,7 @@ const en: Dictionary = {
       },
       gitlab: { pull_requests: "merge requests" },
       datadog: { alerts: "monitors and their alerts", metrics: "metric definitions" },
+      grafana: { alerts: "alert rules and their state", events: "annotations" },
       notion: { databases: "Notion databases" },
       asana: { issues: "tasks" },
       trello: { projects: "boards", issues: "cards" },
@@ -1824,7 +1838,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog and PagerDuty today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty and Grafana today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -1899,6 +1913,16 @@ const en: Dictionary = {
       },
     },
     fieldsOf: {
+      grafana: {
+        base_url: {
+          label: "Grafana address",
+          help: "https://acme.grafana.net, or your own Grafana's — https, reachable from the internet.",
+        },
+        token: {
+          label: "Service account token",
+          help: "glsa_…, a service account's with the Viewer role (Administration → Service accounts). Encrypted, and never shown again.",
+        },
+      },
       pagerduty: {
         api_key: {
           label: "API key",

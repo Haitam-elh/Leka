@@ -29,6 +29,7 @@ import httpx
 
 from leka.connectors.base import Capability
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
+from leka.connectors.network import BlockedAddressError
 from leka.connectors.schemas import RawRecord
 
 type Item = dict[str, object]
@@ -176,6 +177,13 @@ class VendorHttp:
         except httpx.TimeoutException as error:
             raise diagnose(
                 DiagnosticCode.TIMEOUT, detail=f"{method} {path}", secrets=[self._secret]
+            ) from error
+        except BlockedAddressError as error:
+            raise diagnose(
+                DiagnosticCode.CONFIG_INVALID,
+                message="L'adresse configurée ne mène pas à un service public en https.",
+                detail=str(error),
+                secrets=[self._secret],
             ) from error
         except httpx.TransportError as error:
             raise diagnose(
