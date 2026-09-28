@@ -178,6 +178,20 @@ jobs:
         # migration written for it.
         run: alembic check
 
+      - name: Make room on the disk
+        # The runner has some 14 GB free once the services are pulled, and
+        # Oracle's image unpacks to 6 GB, then copies its datafiles as it
+        # writes them. On 2026-09-29 (PR #129) that filled the disk: MinIO
+        # and MongoDB could no longer write, and 20 of their tests failed.
+        # The runner carries toolchains nothing here uses — .NET, Android,
+        # GHC, CodeQL — some 20 GB of them.
+        working-directory: .
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - name: Start Oracle
         # A customer's Oracle, for tests/test_oracle_connector.py (LEKA-349).
         # A step, not a service container: its TLS is set up by
@@ -194,7 +208,7 @@ jobs:
           for _ in $(seq 1 120); do
             if docker logs oracle 2>&1 | grep -q "DATABASE IS READY TO USE" \
               && (echo > /dev/tcp/127.0.0.1/2484) 2>/dev/null; then
-              echo "Oracle is up, TLS on 2484"; exit 0
+              echo "Oracle is up, TLS on 2484"; df -h /; exit 0
             fi
             sleep 2
           done
