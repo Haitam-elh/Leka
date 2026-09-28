@@ -194,7 +194,7 @@ function ConnectorStep({ onPick }: { onPick: (entry: CatalogEntry) => void }) {
               <span className="min-w-0">
                 <span className="block font-medium text-brand-navy">{entry.display_name}</span>
                 <span className="block truncate text-xs text-shell-muted">
-                  {entry.capabilities.map((c) => capabilityWord(t, c)).join(", ")}
+                  {entry.capabilities.map((c) => capabilityWord(t, c, entry.key)).join(", ")}
                 </span>
               </span>
             </button>
@@ -574,7 +574,7 @@ function TestStep({
           ) : null}
           <p>
             {fill(t.sources.add.reads, {
-              list: result.capabilities.map((c) => capabilityWord(t, c)).join(", "),
+              list: result.capabilities.map((c) => capabilityWord(t, c, source.type)).join(", "),
             })}
           </p>
         </AlertDescription>

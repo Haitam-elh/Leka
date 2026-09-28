@@ -72,7 +72,7 @@ export function SourceRunsSection({ source }: { source: Source }) {
       {running?.capability ? (
         <p role="status" className="mb-3 text-sm text-brand-navy">
           {fill(w.progress, {
-            capability: capabilityWord(t, running.capability),
+            capability: capabilityWord(t, running.capability, source.type),
             records: number.format(running.records),
           })}
         </p>

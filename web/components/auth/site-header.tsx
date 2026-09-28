@@ -43,12 +43,13 @@ export function SiteHeader() {
           </a>
         </nav>
         <div className="ml-auto flex items-center gap-4 md:ml-0">
-          <Link href="/login" className={`hidden sm:inline ${link}`}>
+          {/* On a phone, as on the site: the sign-in stays, the demo folds. */}
+          <Link href="/login" className={link}>
             {t.signIn}
           </Link>
           <a
             href="/demo.html?type=demo"
-            className="inline-flex h-[38px] items-center rounded-[6px] bg-site-ink px-4 text-sm font-semibold tracking-[-0.012em] text-white transition-colors hover:bg-site-violet"
+            className="hidden h-[38px] items-center rounded-[6px] bg-site-ink sm:inline-flex px-4 text-sm font-semibold tracking-[-0.012em] text-white transition-colors hover:bg-site-violet"
           >
             {t.demo}
           </a>

@@ -62,3 +62,16 @@ test("the language chosen on the site carries into the application", async ({ pa
 
   await expect(page.getByRole("heading", { name: "Sign in to LEKA" })).toBeVisible();
 });
+
+test("on a phone, the site's sign-in is still there", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  const signIn = page.locator("header").getByRole("link", { name: "Se connecter" });
+  await expect(signIn).toBeVisible();
+  await signIn.click();
+
+  await expect(page).toHaveURL(/\/login$/);
+  // And the sign-in's own header keeps it too.
+  await expect(page.locator("header").getByRole("link", { name: "Se connecter" })).toBeVisible();
+});
