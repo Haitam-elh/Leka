@@ -75,6 +75,13 @@ class Capability(enum.StrEnum):
     # library, a OneDrive — and the files in it, with their text.
     DRIVES = "drives"
     FILES = "files"
+    # Observability and operations (LEKA-348). An alert is a monitor or an
+    # alert rule with its state; a metric is its definition, not its points.
+    ALERTS = "alerts"
+    EVENTS = "events"
+    INCIDENTS = "incidents"
+    METRICS = "metrics"
+    LOGS = "logs"
 
 
 class ConnectorManifest(BaseModel):

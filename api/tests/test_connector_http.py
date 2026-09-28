@@ -174,20 +174,31 @@ async def test_a_refusal_carries_its_code_and_never_the_secret(status: int, code
             {
                 "x-ratelimit-remaining": "4900",
                 "x-ratelimit-limit": "5000",
-                "x-ratelimit-reset": "9",
+                "x-ratelimit-reset": "1790000060",
             },
-            Quota(4900, 5000, 9),
-        ),  # GitHub
+            Quota(4900, 5000, 1_790_000_060),
+        ),  # GitHub: the moment it resets, since the epoch
+        (
+            {
+                "x-ratelimit-remaining": "12",
+                "x-ratelimit-limit": "1000",
+                "x-ratelimit-reset": "9",
+                "x-ratelimit-period": "10",
+            },
+            Quota(12, 1000, 1_790_000_009),
+        ),  # Datadog: the seconds until it resets
         ({"ratelimit-remaining": "3", "ratelimit-limit": "2000"}, Quota(3, 2000, None)),  # GitLab
         ({"x-ratelimit-nearlimit": "true"}, Quota(0, 1, None)),  # Bitbucket
         ({}, None),
         ({"x-ratelimit-remaining": "many", "x-ratelimit-limit": "5000"}, None),
     ],
-    ids=["github", "gitlab", "bitbucket", "silent", "garbled"],
+    ids=["github", "datadog", "gitlab", "bitbucket", "silent", "garbled"],
 )
 def test_the_quota_is_read_the_way_each_vendor_writes_it(
-    headers: dict[str, str], expected: Quota | None
+    headers: dict[str, str], expected: Quota | None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr("leka.connectors.http.time.time", lambda: 1_790_000_000)
+
     assert quota_of(httpx.Response(200, headers=headers)) == expected
 
 

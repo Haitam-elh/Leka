@@ -543,6 +543,11 @@ const fr = {
       databases: "bases",
       drives: "drives",
       files: "fichiers",
+      alerts: "alertes",
+      events: "événements",
+      incidents: "incidents",
+      metrics: "métriques",
+      logs: "logs",
     },
     /**
      * The same words, in each vendor's own terms where it has them: what
@@ -578,6 +583,7 @@ const fr = {
         load_balancers: "load balancers et Application Gateway",
       },
       gitlab: { pull_requests: "merge requests" },
+      datadog: { alerts: "moniteurs et leurs alertes", metrics: "définitions de métriques" },
       notion: { databases: "bases Notion" },
       asana: { issues: "tâches" },
       trello: { projects: "tableaux", issues: "cartes" },
@@ -769,7 +775,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace et Microsoft 365.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365 et Datadog.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -849,6 +855,24 @@ const fr = {
      * back to `fields`.
      */
     fieldsOf: {
+      datadog: {
+        site: {
+          label: "Site Datadog",
+          help: "Celui de votre organisation : datadoghq.com, datadoghq.eu, us3.datadoghq.com… Vous pouvez coller l'adresse de votre Datadog.",
+        },
+        logs_query: {
+          label: "Requête de logs",
+          help: "Les logs à lire, dans la syntaxe de recherche de Datadog. Par défaut, les erreurs : status:error.",
+        },
+        application_key: {
+          label: "Clé d'application",
+          help: "Celle d'un compte de service au rôle Datadog Read Only, limitée à monitors_read, events_read, incident_read, metrics_read et logs_read_data. Chiffrée, et plus jamais affichée.",
+        },
+        api_key: {
+          label: "Clé d'API",
+          help: "Une clé d'API de l'organisation (Organization Settings → API Keys). Chiffrée, et plus jamais affichée.",
+        },
+      },
       jira: {
         token: {
           label: "Jeton d'API",
@@ -1562,6 +1586,11 @@ const en: Dictionary = {
       databases: "databases",
       drives: "drives",
       files: "files",
+      alerts: "alerts",
+      events: "events",
+      incidents: "incidents",
+      metrics: "metrics",
+      logs: "logs",
     },
     capabilitiesOf: {
       aws: {
@@ -1592,6 +1621,7 @@ const en: Dictionary = {
         load_balancers: "load balancers and Application Gateway",
       },
       gitlab: { pull_requests: "merge requests" },
+      datadog: { alerts: "monitors and their alerts", metrics: "metric definitions" },
       notion: { databases: "Notion databases" },
       asana: { issues: "tasks" },
       trello: { projects: "boards", issues: "cards" },
@@ -1782,7 +1812,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace and Microsoft 365 today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365 and Datadog today.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -1857,6 +1887,24 @@ const en: Dictionary = {
       },
     },
     fieldsOf: {
+      datadog: {
+        site: {
+          label: "Datadog site",
+          help: "Your organisation's: datadoghq.com, datadoghq.eu, us3.datadoghq.com… You may paste your Datadog's address.",
+        },
+        logs_query: {
+          label: "Logs query",
+          help: "Which logs to read, in Datadog's search syntax. By default, the errors: status:error.",
+        },
+        application_key: {
+          label: "Application key",
+          help: "A service account's, with the Datadog Read Only role, scoped to monitors_read, events_read, incident_read, metrics_read and logs_read_data. Encrypted, and never shown again.",
+        },
+        api_key: {
+          label: "API key",
+          help: "An API key of the organisation (Organization Settings → API Keys). Encrypted, and never shown again.",
+        },
+      },
       jira: {
         token: {
           label: "API token",
