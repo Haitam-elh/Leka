@@ -273,7 +273,7 @@ class VendorHttp:
         raise diagnose(
             DiagnosticCode.RATE_LIMITED,
             message="LEKA a mis la lecture en pause pour laisser une réserve de quota "
-            "à vos autres outils sur ce jeton.",
+            "à vos autres outils sur ce token.",
             retry_after=wait,
             detail=f"quota {quota.remaining}/{quota.limit}, below the reserve",
             secrets=[self._secret],

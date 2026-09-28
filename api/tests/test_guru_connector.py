@@ -161,14 +161,14 @@ async def test_a_token_that_sees_no_collection_is_told_so() -> None:
     result = await _connector(Guru({"/collections": []})).test_connection()
 
     assert Capability.SPACES not in result.capabilities
-    assert result.warnings == ["Aucune collection n'est visible avec ce jeton."]
+    assert result.warnings == ["Aucune collection n'est visible avec ce token."]
 
 
 async def test_a_collection_in_scope_guru_does_not_show_fails_the_test() -> None:
     error = await _failure(Guru(), collections=["c-onboard", "c-legal"])
 
     assert error.diagnostic.code is DiagnosticCode.NOT_FOUND
-    assert error.diagnostic.message == "Guru ne montre pas ces collections à ce jeton : c-legal."
+    assert error.diagnostic.message == "Guru ne montre pas ces collections à ce token : c-legal."
 
 
 @pytest.mark.parametrize(

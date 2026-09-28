@@ -171,7 +171,7 @@ class TrelloConnector(Connector[TrelloConfig, TrelloCredentials]):
                     }
                 )
             else:
-                warnings.append("Aucun tableau ouvert n'est visible avec ce jeton.")
+                warnings.append("Aucun tableau ouvert n'est visible avec ce token.")
 
         return ConnectionTestResult(
             account=str(me.get("email") or me.get("username") or "Trello"),
@@ -286,7 +286,7 @@ class TrelloConnector(Connector[TrelloConfig, TrelloCredentials]):
             named = ", ".join(missing[:10]) + ("…" if len(missing) > 10 else "")
             raise diagnose(
                 DiagnosticCode.NOT_FOUND,
-                message=f"Trello ne montre pas ces tableaux à ce jeton : {named}.",
+                message=f"Trello ne montre pas ces tableaux à ce token : {named}.",
             )
 
     async def _cards(self, client: VendorHttp, board: str) -> AsyncIterator[Item]:
@@ -329,16 +329,16 @@ class TrelloConnector(Connector[TrelloConfig, TrelloCredentials]):
                 retry_after=_window(response),
             )
         if status == 401 and "permission" in text:
-            message = "Trello refuse cette lecture à ce jeton."
+            message = "Trello refuse cette lecture à ce token."
             return refusal(
                 response, path, secret, DiagnosticCode.PERMISSION_DENIED, message=message
             )
         if status in (400, 401) and ("invalid key" in text or "invalid token" in text):
-            message = "Trello refuse cette clé d'API ou ce jeton."
+            message = "Trello refuse cette clé d'API ou ce token."
             return refusal(response, path, secret, DiagnosticCode.AUTH_INVALID, message=message)
         if status == 404:
             what = missing or "ce tableau"
-            message = f"Trello ne trouve pas {what}, ou ce jeton ne le voit pas."
+            message = f"Trello ne trouve pas {what}, ou ce token ne le voit pas."
             return refusal(response, path, secret, DiagnosticCode.NOT_FOUND, message=message)
         return refusal(response, path, secret, usual_code(status))
 

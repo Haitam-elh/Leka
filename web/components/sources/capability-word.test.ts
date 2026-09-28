@@ -57,7 +57,7 @@ describe("a setting's words", () => {
   it("are the tool's own where its secret is its own", () => {
     expect(fieldWords(fr, "api_key", "linear")?.help).toContain("lin_api_");
     expect(fieldWords(fr, "api_key", "trello")?.help).toContain("Power-Up");
-    expect(fieldWords(fr, "token", "clickup")?.label).toBe("Jeton personnel");
+    expect(fieldWords(fr, "token", "clickup")?.label).toBe("Token personnel");
     // An Atlassian token cannot be read-only; a GitHub one can.
     expect(fieldWords(fr, "token", "jira")?.help).toContain("compte dédié");
     // Datadog's site is not Atlassian's, nor its api_key Linear's.

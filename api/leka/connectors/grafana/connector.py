@@ -105,7 +105,7 @@ class GrafanaConnector(Connector[GrafanaConfig, GrafanaCredentials]):
         warnings: list[str] = []
         if not capabilities:
             warnings.append(
-                "Ce jeton ne peut rien lire : donnez au compte de service le rôle Viewer."
+                "Ce token ne peut rien lire : donnez au compte de service le rôle Viewer."
             )
         return ConnectionTestResult(
             account=str(org.get("name") or "Grafana"),
@@ -223,7 +223,7 @@ class GrafanaConnector(Connector[GrafanaConfig, GrafanaCredentials]):
                 retry_after=retry_after(response),
             )
         if status == 401:
-            message = "Grafana refuse ce jeton de compte de service."
+            message = "Grafana refuse ce token de compte de service."
             return refusal(response, path, secret, DiagnosticCode.AUTH_INVALID, message=message)
         if status == 403:
             message = (

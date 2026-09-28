@@ -359,7 +359,7 @@ class NotionConnector(Connector[NotionConfig, NotionCredentials]):
                 retry_after=retry_after(response),
             )
         if status == 401 or code == "unauthorized":
-            message = "Notion refuse ce jeton d'intégration."
+            message = "Notion refuse ce token d'intégration."
             return refusal(response, path, secret, DiagnosticCode.AUTH_INVALID, message=message)
         if status == 403 or code == "restricted_resource":
             message = (

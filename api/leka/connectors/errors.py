@@ -61,28 +61,28 @@ class ConnectorError(Exception):
 # `message=`; it never has to invent the remediation.
 _WORDING: dict[DiagnosticCode, tuple[str, str, bool]] = {
     DiagnosticCode.AUTH_INVALID: (
-        "Le jeton a été refusé par le fournisseur.",
+        "Le token a été refusé par le fournisseur.",
         "Vérifiez qu'il a été copié en entier, puis remplacez les identifiants.",
         False,
     ),
     DiagnosticCode.AUTH_EXPIRED: (
-        "Le jeton a expiré.",
+        "Le token a expiré.",
         "Générez-en un nouveau chez le fournisseur et remplacez les identifiants.",
         False,
     ),
     DiagnosticCode.PERMISSION_DENIED: (
         "Le fournisseur refuse l'accès à cette ressource.",
-        "Vérifiez que le compte du jeton a accès à l'organisation et aux dépôts visés.",
+        "Vérifiez que le compte du token a accès à l'organisation et aux dépôts visés.",
         False,
     ),
     DiagnosticCode.INSUFFICIENT_SCOPE: (
-        "Le jeton n'a pas les permissions nécessaires.",
-        "Ajoutez les permissions de lecture demandées au jeton, puis relancez le test.",
+        "Le token n'a pas les permissions nécessaires.",
+        "Ajoutez les permissions de lecture demandées au token, puis relancez le test.",
         False,
     ),
     DiagnosticCode.NOT_FOUND: (
-        "La ressource configurée n'existe pas, ou n'est pas visible avec ce jeton.",
-        "Vérifiez le nom configuré (organisation, projet…) et la visibilité du jeton.",
+        "La ressource configurée n'existe pas, ou n'est pas visible avec ce token.",
+        "Vérifiez le nom configuré (organisation, projet…) et la visibilité du token.",
         False,
     ),
     DiagnosticCode.RATE_LIMITED: (

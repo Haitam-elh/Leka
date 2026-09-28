@@ -148,7 +148,7 @@ describe("a source's page", () => {
       source: source(),
       diagnostic: {
         code: "AUTH_INVALID",
-        message: "Le jeton a été refusé.",
+        message: "Le token a été refusé.",
         remediation: "Remplacez-le.",
       },
     });
@@ -157,7 +157,7 @@ describe("a source's page", () => {
 
     expect(notify.error).toHaveBeenCalledWith({
       title: "La connexion a échoué",
-      description: "Le jeton a été refusé. Remplacez-le.",
+      description: "Le token a été refusé. Remplacez-le.",
     });
   });
 
@@ -306,7 +306,7 @@ describe("its passes", () => {
       data: [
         run({ status: "running", finished_at: null, capability: "commits", records: 1500 }),
         run({ trigger: "manual", full_read: true }),
-        run({ status: "failed", error: { message: "Le jeton a été refusé." } }),
+        run({ status: "failed", error: { message: "Le token a été refusé." } }),
         run({ trigger: "activation", status: "abandoned" }),
       ],
     });
@@ -323,7 +323,7 @@ describe("its passes", () => {
     expect(within(rows[1]).getByText("Complète")).toBeInTheDocument();
     expect(within(rows[1]).getByText("4 min 00 s")).toBeInTheDocument();
     expect(within(rows[1]).getByText("2,3 Mo")).toBeInTheDocument();
-    expect(within(rows[2]).getByText("Le jeton a été refusé.")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("Le token a été refusé.")).toBeInTheDocument();
     expect(within(rows[3]).getByText("Interrompue")).toBeInTheDocument();
   });
 

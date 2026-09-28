@@ -128,8 +128,8 @@ class ClickUpConnector(Connector[ClickUpConfig, ClickUpCredentials]):
             warnings: list[str] = []
             if any(_role(team, user) in ADMIN_ROLES for team in teams):
                 warnings.append(
-                    "Ce jeton appartient à un propriétaire ou un administrateur de l'espace de "
-                    "travail ClickUp. LEKA ne fait que lire : le jeton d'un membre suffit."
+                    "Ce token appartient à un propriétaire ou un administrateur de l'espace de "
+                    "travail ClickUp. LEKA ne fait que lire : le token d'un membre suffit."
                 )
             capabilities: list[Capability] = []
             if chosen:
@@ -141,7 +141,7 @@ class ClickUpConnector(Connector[ClickUpConfig, ClickUpCredentials]):
                     }
                 )
             else:
-                warnings.append("Aucun espace (Space) n'est visible avec ce jeton.")
+                warnings.append("Aucun espace (Space) n'est visible avec ce token.")
 
         return ConnectionTestResult(
             account=str(user.get("email") or user.get("username") or "ClickUp"),
@@ -254,7 +254,7 @@ class ClickUpConnector(Connector[ClickUpConfig, ClickUpCredentials]):
             named = ", ".join(missing[:10]) + ("…" if len(missing) > 10 else "")
             raise diagnose(
                 DiagnosticCode.NOT_FOUND,
-                message=f"ClickUp ne montre pas ces espaces à ce jeton : {named}.",
+                message=f"ClickUp ne montre pas ces espaces à ce token : {named}.",
             )
 
     async def _lists(self, client: VendorHttp, space: str) -> AsyncIterator[Item]:
@@ -308,16 +308,16 @@ class ClickUpConnector(Connector[ClickUpConfig, ClickUpCredentials]):
                 retry_after=retry_after(response, "x-ratelimit-reset"),
             )
         if UNAUTHORISED_TEAM.match(code):
-            message = "Cet espace de travail ClickUp n'a pas été autorisé pour ce jeton."
+            message = "Cet espace de travail ClickUp n'a pas été autorisé pour ce token."
             return refusal(
                 response, path, secret, DiagnosticCode.PERMISSION_DENIED, message=message
             )
         if status == 401:
-            message = "ClickUp refuse ce jeton."
+            message = "ClickUp refuse ce token."
             return refusal(response, path, secret, DiagnosticCode.AUTH_INVALID, message=message)
         if status == 404:
             what = missing or "cet espace"
-            message = f"ClickUp ne trouve pas {what}, ou ce jeton ne le voit pas."
+            message = f"ClickUp ne trouve pas {what}, ou ce token ne le voit pas."
             return refusal(response, path, secret, DiagnosticCode.NOT_FOUND, message=message)
         return refusal(response, path, secret, usual_code(status))
 

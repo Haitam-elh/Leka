@@ -747,7 +747,7 @@ const fr = {
       actionFailed: "L'action n'a pas abouti. Réessayez dans un instant.",
       configuration: "Configuration",
       scope: "Périmètre",
-      scopeAll: "Tout ce que le jeton voit",
+      scopeAll: "Tout ce que le token voit",
       defaultValue: "Par défaut",
       noConnector: "Aucun connecteur n'est encore disponible pour ce type de source : elle ne peut être ni testée ni modifiée.",
       history: "Historique",
@@ -761,19 +761,19 @@ const fr = {
       choose: "Quel outil voulez-vous connecter ?",
       name: "Nom de la source",
       nameHelp: "Comme vous l'appelez dans l'équipe : « GitHub Acme ».",
-      keepSecret: "Laissez vide pour garder le jeton enregistré.",
+      keepSecret: "Laissez vide pour garder le token enregistré.",
       back: "Retour",
       next: "Continuer",
       create: "Enregistrer et continuer",
       scopeTitle: "Que doit lire LEKA ?",
-      scopeAll: "Tout ce que le jeton voit",
+      scopeAll: "Tout ce que le token voit",
       scopeSome: "Seulement une sélection",
       scopeLoading: "Liste en cours de récupération…",
       scopeSearch: "Filtrer la liste…",
       scopeTruncated: "Seuls les 1 000 premiers sont proposés.",
-      scopeEmpty: "Aucun élément visible avec ce jeton.",
+      scopeEmpty: "Aucun élément visible avec ce token.",
       scopeChosen: "{count} sélectionné(s)",
-      scopeNone: "Choisissez au moins un élément, ou « Tout ce que le jeton voit ».",
+      scopeNone: "Choisissez au moins un élément, ou « Tout ce que le token voit ».",
       testing: "Test de la connexion…",
       testOk: "Connexion réussie",
       account: "Compte : {account}",
@@ -798,11 +798,11 @@ const fr = {
     fields: {
       organization: {
         label: "Organisation",
-        help: "Vide : les dépôts que voit le propriétaire du jeton.",
+        help: "Vide : les dépôts que voit le propriétaire du token.",
       },
       group: {
         label: "Groupe",
-        help: "« acme » ou « acme/plateforme », sous-groupes compris. Vide : les projets dont le propriétaire du jeton est membre.",
+        help: "« acme » ou « acme/plateforme », sous-groupes compris. Vide : les projets dont le propriétaire du token est membre.",
       },
       workspace: {
         label: "Workspace",
@@ -813,12 +813,12 @@ const fr = {
         help: "À changer seulement pour une instance hébergée chez vous.",
       },
       token: {
-        label: "Jeton d'accès",
-        help: "Un jeton en lecture seule suffit. Il est chiffré, et ne sera plus jamais affiché.",
+        label: "Token d'accès",
+        help: "Un token en lecture seule suffit. Il est chiffré, et ne sera plus jamais affiché.",
       },
       email: {
         label: "E-mail du compte",
-        help: "Seulement pour un jeton API Atlassian.",
+        help: "Seulement pour un token API Atlassian.",
       },
       access_key_id: {
         label: "Access key ID",
@@ -873,7 +873,7 @@ const fr = {
           help: "https://acme.grafana.net, ou celle de votre Grafana — en https, accessible depuis Internet.",
         },
         token: {
-          label: "Jeton de compte de service",
+          label: "Token de compte de service",
           help: "glsa_…, d'un compte de service au rôle Viewer (Administration → Service accounts). Chiffré, et plus jamais affiché.",
         },
       },
@@ -907,14 +907,14 @@ const fr = {
       },
       jira: {
         token: {
-          label: "Jeton d'API",
-          help: "Un jeton Atlassian ne peut pas être limité à la lecture : créez-le sur un compte dédié, sans droits d'administration, qui ne voit que ce que LEKA doit lire. Chiffré, et plus jamais affiché.",
+          label: "Token d'API",
+          help: "Un token Atlassian ne peut pas être limité à la lecture : créez-le sur un compte dédié, sans droits d'administration, qui ne voit que ce que LEKA doit lire. Chiffré, et plus jamais affiché.",
         },
       },
       confluence: {
         token: {
-          label: "Jeton d'API",
-          help: "Un jeton Atlassian ne peut pas être limité à la lecture : créez-le sur un compte dédié, sans droits d'administration, qui ne voit que ce que LEKA doit lire. Chiffré, et plus jamais affiché.",
+          label: "Token d'API",
+          help: "Un token Atlassian ne peut pas être limité à la lecture : créez-le sur un compte dédié, sans droits d'administration, qui ne voit que ce que LEKA doit lire. Chiffré, et plus jamais affiché.",
         },
       },
       linear: {
@@ -925,13 +925,13 @@ const fr = {
       },
       asana: {
         token: {
-          label: "Jeton d'accès personnel",
+          label: "Token d'accès personnel",
           help: "Celui d'un membre dédié, pas d'un administrateur : Paramètres → Applications → Applications de développement. Chiffré, et plus jamais affiché.",
         },
       },
       trello: {
         token: {
-          label: "Jeton",
+          label: "Token",
           help: "Autorisé en lecture seule (scope=read) par le propriétaire de la clé. Chiffré, et plus jamais affiché.",
         },
         api_key: {
@@ -941,30 +941,30 @@ const fr = {
       },
       clickup: {
         token: {
-          label: "Jeton personnel",
-          help: "pk_…, celui d'un membre dédié : Paramètres → Applications → Jeton d'API. Chiffré, et plus jamais affiché.",
+          label: "Token personnel",
+          help: "pk_…, celui d'un membre dédié : Paramètres → Applications → Token d'API. Chiffré, et plus jamais affiché.",
         },
       },
       monday: {
         token: {
-          label: "Jeton d'API",
-          help: "Celui d'un membre dédié, pas d'un administrateur : avatar → Développeurs → Jeton d'API. Chiffré, et plus jamais affiché.",
+          label: "Token d'API",
+          help: "Celui d'un membre dédié, pas d'un administrateur : avatar → Développeurs → Token d'API. Chiffré, et plus jamais affiché.",
         },
       },
       slab: {
         token: {
-          label: "Jeton d'API",
+          label: "Token d'API",
           help: "Celui de l'espace, dans Team settings → Developer (offres Business et Enterprise). Il lit comme le Slab Bot. Chiffré, et plus jamais affiché.",
         },
       },
       guru: {
         token: {
-          label: "Jeton d'API",
-          help: "De préférence un jeton de collection, en lecture seule ; sinon celui d'un utilisateur dédié. Chiffré, et plus jamais affiché.",
+          label: "Token d'API",
+          help: "De préférence un token de collection, en lecture seule ; sinon celui d'un utilisateur dédié. Chiffré, et plus jamais affiché.",
         },
         username: {
           label: "Identifiant",
-          help: "Pour un jeton de collection : l'identifiant de la collection. Pour un jeton d'utilisateur : son e-mail.",
+          help: "Pour un token de collection : l'identifiant de la collection. Pour un token d'utilisateur : son e-mail.",
         },
       },
       google_workspace: {

@@ -163,7 +163,7 @@ class AsanaConnector(Connector[AsanaConfig, AsanaCredentials]):
             capabilities: list[Capability] = []
             warnings: list[str] = []
             if sample is None:
-                warnings.append("Aucun projet n'est visible avec ce jeton.")
+                warnings.append("Aucun projet n'est visible avec ce token.")
             else:
                 capabilities = await client.probe(
                     {
@@ -297,7 +297,7 @@ class AsanaConnector(Connector[AsanaConfig, AsanaCredentials]):
             named = ", ".join(missing[:10]) + ("…" if len(missing) > 10 else "")
             raise diagnose(
                 DiagnosticCode.NOT_FOUND,
-                message=f"Asana ne montre pas ces projets à ce jeton : {named}.",
+                message=f"Asana ne montre pas ces projets à ce token : {named}.",
             )
 
     def _refuse(self, response: httpx.Response, path: str, missing: str) -> ConnectorError:
@@ -313,7 +313,7 @@ class AsanaConnector(Connector[AsanaConfig, AsanaCredentials]):
                 retry_after=retry_after(response),
             )
         if status == 401:
-            message = "Asana refuse ce jeton d'accès."
+            message = "Asana refuse ce token d'accès."
             return refusal(response, path, secret, DiagnosticCode.AUTH_INVALID, message=message)
         if status == 402:
             message = "Cette lecture demande une offre Asana payante."
@@ -322,7 +322,7 @@ class AsanaConnector(Connector[AsanaConfig, AsanaCredentials]):
             )
         if status == 404:
             what = missing or "ce projet"
-            message = f"Asana ne trouve pas {what}, ou ce jeton ne le voit pas."
+            message = f"Asana ne trouve pas {what}, ou ce token ne le voit pas."
             return refusal(response, path, secret, DiagnosticCode.NOT_FOUND, message=message)
         return refusal(response, path, secret, usual_code(status))
 

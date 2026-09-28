@@ -194,14 +194,14 @@ async def test_a_token_that_sees_no_open_board_is_told_so() -> None:
     result = await _connector(Trello(), boards=["ZzYy9876"]).test_connection()
 
     assert result.capabilities == []
-    assert result.warnings == ["Aucun tableau ouvert n'est visible avec ce jeton."]
+    assert result.warnings == ["Aucun tableau ouvert n'est visible avec ce token."]
 
 
 async def test_a_board_in_scope_that_trello_does_not_show_fails_the_test() -> None:
     error = await _failure(Trello(), boards=["AbCd1234", "Nope5678"])
 
     assert error.diagnostic.code is DiagnosticCode.NOT_FOUND
-    assert error.diagnostic.message == "Trello ne montre pas ces tableaux à ce jeton : Nope5678."
+    assert error.diagnostic.message == "Trello ne montre pas ces tableaux à ce token : Nope5678."
 
 
 @pytest.mark.parametrize(

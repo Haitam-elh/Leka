@@ -193,14 +193,14 @@ async def test_a_token_that_sees_no_project_is_told_so() -> None:
     result = await _connector(Asana({"/users/me": nothing})).test_connection()
 
     assert result.capabilities == []
-    assert result.warnings == ["Aucun projet n'est visible avec ce jeton."]
+    assert result.warnings == ["Aucun projet n'est visible avec ce token."]
 
 
 async def test_a_project_in_scope_that_asana_does_not_show_fails_the_test() -> None:
     error = await _failure(Asana(), projects=["1001", "9999"])
 
     assert error.diagnostic.code is DiagnosticCode.NOT_FOUND
-    assert error.diagnostic.message == "Asana ne montre pas ces projets à ce jeton : 9999."
+    assert error.diagnostic.message == "Asana ne montre pas ces projets à ce token : 9999."
 
 
 @pytest.mark.parametrize(
