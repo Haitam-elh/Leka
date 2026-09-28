@@ -152,3 +152,14 @@ async def test_an_exhausted_quota_mid_stream_keeps_what_was_read() -> None:
 async def test_confluence_reads_only_what_it_declares() -> None:
     with pytest.raises(ValueError, match="does not read"):
         await _stream(Confluence(), Capability.ISSUES)
+
+
+async def test_pages_and_spaces_carry_the_link_to_open_them() -> None:
+    """Confluence gives a path; the record keeps the whole link, on the site."""
+    linked = {**_page(1, "2026-09-25T10:00:00.000Z"), "_links": {"webui": "/spaces/ENG/pages/1001"}}
+    confluence = Confluence({ENG_PAGES: {"results": [linked], "_links": {}}})
+
+    pages = await _stream(confluence, Capability.PAGES)
+
+    assert pages[0].payload["web_url"] == "https://acme.atlassian.net/wiki/spaces/ENG/pages/1001"
+    assert "web_url" not in (await _stream(Confluence(), Capability.SPACES))[0].payload

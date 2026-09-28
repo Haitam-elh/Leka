@@ -13,6 +13,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from leka.connectors import Capability, Mapping, first_match
 from leka.ingestion.extraction import ExtractedRecord, Reference
@@ -27,6 +28,11 @@ CODE_HOSTS = frozenset({"github", "gitlab", "bitbucket"})
 CLOUDS = frozenset({"aws", "azure", "gcp"})
 # The operations tools whose incidents and services are mapped (LEKA-348).
 OPERATIONS = frozenset({"datadog", "pagerduty"})
+# The project and documentation tools beyond Jira (LEKA-346).
+PROJECT_TOOLS = frozenset({"linear", "asana", "trello", "clickup", "monday"})
+DOCUMENT_TOOLS = frozenset(
+    {"confluence", "notion", "slab", "guru", "google_workspace", "microsoft_365"}
+)
 
 ENTITY_TYPES = {
     C.REPOSITORIES: "repository",
@@ -45,6 +51,8 @@ ENTITY_TYPES = {
     C.LOAD_BALANCERS: "infra_resource",
     C.INCIDENTS: "incident",
     C.SERVICES: "service",
+    C.PAGES: "document",
+    C.FILES: "document",
 }
 RESOURCE_KINDS = {
     C.INSTANCES: "instance",
@@ -65,6 +73,7 @@ PERSON_ROLES = {
     "creator": "created_by",
     "lead": "led_by",
     "commander": "led_by",
+    "owner": "led_by",
 }
 # How parsing said one thing points at another.
 REFERENCE_TYPES = {
@@ -176,6 +185,8 @@ def entity(build: Build) -> NormalisedEntity:
         key, attributes = _cloud(build)
     elif capability in (C.INCIDENTS, C.SERVICES):
         key, attributes = _operations(build)
+    elif build.kind in PROJECT_TOOLS or build.kind in DOCUMENT_TOOLS:
+        key, attributes = _tool(build)
     else:
         key, attributes = _work(build)
     _mapped_containers(build, key)
@@ -311,6 +322,81 @@ def _target_key(build: Build, target: Target) -> str | None:
         site = ids.site_of(build.record.url) if build.kind == "jira" else None
         return ids.ticket(target.key, site=site)
     return None
+
+
+# ── project and documentation tools (LEKA-346) ──────────────────────────────
+
+
+def _tool(build: Build) -> tuple[str, dict[str, object]]:
+    """A project tool's project or issue, a documentation tool's or an office
+    suite's document — keyed by the tool and its own id, with its project,
+    its people and its parent."""
+    record, capability = build.record, build.record.provenance.capability
+    own_id, container = record.provenance.external_id, record.provenance.container
+    if capability is C.PROJECTS and build.kind in PROJECT_TOOLS:
+        key = ids.item(build.kind, "project", own_id)
+    elif capability is C.ISSUES and build.kind in PROJECT_TOOLS:
+        key = _tool_issue(build, own_id)
+        project = (
+            next((r.external_id for r in record.references if r.kind == "project"), None)
+            if build.kind == "linear"
+            else container
+        )
+        if project:
+            build.relate("part_of", key, ids.item(build.kind, "project", project), 1.0, "container")
+    elif capability in (C.PAGES, C.FILES) and build.kind in DOCUMENT_TOOLS:
+        key = _document(build, own_id, container)
+    else:
+        raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
+
+    attributes = _common(build)
+    raw_priority = record.metadata.get("priority")
+    if isinstance(raw_priority, str):
+        own = _own(build.mapping.priorities, raw_priority)
+        attributes["priority"], known = (own, True) if own else values.priority(raw_priority)
+        attributes["priority_raw"] = raw_priority
+        if not known:
+            build.diagnostics.append("unknown priority: kept as the vendor wrote it")
+    for reference in record.references:
+        if reference.kind == "person" and reference.role in PERSON_ROLES:
+            person = build.person(reference)
+            if person:
+                build.relate(PERSON_ROLES[reference.role], key, person, 1.0, "references")
+        elif reference.role == "parent" and reference.external_id:
+            parent = (
+                _tool_issue(build, reference.external_id)
+                if reference.kind == "issue"
+                else _document(build, reference.external_id, container)
+            )
+            build.relate("child_of", key, parent, 1.0, "references")
+    _references(build, key)
+    return key, attributes
+
+
+def _tool_issue(build: Build, own_id: str) -> str:
+    """An issue's key. A Linear issue is its identifier in its workspace —
+    'ENG-42' named in a pull request finds it by the alias ticket:ENG-42."""
+    if build.kind != "linear":
+        return ids.item(build.kind, "issue", own_id)
+    identifier = own_id if ids.JIRA_KEY.match(own_id) else build.record.metadata.get("key")
+    if not isinstance(identifier, str) or not identifier:
+        raise InvalidRecordError("no key: the extraction has no metadata.key")
+    path = [part for part in urlsplit(build.record.url or "").path.split("/") if part]
+    ticket = ids.ticket(identifier, site=None)
+    if ticket not in build.aliases and own_id == build.record.provenance.external_id:
+        build.aliases.append(ticket)
+    return f"linear.app/{path[0].lower()}/{identifier.upper()}" if path else ticket
+
+
+def _document(build: Build, own_id: str, container: str | None) -> str:
+    """A document's key: the tool and its id. Confluence's ids are its
+    site's, so its key is the site's; a Microsoft 365 item's, its drive's."""
+    if build.kind == "confluence":
+        site = ids.site_of(build.record.url)
+        return f"{site}/wiki/pages/{own_id}" if site else ids.item("confluence", "page", own_id)
+    if build.kind == "microsoft_365" and container:
+        return ids.item("microsoft_365", "document", f"{container}/{own_id}")
+    return ids.item(build.kind, "document", own_id)
 
 
 # ── operations: incidents and services (LEKA-348) ────────────────────────────

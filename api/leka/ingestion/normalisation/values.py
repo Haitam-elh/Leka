@@ -34,9 +34,29 @@ WORK_STATES = {
     "duplicate": "closed",
     "wontfix": "closed",
     "merged": "merged",
+    # Monday's default labels, and what other tools call being done.
+    "working on it": "in_progress",
+    "stuck": "in_progress",
+    "complete": "closed",
+    "completed": "closed",
 }
-# Jira's own three categories, surer than a status name any team renames.
-STATUS_CATEGORIES = {"new": "open", "indeterminate": "in_progress", "done": "closed"}
+# A tool's own classes of state, surer than a status name any team renames:
+# Jira's three categories, Linear's workflow types, ClickUp's status types.
+STATUS_CATEGORIES = {
+    "new": "open",
+    "indeterminate": "in_progress",
+    "done": "closed",
+    "backlog": "open",
+    "triage": "open",
+    "unstarted": "open",
+    "started": "in_progress",
+    "completed": "closed",
+    "canceled": "closed",
+    "cancelled": "closed",
+    "open": "open",
+    "custom": "in_progress",
+    "closed": "closed",
+}
 
 # Cloud resources: running, starting, stopping, stopped, deleting, failed.
 RESOURCE_STATES = {

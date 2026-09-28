@@ -31,7 +31,9 @@ from leka.ingestion.normalisation.mapping import (
 from leka.ingestion.parsing import ParsedRecord
 
 # 2: incidents and services of the operations tools (LEKA-348).
-NORMALISER_VERSION = 2
+# 3: the project tools' projects and issues, the documentation tools' and
+#    office suites' documents (LEKA-346).
+NORMALISER_VERSION = 3
 
 
 def normalise(

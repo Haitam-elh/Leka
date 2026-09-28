@@ -848,6 +848,18 @@ never reaches them.
   codes: `AADSTS90002` (no such tenant) → `NOT_FOUND`, `AADSTS7000222` (an
   expired secret) → `AUTH_EXPIRED`.
 
+## What comes after
+
+Every capability of these tools has an extraction strategy
+([extraction.md](../extraction.md)): a title, the text — a page's body read
+out of its markup, a file's text — the dates, the people, the project or the
+parent. Normalisation ([normalisation.md](../normalisation.md)) makes their
+projects `project`, their issues, tasks, cards and items `issue` — Linear's
+by their identifier, with the alias `ticket:ENG-42` — and their pages, posts,
+cards and files `document`; spaces, databases, topics, collections and
+drives stay containers. Confluence's pages and spaces carry `web_url`, the
+link to open them (Confluence gives a path only).
+
 ## Diagnostics
 
 | Jira or Confluence answers | Diagnostic |

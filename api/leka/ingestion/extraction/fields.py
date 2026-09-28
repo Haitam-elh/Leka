@@ -6,6 +6,8 @@ record means nothing without it (`required`).
 
 from __future__ import annotations
 
+import html
+import json
 import re
 from datetime import datetime
 from typing import Literal
@@ -184,3 +186,54 @@ def tags(value: object, *path: str | int) -> list[str]:
 def last_segment(value: str | None) -> str | None:
     """'…/zones/europe-west1-b/machineTypes/e2-small' → 'e2-small'."""
     return value.rstrip("/").rsplit("/", 1)[-1] or None if value else None
+
+
+# A markup element that ends a line of text: a paragraph, a heading, a cell.
+_MARKUP_BLOCKS = re.compile(
+    r"</?(?:p|div|br|li|tr|td|th|h[1-6]|pre|blockquote|table|ul|ol)\b[^>]*>", re.IGNORECASE
+)
+_MARKUP_DROPPED = re.compile(r"<(script|style)\b.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
+_MARKUP_TAG = re.compile(r"<[^>]+>")
+
+
+def markup_text(markup: object) -> str | None:
+    """HTML or Confluence's storage XHTML as plain text: its words, a line
+    per block. Read by expressions, never parsed: no entity is expanded
+    beyond HTML's own, nothing is fetched."""
+    if not isinstance(markup, str) or not markup.strip():
+        return None
+    text = _MARKUP_DROPPED.sub(" ", markup)
+    text = _MARKUP_BLOCKS.sub("\n", text)
+    text = html.unescape(_MARKUP_TAG.sub("", text))
+    lines = [" ".join(line.split()) for line in text.splitlines()]
+    joined = "\n".join(line for line in lines if line)
+    return joined or None
+
+
+def delta_text(value: object) -> str | None:
+    """A Quill delta — Slab's rich text, as JSON text or a list of
+    operations — as plain text: what its operations insert."""
+    operations = value
+    if isinstance(value, str):
+        try:
+            operations = json.loads(value)
+        except json.JSONDecodeError:
+            return value.strip() or None
+    if isinstance(operations, dict):
+        operations = operations.get("ops")
+    if not isinstance(operations, list):
+        return None
+    parts = [
+        op["insert"]
+        for op in operations
+        if isinstance(op, dict) and isinstance(op.get("insert"), str)
+    ]
+    return "".join(parts).strip() or None
+
+
+def rich_text(value: object) -> str | None:
+    """Notion's rich text — a list of runs — as its plain text."""
+    if not isinstance(value, list):
+        return None
+    text = "".join(str(run.get("plain_text") or "") for run in value if isinstance(run, dict))
+    return text.strip() or None

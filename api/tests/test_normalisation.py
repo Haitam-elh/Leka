@@ -24,11 +24,21 @@ from leka.ingestion.normalisation import (
 )
 from leka.ingestion.normalisation import identifiers as ids
 from leka.ingestion.parsing import ParsedRecord, parse
+from tests.test_asana_connector import LAUNCH as ASANA_LAUNCH
+from tests.test_asana_resources import _task as asana_task
+from tests.test_clickup_resources import _task as clickup_task
+from tests.test_confluence_connector import ENG as CONFLUENCE_ENG
+from tests.test_confluence_resources import _page as confluence_page
 from tests.test_datadog_connector import CHECKOUT as DATADOG_MONITOR
 from tests.test_datadog_resources import incident as datadog_incident
 from tests.test_extraction import BITBUCKET_PR, GITHUB_PR, GITLAB_MR, JIRA_ISSUE, _extract
+from tests.test_extraction_tools import LINEAR_ISSUE, NOTION_PAGE
+from tests.test_microsoft_365_resources import item as m365_item
+from tests.test_monday_resources import _item as monday_item
+from tests.test_notion_connector import WIKI
 from tests.test_pagerduty_connector import CHECKOUT as PAGERDUTY_CHECKOUT
 from tests.test_pagerduty_connector import incident as pagerduty_incident
+from tests.test_trello_resources import _card as trello_card
 
 ARN = "arn:aws:ec2:eu-west-3:123456789012"
 
@@ -456,3 +466,99 @@ def test_alerts_events_and_logs_are_not_entities_yet() -> None:
     failure = _failure(normalise(extracted, parsed))
 
     assert failure.code.value == "unsupported"
+
+
+# ── project and documentation tools (LEKA-346) ───────────────────────────────
+
+
+def test_a_linear_issue_is_its_identifier_in_its_workspace_with_a_ticket_alias() -> None:
+    record = _normalised(
+        SourceKind.LINEAR, Capability.ISSUES, LINEAR_ISSUE, external_id=LINEAR_ISSUE["id"]
+    )
+
+    assert (record.entity.type, record.entity.key) == ("issue", "linear.app/acme/ENG-42")
+    assert "ticket:ENG-42" in record.entity.aliases
+    attributes = record.entity.attributes
+    assert (attributes["state"], attributes["state_raw"]) == ("in_progress", "in review")
+    assert attributes["priority"] == "high"
+    assert _edges(record) >= {
+        ("part_of", "linear:project:proj-1"),
+        ("child_of", "linear.app/acme/ENG-40"),
+        ("assigned_to", "person:email:nora@acme.test"),
+    }
+
+
+def test_a_task_of_another_tool_is_part_of_its_project() -> None:
+    asana = _normalised(
+        SourceKind.ASANA,
+        Capability.ISSUES,
+        asana_task("7", "1001"),
+        external_id="7",
+        container="1001",
+    )
+    trello = _normalised(
+        SourceKind.TRELLO, Capability.ISSUES, trello_card(2), external_id="c2", container="b1"
+    )
+    clickup = _normalised(
+        SourceKind.CLICKUP, Capability.ISSUES, clickup_task(1), external_id="t1", container="l-1"
+    )
+
+    assert asana.entity.key == "asana:issue:7"
+    assert ("part_of", "asana:project:1001") in _edges(asana)
+    assert ("part_of", "trello:project:b1") in _edges(trello)
+    assert trello.entity.attributes["state"] == "closed"  # card 2 is archived
+    assert ("part_of", "clickup:project:l-1") in _edges(clickup)
+
+
+def test_a_monday_status_label_is_on_leka_s_scale() -> None:
+    item = {**monday_item(1), "column_values": [{"type": "status", "text": "Working on it"}]}
+
+    record = _normalised(SourceKind.MONDAY, Capability.ISSUES, item, container="111")
+
+    assert record.entity.attributes["state"] == "in_progress"
+
+
+def test_a_project_of_a_tool_is_a_project() -> None:
+    record = _normalised(SourceKind.ASANA, Capability.PROJECTS, ASANA_LAUNCH, external_id="1001")
+
+    assert (record.entity.type, record.entity.key) == ("project", "asana:project:1001")
+
+
+def test_a_confluence_page_is_a_document_of_its_site_and_its_author_jira_s_person() -> None:
+    payload = {
+        **confluence_page(1, "2026-09-21T12:05:00Z"),
+        "authorId": "5b10ac8d",
+        "web_url": "https://acme.atlassian.net/wiki/spaces/ENG/pages/1001/Runbook",
+    }
+
+    record = _normalised(SourceKind.CONFLUENCE, Capability.PAGES, payload, external_id="1001")
+
+    assert (record.entity.type, record.entity.key) == (
+        "document",
+        "acme.atlassian.net/wiki/pages/1001",
+    )
+    assert _edges(record) >= {
+        ("authored_by", "person:acme.atlassian.net:5b10ac8d"),
+        ("child_of", "acme.atlassian.net/wiki/pages/999"),
+    }
+
+
+def test_documents_of_the_other_tools_are_keyed_by_tool_and_id() -> None:
+    notion = _normalised(SourceKind.NOTION, Capability.PAGES, NOTION_PAGE, external_id=WIKI)
+    microsoft = _normalised(
+        SourceKind.MICROSOFT_365,
+        Capability.FILES,
+        m365_item("report", name="Report.docx"),
+        external_id="report",
+        container="b!docs",
+    )
+
+    assert notion.entity.key == f"notion:document:{WIKI}"
+    assert ("child_of", "notion:document:parent-page") in _edges(notion)
+    assert microsoft.entity.key == "microsoft_365:document:b!docs/report"
+
+
+def test_containers_of_documents_are_not_entities() -> None:
+    extracted, parsed = _pipeline(SourceKind.CONFLUENCE, Capability.SPACES, CONFLUENCE_ENG)
+
+    assert _failure(normalise(extracted, parsed)).code.value == "unsupported"
