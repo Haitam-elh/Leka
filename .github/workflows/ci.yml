@@ -205,8 +205,11 @@ jobs:
             -e ORACLE_PASSWORD=Leka-local-1 \
             -v "$PWD/api/tests/oracle:/container-entrypoint-startdb.d:ro" \
             gvenzl/oracle-free:23-slim-faststart@sha256:f5ff19033860d662c821cb04eb10483fa94f14f78eae252d054291ea07028093
+          # grep reads the whole log, not -q: a run's shell has pipefail,
+          # and `grep -q` leaving early kills `docker logs` with SIGPIPE —
+          # the line there, and the test false (checked by hand, 2026-09-29).
           for _ in $(seq 1 120); do
-            if docker logs oracle 2>&1 | grep -q "DATABASE IS READY TO USE" \
+            if docker logs oracle 2>&1 | grep "DATABASE IS READY TO USE" > /dev/null \
               && (echo > /dev/tcp/127.0.0.1/2484) 2>/dev/null; then
               echo "Oracle is up, TLS on 2484"; df -h /; exit 0
             fi
