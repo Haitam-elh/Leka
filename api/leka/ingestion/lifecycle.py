@@ -92,6 +92,10 @@ POLICIES: dict[ProcessingStage, Policy] = {
         kept="while its parse is parsed",
         replaced="when the parse or NORMALISER_VERSION changes",
     ),
+    ProcessingStage.VALIDATION: Policy(
+        kept="while its normalisation is normalised",
+        replaced="when the record is normalised again or VALIDATOR_VERSION changes",
+    ),
 }
 
 

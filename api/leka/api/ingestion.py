@@ -8,6 +8,8 @@
     GET  /ingestion/sources/{id}/extraction  what extraction made of it (LEKA-354)
     GET  /ingestion/sources/{id}/parsing     what parsing read in it (LEKA-355)
     GET  /ingestion/sources/{id}/normalisation  the candidates made of it (LEKA-356)
+    GET  /ingestion/sources/{id}/validation     what they are worth, what is quarantined (LEKA-358)
+    GET  /ingestion/quality                     one line per source: how its records validate
     GET  /ingestion/sources/{id}/pipeline       each stage: under way, pending, last run (LEKA-360)
     GET  /ingestion/sources/{id}/processing-runs  every run, newest first
     POST /ingestion/sources/{id}/pipeline/resume     queue what has work — source:manage
@@ -47,14 +49,18 @@ from leka.ingestion import (
     ProcessingRunRead,
     ProcessingRunRepository,
     ProcessingStage,
+    QualityScores,
+    QuarantinedRecordRead,
     SourceExtraction,
     SourceNormalisation,
     SourceParsing,
     SourcePipeline,
+    SourceQuality,
     SourceRecordRepository,
     SourceSyncRead,
     SourceSyncRepository,
     SourceSyncs,
+    SourceValidation,
     StageState,
     SyncRequested,
     SyncRun,
@@ -63,6 +69,8 @@ from leka.ingestion import (
     SyncRunStatus,
     SyncSummary,
     SyncTrigger,
+    ValidationIssueCount,
+    ValidationRepository,
     WebhookDelivery,
     WebhookDeliveryRead,
     WebhookDeliveryRepository,
@@ -333,6 +341,63 @@ async def source_normalisation(
             for row, external_id in await repository.failures(source_id, limit=FAILURES_SHOWN)
         ],
     )
+
+
+QUARANTINED_SHOWN = 20
+
+
+@router.get("/sources/{source_id}/validation", response_model=SourceValidation)
+async def source_validation(
+    source_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> SourceValidation:
+    """What validation found of the source's records: how many are valid,
+    doubtful, quarantined; what they are worth; which issues, how often, and
+    what to do about each; the latest quarantined — kept out of the company
+    model until they are corrected."""
+    await _source(session, principal, source_id)
+    repository = ValidationRepository(session, principal.workspace_id)
+    statuses = (await repository.statuses(source_id)).get(source_id, {})
+    averages = (await repository.averages(source_id)).get(source_id, {})
+    return SourceValidation(
+        valid=statuses.get("valid", 0),
+        warning=statuses.get("warning", 0),
+        quarantined=statuses.get("quarantined", 0),
+        scores=QualityScores(
+            **{
+                name: averages.get(name)
+                for name in ("quality", "completeness", "consistency", "freshness", "confidence")
+            }
+        ),
+        last_validated_at=averages.get("validated_at"),
+        issues=[
+            ValidationIssueCount(code=code, severity=severity, records=n, remediation=remedy)
+            for code, severity, remedy, n in await repository.issue_counts(source_id)
+        ],
+        quarantined_records=[
+            QuarantinedRecordRead.model_validate(row, from_attributes=True)
+            for row in await repository.quarantined(source_id, QUARANTINED_SHOWN)
+        ],
+    )
+
+
+@router.get("/quality", response_model=list[SourceQuality])
+async def quality(session: SessionDep, principal: Reader) -> list[SourceQuality]:
+    """One line per source whose records were validated: how many valid,
+    doubtful, quarantined, and their mean quality."""
+    repository = ValidationRepository(session, principal.workspace_id)
+    statuses = await repository.statuses()
+    averages = await repository.averages()
+    return [
+        SourceQuality(
+            source_id=source_id,
+            valid=counts.get("valid", 0),
+            warning=counts.get("warning", 0),
+            quarantined=counts.get("quarantined", 0),
+            quality=averages.get(source_id, {}).get("quality"),
+            last_validated_at=averages.get(source_id, {}).get("validated_at"),
+        )
+        for source_id, counts in sorted(statuses.items(), key=lambda pair: str(pair[0]))
+    ]
 
 
 @router.get("/sources/{source_id}/pipeline", response_model=SourcePipeline)

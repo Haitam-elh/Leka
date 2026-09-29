@@ -55,7 +55,8 @@ from typing import Literal
 
 from leka.ingestion.resolution import signals as sig
 
-RESOLVER_VERSION = 1
+# 2: quarantined records left out, and each entity's quality (LEKA-358).
+RESOLVER_VERSION = 2
 MERGE = 0.9
 LINK = 0.6
 SEMANTIC_CAP = 0.95
@@ -91,6 +92,8 @@ class Mention:
     named: int = 0
     # A normalised_records row that says it.
     example: uuid.UUID | None = None
+    # The best quality validation gave the source's records that are it.
+    quality: float | None = None
 
 
 @dataclass(frozen=True)
@@ -132,6 +135,7 @@ class Identity:
     keys: list[KeySeen]
     decisions: list[Decision]
     sources: list[uuid.UUID]
+    quality: float | None = None
 
 
 @dataclass
@@ -530,6 +534,7 @@ def _identity(
         keys=_provenance(own, mentions, by_key, derived_from),
         decisions=decisions,
         sources=sorted({m.source_id for m in mentions}, key=str),
+        quality=max((m.quality for m in mentions if m.quality is not None), default=None),
     )
 
 

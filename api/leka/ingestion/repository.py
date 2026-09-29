@@ -54,6 +54,8 @@ from leka.ingestion.models import (
     SyncRun,
     SyncRunOutcome,
     SyncTrigger,
+    ValidatedRecordRow,
+    ValidationStatus,
     WebhookDelivery,
 )
 
@@ -1072,6 +1074,11 @@ class ProcessingRunRepository(WorkspaceScopedRepository):
                 ParsedRecordRow.workspace_id == self.workspace_id,
                 ParsedRecordRow.source_id == source_id,
             )
+        elif stage is ProcessingStage.VALIDATION:
+            statement = delete(ValidatedRecordRow).where(
+                ValidatedRecordRow.workspace_id == self.workspace_id,
+                ValidatedRecordRow.source_id == source_id,
+            )
         else:
             statement = delete(NormalisedRecordRow).where(
                 NormalisedRecordRow.workspace_id == self.workspace_id,
@@ -1256,21 +1263,218 @@ class WebhookDeliveryRepository(WorkspaceScopedRepository):
 PLURAL = {"merge": "merges", "link": "links", "ambiguous": "ambiguous"}
 
 
+class ValidationRepository(WorkspaceScopedRepository):
+    """What validation found of a source's normalised records (LEKA-358).
+
+    A normalised record needs validating when it was normalised and has no
+    row yet, when it was normalised again since (`normalised_at`), or when
+    the rules changed (`validator_version`). Validating needs when a pass
+    last saw its record: `stale` returns that too.
+    """
+
+    model = ValidatedRecordRow
+
+    def _stale(self, source_id: uuid.UUID, version: int) -> Select[Any]:
+        normalised, row = NormalisedRecordRow, ValidatedRecordRow
+        return (
+            select(normalised, SourceRecord.last_seen_at)
+            .join(ParsedRecordRow, ParsedRecordRow.id == normalised.parsed_record_id)
+            .join(ExtractedRecordRow, ExtractedRecordRow.id == ParsedRecordRow.extracted_record_id)
+            .join(SourceRecord, SourceRecord.id == ExtractedRecordRow.source_record_id)
+            .outerjoin(row, row.normalised_record_id == normalised.id)
+            .where(
+                normalised.workspace_id == self.workspace_id,
+                normalised.source_id == source_id,
+                normalised.status == NormalisationStatus.NORMALISED,
+                or_(
+                    row.id.is_(None),
+                    row.normalised_at != normalised.normalised_at,
+                    row.validator_version != version,
+                ),
+            )
+        )
+
+    async def stale(
+        self, source_id: uuid.UUID, version: int, *, after: uuid.UUID | None, limit: int
+    ) -> list[tuple[NormalisedRecordRow, datetime | None]]:
+        statement = self._stale(source_id, version).order_by(NormalisedRecordRow.id).limit(limit)
+        if after is not None:
+            statement = statement.where(NormalisedRecordRow.id > after)
+        rows = await self._session.execute(statement)
+        return [(normalised, seen_at) for normalised, seen_at in rows.all()]
+
+    async def has_stale(self, source_id: uuid.UUID, version: int) -> bool:
+        found = await self._session.execute(
+            self._stale(source_id, version).with_only_columns(NormalisedRecordRow.id).limit(1)
+        )
+        return found.first() is not None
+
+    async def duplicate_keys(self, source_id: uuid.UUID) -> set[str]:
+        """The entity keys two or more of the source's records make."""
+        rows = await self._session.execute(
+            select(NormalisedRecordRow.entity_key)
+            .where(
+                NormalisedRecordRow.workspace_id == self.workspace_id,
+                NormalisedRecordRow.source_id == source_id,
+                NormalisedRecordRow.status == NormalisationStatus.NORMALISED,
+            )
+            .group_by(NormalisedRecordRow.entity_key)
+            .having(func.count() > 1)
+        )
+        return {key for (key,) in rows.all() if key}
+
+    async def forget_unvalidatable(self, source_id: uuid.UUID) -> int:
+        """Records that failed normalisation since lose their validation."""
+        failed = select(NormalisedRecordRow.id).where(
+            NormalisedRecordRow.workspace_id == self.workspace_id,
+            NormalisedRecordRow.source_id == source_id,
+            NormalisedRecordRow.status == NormalisationStatus.FAILED,
+        )
+        result = await self._session.execute(
+            delete(ValidatedRecordRow).where(
+                ValidatedRecordRow.workspace_id == self.workspace_id,
+                ValidatedRecordRow.normalised_record_id.in_(failed),
+            )
+        )
+        return _affected_rows(result)
+
+    async def save(self, rows: list[dict[str, object]]) -> None:
+        if not rows:
+            return
+        statement = insert(ValidatedRecordRow).values(
+            [{"workspace_id": self.workspace_id, **row} for row in rows]
+        )
+        excluded = statement.excluded
+        columns = (
+            "kind",
+            "entity_type",
+            "entity_key",
+            "status",
+            "issues",
+            "quality",
+            "completeness",
+            "consistency",
+            "freshness",
+            "confidence",
+            "seen_at",
+            "normalised_at",
+            "validator_version",
+            "run_id",
+            "validated_at",
+        )
+        await self._session.execute(
+            statement.on_conflict_do_update(
+                constraint="uq_validated_records_normalised_record",
+                set_={c: getattr(excluded, c) for c in columns} | {"updated_at": func.now()},
+            )
+        )
+
+    def _of(self, source_id: uuid.UUID) -> Any:
+        return and_(
+            ValidatedRecordRow.workspace_id == self.workspace_id,
+            ValidatedRecordRow.source_id == source_id,
+        )
+
+    async def statuses(self, source_id: uuid.UUID | None = None) -> dict[uuid.UUID, dict[str, int]]:
+        """How many valid, warning, quarantined — per source of the workspace."""
+        statement = (
+            select(ValidatedRecordRow.source_id, ValidatedRecordRow.status, func.count())
+            .where(ValidatedRecordRow.workspace_id == self.workspace_id)
+            .group_by(ValidatedRecordRow.source_id, ValidatedRecordRow.status)
+        )
+        if source_id is not None:
+            statement = statement.where(ValidatedRecordRow.source_id == source_id)
+        found: dict[uuid.UUID, dict[str, int]] = {}
+        for source, status, count in (await self._session.execute(statement)).all():
+            found.setdefault(source, {s.value: 0 for s in ValidationStatus})[str(status)] = int(
+                count
+            )
+        return found
+
+    async def averages(
+        self, source_id: uuid.UUID | None = None
+    ) -> dict[uuid.UUID, dict[str, float]]:
+        """The mean of each score, per source — quarantined records left out
+        of quality, which is 0 for them by rule."""
+        row = ValidatedRecordRow
+        statement = (
+            select(
+                row.source_id,
+                func.avg(row.quality).filter(row.status != ValidationStatus.QUARANTINED),
+                func.avg(row.completeness),
+                func.avg(row.consistency),
+                func.avg(row.freshness),
+                func.avg(row.confidence),
+                func.max(row.validated_at),
+            )
+            .where(row.workspace_id == self.workspace_id)
+            .group_by(row.source_id)
+        )
+        if source_id is not None:
+            statement = statement.where(row.source_id == source_id)
+        found: dict[uuid.UUID, dict[str, Any]] = {}
+        for source, *values, last in (await self._session.execute(statement)).all():
+            names = ("quality", "completeness", "consistency", "freshness", "confidence")
+            found[source] = {
+                name: round(float(value), 2) if value is not None else None
+                for name, value in zip(names, values, strict=True)
+            } | {"validated_at": last}
+        return found
+
+    async def issue_counts(self, source_id: uuid.UUID) -> list[tuple[str, str, str, int]]:
+        """(code, severity, remediation, how many records) for the source, the
+        most frequent first."""
+        issue = (
+            func.jsonb_array_elements(ValidatedRecordRow.issues).table_valued("value").alias("i")
+        )
+        code = issue.c.value.op("->>")("code")
+        severity = issue.c.value.op("->>")("severity")
+        remedy = issue.c.value.op("->>")("remediation")
+        rows = await self._session.execute(
+            select(code, severity, remedy, func.count(func.distinct(ValidatedRecordRow.id)))
+            .select_from(ValidatedRecordRow)
+            .join(issue, true())
+            .where(self._of(source_id))
+            .group_by(code, severity, remedy)
+            .order_by(func.count(func.distinct(ValidatedRecordRow.id)).desc(), code)
+        )
+        return [(str(c), str(s), str(r), int(n)) for c, s, r, n in rows.all()]
+
+    async def quarantined(self, source_id: uuid.UUID, limit: int) -> Sequence[ValidatedRecordRow]:
+        """The latest quarantined records of the source."""
+        return await self.list(
+            self.select(ValidatedRecordRow)
+            .where(
+                ValidatedRecordRow.source_id == source_id,
+                ValidatedRecordRow.status == ValidationStatus.QUARANTINED,
+            )
+            .order_by(ValidatedRecordRow.validated_at.desc(), ValidatedRecordRow.id)
+            .limit(limit)
+        )
+
+
 class ResolutionRepository(WorkspaceScopedRepository):
     """Entity resolution's rows (LEKA-357): what it reads of normalisation,
     and what it made — replaced whole at each run, the ids kept."""
 
     async def fingerprint(self) -> str:
-        """What normalisation has made so far: how many rows, and the latest.
-        A row replaced moves the latest; one removed, the count."""
-        count, latest = (
-            await self._session.execute(
-                select(func.count(), func.max(NormalisedRecordRow.normalised_at)).where(
-                    NormalisedRecordRow.workspace_id == self.workspace_id
+        """What normalisation and validation (LEKA-358) have made so far: how
+        many rows of each, and the latest. A row replaced moves the latest;
+        one removed, the count."""
+        found = []
+        for model, stamp in (
+            (NormalisedRecordRow, NormalisedRecordRow.normalised_at),
+            (ValidatedRecordRow, ValidatedRecordRow.validated_at),
+        ):
+            count, latest = (
+                await self._session.execute(
+                    select(func.count(), func.max(stamp)).where(
+                        model.workspace_id == self.workspace_id
+                    )
                 )
-            )
-        ).one()
-        return f"{int(count)}:{latest.isoformat() if latest else '-'}"
+            ).one()
+            found.append(f"{int(count)}:{latest.isoformat() if latest else '-'}")
+        return "|".join(found)
 
     async def latest_run(self, *, succeeded: bool = False) -> ResolutionRun | None:
         statement = self.select(ResolutionRun)
@@ -1307,15 +1511,24 @@ class ResolutionRepository(WorkspaceScopedRepository):
 
     async def normalised(
         self, *, after: uuid.UUID | None, limit: int
-    ) -> Sequence[tuple[uuid.UUID, uuid.UUID, dict[str, object]]]:
-        """The next `limit` candidates' rows, by id: (row id, source, result)."""
+    ) -> Sequence[tuple[uuid.UUID, uuid.UUID, dict[str, object], float | None]]:
+        """The next `limit` candidates' rows, by id: (row id, source, result,
+        the quality validation gave it). A QUARANTINED record is not among
+        them (LEKA-358); one not validated yet is — validation catches up,
+        and resolution runs again."""
+        validated = ValidatedRecordRow
         statement = (
             select(
-                NormalisedRecordRow.id, NormalisedRecordRow.source_id, NormalisedRecordRow.result
+                NormalisedRecordRow.id,
+                NormalisedRecordRow.source_id,
+                NormalisedRecordRow.result,
+                validated.quality,
             )
+            .outerjoin(validated, validated.normalised_record_id == NormalisedRecordRow.id)
             .where(
                 NormalisedRecordRow.workspace_id == self.workspace_id,
                 NormalisedRecordRow.status == NormalisationStatus.NORMALISED,
+                or_(validated.id.is_(None), validated.status != ValidationStatus.QUARANTINED),
             )
             .order_by(NormalisedRecordRow.id)
             .limit(limit)
@@ -1323,7 +1536,10 @@ class ResolutionRepository(WorkspaceScopedRepository):
         if after is not None:
             statement = statement.where(NormalisedRecordRow.id > after)
         rows = await self._session.execute(statement)
-        return [(row_id, source_id, result or {}) for row_id, source_id, result in rows.all()]
+        return [
+            (row_id, source_id, result or {}, quality)
+            for row_id, source_id, result, quality in rows.all()
+        ]
 
     async def previous_ids(self) -> dict[str, set[uuid.UUID]]:
         """Which entity each key belonged to at the last run."""

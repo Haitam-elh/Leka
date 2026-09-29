@@ -225,6 +225,60 @@ class SourceNormalisation(BaseModel):
     failures: list[NormalisationFailureRead] = Field(description="The latest, newest first.")
 
 
+# ── Validation, over the API (LEKA-358) ──────────────────────────────────────
+
+
+class QualityScores(BaseModel):
+    """Means over the validated records, from 0 to 1 — none before any."""
+
+    quality: float | None = Field(description="Over the records not quarantined.")
+    completeness: float | None
+    consistency: float | None
+    freshness: float | None
+    confidence: float | None
+
+
+class ValidationIssueCount(BaseModel):
+    """A kind of issue, how many records have it, and what to do about it."""
+
+    code: str
+    severity: str = Field(description="error (quarantines), warning or info.")
+    records: int
+    remediation: str
+
+
+class QuarantinedRecordRead(BaseModel):
+    """A record kept out of the company model, and why."""
+
+    entity_type: str | None
+    entity_key: str | None
+    issues: list[dict[str, object]]
+    validated_at: datetime
+
+
+class SourceValidation(BaseModel):
+    """Where a source's validation stands."""
+
+    valid: int
+    warning: int
+    quarantined: int
+    scores: QualityScores
+    last_validated_at: datetime | None
+    issues: list[ValidationIssueCount] = Field(description="The most frequent first.")
+    quarantined_records: list[QuarantinedRecordRead] = Field(description="The latest first.")
+
+
+class SourceQuality(BaseModel):
+    """One line per source of the workspace: how its records validate."""
+
+    source_id: uuid.UUID
+    valid: int
+    warning: int
+    quarantined: int
+    quality: float | None
+    last_validated_at: datetime | None
+
+
 # ── The pipeline, over the API (LEKA-360) ────────────────────────────────────
 
 
@@ -282,6 +336,9 @@ class ResolvedEntityRead(BaseModel):
         "source_id, key, observed_at}]} — every value kept."
     )
     confidence: float = Field(description="How sure the merges that made it are.")
+    quality: float | None = Field(
+        description="The best quality validation gave the records that are it (LEKA-358)."
+    )
     sources: int
     resolved_at: datetime
 

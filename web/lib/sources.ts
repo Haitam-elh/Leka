@@ -27,6 +27,7 @@ export type SourceSyncs = components["schemas"]["SourceSyncs"];
 export type SyncSummary = components["schemas"]["SyncSummary"];
 export type SyncRun = components["schemas"]["SyncRunRead"];
 export type WebhookDelivery = components["schemas"]["WebhookDeliveryRead"];
+export type SourceValidation = components["schemas"]["SourceValidation"];
 
 type Page<T> = { data: T[]; next_cursor?: string | null };
 
@@ -80,6 +81,9 @@ export const sources = {
   /** Its passes, newest first (LEKA-353). */
   runs: (sourceId: string, limit = 10) =>
     apiFetch<Page<SyncRun>>(`/ingestion/sources/${sourceId}/runs?limit=${limit}`),
+  /** What its records are worth: valid, doubtful, quarantined, and why (LEKA-358). */
+  validation: (sourceId: string) =>
+    apiFetch<SourceValidation>(`/ingestion/sources/${sourceId}/validation`),
   /** What a webhook source received, newest first (LEKA-350). Never a body. */
   deliveries: (sourceId: string, limit = 20) =>
     apiFetch<Page<WebhookDelivery>>(`/ingestion/sources/${sourceId}/deliveries?limit=${limit}`),

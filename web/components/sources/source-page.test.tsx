@@ -33,6 +33,7 @@ const api = {
   syncSummaries: vi.fn(),
   runs: vi.fn(),
   deliveries: vi.fn(),
+  validation: vi.fn(),
 };
 const push = vi.fn();
 const notify = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
@@ -63,6 +64,22 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { SourcePage } = await import("@/components/sources/source-page");
+
+const EMPTY_VALIDATION = {
+  valid: 0,
+  warning: 0,
+  quarantined: 0,
+  scores: {
+    quality: null,
+    completeness: null,
+    consistency: null,
+    freshness: null,
+    confidence: null,
+  },
+  last_validated_at: null,
+  issues: [],
+  quarantined_records: [],
+};
 
 const GITHUB = {
   key: "github",
@@ -122,6 +139,7 @@ beforeEach(() => {
   api.syncSummaries.mockResolvedValue([]);
   api.runs.mockResolvedValue({ data: [] });
   api.deliveries.mockResolvedValue({ data: [] });
+  api.validation.mockResolvedValue(EMPTY_VALIDATION);
 });
 
 describe("a source's page", () => {
@@ -500,5 +518,88 @@ describe("its reception, for a source its system sends to", () => {
     await screen.findByText("acme/api, acme/web");
     expect(screen.queryByRole("heading", { name: "Réception" })).not.toBeInTheDocument();
     expect(api.deliveries).not.toHaveBeenCalled();
+  });
+});
+
+describe("its data quality (LEKA-358)", () => {
+  async function quality(): Promise<HTMLElement> {
+    const heading = await screen.findByRole("heading", { name: "Qualité des données" });
+    return heading.closest("section") as HTMLElement;
+  }
+
+  it("says what the records are worth, what was found, and what to do", async () => {
+    api.validation.mockResolvedValue({
+      valid: 1240,
+      warning: 32,
+      quarantined: 3,
+      scores: {
+        quality: 0.87,
+        completeness: 0.9,
+        consistency: 0.95,
+        freshness: 1,
+        confidence: 0.8,
+      },
+      last_validated_at: new Date().toISOString(),
+      issues: [
+        {
+          code: "unknown_state",
+          severity: "warning",
+          records: 32,
+          remediation: "Donnez à cet état sa place sur l'échelle de LEKA.",
+        },
+        {
+          code: "bad_date",
+          severity: "error",
+          records: 3,
+          remediation: "Vérifiez le champ de date dans le mapping.",
+        },
+      ],
+      quarantined_records: [
+        {
+          entity_type: "issue",
+          entity_key: "acme.atlassian.net/PAY-9",
+          issues: [
+            {
+              code: "bad_date",
+              severity: "error",
+              field: "entity.attributes.updated_at",
+              message: "Une date qui ne se lit pas.",
+            },
+          ],
+          validated_at: new Date().toISOString(),
+        },
+      ],
+    });
+    renderPage();
+
+    const section = await quality();
+    expect(await within(section).findByText("1 240")).toBeInTheDocument();
+    expect(within(section).getByText("87 %")).toBeInTheDocument();
+    expect(within(section).getByText("95 %")).toBeInTheDocument();
+    const found = within(section).getByRole("table", {
+      name: "Problèmes relevés, les plus fréquents d'abord",
+    });
+    const [, stateRow, dateRow] = within(found).getAllByRole("row");
+    expect(stateRow).toHaveTextContent("État hors échelle");
+    expect(stateRow).toHaveTextContent("Donnez à cet état sa place");
+    expect(dateRow).toHaveTextContent("Erreur");
+    const kept = within(section).getByRole("table", {
+      name: "Les derniers éléments tenus à l'écart",
+    });
+    expect(within(kept).getByText("acme.atlassian.net/PAY-9")).toBeInTheDocument();
+    expect(
+      within(kept).getByText("Date illisible — Une date qui ne se lit pas."),
+    ).toBeInTheDocument();
+  });
+
+  it("says a source not validated yet will be", async () => {
+    renderPage();
+
+    const section = await quality();
+    expect(
+      await within(section).findByText(
+        "Pas encore validé : la validation suit la normalisation de la source.",
+      ),
+    ).toBeInTheDocument();
   });
 });

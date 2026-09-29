@@ -17,7 +17,9 @@ candidates normalisation made of each, the seventh (LEKA-356);
 `processing_runs`, each run of those three stages, the eighth (LEKA-360);
 `webhook_deliveries`, what webhook sources received, the ninth (LEKA-350);
 `resolved_entities`, `resolved_keys`, `resolution_decisions` and
-`resolution_runs`, what entity resolution made of it all (LEKA-357).
+`resolution_runs`, what entity resolution made of it all (LEKA-357);
+`validated_records`, what validation found of each normalised record
+(LEKA-358).
 It is the row half of the split
 described in docs/adr/010-object-storage.md: the bytes live in the object
 store, and this is everything we know about them — where they came from, how
@@ -638,6 +640,8 @@ class ProcessingStage(enum.StrEnum):
     EXTRACTION = "extraction"
     PARSING = "parsing"
     NORMALISATION = "normalisation"
+    # What normalisation made, checked before it is trusted (LEKA-358).
+    VALIDATION = "validation"
 
 
 class ProcessingRunStatus(enum.StrEnum):
@@ -843,6 +847,9 @@ class ResolvedEntity(Base, WorkspaceScopedMixin):
     # say they are one another.
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     sources: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The best quality validation gave the records that are it (LEKA-358);
+    # none when no record of its own was validated — only named by others.
+    quality: Mapped[float | None] = mapped_column(Float, nullable=True)
     resolver_version: Mapped[int] = mapped_column(Integer, nullable=False)
     resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -949,3 +956,88 @@ class ResolutionRun(Base, WorkspaceScopedMixin):
     resolver_version: Mapped[int] = mapped_column(Integer, nullable=False)
     counts: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
     error: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+# ── validation (LEKA-358) ────────────────────────────────────────────────────
+
+
+class ValidationStatus(enum.StrEnum):
+    VALID = "valid"
+    # Usable; what is doubtful is said.
+    WARNING = "warning"
+    # An error: kept out of entity resolution, and so of the company model,
+    # until its record is corrected — normalised again, validated again.
+    QUARANTINED = "quarantined"
+
+
+class ValidatedRecordRow(Base, WorkspaceScopedMixin):
+    """What validation found of one normalised record (LEKA-358): its
+    status, its issues and what to do about them, its quality and what made
+    it — traceable to its source, its record and the run that validated it.
+
+    ONE ROW PER normalised_records ROW THAT WAS NORMALISED, remade when that
+    row is (its `normalised_at`) or the rules change (`validator_version`).
+    Gone with it.
+    """
+
+    __tablename__ = "validated_records"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_id"],
+            ["sources.workspace_id", "sources.id"],
+            name="fk_validated_records_workspace_source",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("normalised_record_id", name="uq_validated_records_normalised_record"),
+        CheckConstraint(
+            "status IN (" + ", ".join(f"'{s}'" for s in _statuses(ValidationStatus)) + ")",
+            name="status",
+        ),
+        CheckConstraint(
+            "quality >= 0 AND quality <= 1 AND completeness >= 0 AND completeness <= 1 "
+            "AND consistency >= 0 AND consistency <= 1 AND freshness >= 0 AND freshness <= 1 "
+            "AND confidence >= 0 AND confidence <= 1",
+            name="scores_range",
+        ),
+        Index("ix_validated_records_source_status", "source_id", "status"),
+        Index("ix_validated_records_workspace_validated_at", "workspace_id", "validated_at"),
+    )
+
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    normalised_record_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("normalised_records.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(50), nullable=False)
+    entity_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    entity_key: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    status: Mapped[ValidationStatus] = mapped_column(
+        Enum(
+            ValidationStatus,
+            name="status",
+            native_enum=False,
+            length=20,
+            values_callable=_statuses,
+            create_constraint=False,
+        ),
+        nullable=False,
+    )
+    # {code, severity, field, message, remediation} — never a record's value.
+    issues: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    quality: Mapped[float] = mapped_column(Float, nullable=False)
+    completeness: Mapped[float] = mapped_column(Float, nullable=False)
+    consistency: Mapped[float] = mapped_column(Float, nullable=False)
+    freshness: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    # When a pass last saw its record: what freshness was measured from.
+    seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The normalised row's own stamp: a row normalised again is validated again.
+    normalised_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    validator_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The processing run that validated it. Single-column, as source_records':
+    # SET NULL through workspace_id would null the workspace too.
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("processing_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    validated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

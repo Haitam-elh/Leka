@@ -93,8 +93,9 @@ def test_the_stages_run_in_their_order_each_under_its_own_key() -> None:
         ProcessingStage.EXTRACTION,
         ProcessingStage.PARSING,
         ProcessingStage.NORMALISATION,
+        ProcessingStage.VALIDATION,
     ]
-    assert len(keys) == 3  # one run per stage per source; stages of a source never collide
+    assert len(keys) == 4  # one run per stage per source; stages of a source never collide
 
 
 @pytest.mark.parametrize("stage", pipeline_module.STAGES, ids=lambda s: s.name.value)

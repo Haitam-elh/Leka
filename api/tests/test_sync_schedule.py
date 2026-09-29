@@ -646,7 +646,12 @@ async def test_a_member_reads_each_stage_of_a_source_s_pipeline(
 
     fresh = (await client.get(url)).json()
 
-    assert [s["stage"] for s in fresh["stages"]] == ["extraction", "parsing", "normalisation"]
+    assert [s["stage"] for s in fresh["stages"]] == [
+        "extraction",
+        "parsing",
+        "normalisation",
+        "validation",
+    ]
     assert all(
         not s["pending"] and s["job"] is None and s["last_run"] is None for s in fresh["stages"]
     )
