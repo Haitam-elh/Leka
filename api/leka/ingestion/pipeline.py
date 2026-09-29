@@ -1,8 +1,8 @@
 """The processing pipeline (LEKA-360): its stages, their order, how one hands
 over to the next, and the record of each run.
 
-    collection ──▶ extraction ──▶ parsing ──▶ normalisation
-    (a pass)       extract:<id>   parse:<id>  normalise:<id>
+    collection ──▶ extraction ──▶ parsing ──▶ normalisation ──▶ resolution
+    (a pass)       extract:<id>   parse:<id>  normalise:<id>   resolve:<workspace>
 
 ONE DEFINITION. `STAGES` is the order; each stage depends on the one before
 it and reads only what that one wrote. The pass and every stage end with
@@ -10,6 +10,12 @@ it and reads only what that one wrote. The pass and every stage end with
 once for one source: a later stage waits for the rows the earlier one is
 writing, and is queued by it when it ends. A later stage alone has work when
 only its own version changed; `advance` finds it all the same.
+
+THEN THE WORKSPACE. Entity resolution (LEKA-357) decides across sources
+what is one thing, so it is the workspace's, not a source's: `advance`,
+finding nothing left for a source, queues `resolve:<workspace>` when
+normalisation made something since its last success
+(leka/ingestion/resolution/job.py).
 
 PARALLEL WHERE SAFE. One run of a stage at a time per source (its
 concurrency key); stages of one source run in order; different sources run
@@ -50,7 +56,11 @@ from leka.ingestion.repository import (
     NormalisationRepository,
     ParsingRepository,
     ProcessingRunRepository,
+    ResolutionRepository,
 )
+from leka.ingestion.resolution import RESOLVER_VERSION
+from leka.ingestion.resolution.job import RESOLVE_JOB
+from leka.ingestion.resolution.job import concurrency_key as resolution_key
 
 logger = structlog.get_logger(__name__)
 
@@ -123,7 +133,8 @@ async def advance(
     after: ProcessingStage | None,
 ) -> ProcessingStage | None:
     """Queue the first stage after `after` (None: after collection) that has
-    work. Returns it, or None when the source is processed through."""
+    work. Returns it, or None when the source is processed through — and
+    then the workspace's resolution, if it has something new to read."""
     names = [stage.name for stage in STAGES]
     start = 0 if after is None else names.index(after) + 1
     for stage in STAGES[start:]:
@@ -136,7 +147,24 @@ async def advance(
                 concurrency_key=stage.key(source.id),
             )
             return stage.name
+    await resolve_if_pending(session, workspace_id)
     return None
+
+
+async def resolve_if_pending(session: AsyncSession, workspace_id: uuid.UUID) -> bool:
+    """Queue the workspace's entity resolution (LEKA-357) when normalisation
+    made something since its last success, or its rules changed. Already
+    queued or running: that run takes it — or runs again (ROUNDS)."""
+    resolution = ResolutionRepository(session, workspace_id)
+    if not await resolution.pending(await resolution.fingerprint(), RESOLVER_VERSION):
+        return False
+    await enqueue_job(
+        RESOLVE_JOB,
+        str(workspace_id),
+        for_workspace_id=workspace_id,
+        concurrency_key=resolution_key(workspace_id),
+    )
+    return True
 
 
 @asynccontextmanager

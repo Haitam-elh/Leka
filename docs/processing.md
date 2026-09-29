@@ -7,12 +7,18 @@ contract: [extraction.md](extraction.md), [parsing.md](parsing.md),
 [collection.md](collection.md).
 
 ```
- collection ──▶ extraction ──▶ parsing ──▶ normalisation
- (a pass)       extract:<id>   parse:<id>  normalise:<id>
- source_records extracted_      parsed_     normalised_
- raw_payloads   records         records     records
-                        each run: processing_runs
+ collection ──▶ extraction ──▶ parsing ──▶ normalisation ──▶ resolution
+ (a pass)       extract:<id>   parse:<id>  normalise:<id>   resolve:<workspace>
+ source_records extracted_      parsed_     normalised_      resolved_entities,
+ raw_payloads   records         records     records          _keys, resolution_
+                        each run: processing_runs            decisions; runs:
+                                                             resolution_runs
 ```
+
+The last stage is the **workspace's**, not a source's: what is one thing
+is decided across sources ([resolution.md](resolution.md), LEKA-357). A
+source's `advance`, finding nothing left for it, queues it when
+normalisation made something since its last run.
 
 ---
 

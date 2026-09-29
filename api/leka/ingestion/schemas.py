@@ -261,3 +261,75 @@ class SourcePipeline(BaseModel):
 
 class PipelineQueued(BaseModel):
     queued: str | None = Field(description="The stage queued, or null when none had work.")
+
+
+# ── Entity resolution, over the API (LEKA-357) ───────────────────────────────
+
+
+class ResolvedEntityRead(BaseModel):
+    """One real thing, as the workspace's sources show it."""
+
+    id: uuid.UUID
+    type: str
+    key: str = Field(description="The key that says it best; every other is in `keys`.")
+    name: str
+    names: list[str] = Field(description="Every name it goes by, the chosen one first.")
+    attributes: dict[str, object] = Field(
+        description="What its sources say it is: where they disagree, the chosen value."
+    )
+    conflicts: list[dict[str, object]] = Field(
+        description="Where its sources disagree: {attribute, chosen, values: [{value, "
+        "source_id, key, observed_at}]} — every value kept."
+    )
+    confidence: float = Field(description="How sure the merges that made it are.")
+    sources: int
+    resolved_at: datetime
+
+
+class ResolvedKeyRead(BaseModel):
+    """A key it goes by, as one source gave it: the provenance."""
+
+    key: str
+    source_id: uuid.UUID
+    kind: str = Field(description="key, alias or derived.")
+    name: str | None
+    records: int = Field(description="Records of the source that are it.")
+    named: int = Field(description="Records of the source that name it.")
+    first_seen_at: datetime | None
+    last_seen_at: datetime | None
+
+
+class ResolutionDecisionRead(BaseModel):
+    """What was decided, and why."""
+
+    kind: str = Field(description="merge, link or ambiguous.")
+    rule: str
+    confidence: float
+    keys: list[str]
+    evidence: str
+    other_entity_id: uuid.UUID | None = Field(
+        description="A link's other end, from this entity's side."
+    )
+
+
+class ResolvedEntityDetail(ResolvedEntityRead):
+    keys: list[ResolvedKeyRead]
+    decisions: list[ResolutionDecisionRead]
+
+
+class ResolutionRunRead(BaseModel):
+    status: str
+    started_at: datetime
+    finished_at: datetime | None
+    counts: dict[str, object]
+    error: str | None
+
+
+class ResolutionStatus(BaseModel):
+    """Where the workspace's resolution stands."""
+
+    pending: bool = Field(description="Normalisation made something the last run did not read.")
+    last_run: ResolutionRunRead | None
+    counts: dict[str, int] = Field(
+        description="entities, conflicted, and and decisions: merges, links, ambiguous."
+    )

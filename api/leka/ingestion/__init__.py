@@ -16,6 +16,10 @@ from leka.ingestion.models import (
     ProcessingRunStatus,
     ProcessingStage,
     RawPayload,
+    ResolutionDecision,
+    ResolutionRun,
+    ResolvedEntity,
+    ResolvedKey,
     SourceRecord,
     SourceSync,
     SyncRun,
@@ -31,11 +35,13 @@ from leka.ingestion.repository import (
     ParsingRepository,
     ProcessingRunRepository,
     RawPayloadRepository,
+    ResolutionRepository,
     SourceRecordRepository,
     SourceSyncRepository,
     SyncRunRepository,
     WebhookDeliveryRepository,
 )
+from leka.ingestion.resolution import RESOLVER_VERSION
 from leka.ingestion.retention import retention_days
 from leka.ingestion.schemas import (
     ExtractionFailureRead,
@@ -46,6 +52,12 @@ from leka.ingestion.schemas import (
     ParseFailureRead,
     PipelineQueued,
     ProcessingRunRead,
+    ResolutionDecisionRead,
+    ResolutionRunRead,
+    ResolutionStatus,
+    ResolvedEntityDetail,
+    ResolvedEntityRead,
+    ResolvedKeyRead,
     SourceExtraction,
     SourceNormalisation,
     SourceParsing,
@@ -61,6 +73,7 @@ from leka.ingestion.schemas import (
 from leka.ingestion.service import IngestionService
 
 __all__ = [
+    "RESOLVER_VERSION",
     "DeliveryStatus",
     "ExtractedRecordRow",
     "ExtractionFailureRead",
@@ -87,6 +100,17 @@ __all__ = [
     "ProcessingStage",
     "RawPayload",
     "RawPayloadRepository",
+    "ResolutionDecision",
+    "ResolutionDecisionRead",
+    "ResolutionRepository",
+    "ResolutionRun",
+    "ResolutionRunRead",
+    "ResolutionStatus",
+    "ResolvedEntity",
+    "ResolvedEntityDetail",
+    "ResolvedEntityRead",
+    "ResolvedKey",
+    "ResolvedKeyRead",
     "SourceExtraction",
     "SourceNormalisation",
     "SourceParsing",

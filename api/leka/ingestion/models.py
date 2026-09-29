@@ -15,7 +15,9 @@ of each of them, the fifth (LEKA-354); `parsed_records`, what parsing read
 in each extraction, the sixth (LEKA-355); `normalised_records`, the
 candidates normalisation made of each, the seventh (LEKA-356);
 `processing_runs`, each run of those three stages, the eighth (LEKA-360);
-`webhook_deliveries`, what webhook sources received, the ninth (LEKA-350).
+`webhook_deliveries`, what webhook sources received, the ninth (LEKA-350);
+`resolved_entities`, `resolved_keys`, `resolution_decisions` and
+`resolution_runs`, what entity resolution made of it all (LEKA-357).
 It is the row half of the split
 described in docs/adr/010-object-storage.md: the bytes live in the object
 store, and this is everything we know about them — where they came from, how
@@ -34,6 +36,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -592,6 +595,9 @@ class NormalisedRecordRow(Base, WorkspaceScopedMixin):
         Index("ix_normalised_records_source_status", "source_id", "status"),
         # Every record naming one entity, across the workspace's sources.
         Index("ix_normalised_records_entity_key", "workspace_id", "entity_key"),
+        # What entity resolution (LEKA-357) asks before it runs: has anything
+        # of the workspace been normalised since?
+        Index("ix_normalised_records_workspace_normalised_at", "workspace_id", "normalised_at"),
     )
 
     source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -796,3 +802,150 @@ class WebhookDelivery(Base, WorkspaceScopedMixin):
     run_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("sync_runs.id", ondelete="SET NULL"), nullable=True
     )
+
+
+# ── entity resolution (LEKA-357) ─────────────────────────────────────────────
+
+
+class ResolvedEntity(Base, WorkspaceScopedMixin):
+    """One real thing, as the workspace's sources show it: the candidates
+    of `normalised_records` that entity resolution found to be one
+    (leka/ingestion/resolution). What the company model is built from.
+
+    MADE AGAIN WHOLE at each resolution run of the workspace, its id KEPT:
+    the id a key had stays that key's, so what reads an entity by its id
+    reads the same thing tomorrow.
+    """
+
+    __tablename__ = "resolved_entities"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "id", name="uq_resolved_entities_workspace_id_id"),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
+        Index("ix_resolved_entities_workspace_type_name", "workspace_id", "type", "name"),
+    )
+
+    type: Mapped[str] = mapped_column(String(50), nullable=False)
+    # The key that says it best (docs/resolution.md); every other it goes by
+    # is in resolved_keys.
+    key: Mapped[str] = mapped_column(String(1000), nullable=False)
+    name: Mapped[str] = mapped_column(String(500), nullable=False)
+    # Every name it goes by, the chosen one first.
+    names: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    # What its sources say it is, one value each: where they disagree, the
+    # chosen one — the disagreement is in `conflicts`, every value kept.
+    attributes: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    conflicts: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    # How sure the merges that made it are: 1.0 for one key, or keys that
+    # say they are one another.
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    sources: Mapped[int] = mapped_column(Integer, nullable=False)
+    resolver_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ResolvedKey(Base, WorkspaceScopedMixin):
+    """A key a resolved entity goes by, as one source gave it — its own key,
+    an alias it asserted, or one derived from it: the PROVENANCE of an
+    entity, and how anything that holds a key finds it. A key two entities
+    hold is an ambiguous one (a ticket key in two tools)."""
+
+    __tablename__ = "resolved_keys"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "entity_id"],
+            ["resolved_entities.workspace_id", "resolved_entities.id"],
+            name="fk_resolved_keys_workspace_entity",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "source_id"],
+            ["sources.workspace_id", "sources.id"],
+            name="fk_resolved_keys_workspace_source",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "entity_id", "key", "source_id", name="uq_resolved_keys_entity_key_source"
+        ),
+        CheckConstraint("kind IN ('key', 'alias', 'derived')", name="kind"),
+        CheckConstraint("records >= 0 AND named >= 0", name="counts_not_negative"),
+        Index("ix_resolved_keys_workspace_key", "workspace_id", "key"),
+        Index("ix_resolved_keys_entity", "entity_id"),
+    )
+
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    key: Mapped[str] = mapped_column(String(1000), nullable=False)
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)
+    # How the source names it, and how often: as the record itself, and
+    # as named by another record.
+    name: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    records: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    named: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # A normalised_records row that says it. No foreign key: those rows are
+    # replaced as their records change, and this is an example, not a link.
+    example_record_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+
+class ResolutionDecision(Base, WorkspaceScopedMixin):
+    """What entity resolution decided, and why: a merge that made an entity,
+    a link to another that is probably the same thing, or an ambiguity it
+    would not guess — with its rule, its confidence and its evidence."""
+
+    __tablename__ = "resolution_decisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "entity_id"],
+            ["resolved_entities.workspace_id", "resolved_entities.id"],
+            name="fk_resolution_decisions_workspace_entity",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "other_entity_id"],
+            ["resolved_entities.workspace_id", "resolved_entities.id"],
+            name="fk_resolution_decisions_workspace_other",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("kind IN ('merge', 'link', 'ambiguous')", name="kind"),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
+        CheckConstraint("(kind = 'link') = (other_entity_id IS NOT NULL)", name="link_has_other"),
+        Index("ix_resolution_decisions_entity", "entity_id"),
+        Index("ix_resolution_decisions_other", "other_entity_id"),
+    )
+
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # A link's other end; a merge and an ambiguity are within one entity.
+    other_entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    rule: Mapped[str] = mapped_column(String(100), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    keys: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    evidence: Mapped[str] = mapped_column(String(1000), nullable=False)
+
+
+class ResolutionRun(Base, WorkspaceScopedMixin):
+    """One run of entity resolution over a workspace: when, from what
+    (`fingerprint`: what normalisation had made by then), by which version,
+    what it found — or the type of the error it stopped on."""
+
+    __tablename__ = "resolution_runs"
+    __table_args__ = (
+        CheckConstraint("status IN ('running', 'succeeded', 'failed', 'abandoned')", name="status"),
+        CheckConstraint(
+            "finished_at IS NULL OR finished_at >= started_at", name="finished_after_started"
+        ),
+        Index("ix_resolution_runs_workspace_started_at", "workspace_id", "started_at"),
+    )
+
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="running")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fingerprint: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    resolver_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    counts: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    error: Mapped[str | None] = mapped_column(String(200), nullable=True)
