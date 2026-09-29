@@ -37,6 +37,7 @@ from leka.connectors.custom.common import (
     CustomCredentials,
     DeclaredConnector,
     named_where_needed,
+    no_credential_in,
     records_at,
     text,
     too_many,
@@ -86,6 +87,7 @@ class CustomGraphQLConfig(BaseModel):
         if value.query:
             msg = "the endpoint takes no query: the query is in the definition's documents"
             raise ValueError(msg)
+        no_credential_in(value)
         return value
 
     @field_validator("definition")

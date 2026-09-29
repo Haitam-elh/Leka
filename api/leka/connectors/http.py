@@ -193,8 +193,10 @@ class VendorHttp:
                 secrets=[self._secret],
             ) from error
         except httpx.TransportError as error:
+            refused = tls_refusal(error)
             raise diagnose(
-                DiagnosticCode.NETWORK_UNREACHABLE,
+                DiagnosticCode.UNSUPPORTED if refused else DiagnosticCode.NETWORK_UNREACHABLE,
+                message=refused,
                 detail=f"{method} {path}: {type(error).__name__}",
                 secrets=[self._secret],
             ) from error
@@ -370,6 +372,29 @@ def refusal(
         detail=f"GET {path} → {response.status_code}: {response.text[:200]}",
         secrets=[secret],
     )
+
+
+def tls_refusal(error: BaseException) -> str | None:
+    """What a TLS failure says LEKA cannot do, when it says it (LEKA-426):
+    trust a certificate that is not public, or present one of its own.
+    None for a network that is simply not there."""
+    said: list[str] = []
+    link: BaseException | None = error
+    while link is not None and len(said) < 10:
+        said.append(f"{type(link).__name__} {link}")
+        link = link.__cause__ or link.__context__
+    text = " ".join(said).upper()
+    if "CERTIFICATE_VERIFY_FAILED" in text or "SSLCERTVERIFICATIONERROR" in text:
+        return (
+            "Le certificat du serveur n'est pas reconnu — auto-signé, ou d'une autorité "
+            "interne : LEKA ne se connecte qu'aux serveurs dont le certificat est public."
+        )
+    if "CERTIFICATE_REQUIRED" in text or "CERTIFICATE REQUIRED" in text:
+        return (
+            "Le serveur demande un certificat client (TLS mutuel) : ce n'est pas pris en "
+            "charge. Il faut une autre façon de s'authentifier — un token, une clé d'API."
+        )
+    return None
 
 
 def usual_code(status: int) -> DiagnosticCode:

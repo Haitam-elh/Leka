@@ -179,6 +179,7 @@ into the history.
 | `NETWORK_UNREACHABLE` | yes | connection refused, DNS |
 | `PROVIDER_ERROR` | yes | 5xx |
 | `CONFIG_INVALID` | no | settings the connector refuses, no connector for the kind |
+| `UNSUPPORTED` | no | what the system asks is something LEKA cannot do yet — a certificate that is not public, a client certificate; for a custom source also XML or CSV answers, a sign-in page (OAuth, SSO), Windows or Digest authentication ([custom.md](custom.md#what-is-not-supported)). Said as such rather than failed as something else (LEKA-426) |
 | `UNKNOWN` | yes | anything else |
 
 **A failed test is an answer, not an error**: `POST /sources/{id}/test`

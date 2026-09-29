@@ -1,6 +1,15 @@
 "use client";
 
-import { CircleAlert, Clock, FileText, type LucideIcon, Plug, Plus, RefreshCw } from "lucide-react";
+import {
+  CircleAlert,
+  Clock,
+  FileText,
+  type LucideIcon,
+  Plug,
+  Plus,
+  RefreshCw,
+  Wrench,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
@@ -13,11 +22,13 @@ import { StatusBadge } from "@/components/knowledge/status-badge";
 import { timeAgo } from "@/components/knowledge/time";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
 import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
+import { CustomBadge } from "@/components/sources/custom-badge";
 import { capabilityWord, SourcePanel } from "@/components/sources/source-panel";
 import { SourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { StatePanel } from "@/components/states/state-panel";
+import { isCustom } from "@/lib/custom-connectors";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -59,12 +70,20 @@ export function SourcesPage() {
   // Records read so far, per source; undefined until a pass has read it.
   const recordsOf = (source: Source) => summaries.data?.get(source.id)?.records_total;
   const canManage = usePermissions()?.includes("source:manage") ?? false;
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<"native" | "custom" | null>(null);
+  // Two ways in: a tool LEKA knows, or one it does not — a custom
+  // connector (LEKA-426), from here rather than at the bottom of a list.
   const addButton = canManage ? (
-    <Button onClick={() => setAdding(true)}>
-      <Plus aria-hidden="true" />
-      {t.sources.add.open}
-    </Button>
+    <div className="flex flex-wrap gap-2">
+      <Button variant="outline" onClick={() => setAdding("custom")}>
+        <Wrench aria-hidden="true" />
+        {t.sources.custom.open}
+      </Button>
+      <Button onClick={() => setAdding("native")}>
+        <Plus aria-hidden="true" />
+        {t.sources.add.open}
+      </Button>
+    </div>
   ) : null;
 
   const all = list.data ?? [];
@@ -82,8 +101,11 @@ export function SourcesPage() {
         actions={all.length > 0 ? addButton : null}
       />
       <AddSourceDialog
-        open={adding}
-        onOpenChange={setAdding}
+        open={adding !== null}
+        start={adding ?? "native"}
+        onOpenChange={(open) => {
+          if (!open) setAdding(null);
+        }}
         onDone={(done) => setSelectedId(done.id)}
       />
       {list.isPending ? (
@@ -378,11 +400,14 @@ function SourcesTable({
       id: "type",
       header: c.type,
       sortValue: (source) => categoryOf(source),
-      cell: (source) => (
-        <span className="rounded-md bg-state-info-soft px-2 py-0.5 text-xs text-state-info">
-          {t.sources.categories[categoryOf(source)]}
-        </span>
-      ),
+      cell: (source) =>
+        isCustom(source.type) ? (
+          <CustomBadge />
+        ) : (
+          <span className="rounded-md bg-state-info-soft px-2 py-0.5 text-xs text-state-info">
+            {t.sources.categories[categoryOf(source)]}
+          </span>
+        ),
     },
     {
       id: "status",

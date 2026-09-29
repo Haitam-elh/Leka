@@ -6,11 +6,18 @@ rest is here, once: the secret and how it is sent, the connection test
 that tries the mapping on each resource's first record, health, the scope
 by resource, the records built from what the mapping reads, the bounds,
 and the API's refusals as diagnostics.
+
+WHAT LEKA CANNOT DO IS SAID, not failed as something else (LEKA-426): an
+answer in XML or CSV, a redirect to a sign-in page (OAuth, SSO), a
+challenge for Windows or Digest authentication are `UNSUPPORTED`, naming
+what was asked — and a secret in a URL, a parameter or a variable is
+refused when saved: every member reads the configuration.
 """
 
 from __future__ import annotations
 
 import base64
+import json
 import re
 from abc import abstractmethod
 from collections.abc import AsyncIterator, Sequence
@@ -26,10 +33,18 @@ from leka.connectors.base import (
     ConnectionTestResult,
     Connector,
     HealthResult,
+    Preview,
     ScopeListing,
     ScopeOption,
 )
-from leka.connectors.custom.definition import Declared, at, fields, identifier, moment
+from leka.connectors.custom.definition import (
+    Declared,
+    at,
+    fields,
+    identifier,
+    moment,
+    no_credential_named,
+)
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
 from leka.connectors.http import VendorHttp, refusal, retry_after, usual_code
 from leka.connectors.models import HealthStatus
@@ -48,6 +63,32 @@ TRANSPORT_HEADERS = frozenset(
     {"host", "content-length", "transfer-encoding", "connection", "cookie", "authorization"}
 )
 OPTIONAL = ("url", "state", "created_at", "updated_at", "description", "author")
+# What an API may answer in that is not JSON, and that LEKA cannot read —
+# said as such (LEKA-426). Plain text is not here: it is more often an
+# error page at a wrong address than a format.
+OTHER_FORMATS = frozenset(
+    {
+        "text/csv",
+        "application/csv",
+        "text/tab-separated-values",
+        "application/x-ndjson",
+        "application/jsonl",
+        "application/x-yaml",
+        "application/yaml",
+        "text/yaml",
+        "application/x-protobuf",
+        "application/protobuf",
+        "application/msgpack",
+        "application/x-msgpack",
+        "application/octet-stream",
+        "application/zip",
+        "application/pdf",
+    }
+)
+# How much of a value the test's preview shows.
+PREVIEW_CHARS = 120
+# Where a redirect to a person's sign-in goes: OAuth, SAML, SSO pages.
+SIGN_IN = re.compile(r"(?i)(oauth|authorize|login|signin|sign-in|saml|sso|openid|auth/realms)")
 
 Auth = Literal["none", "bearer", "header", "query", "basic"]
 AUTH_HELP = (
@@ -65,6 +106,20 @@ class ApiSettings(Protocol):
 
     auth: Auth
     auth_name: str | None
+
+
+def no_credential_in(url: object) -> None:
+    """An address holds no secret: no user or password before the host, no
+    parameter named as a credential. The configuration is shown to every
+    member; the secret field is not."""
+    parsed = httpx.URL(str(url))
+    if parsed.userinfo:
+        msg = (
+            "the address carries a user or a password: put them in the credentials, "
+            "with authentication « basic »"
+        )
+        raise ValueError(msg)
+    no_credential_named(list(parsed.params.keys()), "the address's parameter")
 
 
 def named_where_needed(auth: Auth, auth_name: str | None) -> None:
@@ -117,11 +172,13 @@ class DeclaredConnector[ConfigT: BaseModel, ResourceT: Declared](
         self._require_the_secret()
         counts: dict[str, int] = {}
         warnings: list[str] = []
+        previews: list[Preview] = []
         async with self._client() as client:
             for resource in self.resources:
                 page = await self._first_page(client, resource)
                 counts[resource.name] = len(page)
                 if not page:
+                    previews.append(Preview(name=resource.name, entity=resource.entity, read=0))
                     warnings.append(
                         f"« {resource.name} » : la première page est vide, le mapping n'a pas "
                         "pu être essayé."
@@ -130,6 +187,24 @@ class DeclaredConnector[ConfigT: BaseModel, ResourceT: Declared](
                 found = fields(resource.mapping, page[0])
                 _require(resource, "id", identifier(found.get("id")) is not None)
                 _require(resource, "title", readable(found.get("title")))
+                absent = [
+                    name
+                    for name in OPTIONAL
+                    if getattr(resource.mapping, name) and name not in found
+                ] + [
+                    f"metadata.{name}"
+                    for name in resource.mapping.metadata
+                    if name not in found.get("metadata", {})
+                ]
+                previews.append(
+                    Preview(
+                        name=resource.name,
+                        entity=resource.entity,
+                        read=len(page),
+                        fields=self._shown(found),
+                        missing=absent,
+                    )
+                )
                 missing = [
                     f"{name} ({getattr(resource.mapping, name)})"
                     for name in OPTIONAL
@@ -145,6 +220,7 @@ class DeclaredConnector[ConfigT: BaseModel, ResourceT: Declared](
             metadata={"resources": counts},
             capabilities=[C.RECORDS],
             warnings=warnings,
+            preview=previews,
         )
 
     async def check_health(self) -> HealthResult:
@@ -261,8 +337,23 @@ class DeclaredConnector[ConfigT: BaseModel, ResourceT: Declared](
                 message="L'authentification basic demande un utilisateur.",
             )
 
+    def _shown(self, found: dict[str, Any]) -> dict[str, str]:
+        """What the mapping read, as the preview shows it: text, cut short,
+        the secret never — should the API echo it."""
+        flat = {name: value for name, value in found.items() if name != "metadata"}
+        flat |= {f"metadata.{name}": value for name, value in found.get("metadata", {}).items()}
+        secret = self._secret()
+        shown: dict[str, str] = {}
+        for name, value in flat.items():
+            text_ = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+            if secret:
+                text_ = text_.replace(secret, "••••")
+            shown[name] = text_ if len(text_) <= PREVIEW_CHARS else text_[: PREVIEW_CHARS - 1] + "…"
+        return shown
+
     def _json(self, response: httpx.Response, method: str, where: str) -> Any:
-        """An answer as JSON, bounded — or a diagnostic that names where."""
+        """An answer as JSON, bounded — or a diagnostic that names where, and
+        what it answered instead when LEKA cannot read that."""
         if len(response.content) > MAX_PAGE_BYTES:
             raise diagnose(
                 DiagnosticCode.PROVIDER_ERROR,
@@ -272,10 +363,34 @@ class DeclaredConnector[ConfigT: BaseModel, ResourceT: Declared](
         try:
             return response.json()
         except ValueError:
+            kind = response.headers.get("content-type", "").split(";")[0].strip().lower()
+            detail = f"{method} {where} → {kind or '?'}"
+            if "xml" in kind:
+                raise diagnose(
+                    DiagnosticCode.UNSUPPORTED,
+                    message=f"« {where} » répond en XML : les connecteurs sur mesure ne lisent "
+                    "que le JSON — les API XML et SOAP ne sont pas prises en charge.",
+                    detail=detail,
+                ) from None
+            if kind == "text/html":
+                raise diagnose(
+                    DiagnosticCode.CONFIG_INVALID,
+                    message=f"« {where} » répond par une page web, pas par l'API : vérifiez "
+                    "l'adresse. Si c'est une page de connexion, l'authentification par "
+                    "navigateur (SSO, OAuth) n'est pas prise en charge : il faut un token d'API.",
+                    detail=detail,
+                ) from None
+            if kind in OTHER_FORMATS or kind.startswith(("application/vnd.", "image/", "audio/")):
+                raise diagnose(
+                    DiagnosticCode.UNSUPPORTED,
+                    message=f"« {where} » répond en {kind} : les connecteurs sur mesure ne "
+                    "lisent que le JSON.",
+                    detail=detail,
+                ) from None
             raise diagnose(
                 DiagnosticCode.CONFIG_INVALID,
                 message=f"« {where} » ne répond pas en JSON : vérifiez l'adresse.",
-                detail=f"{method} {where} → {response.headers.get('content-type', '?')}",
+                detail=detail,
             ) from None
 
     def _refuse(self, response: httpx.Response, path: str, missing: str) -> ConnectorError:
@@ -283,6 +398,22 @@ class DeclaredConnector[ConfigT: BaseModel, ResourceT: Declared](
         secret = self._secret()
         status = response.status_code
         where = path_of(path)
+        if 300 <= status < 400:
+            return self._redirected(response, where)
+        challenge = response.headers.get("www-authenticate", "").lower()
+        if status == 401 and challenge.startswith(("negotiate", "ntlm", "kerberos")):
+            message = (
+                f"« {where} » demande une authentification Windows (Kerberos, NTLM) : elle "
+                "n'est pas prise en charge. Il faut une clé ou un token d'API."
+            )
+            return refusal(response, where, secret, DiagnosticCode.UNSUPPORTED, message=message)
+        if status == 401 and challenge.startswith("digest"):
+            message = (
+                f"« {where} » demande une authentification Digest : elle n'est pas prise en "
+                "charge. Les façons prises en charge : token, clé dans un en-tête ou dans "
+                "l'URL, utilisateur et mot de passe (Basic)."
+            )
+            return refusal(response, where, secret, DiagnosticCode.UNSUPPORTED, message=message)
         if status == 401:
             message = "L'API refuse ce secret : vérifiez-le, et la façon de l'envoyer."
             return refusal(response, where, secret, DiagnosticCode.AUTH_INVALID, message=message)
@@ -303,6 +434,26 @@ class DeclaredConnector[ConfigT: BaseModel, ResourceT: Declared](
                 retry_after=retry_after(response),
             )
         return refusal(response, where, secret, usual_code(status))
+
+    def _redirected(self, response: httpx.Response, where: str) -> ConnectorError:
+        """LEKA follows no redirect: the host a secret is sent to is the one
+        configured. One to a sign-in page is a person's login — OAuth, SSO —
+        which LEKA cannot do; any other is an address to correct."""
+        target = _redirect_target(response)
+        shown = f"{target.host}{target.path}" if target else "?"
+        secret = self._secret()
+        if target is not None and SIGN_IN.search(f"{target.host}{target.path}"):
+            message = (
+                f"« {where} » renvoie vers une page de connexion ({target.host}) : la "
+                "connexion par navigateur (OAuth, SSO) n'est pas prise en charge. Il faut un "
+                "token ou une clé d'API, si le système en donne."
+            )
+            return refusal(response, where, secret, DiagnosticCode.UNSUPPORTED, message=message)
+        message = (
+            f"« {where} » redirige vers {shown} : LEKA ne suit pas les redirections, pour "
+            "n'envoyer le secret qu'à l'adresse configurée. Mettez l'adresse d'arrivée."
+        )
+        return refusal(response, where, secret, DiagnosticCode.CONFIG_INVALID, message=message)
 
 
 def record_of(
@@ -333,6 +484,16 @@ def record_of(
 def external_of(resource: Declared, external_id: str) -> str:
     """Ids of two resources may be the same number: the resource tells them apart."""
     return f"{resource.name}:{external_id}"
+
+
+def _redirect_target(response: httpx.Response) -> httpx.URL | None:
+    location = response.headers.get("location")
+    if not location:
+        return None
+    try:
+        return response.url.join(location) if response.request else httpx.URL(location)
+    except (httpx.InvalidURL, RuntimeError):
+        return None
 
 
 def records_at(resource: Declared, body: Any) -> list[dict[str, Any]]:

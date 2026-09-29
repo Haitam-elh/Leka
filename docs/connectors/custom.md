@@ -23,9 +23,79 @@ diagnostics.
 
 ---
 
+## From the Sources page
+
+What an admin does, start to finish (LEKA-426) — no LEKA code, no ticket to
+LEKA's team:
+
+1. **Sources → Connecteur sur mesure** (or, in **Ajouter une source**, the
+   card at the bottom of the catalogue: *Votre outil n'est pas dans la
+   liste ?*). The native catalogue lists LEKA's connectors only; the custom
+   ones have this way in.
+2. **The method**: *API REST*, *API GraphQL* or *Webhook entrant*, each
+   with what it needs — and, beneath, [what none of them can do
+   today](#what-is-not-supported), so a tool that needs one of those is
+   known before anything is typed.
+3. **The connection**: a name, the address, how the secret is sent, the
+   secret, the definition. The form shows only what the choices make
+   useful — a header's name only for a key sent in one, a user only for
+   Basic, no secret without authentication, no signature header for
+   Standard Webhooks — and sends nothing a choice made pointless.
+   **Partir d'un exemple** fills an empty definition with one that works —
+   this page's examples — to edit rather than to write. Saving creates the
+   source in draft; a definition the API refuses is shown on its field,
+   with where it is wrong.
+4. **The test**, with **what the mapping read**: for each resource, how
+   many records its first page held and, field by field — title, state,
+   author, each metadata — the value read in its first record, and what
+   the mapping names that it lacks. Shown there and then, **stored
+   nowhere** (not with the source, not in its history): it is the
+   system's own data. A failure says why, as every source's test does; what
+   LEKA cannot do says **Pas pris en charge aujourd'hui**, not "failed". A
+   webhook reads nothing to test: its test gives the address to copy into
+   the tool.
+5. **Activate** — or later, from the source's page.
+
+Then it is a source like the others: in the list — its *Type* reads **Sur
+mesure**, where a native reads its category, and its page and panel say
+so beside its status — with its health, its sync state and history, its
+last error and what to do about it, its scope and mapping (the source's
+*Périmètre et mapping*, LEKA-351), and for a webhook its **Réception**.
+It is disabled, activated again, changed (**Modifier**) or deleted as any
+source; one whose secret was refused, or in error, offers **Reconnecter**:
+the same form, a new secret, the test, the activation.
+
+**No secret in what every member reads.** The configuration is shown to
+every member of the workspace; the secret field is write-only, encrypted,
+never returned. So when saved, an address with a user or a password in it
+(`https://ops:…@host`), and a parameter or a variable named as a
+credential (`api_key`, `token`, `access_token`, `client_secret`,
+`password`, `signature`…) are refused, saying where the secret goes:
+authentication *Clé dans l'URL* or *Clé dans un en-tête*, with that name.
+Pagination's own tokens (`pageToken`, `next_token`) are not credentials.
+
+### What is not supported
+
+Said as such — `UNSUPPORTED`, **Pas pris en charge aujourd'hui** — by the
+method step before anything is typed, and by the test when it meets one:
+
+| What the system asks | What the test says |
+|---|---|
+| A person's sign-in: OAuth, SSO, SAML | a redirect to a sign-in page names its host; a web page answered instead of the API says to check the address, and that a sign-in page is not supported |
+| An answer other than JSON: XML, SOAP, CSV, YAML, a file | the format it answered in |
+| Windows (Kerberos, NTLM) or Digest authentication | the challenge it sent |
+| A certificate that is not public — self-signed, an internal authority — or a client certificate (mutual TLS) | which of the two |
+| An address that is not public, or plain http | refused when saved, or when connecting ([framework.md](framework.md)) |
+| Signed requests (AWS SigV4, per-request HMAC), writing to the tool | — LEKA sends a secret as is, and only reads |
+
+The remediation says what to try instead — an API token, where the system
+offers one — and where to ask for it: support@leka-core.com.
+
+---
+
 ## Configuring one
 
-**Sources → Add → API REST**, then:
+**Sources → Connecteur sur mesure → API REST**, then:
 
 | Field | |
 |---|---|
@@ -36,10 +106,10 @@ diagnostics.
 | `secret` | The token, the API key, or the password. Empty for `none` |
 
 Then **Test**: LEKA reads the first page of each resource and tries the
-mapping on its first record. The test fails, naming the resource and the
-path, when that record has no id or no title where the mapping says; a
-mapped field it lacks is a warning. The scope then offers the resources:
-keep them all, or some.
+mapping on its first record — and shows what it read (above). The test
+fails, naming the resource and the path, when that record has no id or no
+title where the mapping says; a mapped field it lacks is a warning. The
+scope then offers the resources: keep them all, or some.
 
 ---
 
@@ -155,7 +225,7 @@ changes `fields` — and so, at the next pass, what is extracted.
 
 ## GraphQL
 
-**Sources → Add → API GraphQL**: the `endpoint` (`https://api.acme.com/graphql`,
+**Sources → Connecteur sur mesure → API GraphQL**: the `endpoint` (`https://api.acme.com/graphql`,
 no query), the same `auth`, and a definition whose resources are queries.
 Everything above holds — the mapping, `entity`, `items`, the bounds, the
 scope, extraction, normalisation — except how a page is asked for:
@@ -199,7 +269,7 @@ page read in part would mark the rest gone.
 
 ## Webhooks
 
-**Sources → Add → Webhook entrant**. The other way round: LEKA reads
+**Sources → Connecteur sur mesure → Webhook entrant**. The other way round: LEKA reads
 nothing, the system SENDS each change, as it happens, to the source's own
 address — shown on the source's page, to copy into the system's settings:
 
@@ -326,7 +396,8 @@ back, nor in a path, whose query a diagnostic leaves out.
 
 ## Limits
 
-- JSON over https only: no XML, no SOAP, no plain http.
+- JSON over https only: no XML, no SOAP, no plain http — [said as
+  such](#what-is-not-supported) when met.
 - A secret that is sent as is: no OAuth dance, no signed requests.
 - Every pass reads whole: an API of millions of records is to be narrowed
   with `params`.

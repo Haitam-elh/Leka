@@ -47,6 +47,7 @@ from leka.connectors.custom.common import (
     CustomCredentials,
     DeclaredConnector,
     named_where_needed,
+    no_credential_in,
     path_of,
     records_at,
     text,
@@ -81,6 +82,12 @@ class CustomRestConfig(BaseModel):
     @classmethod
     def _readable(cls, value: str) -> str:
         parse(value)
+        return value
+
+    @field_validator("base_url")
+    @classmethod
+    def _no_secret(cls, value: Any) -> Any:
+        no_credential_in(value)
         return value
 
     @model_validator(mode="after")

@@ -31,6 +31,10 @@ class DiagnosticCode(enum.StrEnum):
     NETWORK_UNREACHABLE = "NETWORK_UNREACHABLE"
     PROVIDER_ERROR = "PROVIDER_ERROR"
     CONFIG_INVALID = "CONFIG_INVALID"
+    # What the system asks is something LEKA cannot do yet — OAuth, XML,
+    # Windows authentication (LEKA-426): said, rather than failing as
+    # something else.
+    UNSUPPORTED = "UNSUPPORTED"
     UNKNOWN = "UNKNOWN"
 
 
@@ -108,6 +112,12 @@ _WORDING: dict[DiagnosticCode, tuple[str, str, bool]] = {
     DiagnosticCode.CONFIG_INVALID: (
         "La configuration de la source est invalide.",
         "Corrigez les champs signalés, puis relancez le test.",
+        False,
+    ),
+    DiagnosticCode.UNSUPPORTED: (
+        "Ce système demande quelque chose que LEKA ne sait pas encore faire.",
+        "Voyez s'il offre une autre façon, indiquée ci-dessus ; sinon, écrivez au support "
+        "LEKA (support@leka-core.com) : c'est ce qui décide de ce qui vient ensuite.",
         False,
     ),
     DiagnosticCode.UNKNOWN: (
