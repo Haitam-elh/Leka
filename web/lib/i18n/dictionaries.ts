@@ -796,7 +796,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase et MongoDB — et, sur mesure, à toute API REST.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase et MongoDB — et, sur mesure, à toute API REST ou GraphQL.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -1079,6 +1079,26 @@ const fr = {
           help: "Un utilisateur dédié, avec CREATE SESSION et REFERENCES sur chaque table et vue à décrire. Aucun SELECT n'est nécessaire.",
         },
         password: { label: "Mot de passe", help: "Celui de l'utilisateur. Chiffré, et plus jamais affiché." },
+      },
+      custom_graphql: {
+        endpoint: {
+          label: "Point d'accès GraphQL",
+          help: "L'adresse de l'API GraphQL, en https et publique : https://api.acme.com/graphql.",
+        },
+        auth: { label: "Authentification", help: "Comment LEKA envoie le secret à l'API." },
+        auth_name: {
+          label: "En-tête ou paramètre",
+          help: "Pour une clé dans un en-tête (X-API-Key) ou dans l'URL (api_key) : son nom.",
+        },
+        definition: {
+          label: "Définition",
+          help: 'Pour chaque ressource, sa requête GraphQL (lecture seule), où sont ses éléments dans la réponse, sa pagination et ce que signifie chaque champ, en JSON. Le plus court : {"resources": [{"name": "issues", "query": "query { issues { id title } }", "items": "data.issues", "mapping": {"id": "id", "title": "title"}}]}',
+        },
+        secret: {
+          label: "Secret",
+          help: "Le token, la clé d'API ou le mot de passe. Chiffré, et plus jamais affiché. Vide sans authentification.",
+        },
+        username: { label: "Utilisateur", help: "Pour une authentification par utilisateur et mot de passe." },
       },
       custom_rest: {
         base_url: {
@@ -2006,7 +2026,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase and MongoDB today — and, custom, to any REST API.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase and MongoDB today — and, custom, to any REST or GraphQL API.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -2284,6 +2304,26 @@ const en: Dictionary = {
           help: "A dedicated user, with CREATE SESSION and REFERENCES on each table and view to describe. No SELECT is needed.",
         },
         password: { label: "Password", help: "The user's. Encrypted, and never shown again." },
+      },
+      custom_graphql: {
+        endpoint: {
+          label: "GraphQL endpoint",
+          help: "The GraphQL API's address, https and public: https://api.acme.com/graphql.",
+        },
+        auth: { label: "Authentication", help: "How LEKA sends the secret to the API." },
+        auth_name: {
+          label: "Header or parameter",
+          help: "For a key in a header (X-API-Key) or in the URL (api_key): its name.",
+        },
+        definition: {
+          label: "Definition",
+          help: 'For each resource, its GraphQL query (read-only), where its items are in the answer, its pagination and what each field means, as JSON. The shortest: {"resources": [{"name": "issues", "query": "query { issues { id title } }", "items": "data.issues", "mapping": {"id": "id", "title": "title"}}]}',
+        },
+        secret: {
+          label: "Secret",
+          help: "The token, the API key or the password. Encrypted, and never shown again. Empty without authentication.",
+        },
+        username: { label: "User", help: "For a user and password authentication." },
       },
       custom_rest: {
         base_url: {

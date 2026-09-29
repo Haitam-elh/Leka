@@ -149,18 +149,25 @@ class VendorHttp:
         return await self._send("GET", path, params=params, missing=missing, empty=empty)
 
     async def post(
-        self, path: str, body: Mapping[str, object], *, missing: str = ""
+        self,
+        path: str,
+        body: Mapping[str, object],
+        *,
+        params: Params | None = None,
+        missing: str = "",
     ) -> httpx.Response:
         """A read the vendor offers only as a POST, answered like `get`.
 
         Only to a path declared in `reads_by_post`. Anything else raises
         before a byte is sent: a connector that POSTs elsewhere is a bug,
-        and LEKA does not write to a customer's system.
+        and LEKA does not write to a customer's system. `params`: a query
+        beside the body — a custom GraphQL source's secret, when it is sent
+        as one.
         """
         if path not in self._reads_by_post:
             msg = f"POST {path} is not a read this connector declared"
             raise ValueError(msg)
-        return await self._send("POST", path, json=body, missing=missing)
+        return await self._send("POST", path, params=params, json=body, missing=missing)
 
     async def _send(
         self,

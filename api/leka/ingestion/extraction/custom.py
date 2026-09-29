@@ -1,10 +1,11 @@
 """Systems LEKA has no connector for (LEKA-350): what their admin mapped.
 
-A generic source stores each record as `{"resource", "fields", "record"}`
-(leka/connectors/custom/rest.py): `fields` is what the source's mapping
-read in the record — LEKA's own fields, named as the extraction contract
-names them. So one strategy reads every such source, whatever the system:
-the meaning was declared by the admin, not guessed here.
+A generic source — REST or GraphQL — stores each record as `{"resource",
+"entity", "fields", "record"}` (leka/connectors/custom/common.py): `fields`
+is what the source's mapping read in the record — LEKA's own fields, named
+as the extraction contract names them. So one strategy reads every such
+source, whatever the system and its API: the meaning was declared by the
+admin, not guessed here.
 
     title        the name — a record without one is malformed
     url          where a person opens it
@@ -33,9 +34,10 @@ from leka.ingestion.extraction.fields import content, dig, lower, ref, required,
 
 C = Capability
 CUSTOM_REST = SourceKind.CUSTOM_REST
+CUSTOM_GRAPHQL = SourceKind.CUSTOM_GRAPHQL
 
 
-@strategy("custom.records", 1, (CUSTOM_REST, C.RECORDS))
+@strategy("custom.records", 1, (CUSTOM_REST, C.RECORDS), (CUSTOM_GRAPHQL, C.RECORDS))
 def custom_record(p: Payload) -> Extracted:
     if not isinstance(dig(p, "fields"), dict):
         raise MalformedPayloadError("missing field 'fields'")

@@ -42,7 +42,7 @@ from leka.connectors import (
     register_connector,
     unregister_connector,
 )
-from leka.connectors.custom import CustomCredentials, CustomRestConfig, CustomRestConnector, rest
+from leka.connectors.custom import CustomCredentials, CustomRestConfig, CustomRestConnector, common
 from leka.connectors.custom import definition as definitions
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion import pipeline as pipeline_module
@@ -561,7 +561,7 @@ async def test_a_quota_nearly_spent_pauses_the_read() -> None:
 async def test_more_than_a_pass_reads_is_a_failure_not_a_cut(
     limit: str, what: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(rest, limit, 2)
+    monkeypatch.setattr(common, limit, 2)
 
     with pytest.raises(ConnectorError) as caught:
         await _records(_connector())

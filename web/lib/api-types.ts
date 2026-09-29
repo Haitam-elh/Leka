@@ -2150,7 +2150,7 @@ export interface components {
          *     the database stopped checking this list in LEKA-344.
          * @enum {string}
          */
-        SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "linear" | "notion" | "asana" | "trello" | "clickup" | "monday" | "slab" | "guru" | "google_workspace" | "microsoft_365" | "aws" | "azure" | "gcp" | "datadog" | "pagerduty" | "grafana" | "postgresql" | "mysql" | "mariadb" | "sqlserver" | "oracle" | "custom_rest" | "mongodb" | "supabase" | "slack";
+        SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "linear" | "notion" | "asana" | "trello" | "clickup" | "monday" | "slab" | "guru" | "google_workspace" | "microsoft_365" | "aws" | "azure" | "gcp" | "datadog" | "pagerduty" | "grafana" | "postgresql" | "mysql" | "mariadb" | "sqlserver" | "oracle" | "custom_rest" | "custom_graphql" | "mongodb" | "supabase" | "slack";
         /**
          * SourceNormalisation
          * @description Where a source's normalisation stands.
