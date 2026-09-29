@@ -909,6 +909,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingestion/sources/{source_id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Source Deliveries
+         * @description What a webhook source received, newest first: when, what it was, what
+         *     was kept of it, why not. Empty for a source that is not sent to.
+         */
+        get: operations["source_deliveries_api_v1_ingestion_sources__source_id__deliveries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingestion/sources/{source_id}/extraction": {
         parameters: {
             query?: never;
@@ -1058,6 +1079,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/webhooks/sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deliver
+         * @description A delivery to a webhook source, signed with its secret.
+         */
+        post: operations["deliver_api_v1_webhooks_sources__source_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1090,6 +1131,12 @@ export interface components {
             capabilities: components["schemas"]["Capability"][];
             /** Read Only */
             read_only: boolean;
+            /**
+             * Receives
+             * @description Sent to rather than read: the system posts to the source's webhook address.
+             * @default false
+             */
+            receives: boolean;
             /**
              * Config Schema
              * @description JSON Schema of the settings.
@@ -1202,6 +1249,36 @@ export interface components {
              * Format: date-time
              */
             erasure_due_at: string;
+        };
+        /**
+         * DeliveryAccepted
+         * @description A delivery kept — not yet stored: the source's next pass stores it.
+         */
+        DeliveryAccepted: {
+            /**
+             * Delivery
+             * Format: uuid
+             * @description LEKA's id for it, as its log shows it.
+             */
+            delivery: string;
+            /**
+             * Status
+             * @description pending: to be stored; ignored: none of the definition's resources is it.
+             * @enum {string}
+             */
+            status: "pending" | "ignored";
+            /** Resource */
+            resource: string | null;
+            /**
+             * Records
+             * @description Records it holds, to store.
+             */
+            records: number;
+            /**
+             * Gone
+             * @description Records it says were deleted.
+             */
+            gone: number;
         };
         /**
          * Diagnostic
@@ -1749,6 +1826,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[WebhookDeliveryRead] */
+        PageEnvelope_WebhookDeliveryRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["WebhookDeliveryRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[WorkspaceSummary] */
         PageEnvelope_WorkspaceSummary_: {
             /**
@@ -2150,7 +2240,7 @@ export interface components {
          *     the database stopped checking this list in LEKA-344.
          * @enum {string}
          */
-        SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "linear" | "notion" | "asana" | "trello" | "clickup" | "monday" | "slab" | "guru" | "google_workspace" | "microsoft_365" | "aws" | "azure" | "gcp" | "datadog" | "pagerduty" | "grafana" | "postgresql" | "mysql" | "mariadb" | "sqlserver" | "oracle" | "custom_rest" | "custom_graphql" | "mongodb" | "supabase" | "slack";
+        SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "linear" | "notion" | "asana" | "trello" | "clickup" | "monday" | "slab" | "guru" | "google_workspace" | "microsoft_365" | "aws" | "azure" | "gcp" | "datadog" | "pagerduty" | "grafana" | "postgresql" | "mysql" | "mariadb" | "sqlserver" | "oracle" | "custom_rest" | "custom_graphql" | "custom_webhook" | "mongodb" | "supabase" | "slack";
         /**
          * SourceNormalisation
          * @description Where a source's normalisation stands.
@@ -2412,7 +2502,7 @@ export interface components {
             id: string;
             /**
              * Trigger
-             * @description activation, schedule or manual.
+             * @description activation, schedule, manual, settings or webhook.
              */
             trigger: string;
             /**
@@ -2511,6 +2601,58 @@ export interface components {
             /** Job Title */
             job_title?: string | null;
             company_size?: components["schemas"]["CompanySize"] | null;
+        };
+        /**
+         * WebhookDeliveryRead
+         * @description One delivery a webhook source received, signed (LEKA-350) — never its body.
+         */
+        WebhookDeliveryRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            /**
+             * Status
+             * @description pending, stored, ignored or rejected.
+             */
+            status: string;
+            /**
+             * Delivery Id
+             * @description The sender's own id for it, when it gives one.
+             */
+            delivery_id: string | null;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Resource
+             * @description The resource it was.
+             */
+            resource: string | null;
+            /**
+             * Records
+             * @description Records it held, to store.
+             */
+            records: number;
+            /**
+             * Gone
+             * @description Records it said were deleted.
+             */
+            gone: number;
+            /**
+             * Error
+             * @description Why it was rejected: {reason, message}.
+             */
+            error: {
+                [key: string]: unknown;
+            } | null;
+            /** Processed At */
+            processed_at: string | null;
         };
         /**
          * WorkspaceCreate
@@ -7397,6 +7539,109 @@ export interface operations {
             };
         };
     };
+    source_deliveries_api_v1_ingestion_sources__source_id__deliveries_get: {
+        parameters: {
+            query?: {
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_WebhookDeliveryRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     source_extraction_api_v1_ingestion_sources__source_id__extraction_get: {
         parameters: {
             query?: never;
@@ -7990,6 +8235,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PipelineQueued"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    deliver_api_v1_webhooks_sources__source_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryAccepted"];
                 };
             };
             /** @description The request could not be understood. */

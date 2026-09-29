@@ -78,6 +78,10 @@ class CatalogEntry(BaseModel):
     auth_type: str
     capabilities: list[Capability]
     read_only: bool
+    receives: bool = Field(
+        default=False,
+        description="Sent to rather than read: the system posts to the source's webhook address.",
+    )
     config_schema: dict[str, object] = Field(description="JSON Schema of the settings.")
     credentials_schema: dict[str, object] = Field(
         description="JSON Schema of the secrets. Every field is write-only."

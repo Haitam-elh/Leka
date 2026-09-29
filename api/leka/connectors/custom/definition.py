@@ -223,6 +223,55 @@ class GraphQLResource(Declared):
         return self
 
 
+# What a condition compares with: text, a number, yes/no.
+Value = str | int | float | bool
+
+
+class Match(BaseModel):
+    """A condition on a delivery: the value at `path` is `equals` — or one
+    of them, when it is a list. `{"path": "event", "equals": "ticket.updated"}`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: Path
+    equals: Value | list[Value]
+
+    @field_validator("equals")
+    @classmethod
+    def _some(cls, value: Value | list[Value]) -> Value | list[Value]:
+        if isinstance(value, list) and not 1 <= len(value) <= MAX_PARAMS:
+            msg = f"`equals` lists 1 to {MAX_PARAMS} values"
+            raise ValueError(msg)
+        return value
+
+    def met_by(self, document: object) -> bool:
+        found = at(document, self.path)
+        wanted = self.equals if isinstance(self.equals, list) else [self.equals]
+        return any(_same(found, value) for value in wanted)
+
+
+def _same(found: object, wanted: Value) -> bool:
+    """Equal, and of the same kind: `true` is not `1`, nor `"1"`."""
+    if isinstance(found, bool) or isinstance(wanted, bool):
+        return isinstance(found, bool) and isinstance(wanted, bool) and found is wanted
+    return isinstance(found, str | int | float) and found == wanted
+
+
+class WebhookResource(Declared):
+    """What a delivery is, when it is one of this resource's, and where its
+    records are in it.
+
+    `match`: the condition on the delivery — which event it is. The first
+    resource whose `match` the delivery meets is its resource; one without
+    `match` takes every delivery, so it comes last. `items`: where its
+    records are — absent, the delivery is the record, or the list of them.
+    `deleted`: the condition that says its records were deleted — they are
+    marked gone, not stored."""
+
+    match: Match | None = None
+    deleted: Match | None = None
+
+
 def _names_once(resources: Sequence[Declared]) -> None:
     names = [resource.name for resource in resources]
     twice = sorted({name for name in names if names.count(name) > 1})
@@ -259,6 +308,34 @@ class GraphQLDefinition(BaseModel):
         return self
 
 
+class WebhookDefinition(BaseModel):
+    """A webhook source's definition: what its deliveries may be."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: Literal[1] = 1
+    resources: list[WebhookResource] = Field(min_length=1, max_length=MAX_RESOURCES)
+
+    @model_validator(mode="after")
+    def _named(self) -> Self:
+        _names_once(self.resources)
+        unmatched = [r.name for r in self.resources if r.match is None]
+        if len(unmatched) > 1 or (unmatched and self.resources[-1].match is not None):
+            msg = (
+                "a resource without `match` takes every delivery: one at most, and last — "
+                f"the others would never be reached ({', '.join(unmatched)})"
+            )
+            raise ValueError(msg)
+        return self
+
+    def of(self, delivery: object) -> WebhookResource | None:
+        """The resource a delivery is — the first whose `match` it meets."""
+        for resource in self.resources:
+            if resource.match is None or resource.match.met_by(delivery):
+                return resource
+        return None
+
+
 def parse(text: str) -> Definition:
     """A REST definition from its JSON — or a ValueError that says, in a
     line, where it is wrong."""
@@ -268,6 +345,11 @@ def parse(text: str) -> Definition:
 def parse_graphql(text: str) -> GraphQLDefinition:
     """A GraphQL definition from its JSON, as `parse`."""
     return _parsed(text, GraphQLDefinition)
+
+
+def parse_webhook(text: str) -> WebhookDefinition:
+    """A webhook definition from its JSON, as `parse`."""
+    return _parsed(text, WebhookDefinition)
 
 
 def _parsed[T: BaseModel](text: str, model: type[T]) -> T:

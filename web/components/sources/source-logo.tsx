@@ -120,6 +120,12 @@ const MARKS: Record<SourceKind, { title: string; color: string; path: string }> 
     color: "#475569",
     path: "M8 3C6.3 3 5.5 3.9 5.5 5.5V9C5.5 10.1 4.9 11 4 11.5v1c.9.5 1.5 1.4 1.5 2.5v3.5c0 1.6.8 2.5 2.5 2.5h1v-1.8h-.6c-.7 0-1-.4-1-1.2v-3.3c0-1.3-.5-2.2-1.4-2.7.9-.5 1.4-1.4 1.4-2.7V6c0-.8.3-1.2 1-1.2H9V3H8zM16 3c1.7 0 2.5.9 2.5 2.5V9c0 1.1.6 2 1.5 2.5v1c-.9.5-1.5 1.4-1.5 2.5v3.5c0 1.6-.8 2.5-2.5 2.5h-1v-1.8h.6c.7 0 1-.4 1-1.2v-3.3c0-1.3.5-2.2 1.4-2.7-.9-.5-1.4-1.4-1.4-2.7V6c0-.8-.3-1.2-1-1.2H15V3h1z",
   },
+  custom_webhook: {
+    // No one's mark: a system that sends to LEKA. An arrow into a tray.
+    title: "Webhook entrant",
+    color: "#0F766E",
+    path: "M11 2h2v8.2l2.6-2.6 1.4 1.4-5 5-5-5 1.4-1.4 2.6 2.6V2zM3 14h2v5h14v-5h2v7H3z",
+  },
   supabase: {
     title: "Supabase",
     color: "#3FCF8E",

@@ -91,6 +91,7 @@ class SourceKind(enum.StrEnum):
     ORACLE = "oracle"
     CUSTOM_REST = "custom_rest"
     CUSTOM_GRAPHQL = "custom_graphql"
+    CUSTOM_WEBHOOK = "custom_webhook"
     MONGODB = "mongodb"
     SUPABASE = "supabase"
     SLACK = "slack"

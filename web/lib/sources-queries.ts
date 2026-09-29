@@ -17,6 +17,7 @@ export const sourceKeys = {
   syncs: (id: string) => [...sourceKeys.all, "syncs", id] as const,
   syncSummaries: () => [...sourceKeys.all, "sync-summaries"] as const,
   runs: (id: string) => [...sourceKeys.all, "runs", id] as const,
+  deliveries: (id: string) => [...sourceKeys.all, "deliveries", id] as const,
 };
 
 export function useSources() {
@@ -85,5 +86,16 @@ export function useSourceRuns(id: string) {
     queryKey: sourceKeys.runs(id),
     queryFn: async () => (await sources.runs(id)).data,
     refetchInterval: (query) => (query.state.data?.[0]?.status === "running" ? 5_000 : false),
+  });
+}
+
+/** What a webhook source received. Polled while a delivery waits for its
+ * pass, so it is seen stored — or refused — without a reload. */
+export function useSourceDeliveries(id: string) {
+  return useQuery({
+    queryKey: sourceKeys.deliveries(id),
+    queryFn: async () => (await sources.deliveries(id)).data,
+    refetchInterval: (query) =>
+      query.state.data?.some((delivery) => delivery.status === "pending") ? 5_000 : false,
   });
 }

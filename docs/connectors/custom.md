@@ -1,14 +1,15 @@
 # Custom sources — a system LEKA has no connector for
 
 A company's own tools — an in-house ticketing system, an asset inventory, a
-vendor LEKA does not know — read through their REST or GraphQL API,
-**without a line of LEKA's code**: the admin declares what to read and what
-it means, and the [connector framework](framework.md) does the rest as for
-any source. LEKA-350.
+vendor LEKA does not know — read through their REST or GraphQL API, or
+sending LEKA their changes by webhook, **without a line of LEKA's code**:
+the admin declares what to read and what it means, and the
+[connector framework](framework.md) does the rest as for any source.
+LEKA-350.
 
 | | |
 |---|---|
-| Kinds | `custom_rest` — **API REST** — and `custom_graphql` — **API GraphQL** ([below](#graphql)) — in the **Custom** category |
+| Kinds | `custom_rest` — **API REST** — `custom_graphql` — **API GraphQL** ([below](#graphql)) — and `custom_webhook` — **Webhook entrant** ([below](#webhooks)) — in the **Custom** category |
 | Server | any JSON API over https, on a public address |
 | Credentials | `secret` (first, so the stored hint is the secret's), `username` for basic — write-only |
 | Config | `base_url` (REST) or `endpoint` (GraphQL), `auth`, `auth_name`, `definition` |
@@ -196,6 +197,117 @@ else `PROVIDER_ERROR` — the server's words in the detail, the secret
 cleaned out. `errors` beside partial `data` fail the call all the same: a
 page read in part would mark the rest gone.
 
+## Webhooks
+
+**Sources → Add → Webhook entrant**. The other way round: LEKA reads
+nothing, the system SENDS each change, as it happens, to the source's own
+address — shown on the source's page, to copy into the system's settings:
+
+    POST https://api.leka-core.com/api/v1/webhooks/sources/<source id>
+
+| Field | |
+|---|---|
+| `signature` | How the system signs what it sends, with the secret: `hmac_sha256` (the default), `standard_webhooks`, `token` — below |
+| `signature_header` | For `hmac_sha256` and `token`: the header that carries it — `X-Hub-Signature-256` for GitHub. Empty: `X-Leka-Signature`, or `X-Leka-Token` |
+| `definition` | What a delivery may be, as JSON (below) |
+| `secret` | The same on both sides, 16 characters at least — for `standard_webhooks`, the `whsec_…` the system gives. `openssl rand -hex 32` makes one |
+
+**Test** calls nothing — there is nothing to call: it checks the secret's
+form and lists the resources the definition recognises. Then **Activate**:
+until then, deliveries are refused (409).
+
+### The definition
+
+```json
+{
+  "resources": [
+    {
+      "name": "tickets",
+      "entity": "issue",
+      "match": {"path": "event", "equals": ["ticket.created", "ticket.updated", "ticket.deleted"]},
+      "deleted": {"path": "event", "equals": "ticket.deleted"},
+      "items": "ticket",
+      "mapping": {"id": "id", "title": "subject", "url": "html_url", "state": "status",
+                  "updated_at": "updated_at", "author": "requester.email",
+                  "metadata": {"priority": "priority"}}
+    },
+    {
+      "name": "assets",
+      "entity": "service",
+      "match": {"path": "type", "equals": "asset.batch"},
+      "items": "assets",
+      "mapping": {"id": "serial", "title": "model"}
+    }
+  ]
+}
+```
+
+`name`, `entity`, `items` and `mapping` are the REST definition's
+([above](#the-definition)), read in the delivery rather than a page. Two
+keys are the webhook's:
+
+| Key | |
+|---|---|
+| `match` | Which deliveries are this resource's: the value at `path` is `equals` — or one of them, a list. Like with like: `true` is not `1`, nor `"true"`. The **first** resource whose `match` a delivery meets is its resource; one without `match` takes every delivery, so it comes last, and alone. A delivery no resource matches is **ignored** — acknowledged (202), logged, not stored: systems send events nobody asked LEKA to keep |
+| `deleted` | The condition that says the delivery's records were **deleted**: they are marked gone — as a sweep marks them, and purged the same way — rather than stored. A deletion needs an id, not a title |
+
+`items` absent: the delivery is the record — or the list of them.
+
+### Signatures
+
+| `signature` | What is checked | Systems |
+|---|---|---|
+| `hmac_sha256` | HMAC-SHA256 of the **body as sent**, keyed with the secret, in the header: hex — after `sha256=` or not — or base64 | GitHub (`X-Hub-Signature-256`), Shopify (`X-Shopify-Hmac-Sha256`), most in-house tools |
+| `standard_webhooks` | [Standard Webhooks](https://www.standardwebhooks.com): `webhook-id`, `webhook-timestamp`, `webhook-signature` — `v1,<base64>` of `{id}.{timestamp}.{body}`, keyed with the `whsec_` secret's bytes; one of several matching is enough, while the system rotates its secret. **Signed more than five minutes from now: refused** — a replay | Svix and the systems that send through it |
+| `token` | The secret itself, in the header | GitLab (`X-Gitlab-Token`) |
+
+Compared in constant time. The secret is in no answer and no log. With
+`hmac_sha256` and `token`, a delivery captured on the way can be sent again
+— the signature carries no time; `standard_webhooks` is the one that
+refuses a replay.
+
+### What the address answers
+
+A delivery is read at the door as the pass will read it, so what could not
+be stored is refused while the sender still listens, with the reason:
+
+| | Answer | Written |
+|---|---|---|
+| no webhook source at this address | **404** | nothing |
+| not signed, or signed otherwise; `standard_webhooks` signed too long ago | **401** | nothing — a line in the logs (`webhook_refused`), not a row: the address is public |
+| the source not switched on | **409** | nothing |
+| more than 1 200 a minute to this source, or 1 000 deliveries — 50 MB — waiting | **429**, `Retry-After` | nothing: the sender retries |
+| more than 1 MB | **413** | nothing |
+| not JSON; `items` not a record nor a list; more than 1 000 records | **400** | the delivery, `rejected`, with why — not its body |
+| a record without an id, or without a title | **422** — `record 3: no id at « id »`; the whole delivery is refused | the same |
+| none of the resources is it | **202** `ignored` | the delivery, `ignored` |
+| the rest | **202** `pending` — kept, not yet stored | the delivery, **with its body** |
+
+The API's own limit — 300 requests a minute per sending address — holds
+too.
+
+### Kept, then stored
+
+The address answers in milliseconds, whatever the pipeline is doing: the
+delivery is kept (`webhook_deliveries`), and a pass is queued — the
+source's key, one pass at a time, as for every source. The pass stores
+what the deliveries hold **in the order they came** — an update then a
+deletion: gone; a deletion then a creation: back — through the same index
+as a record read: a delivery sent twice is written once, extraction and
+normalisation follow, nothing of their own. It lets each body go as it
+stores it. **Never a sweep**: what was not sent was not deleted. A delivery
+that came while a pass was ending waits for the next one — the next
+delivery's, or the schedule's, within the hour.
+
+### What the admin sees
+
+The source's page, **Réception**: the address, how it signs, and the latest
+deliveries — received, waiting, stored, ignored, refused and why. Over the
+API, `GET /ingestion/sources/{id}/deliveries`, never a body. The passes
+deliveries started are in its history, *Une livraison*. Both are kept 30
+days; a pending delivery, until it is stored
+([data-lifecycle.md](../data-lifecycle.md)).
+
 ## Errors
 
 | What | Diagnostic |
@@ -220,4 +332,7 @@ back, nor in a path, whose query a diagnostic leaves out.
   with `params`.
 - The mapping reads values, it does not compute: no concatenation, no
   conversion beyond dates.
-- Webhooks come next in LEKA-350.
+- A webhook delivery is one kind of event: `match` and `deleted` are read on
+  the delivery, not on each record of a list.
+- A webhook's secret is the same for the source's whole life, until rotated
+  — as every source's credentials: rotating sends it back to draft.

@@ -27,7 +27,11 @@ THE SWEEP, daily (`run_processing_sweep`), across every workspace:
 - history older than HISTORY_DAYS is pruned;
 - what was extracted from a record marked deleted is removed, with what was
   made from it — the extraction does it when it runs, the sweep for the
-  sources whose extraction no longer runs (switched off).
+  sources whose extraction no longer runs (switched off);
+- a webhook source's log (LEKA-350) is kept DELIVERY_DAYS: its deliveries
+  stored, ignored or rejected — never one still pending — and the passes
+  deliveries started, which come by the thousand where a schedule's come
+  by the hour.
 """
 
 from __future__ import annotations
@@ -45,11 +49,16 @@ from leka.background.runner import RQ_JOB_TIMEOUT
 from leka.connectors import Source
 from leka.db import session_factory, system_scope
 from leka.ingestion.models import (
+    DeliveryStatus,
     ExtractedRecordRow,
     ProcessingRun,
     ProcessingRunStatus,
     ProcessingStage,
     SourceRecord,
+    SyncRun,
+    SyncRunOutcome,
+    SyncTrigger,
+    WebhookDelivery,
 )
 from leka.ingestion.pipeline import advance
 from leka.ingestion.repository import ProcessingRunRepository, _affected_rows
@@ -57,6 +66,7 @@ from leka.ingestion.repository import ProcessingRunRepository, _affected_rows
 logger = structlog.get_logger(__name__)
 
 HISTORY_DAYS = 90
+DELIVERY_DAYS = 30
 # Longer than RQ lets a job's work-horse live: a run older than this is dead.
 STUCK_AFTER = timedelta(seconds=RQ_JOB_TIMEOUT) + timedelta(hours=1)
 
@@ -127,11 +137,27 @@ async def sweep_processing(*, now: datetime | None = None) -> dict[str, int]:
             forgotten = await session.execute(
                 delete(ExtractedRecordRow).where(ExtractedRecordRow.source_record_id.in_(gone))
             )
+            delivered_before = now - timedelta(days=DELIVERY_DAYS)
+            deliveries = await session.execute(
+                delete(WebhookDelivery).where(
+                    WebhookDelivery.status != DeliveryStatus.PENDING,
+                    WebhookDelivery.received_at < delivered_before,
+                )
+            )
+            passes = await session.execute(
+                delete(SyncRun).where(
+                    SyncRun.trigger == SyncTrigger.WEBHOOK,
+                    SyncRun.status != SyncRunOutcome.RUNNING,
+                    SyncRun.started_at < delivered_before,
+                )
+            )
             await session.commit()
     result = {
         "abandoned": _affected_rows(abandoned),
         "pruned": _affected_rows(pruned),
         "forgotten": _affected_rows(forgotten),
+        "deliveries": _affected_rows(deliveries),
+        "webhook_passes": _affected_rows(passes),
     }
     logger.info("processing_swept", **result)
     return result

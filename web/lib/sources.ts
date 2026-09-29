@@ -7,7 +7,7 @@
  * rather than reading as `undefined` on a card.
  */
 
-import { apiFetch } from "@/lib/api";
+import { apiAddress, apiFetch } from "@/lib/api";
 import type { components } from "@/lib/api-types";
 
 export type Source = components["schemas"]["SourceRead"];
@@ -26,6 +26,7 @@ export type SourceSync = components["schemas"]["SourceSyncRead"];
 export type SourceSyncs = components["schemas"]["SourceSyncs"];
 export type SyncSummary = components["schemas"]["SyncSummary"];
 export type SyncRun = components["schemas"]["SyncRunRead"];
+export type WebhookDelivery = components["schemas"]["WebhookDeliveryRead"];
 
 type Page<T> = { data: T[]; next_cursor?: string | null };
 
@@ -79,7 +80,15 @@ export const sources = {
   /** Its passes, newest first (LEKA-353). */
   runs: (sourceId: string, limit = 10) =>
     apiFetch<Page<SyncRun>>(`/ingestion/sources/${sourceId}/runs?limit=${limit}`),
+  /** What a webhook source received, newest first (LEKA-350). Never a body. */
+  deliveries: (sourceId: string, limit = 20) =>
+    apiFetch<Page<WebhookDelivery>>(`/ingestion/sources/${sourceId}/deliveries?limit=${limit}`),
 };
+
+/** Where a webhook source's system sends its deliveries (LEKA-350). */
+export function receivingAddress(sourceId: string): string {
+  return apiAddress(`/webhooks/sources/${sourceId}`);
+}
 
 /**
  * One word for where a source stands, from the three fields that say it.
@@ -151,6 +160,7 @@ export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
   oracle: "data",
   custom_rest: "custom",
   custom_graphql: "custom",
+  custom_webhook: "custom",
   supabase: "data",
   mongodb: "data",
   slack: "chat",

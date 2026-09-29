@@ -14,7 +14,8 @@ each vendor object, the fourth; `extracted_records`, what extraction made
 of each of them, the fifth (LEKA-354); `parsed_records`, what parsing read
 in each extraction, the sixth (LEKA-355); `normalised_records`, the
 candidates normalisation made of each, the seventh (LEKA-356);
-`processing_runs`, each run of those three stages, the eighth (LEKA-360).
+`processing_runs`, each run of those three stages, the eighth (LEKA-360);
+`webhook_deliveries`, what webhook sources received, the ninth (LEKA-350).
 It is the row half of the split
 described in docs/adr/010-object-storage.md: the bytes live in the object
 store, and this is everything we know about them — where they came from, how
@@ -37,6 +38,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     String,
     UniqueConstraint,
     text,
@@ -226,6 +228,8 @@ class SyncTrigger(enum.StrEnum):
     # The source's scope rules changed (LEKA-351): a full pass, to read what
     # came in and sweep what went out.
     SETTINGS = "settings"
+    # A webhook source received a delivery (LEKA-350): the pass stores it.
+    WEBHOOK = "webhook"
 
 
 class SyncRunOutcome(enum.StrEnum):
@@ -704,3 +708,91 @@ class ProcessingRun(Base, WorkspaceScopedMixin):
     # Why it stopped: the exception's type — its details are in the logs,
     # a database error's may quote a record.
     error: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class DeliveryStatus(enum.StrEnum):
+    """Where a delivery a webhook source received stands (LEKA-350)."""
+
+    # Kept, with its body, for the source's next pass.
+    PENDING = "pending"
+    # Its records stored, or marked gone.
+    STORED = "stored"
+    # No resource of the definition is it: nothing to keep.
+    IGNORED = "ignored"
+    # Signed, but not what the definition says: not JSON, a record without id.
+    REJECTED = "rejected"
+
+
+class WebhookDelivery(Base, WorkspaceScopedMixin):
+    """One delivery a webhook source received, signed (LEKA-350).
+
+    THE INBOX, THEN THE LOG. A delivery is kept `pending`, its body with it,
+    until the source's next pass stores what it holds — one pass at a time
+    per source, as for every source (leka/ingestion/sync.py). Then its body
+    goes, and the row stays 30 days: the log an admin reads — when each came,
+    what it was, what was kept of it, and why not.
+
+    ONLY WHAT WAS SIGNED with the source's secret is written. Anyone can
+    reach the address; a POST without the signature is refused at the door
+    and leaves a line in the logs, not a row here.
+    """
+
+    __tablename__ = "webhook_deliveries"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_id"],
+            ["sources.workspace_id", "sources.id"],
+            name="fk_webhook_deliveries_workspace_source",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "status IN (" + ", ".join(f"'{s}'" for s in _statuses(DeliveryStatus)) + ")",
+            name="status",
+        ),
+        CheckConstraint(
+            "size_bytes >= 0 AND records >= 0 AND gone >= 0", name="counts_not_negative"
+        ),
+        # A body is kept for the pass, and only until it.
+        CheckConstraint("status = 'pending' OR body IS NULL", name="body_only_while_pending"),
+        # The log of a source, newest first.
+        Index("ix_webhook_deliveries_source_received_at", "source_id", "received_at"),
+        # The pass: a source's deliveries still to store, oldest first.
+        Index(
+            "ix_webhook_deliveries_pending",
+            "source_id",
+            "received_at",
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
+
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[DeliveryStatus] = mapped_column(
+        Enum(
+            DeliveryStatus,
+            name="status",
+            native_enum=False,
+            length=20,
+            values_callable=_statuses,
+            create_constraint=False,
+        ),
+        nullable=False,
+    )
+    # The sender's own id for it, when it gives one — webhook-id,
+    # X-GitHub-Delivery, X-Request-Id: what its log and this one share.
+    delivery_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The resource it was, and what it held: records to store, ids gone.
+    resource: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    records: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    gone: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # What it was, as it came — for the pass, and let go after it.
+    body: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    # Why it was rejected: {"reason", "message"} — never the body.
+    error: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The pass that stored it. Single-column, as source_records': SET NULL
+    # through workspace_id would null the workspace too.
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sync_runs.id", ondelete="SET NULL"), nullable=True
+    )

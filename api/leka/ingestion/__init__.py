@@ -5,6 +5,7 @@ about how the graph is queried or how answers are built.
 """
 
 from leka.ingestion.models import (
+    DeliveryStatus,
     ExtractedRecordRow,
     ExtractionStatus,
     NormalisationStatus,
@@ -21,6 +22,7 @@ from leka.ingestion.models import (
     SyncRunOutcome,
     SyncRunStatus,
     SyncTrigger,
+    WebhookDelivery,
 )
 from leka.ingestion.repository import (
     ExtractionRepository,
@@ -32,6 +34,7 @@ from leka.ingestion.repository import (
     SourceRecordRepository,
     SourceSyncRepository,
     SyncRunRepository,
+    WebhookDeliveryRepository,
 )
 from leka.ingestion.retention import retention_days
 from leka.ingestion.schemas import (
@@ -53,10 +56,12 @@ from leka.ingestion.schemas import (
     SyncRequested,
     SyncRunRead,
     SyncSummary,
+    WebhookDeliveryRead,
 )
 from leka.ingestion.service import IngestionService
 
 __all__ = [
+    "DeliveryStatus",
     "ExtractedRecordRow",
     "ExtractionFailureRead",
     "ExtractionRepository",
@@ -101,5 +106,8 @@ __all__ = [
     "SyncRunStatus",
     "SyncSummary",
     "SyncTrigger",
+    "WebhookDelivery",
+    "WebhookDeliveryRead",
+    "WebhookDeliveryRepository",
     "retention_days",
 ]

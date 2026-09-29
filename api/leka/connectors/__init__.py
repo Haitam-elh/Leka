@@ -18,7 +18,7 @@ from leka.connectors import (
     bitbucket,  # noqa: F401  — registers BitbucketConnector
     clickup,  # noqa: F401  — registers ClickUpConnector
     confluence,  # noqa: F401  — registers ConfluenceConnector
-    custom,  # noqa: F401  — registers CustomRestConnector, CustomGraphQLConnector
+    custom,  # noqa: F401  — registers the REST, GraphQL and webhook custom connectors
     datadog,  # noqa: F401  — registers DatadogConnector
     gcp,  # noqa: F401  — registers GcpConnector
     github,  # noqa: F401  — registers GitHubConnector
@@ -66,6 +66,7 @@ from leka.connectors.models import (
     SourceStatus,
     SyncStatus,
 )
+from leka.connectors.receiving import Received, Receiver, Refusal, RefusedDeliveryError
 from leka.connectors.registry import (
     UnknownConnectorError,
     get_connector,
@@ -146,6 +147,10 @@ __all__ = [
     "Mapping",
     "NoScopeError",
     "RawRecord",
+    "Received",
+    "Receiver",
+    "Refusal",
+    "RefusedDeliveryError",
     "Retention",
     "RotationRefusedError",
     "RotationReport",

@@ -116,7 +116,7 @@ class SyncRunRead(BaseModel):
     """One pass over a source: what started it, how far it got, how it ended."""
 
     id: uuid.UUID
-    trigger: str = Field(description="activation, schedule or manual.")
+    trigger: str = Field(description="activation, schedule, manual, settings or webhook.")
     full_read: bool = Field(
         description="Read at least one capability whole, ignoring where the last pass stopped."
     )
@@ -128,6 +128,21 @@ class SyncRunRead(BaseModel):
     payloads: int
     bytes: int
     error: dict[str, object] | None = Field(description="The diagnostic it ended on.")
+
+
+class WebhookDeliveryRead(BaseModel):
+    """One delivery a webhook source received, signed (LEKA-350) — never its body."""
+
+    id: uuid.UUID
+    received_at: datetime
+    status: str = Field(description="pending, stored, ignored or rejected.")
+    delivery_id: str | None = Field(description="The sender's own id for it, when it gives one.")
+    size_bytes: int
+    resource: str | None = Field(description="The resource it was.")
+    records: int = Field(description="Records it held, to store.")
+    gone: int = Field(description="Records it said were deleted.")
+    error: dict[str, object] | None = Field(description="Why it was rejected: {reason, message}.")
+    processed_at: datetime | None
 
 
 # ── The extraction, over the API (LEKA-354) ──────────────────────────────────

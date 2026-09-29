@@ -1,7 +1,8 @@
 """Systems LEKA has no connector for (LEKA-350): what their admin mapped.
 
-A generic source — REST or GraphQL — stores each record as `{"resource",
-"entity", "fields", "record"}` (leka/connectors/custom/common.py): `fields`
+A generic source — REST, GraphQL, or a webhook — stores each record as
+`{"resource", "entity", "fields", "record"}` (leka/connectors/custom/common.py),
+read or received alike: `fields`
 is what the source's mapping read in the record — LEKA's own fields, named
 as the extraction contract names them. So one strategy reads every such
 source, whatever the system and its API: the meaning was declared by the
@@ -35,9 +36,16 @@ from leka.ingestion.extraction.fields import content, dig, lower, ref, required,
 C = Capability
 CUSTOM_REST = SourceKind.CUSTOM_REST
 CUSTOM_GRAPHQL = SourceKind.CUSTOM_GRAPHQL
+CUSTOM_WEBHOOK = SourceKind.CUSTOM_WEBHOOK
 
 
-@strategy("custom.records", 1, (CUSTOM_REST, C.RECORDS), (CUSTOM_GRAPHQL, C.RECORDS))
+@strategy(
+    "custom.records",
+    1,
+    (CUSTOM_REST, C.RECORDS),
+    (CUSTOM_GRAPHQL, C.RECORDS),
+    (CUSTOM_WEBHOOK, C.RECORDS),
+)
 def custom_record(p: Payload) -> Extracted:
     if not isinstance(dig(p, "fields"), dict):
         raise MalformedPayloadError("missing field 'fields'")

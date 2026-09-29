@@ -13,6 +13,7 @@ from typing import Any
 
 from leka.connectors.base import Connector, ConnectorManifest
 from leka.connectors.models import SourceKind
+from leka.connectors.receiving import Receiver
 
 _REGISTRY: dict[SourceKind, type[Connector[Any, Any]]] = {}
 
@@ -23,6 +24,9 @@ class UnknownConnectorError(LookupError):
 
 def register_connector[C: type[Connector[Any, Any]]](cls: C) -> C:
     key = cls.manifest.key
+    if cls.manifest.receives != issubclass(cls, Receiver):
+        msg = f"{cls.__name__}: a manifest that `receives` is a Receiver's, and only one's"
+        raise ValueError(msg)
     if key in _REGISTRY and _REGISTRY[key] is not cls:
         msg = f"two connectors claim {key!r}: {_REGISTRY[key].__name__} and {cls.__name__}"
         raise ValueError(msg)

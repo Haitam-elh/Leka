@@ -3,6 +3,7 @@
     POST /ingestion/sources/{id}/sync     "sync now" — source:manage
     GET  /ingestion/sources/{id}/syncs    a pass under way?, and each capability
     GET  /ingestion/sources/{id}/runs     its passes, newest first (LEKA-353)
+    GET  /ingestion/sources/{id}/deliveries  what a webhook source received (LEKA-350)
     GET  /ingestion/syncs                 one line per source, for a list
     GET  /ingestion/sources/{id}/extraction  what extraction made of it (LEKA-354)
     GET  /ingestion/sources/{id}/parsing     what parsing read in it (LEKA-355)
@@ -62,6 +63,9 @@ from leka.ingestion import (
     SyncRunStatus,
     SyncSummary,
     SyncTrigger,
+    WebhookDelivery,
+    WebhookDeliveryRead,
+    WebhookDeliveryRepository,
 )
 from leka.ingestion.lifecycle import reprocess
 from leka.ingestion.pipeline import STAGES, advance, pending
@@ -188,6 +192,41 @@ async def source_runs(
     )
     return PageEnvelope(
         data=[SyncRunRead.model_validate(run, from_attributes=True) for run in result.items],
+        next_cursor=result.next_cursor,
+    )
+
+
+DELIVERY_SORTS = SortCatalogue(
+    fields=(
+        SortableField(
+            "received_at",
+            WebhookDelivery.received_at,
+            "ix_webhook_deliveries_source_received_at",
+        ),
+    ),
+    default="received_at",
+)
+
+
+@router.get("/sources/{source_id}/deliveries", response_model=PageEnvelope[WebhookDeliveryRead])
+async def source_deliveries(
+    source_id: uuid.UUID, session: SessionDep, principal: Reader, page: PageParams
+) -> PageEnvelope[WebhookDeliveryRead]:
+    """What a webhook source received, newest first: when, what it was, what
+    was kept of it, why not. Empty for a source that is not sent to."""
+    await _source(session, principal, source_id)
+    result = await serve_page(
+        session,
+        WebhookDeliveryRepository(session, principal.workspace_id).log(source_id),
+        request=page,
+        catalogue=DELIVERY_SORTS,
+        id_column=WebhookDelivery.id,
+    )
+    return PageEnvelope(
+        data=[
+            WebhookDeliveryRead.model_validate(delivery, from_attributes=True)
+            for delivery in result.items
+        ],
         next_cursor=result.next_cursor,
     )
 

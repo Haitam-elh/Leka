@@ -4,7 +4,8 @@
  * What these protect: a member sees everything and no button; a failed
  * test is explained, not just reported; activation refused for want of a
  * test says so; deletion needs the source's name typed; a source with no
- * connector cannot be tested or changed.
+ * connector cannot be tested or changed; a webhook source shows the address
+ * to give its system, and what that system sent (LEKA-350).
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -31,6 +32,7 @@ const api = {
   syncs: vi.fn(),
   syncSummaries: vi.fn(),
   runs: vi.fn(),
+  deliveries: vi.fn(),
 };
 const push = vi.fn();
 const notify = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
@@ -119,6 +121,7 @@ beforeEach(() => {
   api.syncs.mockResolvedValue({ pass_state: null, capabilities: [] });
   api.syncSummaries.mockResolvedValue([]);
   api.runs.mockResolvedValue({ data: [] });
+  api.deliveries.mockResolvedValue({ data: [] });
 });
 
 describe("a source's page", () => {
@@ -331,5 +334,128 @@ describe("its passes", () => {
     renderPage();
 
     expect(await screen.findByText("Aucune synchronisation pour l'instant.")).toBeInTheDocument();
+  });
+});
+
+describe("its reception, for a source its system sends to", () => {
+  const WEBHOOK = {
+    key: "custom_webhook",
+    display_name: "Webhook entrant",
+    category: "custom",
+    capabilities: ["records"],
+    receives: true,
+    config_schema: {
+      properties: {
+        signature: { type: "string", enum: ["hmac_sha256", "standard_webhooks", "token"] },
+        signature_header: { anyOf: [{ type: "string" }, { type: "null" }] },
+        definition: { type: "string", format: "json" },
+      },
+    },
+    credentials_schema: { properties: {} },
+  } as unknown as CatalogEntry;
+  const hooks = (overrides: Partial<Source> = {}) =>
+    source({
+      type: "custom_webhook",
+      display_name: "Helpdesk hooks",
+      status: "active",
+      config: {
+        signature: "hmac_sha256",
+        signature_header: "X-Hub-Signature-256",
+        definition: '{"resources": []}',
+      },
+      capabilities: ["records"],
+      ...overrides,
+    });
+  const delivery = (overrides: Record<string, unknown>) => ({
+    id: crypto.randomUUID(),
+    received_at: new Date().toISOString(),
+    status: "stored",
+    delivery_id: null,
+    size_bytes: 420,
+    resource: "tickets",
+    records: 1,
+    gone: 0,
+    error: null,
+    processed_at: new Date().toISOString(),
+    ...overrides,
+  });
+
+  async function reception(): Promise<HTMLElement> {
+    const heading = await screen.findByRole("heading", { name: "Réception" });
+    return heading.closest("section") as HTMLElement;
+  }
+
+  it("gives the address to copy into the system, and how it signs", async () => {
+    api.get.mockResolvedValue(hooks());
+    api.catalog.mockResolvedValue([WEBHOOK]);
+    renderPage();
+
+    const section = await reception();
+    expect(within(section).getByText(/\/api\/v1\/webhooks\/sources\/s1$/)).toBeInTheDocument();
+    expect(within(section).getByRole("button", { name: /Copier/ })).toBeInTheDocument();
+    expect(
+      within(section).getByText(
+        "HMAC-SHA256 du corps, en hexadécimal ou en base64, dans l'en-tête X-Hub-Signature-256",
+      ),
+    ).toBeInTheDocument();
+    expect(within(section).queryByText(/Activez la source/)).not.toBeInTheDocument();
+  });
+
+  it("lists what was sent: stored, ignored, refused and why", async () => {
+    api.get.mockResolvedValue(hooks());
+    api.catalog.mockResolvedValue([WEBHOOK]);
+    api.deliveries.mockResolvedValue({
+      data: [
+        delivery({
+          status: "rejected",
+          resource: null,
+          records: 0,
+          error: { reason: "unmapped", message: "« tickets », record 0: no id at « id »." },
+        }),
+        delivery({ records: 1, gone: 1 }),
+        delivery({ status: "ignored", resource: null, records: 0, processed_at: null }),
+      ],
+    });
+    renderPage();
+
+    const section = await reception();
+    await within(section).findByText("Refusée");
+    const rows = within(section).getAllByRole("row").slice(1);
+    expect(within(rows[0]).getByText("Refusée")).toBeInTheDocument();
+    expect(within(rows[0]).getByText("Mapping incomplet")).toBeInTheDocument();
+    expect(
+      within(rows[0]).getByText("« tickets », record 0: no id at « id »."),
+    ).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Enregistrée")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("1 · 1 supprimé(s)")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("Ignorée")).toBeInTheDocument();
+    expect(
+      within(rows[2]).getByText("Aucune ressource de la définition ne la reconnaît."),
+    ).toBeInTheDocument();
+  });
+
+  it("says a source not switched on refuses what it is sent", async () => {
+    api.get.mockResolvedValue(hooks({ status: "tested" }));
+    api.catalog.mockResolvedValue([WEBHOOK]);
+    renderPage();
+
+    const section = await reception();
+    expect(
+      within(section).getByText(
+        "Activez la source pour qu'elle reçoive : d'ici là, les livraisons sont refusées.",
+      ),
+    ).toHaveAttribute("role", "status");
+    expect(
+      await within(section).findByText("Aucune livraison reçue pour l'instant."),
+    ).toBeInTheDocument();
+  });
+
+  it("is not there for a source LEKA reads", async () => {
+    renderPage();
+
+    await screen.findByRole("heading", { level: 1, name: "Acme GitHub" });
+    await screen.findByText("acme/api, acme/web");
+    expect(screen.queryByRole("heading", { name: "Réception" })).not.toBeInTheDocument();
+    expect(api.deliveries).not.toHaveBeenCalled();
   });
 });
