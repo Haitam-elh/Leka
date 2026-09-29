@@ -89,6 +89,7 @@ class SourceKind(enum.StrEnum):
     MARIADB = "mariadb"
     SQLSERVER = "sqlserver"
     ORACLE = "oracle"
+    CUSTOM_REST = "custom_rest"
     MONGODB = "mongodb"
     SUPABASE = "supabase"
     SLACK = "slack"

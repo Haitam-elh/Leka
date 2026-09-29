@@ -7,7 +7,9 @@ import { FormProvider } from "react-hook-form";
 
 import { cn } from "cn";
 import { FormAlert } from "@/components/forms/form-alert";
+import { SelectField } from "@/components/forms/choice-fields";
 import { TextField } from "@/components/forms/text-field";
+import { TextareaField } from "@/components/forms/textarea-field";
 import { capabilityWord, fieldWords } from "@/components/sources/source-panel";
 import { SourceLogo } from "@/components/sources/source-logo";
 import { LoadingState } from "@/components/states/loading-state";
@@ -342,12 +344,43 @@ function SchemaField({
     .filter(Boolean)
     .join(" ");
   const name = `${part}.${field.name}` as `config.${string}`;
+  const optional = !field.required || (keepSecret && field.kind === "password");
+  if (field.kind === "choice") {
+    const words = (t.sources.choices as Record<string, Record<string, string> | undefined>)[
+      field.name
+    ];
+    return (
+      <SelectField<Values, typeof name>
+        name={name}
+        label={known?.label ?? field.title}
+        description={help || undefined}
+        optional={optional}
+        options={(field.options ?? []).map((value) => ({
+          value,
+          label: words?.[value] ?? value,
+        }))}
+      />
+    );
+  }
+  if (field.kind === "json") {
+    return (
+      <TextareaField<Values, typeof name>
+        name={name}
+        label={known?.label ?? field.title}
+        description={help || undefined}
+        optional={optional}
+        minRows={8}
+        maxRows={24}
+        code
+      />
+    );
+  }
   return (
     <TextField<Values, typeof name>
       name={name}
       label={known?.label ?? field.title}
       description={help || undefined}
-      optional={!field.required || (keepSecret && field.kind === "password")}
+      optional={optional}
       type={field.kind === "number" ? "text" : field.kind}
       inputMode={field.kind === "number" ? "numeric" : undefined}
       autoComplete={field.kind === "password" ? "off" : undefined}

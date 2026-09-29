@@ -45,3 +45,61 @@ describe("a whole-number field", () => {
     expect(filled({ host: "db.acme.example", port: "" })).toEqual({ host: "db.acme.example" });
   });
 });
+
+/**
+ * A custom source's form (LEKA-350): a closed list — how the secret is sent
+ * — and a document — the definition, in JSON — read from the same schema.
+ */
+const CUSTOM_REST = {
+  type: "object",
+  required: ["base_url", "definition"],
+  properties: {
+    base_url: { type: "string", format: "uri", minLength: 1, maxLength: 2083, title: "Base Url" },
+    auth: {
+      type: "string",
+      enum: ["none", "bearer", "header", "query", "basic"],
+      default: "bearer",
+      title: "Auth",
+    },
+    auth_name: { anyOf: [{ type: "string", maxLength: 64 }, { type: "null" }], title: "Auth Name" },
+    definition: { type: "string", format: "json", minLength: 2, maxLength: 100000, title: "Definition" },
+  },
+};
+
+describe("a custom source's fields", () => {
+  const fields = fieldsOf(CUSTOM_REST);
+  const byName = Object.fromEntries(fields.map((field) => [field.name, field]));
+  const valid = {
+    base_url: "https://helpdesk.acme.example/api",
+    auth: "bearer",
+    auth_name: "",
+    definition: '{"resources": []}',
+  };
+
+  it("offers the enum as a choice, with its default", () => {
+    expect(byName.auth).toMatchObject({
+      kind: "choice",
+      options: ["none", "bearer", "header", "query", "basic"],
+      required: false,
+    });
+    expect(defaultsOf(fields).auth).toBe("bearer");
+  });
+
+  it("types the definition as a JSON document", () => {
+    expect(byName.definition).toMatchObject({ kind: "json", required: true });
+  });
+
+  it("accepts a choice it offers and a document that is JSON", () => {
+    expect(zodOf(fields).safeParse(valid).success).toBe(true);
+  });
+
+  it.each(["oauth", "Bearer"])("refuses the choice %j", (auth) => {
+    expect(zodOf(fields).safeParse({ ...valid, auth }).success).toBe(false);
+  });
+
+  it.each(['{"resources": [}', "resources: []", '{"a": }'])("refuses the document %j", (definition) => {
+    const result = zodOf(fields).safeParse({ ...valid, definition });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toContain("json");
+  });
+});

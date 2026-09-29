@@ -109,6 +109,12 @@ const MARKS: Record<SourceKind, { title: string; color: string; path: string }> 
     color: "#F80000",
     path: "M16.412 4.412h-8.82a7.588 7.588 0 0 0-.008 15.176h8.828a7.588 7.588 0 0 0 0-15.176zm-.193 12.502H7.786a4.915 4.915 0 0 1 0-9.828h8.433a4.914 4.914 0 1 1 0 9.828z",
   },
+  custom_rest: {
+    // No one's mark: an API LEKA has no connector for. A pair of braces.
+    title: "API REST",
+    color: "#475569",
+    path: "M8 3C6.3 3 5.5 3.9 5.5 5.5V9C5.5 10.1 4.9 11 4 11.5v1c.9.5 1.5 1.4 1.5 2.5v3.5c0 1.6.8 2.5 2.5 2.5h1v-1.8h-.6c-.7 0-1-.4-1-1.2v-3.3c0-1.3-.5-2.2-1.4-2.7.9-.5 1.4-1.4 1.4-2.7V6c0-.8.3-1.2 1-1.2H9V3H8zM16 3c1.7 0 2.5.9 2.5 2.5V9c0 1.1.6 2 1.5 2.5v1c-.9.5-1.5 1.4-1.5 2.5v3.5c0 1.6-.8 2.5-2.5 2.5h-1v-1.8h.6c.7 0 1-.4 1-1.2v-3.3c0-1.3.5-2.2 1.4-2.7-.9-.5-1.4-1.4-1.4-2.7V6c0-.8-.3-1.2-1-1.2H15V3h1z",
+  },
   supabase: {
     title: "Supabase",
     color: "#3FCF8E",

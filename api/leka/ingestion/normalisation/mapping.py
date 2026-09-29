@@ -33,6 +33,8 @@ PROJECT_TOOLS = frozenset({"linear", "asana", "trello", "clickup", "monday"})
 DOCUMENT_TOOLS = frozenset(
     {"confluence", "notion", "slab", "guru", "google_workspace", "microsoft_365"}
 )
+# What a custom source's resource may declare its records to be (LEKA-350).
+CUSTOM_ENTITIES = frozenset({"issue", "incident", "service", "project", "document"})
 
 ENTITY_TYPES = {
     C.REPOSITORIES: "repository",
@@ -174,12 +176,15 @@ class Build:
 def entity(build: Build) -> NormalisedEntity:
     """The record itself, as an entity."""
     record, capability = build.record, build.record.provenance.capability
-    if capability not in ENTITY_TYPES:
+    declared = _declared(build) if capability is C.RECORDS else None
+    if declared is None and capability not in ENTITY_TYPES:
         raise UnsupportedRecordError(f"no mapping for {capability.value} yet")
     name = values.name(record.title)
     if not name:
         raise InvalidRecordError("no name: the extraction has no title")
-    if capability in RESOURCE_KINDS:
+    if declared is not None:
+        key, attributes = _custom(build, declared)
+    elif capability in RESOURCE_KINDS:
         if build.kind not in CLOUDS:
             raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
         key, attributes = _cloud(build)
@@ -191,7 +196,7 @@ def entity(build: Build) -> NormalisedEntity:
         key, attributes = _work(build)
     _mapped_containers(build, key)
     return NormalisedEntity(
-        type=build.mapping.entity_types.get(capability.value, ENTITY_TYPES[capability]),
+        type=declared or build.mapping.entity_types.get(capability.value, ENTITY_TYPES[capability]),
         key=key,
         external_id=record.provenance.external_id,
         source_id=build.source_id,
@@ -397,6 +402,60 @@ def _document(build: Build, own_id: str, container: str | None) -> str:
     if build.kind == "microsoft_365" and container:
         return ids.item("microsoft_365", "document", f"{container}/{own_id}")
     return ids.item(build.kind, "document", own_id)
+
+
+# ── custom sources (LEKA-350) ────────────────────────────────────────────────
+
+
+def _declared(build: Build) -> str:
+    """What the resource of a custom record declared it to be — or, when it
+    declared nothing, not an entity: extracted, not modelled."""
+    declared = build.record.signals.get("entity")
+    if not isinstance(declared, str) or declared not in CUSTOM_ENTITIES:
+        resource = build.record.signals.get("resource")
+        raise UnsupportedRecordError(
+            f"no entity declared for the resource {resource!r}: extracted, not modelled"
+        )
+    return declared
+
+
+def _custom(build: Build, declared: str) -> tuple[str, dict[str, object]]:
+    """A custom source's record, as the entity its resource declared: keyed
+    by the source — nothing tells two unknown systems' ids apart — except a
+    service, keyed by its name as PagerDuty's and a `service:` tag's are, so
+    they meet; its state and priority on LEKA's scales; its author."""
+    record = build.record
+    if declared == "service":
+        key = ids.service(str(record.title))
+    else:
+        key = ids.item(f"custom-{build.source_id}", declared, record.provenance.external_id)
+    attributes = _common(build)
+    if record.state is not None and declared in ("issue", "incident"):
+        own = _own(build.mapping.states, record.state)
+        state, known = (
+            (own, True)
+            if own
+            else values.incident_state(record.state)
+            if declared == "incident"
+            else values.work_state(record.state)
+        )
+        attributes["state"], attributes["state_raw"] = state, record.state
+        if not known:
+            build.diagnostics.append("unknown state: kept as the system wrote it")
+    raw_priority = record.metadata.get("priority")
+    if isinstance(raw_priority, str) and declared in ("issue", "incident"):
+        own = _own(build.mapping.priorities, raw_priority)
+        attributes["priority"], known = (own, True) if own else values.priority(raw_priority)
+        attributes["priority_raw"] = raw_priority
+        if not known:
+            build.diagnostics.append("unknown priority: kept as the system wrote it")
+    for reference in record.references:
+        if reference.kind == "person" and reference.role in PERSON_ROLES:
+            person = build.person(reference)
+            if person:
+                build.relate(PERSON_ROLES[reference.role], key, person, 1.0, "references")
+    _references(build, key)
+    return key, attributes
 
 
 # ── operations: incidents and services (LEKA-348) ────────────────────────────

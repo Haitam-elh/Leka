@@ -13,6 +13,10 @@ import { Textarea } from "@/components/ui/textarea";
  * and someone writing an intention cannot see the sentence they just wrote.
  * It stops growing at `maxRows` because a box that swallows the page hides
  * the button that submits it.
+ *
+ * `code`: a document written by hand — a custom source's definition, in
+ * JSON (LEKA-350) — set in monospace, and never corrected by the browser:
+ * a JSON key "corrected" is a definition broken.
  */
 export function TextareaField<TFieldValues extends FieldValues, TName extends Path<TFieldValues>>({
   name,
@@ -20,6 +24,7 @@ export function TextareaField<TFieldValues extends FieldValues, TName extends Pa
   maxRows = 12,
   max,
   placeholder,
+  code = false,
   ...props
 }: Omit<FormFieldProps<TFieldValues, TName>, "children" | "counter" | "name"> & {
   name: TName;
@@ -28,6 +33,7 @@ export function TextareaField<TFieldValues extends FieldValues, TName extends Pa
   /** Shows `n / max` under the box, and warns near the limit. */
   max?: number;
   placeholder?: string;
+  code?: boolean;
 }) {
   const value = useWatch({ name }) as unknown;
   const length = typeof value === "string" ? value.length : 0;
@@ -45,6 +51,7 @@ export function TextareaField<TFieldValues extends FieldValues, TName extends Pa
           minRows={minRows}
           maxRows={maxRows}
           placeholder={placeholder}
+          code={code}
           aria-invalid={invalid || undefined}
         />
       )}
@@ -55,9 +62,10 @@ export function TextareaField<TFieldValues extends FieldValues, TName extends Pa
 function AutoTextarea({
   minRows,
   maxRows,
+  code,
   onChange,
   ...props
-}: React.ComponentProps<typeof Textarea> & { minRows: number; maxRows: number }) {
+}: React.ComponentProps<typeof Textarea> & { minRows: number; maxRows: number; code: boolean }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
 
   const resize = useCallback(() => {
@@ -92,7 +100,10 @@ function AutoTextarea({
         onChange?.(event);
         resize();
       }}
-      className="resize-none"
+      spellCheck={code ? false : undefined}
+      autoCapitalize={code ? "off" : undefined}
+      autoCorrect={code ? "off" : undefined}
+      className={code ? "resize-none font-mono text-xs md:text-xs" : "resize-none"}
     />
   );
 }

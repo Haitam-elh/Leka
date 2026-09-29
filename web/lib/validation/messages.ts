@@ -88,6 +88,13 @@ export function installValidationMessages(): void {
           return encode("tooBigNumber", { max });
         }
 
+        case "custom": {
+          // A `.refine()` that names its rule — `{ params: { rule: "json" } }`
+          // — reads as that rule; any other as the generic sentence.
+          const rule = (issue.params as { rule?: string } | undefined)?.rule;
+          return rule === "json" ? encode("json") : encode("invalid");
+        }
+
         case "invalid_format":
           if (issue.format === "email") return encode("email");
           if (issue.format === "url") return encode("url");

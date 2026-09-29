@@ -227,6 +227,7 @@ const fr = {
     url: "Indiquez une adresse web valide.",
     invalidFormat: "Ce format n'est pas reconnu.",
     invalid: "Cette valeur n'est pas valide.",
+    json: "Ce n'est pas du JSON valide.",
   },
   /** Confirming, cancelling, and acting on a selection. */
   interactions: {
@@ -510,6 +511,7 @@ const fr = {
       observability: "Observabilité",
       data: "Données",
       chat: "Communication",
+      custom: "Sur mesure",
       other: "Autres",
     },
     columns: {
@@ -553,6 +555,7 @@ const fr = {
       dashboards: "tableaux de bord",
       schemas: "schémas",
       tables: "tables et vues",
+      records: "enregistrements",
     },
     /**
      * The same words, in each vendor's own terms where it has them: what
@@ -793,12 +796,21 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase et MongoDB.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase et MongoDB — et, sur mesure, à toute API REST.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
         scope: "Périmètre",
         test: "Test et activation",
+      },
+    },
+    choices: {
+      auth: {
+        none: "Aucune",
+        bearer: "Token (Authorization: Bearer)",
+        header: "Clé dans un en-tête",
+        query: "Clé dans l'URL",
+        basic: "Utilisateur et mot de passe",
       },
     },
     fields: {
@@ -1067,6 +1079,26 @@ const fr = {
           help: "Un utilisateur dédié, avec CREATE SESSION et REFERENCES sur chaque table et vue à décrire. Aucun SELECT n'est nécessaire.",
         },
         password: { label: "Mot de passe", help: "Celui de l'utilisateur. Chiffré, et plus jamais affiché." },
+      },
+      custom_rest: {
+        base_url: {
+          label: "Adresse de l'API",
+          help: "L'adresse de base, en https et publique : https://api.acme.com/v2. Le chemin de chaque ressource s'y ajoute.",
+        },
+        auth: { label: "Authentification", help: "Comment LEKA envoie le secret à l'API." },
+        auth_name: {
+          label: "En-tête ou paramètre",
+          help: "Pour une clé dans un en-tête (X-API-Key) ou dans l'URL (api_key) : son nom.",
+        },
+        definition: {
+          label: "Définition",
+          help: 'Les ressources à lire, leur pagination et ce que signifie chaque champ, en JSON. Le plus court : {"resources": [{"name": "tickets", "path": "/tickets", "items": "data", "mapping": {"id": "id", "title": "subject"}}]}',
+        },
+        secret: {
+          label: "Secret",
+          help: "Le token, la clé d'API ou le mot de passe. Chiffré, et plus jamais affiché. Vide sans authentification.",
+        },
+        username: { label: "Utilisateur", help: "Pour une authentification par utilisateur et mot de passe." },
       },
       supabase: {
         host: {
@@ -1432,6 +1464,7 @@ const en: Dictionary = {
     url: "Enter a valid web address.",
     invalidFormat: "That format is not recognised.",
     invalid: "That value is not valid.",
+    json: "That is not valid JSON.",
   },
   interactions: {
     cancel: "Cancel",
@@ -1694,6 +1727,7 @@ const en: Dictionary = {
       observability: "Observability",
       data: "Data",
       chat: "Communication",
+      custom: "Custom",
       other: "Other",
     },
     columns: {
@@ -1737,6 +1771,7 @@ const en: Dictionary = {
       dashboards: "dashboards",
       schemas: "schemas",
       tables: "tables and views",
+      records: "records",
     },
     capabilitiesOf: {
       aws: {
@@ -1971,12 +2006,21 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase and MongoDB today.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase and MongoDB today — and, custom, to any REST API.",
       steps: {
         connector: "Tool",
         settings: "Connection",
         scope: "Scope",
         test: "Test and activation",
+      },
+    },
+    choices: {
+      auth: {
+        none: "None",
+        bearer: "Token (Authorization: Bearer)",
+        header: "Key in a header",
+        query: "Key in the URL",
+        basic: "User and password",
       },
     },
     fields: {
@@ -2240,6 +2284,26 @@ const en: Dictionary = {
           help: "A dedicated user, with CREATE SESSION and REFERENCES on each table and view to describe. No SELECT is needed.",
         },
         password: { label: "Password", help: "The user's. Encrypted, and never shown again." },
+      },
+      custom_rest: {
+        base_url: {
+          label: "API address",
+          help: "The base address, https and public: https://api.acme.com/v2. Each resource's path is added to it.",
+        },
+        auth: { label: "Authentication", help: "How LEKA sends the secret to the API." },
+        auth_name: {
+          label: "Header or parameter",
+          help: "For a key in a header (X-API-Key) or in the URL (api_key): its name.",
+        },
+        definition: {
+          label: "Definition",
+          help: 'The resources to read, their pagination and what each field means, as JSON. The shortest: {"resources": [{"name": "tickets", "path": "/tickets", "items": "data", "mapping": {"id": "id", "title": "subject"}}]}',
+        },
+        secret: {
+          label: "Secret",
+          help: "The token, the API key or the password. Encrypted, and never shown again. Empty without authentication.",
+        },
+        username: { label: "User", help: "For a user and password authentication." },
       },
       supabase: {
         host: {

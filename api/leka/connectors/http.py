@@ -293,15 +293,7 @@ class VendorHttp:
             found = response.links.get(self._next_rel, {}).get("url")
         if not found:
             return None
-        base = self._client.base_url
-        link = base.join(str(found))
-        if (link.scheme, link.host) != (base.scheme, base.host):
-            raise diagnose(
-                DiagnosticCode.PROVIDER_ERROR,
-                detail=f"pagination points to another host: {link.scheme}://{link.host}",
-                secrets=[self._secret],
-            )
-        return str(link)
+        return on_the_host(self._client.base_url, str(found), self._secret)
 
     async def probe(
         self, paths: Mapping[Capability, str], params: Params | None = None
@@ -336,6 +328,21 @@ class Pace:
             if self._next > now:
                 await asyncio.sleep(self._next - now)
             self._next = max(now, self._next) + self._interval
+
+
+def on_the_host(base: httpx.URL, found: str, secret: str) -> str:
+    """A next page's URL, read against the base URL — only if it is on the
+    host the secret was meant for, over the same scheme. A relative link
+    ("/wiki/api/v2/spaces?cursor=…"), an absolute one, a protocol-relative
+    "//elsewhere": all must land on the same host."""
+    link = base.join(found)
+    if (link.scheme, link.host) != (base.scheme, base.host):
+        raise diagnose(
+            DiagnosticCode.PROVIDER_ERROR,
+            detail=f"pagination points to another host: {link.scheme}://{link.host}",
+            secrets=[secret],
+        )
+    return str(link)
 
 
 def refusal(

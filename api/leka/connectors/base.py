@@ -47,6 +47,8 @@ class ConnectorCategory(enum.StrEnum):
     OBSERVABILITY = "observability"
     DATA = "data"
     CHAT = "chat"
+    # A system LEKA has no connector for, read as its admin declared it (LEKA-350).
+    CUSTOM = "custom"
 
 
 class Capability(enum.StrEnum):
@@ -93,6 +95,10 @@ class Capability(enum.StrEnum):
     # and their tables and views — never the rows.
     SCHEMAS = "schemas"
     TABLES = "tables"
+    # A system LEKA has no connector for (LEKA-350): what its admin declared
+    # in the source's definition — tickets, assets, whatever it holds — each
+    # record's resource its container.
+    RECORDS = "records"
 
 
 class ConnectorManifest(BaseModel):
