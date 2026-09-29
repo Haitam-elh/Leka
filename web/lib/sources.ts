@@ -149,6 +149,7 @@ export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
   mariadb: "data",
   sqlserver: "data",
   oracle: "data",
+  custom_rest: "custom",
   supabase: "data",
   mongodb: "data",
   slack: "chat",

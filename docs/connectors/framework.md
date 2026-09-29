@@ -10,7 +10,8 @@ and Microsoft 365:
 [project-and-documentation.md](project-and-documentation.md); Datadog,
 PagerDuty and Grafana: [observability.md](observability.md); PostgreSQL,
 Supabase, MySQL, MariaDB, SQL Server, Oracle and MongoDB:
-[databases.md](databases.md).
+[databases.md](databases.md); a system LEKA has no connector for, read
+through its API as its admin declared it: [custom.md](custom.md).
 
 **LEKA only reads.** No connector writes to a customer's system: the
 manifest says `read_only: True` as a literal, and every call a connector

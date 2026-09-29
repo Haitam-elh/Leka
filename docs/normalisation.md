@@ -54,6 +54,7 @@ something no source has shown yet — a ticket in a tool not connected.
 | pages, files (Confluence, Notion, Slab, Guru, Google Workspace, Microsoft 365) | `document` |
 | incidents (Datadog, PagerDuty) | `incident` |
 | services (PagerDuty) | `service` |
+| records of a custom API (`custom_rest`) | the `entity` their resource declares: `issue`, `incident`, `service`, `project`, `document` — keyed by the source, a service by its name ([custom.md](connectors/custom.md)) |
 | named by a record | `person`, `service`, `team` |
 
 Alerts, events, metrics, logs and dashboards (Datadog, Grafana) are
@@ -62,7 +63,8 @@ incidents and services, not things of the company model. Nor are the
 containers of documents — spaces, Notion databases, topics, collections,
 drives: a document names what it is part of. Both stay `unsupported`.
 So do a database's schemas and tables (PostgreSQL, Supabase, MySQL, MariaDB, SQL Server, Oracle, MongoDB): representing them in
-the company model is LEKA-364.
+the company model is LEKA-364. And so do a custom API's records whose
+resource declares no `entity`: extracted, not modelled.
 
 A GitLab merge request is a `pull_request`; a Jira issue and a GitHub issue
 are both `issue`. The strings are ingestion's; leka.knowledge maps them onto

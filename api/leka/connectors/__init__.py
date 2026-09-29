@@ -18,6 +18,7 @@ from leka.connectors import (
     bitbucket,  # noqa: F401  — registers BitbucketConnector
     clickup,  # noqa: F401  — registers ClickUpConnector
     confluence,  # noqa: F401  — registers ConfluenceConnector
+    custom,  # noqa: F401  — registers CustomRestConnector
     datadog,  # noqa: F401  — registers DatadogConnector
     gcp,  # noqa: F401  — registers GcpConnector
     github,  # noqa: F401  — registers GitHubConnector

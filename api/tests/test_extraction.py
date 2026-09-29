@@ -136,6 +136,7 @@ EXTRACTED_KINDS = [
     SourceKind.MARIADB,
     SourceKind.SQLSERVER,
     SourceKind.ORACLE,
+    SourceKind.CUSTOM_REST,
     SourceKind.MONGODB,
     SourceKind.SUPABASE,
 ]

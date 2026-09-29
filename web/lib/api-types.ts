@@ -1077,7 +1077,7 @@ export interface components {
          *     discovered for each source: a token may see repositories and not issues.
          * @enum {string}
          */
-        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "spaces" | "pages" | "databases" | "drives" | "files" | "alerts" | "events" | "incidents" | "metrics" | "logs" | "services" | "dashboards" | "schemas" | "tables";
+        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "spaces" | "pages" | "databases" | "drives" | "files" | "alerts" | "events" | "incidents" | "metrics" | "logs" | "services" | "dashboards" | "schemas" | "tables" | "records";
         /** CatalogEntry */
         CatalogEntry: {
             key: components["schemas"]["SourceKind"];
@@ -1148,7 +1148,7 @@ export interface components {
          * ConnectorCategory
          * @enum {string}
          */
-        ConnectorCategory: "code" | "project" | "docs" | "cloud" | "observability" | "data" | "chat";
+        ConnectorCategory: "code" | "project" | "docs" | "cloud" | "observability" | "data" | "chat" | "custom";
         /** CredentialsRead */
         CredentialsRead: {
             /**
@@ -2150,7 +2150,7 @@ export interface components {
          *     the database stopped checking this list in LEKA-344.
          * @enum {string}
          */
-        SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "linear" | "notion" | "asana" | "trello" | "clickup" | "monday" | "slab" | "guru" | "google_workspace" | "microsoft_365" | "aws" | "azure" | "gcp" | "datadog" | "pagerduty" | "grafana" | "postgresql" | "mysql" | "mariadb" | "sqlserver" | "oracle" | "mongodb" | "supabase" | "slack";
+        SourceKind: "github" | "gitlab" | "bitbucket" | "jira" | "confluence" | "linear" | "notion" | "asana" | "trello" | "clickup" | "monday" | "slab" | "guru" | "google_workspace" | "microsoft_365" | "aws" | "azure" | "gcp" | "datadog" | "pagerduty" | "grafana" | "postgresql" | "mysql" | "mariadb" | "sqlserver" | "oracle" | "custom_rest" | "mongodb" | "supabase" | "slack";
         /**
          * SourceNormalisation
          * @description Where a source's normalisation stands.

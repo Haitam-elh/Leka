@@ -14,6 +14,9 @@
  * are the scope, chosen from what the vendor lists, in the wizard's next
  * step. A whole number — a database's port — is typed as text, with the
  * phone's digit keyboard, and sent as text: the API reads "5432" as 5432.
+ * A closed list of values (`enum`) is chosen from a menu; a field whose
+ * format is `json` — a custom source's definition — is a document, typed
+ * in a box of several lines and checked to be JSON before it is sent.
  */
 
 import { z } from "@/lib/validation";
@@ -28,6 +31,7 @@ type JsonSchema = {
   minimum?: number;
   maximum?: number;
   writeOnly?: boolean;
+  enum?: unknown[];
   anyOf?: JsonSchema[];
   items?: JsonSchema;
 };
@@ -35,7 +39,9 @@ type JsonSchema = {
 export interface FieldSpec {
   name: string;
   title: string;
-  kind: "text" | "url" | "password" | "number";
+  kind: "text" | "url" | "password" | "number" | "choice" | "json";
+  /** For a choice: the values, as the API takes them. */
+  options?: string[];
   required: boolean;
   default: string;
   minLength?: number;
@@ -62,10 +68,23 @@ export function fieldsOf(schema: Record<string, unknown>): FieldSpec[] {
       const inner = concrete(property);
       const secret = inner.format === "password" || inner.writeOnly === true;
       const whole = inner.type === "integer";
+      const choices = (inner.enum ?? []).filter((value): value is string => typeof value === "string");
+      const kind: FieldSpec["kind"] = choices.length
+        ? "choice"
+        : inner.format === "json"
+          ? "json"
+          : whole
+            ? "number"
+            : secret
+              ? "password"
+              : inner.format === "uri"
+                ? "url"
+                : "text";
       return {
         name,
         title: property.title ?? name,
-        kind: whole ? "number" : secret ? "password" : inner.format === "uri" ? "url" : "text",
+        kind,
+        options: choices.length ? choices : undefined,
         required: required.has(name),
         default: ["string", "number"].includes(typeof property.default)
           ? String(property.default)
@@ -103,11 +122,32 @@ export function zodOf(fields: FieldSpec[], { keepSecrets = false } = {}) {
       shape[field.name] = mayBeEmpty ? z.union([z.literal(""), whole]) : whole;
       continue;
     }
+    if (field.kind === "choice") {
+      const options = field.options ?? [];
+      const choice = z.string().refine((value) => options.includes(value));
+      shape[field.name] = mayBeEmpty ? z.union([z.literal(""), choice]) : choice;
+      continue;
+    }
+    if (field.kind === "json") {
+      const json = rule.min(field.minLength ?? 1).refine(isJson, { params: { rule: "json" } });
+      shape[field.name] = mayBeEmpty ? z.union([z.literal(""), json]) : json;
+      continue;
+    }
     const least = field.minLength ?? 1;
     // An empty value is allowed, or a long enough one — never a short one.
     shape[field.name] = mayBeEmpty ? z.union([z.literal(""), rule.min(least)]) : rule.min(least);
   }
   return z.object(shape);
+}
+
+/** Whether a text is JSON — what a `json` field must hold to be sent. */
+function isJson(value: string): boolean {
+  try {
+    JSON.parse(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Digits, within the schema's bounds — said as a number's bounds are. */
