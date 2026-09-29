@@ -45,6 +45,10 @@ from leka.ingestion.models import (
     ProcessingRunStatus,
     ProcessingStage,
     RawPayload,
+    ResolutionDecision,
+    ResolutionRun,
+    ResolvedEntity,
+    ResolvedKey,
     SourceRecord,
     SourceSync,
     SyncRun,
@@ -1247,3 +1251,158 @@ class WebhookDeliveryRepository(WorkspaceScopedRepository):
     def log(self, source_id: uuid.UUID) -> Select[tuple[WebhookDelivery]]:
         """A source's deliveries, for pagination; newest first by default."""
         return self.select(WebhookDelivery).where(WebhookDelivery.source_id == source_id)
+
+
+PLURAL = {"merge": "merges", "link": "links", "ambiguous": "ambiguous"}
+
+
+class ResolutionRepository(WorkspaceScopedRepository):
+    """Entity resolution's rows (LEKA-357): what it reads of normalisation,
+    and what it made — replaced whole at each run, the ids kept."""
+
+    async def fingerprint(self) -> str:
+        """What normalisation has made so far: how many rows, and the latest.
+        A row replaced moves the latest; one removed, the count."""
+        count, latest = (
+            await self._session.execute(
+                select(func.count(), func.max(NormalisedRecordRow.normalised_at)).where(
+                    NormalisedRecordRow.workspace_id == self.workspace_id
+                )
+            )
+        ).one()
+        return f"{int(count)}:{latest.isoformat() if latest else '-'}"
+
+    async def latest_run(self, *, succeeded: bool = False) -> ResolutionRun | None:
+        statement = self.select(ResolutionRun)
+        if succeeded:
+            statement = statement.where(ResolutionRun.status == "succeeded")
+        found = await self._session.execute(
+            statement.order_by(ResolutionRun.started_at.desc()).limit(1)
+        )
+        return found.scalar_one_or_none()
+
+    async def pending(self, fingerprint: str, version: int) -> bool:
+        """Whether resolving now would read anything the last success did not:
+        normalisation moved since, or the rules did."""
+        last = await self.latest_run(succeeded=True)
+        return last is None or last.fingerprint != fingerprint or last.resolver_version != version
+
+    async def start(self, fingerprint: str, version: int, *, at: datetime) -> ResolutionRun:
+        """A new run. One still `running` is one whose worker died — one run
+        at a time per workspace (resolve:<workspace>) — and is closed first."""
+        await self._session.execute(
+            update(ResolutionRun)
+            .where(
+                ResolutionRun.workspace_id == self.workspace_id,
+                ResolutionRun.status == "running",
+            )
+            .values(status="abandoned", finished_at=at, updated_at=func.now())
+        )
+        run = ResolutionRun(
+            status="running", started_at=at, fingerprint=fingerprint, resolver_version=version
+        )
+        self.add(run)
+        await self.flush()
+        return run
+
+    async def normalised(
+        self, *, after: uuid.UUID | None, limit: int
+    ) -> Sequence[tuple[uuid.UUID, uuid.UUID, dict[str, object]]]:
+        """The next `limit` candidates' rows, by id: (row id, source, result)."""
+        statement = (
+            select(
+                NormalisedRecordRow.id, NormalisedRecordRow.source_id, NormalisedRecordRow.result
+            )
+            .where(
+                NormalisedRecordRow.workspace_id == self.workspace_id,
+                NormalisedRecordRow.status == NormalisationStatus.NORMALISED,
+            )
+            .order_by(NormalisedRecordRow.id)
+            .limit(limit)
+        )
+        if after is not None:
+            statement = statement.where(NormalisedRecordRow.id > after)
+        rows = await self._session.execute(statement)
+        return [(row_id, source_id, result or {}) for row_id, source_id, result in rows.all()]
+
+    async def previous_ids(self) -> dict[str, set[uuid.UUID]]:
+        """Which entity each key belonged to at the last run."""
+        rows = await self._session.execute(
+            select(ResolvedKey.key, ResolvedKey.entity_id).where(
+                ResolvedKey.workspace_id == self.workspace_id
+            )
+        )
+        found: dict[str, set[uuid.UUID]] = {}
+        for key, entity_id in rows.all():
+            found.setdefault(key, set()).add(entity_id)
+        return found
+
+    async def clear(self) -> None:
+        """Everything the last run made; the keys and decisions go with their
+        entities."""
+        await self._session.execute(
+            delete(ResolvedEntity).where(ResolvedEntity.workspace_id == self.workspace_id)
+        )
+
+    async def write(self, model: type[Any], rows: list[dict[str, object]]) -> None:
+        for start in range(0, len(rows), 1_000):
+            chunk = rows[start : start + 1_000]
+            await self._session.execute(
+                insert(model).values([{"workspace_id": self.workspace_id, **row} for row in chunk])
+            )
+
+    def entities(self) -> Select[tuple[ResolvedEntity]]:
+        """The workspace's resolved entities, for pagination."""
+        return self.select(ResolvedEntity)
+
+    async def keys_of(self, entity_ids: Sequence[uuid.UUID]) -> Sequence[ResolvedKey]:
+        return await self.list(
+            self.select(ResolvedKey)
+            .where(ResolvedKey.entity_id.in_(list(entity_ids)))
+            .order_by(ResolvedKey.kind, ResolvedKey.key)
+        )
+
+    async def decisions_of(self, entity_id: uuid.UUID) -> Sequence[ResolutionDecision]:
+        return await self.list(
+            self.select(ResolutionDecision)
+            .where(
+                or_(
+                    ResolutionDecision.entity_id == entity_id,
+                    ResolutionDecision.other_entity_id == entity_id,
+                )
+            )
+            .order_by(ResolutionDecision.kind, ResolutionDecision.confidence.desc())
+        )
+
+    async def holding(self, key: str) -> Sequence[ResolvedEntity]:
+        """The entities a key names: one — or several, when it is ambiguous."""
+        held = select(ResolvedKey.entity_id).where(
+            ResolvedKey.workspace_id == self.workspace_id, ResolvedKey.key == key
+        )
+        return await self.list(
+            self.select(ResolvedEntity)
+            .where(ResolvedEntity.id.in_(held))
+            .order_by(ResolvedEntity.confidence.desc(), ResolvedEntity.key)
+        )
+
+    async def counts(self) -> dict[str, int]:
+        """What the workspace resolves to now."""
+        entities = await self._session.scalar(
+            select(func.count()).where(ResolvedEntity.workspace_id == self.workspace_id)
+        )
+        by_kind = await self._session.execute(
+            select(ResolutionDecision.kind, func.count())
+            .where(ResolutionDecision.workspace_id == self.workspace_id)
+            .group_by(ResolutionDecision.kind)
+        )
+        conflicted = await self._session.scalar(
+            select(func.count()).where(
+                ResolvedEntity.workspace_id == self.workspace_id,
+                func.jsonb_array_length(ResolvedEntity.conflicts) > 0,
+            )
+        )
+        return {
+            "entities": int(entities or 0),
+            "conflicted": int(conflicted or 0),
+            **{PLURAL.get(kind, kind): int(n) for kind, n in by_kind.all()},
+        }

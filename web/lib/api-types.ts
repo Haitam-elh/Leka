@@ -1079,6 +1079,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingestion/resolution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolution Status
+         * @description Whether the workspace has something new to resolve, the last run, and
+         *     what the workspace resolves to now.
+         */
+        get: operations["resolution_status_api_v1_ingestion_resolution_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingestion/resolution/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolved Entities
+         * @description The workspace's resolved entities, by name.
+         */
+        get: operations["resolved_entities_api_v1_ingestion_resolution_entities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingestion/resolution/entities/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolved Entity
+         * @description One entity: every key it goes by, per source — and every decision
+         *     that made it, linked it, or would not guess.
+         */
+        get: operations["resolved_entity_api_v1_ingestion_resolution_entities__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingestion/resolution/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lookup
+         * @description The entity a key names — `person:email:sara@acme.io`, `ticket:PAY-42`
+         *     — or several, when the key is ambiguous. None: no source shows it.
+         */
+        get: operations["lookup_api_v1_ingestion_resolution_lookup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/webhooks/sources/{source_id}": {
         parameters: {
             query?: never;
@@ -1766,6 +1849,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[ResolvedEntityRead] */
+        PageEnvelope_ResolvedEntityRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["ResolvedEntityRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[SessionRead] */
         PageEnvelope_SessionRead_: {
             /**
@@ -2024,6 +2120,204 @@ export interface components {
             password: string;
             /** Token */
             token: string;
+        };
+        /**
+         * ResolutionDecisionRead
+         * @description What was decided, and why.
+         */
+        ResolutionDecisionRead: {
+            /**
+             * Kind
+             * @description merge, link or ambiguous.
+             */
+            kind: string;
+            /** Rule */
+            rule: string;
+            /** Confidence */
+            confidence: number;
+            /** Keys */
+            keys: string[];
+            /** Evidence */
+            evidence: string;
+            /**
+             * Other Entity Id
+             * @description A link's other end, from this entity's side.
+             */
+            other_entity_id: string | null;
+        };
+        /** ResolutionRunRead */
+        ResolutionRunRead: {
+            /** Status */
+            status: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Counts */
+            counts: {
+                [key: string]: unknown;
+            };
+            /** Error */
+            error: string | null;
+        };
+        /**
+         * ResolutionStatus
+         * @description Where the workspace's resolution stands.
+         */
+        ResolutionStatus: {
+            /**
+             * Pending
+             * @description Normalisation made something the last run did not read.
+             */
+            pending: boolean;
+            last_run: components["schemas"]["ResolutionRunRead"] | null;
+            /**
+             * Counts
+             * @description entities, conflicted, and and decisions: merges, links, ambiguous.
+             */
+            counts: {
+                [key: string]: number;
+            };
+        };
+        /** ResolvedEntityDetail */
+        ResolvedEntityDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /**
+             * Key
+             * @description The key that says it best; every other is in `keys`.
+             */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Names
+             * @description Every name it goes by, the chosen one first.
+             */
+            names: string[];
+            /**
+             * Attributes
+             * @description What its sources say it is: where they disagree, the chosen value.
+             */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /**
+             * Conflicts
+             * @description Where its sources disagree: {attribute, chosen, values: [{value, source_id, key, observed_at}]} — every value kept.
+             */
+            conflicts: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Confidence
+             * @description How sure the merges that made it are.
+             */
+            confidence: number;
+            /** Sources */
+            sources: number;
+            /**
+             * Resolved At
+             * Format: date-time
+             */
+            resolved_at: string;
+            /** Keys */
+            keys: components["schemas"]["ResolvedKeyRead"][];
+            /** Decisions */
+            decisions: components["schemas"]["ResolutionDecisionRead"][];
+        };
+        /**
+         * ResolvedEntityRead
+         * @description One real thing, as the workspace's sources show it.
+         */
+        ResolvedEntityRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /**
+             * Key
+             * @description The key that says it best; every other is in `keys`.
+             */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Names
+             * @description Every name it goes by, the chosen one first.
+             */
+            names: string[];
+            /**
+             * Attributes
+             * @description What its sources say it is: where they disagree, the chosen value.
+             */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /**
+             * Conflicts
+             * @description Where its sources disagree: {attribute, chosen, values: [{value, source_id, key, observed_at}]} — every value kept.
+             */
+            conflicts: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Confidence
+             * @description How sure the merges that made it are.
+             */
+            confidence: number;
+            /** Sources */
+            sources: number;
+            /**
+             * Resolved At
+             * Format: date-time
+             */
+            resolved_at: string;
+        };
+        /**
+         * ResolvedKeyRead
+         * @description A key it goes by, as one source gave it: the provenance.
+         */
+        ResolvedKeyRead: {
+            /** Key */
+            key: string;
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /**
+             * Kind
+             * @description key, alias or derived.
+             */
+            kind: string;
+            /** Name */
+            name: string | null;
+            /**
+             * Records
+             * @description Records of the source that are it.
+             */
+            records: number;
+            /**
+             * Named
+             * @description Records of the source that name it.
+             */
+            named: number;
+            /** First Seen At */
+            first_seen_at: string | null;
+            /** Last Seen At */
+            last_seen_at: string | null;
         };
         /** Retention */
         Retention: {
@@ -8270,6 +8564,390 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PipelineQueued"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    resolution_status_api_v1_ingestion_resolution_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolutionStatus"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    resolved_entities_api_v1_ingestion_resolution_entities_get: {
+        parameters: {
+            query?: {
+                type?: string | null;
+                /** @description merged: made of several keys; conflicted: its sources disagree; linked: probably one with another; ambiguous: a key or a match it would not guess. */
+                only?: ("merged" | "conflicted" | "linked" | "ambiguous") | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_ResolvedEntityRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    resolved_entity_api_v1_ingestion_resolution_entities__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedEntityDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    lookup_api_v1_ingestion_resolution_lookup_get: {
+        parameters: {
+            query: {
+                key: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedEntityRead"][];
                 };
             };
             /** @description The request could not be understood. */
