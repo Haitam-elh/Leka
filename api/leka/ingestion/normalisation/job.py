@@ -8,7 +8,11 @@ per source. It:
 1. forgets the candidates of parses that failed since;
 2. reads, in id order, the parses that need normalising — never normalised,
    or normalised from another checksum or version — with their extraction;
-3. normalises each and saves the rows chunk by chunk.
+3. normalises each and saves the rows chunk by chunk;
+
+then hands over: `advance` queues the validation (LEKA-358). It did not,
+before: the last stage then, it queued nothing, and entity resolution
+waited for the next pass.
 
 Everything it reads is in the database. Incremental and idempotent, like the
 two stages before it.
@@ -32,7 +36,7 @@ from leka.ingestion.models import (
 )
 from leka.ingestion.normalisation import engine
 from leka.ingestion.normalisation.contract import NormalisedRecord
-from leka.ingestion.pipeline import BY_NAME, source_mapping, stage_run
+from leka.ingestion.pipeline import BY_NAME, advance, source_mapping, stage_run
 from leka.ingestion.repository import NormalisationRepository
 
 logger = structlog.get_logger(__name__)
@@ -47,8 +51,8 @@ def run_normalisation(workspace_id: str, source_id: str) -> dict[str, int]:
 
 
 async def normalise_source(workspace_id: uuid.UUID, source_id: uuid.UUID) -> dict[str, int]:
-    """Normalise what the source's parses say needs it. Idempotent. The last
-    stage: nothing is queued after it."""
+    """Normalise what the source's parses say needs it, then queue what comes
+    next. Idempotent."""
     with workspace_scope(workspace_id):
         async with session_factory() as session:
             source = await session.get(Source, source_id)
@@ -85,6 +89,7 @@ async def normalise_source(workspace_id: uuid.UUID, source_id: uuid.UUID) -> dic
                         ]
                     )
                     await session.commit()
+            await advance(session, workspace_id, source, after=ProcessingStage.NORMALISATION)
 
     logger.info("source_normalised", source_id=str(source_id), **result)
     return dict(result)

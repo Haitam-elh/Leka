@@ -2,8 +2,9 @@
 
 What normalisation reads, what it hands to the graph, and the mapping rules
 it applies. LEKA-356. It reads an extraction ([extraction.md](extraction.md))
-and its parse ([parsing.md](parsing.md)); what reads it next is entity
-resolution ([resolution.md](resolution.md)), then leka.knowledge.
+and its parse ([parsing.md](parsing.md)); what reads it next is validation
+([validation.md](validation.md)), then entity resolution
+([resolution.md](resolution.md)), then leka.knowledge.
 
 ```
  ExtractedRecord + ParsedRecord

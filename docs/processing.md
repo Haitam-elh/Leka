@@ -7,18 +7,20 @@ contract: [extraction.md](extraction.md), [parsing.md](parsing.md),
 [collection.md](collection.md).
 
 ```
- collection ──▶ extraction ──▶ parsing ──▶ normalisation ──▶ resolution
- (a pass)       extract:<id>   parse:<id>  normalise:<id>   resolve:<workspace>
- source_records extracted_      parsed_     normalised_      resolved_entities,
- raw_payloads   records         records     records          _keys, resolution_
-                        each run: processing_runs            decisions; runs:
-                                                             resolution_runs
+ collection ──▶ extraction ──▶ parsing ──▶ normalisation ──▶ validation ──▶ resolution
+ (a pass)       extract:<id>   parse:<id>  normalise:<id>   validate:<id>  resolve:<workspace>
+ source_records extracted_      parsed_     normalised_      validated_     resolved_entities,
+ raw_payloads   records         records     records          records        _keys, resolution_
+                        each run: processing_runs                           decisions; runs:
+                                                                            resolution_runs
 ```
 
-The last stage is the **workspace's**, not a source's: what is one thing
-is decided across sources ([resolution.md](resolution.md), LEKA-357). A
-source's `advance`, finding nothing left for it, queues it when
-normalisation made something since its last run.
+Validation (LEKA-358, [validation.md](validation.md)) checks what
+normalisation made; a quarantined record goes no further. The last stage is
+the **workspace's**, not a source's: what is one thing is decided across
+sources ([resolution.md](resolution.md), LEKA-357). A source's `advance`,
+finding nothing left for it, queues it when normalisation or validation made
+something since its last run.
 
 ---
 
@@ -32,6 +34,7 @@ stage reads only what the stage before it wrote:
 | extraction | `source_records` + the stored batches | `extracted_records` | `leka.ingestion.extraction.job.run_extraction` | `extract:<source_id>` |
 | parsing | `extracted_records` (extracted) | `parsed_records` | `leka.ingestion.parsing.job.run_parsing` | `parse:<source_id>` |
 | normalisation | `parsed_records` (parsed) + their extraction | `normalised_records` | `leka.ingestion.normalisation.job.run_normalisation` | `normalise:<source_id>` |
+| validation | `normalised_records` (normalised) + when their record was last seen | `validated_records` | `leka.ingestion.validation.job.run_validation` | `validate:<source_id>` |
 
 **Handing over.** A pass, and every stage when it ends, calls `advance`,
 which queues the **first later stage that has work** — and only that one.

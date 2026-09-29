@@ -995,6 +995,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingestion/sources/{source_id}/validation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Source Validation
+         * @description What validation found of the source's records: how many are valid,
+         *     doubtful, quarantined; what they are worth; which issues, how often, and
+         *     what to do about each; the latest quarantined — kept out of the company
+         *     model until they are corrected.
+         */
+        get: operations["source_validation_api_v1_ingestion_sources__source_id__validation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingestion/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Quality
+         * @description One line per source whose records were validated: how many valid,
+         *     doubtful, quarantined, and their mean quality.
+         */
+        get: operations["quality_api_v1_ingestion_quality_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingestion/sources/{source_id}/pipeline": {
         parameters: {
             query?: never;
@@ -2053,7 +2097,7 @@ export interface components {
          * @description The stages after collection, in their order (leka/ingestion/pipeline.py).
          * @enum {string}
          */
-        ProcessingStage: "extraction" | "parsing" | "normalisation";
+        ProcessingStage: "extraction" | "parsing" | "normalisation" | "validation";
         /**
          * ProfileUpdate
          * @description What someone changes about themselves. Only the fields sent change.
@@ -2072,6 +2116,44 @@ export interface components {
             /** Job Title */
             job_title?: string | null;
             company_size?: components["schemas"]["CompanySize"] | null;
+        };
+        /**
+         * QualityScores
+         * @description Means over the validated records, from 0 to 1 — none before any.
+         */
+        QualityScores: {
+            /**
+             * Quality
+             * @description Over the records not quarantined.
+             */
+            quality: number | null;
+            /** Completeness */
+            completeness: number | null;
+            /** Consistency */
+            consistency: number | null;
+            /** Freshness */
+            freshness: number | null;
+            /** Confidence */
+            confidence: number | null;
+        };
+        /**
+         * QuarantinedRecordRead
+         * @description A record kept out of the company model, and why.
+         */
+        QuarantinedRecordRead: {
+            /** Entity Type */
+            entity_type: string | null;
+            /** Entity Key */
+            entity_key: string | null;
+            /** Issues */
+            issues: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Validated At
+             * Format: date-time
+             */
+            validated_at: string;
         };
         /**
          * RecoveryAccepted
@@ -2222,6 +2304,11 @@ export interface components {
              * @description How sure the merges that made it are.
              */
             confidence: number;
+            /**
+             * Quality
+             * @description The best quality validation gave the records that are it (LEKA-358).
+             */
+            quality: number | null;
             /** Sources */
             sources: number;
             /**
@@ -2277,6 +2364,11 @@ export interface components {
              * @description How sure the merges that made it are.
              */
             confidence: number;
+            /**
+             * Quality
+             * @description The best quality validation gave the records that are it (LEKA-358).
+             */
+            quality: number | null;
             /** Sources */
             sources: number;
             /**
@@ -2654,6 +2746,27 @@ export interface components {
              */
             processed_through: boolean;
         };
+        /**
+         * SourceQuality
+         * @description One line per source of the workspace: how its records validate.
+         */
+        SourceQuality: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Valid */
+            valid: number;
+            /** Warning */
+            warning: number;
+            /** Quarantined */
+            quarantined: number;
+            /** Quality */
+            quality: number | null;
+            /** Last Validated At */
+            last_validated_at: string | null;
+        };
         /** SourceRead */
         SourceRead: {
             /**
@@ -2795,6 +2908,31 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /**
+         * SourceValidation
+         * @description Where a source's validation stands.
+         */
+        SourceValidation: {
+            /** Valid */
+            valid: number;
+            /** Warning */
+            warning: number;
+            /** Quarantined */
+            quarantined: number;
+            scores: components["schemas"]["QualityScores"];
+            /** Last Validated At */
+            last_validated_at: string | null;
+            /**
+             * Issues
+             * @description The most frequent first.
+             */
+            issues: components["schemas"]["ValidationIssueCount"][];
+            /**
+             * Quarantined Records
+             * @description The latest first.
+             */
+            quarantined_records: components["schemas"]["QuarantinedRecordRead"][];
+        };
         /** StageState */
         StageState: {
             /** Stage */
@@ -2930,6 +3068,23 @@ export interface components {
             /** Job Title */
             job_title?: string | null;
             company_size?: components["schemas"]["CompanySize"] | null;
+        };
+        /**
+         * ValidationIssueCount
+         * @description A kind of issue, how many records have it, and what to do about it.
+         */
+        ValidationIssueCount: {
+            /** Code */
+            code: string;
+            /**
+             * Severity
+             * @description error (quarantines), warning or info.
+             */
+            severity: string;
+            /** Records */
+            records: number;
+            /** Remediation */
+            remediation: string;
         };
         /**
          * WebhookDeliveryRead
@@ -8177,6 +8332,192 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SourceNormalisation"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    source_validation_api_v1_ingestion_sources__source_id__validation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceValidation"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    quality_api_v1_ingestion_quality_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceQuality"][];
                 };
             };
             /** @description The request could not be understood. */

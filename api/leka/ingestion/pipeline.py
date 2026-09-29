@@ -1,8 +1,11 @@
 """The processing pipeline (LEKA-360): its stages, their order, how one hands
 over to the next, and the record of each run.
 
-    collection ──▶ extraction ──▶ parsing ──▶ normalisation ──▶ resolution
-    (a pass)       extract:<id>   parse:<id>  normalise:<id>   resolve:<workspace>
+    collection ──▶ extraction ──▶ parsing ──▶ normalisation ──▶ validation
+    (a pass)       extract:<id>   parse:<id>  normalise:<id>   validate:<id>
+                                                                    │
+                                                  resolution ◀──────┘
+                                                  resolve:<workspace>
 
 ONE DEFINITION. `STAGES` is the order; each stage depends on the one before
 it and reads only what that one wrote. The pass and every stage end with
@@ -57,10 +60,12 @@ from leka.ingestion.repository import (
     ParsingRepository,
     ProcessingRunRepository,
     ResolutionRepository,
+    ValidationRepository,
 )
 from leka.ingestion.resolution import RESOLVER_VERSION
 from leka.ingestion.resolution.job import RESOLVE_JOB
 from leka.ingestion.resolution.job import concurrency_key as resolution_key
+from leka.ingestion.validation.rules import VALIDATOR_VERSION
 
 logger = structlog.get_logger(__name__)
 
@@ -83,6 +88,7 @@ STAGES: tuple[Stage, ...] = (
         "leka.ingestion.normalisation.job.run_normalisation",
         "normalise",
     ),
+    Stage(ProcessingStage.VALIDATION, "leka.ingestion.validation.job.run_validation", "validate"),
 )
 BY_NAME = {stage.name: stage for stage in STAGES}
 
@@ -94,6 +100,8 @@ def versions(stage: ProcessingStage, source: Source) -> dict[str, object]:
         return dict(extraction_versions(source.kind))
     if stage is ProcessingStage.PARSING:
         return {"parser": parsing_engine.PARSER_VERSION}
+    if stage is ProcessingStage.VALIDATION:
+        return {"validator": VALIDATOR_VERSION}
     return {"normaliser": normalisation_engine.NORMALISER_VERSION}
 
 
@@ -108,6 +116,10 @@ async def pending(
     if stage is ProcessingStage.PARSING:
         return await ParsingRepository(session, workspace_id).has_stale(
             source.id, parsing_engine.PARSER_VERSION
+        )
+    if stage is ProcessingStage.VALIDATION:
+        return await ValidationRepository(session, workspace_id).has_stale(
+            source.id, VALIDATOR_VERSION
         )
     settings_version, _mapping = await source_mapping(session, workspace_id, source)
     return await NormalisationRepository(session, workspace_id).has_stale(
@@ -174,11 +186,13 @@ async def stage_run(
     stage: ProcessingStage,
     *,
     versions_used: dict[str, object] | None = None,
+    run_ids: dict[str, uuid.UUID] | None = None,
 ) -> AsyncIterator[dict[str, int]]:
     """Record one run of a stage, in a session of its own: `running` now,
     then `succeeded` with the counts the body filled in, or `failed` with the
     exception's type — which is raised again, for the job runner to retry.
-    The caller holds the workspace scope."""
+    The caller holds the workspace scope. `run_ids["run"]` is the run's id,
+    for a stage whose rows name the run that made them."""
     counts: dict[str, int] = {}
     async with session_factory() as session:
         runs = ProcessingRunRepository(session, workspace_id)
@@ -190,6 +204,8 @@ async def stage_run(
             source.id, stage, versions=versions_used or versions(stage, source), at=now
         )
         await session.commit()
+        if run_ids is not None:
+            run_ids["run"] = run.id
         try:
             yield counts
         except BaseException as error:

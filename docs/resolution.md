@@ -6,7 +6,8 @@ what normalisation made ([normalisation.md](normalisation.md)); what reads
 it next is the company model (leka.knowledge).
 
 ```
- normalised_records, every source of the workspace
+ normalised_records, every source of the workspace — but the quarantined
+        │  (validation, LEKA-358: docs/validation.md)
         │  each record's entity, and the people, services, teams it names —
         │  a canonical key and aliases each
         ▼
@@ -108,6 +109,7 @@ What is **never** merged — the false positives this is built against:
 | `attributes` | from the thing's own records (else from what names it): where they agree, their value; where they disagree, the most recent, then the surest |
 | `conflicts` | **every disagreement, every value kept**: `{attribute, chosen, values: [{value, source_id, key, observed_at}]}`. A name is in conflict when two are not the same name — "Sara Martin" and "Sarah Johnson" under one address; not "Sara Martin" and "Sara Martin-Dupont", nor a handle beside a name |
 | `confidence` | the lowest of the merges that made it — 1.0 for one key or keys that say they are one another |
+| `quality` | the best quality validation gave the records that are it ([validation.md](validation.md)); none for an entity only named by others |
 
 Where a candidate came from — `url`, `source_kind`, `quality`, any `*_at`,
 `*_raw` or `*_confidence` — is never compared or chosen between: it is
@@ -128,8 +130,9 @@ across sources.
 - `advance`, finding nothing left to do for a source, queues
   `leka.ingestion.resolution.job.run_resolution` (key
   `resolve:<workspace>`) when normalisation made something since the last
-  successful run — the count of the workspace's normalised rows and the
-  latest one, its **fingerprint** — or `RESOLVER_VERSION` changed.
+  successful run — the count of the workspace's normalised and validated
+  rows and the latest of each, its **fingerprint** — or `RESOLVER_VERSION`
+  changed. A quarantined record is not read; one not validated yet is.
 - One run at a time per workspace; a run that saw normalisation move while
   it ran runs again (up to three times); a run left `running` by a dead
   worker is closed `abandoned` by the next.

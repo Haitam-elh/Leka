@@ -23,6 +23,7 @@ import { AddSourceDialog } from "@/components/sources/add-source-dialog";
 import { CustomBadge } from "@/components/sources/custom-badge";
 import { fieldWords, SourceFacts, SourceHistory } from "@/components/sources/source-panel";
 import { SourceLogo } from "@/components/sources/source-logo";
+import { SourceQualitySection } from "@/components/sources/source-quality";
 import { SourceReceptionSection } from "@/components/sources/source-reception";
 import { SourceRunsSection } from "@/components/sources/source-runs";
 import { SourceSettingsSection } from "@/components/sources/source-settings";
@@ -98,6 +99,7 @@ export function SourcePage({ sourceId }: { sourceId: string }) {
           <SourceSyncSection source={source} />
           <SourceReceptionSection source={source} />
           <SourceRunsSection source={source} />
+          <SourceQualitySection source={source} />
           <Configuration source={source} />
           <SourceSettingsSection source={source} />
         </div>

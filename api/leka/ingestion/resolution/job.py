@@ -112,10 +112,10 @@ async def _mentions(repository: ResolutionRepository) -> list[Mention]:
     ranks: dict[tuple[str, uuid.UUID], tuple[bool, datetime]] = {}
     after: uuid.UUID | None = None
     while rows := await repository.normalised(after=after, limit=CHUNK):
-        for row_id, source_id, result in rows:
+        for row_id, source_id, result, quality in rows:
             entity = result.get("entity")
             if isinstance(entity, dict):
-                _add(found, ranks, entity, source_id, row_id, own=True)
+                _add(found, ranks, entity, source_id, row_id, own=True, quality=quality)
             related = result.get("related")
             for named in related if isinstance(related, list) else []:
                 if isinstance(named, dict):
@@ -132,6 +132,7 @@ def _add(
     row_id: uuid.UUID,
     *,
     own: bool,
+    quality: float | None = None,
 ) -> None:
     """One more saying of a key by a source. Its name, type and attributes
     are what speaks best for it: the thing's own record before a record
@@ -154,6 +155,8 @@ def _add(
     )
     mention.records += 1 if own else 0
     mention.named += 0 if own else 1
+    if quality is not None:
+        mention.quality = max(quality, mention.quality or 0.0)
     if observed is not None:
         mention.first_seen = min(filter(None, (mention.first_seen, observed)))
         mention.last_seen = max(filter(None, (mention.last_seen, observed)))
@@ -223,6 +226,7 @@ async def _replace(
                 "conflicts": identity.conflicts,
                 "confidence": identity.confidence,
                 "sources": len(identity.sources),
+                "quality": identity.quality,
                 "resolver_version": RESOLVER_VERSION,
                 "resolved_at": now,
             }

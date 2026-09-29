@@ -18,6 +18,7 @@ export const sourceKeys = {
   syncSummaries: () => [...sourceKeys.all, "sync-summaries"] as const,
   runs: (id: string) => [...sourceKeys.all, "runs", id] as const,
   deliveries: (id: string) => [...sourceKeys.all, "deliveries", id] as const,
+  validation: (id: string) => [...sourceKeys.all, "validation", id] as const,
 };
 
 export function useSources() {
@@ -97,5 +98,13 @@ export function useSourceDeliveries(id: string) {
     queryFn: async () => (await sources.deliveries(id)).data,
     refetchInterval: (query) =>
       query.state.data?.some((delivery) => delivery.status === "pending") ? 5_000 : false,
+  });
+}
+
+/** What a source's records are worth (LEKA-358). */
+export function useSourceValidation(id: string) {
+  return useQuery({
+    queryKey: sourceKeys.validation(id),
+    queryFn: () => sources.validation(id),
   });
 }

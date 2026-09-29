@@ -47,6 +47,7 @@ from leka.ingestion.normalisation import NormalisedRecord
 from leka.ingestion.normalisation.job import NORMALISE_JOB, normalise_source
 from leka.ingestion.parsing.job import PARSE_JOB, parse_source
 from leka.ingestion.sync import sync_source
+from leka.ingestion.validation.job import VALIDATE_JOB, validate_source
 from leka.platform import LocalObjectStore
 from tests.test_extraction import GITHUB_PR
 
@@ -218,9 +219,13 @@ async def test_github_payloads_come_out_as_joined_up_candidates(source: Source) 
     parsed = await parse_source(source.workspace_id, source.id)
     assert queued[-1] == NORMALISE_JOB
     normalised = await normalise_source(source.workspace_id, source.id)
+    assert queued[-1] == VALIDATE_JOB  # LEKA-358: what normalisation made is checked next
+    validated = await validate_source(source.workspace_id, source.id)
 
     assert (extracted["extracted"], parsed["parsed"], normalised["normalised"]) == (4, 4, 4)
     assert extracted["failed"] == parsed["failed"] == normalised["failed"] == 0
+    # GitHub as it answers: nothing to quarantine.
+    assert (validated["valid"] + validated["warning"], validated["quarantined"]) == (4, 0)
 
     with workspace_scope(source.workspace_id):
         async with session_factory() as session:
@@ -269,5 +274,6 @@ async def test_github_payloads_come_out_as_joined_up_candidates(source: Source) 
         ("extraction", ProcessingRunStatus.SUCCEEDED),
         ("normalisation", ProcessingRunStatus.SUCCEEDED),
         ("parsing", ProcessingRunStatus.SUCCEEDED),
+        ("validation", ProcessingRunStatus.SUCCEEDED),
     ]
     assert through is None  # processed through: nothing left to queue
