@@ -137,6 +137,7 @@ EXTRACTED_KINDS = [
     SourceKind.SQLSERVER,
     SourceKind.ORACLE,
     SourceKind.CUSTOM_REST,
+    SourceKind.CUSTOM_GRAPHQL,
     SourceKind.MONGODB,
     SourceKind.SUPABASE,
 ]

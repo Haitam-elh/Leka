@@ -90,6 +90,7 @@ class SourceKind(enum.StrEnum):
     SQLSERVER = "sqlserver"
     ORACLE = "oracle"
     CUSTOM_REST = "custom_rest"
+    CUSTOM_GRAPHQL = "custom_graphql"
     MONGODB = "mongodb"
     SUPABASE = "supabase"
     SLACK = "slack"

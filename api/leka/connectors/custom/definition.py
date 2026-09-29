@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, Self
 
@@ -52,10 +53,13 @@ from pydantic import (
     model_validator,
 )
 
+from leka.connectors.graphql import read_only
+
 MAX_RESOURCES = 20
 MAX_METADATA = 30
 MAX_PARAMS = 20
 DEFINITION_MAX = 100_000  # characters of JSON
+QUERY_MAX = 20_000  # characters of a GraphQL document
 
 # A dotted path into a JSON document: `data`, `meta.next_cursor`, `labels.0.name`.
 Path = Annotated[
@@ -65,6 +69,8 @@ Path = Annotated[
 Name = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,39}$")]
 # What a resource's records may be in LEKA's model.
 Entity = Literal["issue", "incident", "service", "project", "document"]
+# A GraphQL variable's name, as the spec spells them.
+Variable = Annotated[str, StringConstraints(pattern=r"^[_A-Za-z][_0-9A-Za-z]{0,63}$")]
 # A query parameter's name, as an API spells it.
 Param = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_.\[\]-]{1,64}$")]
 
@@ -131,24 +137,30 @@ class Mapping(BaseModel):
     metadata: dict[Name, Path] = Field(default_factory=dict, max_length=MAX_METADATA)
 
 
-class Resource(BaseModel):
-    """One kind of thing to read, and where."""
+class Declared(BaseModel):
+    """What every resource declares, whatever the API: its name, what its
+    records are, where they are in an answer, what their fields mean."""
 
     model_config = ConfigDict(extra="forbid")
 
     name: Name
     # What its records are in LEKA's model; None: extracted, not modelled.
     entity: Entity | None = None
+    # Where the records are in an answer; None: the answer is the list.
+    items: Path | None = None
+    mapping: Mapping
+
+
+class Resource(Declared):
+    """A REST resource: a path on the API's host, and its query."""
+
     # On the source's host, from its base: no scheme, no host, no query —
     # `params` holds the query — and no `..` to climb out of the base.
     path: Annotated[str, StringConstraints(pattern=r"^/[^\s?#]*$", max_length=500)]
     params: dict[Param, Annotated[str, StringConstraints(max_length=500)]] = Field(
         default_factory=dict, max_length=MAX_PARAMS
     )
-    # Where the records are in a page; None: the page is the list.
-    items: Path | None = None
     pagination: Pagination = Field(default_factory=Pagination)
-    mapping: Mapping
 
     @field_validator("path")
     @classmethod
@@ -159,35 +171,113 @@ class Resource(BaseModel):
         return value
 
 
+class GraphQLPagination(BaseModel):
+    """How a GraphQL listing's pages follow each other.
+
+    - `none`: one answer, the whole listing;
+    - `cursor`: the end cursor (`next`: `data.issues.pageInfo.endCursor`),
+      sent back as a variable (`variable`: `after`) — while `has_next`
+      (`data.issues.pageInfo.hasNextPage`) says there is more, or, without
+      it, while the cursor is neither empty nor the same again.
+
+    `size_variable` and `size`: the page size, as the query takes it
+    (`first`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["none", "cursor"] = "none"
+    next: Path | None = None
+    has_next: Path | None = None
+    variable: Variable | None = None
+    size_variable: Variable | None = None
+    size: int = Field(default=100, ge=1, le=1000)
+
+    @model_validator(mode="after")
+    def _complete(self) -> Self:
+        if self.type == "cursor" and not (self.next and self.variable):
+            msg = "pagination 'cursor' needs `next`, the end cursor, and `variable`, its name"
+            raise ValueError(msg)
+        return self
+
+
+class GraphQLResource(Declared):
+    """A GraphQL resource: a query document and its variables. The query
+    reads — a `mutation` or a `subscription` is refused when saved — and
+    `items` is where its records are in the answer: `data.issues.nodes`."""
+
+    query: Annotated[str, StringConstraints(min_length=5, max_length=QUERY_MAX)]
+    variables: dict[Variable, Any] = Field(default_factory=dict, max_length=MAX_PARAMS)
+    pagination: GraphQLPagination = Field(default_factory=GraphQLPagination)
+
+    @field_validator("query")
+    @classmethod
+    def _reads(cls, value: str) -> str:
+        return read_only(value, "the API")
+
+    @model_validator(mode="after")
+    def _located(self) -> Self:
+        if not self.items:
+            msg = "a GraphQL resource needs `items`: where its records are, as data.issues.nodes"
+            raise ValueError(msg)
+        return self
+
+
+def _names_once(resources: Sequence[Declared]) -> None:
+    names = [resource.name for resource in resources]
+    twice = sorted({name for name in names if names.count(name) > 1})
+    if twice:
+        msg = f"each resource needs a name of its own: {', '.join(twice)} twice"
+        raise ValueError(msg)
+
+
 class Definition(BaseModel):
+    """A REST source's definition."""
+
     model_config = ConfigDict(extra="forbid")
 
     version: Literal[1] = 1
     resources: list[Resource] = Field(min_length=1, max_length=MAX_RESOURCES)
 
     @model_validator(mode="after")
-    def _names_once(self) -> Self:
-        names = [resource.name for resource in self.resources]
-        twice = sorted({name for name in names if names.count(name) > 1})
-        if twice:
-            msg = f"each resource needs a name of its own: {', '.join(twice)} twice"
-            raise ValueError(msg)
+    def _named(self) -> Self:
+        _names_once(self.resources)
         return self
 
-    def resource(self, name: str) -> Resource | None:
-        return next((resource for resource in self.resources if resource.name == name), None)
+
+class GraphQLDefinition(BaseModel):
+    """A GraphQL source's definition."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: Literal[1] = 1
+    resources: list[GraphQLResource] = Field(min_length=1, max_length=MAX_RESOURCES)
+
+    @model_validator(mode="after")
+    def _named(self) -> Self:
+        _names_once(self.resources)
+        return self
 
 
 def parse(text: str) -> Definition:
-    """A definition from its JSON — or a ValueError that says, in a line,
-    where it is wrong."""
+    """A REST definition from its JSON — or a ValueError that says, in a
+    line, where it is wrong."""
+    return _parsed(text, Definition)
+
+
+def parse_graphql(text: str) -> GraphQLDefinition:
+    """A GraphQL definition from its JSON, as `parse`."""
+    return _parsed(text, GraphQLDefinition)
+
+
+def _parsed[T: BaseModel](text: str, model: type[T]) -> T:
     try:
         document = json.loads(text)
     except json.JSONDecodeError as error:
         msg = f"the definition is not JSON: line {error.lineno}, column {error.colno}"
         raise ValueError(msg) from None
     try:
-        return Definition.model_validate(document)
+        return model.model_validate(document)
     except ValidationError as error:
         first = error.errors()[0]
         where = ".".join(str(step) for step in first["loc"]) or "the definition"

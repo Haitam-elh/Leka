@@ -1,18 +1,19 @@
 # Custom sources — a system LEKA has no connector for
 
 A company's own tools — an in-house ticketing system, an asset inventory, a
-vendor LEKA does not know — read through their API, **without a line of
-LEKA's code**: the admin declares what to read and what it means, and the
-[connector framework](framework.md) does the rest as for any source. LEKA-350.
+vendor LEKA does not know — read through their REST or GraphQL API,
+**without a line of LEKA's code**: the admin declares what to read and what
+it means, and the [connector framework](framework.md) does the rest as for
+any source. LEKA-350.
 
 | | |
 |---|---|
-| Kind | `custom_rest` — shown as **API REST**, in the **Custom** category |
+| Kinds | `custom_rest` — **API REST** — and `custom_graphql` — **API GraphQL** ([below](#graphql)) — in the **Custom** category |
 | Server | any JSON API over https, on a public address |
 | Credentials | `secret` (first, so the stored hint is the secret's), `username` for basic — write-only |
-| Config | `base_url`, `auth`, `auth_name`, `definition` |
+| Config | `base_url` (REST) or `endpoint` (GraphQL), `auth`, `auth_name`, `definition` |
 | Capabilities | `records` — every resource's; a record's container is its resource |
-| Code | `leka/connectors/custom/` (the connector and its definition), `leka/ingestion/extraction/custom.py`, and normalisation's `_custom` |
+| Code | `leka/connectors/custom/` — `common.py` what both share, `rest.py`, `graphql_api.py`, `definition.py` — `leka/ingestion/extraction/custom.py`, and normalisation's `_custom` |
 
 Everything that is not the API's is the framework's, unchanged: the secret
 encrypted at rest and never returned, the connection test, the health
@@ -151,6 +152,50 @@ changes `fields` — and so, at the next pass, what is extracted.
   ([scope-and-mapping.md](scope-and-mapping.md)) applies.
 - **Keeps** its payloads 90 days, as the other structured sources'.
 
+## GraphQL
+
+**Sources → Add → API GraphQL**: the `endpoint` (`https://api.acme.com/graphql`,
+no query), the same `auth`, and a definition whose resources are queries.
+Everything above holds — the mapping, `entity`, `items`, the bounds, the
+scope, extraction, normalisation — except how a page is asked for:
+
+```json
+{
+  "resources": [
+    {
+      "name": "issues",
+      "entity": "issue",
+      "query": "query Issues($first: Int!, $after: String) { issues(first: $first, after: $after) { nodes { id title url updatedAt state { name } } pageInfo { endCursor hasNextPage } } }",
+      "variables": {"project": "PLAT"},
+      "items": "data.issues.nodes",
+      "pagination": {"type": "cursor", "next": "data.issues.pageInfo.endCursor",
+                     "has_next": "data.issues.pageInfo.hasNextPage",
+                     "variable": "after", "size_variable": "first", "size": 100},
+      "mapping": {"id": "id", "title": "title", "url": "url", "state": "state.name",
+                  "updated_at": "updatedAt"}
+    }
+  ]
+}
+```
+
+| Key | | |
+|---|---|---|
+| `query` | required | The document, 20 000 characters at most. **A `query` only**: a `mutation` or a `subscription` — even in a comment — is refused when the definition is saved |
+| `variables` | | Its variables, JSON values: `{"project": "PLAT"}` |
+| `items` | required | Where the records are in the answer, from its root: `data.issues.nodes` |
+| `pagination` | | `none`, or `cursor`: the end cursor's path (`next`), sent back as the variable `variable`; `has_next`, the path that says there is more, when the API gives one — else a cursor empty, or given again, ends the listing. `size_variable` and `size`: the page size, as the query takes it (`first`) |
+
+Each query is POSTed to the endpoint's path — the one POST LEKA sends, and
+only there — as `{"query", "variables"}`, JSON in and out. A GraphQL API
+refuses in two ways, both read: an HTTP status, as REST's; or a 200 whose
+body carries `errors`, read by their `extensions.code` —
+`UNAUTHENTICATED` is `AUTH_INVALID`, `FORBIDDEN` `PERMISSION_DENIED`,
+`GRAPHQL_VALIDATION_FAILED` and `BAD_USER_INPUT` `CONFIG_INVALID` (the
+query or its variables to fix), `RATE_LIMITED` `RATE_LIMITED`, anything
+else `PROVIDER_ERROR` — the server's words in the detail, the secret
+cleaned out. `errors` beside partial `data` fail the call all the same: a
+page read in part would mark the rest gone.
+
 ## Errors
 
 | What | Diagnostic |
@@ -175,4 +220,4 @@ back, nor in a path, whose query a diagnostic leaves out.
   with `params`.
 - The mapping reads values, it does not compute: no concatenation, no
   conversion beyond dates.
-- GraphQL APIs and webhooks come next in LEKA-350.
+- Webhooks come next in LEKA-350.

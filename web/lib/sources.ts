@@ -150,6 +150,7 @@ export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
   sqlserver: "data",
   oracle: "data",
   custom_rest: "custom",
+  custom_graphql: "custom",
   supabase: "data",
   mongodb: "data",
   slack: "chat",
