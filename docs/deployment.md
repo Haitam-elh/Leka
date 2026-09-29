@@ -54,15 +54,19 @@ images, pushes them and runs [`deploy/deploy.sh`](../deploy/deploy.sh) on the bo
 `deploy.sh` is the whole procedure, and it is the same file whether CD runs it
 or a person does:
 
-1. **pull** both images — if either fails, nothing has been touched;
-2. **switch**: write the registry and the release into `production.env`,
+1. **make room**: every image no container uses goes — what runs stays, it
+   is what a failed deployment falls back to — then, with less than 2 GB
+   free, stop there ([below](#when-the-disk-is-full));
+2. **pull** both images — if either fails, nothing has been touched;
+3. **switch**: write the registry and the release into `production.env`,
    `up -d`;
-3. **verify**: the API answers `/api/v1/health` from inside its own
+4. **verify**: the API answers `/api/v1/health` from inside its own
    container, the web app answers `/login`, and the worker and the scheduler
    are still the same processes five seconds later — not restarting in a
    loop;
-4. if any of that fails within ninety seconds, **switch back** to the
-   previous release and verify that too.
+5. if any of that fails within ninety seconds, **switch back** to the
+   previous release and verify that too; if it succeeded, the previous
+   release's images go — rolling back to it pulls them again.
 
 | Exit | Meaning |
 |---|---|
@@ -149,6 +153,39 @@ The downgrade path is exercised in CI on every pull request
 (`alembic downgrade base` then `upgrade head`), so step 2 is tested rather
 than hoped for. It was not, before: the downgrade of
 `20260920_0930_workspace_lifecycle.py` had never run and did not work.
+
+---
+
+## When the disk is full
+
+The symptom: CD fails at *Deploy, verify, and roll back*, on a pull —
+`no space left on device`, or `deploy.sh`'s own `MB free on the disk, 2048
+MB needed`. Nothing was changed: the previous release is still running.
+
+**Why it happened once (CD #77, 2026-09-29).** `deploy.sh` removed old
+images only after a successful deployment, and only once they were a week
+old. Docker's containerd image store keeps each image twice, packed and
+unpacked; a week of daily merges filled the 20 GB disk, and a pull died
+half-way. It now makes room BEFORE each pull, keeping only what runs.
+
+If it happens again — something other than images is filling the disk:
+
+```bash
+ssh -i ~/.ssh/leka-admin.pem ubuntu@<elastic ip>
+df -h /                          # how full
+docker system df                 # images, containers, volumes, build cache
+sudo du -xh --max-depth=2 /var | sort -h | tail -15    # who, outside Docker
+docker image prune -af           # what no container uses; what runs stays
+```
+
+Container logs are capped (10 MB × 3 per container, in the compose file);
+`journalctl --vacuum-size=200M` trims the system journal. Then re-run the
+failed CD job — **Re-run jobs** on its page — or `deploy.sh` by hand.
+
+Growing the disk, when that is the answer: EC2 → *Volumes* → the
+instance's volume → *Modify volume* → size; then on the box
+`sudo growpart /dev/nvme0n1 1 && sudo resize2fs /dev/nvme0n1p1`. No
+restart.
 
 ---
 
@@ -275,7 +312,7 @@ EC2 → **Launch instance**:
 | Type | **`t3.small`** (2 GiB) | `t3.micro`'s 1 GiB cannot hold the API, worker, scheduler, web app, Redis and Caddy |
 | Key pair | Create → `leka-admin`, ED25519, `.pem` — into the password manager | YOUR way in. Not the key GitHub uses |
 | Security group | Create → allow **SSH** from *Anywhere*, **HTTPS** and **HTTP** from the internet | SSH takes keys only; GitHub's runners have no fixed address. HTTP is for Let's Encrypt and the redirect |
-| Storage | **20 GiB gp3** | two images per release, a week of them kept |
+| Storage | **20 GiB gp3** | the release running and the one being pulled — `deploy.sh` makes room before each pull |
 
 Then EC2 → Elastic IPs → **Allocate** → **Associate** with `leka-production`.
 That address is the one DNS points at; it survives a stop and start. It is

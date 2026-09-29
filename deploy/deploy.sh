@@ -19,6 +19,13 @@
 #   1  the release is NOT deployed, and the previous one is running
 #   2  nothing healthy is running — the box needs a person
 #
+# THE DISK. Only what runs is kept: the release a failed deployment falls
+# back to. Every other image goes BEFORE the pull, and the previous release
+# after a success — rolling back to an older one pulls it again. Keeping a
+# week of releases, as this did until 2026-09-29, filled the 20 GB disk in
+# a week of daily merges (Docker's containerd store holds each image twice,
+# packed and unpacked), and the pull died half-way: CD #77.
+#
 # Assumes the caller is already logged in to the registry.
 
 set -euo pipefail
@@ -36,9 +43,34 @@ COMPOSE=(docker compose -f docker-compose.production.yml --env-file "$ENV_FILE")
 # Ninety seconds by default: migrations, a cold start, and room. Past that
 # it is not slow, it is broken.
 HEALTH_ATTEMPTS="${HEALTH_ATTEMPTS:-45}"
+# What pulling a release takes on the disk: both images, packed and
+# unpacked — the API's alone is 540 MB unpacked (2026-09-29) — and a margin.
+# Below it the pull is not started: one that fills the disk half-way leaves
+# it full.
+NEEDED_MB="${NEEDED_MB:-2048}"
 
 current() {
   grep -E "^$1=" "$ENV_FILE" | cut -d= -f2- || true
+}
+
+# Megabytes free where Docker keeps its images. Nothing when that cannot be
+# known — a rehearsal against Docker in a VM — and then nothing is checked.
+room_mb() {
+  local root
+  root="$(docker info --format '{{.DockerRootDir}}' 2> /dev/null)" || return 1
+  [ -d "$root" ] || return 1
+  df -Pk "$root" | awk 'NR == 2 { print int($4 / 1024) }'
+}
+
+# Images no container uses. What runs stays: it is what a failed deployment
+# falls back to.
+unused_images_go() {
+  docker image prune -af > /dev/null || true
+}
+
+disk_report() {
+  df -h / || true
+  docker system df || true
 }
 
 set_var() {
@@ -102,22 +134,29 @@ PREVIOUS_REGISTRY="$(current LEKA_REGISTRY)"
 PREVIOUS="$(current LEKA_RELEASE)"
 echo "Previous: ${PREVIOUS:-none}   New: ${RELEASE}"
 
-# Both pulled before anything is touched: a pull that fails leaves the box
-# exactly as it was.
+# Room first, then both pulled before anything is touched: a pull that
+# fails leaves the box running as it was.
+unused_images_go
+if FREE_MB="$(room_mb)" && [ -n "$FREE_MB" ] && [ "$FREE_MB" -lt "$NEEDED_MB" ]; then
+  echo "::error::${FREE_MB} MB free on the disk, ${NEEDED_MB} MB needed to pull a release. Nothing was changed. See docs/deployment.md, 'When the disk is full'."
+  disk_report
+  exit 1
+fi
+
 for image in api web; do
   if ! docker pull "${REGISTRY}/${image}:${RELEASE}"; then
     echo "::error::Could not pull ${REGISTRY}/${image}:${RELEASE}. Nothing was changed."
+    disk_report
     exit 1
   fi
 done
 
 if switch_to "$REGISTRY" "$RELEASE" && healthy; then
   echo "Healthy on ${RELEASE}"
-  # Images no container uses, built more than a week ago. Without -a only
-  # untagged layers go, and every release is tagged: an 8 GB disk fills in
-  # about fifteen deployments. The previous release goes too once it is a
-  # week old; rolling back to it pulls it again.
-  docker image prune -af --filter "until=168h" > /dev/null || true
+  # The previous release goes now: nothing runs it, and rolling back to it
+  # pulls it again. Without -a only untagged layers would go, and every
+  # release is tagged.
+  unused_images_go
   exit 0
 fi
 

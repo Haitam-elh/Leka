@@ -8,7 +8,10 @@ first person who types the address. These tests find it first.
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -134,3 +137,80 @@ def test_the_web_image_leaves_out_the_browser_suite_whole() -> None:
     ignored = _text(REPO_ROOT / "web" / ".dockerignore").split()
 
     assert ("e2e" in ignored) == ("playwright.config.ts" in ignored)
+
+
+# ── deploy.sh and the disk (CD #77) ──────────────────────────────────────────
+#
+# Run for real, against a `docker` and a `df` that take notes: what matters is
+# the ORDER — room is made before anything is pulled — and that a disk too
+# full to take a release stops the deployment before it starts.
+
+FAKE_DOCKER = """#!/usr/bin/env bash
+echo "$*" >> "$CALLS"
+case "$1" in
+  info) echo "$DOCKER_ROOT" ;;
+  pull) exit 1 ;;
+esac
+"""
+
+FAKE_DF = """#!/usr/bin/env bash
+echo "Filesystem 1024-blocks Used Available Capacity Mounted on"
+echo "/dev/root 20971520 0 $FREE_KB 50% /"
+"""
+
+
+def _deploy(tmp_path: Path, *, free_mb: int) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    tools = tmp_path / "bin"
+    tools.mkdir()
+    for name, script in (("docker", FAKE_DOCKER), ("df", FAKE_DF)):
+        (tools / name).write_text(script, encoding="utf-8")
+        (tools / name).chmod(0o755)
+    box = tmp_path / "opt-leka"
+    box.mkdir()
+    shutil.copy(DEPLOY / "deploy.sh", box / "deploy.sh")
+    (box / "production.env").write_text(
+        "LEKA_REGISTRY=ghcr.io/acme/leka\nLEKA_RELEASE=old\n", encoding="utf-8"
+    )
+    calls = tmp_path / "calls"
+    calls.touch()
+    result = subprocess.run(  # noqa: S603 — our own script, our own arguments
+        ["bash", str(box / "deploy.sh"), "ghcr.io/acme/leka", "new"],  # noqa: S607
+        env={
+            "PATH": f"{tools}:{os.environ['PATH']}",
+            "CALLS": str(calls),
+            "DOCKER_ROOT": str(tmp_path),
+            "FREE_KB": str(free_mb * 1024),
+        },
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert "LEKA_RELEASE=old" in (box / "production.env").read_text(encoding="utf-8")
+    return result, calls.read_text(encoding="utf-8").splitlines()
+
+
+def test_room_is_made_before_a_release_is_pulled(tmp_path: Path) -> None:
+    """Until CD #77, old images went only AFTER a successful deployment, and
+    only once a week old: a week of merges filled the disk and the pull died
+    half-way. What no container uses now goes first."""
+    result, calls = _deploy(tmp_path, free_mb=10_000)
+
+    pulls = [n for n, call in enumerate(calls) if call.startswith("pull ")]
+    assert pulls, calls
+    assert calls.index("image prune -af") < pulls[0]
+    # Every image no container uses: not a week's grace any more.
+    assert not any("until=" in call for call in calls)
+    # The pull failed here, and the box was left as it was — and said why.
+    assert result.returncode == 1
+    assert "Nothing was changed" in result.stdout
+    assert "system df" in calls
+
+
+def test_a_disk_too_full_for_a_release_stops_it_before_the_pull(tmp_path: Path) -> None:
+    result, calls = _deploy(tmp_path, free_mb=500)
+
+    assert result.returncode == 1
+    assert not any(call.startswith("pull ") for call in calls)
+    assert "500 MB free on the disk, 2048 MB needed" in result.stdout
+    assert "Nothing was changed" in result.stdout
