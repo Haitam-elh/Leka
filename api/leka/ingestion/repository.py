@@ -34,6 +34,7 @@ from leka.background import ACTIVE_JOB_STATUSES, JobRun, JobStatus
 from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
 from leka.ingestion.models import (
+    DeliveryStatus,
     ExtractedRecordRow,
     ExtractionStatus,
     NormalisationStatus,
@@ -49,6 +50,7 @@ from leka.ingestion.models import (
     SyncRun,
     SyncRunOutcome,
     SyncTrigger,
+    WebhookDelivery,
 )
 
 
@@ -383,6 +385,27 @@ class SourceRecordRepository(WorkspaceScopedRepository):
                 SourceRecord.kind == kind,
                 SourceRecord.deleted_at.is_(None),
                 SourceRecord.last_seen_run_id.is_distinct_from(run_id),
+            )
+            .values(deleted_at=at, updated_at=func.now())
+        )
+        return _affected_rows(result)
+
+    async def gone(
+        self, source_id: uuid.UUID, kind: str, external_ids: Sequence[str], *, at: datetime
+    ) -> int:
+        """What the system itself says was deleted — a webhook's deletion
+        (LEKA-350): marked as a sweep marks it, and so purged the same way.
+        One seen again later comes back, as from a sweep."""
+        if not external_ids:
+            return 0
+        result = await self._session.execute(
+            update(SourceRecord)
+            .where(
+                SourceRecord.workspace_id == self.workspace_id,
+                SourceRecord.source_id == source_id,
+                SourceRecord.kind == kind,
+                SourceRecord.external_id.in_(list(external_ids)),
+                SourceRecord.deleted_at.is_(None),
             )
             .values(deleted_at=at, updated_at=func.now())
         )
@@ -1159,3 +1182,68 @@ class RawPayloadSweeper:
         """
         result = await self._session.execute(select(RawPayload.object_key))
         return set(result.scalars().all())
+
+
+class WebhookDeliveryRepository(WorkspaceScopedRepository):
+    """What a workspace's webhook sources received (LEKA-350): their inbox,
+    then their log."""
+
+    def keep(
+        self,
+        *,
+        source_id: uuid.UUID,
+        received_at: datetime,
+        status: DeliveryStatus,
+        size_bytes: int,
+        delivery_id: str | None = None,
+        resource: str | None = None,
+        records: int = 0,
+        gone: int = 0,
+        body: bytes | None = None,
+        error: dict[str, object] | None = None,
+    ) -> WebhookDelivery:
+        """Stage one delivery. Only a pending one keeps its body."""
+        row = WebhookDelivery(
+            source_id=source_id,
+            received_at=received_at,
+            status=status,
+            size_bytes=size_bytes,
+            delivery_id=delivery_id,
+            resource=resource,
+            records=records,
+            gone=gone,
+            body=body if status is DeliveryStatus.PENDING else None,
+            error=error,
+            processed_at=None if status is DeliveryStatus.PENDING else received_at,
+        )
+        self.add(row)
+        return row
+
+    async def backlog(self, source_id: uuid.UUID) -> tuple[int, int]:
+        """How many deliveries wait for a pass, and how many bytes they hold."""
+        row = (
+            await self._session.execute(
+                select(func.count(), func.coalesce(func.sum(WebhookDelivery.size_bytes), 0)).where(
+                    WebhookDelivery.workspace_id == self.workspace_id,
+                    WebhookDelivery.source_id == source_id,
+                    WebhookDelivery.status == DeliveryStatus.PENDING,
+                )
+            )
+        ).one()
+        return int(row[0]), int(row[1])
+
+    async def pending(self, source_id: uuid.UUID, *, limit: int) -> Sequence[WebhookDelivery]:
+        """The next deliveries to store, in the order they came."""
+        return await self.list(
+            self.select(WebhookDelivery)
+            .where(
+                WebhookDelivery.source_id == source_id,
+                WebhookDelivery.status == DeliveryStatus.PENDING,
+            )
+            .order_by(WebhookDelivery.received_at, WebhookDelivery.id)
+            .limit(limit)
+        )
+
+    def log(self, source_id: uuid.UUID) -> Select[tuple[WebhookDelivery]]:
+        """A source's deliveries, for pagination; newest first by default."""
+        return self.select(WebhookDelivery).where(WebhookDelivery.source_id == source_id)

@@ -22,6 +22,7 @@ from leka.api import (
     intentions,
     knowledge,
     platform,
+    webhooks,
 )
 
 api_router = APIRouter()
@@ -36,6 +37,8 @@ api_router.include_router(platform.router)
 api_router.include_router(governance.router)
 api_router.include_router(connectors.router)
 api_router.include_router(ingestion.router)
+# What systems send, signed rather than signed in (LEKA-350).
+api_router.include_router(webhooks.router)
 api_router.include_router(knowledge.router)
 api_router.include_router(context.router)
 api_router.include_router(capabilities.router)

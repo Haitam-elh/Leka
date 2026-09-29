@@ -138,6 +138,7 @@ EXTRACTED_KINDS = [
     SourceKind.ORACLE,
     SourceKind.CUSTOM_REST,
     SourceKind.CUSTOM_GRAPHQL,
+    SourceKind.CUSTOM_WEBHOOK,
     SourceKind.MONGODB,
     SourceKind.SUPABASE,
 ]

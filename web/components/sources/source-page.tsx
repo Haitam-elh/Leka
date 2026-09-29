@@ -13,6 +13,7 @@ import { useCurrentUser, usePermissions } from "@/components/shell/shell-provide
 import { AddSourceDialog } from "@/components/sources/add-source-dialog";
 import { fieldWords, SourceFacts, SourceHistory } from "@/components/sources/source-panel";
 import { SourceLogo } from "@/components/sources/source-logo";
+import { SourceReceptionSection } from "@/components/sources/source-reception";
 import { SourceRunsSection } from "@/components/sources/source-runs";
 import { SourceSettingsSection } from "@/components/sources/source-settings";
 import { SourceSyncSection } from "@/components/sources/source-sync";
@@ -83,6 +84,7 @@ export function SourcePage({ sourceId }: { sourceId: string }) {
             <Facts source={source} />
           </section>
           <SourceSyncSection source={source} />
+          <SourceReceptionSection source={source} />
           <SourceRunsSection source={source} />
           <Configuration source={source} />
           <SourceSettingsSection source={source} />

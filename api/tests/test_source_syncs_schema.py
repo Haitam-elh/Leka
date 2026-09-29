@@ -177,7 +177,7 @@ def _run(source: Source, **values: object) -> SyncRun:
 @pytest.mark.parametrize(
     "values",
     [
-        {"trigger": "webhook"},
+        {"trigger": "cron"},
         {"status": "paused"},
         {"records": -1},
         {"finished_at": datetime(2000, 1, 1, tzinfo=UTC)},

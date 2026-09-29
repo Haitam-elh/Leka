@@ -80,6 +80,11 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
         "Setting a new password from a link. The single-use token is the "
         "credential, and the whole point is that the old one is unusable."
     ),
+    ("POST", "/api/v1/webhooks/sources/{source_id}"): (
+        "A system sending a webhook source what changed. A system has no "
+        "session: the delivery's signature, checked against the source's "
+        "secret before anything is written, is the credential."
+    ),
 }
 
 # The dependencies that mean "somebody is authenticated".

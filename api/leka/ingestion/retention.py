@@ -65,6 +65,7 @@ DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     # the company's own records — kept as the other structured sources'.
     SourceKind.CUSTOM_REST: 90,
     SourceKind.CUSTOM_GRAPHQL: 90,
+    SourceKind.CUSTOM_WEBHOOK: 90,
     SourceKind.MONGODB: 90,
     SourceKind.SUPABASE: 90,
     SourceKind.SLACK: 30,

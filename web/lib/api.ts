@@ -18,6 +18,17 @@ type ErrorBody = components["schemas"]["ErrorBody"];
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const API_PREFIX = "/api/v1";
 
+/**
+ * An address of the API another system calls — a webhook source's (LEKA-350).
+ * Absolute: it is copied into that system's settings, where "/api/v1/…"
+ * would mean nothing.
+ */
+export function apiAddress(path: string): string {
+  const address = `${API_URL.replace(/\/$/, "")}${API_PREFIX}${path}`;
+  if (/^https?:\/\//.test(address) || typeof window === "undefined") return address;
+  return new URL(address, window.location.origin).toString();
+}
+
 const CSRF_COOKIE = "leka_csrf";
 const REQUEST_ID_HEADER = "X-Request-ID";
 const CSRF_HEADER = "X-CSRF-Token";

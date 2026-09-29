@@ -668,7 +668,13 @@ const fr = {
       records: "Éléments",
       size: "Volume",
       status: "Résultat",
-      triggers: { activation: "Activation", schedule: "Planification", manual: "Un administrateur" },
+      triggers: {
+        activation: "Activation",
+        schedule: "Planification",
+        manual: "Un administrateur",
+        settings: "Un changement de réglages",
+        webhook: "Une livraison",
+      },
       full: "Complète",
       incremental: "Depuis la dernière",
       running: "En cours",
@@ -676,6 +682,32 @@ const fr = {
       failed: "Échouée",
       abandoned: "Interrompue",
       progress: "Lecture des {capability} : {records} élément(s) jusqu'ici",
+    },
+    reception: {
+      title: "Réception",
+      intro:
+        "Le système envoie ses changements à cette adresse, signés avec le secret de la source. LEKA les garde, puis les enregistre à la passe suivante — en quelques secondes.",
+      address: "Adresse",
+      signature: "Signature",
+      signatures: {
+        hmac_sha256: "HMAC-SHA256 du corps, en hexadécimal ou en base64, dans l'en-tête {header}",
+        standard_webhooks: "Standard Webhooks : webhook-id, webhook-timestamp et webhook-signature",
+        token: "Le secret lui-même, dans l'en-tête {header}",
+      },
+      inactive: "Activez la source pour qu'elle reçoive : d'ici là, les livraisons sont refusées.",
+      deliveries: "Livraisons reçues",
+      caption: "Dernières livraisons",
+      received: "Reçue",
+      status: "État",
+      resource: "Ressource",
+      records: "Éléments",
+      gone: "{count} supprimé(s)",
+      reason: "Pourquoi",
+      empty: "Aucune livraison reçue pour l'instant.",
+      loadFailed: "Impossible de charger les livraisons.",
+      statuses: { pending: "En attente", stored: "Enregistrée", ignored: "Ignorée", rejected: "Refusée" },
+      ignoredWhy: "Aucune ressource de la définition ne la reconnaît.",
+      reasons: { malformed: "Illisible", unmapped: "Mapping incomplet" },
     },
     settings: {
       title: "Périmètre et correspondances",
@@ -796,7 +828,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase et MongoDB — et, sur mesure, à toute API REST ou GraphQL.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase et MongoDB — et, sur mesure, à toute API REST ou GraphQL, ou par webhook.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -811,6 +843,11 @@ const fr = {
         header: "Clé dans un en-tête",
         query: "Clé dans l'URL",
         basic: "Utilisateur et mot de passe",
+      },
+      signature: {
+        hmac_sha256: "HMAC-SHA256 du corps",
+        standard_webhooks: "Standard Webhooks",
+        token: "Jeton dans un en-tête",
       },
     },
     fields: {
@@ -1119,6 +1156,24 @@ const fr = {
           help: "Le token, la clé d'API ou le mot de passe. Chiffré, et plus jamais affiché. Vide sans authentification.",
         },
         username: { label: "Utilisateur", help: "Pour une authentification par utilisateur et mot de passe." },
+      },
+      custom_webhook: {
+        signature: {
+          label: "Signature",
+          help: "Comment le système signe ce qu'il envoie, avec le secret. HMAC-SHA256 : GitHub, Shopify, la plupart des outils maison. Standard Webhooks : les systèmes qui suivent standardwebhooks.com. Jeton : GitLab.",
+        },
+        signature_header: {
+          label: "En-tête de la signature",
+          help: "Pour HMAC-SHA256 et le jeton : l'en-tête qui la porte (X-Hub-Signature-256 pour GitHub). Vide : X-Leka-Signature, ou X-Leka-Token.",
+        },
+        definition: {
+          label: "Définition",
+          help: 'Ce qu\'une livraison peut être, en JSON : pour chaque ressource, la condition qui la reconnaît, où sont ses éléments, ce que signifie chaque champ, et ce qui dit qu\'ils sont supprimés. Le plus court : {"resources": [{"name": "tickets", "items": "ticket", "mapping": {"id": "id", "title": "subject"}}]}',
+        },
+        secret: {
+          label: "Secret",
+          help: "Le même des deux côtés, 16 caractères au moins — pour Standard Webhooks, le whsec_… que donne le système. Chiffré, et plus jamais affiché.",
+        },
       },
       supabase: {
         host: {
@@ -1899,7 +1954,13 @@ const en: Dictionary = {
       records: "Items",
       size: "Size",
       status: "Result",
-      triggers: { activation: "Activation", schedule: "Schedule", manual: "An administrator" },
+      triggers: {
+        activation: "Activation",
+        schedule: "Schedule",
+        manual: "An administrator",
+        settings: "A settings change",
+        webhook: "A delivery",
+      },
       full: "Full",
       incremental: "Since the last",
       running: "Running",
@@ -1907,6 +1968,32 @@ const en: Dictionary = {
       failed: "Failed",
       abandoned: "Interrupted",
       progress: "Reading {capability}: {records} item(s) so far",
+    },
+    reception: {
+      title: "Reception",
+      intro:
+        "The system sends its changes to this address, signed with the source's secret. LEKA keeps them, then stores them at the next pass — within seconds.",
+      address: "Address",
+      signature: "Signature",
+      signatures: {
+        hmac_sha256: "HMAC-SHA256 of the body, hex or base64, in the {header} header",
+        standard_webhooks: "Standard Webhooks: webhook-id, webhook-timestamp and webhook-signature",
+        token: "The secret itself, in the {header} header",
+      },
+      inactive: "Activate the source for it to receive: until then, deliveries are refused.",
+      deliveries: "Deliveries received",
+      caption: "Latest deliveries",
+      received: "Received",
+      status: "State",
+      resource: "Resource",
+      records: "Items",
+      gone: "{count} deleted",
+      reason: "Why",
+      empty: "No delivery received yet.",
+      loadFailed: "The deliveries cannot be loaded.",
+      statuses: { pending: "Waiting", stored: "Stored", ignored: "Ignored", rejected: "Refused" },
+      ignoredWhy: "No resource of the definition recognises it.",
+      reasons: { malformed: "Unreadable", unmapped: "Mapping incomplete" },
     },
     settings: {
       title: "Scope and mapping",
@@ -2026,7 +2113,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase and MongoDB today — and, custom, to any REST or GraphQL API.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase and MongoDB today — and, custom, to any REST or GraphQL API, or by webhook.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -2041,6 +2128,11 @@ const en: Dictionary = {
         header: "Key in a header",
         query: "Key in the URL",
         basic: "User and password",
+      },
+      signature: {
+        hmac_sha256: "HMAC-SHA256 of the body",
+        standard_webhooks: "Standard Webhooks",
+        token: "Token in a header",
       },
     },
     fields: {
@@ -2324,6 +2416,24 @@ const en: Dictionary = {
           help: "The token, the API key or the password. Encrypted, and never shown again. Empty without authentication.",
         },
         username: { label: "User", help: "For a user and password authentication." },
+      },
+      custom_webhook: {
+        signature: {
+          label: "Signature",
+          help: "How the system signs what it sends, with the secret. HMAC-SHA256: GitHub, Shopify, most in-house tools. Standard Webhooks: systems that follow standardwebhooks.com. Token: GitLab.",
+        },
+        signature_header: {
+          label: "Signature header",
+          help: "For HMAC-SHA256 and the token: the header that carries it (X-Hub-Signature-256 for GitHub). Empty: X-Leka-Signature, or X-Leka-Token.",
+        },
+        definition: {
+          label: "Definition",
+          help: 'What a delivery may be, as JSON: for each resource, the condition that recognises it, where its items are, what each field means, and what says they were deleted. The shortest: {"resources": [{"name": "tickets", "items": "ticket", "mapping": {"id": "id", "title": "subject"}}]}',
+        },
+        secret: {
+          label: "Secret",
+          help: "The same on both sides, 16 characters at least — for Standard Webhooks, the whsec_… the system gives. Encrypted, and never shown again.",
+        },
       },
       custom_rest: {
         base_url: {

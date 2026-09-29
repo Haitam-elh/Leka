@@ -117,6 +117,10 @@ class ConnectorManifest(BaseModel):
     # a cloud inventory. Every pass of these is a full read, so what was not
     # seen is marked gone at every pass, not once a week (leka/ingestion/sync.py).
     listed_whole: frozenset[Capability] = frozenset()
+    # Sent to rather than read: the system pushes its changes to the
+    # source's address, a webhook (leka/connectors/receiving.py). Said here
+    # for the catalogue, which shows that address; its class is a Receiver.
+    receives: bool = False
     read_only: Literal[True] = True
 
 

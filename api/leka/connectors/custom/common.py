@@ -129,7 +129,7 @@ class DeclaredConnector[ConfigT: BaseModel, ResourceT: Declared](
                     continue
                 found = fields(resource.mapping, page[0])
                 _require(resource, "id", identifier(found.get("id")) is not None)
-                _require(resource, "title", _scalar(found.get("title")))
+                _require(resource, "title", readable(found.get("title")))
                 missing = [
                     f"{name} ({getattr(resource.mapping, name)})"
                     for name in OPTIONAL
@@ -184,19 +184,7 @@ class DeclaredConnector[ConfigT: BaseModel, ResourceT: Declared](
                     total += 1
                     if total > MAX_RECORDS:
                         raise too_many(f"plus de {MAX_RECORDS} enregistrements")
-                    yield RawRecord(
-                        kind=C.RECORDS,
-                        external_id=f"{resource.name}:{external_id}",
-                        container=resource.name,
-                        payload={
-                            "resource": resource.name,
-                            **({"entity": resource.entity} if resource.entity else {}),
-                            "fields": found,
-                            "record": item,
-                        },
-                        updated_at=moment(found.get("updated_at")),
-                        fetched_at=fetched,
-                    )
+                    yield record_of(resource, external_id, found, item, fetched)
                 if unidentified:
                     # Not stored — nothing tells them apart — and not a failure:
                     # the others are read. Said, so the mapping can be fixed.
@@ -317,6 +305,36 @@ class DeclaredConnector[ConfigT: BaseModel, ResourceT: Declared](
         return refusal(response, where, secret, usual_code(status))
 
 
+def record_of(
+    resource: Declared,
+    external_id: str,
+    found: dict[str, Any],
+    item: dict[str, Any],
+    fetched: datetime,
+) -> RawRecord:
+    """A record as every custom source stores it — read or received:
+    `{"resource", "entity", "fields", "record"}`, its id prefixed by its
+    resource, its resource as its container."""
+    return RawRecord(
+        kind=C.RECORDS,
+        external_id=external_of(resource, external_id),
+        container=resource.name,
+        payload={
+            "resource": resource.name,
+            **({"entity": resource.entity} if resource.entity else {}),
+            "fields": found,
+            "record": item,
+        },
+        updated_at=moment(found.get("updated_at")),
+        fetched_at=fetched,
+    )
+
+
+def external_of(resource: Declared, external_id: str) -> str:
+    """Ids of two resources may be the same number: the resource tells them apart."""
+    return f"{resource.name}:{external_id}"
+
+
 def records_at(resource: Declared, body: Any) -> list[dict[str, Any]]:
     """The records of an answer — where `items` says, or the answer itself."""
     found = at(body, resource.items) if resource.items else body
@@ -360,7 +378,8 @@ def _require(resource: Declared, name: str, present: bool) -> None:
         )
 
 
-def _scalar(value: object) -> bool:
+def readable(value: object) -> bool:
+    """A value a person can read as a name: text or a number, not empty."""
     return (
         isinstance(value, str | int | float)
         and not isinstance(value, bool)

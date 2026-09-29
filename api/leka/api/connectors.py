@@ -228,6 +228,7 @@ async def catalog(_principal: Reader) -> list[CatalogEntry]:
             auth_type=manifest.auth_type,
             capabilities=sorted(manifest.capabilities),
             read_only=manifest.read_only,
+            receives=manifest.receives,
             config_schema=manifest.config_schema.model_json_schema(),
             credentials_schema=manifest.credentials_schema.model_json_schema(),
         )

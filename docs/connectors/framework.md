@@ -11,8 +11,8 @@ and Microsoft 365:
 PagerDuty and Grafana: [observability.md](observability.md); PostgreSQL,
 Supabase, MySQL, MariaDB, SQL Server, Oracle and MongoDB:
 [databases.md](databases.md); a system LEKA has no connector for, read
-through its REST or GraphQL API as its admin declared it:
-[custom.md](custom.md).
+through its REST or GraphQL API as its admin declared it, or sending LEKA
+its changes by webhook: [custom.md](custom.md).
 
 **LEKA only reads.** No connector writes to a customer's system: the
 manifest says `read_only: True` as a literal, and every call a connector
@@ -71,6 +71,23 @@ list whole — no filter by date, like a cloud inventory — goes in the
 manifest's `listed_whole`: every pass of it is a full read, and its deleted
 records are found at every pass; GitHub implements it (LEKA-345), the
 engine that calls it is LEKA-352.
+
+**A source that is sent to** — a webhook (LEKA-350) — is not read: the
+system posts its changes to the source's address. Its connector is also a
+`Receiver` (`leka/connectors/receiving.py`), and its manifest says
+`receives: True` — the catalogue shows it, and registering one without the
+other is refused:
+
+```python
+class Receiver(ABC):
+    def verify(self, headers, body, *, now) -> None   # the signature, or RefusedDeliveryError
+    def receive(self, body, *, now) -> Received      # records to store, ids gone — pure
+```
+
+Still no database, still no network: `verify` checks a delivery against the
+secret, `receive` says what it holds. Keeping it is
+`leka/ingestion/webhooks.py`'s, storing it the pass's, one at a time per
+source as for every source — [custom.md](custom.md#webhooks).
 
 ## Scope
 
@@ -205,6 +222,8 @@ Reading needs `source:read` (every member); everything else needs
 | `GET /sources/{id}/scope/options` | what the scope can be chosen from, asked of the vendor now — 200 with `ok: false` and a diagnostic when it refuses; 409 for a connector without a scope |
 | `POST /sources/{id}/health-check` · `GET /health` | check now · last result |
 | `GET /sources/{id}/events` | the history, paginated |
+| `POST /webhooks/sources/{id}` | a delivery to a webhook source — **no session**: its signature is the credential ([custom.md](custom.md#webhooks)) |
+| `GET /ingestion/sources/{id}/deliveries` | what a webhook source received, newest first — never a body |
 
 ## What is not here
 

@@ -54,7 +54,7 @@ something no source has shown yet — a ticket in a tool not connected.
 | pages, files (Confluence, Notion, Slab, Guru, Google Workspace, Microsoft 365) | `document` |
 | incidents (Datadog, PagerDuty) | `incident` |
 | services (PagerDuty) | `service` |
-| records of a custom API (`custom_rest`, `custom_graphql`) | the `entity` their resource declares: `issue`, `incident`, `service`, `project`, `document` — keyed by the source, a service by its name ([custom.md](connectors/custom.md)) |
+| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `project`, `document` — keyed by the source, a service by its name ([custom.md](connectors/custom.md)) |
 | named by a record | `person`, `service`, `team` |
 
 Alerts, events, metrics, logs and dashboards (Datadog, Grafana) are

@@ -40,6 +40,13 @@ FAILURES, AND WHO DEALS WITH THEM:
 The first failure is a `sync_failed` event and the first success after it
 `sync_recovered`: a history an admin reads, not one line an hour.
 
+A SOURCE THAT IS SENT TO — a webhook (leka/connectors/receiving.py) — is
+not read: its pass stores what it received, the deliveries kept pending by
+leka/ingestion/webhooks.py, in the order they came; and what a delivery
+says was deleted is marked gone. Never a sweep: what was not sent was not
+deleted. A delivery starts a pass; the schedule's passes store what a pass
+already under way left.
+
 Runs as a job (`run_sync`), one at a time per source — the caller holds the
 concurrency key `sync:<source_id>` (leka.background.enqueue_job). Safe to
 run twice: a second pass reads again from the same cursor.
@@ -65,6 +72,8 @@ from leka.connectors import (
     DiagnosticCode,
     LifecycleEvent,
     RawRecord,
+    Receiver,
+    RefusedDeliveryError,
     ScopeRules,
     Source,
     SourceEventType,
@@ -78,11 +87,13 @@ from leka.connectors import (
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion.checksum import checksum
 from leka.ingestion.models import (
+    DeliveryStatus,
     SourceSync,
     SyncRun,
     SyncRunOutcome,
     SyncRunStatus,
     SyncTrigger,
+    WebhookDelivery,
 )
 from leka.ingestion.pipeline import advance
 from leka.ingestion.purge import PURGE_JOB
@@ -94,6 +105,7 @@ from leka.ingestion.repository import (
     SourceSyncRepository,
     SyncRunRepository,
     SyncScheduleRepository,
+    WebhookDeliveryRepository,
 )
 from leka.ingestion.retention import expires_at
 from leka.platform import from_bytes, object_key, object_store
@@ -112,6 +124,10 @@ RETRY_SOON_SECONDS = 300
 # person, and the health check or a test brings it back.
 SYNCABLE = (SourceStatus.ACTIVE, SourceStatus.DEGRADED)
 CONTENT_TYPE = "application/x-ndjson"
+# A webhook source's pass takes its deliveries this many at a time, and at
+# most so many: a pass stays bounded, the rest are the next one's.
+DELIVERY_CHUNK = 100
+MAX_DELIVERIES_PER_PASS = 5_000
 
 
 # What a pass records for the one before it that never finished.
@@ -386,6 +402,8 @@ class _Pass:
             # failure it was, then read as usual.
             _failed(row, ABANDONED, row.records_last_run)
         started = datetime.now(UTC)
+        if isinstance(connector, Receiver):
+            return await self._receive(source, connector, capability, row, started)
         # A capability that stored records before the index existed (LEKA-352)
         # is read in full once, so the index knows all of it — not only what
         # changes. One that never had any has nothing to catch up on.
@@ -446,6 +464,82 @@ class _Pass:
                 source.id, capability.value, run_id=self._run.id, at=datetime.now(UTC)
             )
             self.deleted[capability.value] = gone
+        await self._session.commit()
+        return count, None
+
+    async def _receive(
+        self,
+        source: Source,
+        connector: Receiver,
+        capability: Capability,
+        row: SourceSync,
+        started: datetime,
+    ) -> tuple[int, Diagnostic | None]:
+        """A webhook source's pass: its pending deliveries, in the order they
+        came — what each holds stored, what each says was deleted marked
+        gone, each settled as it goes. Never full, never a sweep.
+
+        Settled in the transaction that stores them: a pass that dies leaves
+        them pending, and the next stores them again — a write, as when a
+        pass that reads is interrupted."""
+        row.status = SyncRunStatus.RUNNING
+        row.last_started_at = started
+        if self._run is not None:
+            self._run.capability = capability.value
+            self._run.full_read = False
+        await self._session.commit()
+
+        deliveries = WebhookDeliveryRepository(self._session, self._workspace_id)
+        run_id = self._run.id if self._run is not None else None
+        count = 0
+        taken = 0
+        batch: list[RawRecord] = []
+        while taken < MAX_DELIVERIES_PER_PASS:
+            waiting = await deliveries.pending(
+                source.id, limit=min(DELIVERY_CHUNK, MAX_DELIVERIES_PER_PASS - taken)
+            )
+            if not waiting:
+                break
+            for delivery in waiting:
+                taken += 1
+                try:
+                    received = connector.receive(delivery.body or b"", now=delivery.received_at)
+                except RefusedDeliveryError as refused:
+                    # Taken at the door, refused now: the definition changed since.
+                    _settled(delivery, DeliveryStatus.REJECTED, run_id)
+                    delivery.error = {"reason": refused.reason, "message": refused.message}
+                    continue
+                if received.ignored:
+                    _settled(delivery, DeliveryStatus.IGNORED, run_id)
+                    continue
+                if received.gone:
+                    # What came before the deletion is stored before it.
+                    if batch:
+                        count += await self._store(source, row, capability, batch)
+                        batch = []
+                    gone = await self._records.gone(
+                        source.id, capability.value, received.gone, at=datetime.now(UTC)
+                    )
+                    self.deleted[capability.value] = self.deleted.get(capability.value, 0) + gone
+                kept = [r for r in received.records if in_scope(r.container, self._scope)]
+                if len(kept) < len(received.records):
+                    self.excluded[capability.value] = (
+                        self.excluded.get(capability.value, 0) + len(received.records) - len(kept)
+                    )
+                batch.extend(kept)
+                _settled(delivery, DeliveryStatus.STORED, run_id)
+                delivery.resource = received.resource
+                delivery.records = len(received.records)
+                delivery.gone = len(received.gone)
+                if len(batch) >= BATCH_SIZE:
+                    count += await self._store(source, row, capability, batch)
+                    batch = []
+            if batch:
+                count += await self._store(source, row, capability, batch)
+                batch = []
+            await self._session.commit()
+
+        _succeeded(row, started, count, full=False)
         await self._session.commit()
         return count, None
 
@@ -594,6 +688,14 @@ def _succeeded(row: SourceSync, started: datetime, count: int, *, full: bool) ->
     row.records_last_run = count
     row.consecutive_failures = 0
     row.last_error = None
+
+
+def _settled(delivery: WebhookDelivery, status: DeliveryStatus, run_id: uuid.UUID | None) -> None:
+    """A delivery done with: its status, its pass, its body let go."""
+    delivery.status = status
+    delivery.run_id = run_id
+    delivery.processed_at = datetime.now(UTC)
+    delivery.body = None
 
 
 def _failed(row: SourceSync, diagnostic: Diagnostic, count: int) -> None:

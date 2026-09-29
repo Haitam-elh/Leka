@@ -256,15 +256,29 @@ def test_the_script_runs_and_refuses_a_single_key() -> None:
     assert "new key first" in result.stderr
 
 
+# Bytes that are NOT encrypted, and why. Each entry is a decision: every
+# other binary column is taken for ciphertext and must be rotated.
+NOT_ENCRYPTED: dict[str, str] = {
+    "webhook_deliveries.body": (
+        "A webhook delivery as it came (LEKA-350), kept the seconds until its "
+        "pass stores it, then let go: customer data like a raw payload, not a "
+        "secret — encrypted at rest by the database's storage, as the rest."
+    ),
+}
+
+
 def test_every_encrypted_column_is_rotated() -> None:
     """A column added later under the same key would come through a rotation
     untouched — and become unreadable the day the old key is removed."""
-    encrypted = {
+    binary = {
         f"{table.name}.{column.name}"
         for table in Base.metadata.tables.values()
         for column in table.columns
         if isinstance(column.type, LargeBinary) or column.name.endswith("_encrypted")
     }
+    # An exception that names no column any more is one nobody would notice.
+    assert NOT_ENCRYPTED.keys() <= binary, sorted(NOT_ENCRYPTED.keys() - binary)
+    encrypted = binary - NOT_ENCRYPTED.keys()
     assert encrypted, "no encrypted column found at all: are the models imported?"
     assert encrypted <= ROTATED_COLUMNS, (
         f"encrypted but never rotated: {sorted(encrypted - ROTATED_COLUMNS)}. "
