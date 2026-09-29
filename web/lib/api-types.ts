@@ -1190,6 +1190,11 @@ export interface components {
             capabilities: components["schemas"]["Capability"][];
             /** Warnings */
             warnings?: string[];
+            /**
+             * Preview
+             * @description What the test read, as the mapping reads it — shown once, never stored.
+             */
+            preview?: components["schemas"]["Preview"][];
         };
         /**
          * ConnectorCategory
@@ -1318,7 +1323,7 @@ export interface components {
          * DiagnosticCode
          * @enum {string}
          */
-        DiagnosticCode: "AUTH_INVALID" | "AUTH_EXPIRED" | "PERMISSION_DENIED" | "INSUFFICIENT_SCOPE" | "NOT_FOUND" | "RATE_LIMITED" | "TIMEOUT" | "NETWORK_UNREACHABLE" | "PROVIDER_ERROR" | "CONFIG_INVALID" | "UNKNOWN";
+        DiagnosticCode: "AUTH_INVALID" | "AUTH_EXPIRED" | "PERMISSION_DENIED" | "INSUFFICIENT_SCOPE" | "NOT_FOUND" | "RATE_LIMITED" | "TIMEOUT" | "NETWORK_UNREACHABLE" | "PROVIDER_ERROR" | "CONFIG_INVALID" | "UNSUPPORTED" | "UNKNOWN";
         /**
          * ErrorBody
          * @description The contents of an error response.
@@ -1878,6 +1883,36 @@ export interface components {
              * @description The stage queued, or null when none had work.
              */
             queued: string | null;
+        };
+        /**
+         * Preview
+         * @description What a test read of one part of a source, as its mapping reads it —
+         *     so the admin sees the mapping work before switching the source on
+         *     (LEKA-426). The system's own values: shown to the person testing, and
+         *     NEVER stored — not in `metadata`, which is kept, nor in the history.
+         */
+        Preview: {
+            /** Name */
+            name: string;
+            /** Entity */
+            entity?: string | null;
+            /**
+             * Read
+             * @description Records on the first page.
+             */
+            read: number;
+            /**
+             * Fields
+             * @description LEKA's field → the value read in the first record, as text, cut short.
+             */
+            fields?: {
+                [key: string]: string;
+            };
+            /**
+             * Missing
+             * @description Fields the mapping names that the first record lacks.
+             */
+            missing?: string[];
         };
         /**
          * ProcessingRunRead

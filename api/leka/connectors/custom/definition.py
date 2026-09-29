@@ -162,6 +162,12 @@ class Resource(Declared):
     )
     pagination: Pagination = Field(default_factory=Pagination)
 
+    @field_validator("params")
+    @classmethod
+    def _no_secret(cls, value: dict[str, str]) -> dict[str, str]:
+        no_credential_named(value, "the parameter")
+        return value
+
     @field_validator("path")
     @classmethod
     def _within_the_base(cls, value: str) -> str:
@@ -214,6 +220,12 @@ class GraphQLResource(Declared):
     @classmethod
     def _reads(cls, value: str) -> str:
         return read_only(value, "the API")
+
+    @field_validator("variables")
+    @classmethod
+    def _no_secret(cls, value: dict[str, Any]) -> dict[str, Any]:
+        no_credential_named(value, "the variable")
+        return value
 
     @model_validator(mode="after")
     def _located(self) -> Self:
@@ -270,6 +282,30 @@ class WebhookResource(Declared):
 
     match: Match | None = None
     deleted: Match | None = None
+
+
+# Names under which a query parameter or a variable carries a credential.
+# A definition is shown to every member of the workspace: a secret has no
+# place in it (LEKA-426). Pagination's own tokens — page_token, nextToken —
+# are not credentials.
+CREDENTIAL = re.compile(
+    r"(?i)^(?!.*(?:page|next|cursor|continuation|sync).*$)"
+    r"(?:.*[_.\-])?(?:api[_\-]?key|apikey|key|api[_\-]?token|access[_\-]?token|token|"
+    r"secret|client[_\-]?secret|password|passwd|pwd|auth|authorization|access[_\-]?key|"
+    r"private[_\-]?key|signature|sig|session[_\-]?id)$"
+)
+
+
+def no_credential_named(names: object, where: str) -> None:
+    """Refuse a parameter or a variable named as a credential is."""
+    for name in names if isinstance(names, dict | list | tuple | set) else ():
+        if isinstance(name, str) and CREDENTIAL.match(name.replace("[]", "")):
+            msg = (
+                f"{where} « {name} » looks like a secret: the definition is shown to every "
+                "member, and a secret has no place in it. Put it in the Secret field — "
+                f"authentication « query » (or « header ») named {name}."
+            )
+            raise ValueError(msg)
 
 
 def _names_once(resources: Sequence[Declared]) -> None:

@@ -7,9 +7,11 @@ import { EventTimeline, type TimelineEvent } from "@/components/knowledge/event-
 import { MetadataPanel, type MetadataItem } from "@/components/knowledge/metadata-panel";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
+import { CustomBadge } from "@/components/sources/custom-badge";
 import { SourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { routes } from "@/config/routes";
+import { isCustom } from "@/lib/custom-connectors";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { type Diagnostic, type Source, type SourceEvent, sourceTone } from "@/lib/sources";
@@ -46,7 +48,10 @@ export function SourcePanel({
         <SourceLogo kind={source.type} className="size-8 shrink-0" />
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-lg font-semibold text-brand-navy">{source.display_name}</h2>
-          <StatusBadge variant={`source.${sourceTone(source)}`} size="sm" />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StatusBadge variant={`source.${sourceTone(source)}`} size="sm" />
+            {isCustom(source.type) ? <CustomBadge /> : null}
+          </div>
         </div>
         <button
           type="button"

@@ -1,12 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { CircleCheck, Lock, Search, TriangleAlert, X } from "lucide-react";
+import { Ban, CircleCheck, Lock, Search, TriangleAlert, Wrench, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FormProvider } from "react-hook-form";
+import { FormProvider, useFormContext, useWatch } from "react-hook-form";
 
 import { cn } from "cn";
 import { FormAlert } from "@/components/forms/form-alert";
+import { MetadataPanel } from "@/components/knowledge/metadata-panel";
 import { SelectField } from "@/components/forms/choice-fields";
 import { TextField } from "@/components/forms/text-field";
 import { TextareaField } from "@/components/forms/textarea-field";
@@ -19,11 +20,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
+import { CUSTOM_KINDS, isCustom, shownFor, shownOnly, TEMPLATES } from "@/lib/custom-connectors";
 import { useLekaForm } from "@/lib/forms/use-leka-form";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
-import { type CatalogEntry, type Diagnostic, type Source, sources } from "@/lib/sources";
+import {
+  type CatalogEntry,
+  type Diagnostic,
+  receivingAddress,
+  type Source,
+  sources,
+  type TestOutcome,
+} from "@/lib/sources";
 import {
   defaultsOf,
   type FieldSpec,
@@ -48,35 +57,58 @@ import { z } from "@/lib/validation";
  *
  * Nothing is lost by stopping: the source exists from step 2, in draft, and
  * its own page takes it from there. Going back from 3 or 4 edits it.
+ *
+ * A CUSTOM CONNECTOR (LEKA-426) — a tool LEKA has no connector for — is the
+ * same wizard, from its own entry: its first step is the method (REST,
+ * GraphQL, webhook), with what each needs and what none can do; the
+ * connection shows only the fields the choices make useful and starts the
+ * definition from an example; the test shows what the mapping read. The
+ * native catalogue lists natives only, and leads here when the tool is
+ * not in it.
  */
 
 type Step = "connector" | "settings" | "scope" | "test";
 const STEPS: Step[] = ["connector", "settings", "scope", "test"];
+type Kind = "native" | "custom";
 
 export function AddSourceDialog({
   open,
   onOpenChange,
   onDone,
   editing,
+  start = "native",
+  reconnecting = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDone: (source: Source) => void;
   /** A source to change: the wizard starts at its connection. */
   editing?: Source;
+  /** The catalogue of natives, or the custom connector's methods. */
+  start?: Kind;
+  /** Changing a source to connect it again — a new secret, most often. */
+  reconnecting?: boolean;
 }) {
   const t = useDictionary();
   const catalog = useCatalog();
   const [step, setStep] = useState<Step>(editing ? "settings" : "connector");
+  const [kind, setKind] = useState<Kind>(start);
   const [picked, setEntry] = useState<CatalogEntry | null>(null);
   const [source, setSource] = useState<Source | null>(editing ?? null);
   const entry =
     picked ?? (editing ? (catalog.data?.find((e) => e.key === editing.type) ?? null) : null);
+  const custom = kind === "custom" || (entry !== null && isCustom(entry.key));
+
+  // Opened again from another entry — "Ajouter", "Connecteur sur mesure".
+  useEffect(() => {
+    if (open) setKind(start);
+  }, [open, start]);
 
   function close(next: boolean) {
     onOpenChange(next);
     if (!next) {
       setStep(editing ? "settings" : "connector");
+      setKind(start);
       setEntry(null);
       setSource(editing ?? null);
     }
@@ -92,7 +124,15 @@ export function AddSourceDialog({
       <DialogContent showCloseButton={false} className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <div className="flex items-start gap-3">
           <div className="flex-1">
-            <DialogTitle>{editing ? t.sources.page.editTitle : t.sources.add.title}</DialogTitle>
+            <DialogTitle>
+              {editing
+                ? reconnecting
+                  ? t.sources.page.reconnectTitle
+                  : t.sources.page.editTitle
+                : custom
+                  ? t.sources.custom.open
+                  : t.sources.add.title}
+            </DialogTitle>
             <DialogDescription className="mt-1 flex items-center gap-1.5">
               <Lock className="size-3.5" aria-hidden="true" />
               {t.sources.add.readOnly}
@@ -107,20 +147,31 @@ export function AddSourceDialog({
             <X aria-hidden="true" />
           </Button>
         </div>
-        <Stepper step={step} />
+        <Stepper step={step} custom={custom} />
 
-        {step === "connector" ? (
+        {step === "connector" && kind === "native" ? (
           <ConnectorStep
             onPick={(picked) => {
               setEntry(picked);
               setStep("settings");
             }}
+            onCustom={() => setKind("custom")}
+          />
+        ) : null}
+        {step === "connector" && kind === "custom" ? (
+          <MethodStep
+            onPick={(picked) => {
+              setEntry(picked);
+              setStep("settings");
+            }}
+            onBack={start === "native" ? () => setKind("native") : undefined}
           />
         ) : null}
         {step === "settings" && entry ? (
           <SettingsStep
             entry={entry}
             source={source}
+            reconnecting={reconnecting}
             onBack={source ? undefined : () => setStep("connector")}
             onSaved={(saved) => {
               setSource(saved);
@@ -147,7 +198,7 @@ export function AddSourceDialog({
   );
 }
 
-function Stepper({ step }: { step: Step }) {
+function Stepper({ step, custom }: { step: Step; custom: boolean }) {
   const t = useDictionary();
   const current = STEPS.indexOf(step);
   return (
@@ -168,7 +219,8 @@ function Stepper({ step }: { step: Step }) {
                 : "text-shell-muted",
           )}
         >
-          {index + 1}. {t.sources.add.steps[name]}
+          {index + 1}.{" "}
+          {name === "connector" && custom ? t.sources.custom.step : t.sources.add.steps[name]}
         </li>
       ))}
     </ol>
@@ -177,15 +229,23 @@ function Stepper({ step }: { step: Step }) {
 
 // ── 1. The tool ─────────────────────────────────────────────────────────────
 
-function ConnectorStep({ onPick }: { onPick: (entry: CatalogEntry) => void }) {
+function ConnectorStep({
+  onPick,
+  onCustom,
+}: {
+  onPick: (entry: CatalogEntry) => void;
+  onCustom: () => void;
+}) {
   const t = useDictionary();
   const catalog = useCatalog();
   if (!catalog.data) return <LoadingState size="section" />;
+  // Natives only: a custom connector has its own way in, below.
+  const natives = catalog.data.filter((entry) => !isCustom(entry.key));
   return (
     <section className="flex flex-col gap-3">
       <h3 className="text-sm font-medium text-brand-navy">{t.sources.add.choose}</h3>
       <ul className="grid gap-2 sm:grid-cols-2">
-        {catalog.data.map((entry) => (
+        {natives.map((entry) => (
           <li key={entry.key}>
             <button
               type="button"
@@ -203,10 +263,88 @@ function ConnectorStep({ onPick }: { onPick: (entry: CatalogEntry) => void }) {
           </li>
         ))}
       </ul>
-      <p className="text-xs text-shell-muted">
-        <span className="font-medium">{t.sources.add.missingTitle}</span>{" "}
-        {t.sources.add.missingBody}
-      </p>
+      <div className="flex flex-col gap-2 rounded-lg border border-dashed border-shell-line p-3 sm:flex-row sm:items-center">
+        <p className="flex-1 text-xs text-shell-muted">
+          <span className="font-medium text-brand-navy">{t.sources.custom.fromCatalog}</span>{" "}
+          {t.sources.add.missingBody}
+        </p>
+        <Button type="button" variant="outline" size="sm" onClick={onCustom}>
+          <Wrench aria-hidden="true" />
+          {t.sources.custom.fromCatalogAction}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+// ── 1. The method, for a custom connector (LEKA-426) ────────────────────────
+
+function MethodStep({
+  onPick,
+  onBack,
+}: {
+  onPick: (entry: CatalogEntry) => void;
+  onBack?: () => void;
+}) {
+  const t = useDictionary();
+  const w = t.sources.custom;
+  const catalog = useCatalog();
+  if (!catalog.data) return <LoadingState size="section" />;
+  const methods = CUSTOM_KINDS.map((key) => catalog.data.find((entry) => entry.key === key)).filter(
+    (entry): entry is CatalogEntry => entry !== undefined,
+  );
+  return (
+    <section className="flex flex-col gap-3">
+      <div>
+        <h3 className="text-sm font-medium text-brand-navy">{w.title}</h3>
+        <p className="text-xs text-shell-muted">{w.intro}</p>
+      </div>
+      <ul className="flex flex-col gap-2">
+        {methods.map((entry) => {
+          const words = w.methods[entry.key as keyof typeof w.methods];
+          return (
+            <li key={entry.key}>
+              <button
+                type="button"
+                onClick={() => onPick(entry)}
+                className="flex w-full items-start gap-3 rounded-lg border border-shell-line bg-white p-3 text-left outline-none hover:border-brand-violet focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+              >
+                <SourceLogo kind={entry.key} className="mt-0.5 size-7 shrink-0" />
+                <span className="min-w-0">
+                  <span className="block font-medium text-brand-navy">{words.title}</span>
+                  <span className="block text-sm text-shell-muted">{words.body}</span>
+                  <span className="mt-1 block text-xs text-shell-muted">
+                    {fill(w.needs, { needs: words.needs })}
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <section
+        aria-labelledby="custom-unsupported"
+        className="rounded-lg border border-shell-line bg-shell-canvas p-3"
+      >
+        <h4
+          id="custom-unsupported"
+          className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-brand-navy"
+        >
+          <Ban className="size-4" aria-hidden="true" />
+          {w.unsupportedTitle}
+        </h4>
+        <ul className="list-disc space-y-0.5 pl-5 text-xs text-shell-muted">
+          {w.unsupported.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+        <p className="mt-2 text-xs text-shell-muted">{w.unsupportedContact}</p>
+      </section>
+      {onBack ? (
+        <Button type="button" variant="ghost" className="self-start" onClick={onBack}>
+          {t.sources.add.back}
+        </Button>
+      ) : null}
     </section>
   );
 }
@@ -222,11 +360,13 @@ type Values = {
 function SettingsStep({
   entry,
   source,
+  reconnecting = false,
   onBack,
   onSaved,
 }: {
   entry: CatalogEntry;
   source: Source | null;
+  reconnecting?: boolean;
   onBack?: () => void;
   onSaved: (source: Source) => void;
 }) {
@@ -235,7 +375,14 @@ function SettingsStep({
   const secretFields = useMemo(() => fieldsOf(entry.credentials_schema), [entry]);
   const scopeField = scopeFieldOf(entry.config_schema);
   const editing = source !== null;
-  const save = useSourceMutation(async (values: Values) => {
+  const save = useSourceMutation(async (given: Values) => {
+    // What a choice made pointless — a header name without a header — is
+    // not sent, whatever was typed in it before the choice changed.
+    const values = {
+      ...given,
+      config: shownOnly(entry.key, given.config, given.config),
+      credentials: shownOnly(entry.key, given.credentials, given.config),
+    };
     if (!source) {
       return sources.create({
         type: entry.key,
@@ -281,11 +428,22 @@ function SettingsStep({
     },
     onSubmit: async (values) => onSaved(await save.mutateAsync(values)),
   });
+  const chosen = (useWatch({ control: form.control, name: "config" }) ?? {}) as Record<
+    string,
+    string
+  >;
+  const shown = (field: FieldSpec) => shownFor(entry.key, field.name, chosen);
 
   return (
     <FormProvider {...form}>
       <form onSubmit={form.submit} className="flex flex-col gap-4" noValidate>
         <FormAlert<Values> />
+        {reconnecting ? (
+          <Alert>
+            <TriangleAlert aria-hidden="true" />
+            <AlertDescription>{t.sources.page.reconnectHint}</AlertDescription>
+          </Alert>
+        ) : null}
         <div className="flex items-center gap-2">
           <SourceLogo kind={entry.key} className="size-6" />
           <span className="font-medium text-brand-navy">{entry.display_name}</span>
@@ -295,7 +453,7 @@ function SettingsStep({
           label={t.sources.add.name}
           description={t.sources.add.nameHelp}
         />
-        {secretFields.map((field) => (
+        {secretFields.filter(shown).map((field) => (
           <SchemaField
             key={field.name}
             kind={entry.key}
@@ -304,7 +462,7 @@ function SettingsStep({
             keepSecret={editing}
           />
         ))}
-        {configFields.map((field) => (
+        {configFields.filter(shown).map((field) => (
           <SchemaField key={field.name} kind={entry.key} field={field} part="config" />
         ))}
         <div className="flex justify-between gap-2">
@@ -364,15 +522,18 @@ function SchemaField({
   }
   if (field.kind === "json") {
     return (
-      <TextareaField<Values, typeof name>
-        name={name}
-        label={known?.label ?? field.title}
-        description={help || undefined}
-        optional={optional}
-        minRows={8}
-        maxRows={24}
-        code
-      />
+      <div className="flex flex-col gap-1.5">
+        <TextareaField<Values, typeof name>
+          name={name}
+          label={known?.label ?? field.title}
+          description={help || undefined}
+          optional={optional}
+          minRows={8}
+          maxRows={24}
+          code
+        />
+        {TEMPLATES[kind] ? <Example kind={kind} name={name} /> : null}
+      </div>
     );
   }
   return (
@@ -385,6 +546,27 @@ function SchemaField({
       inputMode={field.kind === "number" ? "numeric" : undefined}
       autoComplete={field.kind === "password" ? "off" : undefined}
     />
+  );
+}
+
+/** An empty definition starts from one that works — to edit, not to write. */
+function Example({ kind, name }: { kind: string; name: `config.${string}` }) {
+  const t = useDictionary();
+  const form = useFormContext<Values>();
+  const value = useWatch({ control: form.control, name });
+  if (typeof value === "string" && value.trim() !== "") return null;
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="self-start"
+      onClick={() =>
+        form.setValue(name, TEMPLATES[kind], { shouldDirty: true, shouldValidate: true })
+      }
+    >
+      {t.sources.custom.example}
+    </Button>
   );
 }
 
@@ -575,10 +757,12 @@ function TestStep({
     return <LoadingState size="section" label={t.sources.add.testing} />;
   const outcome = test.data;
   if (!outcome || !outcome.ok || !outcome.result) {
+    // What LEKA cannot do is said as such, not as a failure to retry.
+    const unsupported = outcome?.diagnostic?.code === "UNSUPPORTED";
     return (
       <div className="flex flex-col gap-3">
         <ErrorAlert
-          title={t.sources.add.testFailed}
+          title={unsupported ? t.sources.add.unsupported : t.sources.add.testFailed}
           diagnostic={outcome?.diagnostic}
           onEdit={onEdit}
         />
@@ -627,6 +811,10 @@ function TestStep({
           <AlertDescription>{warning}</AlertDescription>
         </Alert>
       ))}
+      <MappingPreview outcome={outcome} />
+      {source.type === "custom_webhook" ? (
+        <Receiving source={source} />
+      ) : null}
       <div className="flex justify-between gap-2">
         <Button type="button" variant="ghost" onClick={later}>
           {t.sources.add.later}
@@ -635,6 +823,102 @@ function TestStep({
           {t.sources.add.activate}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** What the mapping read in each resource's first record (LEKA-426): the
+ * admin sees it work before switching the source on. Shown here, stored
+ * nowhere — the API returns it with the test and keeps none of it. */
+function MappingPreview({ outcome }: { outcome: TestOutcome }) {
+  const t = useDictionary();
+  const w = t.sources.custom;
+  const previews = outcome.result?.preview ?? [];
+  if (previews.length === 0) return null;
+  const fieldLabel = (name: string) =>
+    name.startsWith("metadata.")
+      ? fill(w.preview.metadata, { name: name.slice("metadata.".length) })
+      : ((w.fields as Record<string, string>)[name] ?? name);
+  return (
+    <section className="flex flex-col gap-3">
+      <h3 className="text-sm font-medium text-brand-navy">{w.preview.title}</h3>
+      {previews.map((preview) => (
+        <div key={preview.name} className="rounded-lg border border-shell-line p-3">
+          <p className="text-sm text-brand-navy">
+            <span className="font-medium">{preview.name}</span>
+            {preview.entity ? (
+              <span className="text-shell-muted">
+                {" "}
+                · {(w.entities as Record<string, string>)[preview.entity] ?? preview.entity}
+              </span>
+            ) : null}
+            <span className="text-shell-muted">
+              {" "}
+              · {fill(w.preview.read, { count: preview.read })}
+            </span>
+          </p>
+          {preview.read === 0 ? (
+            <p className="mt-1 text-xs text-shell-muted">{w.preview.empty}</p>
+          ) : (
+            <table className="mt-2 w-full text-left text-xs">
+              <caption className="sr-only">
+                {fill(w.preview.caption, { resource: preview.name })}
+              </caption>
+              <thead className="text-shell-muted">
+                <tr>
+                  <th scope="col" className="w-40 py-1 pr-3 font-medium">
+                    {w.preview.field}
+                  </th>
+                  <th scope="col" className="py-1 font-medium">
+                    {w.preview.value}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-shell-line">
+                {Object.entries(preview.fields ?? {}).map(([name, value]) => (
+                  <tr key={name}>
+                    <th scope="row" className="py-1 pr-3 font-normal text-shell-muted">
+                      {fieldLabel(name)}
+                    </th>
+                    <td className="py-1 break-all text-brand-navy">{value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {(preview.missing ?? []).length > 0 ? (
+            <p className="mt-2 text-xs text-state-warning">
+              {fill(w.preview.missing, {
+                fields: (preview.missing ?? []).map(fieldLabel).join(", "),
+              })}
+            </p>
+          ) : null}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/** A webhook reads nothing to test: what the admin needs next is its address. */
+function Receiving({ source }: { source: Source }) {
+  const t = useDictionary();
+  const address = receivingAddress(source.id);
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-shell-line p-3">
+      <MetadataPanel
+        sections={[
+          {
+            items: [
+              {
+                label: t.sources.reception.address,
+                value: <code className="break-all">{address}</code>,
+                copyValue: address,
+              },
+            ],
+          },
+        ]}
+      />
+      <p className="text-xs text-shell-muted">{t.sources.custom.webhookNext}</p>
     </div>
   );
 }

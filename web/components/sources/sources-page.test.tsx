@@ -3,7 +3,9 @@
  *
  * What these protect: every number is computed from the sources the API
  * returns — never the mockup's — what is not counted yet says so, and a
- * failed source shows the admin what went wrong and what to do.
+ * failed source shows the admin what went wrong and what to do. A custom
+ * connector has its own way in, and its sources say they are custom
+ * (LEKA-426).
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -18,6 +20,7 @@ import type { Source, SourceEvent } from "@/lib/sources";
 const list = vi.fn();
 const events = vi.fn();
 const syncSummaries = vi.fn();
+const catalog = vi.fn();
 let permissions: string[] = ["source:read", "source:manage"];
 
 vi.mock("@/lib/sources", async (original) => ({
@@ -26,6 +29,7 @@ vi.mock("@/lib/sources", async (original) => ({
     list: () => list(),
     events: (id: string) => events(id),
     syncSummaries: () => syncSummaries(),
+    catalog: () => catalog(),
   },
 }));
 
@@ -194,6 +198,46 @@ describe("adding", () => {
     renderPage();
     await screen.findByText("Acme GitHub");
     expect(screen.queryByRole("button", { name: "Ajouter une source" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Connecteur sur mesure" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers a custom connector as its own way in, straight to its methods", async () => {
+    catalog.mockResolvedValue([
+      {
+        key: "custom_rest",
+        display_name: "API REST",
+        category: "custom",
+        capabilities: ["records"],
+        config_schema: { properties: {} },
+        credentials_schema: { properties: {} },
+      },
+    ]);
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Connecteur sur mesure" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Comment LEKA rejoint-il votre outil ?")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: /API REST/ })).toBeInTheDocument();
+  });
+});
+
+describe("a custom source", () => {
+  it("says it is custom where natives say their category", async () => {
+    list.mockResolvedValue({
+      data: [GITHUB, source({ type: "custom_rest", display_name: "Helpdesk" })],
+    });
+    renderPage();
+
+    const helpdesk = (await screen.findByText("Helpdesk")).closest("tr") as HTMLElement;
+    expect(within(helpdesk).getByText("Sur mesure")).toHaveAttribute(
+      "title",
+      expect.stringContaining("pas par un connecteur natif"),
+    );
+    const github = screen.getByText("Acme GitHub").closest("tr") as HTMLElement;
+    expect(within(github).queryByText("Sur mesure")).not.toBeInTheDocument();
   });
 });
 

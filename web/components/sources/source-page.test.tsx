@@ -207,6 +207,49 @@ describe("a source's page", () => {
   });
 });
 
+describe("connecting it again, and saying what it is (LEKA-426)", () => {
+  const refused = {
+    code: "AUTH_INVALID",
+    retryable: false,
+    retry_after: null,
+    message: "Le token a été refusé par le fournisseur.",
+    remediation: "Remplacez les identifiants.",
+    provider_status: 401,
+    detail: null,
+  };
+
+  it("offers to reconnect a source whose secret was refused, and says how", async () => {
+    api.get.mockResolvedValue(source({ status: "error", last_error: refused } as Partial<Source>));
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Reconnecter" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Reconnecter la source")).toBeInTheDocument();
+    expect(within(dialog).getByText(/Remplacez le secret/)).toBeInTheDocument();
+  });
+
+  it("does not offer it to a source that works", async () => {
+    api.get.mockResolvedValue(source({ status: "active" }));
+    renderPage();
+
+    await screen.findByRole("heading", { level: 1, name: "Acme GitHub" });
+    expect(screen.queryByRole("button", { name: "Reconnecter" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Sur mesure")).not.toBeInTheDocument();
+  });
+
+  it("says a custom source is custom, beside its status", async () => {
+    api.get.mockResolvedValue(
+      source({ type: "custom_rest", display_name: "Helpdesk", config: {} }),
+    );
+    api.catalog.mockResolvedValue([{ ...GITHUB, key: "custom_rest", display_name: "API REST" }]);
+    renderPage();
+
+    await screen.findByRole("heading", { level: 1, name: "Helpdesk" });
+    expect(screen.getByText("Sur mesure")).toBeInTheDocument();
+  });
+});
+
 describe("its sync", () => {
   it("shows where each capability stands, and why the last pass failed", async () => {
     api.get.mockResolvedValue(source({ status: "active" }));

@@ -1,6 +1,15 @@
 "use client";
 
-import { HeartPulse, Pencil, Plug, Power, PowerOff, RefreshCw, Trash2 } from "lucide-react";
+import {
+  HeartPulse,
+  KeyRound,
+  Pencil,
+  Plug,
+  Power,
+  PowerOff,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -11,6 +20,7 @@ import { PageContainer, PageHeader } from "@/components/shell/page-container";
 import { RouteState } from "@/components/shell/route-state";
 import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
 import { AddSourceDialog } from "@/components/sources/add-source-dialog";
+import { CustomBadge } from "@/components/sources/custom-badge";
 import { fieldWords, SourceFacts, SourceHistory } from "@/components/sources/source-panel";
 import { SourceLogo } from "@/components/sources/source-logo";
 import { SourceReceptionSection } from "@/components/sources/source-reception";
@@ -22,6 +32,7 @@ import { LoadingState } from "@/components/states/loading-state";
 import { Button } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
+import { isCustom } from "@/lib/custom-connectors";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -77,9 +88,10 @@ export function SourcePage({ sourceId }: { sourceId: string }) {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="flex flex-col gap-4">
           <section className="flex flex-col gap-4 rounded-xl border border-shell-line bg-white p-4">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <SourceLogo kind={source.type} className="size-8" />
               <StatusBadge variant={`source.${sourceTone(source)}`} />
+              {isCustom(source.type) ? <CustomBadge /> : null}
             </div>
             <Facts source={source} />
           </section>
@@ -157,7 +169,7 @@ function Actions({ source }: { source: Source }) {
   const confirm = useConfirm();
   const catalog = useCatalog();
   const canManage = usePermissions()?.includes("source:manage") ?? false;
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState<"edit" | "reconnect" | null>(null);
   const run = useSourceMutation(async (action: () => Promise<unknown>) => action());
 
   if (!canManage) return null;
@@ -252,11 +264,17 @@ function Actions({ source }: { source: Source }) {
             <HeartPulse aria-hidden="true" />
             {p.health}
           </Button>
-          <Button variant="outline" onClick={() => setEditing(true)} disabled={busy}>
+          <Button variant="outline" onClick={() => setEditing("edit")} disabled={busy}>
             <Pencil aria-hidden="true" />
             {p.edit}
           </Button>
         </>
+      ) : null}
+      {needsReconnecting(source) && hasConnector ? (
+        <Button onClick={() => setEditing("reconnect")} disabled={busy}>
+          <KeyRound aria-hidden="true" />
+          {p.reconnect}
+        </Button>
       ) : null}
       {canActivate(source) && hasConnector ? (
         <Button
@@ -295,10 +313,25 @@ function Actions({ source }: { source: Source }) {
         <AddSourceDialog
           open
           editing={source}
-          onOpenChange={setEditing}
-          onDone={() => setEditing(false)}
+          reconnecting={editing === "reconnect"}
+          onOpenChange={(open) => {
+            if (!open) setEditing(null);
+          }}
+          onDone={() => setEditing(null)}
         />
       ) : null}
     </div>
+  );
+}
+
+/** In error, or refused its secret: connecting it again is what it needs —
+ * a new secret, most often, then a test and an activation. */
+function needsReconnecting(source: Source): boolean {
+  const code = source.last_error?.code;
+  return (
+    source.status === "error" ||
+    code === "AUTH_INVALID" ||
+    code === "AUTH_EXPIRED" ||
+    code === "PERMISSION_DENIED"
   );
 }

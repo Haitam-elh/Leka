@@ -124,6 +124,24 @@ class ConnectorManifest(BaseModel):
     read_only: Literal[True] = True
 
 
+class Preview(BaseModel):
+    """What a test read of one part of a source, as its mapping reads it —
+    so the admin sees the mapping work before switching the source on
+    (LEKA-426). The system's own values: shown to the person testing, and
+    NEVER stored — not in `metadata`, which is kept, nor in the history."""
+
+    name: str
+    entity: str | None = None
+    read: int = Field(description="Records on the first page.")
+    fields: dict[str, str] = Field(
+        default_factory=dict,
+        description="LEKA's field → the value read in the first record, as text, cut short.",
+    )
+    missing: list[str] = Field(
+        default_factory=list, description="Fields the mapping names that the first record lacks."
+    )
+
+
 class ConnectionTestResult(BaseModel):
     """What a successful test found."""
 
@@ -131,6 +149,10 @@ class ConnectionTestResult(BaseModel):
     metadata: dict[str, object] = Field(default_factory=dict)
     capabilities: list[Capability] = Field(description="Declared AND actually reachable.")
     warnings: list[str] = Field(default_factory=list)
+    preview: list[Preview] = Field(
+        default_factory=list,
+        description="What the test read, as the mapping reads it — shown once, never stored.",
+    )
 
 
 class ScopeOption(BaseModel):
