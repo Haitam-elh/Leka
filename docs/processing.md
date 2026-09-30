@@ -14,11 +14,11 @@ contract: [extraction.md](extraction.md), [parsing.md](parsing.md),
                         each run: processing_runs                           │
    ┌────────────────────────────────────────────────────────────────────────┘
    ▼  the workspace's
- resolution ────────────────▶ enrichment
- resolve:<workspace>          enrich:<workspace>
- resolved_entities, _keys,    enriched_relationships, entity_enrichments
- resolution_decisions         runs: enrichment_runs
- runs: resolution_runs
+ resolution ────────────────▶ enrichment ──────────────────────▶ company model
+ resolve:<workspace>          enrich:<workspace>                  model:<workspace>
+ resolved_entities, _keys,    enriched_relationships,             entities, relationships,
+ resolution_decisions         entity_enrichments                  entity_versions
+ runs: resolution_runs        runs: enrichment_runs               runs: model_runs
 ```
 
 Validation (LEKA-358, [validation.md](validation.md)) checks what
@@ -29,7 +29,9 @@ things are to one another ([enrichment.md](enrichment.md), LEKA-359). A
 source's `advance`, finding nothing left for it, queues the resolution when
 normalisation or validation made something since its last run — and, with
 nothing to resolve, the enrichment when it has something to do; a
-resolution run that succeeds queues the enrichment.
+resolution run that succeeds queues the enrichment. An enrichment run that
+succeeds publishes an event the company model is built from
+([company-model.md](company-model.md), LEKA-361, `leka.knowledge`).
 
 ---
 

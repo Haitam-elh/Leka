@@ -4,7 +4,8 @@ Entity resolution says what is **one** thing ([resolution.md](resolution.md),
 LEKA-357). Enrichment adds what those things are **together**, and what
 follows from it: the relationships between them across tools, who owns and
 works on them, how alive they are, what kind of work they are. LEKA-359.
-What reads it next is the company model (leka.knowledge).
+What reads it next is the company model ([company-model.md](company-model.md),
+LEKA-361).
 
 ```
  resolved_entities, resolved_keys        what the last resolution run made
@@ -179,6 +180,10 @@ A **workspace** stage, after resolution
   while it reads is closed `abandoned` and reads again (up to three times);
   a run left `running` by a dead worker is closed `abandoned` by the next.
 - `enrichment_runs` is kept 90 days ([data-lifecycle.md](data-lifecycle.md)).
+- **A run that succeeds publishes `ingestion.enriched`**, in the
+  transaction that records its success (the outbox,
+  [ADR 013](adr/013-events-and-job-runs.md)): the company model is built
+  from it ([company-model.md § 6](company-model.md#6-when-it-builds)).
 
 ## 10. The API
 

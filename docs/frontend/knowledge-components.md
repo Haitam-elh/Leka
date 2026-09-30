@@ -20,12 +20,15 @@ Three rules hold for all of them:
 ## The vocabulary
 
 The entity and relationship kinds mirror the backend's
-`leka/knowledge/models.py` — `service`, `repository`, `incident`,
-`deployment`, `person`, `document`, `infra_resource`, `database`; and
-`depends_on`, `owns`, `deployed_to`, `mentions`, `caused_by`, `member_of`.
-They live in [`web/lib/knowledge.ts`](../../web/lib/knowledge.ts) because no
-route serves the graph yet (so they are not in the generated API types), and
-`api/tests/test_knowledge_mirror.py` fails the build if the two drift.
+`leka/knowledge/models.py` — the company model's registry
+([company-model.md § 1](../company-model.md#1-the-registry--the-kinds-of-things)):
+`person`, `team`, `service`, `repository`, `project`, `issue`,
+`pull_request`, `commit`, `release`, `deployment`, `incident`,
+`infra_resource`, `database`, `document`, and the relationships between
+them. They live in [`web/lib/knowledge.ts`](../../web/lib/knowledge.ts) as
+lists — the generated API types have them as unions, which cannot be
+iterated — and `api/tests/test_knowledge_mirror.py` fails the build if the
+two drift.
 
 Quality is the backend's `confidence` (0–1), shown out of 100 —
 `confidenceToScore()` converts. Provenance is the source an entity came from
@@ -151,10 +154,9 @@ be added as a dependency when a page needs it.
   `KnowledgeTable` and the same time helpers. Its map is its own: mockup
   10's rows with their names and counts, which `DependencyGraph`'s free
   canvas does not draw. The Company Model's own views stay LEKA-369's
-  (Knowledge Graph & Company Views, sprint 3), with the API that serves the
-  graph — no route reads it yet, and nothing writes it before the
-  company-model tickets (LEKA-361, LEKA-368). `DependencyGraph` and
-  `EntityDetailPanel` are there for them.
+  (Knowledge Graph & Company Views, sprint 3), on the API that serves the
+  company model (`/knowledge/*`, LEKA-361 — [company-model.md § 7](../company-model.md#7-the-api)).
+  `DependencyGraph` and `EntityDetailPanel` are there for them.
 
 ## Adding a state
 
