@@ -397,6 +397,8 @@ const fr = {
       pull_request: "Pull request",
       commit: "Commit",
       release: "Version publiée",
+      application: "Application",
+      environment: "Environnement",
     },
     relationships: {
       depends_on: "dépend de",
@@ -419,6 +421,7 @@ const fr = {
       merges: "fusionne",
       child_of: "est une sous-tâche de",
       in_network: "est dans le réseau",
+      runs_in: "tourne en",
     },
     events: {
       deployment: "Déploiement",
@@ -1050,7 +1053,9 @@ const fr = {
       ownersHelp: "Un par ligne : acme/* → payments",
       tagEnvironment: "Clés d'environnement",
       tagService: "Clés de service",
+      tagApplication: "Clés d'application",
       tagOwner: "Clés d'équipe",
+      tagCriticality: "Clés de criticité",
       tagsHelp: "Séparées par des virgules : stage, app",
       statesHelp: "Un par ligne : QA Review = in_progress",
       prioritiesHelp: "Un par ligne : P0 = highest",
@@ -1175,6 +1180,7 @@ const fr = {
         issue: "Ticket ou tâche",
         incident: "Incident",
         service: "Service",
+        application: "Application",
         project: "Projet",
         document: "Document",
       },
@@ -1342,7 +1348,7 @@ const fr = {
         },
         application_key: {
           label: "Clé d'application",
-          help: "Celle d'un compte de service au rôle Datadog Read Only, limitée à monitors_read, events_read, incident_read, metrics_read et logs_read_data. Chiffrée, et plus jamais affichée.",
+          help: "Celle d'un compte de service au rôle Datadog Read Only, limitée à monitors_read, events_read, incident_read, metrics_read, logs_read_data et apm_service_catalog_read. Chiffrée, et plus jamais affichée.",
         },
         api_key: {
           label: "Clé d'API",
@@ -2082,6 +2088,8 @@ const en: Dictionary = {
       pull_request: "Pull request",
       commit: "Commit",
       release: "Release",
+      application: "Application",
+      environment: "Environment",
     },
     relationships: {
       depends_on: "depends on",
@@ -2104,6 +2112,7 @@ const en: Dictionary = {
       merges: "merges",
       child_of: "is a subtask of",
       in_network: "is in the network",
+      runs_in: "runs in",
     },
     events: {
       deployment: "Deployment",
@@ -2718,7 +2727,9 @@ const en: Dictionary = {
       ownersHelp: "One per line: acme/* → payments",
       tagEnvironment: "Environment keys",
       tagService: "Service keys",
+      tagApplication: "Application keys",
       tagOwner: "Team keys",
+      tagCriticality: "Criticality keys",
       tagsHelp: "Comma-separated: stage, app",
       statesHelp: "One per line: QA Review = in_progress",
       prioritiesHelp: "One per line: P0 = highest",
@@ -2843,6 +2854,7 @@ const en: Dictionary = {
         issue: "Ticket or task",
         incident: "Incident",
         service: "Service",
+        application: "Application",
         project: "Project",
         document: "Document",
       },
@@ -3005,7 +3017,7 @@ const en: Dictionary = {
         },
         application_key: {
           label: "Application key",
-          help: "A service account's, with the Datadog Read Only role, scoped to monitors_read, events_read, incident_read, metrics_read and logs_read_data. Encrypted, and never shown again.",
+          help: "A service account's, with the Datadog Read Only role, scoped to monitors_read, events_read, incident_read, metrics_read, logs_read_data and apm_service_catalog_read. Encrypted, and never shown again.",
         },
         api_key: {
           label: "API key",

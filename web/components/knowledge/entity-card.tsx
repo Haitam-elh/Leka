@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AppWindow,
   CircleDot,
   Cloud,
   Database,
@@ -9,6 +10,7 @@ import {
   FolderKanban,
   GitCommitHorizontal,
   GitPullRequest,
+  Layers,
   type LucideIcon,
   Rocket,
   Server,
@@ -42,6 +44,8 @@ export const ENTITY_ICONS: Record<EntityType, LucideIcon> = {
   pull_request: GitPullRequest,
   commit: GitCommitHorizontal,
   release: Tag,
+  application: AppWindow,
+  environment: Layers,
 };
 
 export function EntityIcon({

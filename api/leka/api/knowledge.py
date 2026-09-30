@@ -9,6 +9,13 @@
     GET /knowledge/entities/{id}               one: its provenance, its relationships
     GET /knowledge/entities/{id}/versions      its history, the latest first
     GET /knowledge/entities/{id}/neighbourhood what surrounds it, 1 to 3 steps away
+    GET /knowledge/entities/{id}/dependencies  what it depends on, or what depends
+                                               on it, 1 to 5 steps — in one
+                                               environment or all (LEKA-362)
+    GET /knowledge/services                    the services: how critical, where
+    GET /knowledge/applications                they run, whose, what they depend on
+    GET /knowledge/services/{id}               one, what it is made of, its
+    GET /knowledge/applications/{id}           dependencies both ways
 
 Read by every member (`workspace:read`): it is the company's own picture. A
 route validates, calls one repository or service, and returns (architecture
@@ -19,7 +26,7 @@ payload (rule 3): another workspace's entity is 404.
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, status
 
@@ -34,6 +41,7 @@ from leka.knowledge import (
     ENTITY_KINDS,
     MODEL_VERSION,
     RELATIONSHIP_KINDS,
+    Dependencies,
     Entity,
     EntityBrief,
     EntityDetail,
@@ -43,6 +51,9 @@ from leka.knowledge import (
     EntityType,
     EntityVersionRead,
     KnowledgeService,
+    LandscapeDetail,
+    LandscapeFilters,
+    LandscapeRead,
     Lifecycle,
     LinkRead,
     ModelRepository,
@@ -171,6 +182,7 @@ async def entity(entity_id: uuid.UUID, session: SessionDep, principal: Reader) -
                             "origin",
                             "rule",
                             "cross_source",
+                            "attributes",
                         )
                     },
                     "direction": "out" if outgoing else "in",
@@ -210,6 +222,150 @@ async def neighbourhood(
     unit leka.context reads."""
     service = KnowledgeService(EntityRepository(session, principal.workspace_id))
     found = await service.neighbourhood(entity_id, depth=depth)
+    if found is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
+    return found
+
+
+# ── the landscape: applications and services (LEKA-362) ─────────────────────
+
+Level = Literal["critical", "high", "medium", "low"]
+Stage = Literal["experimental", "production", "deprecated", "retired"]
+
+
+async def _landscape_page(
+    kind: EntityType,
+    session: SessionDep,
+    principal: Principal,
+    page: PageParams,
+    filters: LandscapeFilters,
+) -> PageEnvelope[LandscapeRead]:
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.landscape(kind, filters)
+    result = await serve_page(
+        session, statement, request=page, catalogue=ENTITY_SORTS, id_column=Entity.id
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).landscape(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/services", response_model=PageEnvelope[LandscapeRead])
+async def services(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    criticality: Level | None = None,
+    stage: Stage | None = None,
+    environment: Annotated[str | None, Query(max_length=50)] = None,
+    application_id: uuid.UUID | None = None,
+    team_id: uuid.UUID | None = None,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the name.")] = None,
+) -> PageEnvelope[LandscapeRead]:
+    """The services, by name: how critical — and who says so — where in
+    their life, where they run, their application, their team, how many
+    things they depend on and depend on them."""
+    return await _landscape_page(
+        EntityType.SERVICE,
+        session,
+        principal,
+        page,
+        LandscapeFilters(
+            lifecycle=lifecycle,
+            criticality=criticality,
+            stage=stage,
+            environment=environment,
+            application_id=application_id,
+            team_id=team_id,
+            q=q,
+        ),
+    )
+
+
+@router.get("/applications", response_model=PageEnvelope[LandscapeRead])
+async def applications(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    criticality: Level | None = None,
+    stage: Stage | None = None,
+    environment: Annotated[str | None, Query(max_length=50)] = None,
+    team_id: uuid.UUID | None = None,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the name.")] = None,
+) -> PageEnvelope[LandscapeRead]:
+    """The applications — groups of services the company names as one — by
+    name, with how many services each holds."""
+    return await _landscape_page(
+        EntityType.APPLICATION,
+        session,
+        principal,
+        page,
+        LandscapeFilters(
+            lifecycle=lifecycle,
+            criticality=criticality,
+            stage=stage,
+            environment=environment,
+            team_id=team_id,
+            q=q,
+        ),
+    )
+
+
+async def _detail(
+    kind: EntityType, entity_id: uuid.UUID, session: SessionDep, principal: Principal
+) -> LandscapeDetail:
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not kind:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, f"No such {kind.value}.")
+    return await KnowledgeService(repository).detail(found)
+
+
+@router.get("/services/{entity_id}", response_model=LandscapeDetail)
+async def service(entity_id: uuid.UUID, session: SessionDep, principal: Reader) -> LandscapeDetail:
+    """One service: its landscape, what it is made of — its resources,
+    databases, repositories, in which environments — and its dependencies
+    both ways."""
+    return await _detail(EntityType.SERVICE, entity_id, session, principal)
+
+
+@router.get("/applications/{entity_id}", response_model=LandscapeDetail)
+async def application(
+    entity_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> LandscapeDetail:
+    """One application: its services and what else it is made of, and its
+    dependencies both ways."""
+    return await _detail(EntityType.APPLICATION, entity_id, session, principal)
+
+
+@router.get("/entities/{entity_id}/dependencies", response_model=Dependencies)
+async def dependencies(
+    entity_id: uuid.UUID,
+    session: SessionDep,
+    principal: Reader,
+    direction: Annotated[
+        Literal["downstream", "upstream"],
+        Query(description="downstream: what it depends on; upstream: what depends on it."),
+    ] = "downstream",
+    depth: Annotated[int, Query(ge=1, le=5)] = 3,
+    environment: Annotated[
+        str | None, Query(max_length=50, description="Only what holds there. Absent: all.")
+    ] = None,
+) -> Dependencies:
+    """What an entity depends on — or what a failure of it reaches — through
+    `depends_on`, `depth` steps at most: each thing reached, how far, and
+    the relationships walked."""
+    service = KnowledgeService(EntityRepository(session, principal.workspace_id))
+    found = await service.dependencies(
+        entity_id, direction=direction, depth=depth, environment=environment
+    )
     if found is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
     return found

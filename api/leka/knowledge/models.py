@@ -76,6 +76,8 @@ class EntityType(enum.StrEnum):
     PULL_REQUEST = "pull_request"
     COMMIT = "commit"
     RELEASE = "release"
+    APPLICATION = "application"
+    ENVIRONMENT = "environment"
 
 
 class RelationshipType(enum.StrEnum):
@@ -101,6 +103,7 @@ class RelationshipType(enum.StrEnum):
     MERGES = "merges"
     CHILD_OF = "child_of"
     IN_NETWORK = "in_network"
+    RUNS_IN = "runs_in"
 
 
 class Lifecycle(enum.StrEnum):
@@ -230,6 +233,12 @@ class Relationship(Base, WorkspaceScopedMixin):
     origin: Mapped[str] = mapped_column(String(10), nullable=False, server_default="stated")
     rule: Mapped[str] = mapped_column(String(100), nullable=False, server_default="stated")
     cross_source: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # What holds of it beyond its ends: `environments`, the ones it is true
+    # in — a service's production database is not its staging one
+    # (LEKA-362). Empty: everywhere, or unknown.
+    attributes: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
     # The records that stated it, or what it was inferred from.
     provenance: Mapped[list[dict[str, object]]] = mapped_column(
         JSONB, nullable=False, server_default="[]"

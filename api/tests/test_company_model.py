@@ -149,6 +149,7 @@ def test_an_entity_is_its_resolved_entity_with_where_it_came_from() -> None:
             "lifecycle": {"origin": "enrichment", "rule": "last_activity", "confidence": 0.9},
         },
         "dropped": [],
+        "conflicts": [],
     }
     [version] = built.versions
     assert (version["entity_id"], version["version"], version["changed"]) == (
@@ -328,11 +329,19 @@ def test_what_changed_is_named_and_the_fingerprint_ignores_order() -> None:
 def test_every_type_has_its_kind_in_the_registry() -> None:
     assert set(ENTITY_KINDS) == set(EntityType)
     assert set(RELATIONSHIP_KINDS) == set(RelationshipType)
-    assert {kind.version for kind in ENTITY_KINDS.values()} == {1}
+    assert all(kind.version >= 1 for kind in ENTITY_KINDS.values())
 
 
 def test_every_type_normalisation_makes_is_modelled_or_left_out_on_purpose() -> None:
-    made = {*ENTITY_TYPES.values(), *CUSTOM_ENTITIES, "person", "team", "service"}
+    made = {
+        *ENTITY_TYPES.values(),
+        *CUSTOM_ENTITIES,
+        "person",
+        "team",
+        "service",
+        "application",
+        "environment",
+    }
 
     assert not made - set(BUILT_FROM) - NOT_MODELLED, "a kind is missing in registry.py"
     assert not NOT_MODELLED & set(BUILT_FROM)
@@ -351,6 +360,7 @@ def test_every_relationship_the_stages_state_or_infer_is_modelled() -> None:
         "in_network",
         "depends_on",
         "affects",
+        "runs_in",
     }
 
     assert not (stated | structural) - set(RELATIONSHIP_FROM)
@@ -358,3 +368,124 @@ def test_every_relationship_the_stages_state_or_infer_is_modelled() -> None:
 
 def test_a_lifecycle_is_one_of_four() -> None:
     assert [state.value for state in Lifecycle] == ["active", "dormant", "archived", "removed"]
+
+
+# ── applications and services (LEKA-362) ────────────────────────────────────
+
+PROD = uuid.uuid4()
+INSTANCE = uuid.uuid4()
+
+
+def test_a_relationship_keeps_the_environment_its_end_runs_in() -> None:
+    instance = Candidate(
+        id=INSTANCE,
+        type="infra_resource",
+        key="aws:i-1",
+        name="billing-1",
+        attributes={"environment": "production"},
+    )
+    production = Candidate(
+        id=PROD, type="environment", key="environment:production", name="production", attributes={}
+    )
+    links = [
+        Link(INSTANCE, SERVICE, "part_of", "stated", "stated", 0.95),
+        Link(INSTANCE, PROD, "runs_in", "stated", "stated", 0.95),
+        Link(SERVICE, PROD, "runs_in", "inferred", "parts", 0.95),
+        Link(REPO, SERVICE, "part_of", "inferred", "same_name", 0.8),
+    ]
+
+    built = build([instance, production, service(), repo()], links, {}, now=NOW)
+
+    edges = {(e["from_entity_id"], e["type"], e["to_entity_id"]): e for e in built.relationships}
+    assert edges[(INSTANCE, "part_of", SERVICE)]["attributes"] == {"environments": ["production"]}
+    assert edges[(SERVICE, "runs_in", PROD)]["attributes"] == {"environments": ["production"]}
+    # A repository and its service, seen in production only: production's.
+    assert edges[(REPO, "part_of", SERVICE)]["attributes"] == {"environments": ["production"]}
+
+
+def test_a_thing_that_runs_in_several_environments_says_none_of_them() -> None:
+    staging = uuid.uuid4()
+    environments = [
+        Candidate(
+            id=PROD, type="environment", key="environment:production", name="p", attributes={}
+        ),
+        Candidate(
+            id=staging, type="environment", key="environment:staging", name="s", attributes={}
+        ),
+    ]
+    links = [
+        Link(SERVICE, PROD, "runs_in", "inferred", "parts", 0.9),
+        Link(SERVICE, staging, "runs_in", "inferred", "parts", 0.9),
+        Link(REPO, SERVICE, "part_of", "inferred", "same_name", 0.8),
+    ]
+
+    built = build([*environments, service(), repo()], links, {}, now=NOW)
+
+    edges = {(e["from_entity_id"], e["type"], e["to_entity_id"]): e for e in built.relationships}
+    assert edges[(REPO, "part_of", SERVICE)]["attributes"] == {}
+    assert edges[(SERVICE, "runs_in", staging)]["attributes"] == {"environments": ["staging"]}
+
+
+def test_what_the_sources_disagree_on_is_kept_every_value_with_its_source() -> None:
+    disputed = Candidate(
+        **{
+            **service().__dict__,
+            "attributes": {"criticality": "critical"},
+            "conflicts": (
+                {
+                    "attribute": "criticality",
+                    "chosen": "critical",
+                    "values": [
+                        {
+                            "value": "critical",
+                            "source_id": str(PAGERDUTY),
+                            "key": "service:billing",
+                        },
+                        {"value": "high", "source_id": str(GITHUB), "key": "service:billing"},
+                    ],
+                },
+            ),
+        }
+    )
+
+    row = only(build([disputed], [], {}, now=NOW).entities)
+
+    assert row["provenance"]["attributes"]["criticality"] == {
+        "origin": "source",
+        "disputed": True,
+    }
+    assert row["provenance"]["conflicts"] == [
+        {
+            "attribute": "criticality",
+            "chosen": "critical",
+            "values": [
+                {"value": "critical", "source_id": str(PAGERDUTY)},
+                {"value": "high", "source_id": str(GITHUB)},
+            ],
+        }
+    ]
+
+
+def test_a_retired_service_is_archived() -> None:
+    retired = Candidate(**{**service().__dict__, "attributes": {"stage": "retired"}})
+
+    assert only(build([retired], [], {}, now=NOW).entities)["lifecycle"] == "archived"
+
+
+def test_a_service_s_schema_keeps_criticality_stage_and_environments() -> None:
+    kept, dropped = clean(
+        ENTITY_KINDS[EntityType.SERVICE],
+        {
+            "criticality": "critical",
+            "stage": "production",
+            "environments": ["production", "staging"],
+            "languages": "python",
+        },
+    )
+
+    assert kept == {
+        "criticality": "critical",
+        "stage": "production",
+        "environments": ["production", "staging"],
+    }
+    assert dropped == ["languages"]

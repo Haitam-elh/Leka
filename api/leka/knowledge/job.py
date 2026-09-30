@@ -173,8 +173,18 @@ async def _inputs(inputs: EnrichmentRepository) -> tuple[list[Candidate], list[L
             quality=quality,
             keys=tuple(keys.get(entity_id, ())),
             enriched=enriched.get(entity_id, {}),
+            conflicts=tuple(conflicts or ()),
         )
-        for entity_id, kind, key, name, attributes, confidence, quality in await inputs.resolved()
+        for (
+            entity_id,
+            kind,
+            key,
+            name,
+            attributes,
+            confidence,
+            quality,
+            conflicts,
+        ) in await inputs.resolved()
     ]
     links = [
         Link(
