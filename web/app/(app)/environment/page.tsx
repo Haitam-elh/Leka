@@ -1,7 +1,7 @@
 "use client";
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page";
+import { EnvironmentScreen } from "@/components/environment/environment-screen";
 
 export default function Page() {
-  return <PlaceholderPage />;
+  return <EnvironmentScreen />;
 }

@@ -9,6 +9,10 @@ workspace's sources resolve to.
                                                 added, its relationships both ways
     GET /ingestion/enrichment/relationships     every relationship — by type, origin,
                                                 rule, cross-source
+    GET /ingestion/enrichment/environment       the "Mon environnement" screen (mockup
+                                                10): the map, its figures, what needs
+                                                attention, what moved last
+    GET /ingestion/enrichment/environment/{id}  one entity's sheet (mockup 11)
 
 Read by every member (`source:read`), as resolution is. A route validates,
 calls one repository, and returns (architecture rule 6). The workspace is
@@ -19,6 +23,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, status
@@ -39,8 +44,12 @@ from leka.ingestion import (
     EnrichmentRunRead,
     EnrichmentStatus,
     EntityRef,
+    EntitySheetRead,
+    EnvironmentRead,
     ResolvedEntity,
     ResolvedEntityRead,
+    entity_sheet,
+    environment_screen,
 )
 
 router = APIRouter(prefix="/ingestion/enrichment", tags=["ingestion"])
@@ -86,9 +95,38 @@ async def enriched_entity(
     its rule, confidence and evidence — and its relationships, the surest
     first, up to 100 each way."""
     repository = EnrichmentRepository(session, principal.workspace_id)
+    return await _enriched(repository, await _entity(repository, entity_id))
+
+
+@router.get("/environment", response_model=EnvironmentRead)
+async def environment(session: SessionDep, principal: Reader) -> EnvironmentRead:
+    """The workspace's environment, as mockup 10 lays it out: the map of its
+    applications, services, data and infrastructure, their states, what
+    needs attention, what moved last."""
+    repository = EnrichmentRepository(session, principal.workspace_id)
+    return await environment_screen(repository, now=datetime.now(UTC))
+
+
+@router.get("/environment/{entity_id}", response_model=EntitySheetRead)
+async def environment_entity(
+    entity_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> EntitySheetRead:
+    """One entity, as mockup 11 lays it out: its state, owner and team,
+    incidents, what moved around it, dependencies and documents."""
+    repository = EnrichmentRepository(session, principal.workspace_id)
+    entity = await _entity(repository, entity_id)
+    enriched = await _enriched(repository, entity)
+    return await entity_sheet(repository, entity, enriched, now=datetime.now(UTC))
+
+
+async def _entity(repository: EnrichmentRepository, entity_id: uuid.UUID) -> ResolvedEntity:
     entity = await repository.get(ResolvedEntity, entity_id)
     if entity is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
+    return entity
+
+
+async def _enriched(repository: EnrichmentRepository, entity: ResolvedEntity) -> EnrichedEntity:
     outgoing, outgoing_total = await repository.edges_of(entity.id, outgoing=True, limit=EDGES)
     incoming, incoming_total = await repository.edges_of(entity.id, outgoing=False, limit=EDGES)
     ends = await repository.entities_by_id(

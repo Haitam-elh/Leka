@@ -1249,6 +1249,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingestion/enrichment/environment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Environment
+         * @description The workspace's environment, as mockup 10 lays it out: the map of its
+         *     applications, services, data and infrastructure, their states, what
+         *     needs attention, what moved last.
+         */
+        get: operations["environment_api_v1_ingestion_enrichment_environment_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingestion/enrichment/environment/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Environment Entity
+         * @description One entity, as mockup 11 lays it out: its state, owner and team,
+         *     incidents, what moved around it, dependencies and documents.
+         */
+        get: operations["environment_entity_api_v1_ingestion_enrichment_environment__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingestion/enrichment/relationships": {
         parameters: {
             query?: never;
@@ -1302,6 +1345,27 @@ export interface components {
         AccountDeletion: {
             /** Password */
             password: string;
+        };
+        /**
+         * AttentionPointRead
+         * @description What needs someone's attention, and how much.
+         */
+        AttentionPointRead: {
+            /**
+             * Kind
+             * @description open_incident, failed_resources, stopped_resources, stale_work, unmonitored_services or dormant_repositories.
+             */
+            kind: string;
+            /**
+             * Level
+             * @description high, medium or info.
+             */
+            level: string;
+            /** Count */
+            count: number;
+            entity: components["schemas"]["EntityRef"] | null;
+            /** Detail */
+            detail: string | null;
         };
         /**
          * Capability
@@ -1719,6 +1783,146 @@ export interface components {
             key: string;
             /** Name */
             name: string;
+        };
+        /**
+         * EntitySheetRead
+         * @description One entity, as mockup 11 lays it out.
+         */
+        EntitySheetRead: {
+            entity: components["schemas"]["EnrichedEntity"];
+            /** Status */
+            status: string | null;
+            /** Environment */
+            environment: string | null;
+            owner: components["schemas"]["SheetPersonRead"] | null;
+            team: components["schemas"]["SheetTeamRead"] | null;
+            /** Incidents */
+            incidents: components["schemas"]["EnvironmentEventRead"][];
+            /** Events */
+            events: components["schemas"]["EnvironmentEventRead"][];
+            /** Dependencies */
+            dependencies: components["schemas"]["SheetLinkRead"][];
+            /** Documents */
+            documents: components["schemas"]["EntityRef"][];
+            /** Attention */
+            attention: components["schemas"]["AttentionPointRead"][];
+            /** Source Kinds */
+            source_kinds: string[];
+        };
+        /** EnvironmentEdgeRead */
+        EnvironmentEdgeRead: {
+            /** From Id */
+            from_id: string;
+            /** To Id */
+            to_id: string;
+            /** Type */
+            type: string;
+            /**
+             * Status
+             * @description The worse state of its two ends.
+             */
+            status: string | null;
+        };
+        /**
+         * EnvironmentEventRead
+         * @description Something that moved: when, what it is now, and where.
+         */
+        EnvironmentEventRead: {
+            entity: components["schemas"]["EntityRef"];
+            /** At */
+            at: string;
+            /**
+             * Kind
+             * @description incident, resolved, attention, change or information.
+             */
+            kind: string;
+            /** @description Its service, repository or project. */
+            where: components["schemas"]["EntityRef"] | null;
+            /** Source Kinds */
+            source_kinds: string[];
+        };
+        /**
+         * EnvironmentNodeRead
+         * @description A box of the map: an entity, or a provider's cloud resources together.
+         */
+        EnvironmentNodeRead: {
+            /** Id */
+            id: string;
+            /**
+             * Type
+             * @description repository, service, database — or provider.
+             */
+            type: string;
+            /**
+             * Layer
+             * @description applications, services, data or infrastructure.
+             */
+            layer: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @description operational, attention, incident, unmonitored — none when it has no state.
+             */
+            status: string | null;
+            /** Entity Id */
+            entity_id: string | null;
+            /** Key */
+            key: string | null;
+            /**
+             * Detail
+             * @description A provider's region.
+             */
+            detail: string | null;
+            /**
+             * Count
+             * @description A provider's resources; 1 for an entity.
+             */
+            count: number;
+            /** Environment */
+            environment: string | null;
+            team: components["schemas"]["EntityRef"] | null;
+        };
+        /**
+         * EnvironmentRead
+         * @description The workspace's environment, as mockup 10 lays it out.
+         */
+        EnvironmentRead: {
+            /**
+             * Updated At
+             * @description When the last enrichment finished.
+             */
+            updated_at: string | null;
+            /** Nodes */
+            nodes: components["schemas"]["EnvironmentNodeRead"][];
+            /** Edges */
+            edges: components["schemas"]["EnvironmentEdgeRead"][];
+            /**
+             * Layers
+             * @description How many things each layer holds.
+             */
+            layers: {
+                [key: string]: number;
+            };
+            /**
+             * Environments
+             * @description The environments its things say they are in.
+             */
+            environments: string[];
+            /** Services */
+            services: number;
+            /** Services Operational */
+            services_operational: number;
+            /** Incidents Open */
+            incidents_open: number;
+            /** Services Impacted */
+            services_impacted: number;
+            /** Changes 24H */
+            changes_24h: number;
+            /** Attention */
+            attention: components["schemas"]["AttentionPointRead"][];
+            /** Events */
+            events: components["schemas"]["EnvironmentEventRead"][];
         };
         /**
          * ErrorBody
@@ -2861,6 +3065,49 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * SheetLinkRead
+         * @description A thing related to this one, and how.
+         */
+        SheetLinkRead: {
+            entity: components["schemas"]["EntityRef"];
+            /** Type */
+            type: string;
+            /**
+             * Direction
+             * @description out: this one → it; in: it → this one.
+             */
+            direction: string;
+            /** Status */
+            status: string | null;
+            /** Origin */
+            origin: string;
+            /** Confidence */
+            confidence: number;
+            /** Cross Source */
+            cross_source: boolean;
+        };
+        /** SheetPersonRead */
+        SheetPersonRead: {
+            entity: components["schemas"]["EntityRef"];
+            /** Confidence */
+            confidence: number;
+            /** Evidence */
+            evidence: string;
+        };
+        /** SheetTeamRead */
+        SheetTeamRead: {
+            entity: components["schemas"]["EntityRef"];
+            /** Confidence */
+            confidence: number;
+            /** Origin */
+            origin: string;
+            /**
+             * Members
+             * @description The people who work with it, as enrichment infers.
+             */
+            members: number;
         };
         /** SourceCreate */
         SourceCreate: {
@@ -9757,6 +10004,192 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnrichedEntity"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    environment_api_v1_ingestion_enrichment_environment_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    environment_entity_api_v1_ingestion_enrichment_environment__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitySheetRead"];
                 };
             };
             /** @description The request could not be understood. */

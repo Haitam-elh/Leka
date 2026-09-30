@@ -35,7 +35,7 @@ export function RouteTabs() {
 
   return (
     <div className="mb-6 -mx-1 overflow-x-auto border-b border-shell-line">
-      <nav aria-label={t.shell.breadcrumb} className="flex min-w-max gap-1 px-1">
+      <nav aria-label={t.shell.sections} className="flex min-w-max gap-1 px-1">
         {tabs.map((tab, index) => {
           const active = tab === current;
           return (

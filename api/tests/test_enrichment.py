@@ -28,7 +28,7 @@ from typing import Any
 
 import pytest
 
-from leka.ingestion.enrichment import Node, Snapshot, Stated, enrich
+from leka.ingestion.enrichment import Node, Snapshot, Stated, enrich, view
 from leka.ingestion.enrichment.engine import (
     Edge,
     Enrichment,
@@ -671,3 +671,73 @@ def test_the_counts_say_what_was_added() -> None:
     assert result.counts["attributes"] == len(result.facts)
     assert result.counts["failed"] == 0
     assert result.failures == []
+
+
+# ── the environment screens' states (mockup 10's legend) ─────────────────────
+
+
+def _thing(type_: str, key: str = "k", **attributes: Any) -> view.Thing:
+    facts = attributes.pop("facts", {})
+    kinds = attributes.pop("kinds", frozenset())
+    return view.Thing(uuid.uuid4(), type_, key, key, attributes, facts, kinds)
+
+
+WATCHED = frozenset({"pagerduty", "datadog", "grafana"})
+
+
+@pytest.mark.parametrize(
+    ("thing", "hit", "expected"),
+    [
+        (
+            _thing("service", facts={"open_incidents": 2}, kinds=frozenset({"pagerduty"})),
+            False,
+            "incident",
+        ),
+        (_thing("service", kinds=frozenset({"pagerduty"})), True, "attention"),
+        (_thing("service", kinds=frozenset({"datadog", "github"})), False, "operational"),
+        (_thing("service", kinds=frozenset({"github"})), False, "unmonitored"),
+        (_thing("infra_resource", state="running"), False, "operational"),
+        (_thing("database", state="stopped"), False, "attention"),
+        (_thing("infra_resource", state="failed"), False, "incident"),
+        (_thing("infra_resource"), False, None),
+        (_thing("incident", state="in_progress"), False, "incident"),
+        (_thing("incident", state="closed"), False, "operational"),
+        (_thing("repository"), False, None),
+    ],
+)
+def test_each_thing_s_state_says_where_it_comes_from(
+    thing: view.Thing, hit: bool, expected: str | None
+) -> None:
+    assert view.status(thing, monitoring=WATCHED, recently_hit=hit) == expected
+
+
+def test_cloud_resources_are_boxed_by_provider_and_region_in_their_worst_state() -> None:
+    service = _thing("service", "service:billing")
+    one = _thing("infra_resource", "aws:arn:aws:ec2:eu-west-1:1:instance/i-1", state="running")
+    two = _thing("infra_resource", "aws:arn:aws:rds:eu-west-1:1:db:x", state="failed")
+    blob = _thing("infra_resource", "azure:/subscriptions/s/b", region="westeurope")
+    links = [view.Link(one.id, service.id, "part_of"), view.Link(two.id, service.id, "part_of")]
+    statuses = {one.id: "operational", two.id: "incident", blob.id: None, service.id: None}
+
+    nodes, edges, layers = view.layout([service, one, two, blob], links, statuses)
+
+    boxes = {n.id: n for n in nodes if n.type == "provider"}
+    aws = boxes["provider:aws:eu-west-1"]
+    assert (aws.count, aws.status, aws.detail) == (2, "incident", "eu-west-1")
+    assert boxes["provider:azure:westeurope"].count == 1
+    assert [(e.from_id, e.to_id, e.status) for e in edges] == [
+        ("provider:aws:eu-west-1", str(service.id), "incident")
+    ]
+    assert layers == {"services": 1, "infrastructure": 3}
+    assert view.provider_of(_thing("infra_resource", "gcp:projects/p/zones/z/instances/i")) == (
+        "gcp",
+        None,
+    )
+
+
+def test_what_moved_shows_as_what_it_is_now() -> None:
+    assert view.event_kind(_thing("incident", state="open")) == "incident"
+    assert view.event_kind(_thing("incident", state="closed")) == "resolved"
+    assert view.event_kind(_thing("issue", facts={"stale": True})) == "attention"
+    assert view.event_kind(_thing("pull_request")) == "change"
+    assert view.event_kind(_thing("document")) == "information"

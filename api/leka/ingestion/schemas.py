@@ -466,3 +466,112 @@ class EnrichmentStatus(BaseModel):
     )
     relationships: dict[str, int] = Field(description="How many per `type:rule`.")
     attributes: dict[str, int] = Field(description="How many of each enriched attribute.")
+
+
+# ── the environment screens (LEKA-359, mockups 10 and 11) ───────────────────
+
+
+class EnvironmentNodeRead(BaseModel):
+    """A box of the map: an entity, or a provider's cloud resources together."""
+
+    id: str
+    type: str = Field(description="repository, service, database — or provider.")
+    layer: str = Field(description="applications, services, data or infrastructure.")
+    name: str
+    status: str | None = Field(
+        description="operational, attention, incident, unmonitored — none when it has no state."
+    )
+    entity_id: uuid.UUID | None
+    key: str | None
+    detail: str | None = Field(description="A provider's region.")
+    count: int = Field(description="A provider's resources; 1 for an entity.")
+    environment: str | None
+    team: EntityRef | None
+
+
+class EnvironmentEdgeRead(BaseModel):
+    from_id: str
+    to_id: str
+    type: str
+    status: str | None = Field(description="The worse state of its two ends.")
+
+
+class EnvironmentEventRead(BaseModel):
+    """Something that moved: when, what it is now, and where."""
+
+    entity: EntityRef
+    at: str
+    kind: str = Field(description="incident, resolved, attention, change or information.")
+    where: EntityRef | None = Field(description="Its service, repository or project.")
+    source_kinds: list[str]
+
+
+class AttentionPointRead(BaseModel):
+    """What needs someone's attention, and how much."""
+
+    kind: str = Field(
+        description="open_incident, failed_resources, stopped_resources, stale_work, "
+        "unmonitored_services or dormant_repositories."
+    )
+    level: str = Field(description="high, medium or info.")
+    count: int
+    entity: EntityRef | None
+    detail: str | None
+
+
+class EnvironmentRead(BaseModel):
+    """The workspace's environment, as mockup 10 lays it out."""
+
+    updated_at: datetime | None = Field(description="When the last enrichment finished.")
+    nodes: list[EnvironmentNodeRead]
+    edges: list[EnvironmentEdgeRead]
+    layers: dict[str, int] = Field(description="How many things each layer holds.")
+    environments: list[str] = Field(description="The environments its things say they are in.")
+    services: int
+    services_operational: int
+    incidents_open: int
+    services_impacted: int
+    changes_24h: int
+    attention: list[AttentionPointRead]
+    events: list[EnvironmentEventRead]
+
+
+class SheetPersonRead(BaseModel):
+    entity: EntityRef
+    confidence: float
+    evidence: str
+
+
+class SheetTeamRead(BaseModel):
+    entity: EntityRef
+    confidence: float
+    origin: str
+    members: int = Field(description="The people who work with it, as enrichment infers.")
+
+
+class SheetLinkRead(BaseModel):
+    """A thing related to this one, and how."""
+
+    entity: EntityRef
+    type: str
+    direction: str = Field(description="out: this one → it; in: it → this one.")
+    status: str | None
+    origin: str
+    confidence: float
+    cross_source: bool
+
+
+class EntitySheetRead(BaseModel):
+    """One entity, as mockup 11 lays it out."""
+
+    entity: EnrichedEntity
+    status: str | None
+    environment: str | None
+    owner: SheetPersonRead | None
+    team: SheetTeamRead | None
+    incidents: list[EnvironmentEventRead]
+    events: list[EnvironmentEventRead]
+    dependencies: list[SheetLinkRead]
+    documents: list[EntityRef]
+    attention: list[AttentionPointRead]
+    source_kinds: list[str]
