@@ -152,7 +152,9 @@ function Summary({
         [
           ...(m.tag_keys?.environment ?? []),
           ...(m.tag_keys?.service ?? []),
+          ...(m.tag_keys?.application ?? []),
           ...(m.tag_keys?.owner ?? []),
+          ...(m.tag_keys?.criticality ?? []),
         ].join(", "),
       ],
       [w.states, table(m.states)],
@@ -187,7 +189,13 @@ const TEXT_FIELDS: { field: keyof SettingsDraft; help: string; rows: number }[] 
   { field: "priorities", help: "prioritiesHelp", rows: 2 },
   { field: "environments", help: "environmentsHelp", rows: 2 },
 ];
-const TAG_FIELDS: (keyof SettingsDraft)[] = ["tagEnvironment", "tagService", "tagOwner"];
+const TAG_FIELDS: (keyof SettingsDraft)[] = [
+  "tagEnvironment",
+  "tagService",
+  "tagApplication",
+  "tagOwner",
+  "tagCriticality",
+];
 
 function SettingsDialog({
   source,

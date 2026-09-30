@@ -152,7 +152,10 @@ async def test_every_parse_gets_its_candidates_or_the_reason_it_has_none(source:
     assert ok.result is not None
     provenance = ok.result["provenance"]
     assert isinstance(provenance, dict) and provenance["external_id"] == "commits-0"
-    assert (ok.normaliser_version, ok.parser_version) == (NORMALISER_VERSION, 1)
+    assert (ok.normaliser_version, ok.parser_version) == (
+        NORMALISER_VERSION,
+        parsing_engine.PARSER_VERSION,
+    )
     bad = rows["commits-2"]
     assert (bad.failure_code, bad.message) == (
         "invalid",
@@ -232,7 +235,7 @@ async def test_a_parse_that_now_fails_loses_its_candidates(
                 {"s": source.id},
             )
             await session.commit()
-    monkeypatch.setattr(parsing_engine, "PARSER_VERSION", 2)
+    monkeypatch.setattr(parsing_engine, "PARSER_VERSION", parsing_engine.PARSER_VERSION + 1)
     await parse_source(source.workspace_id, source.id)  # commits-0 now fails to parse
 
     result = await normalise_source(source.workspace_id, source.id)

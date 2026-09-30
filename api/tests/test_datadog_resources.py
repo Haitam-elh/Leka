@@ -246,6 +246,96 @@ async def test_a_low_quota_mid_stream_keeps_what_was_read(
     assert 25 <= caught.value.diagnostic.retry_after <= 30
 
 
+# ── the service catalog (LEKA-362) ───────────────────────────────────────────
+
+# A definition as the schema v2.2 writes it, and one as v3 does.
+BILLING_V22: dict[str, Any] = {
+    "id": "d-billing",
+    "type": "service-definition",
+    "attributes": {
+        "meta": {"last-modified-time": "2026-09-28T10:00:00Z"},
+        "schema": {
+            "schema-version": "v2.2",
+            "dd-service": "Billing-API",
+            "team": "payments",
+            "application": "Billing",
+            "tier": "1",
+            "lifecycle": "production",
+            "type": "web",
+            "languages": ["python"],
+            "description": "Invoices and refunds",
+            "links": [
+                {"name": "Runbook", "type": "runbook", "url": "https://wiki.acme.test/billing"},
+                {"name": "Code", "type": "repo", "url": "https://github.com/acme/billing-api"},
+            ],
+        },
+    },
+}
+LEDGER_V3: dict[str, Any] = {
+    "id": "d-ledger",
+    "type": "service-definition",
+    "attributes": {
+        "meta": {"last-modified-time": "2026-09-27T10:00:00Z"},
+        "schema": {
+            "apiVersion": "v3",
+            "kind": "service",
+            "metadata": {
+                "name": "ledger",
+                "displayName": "Ledger",
+                "owner": "finance-platform",
+                "description": "The double-entry ledger",
+                "links": [{"name": "Dashboards", "type": "dashboard", "url": "https://x.test"}],
+            },
+            "spec": {
+                "lifecycle": "Deprecated",
+                "tier": "2",
+                "type": "grpc",
+                "languages": ["go"],
+                "dependsOn": ["service:postgres-ledger", "service:billing-api"],
+                "componentOf": ["system:billing"],
+            },
+        },
+    },
+}
+
+
+async def test_the_catalog_s_services_come_whole_with_their_datadog_name() -> None:
+    datadog = Datadog()
+    datadog.catalog = [BILLING_V22, LEDGER_V3, {"attributes": {"schema": {}}}]
+
+    found = await _stream(datadog, C.SERVICES)
+
+    assert [(r.external_id, r.container) for r in found] == [
+        ("billing-api", "billing-api"),
+        ("ledger", "ledger"),
+    ]
+    assert found[0].payload == BILLING_V22
+    assert found[0].updated_at == datetime(2026, 9, 28, 10, 0, tzinfo=UTC)
+
+
+async def test_only_the_catalog_s_services_in_scope_are_read() -> None:
+    datadog = Datadog()
+    datadog.catalog = [BILLING_V22, LEDGER_V3]
+
+    found = await _stream(datadog, C.SERVICES, services=["ledger"])
+
+    assert [r.external_id for r in found] == ["ledger"]
+
+
+async def test_the_catalog_is_read_page_after_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(datadog_module, "CATALOG_PAGE", 2)
+    datadog = Datadog()
+    datadog.catalog = ["a", "b", "c"]
+
+    found = await _stream(datadog, C.SERVICES)
+
+    assert [r.external_id for r in found] == ["a", "b", "c"]
+    assert [p["page[number]"] for p in datadog.params("/api/v2/services/definitions")] == [
+        "0",
+        "1",
+    ]
+
+
 async def test_a_refused_read_names_the_permission() -> None:
     forbidden = httpx.Response(403, json={"errors": ["Forbidden"]})
 

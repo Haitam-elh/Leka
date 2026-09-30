@@ -151,7 +151,7 @@ know — is refused, so a typo is found when saved, not at the first sync.
 | Key | | |
 |---|---|---|
 | `name` | required | `tickets` — lower case, digits, `_`. What LEKA shows, what the scope keeps or leaves |
-| `entity` | | What its records are in LEKA's model: `issue`, `incident`, `service`, `project`, `document`. Without it, they are extracted and stay out of the model |
+| `entity` | | What its records are in LEKA's model: `issue`, `incident`, `service`, `application`, `project`, `document`. Without it, they are extracted and stay out of the model |
 | `path` | required | From `base_url`: `/tickets`. No scheme, no host, no query, no `..` |
 | `params` | | The query, as a map: `{"status": "open"}`. Not secret — the secret goes in the credentials |
 | `items` | | Where the records are in a page: `data`, `result.items`. Absent: the page is the list |
@@ -217,10 +217,18 @@ changes `fields` — and so, at the next pass, what is extracted.
 - **Normalises** a resource that declares an `entity` into that entity
   ([normalisation.md](../normalisation.md)): keyed by the source —
   `custom-<source id>:issue:tickets:101`, since nothing tells two unknown
-  systems' ids apart — except a `service`, keyed by its name, so it meets
-  the same service from PagerDuty or a tag; its author related by
-  `authored_by`. The source's own mapping of states and priorities
-  ([scope-and-mapping.md](scope-and-mapping.md)) applies.
+  systems' ids apart — except a `service` or an `application`, keyed by its
+  name, so it meets the same one from PagerDuty, Datadog or a tag; its
+  author related by `authored_by`. The source's own mapping of states and
+  priorities ([scope-and-mapping.md](scope-and-mapping.md)) applies.
+- **Reads a catalogue** — a CMDB, a Backstage catalogue behind its API —
+  from a `service` or an `application` resource's `metadata`, by these
+  names (LEKA-362): `team` / `owner` → its teams; `application` / `system` /
+  `product` → the application a service is part of; `services` → an
+  application's services; `depends_on` / `dependencies` → what it depends
+  on; `criticality` / `tier` → how critical, on LEKA's scale; `lifecycle` /
+  `stage` → where in its life; `environments` / `environment` → where it
+  runs. A list, or words between commas: `"prod, staging"`.
 - **Keeps** its payloads 90 days, as the other structured sources'.
 
 ## GraphQL

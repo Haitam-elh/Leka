@@ -1,6 +1,6 @@
-"""Observability: Datadog's monitors, events, incidents, metrics and logs;
-PagerDuty's services and incidents; Grafana's dashboards, alert rules and
-annotations.
+"""Observability: Datadog's monitors, events, incidents, metrics, logs and
+service catalog; PagerDuty's services, business services and incidents;
+Grafana's dashboards, alert rules and annotations.
 
 What an operations question needs, the same way whatever the tool: the
 record's `title`, its `state` (a monitor's, an incident's, a log's
@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 
 from leka.connectors import Capability, SourceKind
 from leka.ingestion.extraction.contract import Extracted
-from leka.ingestion.extraction.engine import Payload, strategy
+from leka.ingestion.extraction.engine import MalformedPayloadError, Payload, strategy
 from leka.ingestion.extraction.fields import (
     content,
     dig,
@@ -89,6 +89,73 @@ def datadog_event(p: Payload) -> Extracted:
             "source": lower(inner, "source_type_name"),
         },
     )
+
+
+@strategy("datadog.services", 1, (DATADOG, C.SERVICES))
+def datadog_service(p: Payload) -> Extracted:
+    """A service as its team wrote it in the catalog — the schemas v2 to
+    v2.2 (`dd-service`, `team`, `application`…) or v3 (`metadata`,
+    `spec`): its owner, its application, its tier and lifecycle, its kind
+    and languages, its links, what it depends on (LEKA-362)."""
+    schema = dig(p, "attributes", "schema")
+    if not isinstance(schema, dict):
+        raise MalformedPayloadError("missing field 'attributes.schema'")
+    v3 = isinstance(schema.get("metadata"), dict)
+    about = schema["metadata"] if v3 else schema
+    spec = dig(schema, "spec") if v3 else schema
+    name = string(schema, "metadata", "name") if v3 else string(schema, "dd-service")
+    if not name:
+        raise MalformedPayloadError("missing field 'dd-service'")
+    teams = [
+        *[t for t in (string(about, "owner"), string(about, "team")) if t],
+        *strings(about, "additionalOwners", key="name"),
+    ]
+    systems = [s.removeprefix("system:") for s in strings(spec, "componentOf")]
+    links = dig(about, "links")
+    return Extracted(
+        title=name.lower(),
+        content=content("description", string(about, "description")),
+        updated_at=when(p, "attributes", "meta", "last-modified-time"),
+        metadata={
+            "display_name": string(about, "displayName"),
+            "tier": string(spec, "tier"),
+            "lifecycle": lower(spec, "lifecycle"),
+            "service_type": lower(spec, "type"),
+            "languages": strings(spec, "languages"),
+            **_links(links if isinstance(links, list) else []),
+        },
+        signals={
+            "teams": list(dict.fromkeys(teams)),
+            "application": string(schema, "application") or next(iter(systems), None),
+            "depends_on": _depends_on(strings(spec, "dependsOn")),
+        },
+    )
+
+
+def _depends_on(references: list[str]) -> list[str]:
+    """The services among what v3 says a service depends on: `service:x`
+    — a datastore or a queue is named in Datadog's words, not a key LEKA
+    shares with another tool."""
+    found = []
+    for reference in references:
+        kind, _, name = reference.rpartition(":")
+        if kind in ("", "service") and name:
+            found.append(name.lower())
+    return list(dict.fromkeys(found))
+
+
+def _links(links: list[object]) -> dict[str, str]:
+    """A catalog's links, the first of each kind that says where to look:
+    `runbook_url`, `repository_url`, `dashboard_url`, `docs_url`."""
+    kinds = {"runbook": "runbook_url", "repo": "repository_url", "dashboard": "dashboard_url"}
+    kinds |= {"doc": "docs_url", "docs": "docs_url"}
+    found: dict[str, str] = {}
+    for link in links:
+        kind = kinds.get(str(dig(link, "type") or "").lower())
+        url = string(link, "url")
+        if kind and url and kind not in found:
+            found[kind] = url
+    return found
 
 
 @strategy("datadog.incidents", 1, (DATADOG, C.INCIDENTS))
@@ -193,8 +260,30 @@ def pagerduty_incident(p: Payload) -> Extracted:
     )
 
 
-@strategy("pagerduty.services", 1, (PAGERDUTY, C.SERVICES))
+@strategy("pagerduty.services", 2, (PAGERDUTY, C.SERVICES))
 def pagerduty_service(p: Payload) -> Extracted:
+    """A technical service — its team, its escalation policy, the services
+    it depends on — or a business service: what one of the company's
+    applications is to PagerDuty, with the services that support it
+    (LEKA-362)."""
+    dependencies = dig(p, "dependencies")
+    listed = dependencies if isinstance(dependencies, list) else []
+    technical = [str(d["name"]) for d in listed if d.get("type") == "technical" and d.get("name")]
+    business = [str(d["name"]) for d in listed if d.get("type") == "business" and d.get("name")]
+    if p.get("type") == "business_service":
+        team = string(p, "team", "summary")
+        return Extracted(
+            title=required(p, "name"),
+            url=string(p, "html_url"),
+            content=content("description", string(p, "description")),
+            metadata={"point_of_contact": string(p, "point_of_contact")},
+            signals={
+                "kind": "application",
+                "teams": [team] if team else [],
+                "services": technical,
+                "depends_on": business,
+            },
+        )
     return Extracted(
         title=required(p, "name"),
         url=string(p, "html_url"),
@@ -206,6 +295,7 @@ def pagerduty_service(p: Payload) -> Extracted:
         signals={
             "escalation_policy": string(p, "escalation_policy", "summary"),
             "teams": strings(p, "teams", key="summary"),
+            "depends_on": technical,
         },
     )
 

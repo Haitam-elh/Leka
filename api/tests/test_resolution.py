@@ -234,6 +234,25 @@ def test_a_service_spelled_three_ways_is_one() -> None:
     assert not any(c["attribute"] == "name" for c in billing.conflicts)
 
 
+def test_an_application_named_two_ways_is_one() -> None:
+    result = resolve(
+        [
+            seen("application:billing", PAGERDUTY, "Billing", type="application", record=True),
+            seen("application:billing-platform", DATADOG, "Billing platform", type="application"),
+            # A service of the same name is another kind of thing.
+            seen("service:billing", DATADOG, "billing", type="service"),
+        ]
+    )
+
+    application = one(result, "application:billing")
+    assert {k.key for k in application.keys} == {
+        "application:billing",
+        "application:billing-platform",
+    }
+    assert rules(application) == {"same_name"}
+    assert len(result.identities) == 2
+
+
 def test_a_plural_and_a_team_word_are_the_same_team() -> None:
     result = resolve(
         [

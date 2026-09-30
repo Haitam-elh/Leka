@@ -42,6 +42,7 @@ const ROW_GAP = 70;
 const LAYER: Record<EntityType, number> = {
   person: 0,
   team: 0,
+  application: 1,
   service: 1,
   repository: 2,
   deployment: 2,
@@ -54,6 +55,7 @@ const LAYER: Record<EntityType, number> = {
   release: 2,
   database: 3,
   infra_resource: 4,
+  environment: 4,
 };
 
 /** Past this many, a layer wraps onto another row: 80 services side by side

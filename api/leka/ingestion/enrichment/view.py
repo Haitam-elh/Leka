@@ -19,7 +19,7 @@ comes from:
                     operational   closed
 
 Pure: rows in, the view out; the route reads (leka/api/enrichment.py).
-Rules: docs/enrichment.md § 11.
+Rules: docs/enrichment.md § 12.
 """
 
 from __future__ import annotations

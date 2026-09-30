@@ -741,3 +741,107 @@ def test_what_moved_shows_as_what_it_is_now() -> None:
     assert view.event_kind(_thing("issue", facts={"stale": True})) == "attention"
     assert view.event_kind(_thing("pull_request")) == "change"
     assert view.event_kind(_thing("document")) == "information"
+
+
+# ── 7. landscape (LEKA-362) ─────────────────────────────────────────────────
+
+APP = "application:billing"
+STAGING = "aws:arn:aws:ec2:eu-central-1:1:instance/i-2"
+LEDGER = "service:ledger"
+
+
+def landscape_world() -> World:
+    """Billing's service runs in production (its tagged instance) and in
+    staging; it is part of the Billing application, with Ledger, which a
+    catalogue says runs in production and is critical."""
+    w = acme()
+    w.thing(APP, "Billing", type="application", sources=(PAGERDUTY,))
+    w.thing(LEDGER, "ledger", type="service", sources=(PAGERDUTY,), criticality="critical")
+    for name in ("production", "staging"):
+        w.thing(f"environment:{name}", name, type="environment", sources=(AWS,))
+    instance = w.nodes[w.id(INSTANCE)]
+    w.nodes[instance.id] = Node(
+        instance.id,
+        instance.type,
+        instance.key,
+        instance.name,
+        {"environment": "production", "environment_confidence": 0.95, "criticality": "high"},
+        instance.sources,
+    )
+    w.thing(
+        STAGING,
+        "billing-api-staging-1",
+        type="infra_resource",
+        sources=(AWS,),
+        environment="staging",
+        environment_confidence=0.5,
+    )
+    w.states(AWS, INSTANCE, "runs_in", "environment:production", confidence=0.95)
+    w.states(AWS, STAGING, "part_of", SERVICE, confidence=0.9, evidence="tags")
+    w.states(AWS, STAGING, "runs_in", "environment:staging", confidence=0.5)
+    w.states(PAGERDUTY, SERVICE, "part_of", APP, evidence="catalogue.services")
+    w.states(PAGERDUTY, LEDGER, "part_of", APP, evidence="catalogue.services")
+    w.states(PAGERDUTY, LEDGER, "runs_in", "environment:production", evidence="environment")
+    return w
+
+
+def test_a_service_runs_where_its_resources_run() -> None:
+    w = landscape_world()
+    result = enrich(w.snapshot())
+
+    production = the(edge(result, w, SERVICE, "runs_in", "environment:production"))
+    staging = the(edge(result, w, SERVICE, "runs_in", "environment:staging"))
+    assert (production.origin, production.rule, production.confidence) == (
+        "inferred",
+        "parts",
+        0.95,
+    )
+    assert "runs in production" in production.evidence
+    assert staging.confidence == 0.5
+    environments = the(fact(result, w, SERVICE, "environments"))
+    assert (environments.value, environments.rule) == (["production", "staging"], "parts")
+
+
+def test_an_application_runs_where_its_services_run() -> None:
+    w = landscape_world()
+    result = enrich(w.snapshot())
+
+    assert the(fact(result, w, APP, "environments")).value == ["production", "staging"]
+    assert edge(result, w, APP, "runs_in", "environment:production") is not None
+    # Ledger's own, stated: nothing inferred beside it.
+    assert edge(result, w, LEDGER, "runs_in", "environment:production") is not None
+    assert the(edge(result, w, LEDGER, "runs_in", "environment:production")).origin == "stated"
+
+
+def test_a_whole_is_as_critical_as_its_most_critical_part() -> None:
+    w = landscape_world()
+    result = enrich(w.snapshot())
+
+    service = the(fact(result, w, SERVICE, "criticality"))
+    application = the(fact(result, w, APP, "criticality"))
+    assert (service.value, service.rule, service.confidence) == ("high", "parts", 0.8)
+    assert "is high" in service.evidence
+    # Ledger's stated critical outranks Billing's inferred high.
+    assert (application.value, application.confidence) == ("critical", 0.8)
+    assert fact(result, w, LEDGER, "criticality") is None  # stated: never enriched
+
+
+def test_an_application_s_team_is_its_services_where_they_have_none() -> None:
+    w = landscape_world()
+    w.thing("team:ledger-squad", "ledger squad", type="team", sources=(PAGERDUTY,))
+    w.states(PAGERDUTY, APP, "owned_by", "team:ledger-squad")
+    result = enrich(w.snapshot())
+
+    inherited = the(edge(result, w, LEDGER, "owned_by", "team:ledger-squad"))
+    assert (inherited.rule, inherited.confidence) == ("inherited", 0.9)
+    # Billing has its own team, stated: nothing inherited.
+    assert edge(result, w, SERVICE, "owned_by", "team:ledger-squad") is None
+
+
+def test_nothing_known_of_its_parts_is_nothing_said() -> None:
+    w = acme()
+    result = enrich(w.snapshot())
+
+    assert fact(result, w, SERVICE, "environments") is None
+    assert fact(result, w, SERVICE, "criticality") is None
+    assert not [e for e in result.edges if e.type == "runs_in"]

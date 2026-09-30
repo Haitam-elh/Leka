@@ -148,7 +148,7 @@ be added as a dependency when a page needs it.
   (`source.*`), and its times — "Il y a 4 min", "14:02" — come from the
   same helpers as the components' (`time.ts`), so no two screens can
   disagree about how long ago something was.
-- **Mon environnement** (LEKA-359, [../enrichment.md § 11](../enrichment.md)):
+- **Mon environnement** (LEKA-359, [../enrichment.md § 12](../enrichment.md)):
   the screen and an entity's sheet, from what resolution and enrichment
   make — `components/environment/` draws them with `StatusBadge`,
   `KnowledgeTable` and the same time helpers. Its map is its own: mockup

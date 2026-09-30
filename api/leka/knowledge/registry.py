@@ -33,7 +33,10 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from leka.knowledge.models import EntityType, RelationshipType
 
 # 1: the first company model.
-MODEL_VERSION = 1
+# 2: applications and environments, where things run, how critical they are,
+#    relationships true in some environments only, sources' disagreements
+#    kept (LEKA-362).
+MODEL_VERSION = 2
 
 
 class Attributes(BaseModel):
@@ -50,12 +53,36 @@ class Attributes(BaseModel):
     activity_90d: int | None = None
 
 
-class ServiceAttributes(Attributes):
+class Landscape(Attributes):
+    """What services and applications share (LEKA-362): how critical — on
+    LEKA's scale, the source's word beside — where in their life, where
+    they run."""
+
+    criticality: str | None = None
+    criticality_raw: str | None = None
+    stage: str | None = None
+    stage_raw: str | None = None
+    environments: list[str] | None = None
+    point_of_contact: str | None = None
+
+
+class ServiceAttributes(Landscape):
     environment: str | None = None
-    tier: str | None = None
+    service_type: str | None = None
+    languages: list[str] | None = None
+    escalation_policy: str | None = None
+    display_name: str | None = None
+    runbook_url: str | None = None
+    repository_url: str | None = None
+    dashboard_url: str | None = None
+    docs_url: str | None = None
     incidents_90d: int | None = None
     open_incidents: int | None = None
     mttr_minutes: int | None = None
+
+
+class ApplicationAttributes(Landscape):
+    """A group of services the company names as one: a product, a system."""
 
 
 class RepositoryAttributes(Attributes):
@@ -93,8 +120,13 @@ class ResourceAttributes(Attributes):
     resource_kind: str | None = None
     environment: str | None = None
     exposure: str | None = None
+    criticality: str | None = None
     region: str | None = None
     tags: dict[str, object] | None = None
+
+
+class EnvironmentAttributes(Attributes):
+    """Production, staging, development, test: where things run."""
 
 
 # A kind's schema: named here, as `type` inside EntityKind is its field.
@@ -119,7 +151,10 @@ ENTITY_KINDS: dict[EntityType, EntityKind] = {
     for kind in (
         EntityKind(EntityType.PERSON, 1, "organisation", Attributes, ("person",)),
         EntityKind(EntityType.TEAM, 1, "organisation", Attributes, ("team",)),
-        EntityKind(EntityType.SERVICE, 1, "applications", ServiceAttributes, ("service",)),
+        EntityKind(
+            EntityType.APPLICATION, 1, "applications", ApplicationAttributes, ("application",)
+        ),
+        EntityKind(EntityType.SERVICE, 2, "applications", ServiceAttributes, ("service",)),
         EntityKind(EntityType.REPOSITORY, 1, "applications", RepositoryAttributes, ("repository",)),
         EntityKind(EntityType.PROJECT, 1, "delivery", Attributes, ("project",)),
         EntityKind(EntityType.ISSUE, 1, "delivery", WorkAttributes, ("issue",)),
@@ -129,9 +164,12 @@ ENTITY_KINDS: dict[EntityType, EntityKind] = {
         EntityKind(EntityType.DEPLOYMENT, 1, "delivery", Attributes, ("deployment",)),
         EntityKind(EntityType.INCIDENT, 1, "operations", IncidentAttributes, ("incident",)),
         EntityKind(
-            EntityType.INFRA_RESOURCE, 1, "infrastructure", ResourceAttributes, ("infra_resource",)
+            EntityType.INFRA_RESOURCE, 2, "infrastructure", ResourceAttributes, ("infra_resource",)
         ),
-        EntityKind(EntityType.DATABASE, 1, "infrastructure", ResourceAttributes, ("database",)),
+        EntityKind(EntityType.DATABASE, 2, "infrastructure", ResourceAttributes, ("database",)),
+        EntityKind(
+            EntityType.ENVIRONMENT, 1, "infrastructure", EnvironmentAttributes, ("environment",)
+        ),
         EntityKind(EntityType.DOCUMENT, 1, "knowledge", Attributes, ("document",)),
     )
 }
@@ -174,6 +212,7 @@ RELATIONSHIP_KINDS: dict[RelationshipType, RelationshipKind] = {
         RelationshipKind(RelationshipType.MERGES, 1, ("merges",)),
         RelationshipKind(RelationshipType.MENTIONS, 1, ("mentions",)),
         RelationshipKind(RelationshipType.IN_NETWORK, 1, ("in_network",)),
+        RelationshipKind(RelationshipType.RUNS_IN, 1, ("runs_in",)),
         RelationshipKind(RelationshipType.OWNS, 1, ()),
         RelationshipKind(RelationshipType.DEPLOYED_TO, 1, ()),
         RelationshipKind(RelationshipType.CAUSED_BY, 1, ()),

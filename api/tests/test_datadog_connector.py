@@ -68,7 +68,8 @@ class Datadog:
         self.incidents: list[dict[str, Any]] = []
         self.users: list[dict[str, Any]] = []
         self.metrics: list[dict[str, Any]] = []
-        self.catalog = ["checkout", "billing"]
+        # Names, or whole definitions.
+        self.catalog: list[str | dict[str, Any]] = ["checkout", "billing"]
         self.answers: dict[str, Answer] = {
             "/api/v1/validate": {"valid": True},
             "/api/v2/current_user": {
@@ -120,8 +121,11 @@ class Datadog:
     def _catalog(self, request: httpx.Request) -> httpx.Response:
         page = int(request.url.params["page[number]"])
         size = int(request.url.params["page[size]"])
-        names = self.catalog[page * size : (page + 1) * size]
-        data = [{"attributes": {"schema": {"dd-service": name}}} for name in names]
+        found = self.catalog[page * size : (page + 1) * size]
+        data = [
+            item if isinstance(item, dict) else {"attributes": {"schema": {"dd-service": item}}}
+            for item in found
+        ]
         return httpx.Response(200, json={"data": data})
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
@@ -165,8 +169,15 @@ def test_datadog_is_in_the_catalogue_as_an_observability_source() -> None:
     secrets = manifest.credentials_schema.model_json_schema()["properties"]
 
     assert manifest.category is ConnectorCategory.OBSERVABILITY
-    assert manifest.capabilities == {C.ALERTS, C.EVENTS, C.INCIDENTS, C.METRICS, C.LOGS}
-    assert manifest.listed_whole == {C.ALERTS, C.INCIDENTS}
+    assert manifest.capabilities == {
+        C.ALERTS,
+        C.EVENTS,
+        C.INCIDENTS,
+        C.METRICS,
+        C.LOGS,
+        C.SERVICES,
+    }
+    assert manifest.listed_whole == {C.ALERTS, C.INCIDENTS, C.SERVICES}
     assert list(secrets) == ["application_key", "api_key"]
     assert all(field["writeOnly"] is True for field in secrets.values())
 
@@ -246,6 +257,7 @@ async def test_a_key_that_can_read_nothing_is_told_which_permissions_to_give() -
             "/api/v2/incidents",
             "/api/v2/metrics",
             "/api/v2/logs/events",
+            "/api/v2/services/definitions",
         )
     }
 
@@ -253,6 +265,7 @@ async def test_a_key_that_can_read_nothing_is_told_which_permissions_to_give() -
 
     assert result.capabilities == []
     assert "monitors_read" in result.warnings[0]
+    assert "apm_service_catalog_read" in result.warnings[0]
 
 
 async def test_a_refused_api_key_is_named() -> None:

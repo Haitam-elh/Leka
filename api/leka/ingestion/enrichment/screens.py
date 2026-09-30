@@ -57,6 +57,8 @@ CONTAINERS = ("service", "repository", "project")
 # resources, whose last change is a state read again, not something done.
 NOT_EVENTS = (
     "service",
+    "application",
+    "environment",
     "repository",
     "project",
     "team",

@@ -70,6 +70,8 @@ GENERIC_HANDLES = frozenset(
 )
 # The last words of a name that say what it is, not which one it is.
 SERVICE_WORDS = frozenset({"api", "service", "svc", "srv", "app", "server", "ms", "microservice"})
+# An application's: "Billing platform" is Billing (LEKA-362).
+APPLICATION_WORDS = frozenset({"app", "application", "platform", "system", "product", "suite"})
 TEAM_WORDS = frozenset({"team", "squad", "group", "crew", "guild", "tribe", "eng", "engineering"})
 ENVIRONMENTS = frozenset(
     {

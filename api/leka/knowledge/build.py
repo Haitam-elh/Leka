@@ -16,16 +16,22 @@ WHAT IT SAYS. Its sources' attributes; where they say nothing, enrichment's
 — each with its origin in `provenance`. Checked against its kind's schema
 (registry.py).
 
-LIFECYCLE. `archived` when its source says so; `dormant` when enrichment
-finds nothing done to it for 180 days; `removed` when no source shows it any
-more — kept with its history, never deleted; `active` otherwise. A removed
-thing that comes back is active again, the same entity.
+LIFECYCLE. `archived` when its source says so — or its catalogue says it is
+retired; `dormant` when enrichment finds nothing done to it for 180 days;
+`removed` when no source shows it any more — kept with its history, never
+deleted; `active` otherwise. A removed thing that comes back is active
+again, the same entity.
 
 VERSIONS. What it says — its name, its attributes, its lifecycle — hashed:
 a different hash is a new version, recorded with what changed. Measures
 that move with time alone (last activity, activity over 90 days, incidents
 of the last 90 days) are kept current but make no version: a version is a
 change of the thing, not of the clock.
+
+RELATIONSHIPS keep the environments they are true in: an end that runs in a
+single environment — a production instance, a service seen in production
+only, the production environment itself — makes the edge that
+environment's (LEKA-362). An end that runs in several says nothing.
 
 Pure: rows in, rows out; the job reads and writes (job.py).
 """
@@ -35,7 +41,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -56,6 +62,11 @@ MEASURES = frozenset(
 )
 ARCHIVED_STATES = frozenset({"archived"})
 MAX_SOURCES = 20
+# The sources' disagreements kept in an entity's provenance: this many, of
+# this many values each.
+MAX_CONFLICTS = 20
+MAX_VALUES = 10
+ENVIRONMENTS = frozenset({"production", "staging", "development", "test"})
 
 
 @dataclass(frozen=True)
@@ -91,6 +102,9 @@ class Candidate:
     quality: float | None = None
     keys: tuple[SeenKey, ...] = ()
     enriched: dict[str, Enriched] = field(default_factory=dict)
+    # What its sources disagree on (resolution's `conflicts`): {attribute,
+    # chosen, values: [{value, source_id, …}]}.
+    conflicts: tuple[dict[str, object], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -169,8 +183,39 @@ def _attributes(content: dict[str, object]) -> dict[str, object]:
     return found if isinstance(found, dict) else {}
 
 
+def _conflicts(found: tuple[dict[str, object], ...]) -> list[dict[str, object]]:
+    """Resolution's disagreements, as provenance keeps them: the attribute,
+    the value chosen, every value with the source that gave it."""
+    kept: list[dict[str, object]] = []
+    for conflict in found[:MAX_CONFLICTS]:
+        values = conflict.get("values")
+        listed = values if isinstance(values, list) else []
+        kept.append(
+            {
+                "attribute": conflict.get("attribute"),
+                "chosen": conflict.get("chosen"),
+                "values": [
+                    {"value": v.get("value"), "source_id": v.get("source_id")}
+                    for v in listed[:MAX_VALUES]
+                    if isinstance(v, dict)
+                ],
+            }
+        )
+    return kept
+
+
+def _environment_of(kind: str, key: str, attributes: dict[str, object]) -> str | None:
+    """The one environment a thing runs in: its own, for an environment;
+    the one its source says, for anything else — none for what runs in
+    several, or where nobody says."""
+    if kind == "environment":
+        return key.removeprefix("environment:")
+    found = attributes.get("environment")
+    return found if isinstance(found, str) and found in ENVIRONMENTS else None
+
+
 def lifecycle_of(attributes: dict[str, object]) -> Lifecycle:
-    if attributes.get("state") in ARCHIVED_STATES:
+    if attributes.get("state") in ARCHIVED_STATES or attributes.get("stage") == "retired":
         return Lifecycle.ARCHIVED
     if attributes.get("lifecycle") == "dormant":
         return Lifecycle.DORMANT
@@ -189,6 +234,8 @@ def build(
     entities: list[dict[str, object]] = []
     versions: list[dict[str, object]] = []
     modelled: set[uuid.UUID] = set()
+    # The one environment a thing runs in, when it runs in one.
+    scope: dict[uuid.UUID, str | None] = {}
 
     for candidate in candidates:
         kind = BUILT_FROM.get(candidate.type)
@@ -196,7 +243,7 @@ def build(
             counts["not_modelled"] += 1
             continue
         merged = dict(candidate.attributes)
-        origins: dict[str, object] = {}
+        origins: dict[str, dict[str, object]] = {}
         for name, value in candidate.enriched.items():
             if name in merged:
                 continue
@@ -221,14 +268,21 @@ def build(
         sources = sorted(
             {(str(k.source_id), k.key, k.kind) for k in candidate.keys},
         )[:MAX_SOURCES]
+        conflicts = _conflicts(candidate.conflicts)
+        disputed = {str(c["attribute"]) for c in conflicts}
         provenance = {
             "sources": [
                 {"source_id": source, "key": key, "kind": seen} for source, key, seen in sources
             ],
             "attributes": {
-                name: origins.get(name, {"origin": "source"}) for name in sorted(attributes)
+                name: {
+                    **origins.get(name, {"origin": "source"}),
+                    **({"disputed": True} if name in disputed else {}),
+                }
+                for name in sorted(attributes)
             },
             "dropped": dropped,
+            "conflicts": conflicts,
         }
 
         if before is None:
@@ -278,6 +332,7 @@ def build(
             }
         )
         modelled.add(candidate.id)
+        scope[candidate.id] = _environment_of(kind.type.value, candidate.key, attributes)
         counts[f"type.{kind.type.value}"] += 1
 
     # What no source shows any more: removed, kept, its history with it.
@@ -321,6 +376,17 @@ def build(
         )
         counts["removed"] += 1
 
+    # Where each thing runs, by its `runs_in`: one environment makes it that
+    # environment's, as its own `environment` does.
+    runs: dict[uuid.UUID, set[str]] = defaultdict(set)
+    for link in links:
+        target = scope.get(link.to_id)
+        if link.type == "runs_in" and target and link.from_id in scope:
+            runs[link.from_id].add(target)
+    for thing, places in runs.items():
+        if scope[thing] is None and len(places) == 1:
+            scope[thing] = next(iter(places))
+
     relationships: dict[tuple[uuid.UUID, uuid.UUID, str], dict[str, object]] = {}
     for link in links:
         relation = RELATIONSHIP_FROM.get(link.type)
@@ -337,6 +403,7 @@ def build(
             > (held["origin"] == "stated", float(str(held["confidence"])))
         )
         if stronger:
+            environments = sorted({e for e in (scope[link.from_id], scope[link.to_id]) if e})
             relationships[key] = {
                 "from_entity_id": link.from_id,
                 "to_entity_id": link.to_id,
@@ -345,6 +412,7 @@ def build(
                 "origin": link.origin,
                 "rule": link.rule[:100],
                 "cross_source": link.cross_source,
+                "attributes": {"environments": environments} if environments else {},
                 "provenance": list(link.provenance),
             }
     counts["entities"] = len(modelled)

@@ -29,6 +29,8 @@ export const ENTITY_TYPES = [
   "pull_request",
   "commit",
   "release",
+  "application",
+  "environment",
 ] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
@@ -53,6 +55,7 @@ export const RELATIONSHIP_TYPES = [
   "merges",
   "child_of",
   "in_network",
+  "runs_in",
 ] as const;
 export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
 

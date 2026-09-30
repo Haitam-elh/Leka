@@ -95,7 +95,11 @@ async def test_every_extracted_record_is_parsed_and_the_rest_is_not(source: Sour
 
     assert (result["parsed"], result["failed"]) == (2, 0)  # the issue was never extracted
     row = (await _rows(source))["commits-1"]
-    assert (row.status, row.parser_version, row.extractor_version) == (ParseStatus.PARSED, 1, 1)
+    assert (row.status, row.parser_version, row.extractor_version) == (
+        ParseStatus.PARSED,
+        parsing_engine.PARSER_VERSION,
+        1,
+    )
     assert row.result is not None
     facts = row.result["facts"]
     assert isinstance(facts, list)
@@ -129,10 +133,11 @@ async def test_a_new_parser_version_parses_everything_again(
 ) -> None:
     await _extracted(source, commits=2)
     await parse_source(source.workspace_id, source.id)
-    monkeypatch.setattr(parsing_engine, "PARSER_VERSION", 2)
+    newer = parsing_engine.PARSER_VERSION + 1
+    monkeypatch.setattr(parsing_engine, "PARSER_VERSION", newer)
 
     assert (await parse_source(source.workspace_id, source.id))["parsed"] == 2
-    assert {row.parser_version for row in (await _rows(source)).values()} == {2}
+    assert {row.parser_version for row in (await _rows(source)).values()} == {newer}
 
 
 async def test_only_parsing_to_do_is_queued_by_the_pass(
@@ -141,7 +146,7 @@ async def test_only_parsing_to_do_is_queued_by_the_pass(
     await _extracted(source, commits=2)
     await parse_source(source.workspace_id, source.id)
     sync_tests.queued_purges.clear()
-    monkeypatch.setattr(parsing_engine, "PARSER_VERSION", 2)
+    monkeypatch.setattr(parsing_engine, "PARSER_VERSION", parsing_engine.PARSER_VERSION + 1)
 
     await _sync(source)
 

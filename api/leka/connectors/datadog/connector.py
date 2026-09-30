@@ -1,4 +1,5 @@
-"""The Datadog connector — monitors, events, incidents, metrics and logs.
+"""The Datadog connector — monitors, events, incidents, metrics, logs and
+the service catalog.
 
 Datadog is read at https://api.<site>, the site the organisation lives on
 (datadoghq.com, datadoghq.eu, us3.datadoghq.com…), with an API key and an
@@ -11,6 +12,8 @@ what it may not read, LEKA cannot. Every call is a GET.
     incidents   Datadog Incident Management               incident_read
     metrics     metric definitions, not their points      metrics_read
     logs        logs matching `logs_query`                logs_read_data
+    services    the service catalog's definitions: team,   apm_service_catalog_read
+                application, tier, lifecycle, dependencies
 
 test_connection: is the API key valid (GET /api/v1/validate), whose is the
 application key (GET /api/v2/current_user), and which of the five can it
@@ -21,8 +24,8 @@ check_health: GET /api/v1/validate, reading Datadog's X-RateLimit-*.
 list_scope: the services the organisation knows — its service catalog,
 and the `service:` tags of its monitors.
 
-iter_resources: monitors and incidents come whole each pass, so what a
-pass did not see is gone; metrics too, at most MAX_METRICS, and left for the
+iter_resources: monitors, incidents and the catalog's services come whole
+each pass, so what a pass did not see is gone; metrics too, at most MAX_METRICS, and left for the
 weekly full pass to sweep, since a cut list must not sweep; events and logs
 from the last pass (less a margin), newest first, at most MAX_EVENTS and
 MAX_LOGS a pass. With `services`, each is read for those
@@ -125,6 +128,14 @@ def datadog_site(value: str) -> str:
     return text
 
 
+def catalog_name(definition: Item) -> str | None:
+    """A catalog definition's service name — `dd-service` in the schemas
+    v2 to v2.2, `metadata.name` in v3 — lower-cased as Datadog tags it."""
+    schema = dig(definition, "attributes.schema") or {}
+    name = str(dig(schema, "dd-service") or dig(schema, "metadata.name") or "")
+    return name.strip().lower() or None
+
+
 def app_host(site: str) -> str:
     """Where people open Datadog: app.datadoghq.com, but us3.datadoghq.com."""
     return site if re.match(r"^(us\d|ap\d|uk\d)\.", site) else f"app.{site}"
@@ -197,9 +208,10 @@ class DatadogConnector(Connector[DatadogConfig, DatadogCredentials]):
         auth_type="token",
         config_schema=DatadogConfig,
         credentials_schema=DatadogCredentials,
-        capabilities=frozenset({C.ALERTS, C.EVENTS, C.INCIDENTS, C.METRICS, C.LOGS}),
-        # Monitors, incidents and metrics come whole; events and logs by date.
-        listed_whole=frozenset({C.ALERTS, C.INCIDENTS}),
+        capabilities=frozenset({C.ALERTS, C.EVENTS, C.INCIDENTS, C.METRICS, C.LOGS, C.SERVICES}),
+        # Monitors, incidents, services and metrics come whole; events and
+        # logs by date.
+        listed_whole=frozenset({C.ALERTS, C.INCIDENTS, C.SERVICES}),
     )
 
     # ── the contract ─────────────────────────────────────────────────────────
@@ -214,7 +226,7 @@ class DatadogConnector(Connector[DatadogConfig, DatadogCredentials]):
             warnings.append(
                 "Cette clé d'application ne peut rien lire : donnez-lui les permissions de "
                 "lecture (monitors_read, events_read, incident_read, metrics_read, "
-                "logs_read_data)."
+                "logs_read_data, apm_service_catalog_read)."
             )
         attributes = dig(me, "data.attributes") or {}
         return ConnectionTestResult(
@@ -240,7 +252,7 @@ class DatadogConnector(Connector[DatadogConfig, DatadogCredentials]):
         async with self._client() as client:
             try:
                 async for definition in self._catalog(client):
-                    name = str(dig(definition, "attributes.schema.dd-service") or "").lower()
+                    name = catalog_name(definition)
                     if name:
                         found.setdefault(name, "Catalogue de services")
             except ConnectorError as error:
@@ -268,6 +280,7 @@ class DatadogConnector(Connector[DatadogConfig, DatadogCredentials]):
             C.INCIDENTS: self._incidents,
             C.METRICS: self._metrics,
             C.LOGS: self._logs,
+            C.SERVICES: self._services,
         }
         async with self._client() as client:
             async for found in reads[capability](client, since):
@@ -386,6 +399,23 @@ class DatadogConnector(Connector[DatadogConfig, DatadogCredentials]):
             client.spare_the_quota(response)
         raise diagnose(DiagnosticCode.PROVIDER_ERROR, detail="Datadog gave too many metric pages")
 
+    async def _services(
+        self, client: VendorHttp, since: datetime | None
+    ) -> AsyncIterator[RawRecord]:
+        """The service catalog: each definition, whole — what the team wrote
+        of its service (LEKA-362)."""
+        async for definition in self._catalog(client):
+            name = catalog_name(definition)
+            if not name or not self._wanted([name]):
+                continue
+            yield record(
+                C.SERVICES,
+                definition,
+                external_id=name,
+                container=name,
+                updated=dig(definition, "attributes.meta.last-modified-time"),
+            )
+
     async def _logs(self, client: VendorHttp, since: datetime | None) -> AsyncIterator[RawRecord]:
         after = (since - INDEXING_MARGIN) if since else datetime.now(UTC) - LOGS_HISTORY
         query = self.config.logs_query
@@ -434,6 +464,8 @@ class DatadogConnector(Connector[DatadogConfig, DatadogCredentials]):
             C.METRICS: "/api/v2/metrics?" + urlencode({"page[size]": 1}),
             C.LOGS: "/api/v2/logs/events?"
             + urlencode({"page[limit]": 1, "filter[from]": "now-15m", "filter[query]": logs}),
+            C.SERVICES: "/api/v2/services/definitions?"
+            + urlencode({"page[size]": 1, "page[number]": 0}),
         }
 
     async def _monitors(self, client: VendorHttp) -> AsyncIterator[Item]:

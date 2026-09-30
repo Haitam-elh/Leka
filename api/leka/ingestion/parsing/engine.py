@@ -25,7 +25,8 @@ from leka.ingestion.parsing.contract import (
     Quality,
 )
 
-PARSER_VERSION = 1
+# 2: application and criticality tags (LEKA-362); `tier` read by its value.
+PARSER_VERSION = 2
 CODE_HOSTS = frozenset({"github", "gitlab", "bitbucket"})
 MAX_FACTS = 500  # a page listing a thousand tickets says little about each
 

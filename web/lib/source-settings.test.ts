@@ -16,7 +16,13 @@ const SETTINGS: SourceSettings = {
     entity_types: { issues: "incident" },
     services: [{ match: "acme/pay*", service: "billing" }],
     owners: [{ match: "acme/*", team: "payments" }],
-    tag_keys: { environment: ["stage"], service: ["app"], owner: [] },
+    tag_keys: {
+      environment: ["stage"],
+      service: ["app"],
+      application: ["product"],
+      owner: [],
+      criticality: ["impact"],
+    },
     states: { "QA Review": "in_progress" },
     priorities: { P0: "highest" },
     environments: { prd: "production" },
@@ -81,6 +87,16 @@ describe("the editor's lines", () => {
     const draft = { ...toDraft({}), entityTypes: { issues: "incident", commits: "" } };
 
     expect(fromDraft(draft).settings?.mapping?.entity_types).toEqual({ issues: "incident" });
+  });
+
+  it("read the application and criticality tag keys (LEKA-362)", () => {
+    const draft = { ...toDraft({}), tagApplication: "product, system", tagCriticality: "impact" };
+
+    const keys = fromDraft(draft).settings?.mapping?.tag_keys;
+
+    expect(keys?.application).toEqual(["product", "system"]);
+    expect(keys?.criticality).toEqual(["impact"]);
+    expect(hasMapping(fromDraft(draft).settings ?? {})).toBe(true);
   });
 
   it("know when a mapping says nothing", () => {

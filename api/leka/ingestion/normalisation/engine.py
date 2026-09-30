@@ -33,7 +33,9 @@ from leka.ingestion.parsing import ParsedRecord
 # 2: incidents and services of the operations tools (LEKA-348).
 # 3: the project tools' projects and issues, the documentation tools' and
 #    office suites' documents (LEKA-346).
-NORMALISER_VERSION = 3
+# 4: applications, environments, what services depend on, how critical and
+#    where in their life they are (LEKA-362).
+NORMALISER_VERSION = 4
 
 
 def normalise(

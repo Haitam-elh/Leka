@@ -56,9 +56,17 @@ from typing import Literal
 from leka.ingestion.resolution import signals as sig
 
 # 2: quarantined records left out, and each entity's quality (LEKA-358).
-RESOLVER_VERSION = 2
+# 3: applications named alike are one, as services and teams (LEKA-362).
+RESOLVER_VERSION = 3
 MERGE = 0.9
 LINK = 0.6
+# The kinds one by name — "Billing API" and "billing" — and the words that
+# say what a name is rather than which one it is.
+NAME_WORDS = {
+    "service": sig.SERVICE_WORDS,
+    "team": sig.TEAM_WORDS,
+    "application": sig.APPLICATION_WORDS,
+}
 SEMANTIC_CAP = 0.95
 # Below MERGE: what two people with their own addresses can reach by name.
 KEPT_APART = 0.89
@@ -286,8 +294,11 @@ class _Group:
         self.full_names = {
             n: m.name for m in reversed(self.mentions) if (n := sig.full_name(m.name))
         }
-        words = sig.TEAM_WORDS if self.type == "team" else sig.SERVICE_WORDS
-        self.cores = {sig.core(key, words) for key in self.keys if key.startswith(self.type + ":")}
+        self.cores = {
+            sig.core(key, NAME_WORDS.get(self.type, sig.SERVICE_WORDS))
+            for key in self.keys
+            if key.startswith(self.type + ":")
+        }
 
 
 # ── step 2: what names mean ──────────────────────────────────────────────────
@@ -324,7 +335,7 @@ class _Semantic:
         self.pairs: dict[tuple[int, int], _Evidence] = defaultdict(_Evidence)
         people = [i for i, g in enumerate(groups) if g.type == "person" and not g.bot]
         self._people(people)
-        for kind in ("service", "team"):
+        for kind in NAME_WORDS:
             self._named(kind, [i for i, g in enumerate(groups) if g.type == kind])
         self.decided = {
             pair: evidence.decision(self._apart(*pair)) for pair, evidence in self.pairs.items()
@@ -586,9 +597,8 @@ def _names(
     reals = [m for m in ranked if real(m.name)]
     if kind == "person":
         different = _people_differ(reals)
-    elif kind in ("service", "team"):
-        words = sig.TEAM_WORDS if kind == "team" else sig.SERVICE_WORDS
-        different = len({sig.core(m.name, words)[0] for m in reals}) > 1
+    elif kind in NAME_WORDS:
+        different = len({sig.core(m.name, NAME_WORDS[kind])[0] for m in reals}) > 1
     else:
         described = [m for m in reals if m.records]
         different = len({sig.fold(m.name) for m in described}) > 1

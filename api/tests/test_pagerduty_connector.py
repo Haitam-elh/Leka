@@ -251,6 +251,104 @@ async def test_services_come_whole_those_in_scope_only() -> None:
     assert every[0].updated_at == datetime(2026, 9, 25, 9, tzinfo=UTC)
 
 
+# ── dependencies and business services (LEKA-362) ────────────────────────────
+
+ONLINE_SHOP: dict[str, Any] = {
+    "id": "PBSHOP1",
+    "type": "business_service",
+    "name": "Online shop",
+    "description": "What customers buy through",
+    "point_of_contact": "shop-leads@acme.test",
+    "team": {"id": "PTEAM01", "type": "team_reference", "summary": "Commerce"},
+    "html_url": "https://acme.pagerduty.com/business_services/PBSHOP1",
+}
+
+
+def depends(dependent: str, supporting: str, kind: str = "technical") -> dict[str, Any]:
+    reference = f"{kind}_service_reference"
+    return {
+        "type": "service_dependency",
+        "supporting_service": {"id": supporting, "type": reference},
+        "dependent_service": {"id": dependent, "type": "technical_service_reference"},
+    }
+
+
+def mapped(pagerduty: PagerDuty) -> PagerDuty:
+    """Checkout depends on Search; the Online shop is Checkout's and Search's."""
+    pagerduty.answers |= {
+        "/business_services": lambda r: pagerduty._page(r, "business_services", [ONLINE_SHOP]),
+        "/service_dependencies/technical_services/PCHKOUT": {
+            "relationships": [depends("PCHKOUT", "PSEARCH"), depends("PBSHOP1", "PCHKOUT")]
+        },
+        "/service_dependencies/technical_services/PSEARCH": {
+            "relationships": [depends("PCHKOUT", "PSEARCH")]
+        },
+        "/service_dependencies/business_services/PBSHOP1": {
+            "relationships": [depends("PBSHOP1", "PCHKOUT"), depends("PBSHOP1", "PSEARCH")]
+        },
+    }
+    return pagerduty
+
+
+async def test_each_service_comes_with_what_it_depends_on() -> None:
+    found = {r.external_id: r.payload for r in await _stream(mapped(PagerDuty()), C.SERVICES)}
+
+    # Its own side only: Checkout depends on Search, not on what depends on it.
+    assert found["PCHKOUT"]["dependencies"] == [
+        {"id": "PSEARCH", "name": "Search", "type": "technical"}
+    ]
+    assert found["PSEARCH"]["dependencies"] == []
+
+
+async def test_business_services_come_with_the_services_that_support_them() -> None:
+    found = {r.external_id: r.payload for r in await _stream(mapped(PagerDuty()), C.SERVICES)}
+
+    shop: dict[str, Any] = found["PBSHOP1"]
+    assert shop["type"] == "business_service"
+    assert shop["name"] == "Online shop"
+    assert [d["name"] for d in shop["dependencies"]] == ["Checkout", "Search"]
+
+
+async def test_a_scope_keeps_the_business_services_its_services_support() -> None:
+    pagerduty = mapped(PagerDuty())
+    pagerduty.services = [*pagerduty.services, {"id": "PADMIN1", "name": "Admin"}]
+    pagerduty.answers["/service_dependencies/business_services/PBSHOP1"] = {
+        "relationships": [depends("PBSHOP1", "PCHKOUT")]
+    }
+
+    shopping = await _stream(pagerduty, C.SERVICES, services=["PCHKOUT"])
+    admin = await _stream(pagerduty, C.SERVICES, services=["PADMIN1"])
+
+    assert [r.external_id for r in shopping] == ["PCHKOUT", "PBSHOP1"]
+    assert [r.external_id for r in admin] == ["PADMIN1"]
+
+
+async def test_an_account_without_dependencies_or_business_services_reads_services() -> None:
+    forbidden = httpx.Response(403, json={"error": {"message": "Forbidden", "code": 2010}})
+    pagerduty = PagerDuty({"/business_services": forbidden})
+
+    found = await _stream(pagerduty, C.SERVICES)
+
+    # The dependency paths answer 404 here: read without them.
+    assert [(r.external_id, r.payload["dependencies"]) for r in found] == [
+        ("PCHKOUT", []),
+        ("PSEARCH", []),
+    ]
+
+
+async def test_past_the_dependency_budget_services_are_read_without(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(pagerduty_module, "MAX_DEPENDENCY_READS", 1)
+    pagerduty = mapped(PagerDuty())
+
+    found = {r.external_id: r.payload for r in await _stream(pagerduty, C.SERVICES)}
+
+    assert found["PCHKOUT"]["dependencies"] != []
+    assert found["PSEARCH"]["dependencies"] == []
+    assert pagerduty.requests("/service_dependencies/technical_services/PSEARCH") == []
+
+
 async def test_each_pass_reads_the_incidents_of_the_last_ninety_days() -> None:
     pagerduty = PagerDuty()
     pagerduty.incidents = [incident(1), incident(2, "PSEARCH")]

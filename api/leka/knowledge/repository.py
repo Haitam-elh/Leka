@@ -11,18 +11,40 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, Select, delete, func, or_, select, text, update
+from sqlalchemy import CursorResult, Select, delete, exists, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.db import WorkspaceScopedRepository
 from leka.knowledge.build import Built, Current
-from leka.knowledge.models import Entity, EntityVersion, Lifecycle, ModelRun, Relationship
+from leka.knowledge.models import (
+    Entity,
+    EntityType,
+    EntityVersion,
+    Lifecycle,
+    ModelRun,
+    Relationship,
+    RelationshipType,
+)
 
 CHUNK = 1_000
+
+
+@dataclass(frozen=True)
+class LandscapeFilters:
+    """What a list of services or applications is narrowed to (LEKA-362)."""
+
+    lifecycle: Lifecycle | None = None
+    criticality: str | None = None
+    stage: str | None = None
+    environment: str | None = None
+    application_id: uuid.UUID | None = None
+    team_id: uuid.UUID | None = None
+    q: str | None = None
 
 
 class ModelRepository(WorkspaceScopedRepository):
@@ -253,6 +275,127 @@ class EntityRepository(WorkspaceScopedRepository):
         )
         return entities, list(edges)
 
+    # ── the landscape: applications and services (LEKA-362) ─────────────────
+
+    def landscape(self, kind: EntityType, filters: LandscapeFilters) -> Select[tuple[Entity]]:
+        """The services — or the applications — of the workspace, for a
+        page: every lifecycle but removed unless asked, and only those that
+        are as critical, at that stage, run there, belong to that
+        application or that team."""
+        statement = self.select(Entity).where(Entity.type == kind)
+        f = filters
+        if f.lifecycle is None:
+            statement = statement.where(Entity.lifecycle != Lifecycle.REMOVED)
+        else:
+            statement = statement.where(Entity.lifecycle == f.lifecycle)
+        if f.criticality:
+            statement = statement.where(Entity.attributes["criticality"].astext == f.criticality)
+        if f.stage:
+            statement = statement.where(Entity.attributes["stage"].astext == f.stage)
+        if f.environment:
+            statement = statement.where(
+                Entity.attributes.contains({"environments": [f.environment]})
+            )
+        if f.q:
+            statement = statement.where(Entity.name.ilike(f"%{f.q}%"))
+        for other, relation in (
+            (f.application_id, RelationshipType.PART_OF),
+            (f.team_id, RelationshipType.OWNED_BY),
+        ):
+            if other is not None:
+                statement = statement.where(
+                    exists().where(
+                        Relationship.workspace_id == self.workspace_id,
+                        Relationship.from_entity_id == Entity.id,
+                        Relationship.to_entity_id == other,
+                        Relationship.type == relation,
+                    )
+                )
+        return statement
+
+    async def around(
+        self, ids: Sequence[uuid.UUID], types: Sequence[RelationshipType]
+    ) -> Sequence[Relationship]:
+        """The relationships of these types that start or end at these
+        entities."""
+        if not ids:
+            return []
+        wanted = set(ids)
+        return await self.list(
+            self.select(Relationship).where(
+                Relationship.type.in_(types),
+                or_(Relationship.from_entity_id.in_(wanted), Relationship.to_entity_id.in_(wanted)),
+            )
+        )
+
+    async def dependencies(
+        self,
+        entity_id: uuid.UUID,
+        *,
+        downstream: bool,
+        depth: int,
+        environment: str | None,
+        limit: int,
+    ) -> tuple[dict[uuid.UUID, int], list[Relationship]]:
+        """What an entity depends on (downstream) — or what depends on it
+        (upstream: what a failure of it reaches) — `depth` steps of
+        `depends_on` away, in one environment or all: each reached entity
+        and its distance, and the edges walked. One recursive query,
+        bounded by depth and by `limit` entities (docs/adr/001-postgresql.md)."""
+        near, far = (
+            ("from_entity_id", "to_entity_id") if downstream else ("to_entity_id", "from_entity_id")
+        )
+        walk = text(
+            f"""
+            WITH RECURSIVE reach(id, depth) AS (
+                SELECT CAST(:root AS uuid), 0
+                UNION
+                SELECT r.{far}, reach.depth + 1
+                FROM reach
+                JOIN relationships r
+                  ON r.workspace_id = :workspace
+                 AND r.{near} = reach.id
+                 AND r.type = 'depends_on'
+                 AND (CAST(:environment AS text) IS NULL
+                      OR NOT jsonb_exists(r.attributes, 'environments')
+                      OR jsonb_exists(r.attributes -> 'environments', :environment))
+                WHERE reach.depth < :depth
+            )
+            SELECT reach.id, min(reach.depth) FROM reach
+            JOIN entities e ON e.id = reach.id AND e.workspace_id = :workspace
+            WHERE e.lifecycle <> 'removed' OR reach.id = CAST(:root AS uuid)
+            GROUP BY reach.id
+            ORDER BY min(reach.depth), reach.id
+            LIMIT :limit
+            """  # noqa: S608 — the two column names are chosen above, never given
+        )
+        rows = await self._session.execute(
+            walk,
+            {
+                "root": entity_id,
+                "workspace": self.workspace_id,
+                "depth": depth,
+                "environment": environment,
+                "limit": limit,
+            },
+        )
+        reached = {row[0]: int(row[1]) for row in rows.all()}
+        if entity_id not in reached:
+            return {}, []
+        edges = await self.list(
+            self.select(Relationship).where(
+                Relationship.type == RelationshipType.DEPENDS_ON,
+                Relationship.from_entity_id.in_(reached),
+                Relationship.to_entity_id.in_(reached),
+            )
+        )
+        kept = [
+            edge
+            for edge in edges
+            if environment is None or environment in _environments(edge) or not _environments(edge)
+        ]
+        return reached, kept
+
     async def counts(self) -> dict[str, dict[str, int]]:
         """How many entities of each type and in each lifecycle; how many
         relationships of each type."""
@@ -276,3 +419,8 @@ class EntityRepository(WorkspaceScopedRepository):
             "lifecycles": {state.value: int(n) for state, n in by_lifecycle.all()},
             "relationships": {kind.value: int(n) for kind, n in by_relationship.all()},
         }
+
+
+def _environments(edge: Relationship) -> list[str]:
+    found = (edge.attributes or {}).get("environments")
+    return [str(e) for e in found] if isinstance(found, list) else []

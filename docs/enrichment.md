@@ -15,6 +15,7 @@ LEKA-361).
         ▼
  enrich()                                leka/ingestion/enrichment
         │  1 relationships  2 links  3 ownership  4 membership  5 activity  6 category
+        │  7 landscape
         ▼
  enriched_relationships   every relationship between two entities: stated or inferred
  entity_enrichments       every attribute added to an entity
@@ -81,6 +82,10 @@ the steps' confidences × the owner's × **0.9 a step** — a pull request of a
 repository of a service owned by `payments`: 1.0 × 0.8 × 0.9² = 0.65. Two
 teams equally near: neither (`ownership.tied`). Below 0.5: nothing.
 
+An **application**'s team is inherited the same way by its services
+(LEKA-362): a service a catalogue names as the application's, with no team
+of its own, is the application's team's.
+
 **The maintainers** of a repository, a project, a service: the three people
 most active on what it holds (a service: what is part of it and of its
 repositories), with a share of the work of 20 % or more and two items or
@@ -126,7 +131,24 @@ vendor's type, a label and a Conventional Commits title come first:
 nothing — "Fix typo in docs" is a tie. `category`, rule `title_words`,
 confidence 0.6.
 
-## 7. What fails, fails alone
+## 7. Landscape — where services and applications run, how critical
+
+What a service or an application **is made of** says what no catalogue
+said of it (LEKA-362). Services first — an application reads its services'.
+
+| Attribute or relationship | Of | Rule | Confidence |
+|---|---|---|---|
+| `runs_in` → an environment | service, application | `parts`: one of its parts runs there — a resource by its `environment`, anything by its own `runs_in`; an application's services by what this rule found for them | the surest part's: the `part_of`'s and its environment's, the lower |
+| `environments` | service, application | `parts`: every environment above, and those its sources state, in the order production, staging, development, test | the surest of them |
+| `criticality` | service, application | `parts`: as critical as its most critical part — a resource's `criticality` tag, a service's catalogue | its part's, the `part_of`'s, **0.8 at most** |
+
+A `runs_in` is made to the environment's **own entity** — normalisation
+names `environment:production` wherever a record runs in production — and
+only where the entity has one holder. An attribute its sources state is
+never enriched: a catalogue's `criticality` stands, and it is what an
+application's is read from. Nothing known of its parts: nothing said.
+
+## 8. What fails, fails alone
 
 - **An enricher that raises** is recorded in the run's `failures`
   (`{enricher, error}` — the error's type) and what it made is dropped; the
@@ -142,7 +164,7 @@ confidence 0.6.
 - **The base is never written**: resolved entities, their keys and
   decisions are resolution's alone.
 
-## 8. Where results are kept, and what reads them
+## 9. Where results are kept, and what reads them
 
 | Table | One row per | Holds |
 |---|---|---|
@@ -165,7 +187,7 @@ the same names), and its `enriched_relationships` both ways — each with a
 confidence to weigh. `GET /ingestion/enrichment/entities/{id}` is that
 read.
 
-## 9. When it runs
+## 10. When it runs
 
 A **workspace** stage, after resolution
 ([processing.md](processing.md)): `enrich:<workspace>`,
@@ -174,7 +196,8 @@ A **workspace** stage, after resolution
 - **Queued by a resolution run that succeeded.** It reads what the latest
   successful resolution run made; that run's id is what it was made from.
 - **Queued by `advance`**, when nothing is left to resolve but enrichment
-  has something to do: a new `ENRICHER_VERSION`, a run that used up its
+  has something to do: a new `ENRICHER_VERSION` (2 since LEKA-362's
+  landscape), a run that used up its
   retries.
 - One run at a time per workspace; a run that sees resolution succeed again
   while it reads is closed `abandoned` and reads again (up to three times);
@@ -185,7 +208,7 @@ A **workspace** stage, after resolution
   [ADR 013](adr/013-events-and-job-runs.md)): the company model is built
   from it ([company-model.md § 6](company-model.md#6-when-it-builds)).
 
-## 10. The API
+## 11. The API
 
 `source:read` — every member. Another workspace's entity is 404.
 
@@ -194,10 +217,10 @@ A **workspace** stage, after resolution
 | `GET /ingestion/enrichment` | pending?, the last run and its failed enrichers; counts — relationships, stated, inferred, cross-source, attributes; how many per `type:rule` and per attribute |
 | `GET /ingestion/enrichment/entities/{id}` | one entity as the company model reads it: its attributes, what was added, its relationships both ways (100 each way, by type and the surest first, and how many) |
 | `GET /ingestion/enrichment/relationships` | paginated, the surest first — `type=`, `origin=stated\|inferred`, `rule=`, `cross_source=true`, `entity_id=` |
-| `GET /ingestion/enrichment/environment` | the "Mon environnement" screen (§ 11) |
-| `GET /ingestion/enrichment/environment/{id}` | one entity's sheet (§ 11) |
+| `GET /ingestion/enrichment/environment` | the "Mon environnement" screen (§ 12) |
+| `GET /ingestion/enrichment/environment/{id}` | one entity's sheet (§ 12) |
 
-## 11. The "Mon environnement" screens
+## 12. The "Mon environnement" screens
 
 `/environment` and `/environment/<type>/<id>` in the application, laid out
 as mockups 10 and 11 (`docs/product/mockups/`), read from
@@ -240,7 +263,7 @@ what no source says is said missing, never invented.**
   change is a state read again.
 
 **A sheet** (`GET /ingestion/enrichment/environment/{id}`): the entity as
-the company model reads it (§ 8), its state; its **owner** — its surest
+the company model reads it (§ 9), its state; its **owner** — its surest
 maintainer — and its **team** — owned_by, stated first, and how many work
 with it (`member_of`); its incidents, the open first; the eight latest
 events around it (what is part of it or affects it — for a service, also
@@ -268,4 +291,4 @@ the deployments, logs and configuration tabs, LEKA's insights and analysis
 - **A person's word**: confirming or rejecting an inference by hand, kept
   across runs.
 - **The users, the business domains, the metrics** on the screens: they
-  wait for sources and models that read them (§ 11).
+  wait for sources and models that read them (§ 12).

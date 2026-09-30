@@ -17,6 +17,8 @@ company model reads them, what those things are together:
        time, staleness; an incident's duration; a service's incidents and
        their mean time to resolve.
     6. CATEGORY: the kind of work a title says, where parsing found none.
+    7. LANDSCAPE: where a service or an application runs, and how critical
+       it is, where no catalogue says — what its parts show (LEKA-362).
 
 ADDED, NEVER OVERWRITTEN. Nothing here changes a resolved entity: what is
 enriched is kept beside it — each attribute and each relationship with its
@@ -49,7 +51,9 @@ from typing import Literal
 
 from leka.ingestion.resolution import signals as sig
 
-ENRICHER_VERSION = 1
+# 2: where services and applications run, how critical they are; an
+#    application's team inherited by its services (LEKA-362).
+ENRICHER_VERSION = 2
 
 Origin = Literal["stated", "inferred"]
 
@@ -71,7 +75,7 @@ WORK = {
     "reported_by": 0.3,
 }
 UP = frozenset({"part_of", "child_of"})
-CONTAINERS = frozenset({"repository", "project", "service"})
+CONTAINERS = frozenset({"repository", "project", "service", "application"})
 # What names a service in its title.
 TITLED = frozenset({"issue", "pull_request", "incident", "document"})
 # What a title says the kind of work of.
@@ -193,6 +197,14 @@ TITLE_WORDS: tuple[tuple[str, frozenset[str]], ...] = (
     ),
 )
 TITLE_CONFIDENCE = 0.6
+# The landscape (LEKA-362): services first — an application reads theirs.
+LANDSCAPE = ("service", "application")
+# LEKA's scales, in order: the most critical first; environments as
+# normalisation's canonical names.
+LEVELS = ("critical", "high", "medium", "low")
+ENVIRONMENT_ORDER = ("production", "staging", "development", "test")
+# A part's criticality, said of its whole: at most this sure.
+FROM_PARTS = 0.8
 
 
 # ── what it reads ────────────────────────────────────────────────────────────
@@ -870,6 +882,128 @@ def category(graph: Graph) -> Made:
 Enricher = Callable[[Graph], Made]
 
 # In order: each reads what those before it made.
+# ── 7. landscape (LEKA-362) ─────────────────────────────────────────────────
+
+
+def landscape(graph: Graph) -> Made:
+    """Where a service or an application runs, and how critical it is, where
+    no catalogue says — what its parts show. A service runs in the
+    environments its resources run in, an application in its services';
+    one holding a critical part is critical. Each environment is also an
+    inferred `runs_in`, to the environment's own entity."""
+    made = Made()
+    # What this enricher found, for the applications that read their
+    # services': node → environment → (confidence, the part that says it).
+    runs: dict[uuid.UUID, dict[str, tuple[float, uuid.UUID]]] = {}
+    levels: dict[uuid.UUID, tuple[str, float]] = {}
+    for kind in LANDSCAPE:
+        for node in [n for n in graph.nodes.values() if n.type == kind]:
+            found: dict[str, tuple[float, uuid.UUID]] = {}
+            highest: tuple[int, float, uuid.UUID] | None = None
+            for edge in graph.into(node.id, {"part_of"}):
+                part = graph.nodes[edge.from_id]
+                for name, sure in _runs_in(graph, part, runs).items():
+                    surety = round(min(edge.confidence, sure), 2)
+                    if surety > found.get(name, (0.0, part.id))[0]:
+                        found[name] = (surety, part.id)
+                level = levels.get(part.id) or _criticality(part)
+                if level is not None:
+                    rank = LEVELS.index(level[0])
+                    surety = round(min(FROM_PARTS, edge.confidence, level[1]), 2)
+                    if highest is None or (rank, -surety) < (highest[0], -highest[1]):
+                        highest = (rank, surety, part.id)
+            own = _runs_in(graph, node, {})
+            runs[node.id] = {**found, **{n: (s, node.id) for n, s in own.items()}}
+            for name, (surety, via) in sorted(found.items()):
+                if name in own:
+                    continue
+                target = _one_holder(graph, f"environment:{name}")
+                if target is None:
+                    continue
+                made.edges.append(
+                    _inferred(
+                        node.id,
+                        target,
+                        "runs_in",
+                        "parts",
+                        surety,
+                        f"its {graph.nodes[via].type} {graph.nodes[via].key} runs in {name}",
+                        inputs=[via],
+                    )
+                )
+                made.counts["runs_in"] += 1
+            everywhere = runs[node.id]
+            if everywhere and "environments" not in node.attributes:
+                names = sorted(everywhere, key=_environment_rank)
+                made.facts.append(
+                    _fact(
+                        node,
+                        "environments",
+                        names,
+                        max(s for s, _ in everywhere.values()),
+                        "parts",
+                        f"runs in {', '.join(names)}",
+                    )
+                )
+                made.counts["environments"] += 1
+            stated = _criticality(node)
+            if stated is not None:
+                levels[node.id] = stated
+            elif highest is not None:
+                rank, surety, via = highest
+                levels[node.id] = (LEVELS[rank], surety)
+                part = graph.nodes[via]
+                made.facts.append(
+                    _fact(
+                        node,
+                        "criticality",
+                        LEVELS[rank],
+                        surety,
+                        "parts",
+                        f"its {part.type} {part.key} is {LEVELS[rank]}",
+                    )
+                )
+                made.counts["criticality"] += 1
+    return made
+
+
+def _runs_in(
+    graph: Graph, node: Node, found: dict[uuid.UUID, dict[str, tuple[float, uuid.UUID]]]
+) -> dict[str, float]:
+    """Where a thing runs, and how surely: its sources' `runs_in`, its own
+    `environment`, what this enricher found for it."""
+    where: dict[str, float] = {}
+    for edge in graph.out(node.id, {"runs_in"}):
+        name = graph.nodes[edge.to_id].key.removeprefix("environment:")
+        where[name] = max(where.get(name, 0.0), edge.confidence)
+    environment = node.attributes.get("environment")
+    if isinstance(environment, str) and environment in ENVIRONMENT_ORDER:
+        sure = node.attributes.get("environment_confidence", 1.0)
+        surety = float(sure) if isinstance(sure, int | float) else 1.0
+        where[environment] = max(where.get(environment, 0.0), surety)
+    for name, (surety, _) in found.get(node.id, {}).items():
+        where[name] = max(where.get(name, 0.0), surety)
+    return where
+
+
+def _criticality(node: Node) -> tuple[str, float] | None:
+    """What a thing's sources say of how critical it is, on LEKA's scale."""
+    level = node.attributes.get("criticality")
+    if level not in LEVELS:
+        return None
+    sure = node.attributes.get("criticality_confidence", 1.0)
+    return str(level), float(sure) if isinstance(sure, int | float) else 1.0
+
+
+def _environment_rank(name: str) -> int:
+    return ENVIRONMENT_ORDER.index(name) if name in ENVIRONMENT_ORDER else len(ENVIRONMENT_ORDER)
+
+
+def _one_holder(graph: Graph, key: str) -> uuid.UUID | None:
+    holders = graph.snapshot.holders.get(key, set())
+    return next(iter(holders)) if len(holders) == 1 else None
+
+
 ENRICHERS: tuple[tuple[str, Enricher], ...] = (
     ("relationships", relationships),
     ("links", links),
@@ -877,6 +1011,7 @@ ENRICHERS: tuple[tuple[str, Enricher], ...] = (
     ("membership", membership),
     ("activity", activity),
     ("category", category),
+    ("landscape", landscape),
 )
 
 

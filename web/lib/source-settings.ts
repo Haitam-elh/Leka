@@ -46,7 +46,9 @@ export type SettingsDraft = {
   entityTypes: Record<string, string>;
   tagEnvironment: string;
   tagService: string;
+  tagApplication: string;
   tagOwner: string;
+  tagCriticality: string;
   states: string;
   priorities: string;
   environments: string;
@@ -107,7 +109,9 @@ export function toDraft(settings: SourceSettings): SettingsDraft {
     entityTypes: { ...(mapping.entity_types ?? {}) },
     tagEnvironment: (mapping.tag_keys?.environment ?? []).join(", "),
     tagService: (mapping.tag_keys?.service ?? []).join(", "),
+    tagApplication: (mapping.tag_keys?.application ?? []).join(", "),
     tagOwner: (mapping.tag_keys?.owner ?? []).join(", "),
+    tagCriticality: (mapping.tag_keys?.criticality ?? []).join(", "),
     states: table(mapping.states),
     priorities: table(mapping.priorities),
     environments: table(mapping.environments),
@@ -151,7 +155,9 @@ export function fromDraft(
         tag_keys: {
           environment: list(draft.tagEnvironment),
           service: list(draft.tagService),
+          application: list(draft.tagApplication),
           owner: list(draft.tagOwner),
+          criticality: list(draft.tagCriticality),
         },
         states: Object.fromEntries(states),
         priorities: Object.fromEntries(priorities),
@@ -169,9 +175,13 @@ export function hasMapping(settings: SourceSettings): boolean {
     Object.keys(m.entity_types ?? {}).length > 0 ||
     (m.services ?? []).length > 0 ||
     (m.owners ?? []).length > 0 ||
-    [m.tag_keys?.environment, m.tag_keys?.service, m.tag_keys?.owner].some(
-      (keys) => (keys ?? []).length > 0,
-    ) ||
+    [
+      m.tag_keys?.environment,
+      m.tag_keys?.service,
+      m.tag_keys?.application,
+      m.tag_keys?.owner,
+      m.tag_keys?.criticality,
+    ].some((keys) => (keys ?? []).length > 0) ||
     Object.keys(m.states ?? {}).length > 0 ||
     Object.keys(m.priorities ?? {}).length > 0 ||
     Object.keys(m.environments ?? {}).length > 0

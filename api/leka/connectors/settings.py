@@ -92,7 +92,11 @@ class TagKeys(BaseModel):
 
     environment: list[str] = Field(default_factory=list, max_length=20)
     service: list[str] = Field(default_factory=list, max_length=20)
+    # A group of services (LEKA-362): `system`, `product`, beside `application`.
+    application: list[str] = Field(default_factory=list, max_length=20)
     owner: list[str] = Field(default_factory=list, max_length=20)
+    # How critical: `business-impact`, beside `criticality` and `tier`.
+    criticality: list[str] = Field(default_factory=list, max_length=20)
 
 
 class Mapping(BaseModel):
@@ -252,7 +256,7 @@ def check(
                 )
 
     seen: dict[str, str] = {}
-    for facet in ("environment", "service", "owner"):
+    for facet in ("environment", "service", "application", "owner", "criticality"):
         for key in getattr(mapping.tag_keys, facet):
             other = seen.setdefault(key.strip().lower(), facet)
             if other != facet:

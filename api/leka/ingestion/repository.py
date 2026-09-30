@@ -2067,9 +2067,21 @@ class EnrichmentRepository(WorkspaceScopedRepository):
 
     async def resolved(
         self,
-    ) -> Sequence[tuple[uuid.UUID, str, str, str, dict[str, object], float, float | None]]:
+    ) -> Sequence[
+        tuple[
+            uuid.UUID,
+            str,
+            str,
+            str,
+            dict[str, object],
+            float,
+            float | None,
+            list[dict[str, object]],
+        ]
+    ]:
         """Every resolved entity: (id, type, key, name, attributes,
-        confidence, quality)."""
+        confidence, quality, conflicts — every value its sources disagree
+        on)."""
         rows = await self._session.execute(
             select(
                 ResolvedEntity.id,
@@ -2079,6 +2091,7 @@ class EnrichmentRepository(WorkspaceScopedRepository):
                 ResolvedEntity.attributes,
                 ResolvedEntity.confidence,
                 ResolvedEntity.quality,
+                ResolvedEntity.conflicts,
             ).where(ResolvedEntity.workspace_id == self.workspace_id)
         )
         return [tuple(row) for row in rows.all()]

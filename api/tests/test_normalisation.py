@@ -228,9 +228,14 @@ def test_tags_become_a_service_a_team_and_an_environment() -> None:
     assert {(e.type, e.key, e.name) for e in instance.related} == {
         ("service", "service:billing-api", "Billing API"),
         ("team", "team:payments", "Payments"),
+        ("environment", "environment:production", "production"),
     }
     edges = _edges(instance)
-    assert {("part_of", "service:billing-api"), ("owned_by", "team:payments")} <= edges
+    assert {
+        ("part_of", "service:billing-api"),
+        ("owned_by", "team:payments"),
+        ("runs_in", "environment:production"),
+    } <= edges
     # The instance's network is the VPC record's own key.
     assert ("in_network", vpc.entity.key) in edges
 
