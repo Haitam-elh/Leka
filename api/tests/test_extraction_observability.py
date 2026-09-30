@@ -14,12 +14,13 @@ from datetime import UTC, datetime
 from leka.connectors import Capability, SourceKind
 from leka.ingestion.extraction import FailureCode
 from tests.test_datadog_connector import CHECKOUT
-from tests.test_datadog_resources import event, incident, log
+from tests.test_datadog_resources import BILLING_V22, LEDGER_V3, event, incident, log
 from tests.test_extraction import SECRET, _extract, _failure
 from tests.test_grafana_connector import FIRING as GRAFANA_FIRING
 from tests.test_grafana_connector import LATENCY as GRAFANA_LATENCY
 from tests.test_grafana_connector import annotation as grafana_annotation
 from tests.test_pagerduty_connector import CHECKOUT as PAGERDUTY_CHECKOUT
+from tests.test_pagerduty_connector import ONLINE_SHOP
 from tests.test_pagerduty_connector import incident as pagerduty_incident
 
 C = Capability
@@ -130,6 +131,81 @@ def test_a_pagerduty_service_is_its_name_status_and_last_incident() -> None:
     assert (found.title, found.state) == ("Checkout", "active")
     assert found.content[0].text == "Payments at checkout"
     assert found.metadata["last_incident_at"] == "2026-09-24T08:00:00+00:00"
+
+
+def test_a_pagerduty_service_names_the_services_it_depends_on() -> None:
+    payload = {
+        **PAGERDUTY_CHECKOUT,
+        "dependencies": [
+            {"id": "PSEARCH", "name": "Search", "type": "technical"},
+            {"id": "PBSHOP1", "name": "Online shop", "type": "business"},
+        ],
+    }
+
+    found = _extract(SourceKind.PAGERDUTY, C.SERVICES, payload)
+
+    assert found.signals["depends_on"] == ["Search"]
+    assert "kind" not in found.signals
+
+
+def test_a_pagerduty_business_service_is_an_application_and_its_services() -> None:
+    payload = {
+        **ONLINE_SHOP,
+        "dependencies": [
+            {"id": "PCHKOUT", "name": "Checkout", "type": "technical"},
+            {"id": "PBPAY01", "name": "Payments", "type": "business"},
+        ],
+    }
+
+    found = _extract(SourceKind.PAGERDUTY, C.SERVICES, payload)
+
+    assert found.title == "Online shop"
+    assert found.signals["kind"] == "application"
+    assert found.signals["teams"] == ["Commerce"]
+    assert found.signals["services"] == ["Checkout"]
+    assert found.signals["depends_on"] == ["Payments"]
+    assert found.metadata["point_of_contact"] == "shop-leads@acme.test"
+    assert found.extractor == "pagerduty.services"
+
+
+# ── the Datadog service catalog (LEKA-362) ───────────────────────────────────
+
+
+def test_a_catalog_service_v2_is_its_team_application_tier_and_links() -> None:
+    found = _extract(DATADOG, C.SERVICES, BILLING_V22)
+
+    assert found.title == "billing-api"
+    assert found.content[0].text == "Invoices and refunds"
+    assert found.signals["teams"] == ["payments"]
+    assert found.signals["application"] == "Billing"
+    assert "depends_on" not in found.signals  # nothing: not said
+    assert {k: found.metadata[k] for k in ("tier", "lifecycle", "service_type")} == {
+        "tier": "1",
+        "lifecycle": "production",
+        "service_type": "web",
+    }
+    assert found.metadata["languages"] == ["python"]
+    assert found.metadata["runbook_url"] == "https://wiki.acme.test/billing"
+    assert found.metadata["repository_url"] == "https://github.com/acme/billing-api"
+    assert found.updated_at == datetime(2026, 9, 28, 10, 0, tzinfo=UTC)
+
+
+def test_a_catalog_service_v3_says_its_owner_system_and_dependencies() -> None:
+    found = _extract(DATADOG, C.SERVICES, LEDGER_V3)
+
+    assert found.title == "ledger"
+    assert found.signals["teams"] == ["finance-platform"]
+    assert found.signals["application"] == "billing"
+    assert found.signals["depends_on"] == ["postgres-ledger", "billing-api"]
+    assert (found.metadata["tier"], found.metadata["lifecycle"]) == ("2", "deprecated")
+    assert found.metadata["display_name"] == "Ledger"
+    assert found.metadata["dashboard_url"] == "https://x.test"
+
+
+def test_a_catalog_definition_without_a_name_is_malformed() -> None:
+    failure = _failure(DATADOG, C.SERVICES, {"attributes": {"schema": {"team": "x"}}})
+
+    assert failure.code is FailureCode.MALFORMED
 
 
 # ── Grafana ──────────────────────────────────────────────────────────────────

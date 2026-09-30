@@ -1058,6 +1058,7 @@ async def test_datadog_end_to_end(
             "incidents",
             "logs",
             "metrics",
+            "services",
         ]
 
         offered = (await client.get(f"{url}/scope/options")).json()

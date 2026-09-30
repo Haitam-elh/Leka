@@ -1,4 +1,5 @@
-"""The PagerDuty connector — its services and their incidents.
+"""The PagerDuty connector — its services, what they depend on, and their
+incidents.
 
 PagerDuty is read at https://api.pagerduty.com (or api.eu.pagerduty.com for
 an account in its EU service region) with a REST API key, sent as
@@ -13,7 +14,13 @@ check_health: GET /abilities, reading PagerDuty's ratelimit-* headers.
 
 list_scope: every service of the account.
 
-iter_resources: services, whole each pass; incidents created in the last
+iter_resources: services, whole each pass, each with the services it
+depends on (GET /service_dependencies/technical_services/{id}); the business
+services too — what the company's applications are to PagerDuty — each with
+the services that support it (…/business_services/{id}), those supporting a
+service in scope when there is a scope (LEKA-362). An account whose plan or
+key does not show dependencies or business services is read without them.
+Incidents created in the last
 INCIDENT_WINDOW, every pass — PagerDuty lists incidents by when they were
 created, not when they last changed, so a pass reads the whole window
 again and an incident that changed in it is read again. With `services`,
@@ -23,7 +30,7 @@ only theirs. An incident's service is its container.
 from __future__ import annotations
 
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
@@ -66,6 +73,11 @@ MAX_SCOPE_OPTIONS = 1000
 # most, and an incident rarely changes three months after it was opened.
 INCIDENT_WINDOW = timedelta(days=90)
 LOW_QUOTA_RATIO = 0.1
+# One read per service for its dependencies: past this many a pass, the
+# rest are read without them.
+MAX_DEPENDENCY_READS = 2000
+# What a plan or a key without dependencies or business services answers.
+UNAVAILABLE = frozenset({DiagnosticCode.PERMISSION_DENIED, DiagnosticCode.NOT_FOUND})
 SERVICE_ID = re.compile(r"^P[A-Z0-9]{6,13}$")
 
 
@@ -186,16 +198,8 @@ class PagerDutyConnector(Connector[PagerDutyConfig, PagerDutyCredentials]):
             raise ValueError(msg)
         async with self._client() as client:
             if capability is C.SERVICES:
-                wanted = set(self.config.services or [])
-                async for service in self._services(client):
-                    if wanted and str(service["id"]) not in wanted:
-                        continue
-                    yield record(
-                        capability,
-                        service,
-                        external_id=str(service["id"]),
-                        updated=service.get("updated_at"),
-                    )
+                async for found in self._services_whole(client):
+                    yield found
                 return
             async for incident in self._pages(client, "/incidents", self._incident_params()):
                 yield record(
@@ -235,6 +239,93 @@ class PagerDutyConnector(Connector[PagerDutyConfig, PagerDutyCredentials]):
     async def _services(self, client: VendorHttp) -> AsyncIterator[Item]:
         async for service in self._pages(client, "/services", {"include[]": "teams"}):
             yield service
+
+    async def _services_whole(self, client: VendorHttp) -> AsyncIterator[RawRecord]:
+        """The services in scope, then the business services, each with
+        what it depends on: `dependencies`, `[{id, name, type}]`, `type`
+        `business` or `technical`."""
+        wanted = set(self.config.services or [])
+        services = [s async for s in self._services(client)]
+        business = await self._optional(self._listing(client, "/business_services"))
+        names = {str(item["id"]): str(item.get("name") or "") for item in (*services, *business)}
+        reads = 0
+        for service in services:
+            if wanted and str(service["id"]) not in wanted:
+                continue
+            reads += 1
+            dependencies = (
+                await self._supporting(client, "technical_services", service, names)
+                if reads <= MAX_DEPENDENCY_READS
+                else []
+            )
+            yield record(
+                C.SERVICES,
+                {**service, "dependencies": dependencies},
+                external_id=str(service["id"]),
+                updated=service.get("updated_at"),
+            )
+        for item in business:
+            reads += 1
+            supporting = (
+                await self._supporting(client, "business_services", item, names)
+                if reads <= MAX_DEPENDENCY_READS
+                else []
+            )
+            if wanted and not any(d["id"] in wanted for d in supporting):
+                continue
+            yield record(
+                C.SERVICES,
+                {**item, "type": "business_service", "dependencies": supporting},
+                external_id=str(item["id"]),
+                updated=item.get("updated_at"),
+            )
+
+    async def _supporting(
+        self, client: VendorHttp, kind: str, dependent: Item, names: dict[str, str]
+    ) -> list[dict[str, str]]:
+        """What supports one service: its side of PagerDuty's dependency
+        relationships, named from the listings."""
+        identifier = str(dependent["id"])
+        response = await self._optional_response(
+            client, f"/service_dependencies/{kind}/{identifier}"
+        )
+        if response is None:
+            return []
+        found: dict[str, dict[str, str]] = {}
+        for relationship in response.json().get("relationships") or []:
+            if str(dig(relationship, "dependent_service.id")) != identifier:
+                continue
+            supporting = dig(relationship, "supporting_service") or {}
+            other = str(supporting.get("id") or "")
+            if not other or other == identifier:
+                continue
+            found[other] = {
+                "id": other,
+                "name": names.get(other) or other,
+                "type": "business" if "business" in str(supporting.get("type")) else "technical",
+            }
+        return list(found.values())
+
+    async def _listing(self, client: VendorHttp, path: str) -> list[Item]:
+        return [item async for item in self._pages(client, path, {})]
+
+    async def _optional(self, reading: Awaitable[list[Item]]) -> list[Item]:
+        """A listing a plan or a key may not show: empty then."""
+        try:
+            found = await reading
+        except ConnectorError as error:
+            if error.diagnostic.code not in UNAVAILABLE:
+                raise
+            return []
+        return found
+
+    async def _optional_response(self, client: VendorHttp, path: str) -> httpx.Response | None:
+        try:
+            return await client.get(path)
+        except ConnectorError as error:
+            if error.diagnostic.code not in UNAVAILABLE:
+                raise
+            return None
 
     async def _pages(self, client: VendorHttp, path: str, params: Params) -> AsyncIterator[Item]:
         """Every item of a listing, PagerDuty's offset after offset, while it
