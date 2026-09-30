@@ -7,7 +7,10 @@ indexes them, then extraction, parsing and normalisation run with the real
 strategies and rules, each queued by the one before. What comes out must
 join up: the pull request resolves the issue by its canonical key, the
 commit's author is a person by email with their login as an alias, every
-stage's run is recorded, and the source is processed through.
+stage's run is recorded, and the source is processed through. Then the
+workspace's stages: resolution makes one person of the address and the
+login, and enrichment (LEKA-359) joins the entities — the pull request to
+the issue it resolves and to Sara — and measures them.
 """
 
 from __future__ import annotations
@@ -39,13 +42,24 @@ from leka.connectors import (
     unregister_connector,
 )
 from leka.db import session_factory, system_scope, workspace_scope
-from leka.ingestion import NormalisedRecordRow, ProcessingRun, ProcessingRunStatus
+from leka.ingestion import (
+    EnrichedRelationship,
+    EnrichmentRun,
+    EntityEnrichment,
+    NormalisedRecordRow,
+    ProcessingRun,
+    ProcessingRunStatus,
+    ResolvedEntity,
+)
 from leka.ingestion import pipeline as pipeline_module
 from leka.ingestion import sync as sync_module
+from leka.ingestion.enrichment import job as enrichment_job
+from leka.ingestion.enrichment.job import enrich_workspace
 from leka.ingestion.extraction.job import extract_source
 from leka.ingestion.normalisation import NormalisedRecord
 from leka.ingestion.normalisation.job import NORMALISE_JOB, normalise_source
 from leka.ingestion.parsing.job import PARSE_JOB, parse_source
+from leka.ingestion.resolution.job import resolve_workspace
 from leka.ingestion.sync import sync_source
 from leka.ingestion.validation.job import VALIDATE_JOB, validate_source
 from leka.platform import LocalObjectStore
@@ -180,6 +194,7 @@ def github(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
 
     monkeypatch.setattr(sync_module, "enqueue_job", capture)
     monkeypatch.setattr(pipeline_module, "enqueue_job", capture)
+    monkeypatch.setattr(enrichment_job, "enqueue_job", capture)
     yield
     unregister_connector(SourceKind.GITHUB)
     register_connector(real)
@@ -277,3 +292,41 @@ async def test_github_payloads_come_out_as_joined_up_candidates(source: Source) 
         ("validation", ProcessingRunStatus.SUCCEEDED),
     ]
     assert through is None  # processed through: nothing left to queue
+
+
+async def test_github_payloads_are_resolved_then_enriched(source: Source) -> None:
+    workspace = source.workspace_id
+    await sync_source(workspace, source.id, full=True)
+    for stage in (extract_source, parse_source, normalise_source, validate_source):
+        await stage(workspace, source.id)
+
+    await resolve_workspace(workspace)
+    assert queued[-1] == enrichment_job.ENRICH_JOB  # a resolution that succeeds queues it
+    counts = await enrich_workspace(workspace, now=datetime(2026, 9, 30, tzinfo=UTC))
+
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            found = await session.execute(select(ResolvedEntity.key, ResolvedEntity.id))
+            ids = dict(found.tuples().all())
+            edges = {
+                (e.from_entity_id, e.type, e.to_entity_id): e
+                for e in (await session.execute(select(EnrichedRelationship))).scalars()
+            }
+            facts = {
+                (f.entity_id, f.attribute): f.value
+                for f in (await session.execute(select(EntityEnrichment))).scalars()
+            }
+            [run] = (await session.execute(select(EnrichmentRun))).scalars().all()
+
+    pr, issue = ids["github.com/acme/payments#42"], ids["github.com/acme/payments#41"]
+    repository, sara = ids["github.com/acme/payments"], ids["person:email:sara@acme.io"]
+    assert edges[(pr, "resolves", issue)].origin == "stated"  # "Fixes #41."
+    # By her login in the pull request, by her address in the commit: one Sara.
+    assert (pr, "authored_by", sara) in edges
+    assert edges[(repository, "maintained_by", sara)].rule == "most_active"
+    # Real dates, from the records — resolution keeps none.
+    assert facts[(pr, "cycle_time_hours")] == 50.0
+    assert facts[(repository, "last_activity_at")] == "2026-09-20T10:00:01Z"
+    assert facts[(repository, "lifecycle")] == "active"
+    assert (run.status, run.failures) == ("succeeded", [])
+    assert counts["failed"] == 0

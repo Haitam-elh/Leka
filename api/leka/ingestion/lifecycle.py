@@ -25,7 +25,7 @@ THE SWEEP, daily (`run_processing_sweep`), across every workspace:
 - a run left `running` longer than any job may live is `abandoned` — its
   worker died and no later run of its stage came to say so;
 - history older than HISTORY_DAYS is pruned — entity resolution's runs
-  (LEKA-357) as the stages';
+  (LEKA-357) and enrichment's (LEKA-359) as the stages';
 - what was extracted from a record marked deleted is removed, with what was
   made from it — the extraction does it when it runs, the sweep for the
   sources whose extraction no longer runs (switched off);
@@ -51,6 +51,7 @@ from leka.connectors import Source
 from leka.db import session_factory, system_scope
 from leka.ingestion.models import (
     DeliveryStatus,
+    EnrichmentRun,
     ExtractedRecordRow,
     ProcessingRun,
     ProcessingRunStatus,
@@ -151,6 +152,13 @@ async def sweep_processing(*, now: datetime | None = None) -> dict[str, int]:
                     ResolutionRun.started_at < now - timedelta(days=HISTORY_DAYS),
                 )
             )
+            # Enrichment's (LEKA-359), as long again.
+            enrichment_runs = await session.execute(
+                delete(EnrichmentRun).where(
+                    EnrichmentRun.status != "running",
+                    EnrichmentRun.started_at < now - timedelta(days=HISTORY_DAYS),
+                )
+            )
             deliveries = await session.execute(
                 delete(WebhookDelivery).where(
                     WebhookDelivery.status != DeliveryStatus.PENDING,
@@ -171,6 +179,7 @@ async def sweep_processing(*, now: datetime | None = None) -> dict[str, int]:
         "forgotten": _affected_rows(forgotten),
         "deliveries": _affected_rows(deliveries),
         "resolution_runs": _affected_rows(resolution_runs),
+        "enrichment_runs": _affected_rows(enrichment_runs),
         "webhook_passes": _affected_rows(passes),
     }
     logger.info("processing_swept", **result)

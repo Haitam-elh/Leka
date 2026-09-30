@@ -23,6 +23,8 @@ is derived from its key, the same for the same input.
 
 A run that sees normalisation move while it ran runs again, up to ROUNDS
 times; what moves after is the next run's — queued by the next `advance`.
+What it made is then enriched (LEKA-359): a run that succeeds queues
+`enrich:<workspace>`.
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ from typing import Any
 import structlog
 
 from leka.db import session_factory, workspace_scope
+from leka.ingestion.enrichment.job import enrich_if_pending
 from leka.ingestion.models import (
     ResolutionDecision,
     ResolvedEntity,
@@ -98,6 +101,8 @@ async def resolve_workspace(workspace_id: uuid.UUID) -> dict[str, object]:
                     run.finished_at = datetime.now(UTC)
                     await session.commit()
                     raise
+        async with session_factory() as session:
+            await enrich_if_pending(session, workspace_id)
     logger.info("workspace_resolved", workspace_id=str(workspace_id), **counts)
     return counts
 

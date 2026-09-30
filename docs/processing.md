@@ -7,20 +7,29 @@ contract: [extraction.md](extraction.md), [parsing.md](parsing.md),
 [collection.md](collection.md).
 
 ```
- collection ──▶ extraction ──▶ parsing ──▶ normalisation ──▶ validation ──▶ resolution
- (a pass)       extract:<id>   parse:<id>  normalise:<id>   validate:<id>  resolve:<workspace>
- source_records extracted_      parsed_     normalised_      validated_     resolved_entities,
- raw_payloads   records         records     records          records        _keys, resolution_
-                        each run: processing_runs                           decisions; runs:
-                                                                            resolution_runs
+ collection ──▶ extraction ──▶ parsing ──▶ normalisation ──▶ validation ────┐
+ (a pass)       extract:<id>   parse:<id>  normalise:<id>   validate:<id>   │
+ source_records extracted_      parsed_     normalised_      validated_     │
+ raw_payloads   records         records     records          records        │
+                        each run: processing_runs                           │
+   ┌────────────────────────────────────────────────────────────────────────┘
+   ▼  the workspace's
+ resolution ────────────────▶ enrichment
+ resolve:<workspace>          enrich:<workspace>
+ resolved_entities, _keys,    enriched_relationships, entity_enrichments
+ resolution_decisions         runs: enrichment_runs
+ runs: resolution_runs
 ```
 
 Validation (LEKA-358, [validation.md](validation.md)) checks what
-normalisation made; a quarantined record goes no further. The last stage is
-the **workspace's**, not a source's: what is one thing is decided across
-sources ([resolution.md](resolution.md), LEKA-357). A source's `advance`,
-finding nothing left for it, queues it when normalisation or validation made
-something since its last run.
+normalisation made; a quarantined record goes no further. The last two
+stages are the **workspace's**, not a source's: what is one thing is decided
+across sources ([resolution.md](resolution.md), LEKA-357), then what those
+things are to one another ([enrichment.md](enrichment.md), LEKA-359). A
+source's `advance`, finding nothing left for it, queues the resolution when
+normalisation or validation made something since its last run — and, with
+nothing to resolve, the enrichment when it has something to do; a
+resolution run that succeeds queues the enrichment.
 
 ---
 
@@ -150,7 +159,10 @@ does — a repository, an issue, the pull request that fixes it, a commit —
 through the real pass, extraction, parsing and normalisation, each queued by
 the one before. The pull request resolves the issue by its canonical key,
 the commit's author is a person by email with their login as an alias, the
-three runs are recorded, and the source is processed through.
+runs are recorded, and the source is processed through. Then the
+workspace's stages, on the same records: resolution makes one Sara of the
+address and the login, and enrichment joins the pull request to the issue
+and to her, and measures its cycle time from the records' own dates.
 
 ## Not yet
 

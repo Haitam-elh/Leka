@@ -1206,6 +1206,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingestion/enrichment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enrichment Status
+         * @description Whether resolution made something enrichment has not read, the last
+         *     run — and the enrichers that failed in it — and what it holds.
+         */
+        get: operations["enrichment_status_api_v1_ingestion_enrichment_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingestion/enrichment/entities/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enriched Entity
+         * @description One entity: what its sources say, what enrichment added — each with
+         *     its rule, confidence and evidence — and its relationships, the surest
+         *     first, up to 100 each way.
+         */
+        get: operations["enriched_entity_api_v1_ingestion_enrichment_entities__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingestion/enrichment/relationships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enriched Relationships
+         * @description The workspace's relationships between resolved entities, the surest
+         *     first.
+         */
+        get: operations["enriched_relationships_api_v1_ingestion_enrichment_relationships_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/webhooks/sources/{source_id}": {
         parameters: {
             query?: never;
@@ -1451,6 +1515,211 @@ export interface components {
          * @enum {string}
          */
         DiagnosticCode: "AUTH_INVALID" | "AUTH_EXPIRED" | "PERMISSION_DENIED" | "INSUFFICIENT_SCOPE" | "NOT_FOUND" | "RATE_LIMITED" | "TIMEOUT" | "NETWORK_UNREACHABLE" | "PROVIDER_ERROR" | "CONFIG_INVALID" | "UNSUPPORTED" | "UNKNOWN";
+        /**
+         * EnrichedAttributeRead
+         * @description An attribute enrichment added — never one the sources state.
+         */
+        EnrichedAttributeRead: {
+            /** Attribute */
+            attribute: string;
+            /** Value */
+            value: unknown;
+            /** Confidence */
+            confidence: number;
+            /**
+             * Rule
+             * @description The enrichment rule that made it (docs/enrichment.md).
+             */
+            rule: string;
+            /** Evidence */
+            evidence: string;
+            /**
+             * Inputs
+             * @description The keys of what it was made from.
+             */
+            inputs: string[];
+        };
+        /**
+         * EnrichedEntity
+         * @description A resolved entity as the company model reads it: what its sources
+         *     say (`attributes`), what enrichment adds (`enriched`), and its
+         *     relationships both ways.
+         */
+        EnrichedEntity: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /**
+             * Key
+             * @description The key that says it best; every other is in `keys`.
+             */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Names
+             * @description Every name it goes by, the chosen one first.
+             */
+            names: string[];
+            /**
+             * Attributes
+             * @description What its sources say it is: where they disagree, the chosen value.
+             */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /**
+             * Conflicts
+             * @description Where its sources disagree: {attribute, chosen, values: [{value, source_id, key, observed_at}]} — every value kept.
+             */
+            conflicts: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Confidence
+             * @description How sure the merges that made it are.
+             */
+            confidence: number;
+            /**
+             * Quality
+             * @description The best quality validation gave the records that are it (LEKA-358).
+             */
+            quality: number | null;
+            /** Sources */
+            sources: number;
+            /**
+             * Resolved At
+             * Format: date-time
+             */
+            resolved_at: string;
+            /** Enriched */
+            enriched: components["schemas"]["EnrichedAttributeRead"][];
+            /** Outgoing */
+            outgoing: components["schemas"]["EnrichedRelationshipRead"][];
+            /** Outgoing Total */
+            outgoing_total: number;
+            /** Incoming */
+            incoming: components["schemas"]["EnrichedRelationshipRead"][];
+            /** Incoming Total */
+            incoming_total: number;
+        };
+        /**
+         * EnrichedRelationshipRead
+         * @description A relationship between two resolved entities, and where it comes from.
+         */
+        EnrichedRelationshipRead: {
+            /** Type */
+            type: string;
+            /**
+             * Origin
+             * @description stated: by a source; inferred: by an enrichment rule.
+             */
+            origin: string;
+            /** Rule */
+            rule: string;
+            /** Confidence */
+            confidence: number;
+            /**
+             * Cross Source
+             * @description Its two ends are shown by different sources.
+             */
+            cross_source: boolean;
+            /**
+             * Sources
+             * @description How many sources state it; 0 for an inferred one.
+             */
+            sources: number;
+            /** Evidence */
+            evidence: string;
+            /**
+             * Provenance
+             * @description Stated: {source_id, record_id, evidence} of the first records stating it. Inferred: {entity_id} of what it was inferred from beyond its two ends.
+             */
+            provenance: {
+                [key: string]: unknown;
+            }[];
+            from_entity: components["schemas"]["EntityRef"];
+            to_entity: components["schemas"]["EntityRef"];
+        };
+        /** EnrichmentRunRead */
+        EnrichmentRunRead: {
+            /** Status */
+            status: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Counts */
+            counts: {
+                [key: string]: unknown;
+            };
+            /**
+             * Failures
+             * @description {enricher, error}: an enricher that failed; its output was dropped.
+             */
+            failures: {
+                [key: string]: unknown;
+            }[];
+            /** Error */
+            error: string | null;
+        };
+        /**
+         * EnrichmentStatus
+         * @description Where the workspace's enrichment stands.
+         */
+        EnrichmentStatus: {
+            /**
+             * Pending
+             * @description Resolution made something the last run did not read.
+             */
+            pending: boolean;
+            last_run: components["schemas"]["EnrichmentRunRead"] | null;
+            /**
+             * Counts
+             * @description relationships — stated, inferred, cross_source — and attributes.
+             */
+            counts: {
+                [key: string]: number;
+            };
+            /**
+             * Relationships
+             * @description How many per `type:rule`.
+             */
+            relationships: {
+                [key: string]: number;
+            };
+            /**
+             * Attributes
+             * @description How many of each enriched attribute.
+             */
+            attributes: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * EntityRef
+         * @description A resolved entity, named.
+         */
+        EntityRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+        };
         /**
          * ErrorBody
          * @description The contents of an error response.
@@ -1853,6 +2122,19 @@ export interface components {
             match: string;
             /** Team */
             team: string;
+        };
+        /** PageEnvelope[EnrichedRelationshipRead] */
+        PageEnvelope_EnrichedRelationshipRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["EnrichedRelationshipRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
         };
         /** PageEnvelope[JobRunRead] */
         PageEnvelope_JobRunRead_: {
@@ -9289,6 +9571,300 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResolvedEntityRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    enrichment_status_api_v1_ingestion_enrichment_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrichmentStatus"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    enriched_entity_api_v1_ingestion_enrichment_entities__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrichedEntity"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    enriched_relationships_api_v1_ingestion_enrichment_relationships_get: {
+        parameters: {
+            query?: {
+                type?: string | null;
+                origin?: ("stated" | "inferred") | null;
+                rule?: string | null;
+                /** @description Only the relationships joining two tools' things. */
+                cross_source?: boolean | null;
+                /** @description Only those from or to this entity. */
+                entity_id?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_EnrichedRelationshipRead_"];
                 };
             };
             /** @description The request could not be understood. */

@@ -3,7 +3,9 @@
 What LEKA decides, across a workspace's sources, is **one** thing — a
 person, a service, a ticket — how sure it is, and why. LEKA-357. It reads
 what normalisation made ([normalisation.md](normalisation.md)); what reads
-it next is the company model (leka.knowledge).
+it next is enrichment — what those things are to one another
+([enrichment.md](enrichment.md), LEKA-359) — then the company model
+(leka.knowledge).
 
 ```
  normalised_records, every source of the workspace — but the quarantined
@@ -163,9 +165,9 @@ across sources.
   cost a model to host or an API to pay.
 - **A person's word**: confirming a link or splitting a merge by hand, kept
   across runs.
-- **Incidents from two tools about one outage**, **a repository and the
-  service it builds**: related, not the same thing — the company model's
-  relationships, not resolution's.
+- **Incidents from two tools about one outage**: related, not the same
+  thing — a relationship, not resolution's. **A repository and the service
+  it builds** is one: enrichment infers it ([enrichment.md](enrichment.md)).
 - **A screen**: the routes are there.
 - **Incremental runs**: a run reads the whole workspace; fine at today's
   volumes, to be made incremental — by the keys a run's changes touch —
