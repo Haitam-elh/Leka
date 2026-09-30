@@ -186,6 +186,11 @@ const MARKS: Record<SourceKind, { title: string; color: string; path: string }> 
 };
 
 /** The system's own name — "GitHub", "Amazon Web Services". */
+/** Whether LEKA draws this kind's logo — an example's "stripe" it does not. */
+export function hasSourceLogo(kind: string): kind is SourceKind {
+  return Object.hasOwn(MARKS, kind);
+}
+
 export function sourceTitle(kind: SourceKind): string {
   return MARKS[kind].title;
 }
