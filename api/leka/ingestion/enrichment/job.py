@@ -36,7 +36,7 @@ from datetime import UTC, datetime
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.background import enqueue_job
+from leka.background import enqueue_job, publish_event
 from leka.db import session_factory, workspace_scope
 from leka.ingestion.enrichment.engine import (
     ENRICHER_VERSION,
@@ -50,6 +50,8 @@ from leka.ingestion.repository import EnrichmentRepository
 logger = structlog.get_logger(__name__)
 
 ENRICH_JOB = "leka.ingestion.enrichment.job.run_enrichment"
+# Published when a run succeeds: leka/background/routes.py routes it.
+ENRICHED = "ingestion.enriched"
 CHUNK = 2_000
 ROUNDS = 3
 
@@ -108,6 +110,15 @@ async def enrich_workspace(
                     run.counts = counts
                     run.failures = [dict(failure) for failure in enrichment.failures]
                     run.finished_at = datetime.now(UTC)
+                    # What reads the enrichment next — the company model
+                    # (LEKA-361, leka.knowledge) — is told, not called.
+                    await publish_event(
+                        session,
+                        workspace_id,
+                        ENRICHED,
+                        {"run_id": str(run.id)},
+                        dedupe_key=f"enriched:{run.id}",
+                    )
                     await session.commit()
                 except BaseException as error:
                     await session.rollback()

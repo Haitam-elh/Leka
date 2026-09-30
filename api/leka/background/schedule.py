@@ -88,6 +88,9 @@ SCHEDULE: tuple[Scheduled, ...] = (
     Scheduled(
         "source-sync", "leka.ingestion.sync.run_enqueue_due_syncs", cron="10,25,40,55 * * * *"
     ),
+    # The company model (LEKA-361) of every workspace behind its enrichment:
+    # what no event queues — a failed build, a new model version.
+    Scheduled("model-sweep", "leka.knowledge.job.run_model_sweep", cron="48 * * * *"),
 )
 
 

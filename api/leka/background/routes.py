@@ -48,4 +48,7 @@ ROUTES: dict[str, tuple[Route, ...]] = {
     "source.scope_changed": (Route("leka.ingestion.sync.run_sync_for_event"),),
     # Only its mapping changed: normalised again, nothing read again.
     "source.mapping_changed": (Route("leka.ingestion.pipeline.run_advance_for_event"),),
+    # Enrichment made something new (LEKA-359): the company model is built
+    # again from it (LEKA-361).
+    "ingestion.enriched": (Route("leka.knowledge.job.run_model_build_for_event"),),
 }

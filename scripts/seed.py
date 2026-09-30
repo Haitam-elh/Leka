@@ -141,14 +141,22 @@ async def _build_demo_workspace() -> None:
             confidence: float = 1.0,
             last_seen: datetime | None = None,
         ) -> Entity:
+            # The company model (LEKA-361) is built from what resolution
+            # made; the demo writes it directly, saying where each thing
+            # was "seen" as a build would.
             row = Entity(
                 workspace_id=workspace.id,
                 type=type_,
-                external_id=external_id,
-                source_id=source.id,
+                key=external_id,
                 name=name,
                 attributes=attributes,
                 confidence=confidence,
+                provenance={
+                    "sources": [{"source_id": str(source.id), "key": external_id, "kind": "id"}],
+                    "attributes": {attribute: {"origin": "source"} for attribute in attributes},
+                    "dropped": [],
+                },
+                first_seen_at=last_seen or NOW,
                 last_seen_at=last_seen or NOW,
             )
             session.add(row)
@@ -310,7 +318,9 @@ async def _build_demo_workspace() -> None:
                     to_entity_id=to_entity.id,
                     type=type_,
                     confidence=confidence,
-                    source_id=source.id,
+                    origin="stated",
+                    rule="stated",
+                    provenance=[{"source_id": str(source.id)}],
                 )
             )
 

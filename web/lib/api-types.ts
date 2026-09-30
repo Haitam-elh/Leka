@@ -1333,6 +1333,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Model Status
+         * @description Whether enrichment made something the last build has not read, the
+         *     last build, and what the model holds.
+         */
+        get: operations["model_status_api_v1_knowledge_model_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Registry
+         * @description The kinds of things a company is made of: each entity type — its
+         *     version, its category, the attributes its schema declares, the
+         *     ingestion types it is built from — and each relationship type.
+         */
+        get: operations["registry_api_v1_knowledge_registry_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Entities
+         * @description The company's entities, by name.
+         */
+        get: operations["entities_api_v1_knowledge_entities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/entities/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Entity
+         * @description One entity: where every piece of it came from, and its relationships
+         *     — the surest first, up to 100.
+         */
+        get: operations["entity_api_v1_knowledge_entities__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/entities/{entity_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Versions
+         * @description An entity's history: what it said at each version, and what changed.
+         */
+        get: operations["versions_api_v1_knowledge_entities__entity_id__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/entities/{entity_id}/neighbourhood": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Neighbourhood
+         * @description What surrounds an entity, 1 to 3 steps away in either direction: the
+         *     unit leka.context reads.
+         */
+        get: operations["neighbourhood_api_v1_knowledge_entities__entity_id__neighbourhood_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1768,6 +1893,142 @@ export interface components {
             };
         };
         /**
+         * EntityBrief
+         * @description An entity, named: the other end of a relationship.
+         */
+        EntityBrief: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            type: components["schemas"]["EntityType"];
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+        };
+        /**
+         * EntityDetail
+         * @description An entity, where every piece of it came from, and its relationships.
+         */
+        EntityDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            type: components["schemas"]["EntityType"];
+            /**
+             * Key
+             * @description The key that says it best (docs/resolution.md).
+             */
+            key: string;
+            /** Name */
+            name: string;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            lifecycle: components["schemas"]["Lifecycle"];
+            /**
+             * Version
+             * @description Raised each time what it says changes.
+             */
+            version: number;
+            /**
+             * Schema Version
+             * @description Its type's schema version it was checked against.
+             */
+            schema_version: number;
+            /** Confidence */
+            confidence: number;
+            /** Quality */
+            quality: number | null;
+            /** First Seen At */
+            first_seen_at: string | null;
+            /** Last Seen At */
+            last_seen_at: string | null;
+            /** Removed At */
+            removed_at: string | null;
+            /**
+             * Provenance
+             * @description sources: every source and key it goes by; attributes: each attribute's origin — a source, or an enrichment rule and its confidence.
+             */
+            provenance: {
+                [key: string]: unknown;
+            };
+            /** Relationships */
+            relationships: components["schemas"]["LinkRead"][];
+            /** Relationships Total */
+            relationships_total: number;
+            /** Versions */
+            versions: number;
+        };
+        /**
+         * EntityKindRead
+         * @description A kind of entity, as the registry defines it.
+         */
+        EntityKindRead: {
+            type: components["schemas"]["EntityType"];
+            /** Version */
+            version: number;
+            /** Category */
+            category: string;
+            /**
+             * Attributes
+             * @description The attributes its schema declares.
+             */
+            attributes: string[];
+            /** Built From */
+            built_from: string[];
+        };
+        /**
+         * EntityRead
+         * @description An entity of the company model.
+         */
+        EntityRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            type: components["schemas"]["EntityType"];
+            /**
+             * Key
+             * @description The key that says it best (docs/resolution.md).
+             */
+            key: string;
+            /** Name */
+            name: string;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            lifecycle: components["schemas"]["Lifecycle"];
+            /**
+             * Version
+             * @description Raised each time what it says changes.
+             */
+            version: number;
+            /**
+             * Schema Version
+             * @description Its type's schema version it was checked against.
+             */
+            schema_version: number;
+            /** Confidence */
+            confidence: number;
+            /** Quality */
+            quality: number | null;
+            /** First Seen At */
+            first_seen_at: string | null;
+            /** Last Seen At */
+            last_seen_at: string | null;
+            /** Removed At */
+            removed_at: string | null;
+        };
+        /**
          * EntityRef
          * @description A resolved entity, named.
          */
@@ -1808,6 +2069,38 @@ export interface components {
             attention: components["schemas"]["AttentionPointRead"][];
             /** Source Kinds */
             source_kinds: string[];
+        };
+        /**
+         * EntityType
+         * @description What an entity is. Each is described — its version, its category, its
+         *     attributes — in registry.py.
+         *
+         *     Stored as text with a CHECK constraint rather than a PostgreSQL ENUM.
+         *     An ENUM cannot drop a value — PostgreSQL has no DROP VALUE — and a
+         *     migration that adds one cannot use it in the same transaction. Every new
+         *     connector would add types, so that cost lands on us repeatedly. A CHECK
+         *     constraint is dropped and recreated in one ordinary, transactional
+         *     statement. See docs/adr/006-enum-storage.md.
+         * @enum {string}
+         */
+        EntityType: "service" | "repository" | "incident" | "deployment" | "person" | "document" | "infra_resource" | "database" | "team" | "project" | "issue" | "pull_request" | "commit" | "release";
+        /** EntityVersionRead */
+        EntityVersionRead: {
+            /** Version */
+            version: number;
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+            /** Changed */
+            changed: string[];
+            /** Schema Version */
+            schema_version: number;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
         };
         /** EnvironmentEdgeRead */
         EnvironmentEdgeRead: {
@@ -2208,6 +2501,51 @@ export interface components {
          * @enum {string}
          */
         JobStatus: "queued" | "running" | "retrying" | "succeeded" | "failed";
+        /**
+         * Lifecycle
+         * @description Where a thing is in its life, as the sources show it.
+         * @enum {string}
+         */
+        Lifecycle: "active" | "dormant" | "archived" | "removed";
+        /**
+         * LinkRead
+         * @description A relationship from one entity's side: the other end, named.
+         */
+        LinkRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * From Entity Id
+             * Format: uuid
+             */
+            from_entity_id: string;
+            /**
+             * To Entity Id
+             * Format: uuid
+             */
+            to_entity_id: string;
+            type: components["schemas"]["RelationshipType"];
+            /** Confidence */
+            confidence: number;
+            /**
+             * Origin
+             * @description stated by a source, or inferred by an enrichment rule.
+             */
+            origin: string;
+            /** Rule */
+            rule: string;
+            /** Cross Source */
+            cross_source: boolean;
+            /**
+             * Direction
+             * @description out: this entity → the other; in: the other → it.
+             */
+            direction: string;
+            other: components["schemas"]["EntityBrief"];
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Email */
@@ -2298,6 +2636,69 @@ export interface components {
         MemberRoleUpdate: {
             role: components["schemas"]["Role"];
         };
+        /** ModelRunRead */
+        ModelRunRead: {
+            /** Status */
+            status: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Model Version */
+            model_version: number;
+            /** Counts */
+            counts: {
+                [key: string]: unknown;
+            };
+            /** Error */
+            error: string | null;
+        };
+        /**
+         * ModelStatus
+         * @description Where the workspace's company model stands.
+         */
+        ModelStatus: {
+            /**
+             * Pending
+             * @description Enrichment made something the last build did not read.
+             */
+            pending: boolean;
+            /** Model Version */
+            model_version: number;
+            last_run: components["schemas"]["ModelRunRead"] | null;
+            /**
+             * Types
+             * @description Entities of each type, the removed left out.
+             */
+            types: {
+                [key: string]: number;
+            };
+            /** Lifecycles */
+            lifecycles: {
+                [key: string]: number;
+            };
+            /** Relationships */
+            relationships: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * Neighbourhood
+         * @description One entity and what surrounds it.
+         *
+         *     The unit leka.context asks for. Returning a subgraph rather than a list
+         *     of rows keeps traversal knowledge inside this module.
+         */
+        Neighbourhood: {
+            root: components["schemas"]["EntityRead"];
+            /** Entities */
+            entities?: components["schemas"]["EntityRead"][];
+            /** Relationships */
+            relationships?: components["schemas"]["RelationshipRead"][];
+        };
         /** NormalisationFailureRead */
         NormalisationFailureRead: {
             /** Capability */
@@ -2334,6 +2735,19 @@ export interface components {
              * @description The rows on this page, in the requested order.
              */
             data: components["schemas"]["EnrichedRelationshipRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[EntityRead] */
+        PageEnvelope_EntityRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["EntityRead"][];
             /**
              * Next Cursor
              * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
@@ -2682,6 +3096,59 @@ export interface components {
              */
             detail: string;
         };
+        /** Registry */
+        Registry: {
+            /** Model Version */
+            model_version: number;
+            /** Entities */
+            entities: components["schemas"]["EntityKindRead"][];
+            /** Relationships */
+            relationships: components["schemas"]["RelationshipKindRead"][];
+        };
+        /** RelationshipKindRead */
+        RelationshipKindRead: {
+            type: components["schemas"]["RelationshipType"];
+            /** Version */
+            version: number;
+            /** Built From */
+            built_from: string[];
+        };
+        /** RelationshipRead */
+        RelationshipRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * From Entity Id
+             * Format: uuid
+             */
+            from_entity_id: string;
+            /**
+             * To Entity Id
+             * Format: uuid
+             */
+            to_entity_id: string;
+            type: components["schemas"]["RelationshipType"];
+            /** Confidence */
+            confidence: number;
+            /**
+             * Origin
+             * @description stated by a source, or inferred by an enrichment rule.
+             */
+            origin: string;
+            /** Rule */
+            rule: string;
+            /** Cross Source */
+            cross_source: boolean;
+        };
+        /**
+         * RelationshipType
+         * @description How two entities relate. Direction matters: from -> to.
+         * @enum {string}
+         */
+        RelationshipType: "depends_on" | "owns" | "deployed_to" | "mentions" | "caused_by" | "member_of" | "part_of" | "owned_by" | "maintained_by" | "authored_by" | "assigned_to" | "reviewed_by" | "reported_by" | "led_by" | "affects" | "resolves" | "implements" | "merges" | "child_of" | "in_network";
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
             /** Password */
@@ -10392,6 +10859,580 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeliveryAccepted"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    model_status_api_v1_knowledge_model_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelStatus"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    registry_api_v1_knowledge_registry_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Registry"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    entities_api_v1_knowledge_entities_get: {
+        parameters: {
+            query?: {
+                type?: components["schemas"]["EntityType"] | null;
+                /** @description Absent: every lifecycle but removed. */
+                lifecycle?: components["schemas"]["Lifecycle"] | null;
+                /** @description In the name. */
+                q?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_EntityRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    entity_api_v1_knowledge_entities__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    versions_api_v1_knowledge_entities__entity_id__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityVersionRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    neighbourhood_api_v1_knowledge_entities__entity_id__neighbourhood_get: {
+        parameters: {
+            query?: {
+                depth?: number;
+            };
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Neighbourhood"];
                 };
             };
             /** @description The request could not be understood. */

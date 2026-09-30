@@ -41,11 +41,17 @@ const ROW_GAP = 70;
  */
 const LAYER: Record<EntityType, number> = {
   person: 0,
+  team: 0,
   service: 1,
   repository: 2,
   deployment: 2,
   incident: 2,
   document: 2,
+  project: 2,
+  issue: 2,
+  pull_request: 2,
+  commit: 2,
+  release: 2,
   database: 3,
   infra_resource: 4,
 };

@@ -2057,3 +2057,83 @@ class EnrichmentRepository(WorkspaceScopedRepository):
         """When the last enrichment that succeeded finished."""
         last = await self.latest_run(succeeded=True)
         return last.finished_at if last else None
+
+    # ── what the company model is built from (LEKA-361) ─────────────────────
+
+    async def latest_enrichment(self) -> uuid.UUID | None:
+        """The last enrichment run that succeeded: what the model reads."""
+        last = await self.latest_run(succeeded=True)
+        return last.id if last else None
+
+    async def resolved(
+        self,
+    ) -> Sequence[tuple[uuid.UUID, str, str, str, dict[str, object], float, float | None]]:
+        """Every resolved entity: (id, type, key, name, attributes,
+        confidence, quality)."""
+        rows = await self._session.execute(
+            select(
+                ResolvedEntity.id,
+                ResolvedEntity.type,
+                ResolvedEntity.key,
+                ResolvedEntity.name,
+                ResolvedEntity.attributes,
+                ResolvedEntity.confidence,
+                ResolvedEntity.quality,
+            ).where(ResolvedEntity.workspace_id == self.workspace_id)
+        )
+        return [tuple(row) for row in rows.all()]
+
+    async def seen_keys(
+        self,
+    ) -> Sequence[tuple[uuid.UUID, str, uuid.UUID, str, datetime | None, datetime | None]]:
+        """Every key a resolved entity goes by, per source: (entity, key,
+        source, kind, first seen, last seen)."""
+        rows = await self._session.execute(
+            select(
+                ResolvedKey.entity_id,
+                ResolvedKey.key,
+                ResolvedKey.source_id,
+                ResolvedKey.kind,
+                ResolvedKey.first_seen_at,
+                ResolvedKey.last_seen_at,
+            ).where(ResolvedKey.workspace_id == self.workspace_id)
+        )
+        return [tuple(row) for row in rows.all()]
+
+    async def enrichments(self) -> Sequence[tuple[uuid.UUID, str, object, str, float]]:
+        """Every enriched attribute: (entity, attribute, value, rule,
+        confidence)."""
+        rows = await self._session.execute(
+            select(
+                EntityEnrichment.entity_id,
+                EntityEnrichment.attribute,
+                EntityEnrichment.value,
+                EntityEnrichment.rule,
+                EntityEnrichment.confidence,
+            ).where(EntityEnrichment.workspace_id == self.workspace_id)
+        )
+        return [tuple(row) for row in rows.all()]
+
+    async def enriched_edges(self) -> Sequence[EnrichedRelationship]:
+        """Every relationship enrichment made."""
+        return await self.list(self.select(EnrichedRelationship))
+
+
+class EnrichedWorkspaces:
+    """Each workspace's last successful enrichment run, across every
+    workspace: what the company model's sweep (LEKA-361) compares its builds
+    with. Not workspace-scoped, like SyncScheduleRepository: it runs under
+    system_scope, declared by its caller."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def latest(self) -> dict[uuid.UUID, uuid.UUID]:
+        """workspace → its last enrichment run that succeeded."""
+        rows = await self._session.execute(
+            select(EnrichmentRun.workspace_id, EnrichmentRun.id)
+            .where(EnrichmentRun.status == "succeeded")
+            .distinct(EnrichmentRun.workspace_id)
+            .order_by(EnrichmentRun.workspace_id, EnrichmentRun.started_at.desc())
+        )
+        return dict(rows.tuples().all())

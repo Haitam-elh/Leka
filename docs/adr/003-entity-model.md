@@ -92,3 +92,31 @@ one.
 structurally that it wants real columns — a promoted column alongside JSONB is
 a legitimate escape hatch; `attributes` shapes drifting between connectors for
 the same type; GIN indexes no longer serving the common filters.
+
+## Addendum — 2026-09-30, LEKA-361: the company model
+
+The two tables stayed two tables; what a row **is** changed. Nothing wrote
+them until the company model ([company-model.md](../company-model.md)), and
+by then the stages before it had settled three questions this ADR answered
+early.
+
+**Identity is the resolved entity's id, not `(workspace_id, source_id,
+external_id)`.** A service is shown by GitHub, PagerDuty and Datadog at
+once; resolution (LEKA-357) decides it is one thing and keeps its id from
+one run to the next. A row per source would have been three services.
+`source_id` and `external_id` are gone from `entities`, and `source_id`
+from `relationships`: every source and key a thing goes by is in its
+`provenance`, with the origin of each attribute. The unique constraint that
+stopped a second pass from duplicating the graph is replaced by what makes
+the id: resolution's.
+
+**History and lifecycle are kept.** `version` and `content_hash` on the
+row, every version in `entity_versions`; a lifecycle — active, dormant,
+archived, removed — where a thing gone from every source is removed and
+kept, never deleted.
+
+**Attributes are validated by the registry** (`leka/knowledge/registry.py`),
+a versioned Pydantic schema per kind that lets through what it does not
+declare and drops what does not fit — not by `knowledge/schemas.py`, which
+describes what the API returns. `type` is text with a CHECK constraint
+since [ADR 006](006-enum-storage.md), not an enum.

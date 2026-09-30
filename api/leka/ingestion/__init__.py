@@ -37,6 +37,7 @@ from leka.ingestion.models import (
     WebhookDelivery,
 )
 from leka.ingestion.repository import (
+    EnrichedWorkspaces,
     EnrichmentRepository,
     ExtractionRepository,
     IngestionRunRepository,
@@ -103,6 +104,7 @@ __all__ = [
     "EnrichedEntity",
     "EnrichedRelationship",
     "EnrichedRelationshipRead",
+    "EnrichedWorkspaces",
     "EnrichmentRepository",
     "EnrichmentRun",
     "EnrichmentRunRead",

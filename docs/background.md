@@ -112,6 +112,7 @@ recorded as a run, and is not started again while the previous one is still acti
 | `processing-sweep` | `leka.ingestion.lifecycle.run_processing_sweep` — processed data, see [processing.md](processing.md) | daily 03:45 | low |
 | `source-health` | `leka.connectors.health.run_health_checks` | :05 :20 :35 :50 | low |
 | `source-sync` | `leka.ingestion.sync.run_enqueue_due_syncs` — queues the passes, see [sync.md](sync.md) | :10 :25 :40 :55 | low |
+| `model-sweep` | `leka.knowledge.job.run_model_sweep` — the company models behind their enrichment, see [company-model.md](company-model.md) | hourly, :48 | low |
 
 ---
 

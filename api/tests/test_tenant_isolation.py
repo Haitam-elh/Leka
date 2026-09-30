@@ -117,8 +117,7 @@ async def _make_tenant(session: AsyncSession, label: str) -> Tenant:
     entity = Entity(
         workspace_id=workspace.id,
         type=EntityType.SERVICE,
-        external_id=marker,
-        source_id=source.id,
+        key=f"service:{marker}",
         name=f"secret-service-{marker}",
     )
     session.add(entity)
@@ -213,11 +212,11 @@ async def test_the_database_refuses_a_cross_tenant_row(
         with pytest.raises(Exception, match=r"(?i)foreign key|violates"):
             await connection.execute(
                 text(
-                    "INSERT INTO entities "
-                    "(workspace_id, type, external_id, source_id, name) "
-                    "VALUES (:ws, 'service', 'stolen', :src, 'stolen')"
+                    "INSERT INTO relationships "
+                    "(workspace_id, from_entity_id, to_entity_id, type) "
+                    "VALUES (:ws, :mine, :theirs, 'depends_on')"
                 ),
-                {"ws": alpha.workspace.id, "src": beta.source.id},
+                {"ws": alpha.workspace.id, "mine": alpha.entity.id, "theirs": beta.entity.id},
             )
 
 

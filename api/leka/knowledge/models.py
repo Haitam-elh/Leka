@@ -1,14 +1,23 @@
-"""The graph: two generic tables, not one table per kind of object.
+"""The company model (LEKA-361): two generic tables — and the history of both.
 
 A table per object type would mean a migration, a model and a repository for
 every new thing a connector learns to see. Instead every object is an Entity
 discriminated by `type`, with its specifics in `attributes` (JSONB), and
-every link is a Relationship. Adding "kubernetes cluster" becomes a new enum
-value, not a new table.
+every link is a Relationship. Adding "kubernetes cluster" is a new type in
+the registry (registry.py), not a new table. See docs/adr/003-entity-model.md
+and docs/company-model.md.
 
-The cost is that the database cannot validate what lives inside attributes.
-That validation belongs to the normalisation step in leka.ingestion, and to
-the Pydantic schemas in this module. See docs/adr/003-entity-model.md.
+WHAT AN ENTITY IS. One real thing of the customer's company — a service, a
+repository, a person — as entity resolution found it across the sources
+(LEKA-357) and enrichment completed it (LEKA-359). Its id IS the resolved
+entity's: stable from one build to the next. It keeps where every piece of
+it came from (`provenance`), a LIFECYCLE (active, dormant, archived, removed
+— a thing gone from every source is removed, not deleted: its history
+stays), and a VERSION, raised each time what it says changes; every version
+is kept in `entity_versions`.
+
+The database cannot validate what lives inside attributes: the registry's
+schema per type does, before a row is written.
 """
 
 from __future__ import annotations
@@ -18,12 +27,15 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
     Float,
+    ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     String,
     UniqueConstraint,
 )
@@ -39,7 +51,8 @@ def _values(enum_class: type[enum.StrEnum]) -> list[str]:
 
 
 class EntityType(enum.StrEnum):
-    """What an entity is.
+    """What an entity is. Each is described — its version, its category, its
+    attributes — in registry.py.
 
     Stored as text with a CHECK constraint rather than a PostgreSQL ENUM.
     An ENUM cannot drop a value — PostgreSQL has no DROP VALUE — and a
@@ -57,6 +70,12 @@ class EntityType(enum.StrEnum):
     DOCUMENT = "document"
     INFRA_RESOURCE = "infra_resource"
     DATABASE = "database"
+    TEAM = "team"
+    PROJECT = "project"
+    ISSUE = "issue"
+    PULL_REQUEST = "pull_request"
+    COMMIT = "commit"
+    RELEASE = "release"
 
 
 class RelationshipType(enum.StrEnum):
@@ -68,63 +87,95 @@ class RelationshipType(enum.StrEnum):
     MENTIONS = "mentions"
     CAUSED_BY = "caused_by"
     MEMBER_OF = "member_of"
+    PART_OF = "part_of"
+    OWNED_BY = "owned_by"
+    MAINTAINED_BY = "maintained_by"
+    AUTHORED_BY = "authored_by"
+    ASSIGNED_TO = "assigned_to"
+    REVIEWED_BY = "reviewed_by"
+    REPORTED_BY = "reported_by"
+    LED_BY = "led_by"
+    AFFECTS = "affects"
+    RESOLVES = "resolves"
+    IMPLEMENTS = "implements"
+    MERGES = "merges"
+    CHILD_OF = "child_of"
+    IN_NETWORK = "in_network"
+
+
+class Lifecycle(enum.StrEnum):
+    """Where a thing is in its life, as the sources show it."""
+
+    # Seen, and something moved around it lately.
+    ACTIVE = "active"
+    # Still there, nothing done to it for 180 days (enrichment's lifecycle).
+    DORMANT = "dormant"
+    # Its source says so: an archived repository, a deleted document.
+    ARCHIVED = "archived"
+    # Gone from every source: kept, with its history, never shown as current.
+    REMOVED = "removed"
 
 
 class Entity(Base, WorkspaceScopedMixin):
-    """One object in a customer's information system."""
+    """One real thing of a customer's company."""
 
     __tablename__ = "entities"
     __table_args__ = (
-        # Identity of an entity: the same object seen twice by the same source
-        # is one row, updated. This is what makes the background loop
-        # idempotent — a re-sync must not double the graph.
-        UniqueConstraint(
-            "workspace_id", "source_id", "external_id", name="uq_entities_workspace_source_external"
-        ),
-        # Target for the composite foreign keys in relationships.
+        # Target for the composite foreign keys in relationships and versions.
         UniqueConstraint("workspace_id", "id", name="uq_entities_workspace_id_id"),
-        # An entity's source must belong to the SAME workspace. A plain
-        # source_id foreign key would happily accept another tenant's source;
-        # this composite key makes that row impossible to write.
-        ForeignKeyConstraint(
-            ["workspace_id", "source_id"],
-            ["sources.workspace_id", "sources.id"],
-            name="fk_entities_workspace_source",
-            ondelete="CASCADE",
-        ),
         Index("ix_entities_workspace_type", "workspace_id", "type"),
+        Index("ix_entities_workspace_type_name", "workspace_id", "type", "name"),
+        Index("ix_entities_workspace_key", "workspace_id", "key"),
         # Queries filter on attributes -> GIN, not btree.
         Index("ix_entities_attributes", "attributes", postgresql_using="gin"),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
+        CheckConstraint("version >= 1", name="version_positive"),
+        CheckConstraint(
+            "lifecycle IN ('active', 'dormant', 'archived', 'removed')", name="lifecycle"
+        ),
+        CheckConstraint("(lifecycle = 'removed') = (removed_at IS NOT NULL)", name="removed_when"),
     )
 
     type: Mapped[EntityType] = mapped_column(
-        Enum(
-            EntityType,
-            name="type",
-            native_enum=False,
-            length=50,
-            values_callable=_values,
-        ),
+        Enum(EntityType, name="type", native_enum=False, length=50, values_callable=_values),
         nullable=False,
     )
-    # The identifier the source itself uses: a GitHub node id, a Jira key, an
-    # ARN. Opaque to LEKA, stable across syncs.
-    external_id: Mapped[str] = mapped_column(String(500), nullable=False)
-    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # The key that says it best (docs/resolution.md): `github.com/acme/api`,
+    # `person:email:sara@acme.io`, `service:billing`.
+    key: Mapped[str] = mapped_column(String(1000), nullable=False)
     name: Mapped[str] = mapped_column(String(500), nullable=False)
-
+    # What it is — its sources' word, then enrichment's where they said
+    # nothing — checked against its type's schema.
     attributes: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, server_default="{}"
     )
-
-    # How sure the background loop is that this entity is real and current.
-    # An answer built on low-confidence entities says so.
+    lifecycle: Mapped[Lifecycle] = mapped_column(
+        Enum(Lifecycle, name="lifecycle", native_enum=False, length=20, values_callable=_values),
+        nullable=False,
+        server_default=Lifecycle.ACTIVE.value,
+    )
+    # Raised each time what it says changes; every version is kept.
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    # The version of its type's schema it was checked against.
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    # What it says, hashed: how a build knows it changed.
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, server_default="")
+    # How sure the merges that made it are, and the best quality of its
+    # records (validation, LEKA-358).
     confidence: Mapped[float] = mapped_column(Float, nullable=False, server_default="1.0")
-
-    # Last time a sync saw it. Silence is evidence: an entity nobody has seen
-    # for weeks is probably gone.
+    quality: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Where it came from: every source and key it goes by, and the origin of
+    # each attribute — a source, or an enrichment rule and its confidence.
+    provenance: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Last time a source showed it. Silence is evidence.
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lifecycle_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class Relationship(Base, WorkspaceScopedMixin):
@@ -153,18 +204,13 @@ class Relationship(Base, WorkspaceScopedMixin):
             name="fk_relationships_workspace_to_entity",
             ondelete="CASCADE",
         ),
-        ForeignKeyConstraint(
-            ["workspace_id", "source_id"],
-            ["sources.workspace_id", "sources.id"],
-            name="fk_relationships_workspace_source",
-            ondelete="CASCADE",
-        ),
         # The graph is walked in both directions — "what does payment-api
         # depend on" and "who depends on payment-api" are both everyday
         # questions, so both get an index.
         Index("ix_relationships_from", "workspace_id", "from_entity_id", "type"),
         Index("ix_relationships_to", "workspace_id", "to_entity_id", "type"),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
+        CheckConstraint("origin IN ('stated', 'inferred')", name="origin"),
     )
 
     from_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -180,4 +226,64 @@ class Relationship(Base, WorkspaceScopedMixin):
         nullable=False,
     )
     confidence: Mapped[float] = mapped_column(Float, nullable=False, server_default="1.0")
-    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # Stated by a source, or inferred by an enrichment rule (`rule`).
+    origin: Mapped[str] = mapped_column(String(10), nullable=False, server_default="stated")
+    rule: Mapped[str] = mapped_column(String(100), nullable=False, server_default="stated")
+    cross_source: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # The records that stated it, or what it was inferred from.
+    provenance: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+
+
+class EntityVersion(Base, WorkspaceScopedMixin):
+    """What an entity said, at one of its versions — its history."""
+
+    __tablename__ = "entity_versions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "entity_id"],
+            ["entities.workspace_id", "entities.id"],
+            name="fk_entity_versions_workspace_entity",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("entity_id", "version", name="uq_entity_versions_entity_version"),
+    )
+
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    # {name, attributes, lifecycle} as they were.
+    content: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    # What changed from the version before: "name", "lifecycle", attributes.
+    changed: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # The build that recorded it. Single-column: SET NULL through
+    # workspace_id would null the workspace too.
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("model_runs.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class ModelRun(Base, WorkspaceScopedMixin):
+    """One build of a workspace's company model: from which enrichment run,
+    by which model version, what it did — or the error it stopped on."""
+
+    __tablename__ = "model_runs"
+    __table_args__ = (
+        CheckConstraint("status IN ('running', 'succeeded', 'failed', 'abandoned')", name="status"),
+        CheckConstraint(
+            "finished_at IS NULL OR finished_at >= started_at", name="finished_after_started"
+        ),
+        Index("ix_model_runs_workspace_started_at", "workspace_id", "started_at"),
+    )
+
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="running")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The enrichment run it read (LEKA-359). No foreign key: that history is
+    # pruned, and this says what it was made from, not a link to follow.
+    enrichment_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    model_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    counts: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    error: Mapped[str | None] = mapped_column(String(200), nullable=True)
