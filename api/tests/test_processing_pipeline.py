@@ -33,6 +33,7 @@ from leka.ingestion import pipeline as pipeline_module
 from leka.ingestion.extraction.job import extract_source
 from leka.ingestion.normalisation.job import NORMALISE_JOB, normalise_source
 from leka.ingestion.parsing import job as parsing_job
+from leka.ingestion.parsing.engine import PARSER_VERSION
 from leka.ingestion.parsing.job import PARSE_JOB, parse_source
 from leka.ingestion.repository import ParsingRepository
 from tests import test_sync as sync_tests
@@ -127,7 +128,7 @@ async def test_a_pass_runs_through_every_stage_in_order(source: Source) -> None:
     assert extraction.counts["extracted"] == 3
     assert extraction.versions == {"commits": 1}  # the fake commits' strategy
     assert parsing.counts["parsed"] == 3
-    assert parsing.versions == {"parser": 1}
+    assert parsing.versions == {"parser": PARSER_VERSION}
     assert normalisation.counts["failed"] == 3  # the fake vendor has no rules: unsupported
     assert all(r.finished_at is not None and r.finished_at >= r.started_at for r in runs)
     # Processed through: nothing left to queue.

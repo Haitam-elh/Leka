@@ -68,7 +68,7 @@ Path = Annotated[
 # A resource's or a metadata's name: what LEKA shows, and a scope matches.
 Name = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,39}$")]
 # What a resource's records may be in LEKA's model.
-Entity = Literal["issue", "incident", "service", "project", "document"]
+Entity = Literal["issue", "incident", "service", "application", "project", "document"]
 # A GraphQL variable's name, as the spec spells them.
 Variable = Annotated[str, StringConstraints(pattern=r"^[_A-Za-z][_0-9A-Za-z]{0,63}$")]
 # A query parameter's name, as an API spells it.

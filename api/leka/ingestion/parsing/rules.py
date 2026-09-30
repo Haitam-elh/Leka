@@ -3,8 +3,9 @@
 Work items: a Conventional Commits title says the kind of change, its scope,
 whether it breaks; a branch name carries its ticket; labels and issue types
 say what kind of work it is. Cloud resources: their tags — and, less surely,
-their names — say which environment, service and team they belong to;
-their configuration says whether the internet reaches them.
+their names — say which environment, service, application and team they
+belong to, and how critical they are; their configuration says whether the
+internet reaches them.
 
 Every rule reads the extraction's unified fields (docs/extraction.md), so it
 holds for GitHub, GitLab and Bitbucket alike, for AWS, Azure and Google
@@ -64,9 +65,27 @@ CLOUD = frozenset(
         Capability.LOAD_BALANCERS,
     }
 )
-ENVIRONMENT_KEYS = frozenset({"env", "environment", "stage", "tier"})
-SERVICE_KEYS = frozenset({"service", "app", "application", "component", "system", "product"})
+ENVIRONMENT_KEYS = frozenset({"env", "environment", "stage"})
+SERVICE_KEYS = frozenset({"service", "app", "component"})
+# An application is what several services make together: Backstage's
+# "system", a product.
+APPLICATION_KEYS = frozenset({"application", "system", "product"})
 OWNER_KEYS = frozenset({"team", "owner", "squad", "maintainer", "owning-team"})
+CRITICALITY_KEYS = frozenset(
+    {"criticality", "business-criticality", "business_criticality", "service-tier", "service_tier"}
+)
+# `tier` says an environment in some companies (tier=prod), how critical a
+# thing is in others (tier=1): read by its value, nothing when it says neither.
+TIER = "tier"
+# Criticality words, by level; a tier number is read by TIERS.
+CRITICALITIES = {
+    "critical": ("critical", "mission-critical", "business-critical", "crit", "very-high", "vital"),
+    "high": ("high", "important"),
+    "medium": ("medium", "moderate", "normal", "standard"),
+    "low": ("low", "minor", "non-critical", "noncritical", "best-effort"),
+}
+TIER_NUMBER = re.compile(r"^(?:tier-?|t)?(\d)$")
+TIERS = ("critical", "critical", "high", "medium", "low")
 ENVIRONMENTS = {
     "production": ("prod", "production", "prd", "live"),
     "staging": ("staging", "stage", "stg", "preprod", "pre-prod", "uat"),
@@ -221,9 +240,37 @@ def _cloud(record: ExtractedRecord) -> list[Fact]:
                     evidence=evidence,
                 )
             )
+        elif normalized_key == TIER:
+            if known := _environment(value):
+                facts.append(
+                    Fact(type=FactType.ENVIRONMENT, value=known, confidence=0.9, evidence=evidence)
+                )
+            elif level := criticality(value):
+                facts.append(
+                    Fact(type=FactType.CRITICALITY, value=level, confidence=0.9, evidence=evidence)
+                )
+        elif normalized_key in CRITICALITY_KEYS:
+            level = criticality(value)
+            facts.append(
+                Fact(
+                    type=FactType.CRITICALITY,
+                    value=level or value.strip().lower(),
+                    confidence=0.95 if level else 0.8,
+                    evidence=evidence,
+                )
+            )
         elif normalized_key in SERVICE_KEYS:
             facts.append(
                 Fact(type=FactType.SERVICE, value=value.strip(), confidence=0.9, evidence=evidence)
+            )
+        elif normalized_key in APPLICATION_KEYS:
+            facts.append(
+                Fact(
+                    type=FactType.APPLICATION,
+                    value=value.strip(),
+                    confidence=0.9,
+                    evidence=evidence,
+                )
             )
         elif normalized_key in OWNER_KEYS:
             facts.append(
@@ -247,6 +294,17 @@ def _cloud(record: ExtractedRecord) -> list[Fact]:
 def _environment(value: str) -> str | None:
     word = value.strip().lower()
     return next((name for name, words in ENVIRONMENTS.items() if word in words), None)
+
+
+def criticality(value: str) -> str | None:
+    """How critical, on one scale — critical, high, medium, low — or None
+    for a word it does not know. A tier is a number, 1 the most critical
+    (0 too, where a company counts from it): `tier-1`, `T1`, `1`."""
+    word = re.sub(r"[\s_]+", "-", value.strip().lower())
+    tier = TIER_NUMBER.match(word)
+    if tier:
+        return TIERS[min(int(tier.group(1)), len(TIERS) - 1)]
+    return next((level for level, words in CRITICALITIES.items() if word in words), None)
 
 
 def _environment_in_name(name: str) -> str | None:

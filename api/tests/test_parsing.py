@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from leka.connectors import Capability, SourceKind
 from leka.ingestion.extraction import ExtractedRecord
 from leka.ingestion.parsing import (
@@ -199,6 +201,50 @@ def test_tags_say_the_environment_the_service_and_the_team() -> None:
     assert (FactType.ENVIRONMENT, "production", 0.95) in found
     assert (FactType.SERVICE, "billing", 0.9) in found
     assert (FactType.OWNER, "payments", 0.9) in found
+
+
+def test_tags_say_the_application_apart_from_the_service() -> None:
+    parsed = _instance(
+        [
+            {"Key": "app", "Value": "billing-api"},
+            {"Key": "Application", "Value": "Billing"},
+            {"Key": "system", "Value": "payments-platform"},
+        ]
+    )
+
+    assert [f.value for f in _of(parsed, FactType.SERVICE)] == ["billing-api"]
+    assert [f.value for f in _of(parsed, FactType.APPLICATION)] == [
+        "Billing",
+        "payments-platform",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "found"),
+    [
+        ("criticality", "Mission-Critical", (FactType.CRITICALITY, "critical", 0.95)),
+        ("business_criticality", "tier 2", (FactType.CRITICALITY, "high", 0.95)),
+        ("criticality", "gold", (FactType.CRITICALITY, "gold", 0.8)),
+        # `tier` is read by its value: a number or a level, or an environment.
+        ("tier", "1", (FactType.CRITICALITY, "critical", 0.9)),
+        ("Tier", "T3", (FactType.CRITICALITY, "medium", 0.9)),
+        ("tier", "low", (FactType.CRITICALITY, "low", 0.9)),
+        ("tier", "prod", (FactType.ENVIRONMENT, "production", 0.9)),
+    ],
+)
+def test_tags_say_how_critical_it_is(
+    key: str, value: str, found: tuple[FactType, str, float]
+) -> None:
+    parsed = _instance([{"Key": key, "Value": value}])
+
+    assert found in {(f.type, f.value, f.confidence) for f in parsed.facts}
+
+
+def test_a_tier_that_says_neither_says_nothing() -> None:
+    parsed = _instance([{"Key": "tier", "Value": "web"}])
+
+    assert _of(parsed, FactType.CRITICALITY) == []
+    assert _of(parsed, FactType.ENVIRONMENT) == []
 
 
 def test_a_name_is_only_a_guess_at_the_environment() -> None:

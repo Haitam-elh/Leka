@@ -124,6 +124,18 @@ def team(name: str) -> str:
     return f"team:{slug(name)}"
 
 
+def application(name: str) -> str:
+    """An application — a group of services — by its name, as every tool
+    that names it writes it (LEKA-362)."""
+    return f"application:{slug(name)}"
+
+
+def environment(name: str) -> str:
+    """One of the company's environments, by its canonical name:
+    `environment:production`."""
+    return f"environment:{slug(name)}"
+
+
 def site_of(url: str | None) -> str | None:
     """A Jira site from any of its links: 'acme.atlassian.net'."""
     host = (urlsplit(url).hostname or "") if url else ""

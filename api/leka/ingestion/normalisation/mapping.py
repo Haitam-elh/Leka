@@ -3,9 +3,10 @@
 The record becomes ONE entity — its type from its capability, its key from
 identifiers.py, its attributes canonical (values.py): what the extraction
 said, dates in UTC, states and priorities on LEKA's scale, the facts parsing
-was surest of. The people it names become person entities; the services and
-teams its tags name, service and team entities. What it points at becomes a
-relationship to that thing's key, whether or not any source has shown it.
+was surest of. The people it names become person entities; the services,
+applications, teams and environments its tags and catalogues name, entities
+of their own. What it points at becomes a relationship to that thing's key,
+whether or not any source has shown it.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from leka.ingestion.extraction import ExtractedRecord, Reference
 from leka.ingestion.normalisation import identifiers as ids
 from leka.ingestion.normalisation import values
 from leka.ingestion.parsing import Fact, FactType, ParsedRecord, Target
-from leka.ingestion.parsing.rules import ENVIRONMENTS
+from leka.ingestion.parsing.rules import ENVIRONMENTS, criticality
 from leka.ingestion.schemas import NormalisedEntity, NormalisedRelationship
 
 C = Capability
@@ -34,7 +35,7 @@ DOCUMENT_TOOLS = frozenset(
     {"confluence", "notion", "slab", "guru", "google_workspace", "microsoft_365"}
 )
 # What a custom source's resource may declare its records to be (LEKA-350).
-CUSTOM_ENTITIES = frozenset({"issue", "incident", "service", "project", "document"})
+CUSTOM_ENTITIES = frozenset({"issue", "incident", "service", "application", "project", "document"})
 
 ENTITY_TYPES = {
     C.REPOSITORIES: "repository",
@@ -105,6 +106,9 @@ class Build:
     aliases: list[str] = field(default_factory=list)
     # The source's mapping (LEKA-351): its own words, applied over the rules.
     mapping: Mapping = field(default_factory=Mapping)
+    # What the record is when its capability does not say: a PagerDuty
+    # business service is an application (LEKA-362).
+    as_type: str | None = None
 
     @property
     def kind(self) -> str:
@@ -196,7 +200,9 @@ def entity(build: Build) -> NormalisedEntity:
         key, attributes = _work(build)
     _mapped_containers(build, key)
     return NormalisedEntity(
-        type=declared or build.mapping.entity_types.get(capability.value, ENTITY_TYPES[capability]),
+        type=build.as_type
+        or declared
+        or build.mapping.entity_types.get(capability.value, ENTITY_TYPES[capability]),
         key=key,
         external_id=record.provenance.external_id,
         source_id=build.source_id,
@@ -427,9 +433,15 @@ def _custom(build: Build, declared: str) -> tuple[str, dict[str, object]]:
     record = build.record
     if declared == "service":
         key = ids.service(str(record.title))
+    elif declared == "application":
+        key = ids.application(str(record.title))
     else:
         key = ids.item(f"custom-{build.source_id}", declared, record.provenance.external_id)
     attributes = _common(build)
+    if declared in ("service", "application"):
+        # A CMDB, a Backstage catalogue read as a custom source: what its
+        # admin mapped, in the words below.
+        _catalogued(build, key, attributes, application=declared == "application")
     if record.state is not None and declared in ("issue", "incident"):
         own = _own(build.mapping.states, record.state)
         state, known = (
@@ -471,10 +483,13 @@ def _operations(build: Build) -> tuple[str, dict[str, object]]:
         raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
     attributes = _common(build)
     if capability is C.SERVICES:
-        key = ids.service(str(record.title))
-        for team in _names(record.signals.get("teams")):
-            owner = _named(build, "team", ids.team(team), team, 1.0)
-            build.relate("owned_by", key, owner, 1.0, "signals")
+        application = record.signals.get("kind") == "application"
+        if application:
+            key = ids.application(str(record.title))
+            build.as_type = "application"
+        else:
+            key = ids.service(str(record.title))
+        _catalogued(build, key, attributes, application=application)
         return key, attributes
 
     key = ids.incident(build.kind, record.provenance.external_id)
@@ -518,6 +533,95 @@ def _names(value: object) -> list[str]:
     return [str(v) for v in value if v] if isinstance(value, list) else []
 
 
+# ── services and applications (LEKA-362) ─────────────────────────────────────
+
+# What a catalogue says, in the fields its tool — or a custom source's admin —
+# names it: the first of each list found.
+SAID = {
+    "teams": ("teams", "team", "owner", "owners"),
+    "application": ("application", "system", "product"),
+    "services": ("services",),
+    "depends_on": ("depends_on", "dependencies", "dependsOn"),
+    "criticality": ("criticality", "tier"),
+    "stage": ("lifecycle", "stage"),
+    "environments": ("environments", "environment"),
+}
+# Read here, kept as relationships or on LEKA's scales, not as attributes.
+CATALOGUE_FIELDS = frozenset(
+    {"kind", "application", "system", "product", "services", "depends_on", "dependencies"}
+    | {"dependsOn", "criticality", "tier", "lifecycle", "stage", "environments", "environment"}
+)
+
+
+def _catalogued(
+    build: Build, key: str, attributes: dict[str, object], *, application: bool
+) -> None:
+    """What a tool's catalogue says of a service or an application: who owns
+    it, the application it is part of — or, for an application, its
+    services — what it depends on, how critical it is, where it is in its
+    life, where it runs. In its words, then on LEKA's scales."""
+    for team in _said(build, "teams"):
+        owner = _named(build, "team", ids.team(team), team, 1.0)
+        build.relate("owned_by", key, owner, 1.0, "signals")
+    if not application:
+        for group in _said(build, "application")[:1]:
+            target = _named(build, "application", ids.application(group), group, 1.0)
+            build.relate("part_of", key, target, 1.0, "catalogue.application")
+    for name in _said(build, "services"):
+        service = _named(build, "service", ids.service(name), name, 1.0)
+        build.relate("part_of", service, key, 1.0, "catalogue.services")
+    kind, key_of = ("application", ids.application) if application else ("service", ids.service)
+    for name in _said(build, "depends_on"):
+        other = _named(build, kind, key_of(name), name, 1.0)
+        build.relate("depends_on", key, other, 1.0, "catalogue.depends_on")
+    for name in CATALOGUE_FIELDS:
+        attributes.pop(name, None)
+    raw = next(iter(_said(build, "criticality", split=False)), None)
+    if raw:
+        level = criticality(raw)
+        attributes["criticality"], attributes["criticality_raw"] = level or raw.lower(), raw
+        if level is None:
+            build.diagnostics.append("unknown criticality: kept as the catalogue wrote it")
+    raw = next(iter(_said(build, "stage", split=False)), None)
+    if raw:
+        stage, known = values.stage(raw)
+        attributes["stage"], attributes["stage_raw"] = stage, raw
+        if not known:
+            build.diagnostics.append("unknown lifecycle: kept as the catalogue wrote it")
+    for word in _said(build, "environments"):
+        own = _own(build.mapping.environments, word)
+        usual = next((env for env, words in ENVIRONMENTS.items() if word.lower() in words), None)
+        _runs_in(build, key, own or usual or word.lower(), 1.0)
+
+
+def _said(build: Build, what: str, *, split: bool = True) -> list[str]:
+    """The first of `what`'s fields the record has — its signals, then its
+    metadata — as text: a list, or words between commas."""
+    for bag in (build.record.signals, build.record.metadata):
+        for name in SAID[what]:
+            value = bag.get(name)
+            if isinstance(value, list):
+                found = [str(v).strip() for v in value if str(v).strip()]
+            elif isinstance(value, str | int | float) and not isinstance(value, bool):
+                text = str(value).strip()
+                found = [p.strip() for p in text.split(",")] if split else [text]
+            else:
+                continue
+            found = [f for f in found if f]
+            if found:
+                return list(dict.fromkeys(found))
+    return []
+
+
+def _runs_in(build: Build, key: str, environment: str | None, confidence: float) -> None:
+    """Where a thing runs: one of the company's environments, an entity of
+    its own — only a canonical one: `prd-eu-2` is a name, not an environment."""
+    if environment not in ENVIRONMENTS:
+        return
+    target = _named(build, "environment", ids.environment(environment), environment, confidence)
+    build.relate("runs_in", key, target, confidence, "environment")
+
+
 # ── cloud resources ──────────────────────────────────────────────────────────
 
 
@@ -531,12 +635,14 @@ def _cloud(build: Build) -> tuple[str, dict[str, object]]:
         dict(t.split("=", 1) for t in tags if "=" in t) if isinstance(tags, list) else {}
     )
 
-    for fact_type in (FactType.ENVIRONMENT, FactType.EXPOSURE):
+    for fact_type in (FactType.ENVIRONMENT, FactType.EXPOSURE, FactType.CRITICALITY):
         best = _best(build.parsed, fact_type)
         if best is not None:
             attributes[fact_type.value] = best.value
             attributes[f"{fact_type.value}_confidence"] = best.confidence
-    _mapped_tags(build, key, attributes)
+    services: list[tuple[str, float, str]] = []
+    applications: list[tuple[str, float, str]] = []
+    _mapped_tags(build, key, attributes, services, applications)
     if isinstance(attributes.get("environment"), str):
         # 'prd' read in a tag: the company says it is production.
         own = _own(build.mapping.environments, str(attributes["environment"]))
@@ -544,10 +650,28 @@ def _cloud(build: Build) -> tuple[str, dict[str, object]]:
     for fact in build.parsed.facts:
         if fact.type is FactType.SERVICE and fact.value:
             service = _named(build, "service", ids.service(fact.value), fact.value, fact.confidence)
-            build.relate("part_of", key, service, fact.confidence, fact.evidence.field)
+            services.append((service, fact.confidence, fact.evidence.field))
+        elif fact.type is FactType.APPLICATION and fact.value:
+            group = ids.application(fact.value)
+            _named(build, "application", group, fact.value, fact.confidence)
+            applications.append((group, fact.confidence, fact.evidence.field))
         elif fact.type is FactType.OWNER and fact.value:
             team = _named(build, "team", ids.team(fact.value), fact.value, fact.confidence)
             build.relate("owned_by", key, team, fact.confidence, fact.evidence.field)
+    for service, confidence, evidence in services:
+        build.relate("part_of", key, service, confidence, evidence)
+    # An application tag beside a service tag says the service's
+    # application; alone, the resource's.
+    for group, confidence, evidence in applications:
+        for service, surety, _ in services or [(key, 1.0, "")]:
+            build.relate("part_of", service, group, min(confidence, surety), evidence)
+    environment = attributes.get("environment")
+    _runs_in(
+        build,
+        key,
+        environment if isinstance(environment, str) else None,
+        float(str(attributes.get("environment_confidence", 1.0))),
+    )
 
     network = next((r.external_id for r in record.references if r.kind == "network"), None)
     if network:
@@ -652,9 +776,17 @@ def _mapped_containers(build: Build, key: str) -> None:
         build.relate("owned_by", key, target, 1.0, "mapping.owners")
 
 
-def _mapped_tags(build: Build, key: str, attributes: dict[str, object]) -> None:
+def _mapped_tags(
+    build: Build,
+    key: str,
+    attributes: dict[str, object],
+    services: list[tuple[str, float, str]],
+    applications: list[tuple[str, float, str]],
+) -> None:
     """The company's own tag keys: `stage` for the environment, `app` for
-    the service, `squad` for the team."""
+    the service, `product` for the application, `squad` for the team,
+    `impact` for how critical it is. The services and applications found
+    are added to the lists, related by the caller."""
     tags = attributes.get("tags")
     if not isinstance(tags, dict):
         return
@@ -672,7 +804,18 @@ def _mapped_tags(build: Build, key: str, attributes: dict[str, object]) -> None:
         value = by_key.get(tag.strip().lower())
         if value:
             target = _named(build, "service", ids.service(value), value, 0.95)
-            build.relate("part_of", key, target, 0.95, "mapping.tag_keys.service")
+            services.append((target, 0.95, "mapping.tag_keys.service"))
+    for tag in keys.application:
+        value = by_key.get(tag.strip().lower())
+        if value:
+            group = _named(build, "application", ids.application(value), value, 0.95)
+            applications.append((group, 0.95, "mapping.tag_keys.application"))
+    for tag in keys.criticality:
+        value = by_key.get(tag.strip().lower())
+        if value:
+            attributes["criticality"] = criticality(value) or value.strip().lower()
+            attributes["criticality_confidence"] = 0.95
+            break
     for tag in keys.owner:
         value = by_key.get(tag.strip().lower())
         if value:

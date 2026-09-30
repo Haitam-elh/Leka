@@ -36,9 +36,11 @@ class FactType(enum.StrEnum):
     BREAKING = "breaking"  # a change that breaks its users
     CATEGORY = "category"  # bug, feature, incident, security, docs, task, epic, maintenance
     ENVIRONMENT = "environment"  # production, staging, development, test
-    SERVICE = "service"  # the service or application a resource belongs to
+    SERVICE = "service"  # the service a resource belongs to
+    APPLICATION = "application"  # the application — a group of services — it belongs to
     OWNER = "owner"  # the team or person responsible
     EXPOSURE = "exposure"  # public, internal
+    CRITICALITY = "criticality"  # critical, high, medium, low
 
 
 class Target(BaseModel):

@@ -116,6 +116,32 @@ PRIORITIES = {
     "p5": "lowest",
 }
 
+# Where a service or an application is in its life, as its catalogue says
+# (LEKA-362): experimental, production, deprecated, retired.
+STAGES = {
+    "experimental": "experimental",
+    "alpha": "experimental",
+    "beta": "experimental",
+    "pilot": "experimental",
+    "poc": "experimental",
+    "prototype": "experimental",
+    "incubating": "experimental",
+    "production": "production",
+    "prod": "production",
+    "ga": "production",
+    "live": "production",
+    "stable": "production",
+    "deprecated": "deprecated",
+    "sunset": "deprecated",
+    "sunsetting": "deprecated",
+    "legacy": "deprecated",
+    "retired": "retired",
+    "decommissioned": "retired",
+    "end of life": "retired",
+    "end-of-life": "retired",
+    "eol": "retired",
+}
+
 # An incident's life on the work scale: open, being handled, over.
 INCIDENT_STATES = {
     "triggered": "open",
@@ -148,6 +174,10 @@ def resource_state(raw: str | None) -> tuple[str | None, bool]:
 
 def priority(raw: str | None) -> tuple[str | None, bool]:
     return _lookup(PRIORITIES, raw)
+
+
+def stage(raw: str | None) -> tuple[str | None, bool]:
+    return _lookup(STAGES, raw)
 
 
 def utc(value: datetime | str | None) -> str | None:
