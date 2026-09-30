@@ -58,9 +58,13 @@ One fact per (type, target) — or (type, value) — the surest kept.
 | `category` | `bug`, `feature`, `task`, `epic`, `incident` | | the vendor's issue type | 0.95 |
 | `category` | `bug`, `incident`, `security`, `feature`, `docs`, `maintenance` | | a label | 0.85 |
 | `category` | from the change type | | `feat` → feature, `fix` → bug, `docs`, else maintenance | 0.8 |
-| `environment` | `production`, `staging`, `development`, `test` | | an `env` / `environment` / `stage` / `tier` tag | 0.95 (0.8 for a value it does not know) |
+| `environment` | `production`, `staging`, `development`, `test` | | an `env` / `environment` / `stage` tag | 0.95 (0.8 for a value it does not know) |
+| `environment` | same | | a `tier` tag that says an environment: `tier=prod` | 0.9 |
 | `environment` | same | | a word of the resource's name: `api-prod-1` | **0.5** — a guess |
-| `service` | the tag's value | | a `service` / `app` / `application` / `component` / `system` / `product` tag | 0.9 |
+| `service` | the tag's value | | a `service` / `app` / `component` tag | 0.9 |
+| `application` | the tag's value | | an `application` / `system` / `product` tag — a group of services (LEKA-362) | 0.9 |
+| `criticality` | `critical`, `high`, `medium`, `low` | | a `criticality` / `business-criticality` / `service-tier` tag: a tier number — 1 (or 0) the most critical — or a level word | 0.95 (0.8 for a value it does not know) |
+| `criticality` | same | | a `tier` tag that says a level: `tier=1`, `tier=T3`, `tier=low` — one that says neither an environment nor a level says nothing | 0.9 |
 | `owner` | the tag's value | | a `team` / `owner` / `squad` / `maintainer` tag | 0.9 |
 | `exposure` | `public`, `internal` | | `public` flag, a load balancer's scheme | 0.95 |
 
@@ -100,7 +104,8 @@ described.
 
 ## 5. Versions
 
-`PARSER_VERSION` (`parsing/engine.py`) is raised when what parsing finds
+`PARSER_VERSION` (`parsing/engine.py`; 2 since LEKA-362's application and
+criticality tags) is raised when what parsing finds
 changes: what the old version parsed is parsed again.
 
 ## 6. Where results are kept, and when they are made

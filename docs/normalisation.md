@@ -55,9 +55,9 @@ something no source has shown yet — a ticket in a tool not connected.
 | projects, issues of Linear, Asana, Trello, ClickUp, Monday | `project`, `issue` — a task, a card, an item is an `issue` |
 | pages, files (Confluence, Notion, Slab, Guru, Google Workspace, Microsoft 365) | `document` |
 | incidents (Datadog, PagerDuty) | `incident` |
-| services (PagerDuty) | `service` |
-| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `project`, `document` — keyed by the source, a service by its name ([custom.md](connectors/custom.md)) |
-| named by a record | `person`, `service`, `team` |
+| services (PagerDuty, the Datadog service catalog) | `service` — a PagerDuty **business service** is an `application` (LEKA-362) |
+| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `application`, `project`, `document` — keyed by the source, a service or an application by its name ([custom.md](connectors/custom.md)) |
+| named by a record | `person`, `service`, `application`, `team`, `environment` |
 
 Alerts, events, metrics, logs and dashboards (Datadog, Grafana) are
 extracted and parsed, but are not entities: they are the evidence about
@@ -89,7 +89,9 @@ One thing, one key — built from what every mention of it carries
 | a ticket named where its site is unknown | `ticket:PAY-42` |
 | person | `person:email:sara@acme.io` when an email is known, **alias** `person:github.com:sara`; else the account: `person:github.com:sara`, `person:acme.atlassian.net:<account id>` |
 | cloud resource | `aws:<ARN>`, `azure:<ARM id, lower-cased>`, `gcp:<full resource name>` |
-| service, team | `service:billing-api`, `team:payments` — a slug of the tag's value, or of a PagerDuty service's name: the same service meets on one key |
+| service, team | `service:billing-api`, `team:payments` — a slug of the tag's value, or of a PagerDuty or Datadog service's name: the same service meets on one key |
+| application | `application:billing` — a slug of an `application` / `system` / `product` tag, a catalog's application, a PagerDuty business service's name |
+| environment | `environment:production` — one of the four canonical names only (§ 4): `prd-eu-2` is a name, not an environment |
 | incident | `incident:pagerduty:Q1ABC…`, `incident:datadog:<uuid>` — the tool and its own id, not its per-account number |
 | Linear issue | `linear.app/acme/ENG-42` — its workspace and identifier; **alias `ticket:ENG-42`**, so `ENG-42` in a pull request finds it |
 | another tool's project, issue | `asana:project:1204…`, `trello:issue:5f1e…`, `clickup:issue:86…`, `monday:issue:123…` — the tool, what it is, its id |
@@ -114,26 +116,34 @@ Every entity carries the extraction's `metadata` and `signals`, plus:
 | `state_raw` | the vendor's word, always kept |
 | `priority`, `priority_raw` | `highest`, `high`, `medium`, `low`, `lowest` — `blocker`/`critical` → highest, `major` → high, `normal` → medium, `minor` → low, `trivial` → lowest; an incident's priority (PagerDuty `P1`…`P5`) or severity (Datadog `SEV-0`…`SEV-5`): P1, SEV-0 and SEV-1 → highest, P2 and SEV-2 → high, and so on |
 | `change_type`, `scope`, `category`, `breaking` | the surest fact of each (parsing), with `<name>_confidence` |
-| `environment`, `exposure` (cloud) | the surest fact, with its confidence — a tag's 0.95, a name's 0.5 |
+| `environment`, `exposure`, `criticality` (cloud) | the surest fact, with its confidence — a tag's 0.95, a name's 0.5 |
+| `criticality`, `criticality_raw` (services, applications) | `critical`, `high`, `medium`, `low` — a tier is a number, 1 (or 0) the most critical: `tier-1` → critical, `2` → high, `3` → medium, `4` → low; `mission-critical` → critical. A catalogue's `tier` or `criticality`. The source's word kept beside |
+| `stage`, `stage_raw` (services, applications) | where it is in its life: `experimental` (alpha, beta, pilot), `production` (GA, live, stable), `deprecated` (sunset, legacy), `retired` (decommissioned, EOL). A catalogue's `lifecycle` |
+| `service_type`, `languages`, `display_name`, `runbook_url`, `repository_url`, `dashboard_url`, `docs_url` (Datadog catalog) | what its team wrote: `web`, `grpc`; `["python"]`; the first link of each kind |
 | `tags` (cloud) | a `{key: value}` object |
 | `resource_kind` (cloud) | § 2 |
 | `url`, `source_kind`, `quality` | the link, the connector, the parse's quality score |
 
-A state or a priority no table knows is **kept**, lower-cased, and said in
-`diagnostics` — not a failure. A `name` has its spaces collapsed, at most
+A state, a priority, a criticality or a stage no table knows is **kept**,
+lower-cased, and said in `diagnostics` — not a failure. What a catalogue
+said and normalisation turned into relationships or scales — its
+`application`, `depends_on`, `tier`, `lifecycle` — is not kept twice as an
+attribute: the raw word is in `*_raw`. A `name` has its spaces collapsed, at most
 500 characters.
 
 ## 5. Relationships
 
 | `type` | From → to | Read from |
 |---|---|---|
-| `part_of` | an item → its repository; a Jira issue, a tool's issue → its project; a resource → its service | the container (a Linear issue: its project); a `service` tag |
+| `part_of` | an item → its repository; a Jira issue, a tool's issue → its project; a resource → its service; a service → its application — or a resource, tagged with an application alone | the container (a Linear issue: its project); a `service` tag; an `application` tag beside it; a catalog's application or system; a PagerDuty business service's supporting services |
+| `depends_on` | a service → a service; an application → an application | PagerDuty's technical dependencies and a business service's supporting business services; the Datadog catalog's `dependsOn` (v3); a custom source's `depends_on` |
+| `runs_in` | a resource, a service, an application → an environment | a resource's canonical environment; a custom source's `environments` |
 | `child_of` | a Jira issue → its parent; a tool's issue → its parent issue; a document → its parent page | the extraction's `parent` |
 | `authored_by`, `committed_by`, `assigned_to`, `reviewed_by`, `reported_by`, `created_by`, `led_by` | an item → a person — an incident's commander leads it | the extraction's references |
 | `affects` | an incident → a service | PagerDuty's service, Datadog's *services* field |
 | `resolves`, `mentions`, `implements`, `merges` | an item → an item | parsing's references: "Fixes #41", a link, a branch name, a merge commit |
 | `mentions` | an item → a person | `@handle` on a code host |
-| `owned_by` | a resource → a team; a PagerDuty service → its teams | a `team` / `owner` tag; the service's teams |
+| `owned_by` | a resource → a team; a service, an application → its teams | a `team` / `owner` tag; a PagerDuty service's teams, a business service's team, a catalog's team or owner |
 | `in_network` | a resource → its VPC or network, by that record's own key | the extraction's `network` |
 
 Confidence is the fact's: 1.0 for what the vendor said, the parse's
@@ -153,7 +163,8 @@ metadata.number` — never a value. Its neighbours are normalised.
 ## 7. Versions
 
 `NORMALISER_VERSION` (`normalisation/engine.py`) is raised when a rule
-changes: what the old rules normalised is normalised again.
+changes: what the old rules normalised is normalised again. 4: applications,
+environments, dependencies, criticality and stage (LEKA-362).
 
 ## 8. Where results are kept, and when they are made
 
@@ -191,8 +202,10 @@ vendor wrote it, when last, and the 20 latest failures.
 An administrator's mapping for the source (LEKA-351,
 [scope-and-mapping.md](connectors/scope-and-mapping.md)) is applied over
 these rules: the entity type of a capability, the service and team of a
-container (confidence 1.0), the company's tag keys (0.95), its own words for
-states, priorities and environments — which win over the tables of § 4.
+container (confidence 1.0), the company's tag keys (0.95) — for the
+environment, the service, the application, the team and how critical —
+its own words for states, priorities and environments — which win over the
+tables of § 4.
 `normalised_records.settings_version` is the version it was applied with; a
 new mapping makes the source's rows stale, and they are made again.
 

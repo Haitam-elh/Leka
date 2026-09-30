@@ -51,7 +51,8 @@ make it ambiguous (`ambiguous_alias`): neither is assumed, and a lookup of
 
 ## 2. Semantic — what names mean
 
-Between what step 1 left apart, for **people, services and teams** —
+Between what step 1 left apart, for **people, services, applications and
+teams** —
 computed locally, by LEKA itself: no model, no paid service.
 
 **People** — two families of signals, scored:
@@ -67,13 +68,16 @@ computed locally, by LEKA itself: no model, no paid service.
 The best of each family counts; two families agreeing are worth more than
 either (1 − (1 − a)(1 − b)), up to 0.95 — never the 1.0 of a fact.
 
-**Services and teams** — the core of a name: the words that say "a
-service" or "a team" (`api`, `service`, `svc`, `app`, `server`; `team`,
-`squad`, `group`, `engineering`…) and a plural set aside.
+**Services, applications and teams** — the core of a name: the words that
+say "a service", "an application" or "a team" (`api`, `service`, `svc`,
+`app`, `server`; `application`, `platform`, `system`, `product`; `team`,
+`squad`, `group`, `engineering`…) and a plural set aside. Each kind only
+with its own: a service `billing` and an application `Billing` are two
+things — the service is part of the application (LEKA-362).
 
 | Signal | Example | Score |
 |---|---|---|
-| `same_name` | `Billing API`, `billing-service`, `billing` | 0.9 |
+| `same_name` | `Billing API`, `billing-service`, `billing`; the applications `Billing` and `Billing platform` | 0.9 |
 | `environment_variant` | `billing` and `billing-staging` | 0.7 |
 | `similar_spelling` | `notification` and `notifcation` — a typo, not a digit | 0.65 |
 

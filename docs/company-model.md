@@ -39,13 +39,15 @@ are checked against.
 | Category | Kinds | Schema declares, beyond url, description, state, lifecycle, last activity |
 |---|---|---|
 | organisation | `person`, `team` | — |
-| applications | `service` | environment, tier, incidents over 90 days, open incidents, MTTR |
+| applications | `application` | criticality, stage, environments, point of contact — § 9 |
+| | `service` | the same, and its type, languages, escalation policy, links; incidents over 90 days, open incidents, MTTR — § 9 |
 | | `repository` | visibility, default branch, language, topics, fork |
 | delivery | `project`, `release`, `deployment` | — |
 | | `issue`, `pull_request` | priority, category, labels, components, stale, cycle time |
 | | `commit` | category, change type |
 | operations | `incident` | priority, duration |
-| infrastructure | `infra_resource`, `database` | resource kind, environment, exposure, region, tags |
+| infrastructure | `infra_resource`, `database` | resource kind, environment, exposure, criticality, region, tags |
+| | `environment` | — `production`, `staging`, `development`, `test` |
 | knowledge | `document` | — |
 
 Each **relationship kind** is built from enrichment's relationships
@@ -53,8 +55,9 @@ Each **relationship kind** is built from enrichment's relationships
 `depends_on`, `owned_by`, `maintained_by`, `member_of`, `authored_by`
 (and normalisation's `committed_by`), `assigned_to`, `reviewed_by`,
 `reported_by` (and `created_by`), `led_by`, `affects`, `resolves`,
-`implements`, `merges`, `mentions`, `in_network`. `owns`, `deployed_to`
-and `caused_by` are kept for what states them later; nothing does yet.
+`implements`, `merges`, `mentions`, `in_network`, `runs_in` (LEKA-362).
+`owns`, `deployed_to` and `caused_by` are kept for what states them later;
+nothing does yet.
 
 `GET /knowledge/registry` serves all of it.
 
@@ -93,13 +96,15 @@ shows it and the key it goes by there (up to 20).
 | `attributes` | what its sources say; where they say nothing, what enrichment added — **never enrichment's over a source's**. Checked against its kind's schema |
 | `provenance.attributes` | each attribute's origin: `{"origin": "source"}`, or `{"origin": "enrichment", "rule", "confidence"}` |
 | `provenance.sources` | `{source_id, key, kind}` per source and key |
+| `provenance.conflicts` | what its sources **disagree** on (resolution's conflicts, LEKA-362): `{attribute, chosen, values: [{value, source_id}]}` — every value kept with who said it, the attribute marked `disputed` in `provenance.attributes` |
 | `confidence` | how sure the merges that made it are (resolution) |
 | `quality` | the best quality of its records (validation, LEKA-358) |
 | `first_seen_at`, `last_seen_at` | the earliest and latest a source showed it |
 
 A relationship says whether a source **stated** it or a rule **inferred**
 it (`origin`, `rule`), how sure it is, whether it joins two tools' things
-(`cross_source`), and the records that stated it (`provenance`).
+(`cross_source`), the records that stated it (`provenance`), and the
+**environments** it is true in (`attributes.environments`, § 9).
 
 ## 4. Lifecycle
 
@@ -107,7 +112,7 @@ it (`origin`, `rule`), how sure it is, whether it joins two tools' things
 |---|---|
 | `active` | shown by a source, and not one of the below |
 | `dormant` | enrichment finds nothing done to it for 180 days ([enrichment.md § 5](enrichment.md)) |
-| `archived` | its source says so (`state: archived`) |
+| `archived` | its source says so (`state: archived`), or its catalogue says it is retired (`stage: retired`) |
 | `removed` | **no source shows it any more** |
 
 A removed thing is **kept, never deleted**: its history stays, `removed_at`
@@ -173,6 +178,9 @@ Read by every member (`workspace:read`); another workspace's entity is 404.
 | `GET /knowledge/entities/{id}` | one: its provenance, its relationships both ways — the surest first, up to 100, and how many — and how many versions |
 | `GET /knowledge/entities/{id}/versions` | its history, the latest first: each version's content and what changed |
 | `GET /knowledge/entities/{id}/neighbourhood?depth=1..3` | what surrounds it, in either direction, the removed left out: up to 200 entities and the relationships between them |
+| `GET /knowledge/services`, `GET /knowledge/applications` | the landscape (§ 9), by name, paged: `criticality`, `stage`, `environment`, `application_id` (services), `team_id`, `lifecycle`, `q` |
+| `GET /knowledge/services/{id}`, `GET /knowledge/applications/{id}` | one: its landscape, what it is made of and in which environments, its dependencies both ways, its attributes and provenance. A service's id on the applications' route is 404 |
+| `GET /knowledge/entities/{id}/dependencies` | `direction=downstream` (what it depends on) or `upstream` (what depends on it: what its failure reaches), `depth=1..5`, `environment`: each thing reached and how far, the `depends_on` walked — up to 500, `truncated` beyond |
 
 ## 8. What reads it
 
@@ -181,9 +189,59 @@ what surrounds it, as one subgraph — the unit an answer is assembled from.
 The traversal is one recursive query, bounded by depth and size
 ([ADR 001](adr/001-postgresql.md)).
 
+## 9. Applications and services (LEKA-362)
+
+The company's **application landscape**: the applications — groups of
+services it names as one — the services, where each runs, whose it is, how
+critical, where in its life, what it depends on. Built from the tools that
+know it ([normalisation.md](normalisation.md)):
+
+| Tool | What it says |
+|---|---|
+| PagerDuty | services and their teams; their **technical dependencies**; business services — as **applications** — and the services supporting them |
+| the Datadog service catalog | a service's team, application (v3: its system), tier, lifecycle, type, languages, links, dependencies |
+| cloud tags (AWS, Azure, Google Cloud) | a resource's service, application, environment, team, criticality |
+| a custom source — a CMDB, a Backstage catalogue | services and applications, declared, with the same fields |
+| a code host | the repository of a service's name (enrichment's `same_name`) |
+
+**Canonical.** A service is `service:<name>`, an application
+`application:<name>`, whatever tool names it: resolution makes one entity
+of them (`Billing API` and `billing-service`; `Billing` and `Billing
+platform`), and the model keeps every source it came from.
+
+| On a service or an application | Values | From |
+|---|---|---|
+| `criticality` | `critical`, `high`, `medium`, `low` — `criticality_raw`, the source's word | a catalogue, a tag; else enrichment: its most critical part ([enrichment.md § 7](enrichment.md)) |
+| `stage` | `experimental`, `production`, `deprecated`, `retired` — `stage_raw` | a catalogue's lifecycle; `retired` makes it `archived` (§ 4) |
+| `environments` | the canonical environments it runs in | its parts' and its own `runs_in` (enrichment) |
+| owners | `owned_by` → a team | its catalogue, its tags; else inherited from its application |
+| application | `part_of` → an application | a catalogue, an application tag beside a service tag, a business service |
+| dependencies | `depends_on` → a service (an application → an application) | PagerDuty, the Datadog catalog, a custom source |
+| where it runs | `runs_in` → an environment | its parts, its catalogue |
+
+**Environment-specific.** An `environment` is an entity — things run *in*
+it. A relationship keeps the environments it is true in
+(`attributes.environments`): an end that runs in a single environment — a
+production instance, a service seen in production only — makes the edge
+that environment's; one that runs in several says nothing. So Billing API's
+production database and its staging one stay apart, and the dependencies
+of a service **in staging** leave out what is known to hold in production
+only. Empty: everywhere, or unknown.
+
+**Where known, and who says so.** Nothing is set by default: a service
+nobody says is critical has no criticality. Each value says its origin
+(`provenance.attributes`) — a source, or enrichment with its rule and
+confidence — and where the tools disagree, every value is kept with who
+said it (`provenance.conflicts`).
+
+**Queried.** `GET /knowledge/services` and `/applications` list the
+landscape; one service's detail says what it is made of in which
+environment; `/entities/{id}/dependencies` walks `depends_on` — what a
+service needs, or what its failure reaches — in one environment or all.
+
 ## Not yet
 
-- **The environment screens** ([enrichment.md § 11](enrichment.md)) still
+- **The environment screens** ([enrichment.md § 12](enrichment.md)) still
   read enrichment's tables; they move to the model's entities and
   lifecycles next.
 - **Relationships' history**: a relationship is current only; when it
@@ -193,3 +251,10 @@ The traversal is one recursive query, bounded by depth and size
 - **Kinds promised by connectors not built**: a Kubernetes cluster, a
   dashboard, an alert — each an entry in the registry the day a connector
   makes it.
+- **Backstage files in repositories** (`catalog-info.yaml`): read today
+  through a custom source on Backstage's API; reading the files from the
+  code hosts is the next step.
+- **Datadog's traced dependencies** (APM service maps, per environment):
+  the catalog's declared ones are read; the observed ones are not.
+- **The landscape on a screen**: the API is there; the views are
+  LEKA-369's.

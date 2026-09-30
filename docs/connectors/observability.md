@@ -10,7 +10,8 @@ What observability data is, for LEKA: **alerts** (monitors and their
 state), **events** (the stream of what happened: an alert that fired, a
 deploy, a change), **incidents**, **metrics** (their definitions, not
 their points), **logs** (a chosen few), and the **services** an incident
-tool knows. Every record keeps the vendor's
+tool or a service catalog knows — with their team, application, tier,
+lifecycle and what they depend on (LEKA-362). Every record keeps the vendor's
 own **identifier** — its `external_id` — and its own **timestamp** — its
 `updated_at`, and in the payload as the vendor wrote it.
 
@@ -24,7 +25,7 @@ own **identifier** — its `external_id` — and its own **timestamp** — its
 | Credentials | `application_key` (first, so the stored hint is its own), `api_key` — both write-only |
 | Config | `site`, `logs_query`, `services` |
 | Category | `observability` |
-| Capabilities | `alerts`, `events`, `incidents`, `metrics`, `logs` |
+| Capabilities | `alerts`, `events`, `incidents`, `metrics`, `logs`, `services` |
 
 ### What to create at Datadog
 
@@ -40,7 +41,7 @@ own **identifier** — its `external_id` — and its own **timestamp** — its
    | `incident_read` | `incidents` |
    | `metrics_read` | `metrics` |
    | `logs_read_data` | `logs` |
-   | `apm_service_catalog_read` | the services offered as scope (optional) |
+   | `apm_service_catalog_read` | `services` — the service catalog — and the services offered as scope |
 
    A permission left out is a capability left out — the connection test
    says which it could read — never a failure.
@@ -83,7 +84,7 @@ keys go to `api.<site>` and nowhere else.
    account. Refused: `AUTH_INVALID`, naming the application key.
 3. One small read of each capability, at once — a monitor, an hour of
    events, an incident, a metric, a quarter of an hour of logs matching
-   `logs_query`. A refusal leaves that capability out; none readable is a
+   `logs_query`, a catalog definition. A refusal leaves that capability out; none readable is a
    pass with a warning listing the permissions to give.
 
 ### What is read
@@ -95,6 +96,7 @@ keys go to `api.<site>` and nowhere else.
 | `incidents` | every incident: title, state, severity, services, customer impact, dates, commander and creator (`GET /api/v2/incidents`) | whole each pass | incident id, `modified` |
 | `metrics` | metric definitions: name, type, configured tags (`GET /api/v2/metrics`) — not their points | whole each pass, at most 20 000; swept by the weekly full pass | metric name, `modified_at` |
 | `logs` | logs matching `logs_query`: message, status, service, host, tags (`GET /api/v2/logs/events`) | from the last pass less 5 minutes; an initial pass reads 1 day; newest first, at most 10 000 a pass | log id, `timestamp` |
+| `services` | the service catalog: each definition as its team wrote it — schemas v2 to v2.2 (`dd-service`, `team`, `application`, `tier`, `lifecycle`, `type`, `languages`, links) and v3 (`metadata`, `spec.dependsOn`, `spec.componentOf`) (`GET /api/v2/services/definitions`) | whole each pass | the service's name, in small letters; `last-modified-time` |
 
 The 5-minute margin is Datadog's indexing: an event or a log becomes
 searchable a moment after it happened. Read twice is a write, never a
@@ -119,8 +121,10 @@ text, and the signals an operations question needs — `service`, `env`,
 reads their text like any other. Normalisation
 ([normalisation.md](../normalisation.md)) makes Datadog's and PagerDuty's
 incidents `incident` entities — state and priority on LEKA's scales, the
-commander as a person, the services they affect — and PagerDuty's services
-`service` entities, on the same key as Datadog's `service:` tags. Alerts,
+commander as a person, the services they affect — and PagerDuty's and the
+catalog's services `service` entities, on the same key as Datadog's
+`service:` tags: their team, their application, what they depend on, their
+tier as a criticality and their lifecycle as a stage. Alerts,
 events, metrics, logs and dashboards stay evidence, not entities.
 
 ### Retention
@@ -194,17 +198,22 @@ see a service in scope.
 
 | Capability | What (PagerDuty API) | Incremental | Id, timestamp |
 |---|---|---|---|
-| `services` | each service: name, description, status, teams, escalation policy, last incident (`GET /services`) | whole each pass | service id, `updated_at` |
+| `services` | each service: name, description, status, teams, escalation policy, last incident (`GET /services`) — and the services it depends on (`GET /service_dependencies/technical_services/{id}`, one call a service, the first 2 000 a pass); each **business service** — what an application is to PagerDuty — with its team, point of contact and the services supporting it (`GET /business_services`, `GET /service_dependencies/business_services/{id}`) | whole each pass | service id, `updated_at` |
 | `incidents` | each incident: title, status, urgency, priority, service, assignees, escalation policy, teams, number, link (`GET /incidents`) | every pass reads the incidents **created in the last 90 days** again — PagerDuty lists by creation, not by change | incident id, `updated_at` |
 
 An incident's **container** is its service; the sync reads services
-before the incidents about them. Incidents older than 90 days stay as they
+before the incidents about them. A plan or a key that does not show
+dependencies or business services (403, 404) is read without them — never
+a failure. With `services` in scope, a business service is read when one
+of its supporting services is in scope. Incidents older than 90 days stay as they
 were last read, until their retention ends. Not read: log entries, notes,
 alerts inside an incident, on-call schedules.
 
 Extraction (`extraction/observability.py`): an incident's title, status,
 urgency, priority, number, its assignees as people and its service as a
-reference; a service's name, status, teams and last incident.
+reference; a service's name, status, teams, last incident and the services
+it depends on; a business service's name, team, point of contact, the
+services supporting it — as an application.
 
 ### Retention
 

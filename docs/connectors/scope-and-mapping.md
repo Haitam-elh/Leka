@@ -49,7 +49,7 @@ they differ from what LEKA reads by default:
 | `entity_types` | a capability's records become this entity type | `{"issues": "incident"}` — a GitHub repository of incidents |
 | `services` | containers → the service they are, first match wins | `[{"match": "acme/pay*", "service": "billing"}]` |
 | `owners` | containers → the team that owns them | `[{"match": "acme/*", "team": "platform"}]` |
-| `tag_keys` | this company's tag keys, beside `env`, `service`, `team`… | `{"environment": ["stage"], "owner": ["squad"]}` |
+| `tag_keys` | this company's tag keys, beside `env`, `service`, `application`, `team`, `criticality`… — for the environment, the service, the application, the team and how critical | `{"environment": ["stage"], "owner": ["squad"], "application": ["produit"], "criticality": ["impact"]}` |
 | `states` | a vendor state → LEKA's | `{"QA Review": "in_progress"}` |
 | `priorities` | → `highest`, `high`, `medium`, `low`, `lowest` | `{"P0": "highest"}` |
 | `environments` | → `production`, `staging`, `development`, `test` | `{"prd": "production"}` |
@@ -61,8 +61,10 @@ Normalisation applies it to every record of the source
 - a container matching a `services` / `owners` rule is **part of** that
   service and **owned by** that team, with confidence 1.0 — an administrator
   said so;
-- the company's **tag keys** say the environment (0.95), the service and the
-  team, beside the usual `env`, `service`, `team`;
+- the company's **tag keys** say the environment (0.95), the service, the
+  application — a service tag beside it makes it that service's — the team
+  and how critical the resource is (0.95), beside the usual `env`,
+  `service`, `application`, `team`, `criticality` (LEKA-362);
 - its own **states, priorities and environments** win over LEKA's tables —
   even over Jira's status category — and are no longer diagnostics.
 
