@@ -39,6 +39,7 @@ test.describe("the core screens", () => {
     "/intentions/new?step=decision",
     "/settings",
     "/sources",
+    "/environment",
     "/governance",
   ]) {
     test(`${path} has no violation a machine can see`, async ({ page }) => {

@@ -107,6 +107,7 @@ not activity.
 | Attribute | Of | Rule | Confidence |
 |---|---|---|---|
 | `last_activity_at` | repository, project, service, person, team | `activity`: the latest date of it and what it holds (a person: what they work on; a team: what it owns) | 1.0 |
+| `last_activity_at` | anything else with a date — a ticket, a pull request, an incident, a resource | `activity`: its own latest date — what the screens' events are made of | 1.0 |
 | `activity_90d` | the same | `activity`: how many of those changed in the last 90 days | 1.0 |
 | `lifecycle` | repository, project, service — not archived | `activity`: `active` within 30 days, `quiet` within 180, else `dormant` | 0.9 |
 | `cycle_time_hours` | issue, pull request, closed or merged | `dates`: from its creation to its merge, closing or resolution | 1.0 |
@@ -188,6 +189,66 @@ A **workspace** stage, after resolution
 | `GET /ingestion/enrichment` | pending?, the last run and its failed enrichers; counts — relationships, stated, inferred, cross-source, attributes; how many per `type:rule` and per attribute |
 | `GET /ingestion/enrichment/entities/{id}` | one entity as the company model reads it: its attributes, what was added, its relationships both ways (100 each way, by type and the surest first, and how many) |
 | `GET /ingestion/enrichment/relationships` | paginated, the surest first — `type=`, `origin=stated\|inferred`, `rule=`, `cross_source=true`, `entity_id=` |
+| `GET /ingestion/enrichment/environment` | the "Mon environnement" screen (§ 11) |
+| `GET /ingestion/enrichment/environment/{id}` | one entity's sheet (§ 11) |
+
+## 11. The "Mon environnement" screens
+
+`/environment` and `/environment/<type>/<id>` in the application, laid out
+as mockups 10 and 11 (`docs/product/mockups/`), read from
+`leka/ingestion/enrichment/screens.py` — what resolution and enrichment
+made, put together by `view.py`'s rules. **Every figure is the sources';
+what no source says is said missing, never invented.**
+
+**States** — mockup 10's legend:
+
+| Thing | State | When |
+|---|---|---|
+| service | incident | an open incident `affects` it |
+| | attention | an incident affecting it moved in the last 7 days |
+| | operational | a monitoring source — PagerDuty, Datadog, Grafana (connector category `observability`) — shows it, and nothing above |
+| | unmonitored | no monitoring source shows it |
+| database, cloud resource | operational · attention · incident | `running` · `starting`, `stopping`, `stopped`, `deleting` · `failed` |
+| incident | incident · operational | open or in progress · closed |
+| repository, team | none | no state of its own |
+
+**The screen** (`GET /ingestion/enrichment/environment`):
+
+- **the map**, one row per layer: users (no source describes them yet —
+  said), applications (the repositories), services, data (the databases),
+  infrastructure (the cloud resources boxed per provider and region, in
+  their worst state); a line per `part_of`, `depends_on`, `owned_by` or
+  `in_network` between two boxes, coloured by the worse of their states;
+  each row the surest-troubled first, the others ordered under their
+  services;
+- **the figures**: services, and how many are operational; open incidents,
+  and how many services they affect; changes (pull requests, commits,
+  releases, deployments) in the last 24 hours; the environments things say
+  they are in — the "Vue globale" filter;
+- **points of attention**, the most urgent first: each open incident and
+  what it affects; resources failed; resources stopped; work waiting
+  (`stale`); services nothing watches; dormant repositories;
+- **recent events**: the six latest things that moved (by
+  `last_activity_at`), what each is now — an open incident, a resolved one,
+  work waiting, a change, news — and the service, repository or project it
+  belongs to. Databases and cloud resources are not events: their last
+  change is a state read again.
+
+**A sheet** (`GET /ingestion/enrichment/environment/{id}`): the entity as
+the company model reads it (§ 8), its state; its **owner** — its surest
+maintainer — and its **team** — owned_by, stated first, and how many work
+with it (`member_of`); its incidents, the open first; the eight latest
+events around it (what is part of it or affects it — for a service, also
+what is part of its repositories); its dependencies — repositories,
+services, databases, resources, projects related to it, each way, with the
+relationship's origin, confidence and whether it joins two tools; the
+documents that name it; what needs attention.
+
+In their place, and saying what they wait for: the users and the business
+domains (the company model, LEKA-361 on), the metrics — latency, errors,
+requests, availability — and their chart (a metrics source's metrics read),
+the deployments, logs and configuration tabs, LEKA's insights and analysis
+(its analysis engine, sprint 4).
 
 ## Not yet
 
@@ -201,4 +262,5 @@ A **workspace** stage, after resolution
   surest owner there is.
 - **A person's word**: confirming or rejecting an inference by hand, kept
   across runs.
-- **A screen**: the routes are there.
+- **The users, the business domains, the metrics** on the screens: they
+  wait for sources and models that read them (§ 11).

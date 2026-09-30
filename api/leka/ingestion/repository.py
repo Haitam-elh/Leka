@@ -8,6 +8,7 @@ the graph goes through leka.knowledge.
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -22,6 +23,8 @@ from sqlalchemy import (
     column,
     delete,
     func,
+    literal,
+    literal_column,
     or_,
     select,
     true,
@@ -1886,3 +1889,171 @@ class EnrichmentRepository(WorkspaceScopedRepository):
             "relationships": relationships,
             "attributes": {name: int(n) for name, n in attributes.all()},
         }
+
+    # ── the environment screens (LEKA-359, mockups 10 and 11) ───────────────
+
+    def _as_text(self) -> Any:
+        """An enriched value, as text: a date compares as one."""
+        return EntityEnrichment.value.op("#>>")(literal_column("'{}'"))
+
+    async def things(
+        self, *, types: Sequence[str] | None = None, ids: Sequence[uuid.UUID] | None = None
+    ) -> Sequence[tuple[uuid.UUID, str, str, str, dict[str, object]]]:
+        """Resolved entities of some types, or by id: (id, type, key, name,
+        attributes)."""
+        statement = select(
+            ResolvedEntity.id,
+            ResolvedEntity.type,
+            ResolvedEntity.key,
+            ResolvedEntity.name,
+            ResolvedEntity.attributes,
+        ).where(ResolvedEntity.workspace_id == self.workspace_id)
+        if types is not None:
+            statement = statement.where(ResolvedEntity.type.in_(list(types)))
+        if ids is not None:
+            statement = statement.where(ResolvedEntity.id.in_(list(set(ids))))
+        rows = await self._session.execute(statement)
+        return [tuple(row) for row in rows.all()]
+
+    async def facts_of(
+        self, entity_ids: Sequence[uuid.UUID], attributes: Sequence[str]
+    ) -> dict[uuid.UUID, dict[str, object]]:
+        """Some enriched attributes of some entities."""
+        if not entity_ids:
+            return {}
+        rows = await self._session.execute(
+            select(
+                EntityEnrichment.entity_id, EntityEnrichment.attribute, EntityEnrichment.value
+            ).where(
+                EntityEnrichment.workspace_id == self.workspace_id,
+                EntityEnrichment.entity_id.in_(list(set(entity_ids))),
+                EntityEnrichment.attribute.in_(list(attributes)),
+            )
+        )
+        found: dict[uuid.UUID, dict[str, object]] = defaultdict(dict)
+        for entity_id, attribute, value in rows.all():
+            found[entity_id][attribute] = value
+        return dict(found)
+
+    async def kinds_of(self, entity_ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, set[str]]:
+        """The kinds of the sources that show each entity: github, jira…"""
+        if not entity_ids:
+            return {}
+        rows = await self._session.execute(
+            select(ResolvedKey.entity_id, Source.kind)
+            .join(Source, Source.id == ResolvedKey.source_id)
+            .where(
+                ResolvedKey.workspace_id == self.workspace_id,
+                ResolvedKey.entity_id.in_(list(set(entity_ids))),
+            )
+            .distinct()
+        )
+        found: dict[uuid.UUID, set[str]] = defaultdict(set)
+        for entity_id, kind in rows.all():
+            found[entity_id].add(str(kind.value if hasattr(kind, "value") else kind))
+        return dict(found)
+
+    async def links_among(
+        self, types: Sequence[str], edge_types: Sequence[str]
+    ) -> Sequence[tuple[uuid.UUID, uuid.UUID, str]]:
+        """The relationships of some types between entities of some types."""
+        among = select(ResolvedEntity.id).where(
+            ResolvedEntity.workspace_id == self.workspace_id,
+            ResolvedEntity.type.in_(list(types)),
+        )
+        rows = await self._session.execute(
+            select(
+                EnrichedRelationship.from_entity_id,
+                EnrichedRelationship.to_entity_id,
+                EnrichedRelationship.type,
+            ).where(
+                EnrichedRelationship.workspace_id == self.workspace_id,
+                EnrichedRelationship.type.in_(list(edge_types)),
+                EnrichedRelationship.from_entity_id.in_(among),
+                EnrichedRelationship.to_entity_id.in_(among),
+            )
+        )
+        return [tuple(row) for row in rows.all()]
+
+    async def links_of(
+        self, entity_ids: Sequence[uuid.UUID], edge_types: Sequence[str]
+    ) -> Sequence[tuple[uuid.UUID, uuid.UUID, str]]:
+        """The relationships of some types from or to some entities."""
+        if not entity_ids:
+            return []
+        ids = list(set(entity_ids))
+        rows = await self._session.execute(
+            select(
+                EnrichedRelationship.from_entity_id,
+                EnrichedRelationship.to_entity_id,
+                EnrichedRelationship.type,
+            ).where(
+                EnrichedRelationship.workspace_id == self.workspace_id,
+                EnrichedRelationship.type.in_(list(edge_types)),
+                or_(
+                    EnrichedRelationship.from_entity_id.in_(ids),
+                    EnrichedRelationship.to_entity_id.in_(ids),
+                ),
+            )
+        )
+        return [tuple(row) for row in rows.all()]
+
+    async def open_incidents(self) -> Sequence[uuid.UUID]:
+        """The incidents not resolved: open, in progress."""
+        rows = await self._session.execute(
+            select(ResolvedEntity.id).where(
+                ResolvedEntity.workspace_id == self.workspace_id,
+                ResolvedEntity.type == "incident",
+                ResolvedEntity.attributes["state"].astext.in_(["open", "in_progress"]),
+            )
+        )
+        return list(rows.scalars().all())
+
+    async def moved_since(
+        self,
+        since: str,
+        *,
+        types: Sequence[str] | None = None,
+        exclude: Sequence[str] = (),
+        limit: int | None = None,
+        among: Sequence[uuid.UUID] | None = None,
+    ) -> Sequence[tuple[uuid.UUID, str]]:
+        """The entities whose last activity is `since` or later — an ISO
+        date — the latest first: (id, when)."""
+        when = self._as_text()
+        statement = (
+            select(EntityEnrichment.entity_id, when)
+            .join(ResolvedEntity, ResolvedEntity.id == EntityEnrichment.entity_id)
+            .where(
+                EntityEnrichment.workspace_id == self.workspace_id,
+                EntityEnrichment.attribute == "last_activity_at",
+                when >= since,
+            )
+            .order_by(when.desc(), EntityEnrichment.entity_id)
+        )
+        if types is not None:
+            statement = statement.where(ResolvedEntity.type.in_(list(types)))
+        if exclude:
+            statement = statement.where(ResolvedEntity.type.not_in(list(exclude)))
+        if among is not None:
+            statement = statement.where(EntityEnrichment.entity_id.in_(list(set(among))))
+        if limit is not None:
+            statement = statement.limit(limit)
+        rows = await self._session.execute(statement)
+        return [(entity_id, str(at)) for entity_id, at in rows.all()]
+
+    async def count_where(self, attribute: str, value: object) -> int:
+        """How many entities have an enriched attribute of this value."""
+        found = await self._session.scalar(
+            select(func.count()).where(
+                EntityEnrichment.workspace_id == self.workspace_id,
+                EntityEnrichment.attribute == attribute,
+                EntityEnrichment.value == literal(value, JSONB),
+            )
+        )
+        return int(found or 0)
+
+    async def finished_at(self) -> datetime | None:
+        """When the last enrichment that succeeded finished."""
+        last = await self.latest_run(succeeded=True)
+        return last.finished_at if last else None

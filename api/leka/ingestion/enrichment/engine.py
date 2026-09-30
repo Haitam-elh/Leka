@@ -665,8 +665,9 @@ def membership(graph: Graph) -> Made:
 
 def activity(graph: Graph) -> Made:
     """How alive things are, measured when the run is made: what was last
-    done in a container, by a person, for a team; how long work took; how
-    long an incident lasted; a service's incidents."""
+    done in a container, by a person, for a team — or to an item itself;
+    how long work took; how long an incident lasted; a service's
+    incidents."""
     made = Made()
     now = graph.now
     for node in graph.nodes.values():
@@ -715,6 +716,12 @@ def activity(graph: Graph) -> Made:
                         f"last activity {idle.days} days ago",
                     )
                 )
+        elif (own := _last(node, now)) is not None:
+            # An item — a ticket, a pull request, an incident, a resource:
+            # its own latest date, where the company model finds what moved.
+            made.facts.append(
+                _fact(node, "last_activity_at", _iso(own), 1.0, "activity", "its latest date")
+            )
         if node.type in ("issue", "pull_request"):
             made.facts.extend(_work_times(node, now))
         elif node.type == "incident":

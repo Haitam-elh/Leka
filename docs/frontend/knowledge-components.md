@@ -145,13 +145,16 @@ be added as a dependency when a page needs it.
   (`source.*`), and its times — "Il y a 4 min", "14:02" — come from the
   same helpers as the components' (`time.ts`), so no two screens can
   disagree about how long ago something was.
-- **Mon environnement / Company Model**: those pages are LEKA-369's
-  (Knowledge Graph & Company Views, sprint 3), which also brings the API
-  that serves the graph — no route reads it yet, and nothing writes it
-  before the extraction and company-model tickets (LEKA-354, LEKA-361,
-  LEKA-368). They are built from these components: mockup 10 is
-  `DependencyGraph` with `StatusBadge` and `EventTimeline`, mockup 11 is
-  `EntityDetailPanel`.
+- **Mon environnement** (LEKA-359, [../enrichment.md § 11](../enrichment.md)):
+  the screen and an entity's sheet, from what resolution and enrichment
+  make — `components/environment/` draws them with `StatusBadge`,
+  `KnowledgeTable` and the same time helpers. Its map is its own: mockup
+  10's rows with their names and counts, which `DependencyGraph`'s free
+  canvas does not draw. The Company Model's own views stay LEKA-369's
+  (Knowledge Graph & Company Views, sprint 3), with the API that serves the
+  graph — no route reads it yet, and nothing writes it before the
+  company-model tickets (LEKA-361, LEKA-368). `DependencyGraph` and
+  `EntityDetailPanel` are there for them.
 
 ## Adding a state
 

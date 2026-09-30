@@ -1,11 +1,11 @@
 "use client";
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page";
+import { EntitySheetScreen } from "@/components/environment/entity-sheet";
 
 /**
- * A tab of a detail page. The segment is the truth — see RouteTabs — so each
- * one is a real route rather than a piece of React state.
+ * An entity's sheet (mockup 11) — and each of its tabs: the segment is the
+ * truth (see RouteTabs), the screen reads it.
  */
 export default function Page() {
-  return <PlaceholderPage />;
+  return <EntitySheetScreen />;
 }

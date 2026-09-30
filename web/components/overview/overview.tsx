@@ -29,18 +29,15 @@ import { cn } from "cn";
 import { CompactIntentionComposer } from "@/components/intentions/compact-composer";
 import { PageContainer } from "@/components/shell/page-container";
 import { useCurrentUser } from "@/components/shell/shell-provider";
-import { StatusBadge } from "@/components/knowledge/status-badge";
-import { exactDate, shortWhen, timeAgo } from "@/components/knowledge/time";
-import { SourceLogo } from "@/components/sources/source-logo";
+import { exactDate, shortWhen } from "@/components/knowledge/time";
+import { ConnectedSources } from "@/components/sources/connected-sources";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import {
   isConnected,
-  lastSeen,
   type Source,
   type SourceEvent,
-  type SourceTone,
   sourceTone,
   sources as sourcesApi,
 } from "@/lib/sources";
@@ -445,25 +442,9 @@ function ApprovalsCard() {
   );
 }
 
-const SEVERITY: Record<SourceTone, number> = {
-  error: 0,
-  attention: 1,
-  synced: 2,
-  setup: 3,
-  off: 4,
-};
-
 function SourcesCard({ load }: { load: Load }) {
   const t = useDictionary();
   const list = load.status === "ready" ? load.sources : [];
-  // What needs a look first, then the rest, most recently heard from first.
-  const shown = [...list]
-    .sort(
-      (a, b) =>
-        SEVERITY[sourceTone(a)] - SEVERITY[sourceTone(b)] ||
-        Date.parse(lastSeen(b) ?? "1970") - Date.parse(lastSeen(a) ?? "1970"),
-    )
-    .slice(0, SOURCE_ROWS);
 
   return (
     <Card
@@ -475,31 +456,7 @@ function SourcesCard({ load }: { load: Load }) {
           {t.overview.sourcesEmpty}
         </p>
       ) : (
-        <ul className="space-y-1">
-          {shown.map((source) => {
-            const tone = sourceTone(source);
-            const seen = lastSeen(source);
-            return (
-              <li
-                key={source.id}
-                className="flex items-center gap-3 py-1.5"
-                data-testid="source-row"
-              >
-                <SourceLogo kind={source.type} className="size-5 shrink-0" />
-                <span
-                  title={source.display_name}
-                  className="min-w-0 flex-1 truncate text-[0.8125rem] font-medium text-brand-navy"
-                >
-                  {source.display_name}
-                </span>
-                <StatusBadge variant={`source.${tone}`} />
-                <span className="shrink-0 text-right text-xs whitespace-nowrap text-shell-muted">
-                  {seen ? timeAgo(t, seen) : t.overview.neverSeen}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        <ConnectedSources sources={list} max={SOURCE_ROWS} />
       )}
       <Link
         href={routes.sources()}

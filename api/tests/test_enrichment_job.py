@@ -610,3 +610,141 @@ async def test_another_workspace_s_entity_is_not_found(
         None,
         0,
     )
+
+
+# ── the "Mon environnement" screens (mockups 10 and 11) ─────────────────────
+
+
+async def _live(workspace_id: uuid.UUID) -> dict[str, uuid.UUID]:
+    """The tools, plus what moved in the last hours: an incident open on
+    the billing service, and the cloud instance it runs on."""
+    tools = await _tools(workspace_id)
+    now = datetime.now(UTC)
+    hour, hours = ((now - timedelta(hours=n)).strftime("%Y-%m-%dT%H:%M:%SZ") for n in (1, 2))
+    aws = await _source(workspace_id, "AWS")
+    await _normalised(
+        workspace_id,
+        tools["pagerduty"],
+        entity(
+            "incident:pagerduty:Q1",
+            "Billing API 500s",
+            type="incident",
+            state="open",
+            created_at=hour,
+            updated_at=hour,
+        ),
+        relationships=(
+            relationship("affects", "incident:pagerduty:Q1", SERVICE, tools["pagerduty"]),
+        ),
+        at=now,
+    )
+    instance = "aws:arn:aws:ec2:eu-central-1:111:instance/i-1"
+    await _normalised(
+        workspace_id,
+        aws,
+        entity(
+            instance,
+            "billing-api-1",
+            type="infra_resource",
+            state="running",
+            environment="production",
+            updated_at=hours,
+        ),
+        relationships=(relationship("part_of", instance, SERVICE, aws, evidence="tags"),),
+        at=now,
+    )
+    await resolve_workspace(workspace_id)
+    await enrich_workspace(workspace_id, now=now)
+    return tools
+
+
+async def test_members_see_their_environment_as_the_mockup_lays_it_out(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    workspace = acme["acme"]
+    await _live(workspace)
+    ids = await _resolved(workspace)
+    _as(identity, acme, "member")
+
+    screen = (await client.get(f"{API}/environment")).json()
+
+    nodes = {n["id"]: n for n in screen["nodes"]}
+    service = nodes[str(ids[SERVICE])]
+    # PagerDuty watches it, and an incident is open on it.
+    assert (service["layer"], service["status"]) == ("services", "incident")
+    assert service["team"]["key"] == TEAM
+    assert nodes[str(ids[REPO])]["layer"] == "applications"
+    [cloud] = [n for n in screen["nodes"] if n["type"] == "provider"]
+    assert (cloud["name"], cloud["detail"], cloud["count"], cloud["status"]) == (
+        "aws",
+        "eu-central-1",
+        1,
+        "operational",
+    )
+    assert {(e["from_id"], e["to_id"]) for e in screen["edges"]} >= {
+        (str(ids[REPO]), str(ids[SERVICE])),
+        (cloud["id"], str(ids[SERVICE])),
+    }
+    assert screen["layers"] == {"applications": 1, "services": 1, "infrastructure": 1}
+    assert screen["environments"] == []  # the instance is boxed with its provider
+    assert (screen["services"], screen["services_operational"]) == (1, 0)
+    assert (screen["incidents_open"], screen["services_impacted"]) == (1, 1)
+    assert screen["updated_at"] is not None
+    [incident] = [p for p in screen["attention"] if p["kind"] == "open_incident"]
+    assert (incident["level"], incident["detail"]) == ("high", "Billing")
+    latest = screen["events"][0]
+    assert (latest["entity"]["key"], latest["kind"]) == ("incident:pagerduty:Q1", "incident")
+    assert latest["where"]["key"] == SERVICE
+    assert latest["source_kinds"] == ["slack"]  # the test's sources are all one kind
+
+
+async def test_an_entity_s_sheet_says_its_state_team_incidents_and_dependencies(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    workspace = acme["acme"]
+    await _live(workspace)
+    ids = await _resolved(workspace)
+    _as(identity, acme, "member")
+
+    sheet = (await client.get(f"{API}/environment/{ids[SERVICE]}")).json()
+
+    assert sheet["entity"]["key"] == SERVICE
+    assert sheet["status"] == "incident"
+    assert (sheet["team"]["entity"]["key"], sheet["team"]["origin"]) == (TEAM, "stated")
+    [incident] = sheet["incidents"]
+    assert (incident["entity"]["key"], incident["kind"]) == ("incident:pagerduty:Q1", "incident")
+    assert {(d["entity"]["key"], d["type"], d["direction"]) for d in sheet["dependencies"]} >= {
+        (REPO, "part_of", "in"),
+        ("aws:arn:aws:ec2:eu-central-1:111:instance/i-1", "part_of", "in"),
+    }
+    repository = next(d for d in sheet["dependencies"] if d["entity"]["key"] == REPO)
+    assert (repository["origin"], repository["cross_source"]) == ("inferred", True)
+    # What moved around it: its incident, and its repository's pull request.
+    assert {e["entity"]["key"] for e in sheet["events"]} >= {"incident:pagerduty:Q1", PR}
+    assert [p["kind"] for p in sheet["attention"]] == ["open_incident"]
+
+    repository_sheet = (await client.get(f"{API}/environment/{ids[REPO]}")).json()
+    assert repository_sheet["status"] is None  # a repository has no state of its own
+    assert repository_sheet["owner"] is None  # one pull request maintains nothing
+    assert repository_sheet["team"]["origin"] == "inferred"
+
+
+async def test_an_empty_workspace_has_an_empty_environment_and_no_one_else_s(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    workspace = acme["acme"]
+    await _live(workspace)
+    ids = await _resolved(workspace)
+    _as(identity, acme, "other_admin")  # Globex's
+
+    screen = (await client.get(f"{API}/environment")).json()
+    missing = await client.get(f"{API}/environment/{ids[SERVICE]}")
+
+    assert (screen["nodes"], screen["edges"], screen["events"], screen["attention"]) == (
+        [],
+        [],
+        [],
+        [],
+    )
+    assert (screen["updated_at"], screen["services"], screen["layers"]) == (None, 0, {})
+    assert missing.status_code == 404
