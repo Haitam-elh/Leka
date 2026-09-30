@@ -9,7 +9,14 @@ import { cn } from "cn";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { TONES } from "@/components/knowledge/status";
 import { SourceLogo } from "@/components/sources/source-logo";
-import { entityHref, IconTile, typeIcon, type TileTone } from "@/components/environment/parts";
+import { routes } from "@/config/routes";
+import {
+  entityHref,
+  IconTile,
+  Logo,
+  typeIcon,
+  type TileTone,
+} from "@/components/environment/parts";
 import type { EnvironmentEdge, EnvironmentNode, EnvironmentStatus } from "@/lib/environment";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -18,6 +25,15 @@ import type { SourceKind } from "@/lib/sources";
 /** The rows of mockup 10, top to bottom. */
 export const LAYERS = ["users", "applications", "services", "data", "infrastructure"] as const;
 export type Layer = (typeof LAYERS)[number];
+
+/** What to connect for an empty row: the tools that fill it. */
+const HINT_LOGOS: Record<Layer, SourceKind[]> = {
+  users: [],
+  applications: ["github", "gitlab", "bitbucket"],
+  services: ["pagerduty", "datadog", "grafana"],
+  data: ["aws", "azure", "gcp"],
+  infrastructure: ["aws", "azure", "gcp"],
+};
 
 /** Boxes a row shows before "+N": five fit the mockup's width. */
 const PER_ROW = 5;
@@ -172,7 +188,7 @@ export function Cartography({
         const members = byLayer.get(layer) ?? [];
         const visible = all ? members : members.slice(0, PER_ROW);
         const hidden = members.length - visible.length;
-        const count = layer === "users" ? 0 : (layers[layer] ?? 0);
+        const count = layers[layer] ?? 0;
         return (
           <div
             key={layer}
@@ -181,19 +197,36 @@ export function Cartography({
           >
             <div>
               <p className="text-[0.8125rem] font-medium text-brand-navy">{w.layers[layer]}</p>
-              <p className="text-xs text-shell-muted">{fill(w.counts[layer], { count })}</p>
+              <p className="text-xs text-shell-muted">
+                {fill(w.counts[layer], { count })}
+              </p>
             </div>
             <ul
               aria-label={w.layers[layer]}
               className="flex flex-wrap items-center justify-center gap-2"
             >
-              {layer === "users" ? (
+              {layer === "users" && visible.length === 0 ? (
                 <li className="relative z-10 flex items-center gap-2 rounded-lg border border-dashed border-shell-line bg-white px-3 py-2 text-xs text-shell-muted">
                   <UsersRound className="size-4" aria-hidden="true" />
                   {w.usersEmpty}
                 </li>
               ) : visible.length === 0 ? (
-                <li className="text-xs text-shell-muted">{w.layerEmpty}</li>
+                <li className="relative z-10 flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-shell-line bg-white px-3 py-2 text-xs text-shell-muted">
+                  <span className="flex gap-1.5">
+                    {HINT_LOGOS[layer].map((kind) => (
+                      <SourceLogo key={kind} kind={kind} className="size-4" />
+                    ))}
+                  </span>
+                  <span className="max-w-md">
+                    {(w.hints as Record<string, string>)[layer] ?? w.layerEmpty}
+                  </span>
+                  <Link
+                    href={routes.sources()}
+                    className="font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+                  >
+                    {w.connect}
+                  </Link>
+                </li>
               ) : (
                 visible.map((node) => (
                   <li key={node.id}>
@@ -232,21 +265,21 @@ function NodeBox({ node }: { node: EnvironmentNode }) {
       ? (node.name.split("/").at(-1) ?? node.name)
       : node.name;
   const detail = provider
-    ? [node.detail, fill(t.environment.map.resources, { count: node.count })]
+    ? [node.detail, node.count ? fill(t.environment.map.resources, { count: node.count }) : null]
         .filter(Boolean)
         .join(" · ")
-    : null;
+    : node.detail;
   const body = (
     <>
       {provider ? (
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-shell-canvas">
-          <SourceLogo kind={node.name as SourceKind} className="size-5" />
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-shell-canvas">
+          <Logo kind={node.name} className="size-5" />
         </span>
       ) : (
         <IconTile
           icon={typeIcon(node.type)}
           tone={TILE[node.type] ?? "neutral"}
-          className="size-8"
+          className="size-7 [&>svg]:size-4"
         />
       )}
       <span className="min-w-0">
@@ -272,8 +305,8 @@ function NodeBox({ node }: { node: EnvironmentNode }) {
       </span>
     </>
   );
-  const look =
-    "relative z-10 flex min-w-[8rem] items-center gap-2 rounded-lg border bg-white px-2 py-2 text-left";
+  const box =
+    "relative z-10 flex min-w-[7.5rem] items-center gap-1.5 rounded-lg border bg-white px-1.5 py-1.5 text-left";
   const border =
     node.status === "incident"
       ? "border-state-danger/40 bg-state-danger-soft/40"
@@ -287,7 +320,7 @@ function NodeBox({ node }: { node: EnvironmentNode }) {
         href={entityHref({ id: node.entity_id, type: node.type })}
         data-node={node.id}
         className={cn(
-          look,
+          box,
           border,
           "outline-none transition-shadow hover:shadow-sm focus-visible:ring-3 focus-visible:ring-brand-violet/40",
         )}
@@ -297,7 +330,7 @@ function NodeBox({ node }: { node: EnvironmentNode }) {
     );
   }
   return (
-    <div data-node={node.id} className={cn(look, border)}>
+    <div data-node={node.id} className={cn(box, border)}>
       {body}
     </div>
   );

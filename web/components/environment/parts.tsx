@@ -27,7 +27,7 @@ import Link from "next/link";
 import { cn } from "cn";
 
 import { shortWhen } from "@/components/knowledge/time";
-import { SourceLogo } from "@/components/sources/source-logo";
+import { hasSourceLogo, SourceLogo } from "@/components/sources/source-logo";
 import { routes } from "@/config/routes";
 import {
   type AttentionPoint,
@@ -160,7 +160,26 @@ export function typeLabel(t: ReturnType<typeof useDictionary>, type: string): st
 
 // ── events ───────────────────────────────────────────────────────────────────
 
-const EVENT_TONES: Record<string, { dot: string; pill: string }> = {
+export type EventTone = "incident" | "resolved" | "attention" | "change" | "information";
+
+/** One line of "Événements récents" or "Derniers événements". */
+export interface EventRow {
+  key: string;
+  /** ISO 8601: shown as a time today, a date before. */
+  at: string;
+  tone: EventTone;
+  pill: string;
+  title: string;
+  /** Under the title, in the detailed list: "GitHub · Commit a1b3c4d". */
+  subtitle?: string;
+  /** The service or repository it belongs to, in the compact list. */
+  where?: string;
+  href?: string;
+  /** A source's logo, in the detailed list. */
+  source?: string;
+}
+
+const EVENT_TONES: Record<EventTone, { dot: string; pill: string }> = {
   incident: { dot: "bg-state-danger", pill: TILE_TONES.danger },
   resolved: { dot: "bg-state-success", pill: TILE_TONES.success },
   attention: { dot: "bg-state-warning", pill: TILE_TONES.warning },
@@ -168,59 +187,92 @@ const EVENT_TONES: Record<string, { dot: string; pill: string }> = {
   information: { dot: "bg-shell-nav-active", pill: TILE_TONES.violet },
 };
 
+/** The API's events, as lines. */
+export function eventRows(
+  t: ReturnType<typeof useDictionary>,
+  events: readonly EnvironmentEvent[],
+): EventRow[] {
+  return events.map((event) => ({
+    key: event.entity.id,
+    at: event.at,
+    tone: (event.kind in EVENT_TONES ? event.kind : "information") as EventTone,
+    pill: (t.environment.events.kinds as Record<string, string>)[event.kind] ?? event.kind,
+    title: event.entity.name,
+    subtitle: typeLabel(t, event.entity.type),
+    where: event.where?.name,
+    href: entityHref(event.entity),
+    source: event.source_kinds[0],
+  }));
+}
+
+/** A source's logo — or its initial, for one LEKA has no logo of. */
+export function Logo({ kind, className }: { kind: string; className?: string }) {
+  if (hasSourceLogo(kind)) return <SourceLogo kind={kind as SourceKind} className={className} />;
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "flex items-center justify-center rounded bg-brand-violet-soft text-[0.625rem] font-bold text-shell-nav-active uppercase",
+        className,
+      )}
+    >
+      {kind.slice(0, 1)}
+    </span>
+  );
+}
+
 /**
- * What moved, newest first: when, what, where, and what it is now — as the
- * mockups' "Événements récents" and "Derniers événements".
+ * What moved, newest first — as the mockups' "Événements récents"
+ * (compact: when, what, where, what it is now) and "Derniers événements"
+ * (detailed: with its source and what kind of thing it is).
  */
 export function EventList({
-  events,
+  rows,
   empty,
-  withSource = false,
+  detailed = false,
 }: {
-  events: readonly EnvironmentEvent[];
+  rows: readonly EventRow[];
   empty: string;
-  withSource?: boolean;
+  detailed?: boolean;
 }) {
-  const t = useDictionary();
   const { locale } = useLocale();
-  if (events.length === 0) {
+  if (rows.length === 0) {
     return <p className="py-4 text-center text-[0.8125rem] text-shell-muted">{empty}</p>;
   }
   return (
     <ul className="divide-y divide-shell-line/60">
-      {events.map((event) => {
-        const tone = EVENT_TONES[event.kind] ?? EVENT_TONES.information;
-        const kind = (t.environment.events.kinds as Record<string, string>)[event.kind];
-        const source = event.source_kinds[0] as SourceKind | undefined;
+      {rows.map((row) => {
+        const tone = EVENT_TONES[row.tone];
+        const title = row.href ? (
+          <Link
+            href={row.href}
+            className="block truncate font-medium text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+          >
+            {row.title}
+          </Link>
+        ) : (
+          <span className="block truncate font-medium text-brand-navy">{row.title}</span>
+        );
         return (
           <li
-            key={event.entity.id}
+            key={row.key}
             className="flex items-center gap-3 py-2 text-[0.8125rem]"
             data-testid="event-row"
           >
             <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", tone.dot)} />
             <span className="w-14 shrink-0 whitespace-nowrap text-shell-muted tabular-nums">
-              {shortWhen(locale, event.at)}
+              {shortWhen(locale, row.at)}
             </span>
-            {withSource && source ? (
-              <SourceLogo kind={source} className="size-5 shrink-0" />
-            ) : null}
+            {detailed && row.source ? <Logo kind={row.source} className="size-5 shrink-0" /> : null}
             <span className="min-w-0 flex-1">
-              <Link
-                href={entityHref(event.entity)}
-                className="block truncate font-medium text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-              >
-                {event.entity.name}
-              </Link>
-              {withSource ? (
-                <span className="block truncate text-xs text-shell-muted">
-                  {typeLabel(t, event.entity.type)}
-                </span>
+              {title}
+              {detailed && row.subtitle ? (
+                <span className="block truncate text-xs text-shell-muted">{row.subtitle}</span>
               ) : null}
             </span>
-            {event.where && !withSource ? (
-              <span className="hidden max-w-24 shrink-0 truncate text-right text-xs text-shell-nav-active sm:block">
-                {event.where.name}
+            {!detailed && row.where ? (
+              <span className="hidden max-w-28 shrink-0 truncate text-right text-xs text-shell-nav-active sm:block">
+                {row.where}
               </span>
             ) : null}
             <span
@@ -229,7 +281,7 @@ export function EventList({
                 tone.pill,
               )}
             >
-              {kind}
+              {row.pill}
             </span>
           </li>
         );
@@ -240,6 +292,21 @@ export function EventList({
 
 // ── points of attention ────────────────────────────────────────────────────
 
+export type AttentionLevel = "high" | "medium" | "info";
+
+/** One point of attention: what, how much, how serious — and where from. */
+export interface AttentionRow {
+  key: string;
+  icon: LucideIcon;
+  tone: TileTone;
+  title: string;
+  detail?: string;
+  level: AttentionLevel;
+  href?: string;
+  /** Where it was seen: "GitHub", "Datadog", "INC-2841". */
+  chips?: readonly string[];
+}
+
 const ATTENTION_LOOK: Record<string, { icon: LucideIcon; tone: TileTone }> = {
   open_incident: { icon: OctagonAlert, tone: "danger" },
   failed_resources: { icon: CircleAlert, tone: "danger" },
@@ -249,64 +316,92 @@ const ATTENTION_LOOK: Record<string, { icon: LucideIcon; tone: TileTone }> = {
   dormant_repositories: { icon: FolderGit2, tone: "info" },
 };
 
-const LEVEL_TONES: Record<string, TileTone> = { high: "danger", medium: "warning", info: "info" };
+const LEVEL_TONES: Record<AttentionLevel, TileTone> = {
+  high: "danger",
+  medium: "warning",
+  info: "info",
+};
+
+/** The API's points of attention, as lines. */
+export function attentionRows(
+  t: ReturnType<typeof useDictionary>,
+  points: readonly AttentionPoint[],
+): AttentionRow[] {
+  const w = t.environment.attention;
+  const details = w.details as Record<string, string>;
+  return points.map((point, index) => {
+    const look = ATTENTION_LOOK[point.kind] ?? { icon: Info, tone: "info" as const };
+    const detail =
+      point.kind === "open_incident"
+        ? point.detail
+          ? fill(w.details.open_incident, { detail: point.detail })
+          : w.details.open_incident_none
+        : fill(details[point.kind] ?? "", { count: point.count });
+    return {
+      key: `${point.kind}-${point.entity?.id ?? index}`,
+      icon: look.icon,
+      tone: look.tone,
+      title: point.entity?.name ?? (w.kinds as Record<string, string>)[point.kind] ?? point.kind,
+      detail,
+      level: (point.level in LEVEL_TONES ? point.level : "info") as AttentionLevel,
+      href: point.entity ? entityHref(point.entity) : undefined,
+    };
+  });
+}
 
 /** What needs attention, each with what it is, how much, and how serious. */
 export function AttentionList({
-  points,
+  rows,
   empty,
 }: {
-  points: readonly AttentionPoint[];
+  rows: readonly AttentionRow[];
   empty: string;
 }) {
   const t = useDictionary();
-  const w = t.environment.attention;
-  if (points.length === 0) {
+  const levels = t.environment.attention.levels;
+  if (rows.length === 0) {
     return <p className="py-4 text-center text-[0.8125rem] text-shell-muted">{empty}</p>;
   }
   return (
     <ul className="space-y-3">
-      {points.map((point, index) => {
-        const look = ATTENTION_LOOK[point.kind] ?? { icon: Info, tone: "info" as const };
-        const details = w.details as Record<string, string>;
-        const detail =
-          point.kind === "open_incident"
-            ? point.detail
-              ? fill(w.details.open_incident, { detail: point.detail })
-              : w.details.open_incident_none
-            : fill(details[point.kind] ?? "", { count: point.count });
-        const title = point.entity?.name ?? (w.kinds as Record<string, string>)[point.kind];
-        return (
-          <li
-            key={`${point.kind}-${point.entity?.id ?? index}`}
-            className="flex items-start gap-3"
-            data-testid="attention-row"
+      {rows.map((row) => (
+        <li key={row.key} className="flex items-start gap-3" data-testid="attention-row">
+          <IconTile icon={row.icon} tone={row.tone} className="size-9" />
+          <div className="min-w-0 flex-1">
+            {row.href ? (
+              <Link
+                href={row.href}
+                className="block truncate text-[0.8125rem] font-medium text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+              >
+                {row.title}
+              </Link>
+            ) : (
+              <p className="truncate text-[0.8125rem] font-medium text-brand-navy">{row.title}</p>
+            )}
+            {row.detail ? <p className="text-xs text-shell-muted">{row.detail}</p> : null}
+            {row.chips?.length ? (
+              <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                {row.chips.map((chip) => (
+                  <li
+                    key={chip}
+                    className="rounded-md border border-shell-line bg-shell-canvas px-2 py-0.5 text-[0.6875rem] text-brand-navy"
+                  >
+                    {chip}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+          <span
+            className={cn(
+              "shrink-0 rounded-md px-2 py-0.5 text-[0.6875rem] font-medium",
+              TILE_TONES[LEVEL_TONES[row.level]],
+            )}
           >
-            <IconTile icon={look.icon} tone={look.tone} className="size-9" />
-            <div className="min-w-0 flex-1">
-              {point.entity ? (
-                <Link
-                  href={entityHref(point.entity)}
-                  className="block truncate text-[0.8125rem] font-medium text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-                >
-                  {title}
-                </Link>
-              ) : (
-                <p className="truncate text-[0.8125rem] font-medium text-brand-navy">{title}</p>
-              )}
-              <p className="text-xs text-shell-muted">{detail}</p>
-            </div>
-            <span
-              className={cn(
-                "shrink-0 rounded-md px-2 py-0.5 text-[0.6875rem] font-medium",
-                TILE_TONES[LEVEL_TONES[point.level] ?? "info"],
-              )}
-            >
-              {(w.levels as Record<string, string>)[point.level] ?? point.level}
-            </span>
-          </li>
-        );
-      })}
+            {levels[row.level]}
+          </span>
+        </li>
+      ))}
     </ul>
   );
 }

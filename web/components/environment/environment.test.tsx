@@ -271,7 +271,7 @@ describe("Mon environnement", () => {
     expect(event).toHaveTextContent("Incident");
   });
 
-  it("says the environment is not mapped yet, rather than an empty map", async () => {
+  it("keeps the map's structure when nothing is mapped, and says what to connect — no number invented", async () => {
     api.get.mockResolvedValue({
       ...ENVIRONMENT,
       updated_at: null,
@@ -286,13 +286,24 @@ describe("Mon environnement", () => {
       attention: [],
       events: [],
     });
+    sourcesApi.list.mockResolvedValue({ data: [] });
     mount(<EnvironmentScreen />);
 
+    const services = await screen.findByTestId("layer-services");
+    expect(within(services).getByText(/Connectez PagerDuty, Datadog ou Grafana/)).toBeInTheDocument();
+    expect(within(services).getByRole("link", { name: "Connecter" })).toHaveAttribute(
+      "href",
+      "/sources",
+    );
     expect(
-      await screen.findByText("Votre environnement n'est pas encore cartographié"),
+      within(screen.getByTestId("layer-applications")).getByText(/Connectez GitHub/),
     ).toBeInTheDocument();
+    const tile = (id: string) => within(screen.getByTestId(`env-kpi-${id}`));
+    expect(tile("services").getByText("sur 0 services")).toBeInTheDocument();
+    expect(tile("sources").getByText("0 / 0")).toBeInTheDocument();
     expect(screen.getByText("Pas encore cartographié")).toBeInTheDocument();
     expect(screen.getByText("Rien ne demande votre attention.")).toBeInTheDocument();
+    expect(screen.queryByText("Payment API")).not.toBeInTheDocument();
   });
 });
 

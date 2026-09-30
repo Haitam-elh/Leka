@@ -2,15 +2,19 @@
 
 import {
   Activity,
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
+  CalendarDays,
   ChartLine,
+  ChevronRight,
   CircleCheck,
   Clock,
   Copy,
   Ellipsis,
   FileText,
   Gauge,
-  OctagonAlert,
+  type LucideIcon,
   SearchX,
   ShieldCheck,
   Sparkles,
@@ -23,21 +27,26 @@ import { useMemo, useState } from "react";
 
 import { cn } from "cn";
 
+import { Sparkline } from "@/components/knowledge/entity-detail-panel";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { timeAgo } from "@/components/knowledge/time";
 import {
   AttentionList,
+  type AttentionRow,
+  attentionRows,
   Card,
   CardLink,
   entityHref,
   EventList,
+  type EventRow,
+  eventRows,
   IconTile,
+  Logo,
   typeIcon,
   typeLabel,
 } from "@/components/environment/parts";
 import { PageContainer } from "@/components/shell/page-container";
 import { RouteTabs } from "@/components/shell/route-tabs";
-import { SourceLogo } from "@/components/sources/source-logo";
 import { ErrorState } from "@/components/states/error-state";
 import { StatePanel } from "@/components/states/state-panel";
 import { buttonVariants } from "@/components/ui/button";
@@ -58,7 +67,6 @@ import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import {
   type EntitySheet,
-  type EnvironmentEvent,
   type EnvironmentStatus,
   isEntityId,
   typeSegment,
@@ -69,14 +77,14 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { matchRoute } from "@/lib/navigation/active";
 import { notify } from "@/lib/notify";
-import type { SourceKind } from "@/lib/sources";
 
 /**
  * One entity's sheet, laid out as docs/product/mockups/11-environnement-
- * fiche-service.jpeg (LEKA-359): who owns it, its state, what threatens it,
- * what moved around it, what it depends on — each from what the sources
- * said, resolved and enriched. Its metrics and LEKA's analysis have their
- * places, and say what they wait for.
+ * fiche-service.jpeg (LEKA-359). One model, two fillings: the entity as
+ * resolution and enrichment made it — its metrics and LEKA's analysis
+ * saying what they wait for — or, for the example "Mon environnement"
+ * shows an empty workspace, the mockup's Payment API under the "Exemple"
+ * banner.
  */
 
 const PERIODS = { "24h": 24, "7d": 24 * 7, "30d": 24 * 30 } as const;
@@ -84,17 +92,68 @@ type Period = keyof typeof PERIODS;
 
 const HOUR = 3_600_000;
 
+
+const METRICS: { id: string; icon: LucideIcon }[] = [
+  { id: "latency", icon: Clock },
+  { id: "errors", icon: TriangleAlert },
+  { id: "requests", icon: Activity },
+  { id: "availability", icon: Gauge },
+];
+
+interface Metric {
+  id: string;
+  icon: LucideIcon;
+  label: string;
+  value?: string;
+  delta?: { text: string; up: boolean };
+  /** Whether where it goes is good news: sets the colours. */
+  good?: boolean;
+  series?: readonly number[];
+}
+
+interface Dependency {
+  key: string;
+  name: string;
+  icon?: LucideIcon;
+  source?: string;
+  status: EnvironmentStatus | null;
+  note: string;
+  href?: string;
+}
+
+/** Everything the sheet shows. */
+interface SheetModel {
+  id: string;
+  key: string;
+  type: string;
+  name: string;
+  typeLine: string;
+  status: EnvironmentStatus | null;
+  version?: string;
+  description?: string;
+  owner: { name: string; subtitle: string; href?: string } | null;
+  team: { name: string; subtitle: string; href?: string } | null;
+  metrics: Metric[];
+  incident: { title: string; since: string; href: string } | null;
+  attention: AttentionRow[];
+  events: EventRow[];
+  incidents: EventRow[];
+  dependencies: Dependency[];
+  documents: { key: string; name: string; href?: string }[];
+  general: { label: string; value: React.ReactNode }[];
+}
+
 export function EntitySheetScreen() {
   const t = useDictionary();
   const params = useParams<{ entityId: string }>();
   const pathname = usePathname() ?? "/";
   const id = params.entityId ?? "";
-  const valid = isEntityId(id);
   const sheet = useEntitySheet(id);
-  const name = sheet.data?.entity.name;
-  const crumbs = buildBreadcrumb(pathname, t, name ? () => name : undefined);
+  const model = useSheetModel(sheet.data);
+  const crumbs = buildBreadcrumb(pathname, t, model ? () => model.name : undefined);
   const tab = matchRoute(pathname)?.tab ?? "overview";
-  const missing = !valid || (sheet.error instanceof ApiError && sheet.error.status === 404);
+  const missing =
+    !isEntityId(id) || (sheet.error instanceof ApiError && sheet.error.status === 404);
 
   return (
     <PageContainer>
@@ -132,8 +191,8 @@ export function EntitySheetScreen() {
         />
       ) : sheet.isError ? (
         <ErrorState error={sheet.error} onRetry={() => void sheet.refetch()} />
-      ) : sheet.data ? (
-        <Sheet sheet={sheet.data} tab={tab} />
+      ) : model ? (
+        <Sheet model={model} tab={tab} />
       ) : (
         <div className="h-96 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />
       )}
@@ -141,76 +200,211 @@ export function EntitySheetScreen() {
   );
 }
 
-function Sheet({ sheet, tab }: { sheet: EntitySheet; tab: string }) {
+function useSheetModel(sheet: EntitySheet | undefined): SheetModel | undefined {
   const t = useDictionary();
+  return useMemo(() => (sheet ? realModel(t, sheet) : undefined), [sheet, t]);
+}
+
+function realModel(t: ReturnType<typeof useDictionary>, sheet: EntitySheet): SheetModel {
+  const w = t.environment.sheet;
+  const entity = sheet.entity;
+  const enriched = Object.fromEntries(entity.enriched.map((a) => [a.attribute, a.value]));
+  const version = entity.attributes.version;
+  const description = entity.attributes.description;
+  const state = entity.attributes.state;
+  const lifecycle = enriched.lifecycle;
+  const last = enriched.last_activity_at;
+  const open = sheet.incidents.find((incident) => incident.kind === "incident");
+  const infrastructure = sheet.dependencies.filter((d) => d.entity.type === "infra_resource");
+  const data = sheet.dependencies.filter((d) => d.entity.type === "database");
+  const relations = t.environment.relations as Record<string, { out: string; in: string }>;
+  const unknown = w.general.unknown;
+
+  return {
+    id: entity.id,
+    key: entity.key,
+    type: entity.type,
+    name: entity.name,
+    typeLine: [typeLabel(t, entity.type), sheet.environment].filter(Boolean).join(" · "),
+    status: sheet.status as EnvironmentStatus | null,
+    version: typeof version === "string" ? version : undefined,
+    description: typeof description === "string" && description ? description : undefined,
+    owner: sheet.owner
+      ? {
+          name: sheet.owner.entity.name,
+          subtitle: fill(w.maintainer, { score: Math.round(sheet.owner.confidence * 100) }),
+          href: entityHref(sheet.owner.entity),
+        }
+      : null,
+    team: sheet.team
+      ? {
+          name: sheet.team.entity.name,
+          subtitle: sheet.team.members
+            ? fill(w.members, { count: sheet.team.members })
+            : sheet.team.origin === "stated"
+              ? w.teamStated
+              : fill(w.teamInferred, { score: Math.round(sheet.team.confidence * 100) }),
+          href: entityHref(sheet.team.entity),
+        }
+      : null,
+    metrics: METRICS.map((metric) => ({
+      ...metric,
+      label: (w.metrics as Record<string, string>)[metric.id],
+    })),
+    incident: open
+      ? { title: open.entity.name, since: open.at, href: entityHref(open.entity) }
+      : null,
+    attention: attentionRows(t, sheet.attention),
+    events: eventRows(t, sheet.events),
+    incidents: eventRows(t, sheet.incidents),
+    dependencies: sheet.dependencies.map((link) => {
+      const relation = relations[link.type] ?? relations.other;
+      const notes = [link.direction === "out" ? relation.out : relation.in];
+      if (link.origin === "inferred") {
+        notes.push(fill(w.dependencies.inferred, { score: Math.round(link.confidence * 100) }));
+      }
+      if (link.cross_source) notes.push(w.dependencies.crossSource);
+      return {
+        key: `${link.type}-${link.direction}-${link.entity.id}`,
+        name: link.entity.name,
+        icon: typeIcon(link.entity.type),
+        status: link.status as EnvironmentStatus | null,
+        note: notes.join(" · "),
+        href: entityHref(link.entity),
+      };
+    }),
+    documents: sheet.documents.map((document) => ({
+      key: document.id,
+      name: document.name,
+      href: entityHref(document),
+    })),
+    general: [
+      { label: w.general.type, value: typeLabel(t, entity.type) },
+      { label: w.general.environment, value: sheet.environment ?? unknown },
+      { label: w.general.version, value: typeof version === "string" ? version : unknown },
+      { label: w.general.state, value: typeof state === "string" ? state : unknown },
+      {
+        label: w.general.lifecycle,
+        value:
+          typeof lifecycle === "string"
+            ? ((w.lifecycles as Record<string, string>)[lifecycle] ?? lifecycle)
+            : unknown,
+      },
+      {
+        label: w.general.lastActivity,
+        value: typeof last === "string" ? timeAgo(t, last) : unknown,
+      },
+      {
+        label: w.general.infrastructure,
+        value: infrastructure.length
+          ? infrastructure.map((d) => d.entity.name).join(", ")
+          : unknown,
+      },
+      {
+        label: w.general.data,
+        value: data.length ? data.map((d) => d.entity.name).join(", ") : unknown,
+      },
+      {
+        label: w.general.runbook,
+        value: sheet.documents[0] ? (
+          <Link
+            href={entityHref(sheet.documents[0])}
+            className="font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+          >
+            {sheet.documents[0].name}
+          </Link>
+        ) : (
+          unknown
+        ),
+      },
+      {
+        label: w.general.sources,
+        value: sheet.source_kinds.length ? (
+          <span className="flex gap-1.5">
+            {sheet.source_kinds.map((kind) => (
+              <Logo key={kind} kind={kind} className="size-4" />
+            ))}
+          </span>
+        ) : (
+          unknown
+        ),
+      },
+    ],
+  };
+}
+
+function Sheet({ model, tab }: { model: SheetModel; tab: string }) {
+  const t = useDictionary();
+  const w = t.environment.sheet;
   const [period, setPeriod] = useState<Period>("7d");
   const events = useMemo(() => {
     const since = Date.now() - PERIODS[period] * HOUR;
-    return sheet.events.filter((event) => Date.parse(event.at) >= since);
-  }, [sheet.events, period]);
+    return model.events.filter((event) => Date.parse(event.at) >= since);
+  }, [model.events, period]);
+
+  let body: React.ReactNode;
+  if (tab === "overview") {
+    body = <Overview model={model} events={events} />;
+  } else if (tab === "dependencies") {
+    body = (
+      <Card title={fill(w.dependencies.title, { count: model.dependencies.length })}>
+        <Dependencies rows={model.dependencies} />
+      </Card>
+    );
+  } else if (tab === "incidents") {
+    body = (
+      <Card title={t.tabs.incidents}>
+        <EventList rows={model.incidents} empty={w.incidentsEmpty} detailed />
+      </Card>
+    );
+  } else if (tab === "documentation") {
+    body = (
+      <Card title={t.tabs.documentation}>
+        <Documents rows={model.documents} />
+      </Card>
+    );
+  } else {
+    body = (
+      <StatePanel
+        icon={ChartLine}
+        title={(t.tabs as Record<string, string>)[tab] ?? tab}
+        description={(w.tabs as Record<string, string>)[tab]}
+        size="section"
+        className="rounded-xl border border-shell-line bg-white"
+      />
+    );
+  }
 
   return (
     <>
-      <Header sheet={sheet} period={period} onPeriod={setPeriod} />
+      <Header model={model} period={period} onPeriod={setPeriod} />
       <RouteTabs />
-      {tab === "overview" ? (
-        <Overview sheet={sheet} events={events} />
-      ) : tab === "dependencies" ? (
-        <Card
-          title={fill(t.environment.sheet.dependencies.title, {
-            count: sheet.dependencies.length,
-          })}
-        >
-          <Dependencies sheet={sheet} />
-        </Card>
-      ) : tab === "incidents" ? (
-        <Card title={t.tabs.incidents}>
-          <EventList
-            events={sheet.incidents}
-            empty={t.environment.sheet.incidentsEmpty}
-            withSource
-          />
-        </Card>
-      ) : tab === "documentation" ? (
-        <Card title={t.tabs.documentation}>
-          <Documents sheet={sheet} />
-        </Card>
-      ) : (
-        <StatePanel
-          icon={ChartLine}
-          title={(t.tabs as Record<string, string>)[tab] ?? tab}
-          description={(t.environment.sheet.tabs as Record<string, string>)[tab]}
-          size="section"
-          className="rounded-xl border border-shell-line bg-white"
-        />
-      )}
+      {body}
     </>
   );
 }
 
 function Header({
-  sheet,
+  model,
   period,
   onPeriod,
 }: {
-  sheet: EntitySheet;
+  model: SheetModel;
   period: Period;
   onPeriod: (period: Period) => void;
 }) {
   const t = useDictionary();
   const w = t.environment.sheet;
-  const entity = sheet.entity;
-  const status = sheet.status as EnvironmentStatus | null;
-  const version = entity.attributes.version;
-  const description = entity.attributes.description;
   const periods = (Object.keys(PERIODS) as Period[]).map((value) => ({
     value,
     label: w.periods[value],
   }));
+  const tone =
+    model.status === "incident" ? "danger" : model.status === "attention" ? "warning" : "violet";
 
   async function copyKey() {
     try {
-      await navigator.clipboard.writeText(entity.key);
+      await navigator.clipboard.writeText(model.key);
       notify.success({ title: w.copied });
     } catch {
       // A browser that refuses the clipboard: the key is on the page.
@@ -221,28 +415,27 @@ function Header({
     <div className="mb-5 flex flex-col gap-5 xl:flex-row xl:items-start">
       <div className="flex min-w-0 flex-1 items-start gap-4">
         <IconTile
-          icon={typeIcon(entity.type)}
-          tone={status === "incident" ? "danger" : status === "attention" ? "warning" : "violet"}
+          icon={typeIcon(model.type)}
+          tone={tone}
           className="size-16 rounded-xl [&>svg]:size-8"
         />
         <div className="min-w-0">
           <h1 className="truncate text-[2rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">
-            {entity.name}
+            {model.name}
           </h1>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-[0.875rem] text-shell-muted">
-            <span>
-              {typeLabel(t, entity.type)}
-              {sheet.environment ? ` · ${sheet.environment}` : ""}
-            </span>
-            {status ? <StatusBadge variant={`entity.${status}`} dot /> : null}
-            {typeof version === "string" ? (
+            <span>{model.typeLine}</span>
+            {model.status ? <StatusBadge variant={`entity.${model.status}`} dot /> : null}
+            {model.version ? (
               <span className="rounded-md border border-shell-line px-2 py-0.5 text-xs text-brand-navy">
-                {version}
+                {model.version}
               </span>
             ) : null}
           </div>
-          {typeof description === "string" && description ? (
-            <p className="mt-2 max-w-2xl text-[0.875rem] text-shell-nav-active">{description}</p>
+          {model.description ? (
+            <p className="mt-2 max-w-2xl text-[0.875rem] text-shell-nav-active">
+              {model.description}
+            </p>
           ) : null}
         </div>
       </div>
@@ -254,6 +447,7 @@ function Header({
             items={periods}
           >
             <SelectTrigger className="min-w-44" aria-label={w.period}>
+              <CalendarDays className="size-4 text-shell-muted" aria-hidden="true" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -287,109 +481,156 @@ function Header({
           </DropdownMenu>
         </div>
         <dl className="grid grid-cols-2 gap-6 text-[0.8125rem]">
-          <div>
-            <dt className="text-shell-muted">{w.owner}</dt>
-            <dd className="mt-1 flex items-center gap-2">
-              {sheet.owner ? (
-                <>
-                  <span className="flex size-8 items-center justify-center rounded-full bg-brand-violet-soft text-xs font-semibold text-shell-nav-active">
-                    {sheet.owner.entity.name.slice(0, 1).toUpperCase()}
-                  </span>
-                  <span>
-                    <Link
-                      href={entityHref(sheet.owner.entity)}
-                      className="block font-medium text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-                    >
-                      {sheet.owner.entity.name}
-                    </Link>
-                    <span className="block text-xs text-shell-muted">
-                      {fill(w.maintainer, { score: Math.round(sheet.owner.confidence * 100) })}
-                    </span>
-                  </span>
-                </>
-              ) : (
-                <span className="text-shell-muted">{w.noOwner}</span>
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-shell-muted">{w.team}</dt>
-            <dd className="mt-1 flex items-center gap-2">
-              {sheet.team ? (
-                <>
-                  <IconTile icon={Users} tone="violet" className="size-8" />
-                  <span>
-                    <Link
-                      href={entityHref(sheet.team.entity)}
-                      className="block font-medium text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-                    >
-                      {sheet.team.entity.name}
-                    </Link>
-                    <span className="block text-xs text-shell-muted">
-                      {sheet.team.members
-                        ? fill(w.members, { count: sheet.team.members })
-                        : sheet.team.origin === "stated"
-                          ? w.teamStated
-                          : fill(w.teamInferred, {
-                              score: Math.round(sheet.team.confidence * 100),
-                            })}
-                    </span>
-                  </span>
-                </>
-              ) : (
-                <span className="text-shell-muted">{w.noTeam}</span>
-              )}
-            </dd>
-          </div>
+          <Person
+            label={w.owner}
+            person={model.owner}
+            empty={w.noOwner}
+            avatar={model.owner?.name.slice(0, 1).toUpperCase()}
+          />
+          <Person label={w.team} person={model.team} empty={w.noTeam} />
         </dl>
       </div>
     </div>
   );
 }
 
-function Overview({ sheet, events }: { sheet: EntitySheet; events: EnvironmentEvent[] }) {
+function Person({
+  label,
+  person,
+  empty,
+  avatar,
+}: {
+  label: string;
+  person: { name: string; subtitle: string; href?: string } | null;
+  empty: string;
+  avatar?: string;
+}) {
+  return (
+    <div>
+      <dt className="text-shell-muted">{label}</dt>
+      <dd className="mt-1 flex items-center gap-2">
+        {person ? (
+          <>
+            {avatar ? (
+              <span className="flex size-8 items-center justify-center rounded-full bg-brand-violet-soft text-xs font-semibold text-shell-nav-active">
+                {avatar}
+              </span>
+            ) : (
+              <IconTile icon={Users} tone="violet" className="size-8" />
+            )}
+            <span>
+              {person.href ? (
+                <Link
+                  href={person.href}
+                  className="block font-medium text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+                >
+                  {person.name}
+                </Link>
+              ) : (
+                <span className="block font-medium text-brand-navy">{person.name}</span>
+              )}
+              <span className="block text-xs text-shell-muted">{person.subtitle}</span>
+            </span>
+          </>
+        ) : (
+          <span className="text-shell-muted">{empty}</span>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+function MetricTiles({ model }: { model: SheetModel }) {
   const t = useDictionary();
   const w = t.environment.sheet;
-  const metrics = [
-    { id: "latency", icon: Clock, label: w.metrics.latency },
-    { id: "errors", icon: TriangleAlert, label: w.metrics.errors },
-    { id: "requests", icon: Activity, label: w.metrics.requests },
-    { id: "availability", icon: Gauge, label: w.metrics.availability },
-  ];
+  return (
+    <>
+      {model.metrics.map((metric) => (
+        <div
+          key={metric.id}
+          className="rounded-xl border border-shell-line bg-white p-4"
+          data-testid={`metric-${metric.id}`}
+        >
+          <p className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
+            <metric.icon className="size-4 text-shell-muted" aria-hidden="true" />
+            {metric.label}
+          </p>
+          {metric.value ? (
+            <>
+              <p
+                className={cn(
+                  "mt-2 text-[1.75rem] leading-8 font-bold",
+                  metric.good ? "text-brand-navy" : "text-state-danger",
+                )}
+              >
+                {metric.value}
+              </p>
+              <div className="mt-1 flex items-end justify-between gap-2">
+                {metric.delta ? (
+                  <span
+                    className={cn(
+                      "flex items-center gap-1 text-[0.8125rem] font-medium",
+                      metric.good ? "text-state-success" : "text-state-danger",
+                    )}
+                  >
+                    {metric.delta.text}
+                    {metric.delta.up ? (
+                      <ArrowUp className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <ArrowDown className="size-3.5" aria-hidden="true" />
+                    )}
+                  </span>
+                ) : null}
+                {metric.series ? (
+                  <Sparkline
+                    values={metric.series}
+                    tone={metric.good ? "success" : "danger"}
+                    className="h-8 w-28"
+                  />
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="mt-2 text-[1.75rem] leading-8 font-bold text-shell-muted">—</p>
+              <p className="mt-1 text-xs text-shell-muted">{w.metrics.notMeasured}</p>
+            </>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
 
+function PerformanceCard() {
+  const t = useDictionary();
+  const w = t.environment.sheet;
+  return (
+    <Card
+      title={w.performance.title}
+      icon={<IconTile icon={ChartLine} tone="violet" className="size-9" />}
+    >
+      <p className="py-10 text-center text-[0.8125rem] text-shell-muted">{w.performance.empty}</p>
+    </Card>
+  );
+}
+
+function Overview({ model, events }: { model: SheetModel; events: EventRow[] }) {
+  const t = useDictionary();
+  const w = t.environment.sheet;
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,1.4fr)]">
-        {metrics.map((metric) => (
-          <div
-            key={metric.id}
-            className="rounded-xl border border-shell-line bg-white p-4"
-            data-testid={`metric-${metric.id}`}
-          >
-            <p className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
-              <metric.icon className="size-4 text-shell-muted" aria-hidden="true" />
-              {metric.label}
-            </p>
-            <p className="mt-2 text-[1.75rem] leading-8 font-bold text-shell-muted">—</p>
-            <p className="mt-1 text-xs text-shell-muted">{w.metrics.notMeasured}</p>
-          </div>
-        ))}
-        <ActiveIncident sheet={sheet} />
+        <MetricTiles model={model} />
+        <ActiveIncident model={model} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <Card
-          title={w.performance.title}
-          icon={<IconTile icon={ChartLine} tone="violet" className="size-9" />}
-        >
-          <p className="py-10 text-center text-[0.8125rem] text-shell-muted">
-            {w.performance.empty}
-          </p>
-        </Card>
+        <PerformanceCard />
         <Card
           title={
-            sheet.attention.length
-              ? fill(w.attention, { count: sheet.attention.length })
+            model.attention.length
+              ? fill(w.attention, { count: model.attention.length })
               : w.attentionNone
           }
           icon={
@@ -397,32 +638,47 @@ function Overview({ sheet, events }: { sheet: EntitySheet; events: EnvironmentEv
               aria-hidden="true"
               className={cn(
                 "size-2.5 rounded-full",
-                sheet.attention.length ? "bg-state-danger" : "bg-state-success",
+                model.attention.length ? "bg-state-danger" : "bg-state-success",
               )}
             />
           }
+          action={
+            model.attention.length ? (
+              <CardLink href={routes.approvals()}>{t.environment.kpi.seeAll}</CardLink>
+            ) : null
+          }
         >
-          <AttentionList points={sheet.attention} empty={t.environment.attention.empty} />
+          <AttentionList rows={model.attention} empty={t.environment.attention.empty} />
         </Card>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <Card title={w.events.title}>
-          <EventList events={events} empty={w.events.empty} withSource />
+        <Card
+          title={w.events.title}
+          action={<CardLink href={routes.activity()}>{t.environment.kpi.seeAll}</CardLink>}
+        >
+          <EventList rows={events} empty={w.events.empty} detailed />
         </Card>
         <Card
-          title={fill(w.dependencies.title, { count: sheet.dependencies.length })}
+          title={fill(w.dependencies.title, { count: model.dependencies.length })}
           action={
-            <CardLink
-              href={routes.entity(typeSegment(sheet.entity.type), sheet.entity.id, "dependencies")}
-            >
+            <CardLink href={routes.entity(typeSegment(model.type), model.id, "dependencies")}>
               {w.dependencies.seeGraph}
             </CardLink>
           }
         >
-          <Dependencies sheet={sheet} max={5} />
+          <Dependencies rows={model.dependencies} max={5} />
         </Card>
-        <General sheet={sheet} />
+        <Card title={w.general.title}>
+          <dl className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] gap-x-3 gap-y-2.5 text-[0.8125rem]">
+            {model.general.map((row) => (
+              <div key={row.label} className="contents">
+                <dt className="text-shell-muted">{row.label}</dt>
+                <dd className="min-w-0 truncate text-brand-navy">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
       </div>
 
       <section className="flex flex-col gap-4 rounded-xl bg-shell-highlight px-6 py-5 lg:flex-row lg:items-center">
@@ -443,10 +699,10 @@ function Overview({ sheet, events }: { sheet: EntitySheet; events: EnvironmentEv
   );
 }
 
-function ActiveIncident({ sheet }: { sheet: EntitySheet }) {
+function ActiveIncident({ model }: { model: SheetModel }) {
   const t = useDictionary();
   const w = t.environment.sheet.incident;
-  const open = sheet.incidents.find((incident) => incident.kind === "incident");
+  const open = model.incident;
   if (!open) {
     return (
       <div
@@ -467,63 +723,58 @@ function ActiveIncident({ sheet }: { sheet: EntitySheet }) {
       data-testid="active-incident"
     >
       <p className="flex items-center gap-2 text-[0.9375rem] font-semibold text-state-danger">
-        <OctagonAlert className="size-4" aria-hidden="true" />
+        <span aria-hidden="true" className="size-3 rounded-full bg-state-danger" />
         {w.active}
       </p>
-      <p className="mt-2 truncate text-[0.875rem] text-brand-navy">{open.entity.name}</p>
+      <p className="mt-2 text-[0.875rem] text-brand-navy">{open.title}</p>
       <div className="mt-3 flex items-center justify-between gap-3 text-[0.8125rem]">
-        <span className="text-shell-muted">{fill(w.since, { ago: timeAgo(t, open.at) })}</span>
-        <CardLink href={entityHref(open.entity)}>{w.see}</CardLink>
+        <span className="text-shell-muted">{fill(w.since, { ago: timeAgo(t, open.since) })}</span>
+        <CardLink href={open.href}>{w.see}</CardLink>
       </div>
     </div>
   );
 }
 
-function Dependencies({ sheet, max }: { sheet: EntitySheet; max?: number }) {
+function Dependencies({ rows, max }: { rows: readonly Dependency[]; max?: number }) {
   const t = useDictionary();
-  const w = t.environment;
-  const shown = max ? sheet.dependencies.slice(0, max) : sheet.dependencies;
+  const shown = max ? rows.slice(0, max) : rows;
   if (shown.length === 0) {
     return (
       <p className="py-4 text-center text-[0.8125rem] text-shell-muted">
-        {w.sheet.dependencies.empty}
+        {t.environment.sheet.dependencies.empty}
       </p>
     );
   }
   return (
     <ul className="divide-y divide-shell-line/60">
-      {shown.map((link) => {
-        const relation =
-          (w.relations as Record<string, { out: string; in: string }>)[link.type] ??
-          w.relations.other;
-        const Icon = typeIcon(link.entity.type);
+      {shown.map((row) => {
+        const Icon = row.icon;
         return (
           <li
-            key={`${link.type}-${link.direction}-${link.entity.id}`}
+            key={row.key}
             className="flex items-center gap-3 py-2 text-[0.8125rem]"
             data-testid="dependency-row"
           >
-            <Icon className="size-4 shrink-0 text-shell-nav-active" aria-hidden="true" />
-            <span className="min-w-0 flex-1">
-              <Link
-                href={entityHref(link.entity)}
-                className="block truncate font-medium text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-              >
-                {link.entity.name}
-              </Link>
-              <span className="block truncate text-xs text-shell-muted">
-                {link.direction === "out" ? relation.out : relation.in}
-                {link.origin === "inferred"
-                  ? ` · ${fill(w.sheet.dependencies.inferred, {
-                      score: Math.round(link.confidence * 100),
-                    })}`
-                  : ""}
-                {link.cross_source ? ` · ${w.sheet.dependencies.crossSource}` : ""}
-              </span>
-            </span>
-            {link.status ? (
-              <StatusBadge variant={`entity.${link.status as EnvironmentStatus}`} size="sm" />
+            {row.source ? (
+              <Logo kind={row.source} className="size-5 shrink-0" />
+            ) : Icon ? (
+              <Icon className="size-4 shrink-0 text-shell-nav-active" aria-hidden="true" />
             ) : null}
+            <span className="min-w-0 flex-1">
+              {row.href ? (
+                <Link
+                  href={row.href}
+                  className="block truncate font-medium text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+                >
+                  {row.name}
+                </Link>
+              ) : (
+                <span className="block truncate font-medium text-brand-navy">{row.name}</span>
+              )}
+              <span className="block truncate text-xs text-shell-muted">{row.note}</span>
+            </span>
+            {row.status ? <StatusBadge variant={`entity.${row.status}`} size="sm" /> : null}
+            <ChevronRight className="size-4 shrink-0 text-shell-muted" aria-hidden="true" />
           </li>
         );
       })}
@@ -531,9 +782,9 @@ function Dependencies({ sheet, max }: { sheet: EntitySheet; max?: number }) {
   );
 }
 
-function Documents({ sheet }: { sheet: EntitySheet }) {
+function Documents({ rows }: { rows: SheetModel["documents"] }) {
   const t = useDictionary();
-  if (sheet.documents.length === 0) {
+  if (rows.length === 0) {
     return (
       <p className="py-4 text-center text-[0.8125rem] text-shell-muted">
         {t.environment.sheet.documentsEmpty}
@@ -542,92 +793,21 @@ function Documents({ sheet }: { sheet: EntitySheet }) {
   }
   return (
     <ul className="space-y-2">
-      {sheet.documents.map((document) => (
-        <li key={document.id} className="flex items-center gap-2 text-[0.8125rem]">
+      {rows.map((document) => (
+        <li key={document.key} className="flex items-center gap-2 text-[0.8125rem]">
           <FileText className="size-4 text-shell-nav-active" aria-hidden="true" />
-          <Link
-            href={entityHref(document)}
-            className="font-medium text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-          >
-            {document.name}
-          </Link>
+          {document.href ? (
+            <Link
+              href={document.href}
+              className="font-medium text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+            >
+              {document.name}
+            </Link>
+          ) : (
+            <span className="font-medium text-brand-navy">{document.name}</span>
+          )}
         </li>
       ))}
     </ul>
-  );
-}
-
-function General({ sheet }: { sheet: EntitySheet }) {
-  const t = useDictionary();
-  const w = t.environment.sheet.general;
-  const enriched = Object.fromEntries(sheet.entity.enriched.map((a) => [a.attribute, a.value]));
-  const lifecycle = enriched.lifecycle;
-  const last = enriched.last_activity_at;
-  const state = sheet.entity.attributes.state;
-  const infrastructure = sheet.dependencies.filter((d) => d.entity.type === "infra_resource");
-  const data = sheet.dependencies.filter((d) => d.entity.type === "database");
-  const rows: { label: string; value: React.ReactNode }[] = [
-    { label: w.type, value: typeLabel(t, sheet.entity.type) },
-    { label: w.environment, value: sheet.environment ?? w.unknown },
-    {
-      label: w.version,
-      value:
-        typeof sheet.entity.attributes.version === "string"
-          ? sheet.entity.attributes.version
-          : w.unknown,
-    },
-    { label: w.state, value: typeof state === "string" ? state : w.unknown },
-    {
-      label: w.lifecycle,
-      value:
-        typeof lifecycle === "string"
-          ? ((t.environment.sheet.lifecycles as Record<string, string>)[lifecycle] ?? lifecycle)
-          : w.unknown,
-    },
-    { label: w.lastActivity, value: typeof last === "string" ? timeAgo(t, last) : w.unknown },
-    {
-      label: w.infrastructure,
-      value: infrastructure.length
-        ? infrastructure.map((d) => d.entity.name).join(", ")
-        : w.unknown,
-    },
-    { label: w.data, value: data.length ? data.map((d) => d.entity.name).join(", ") : w.unknown },
-    {
-      label: w.runbook,
-      value: sheet.documents[0] ? (
-        <Link
-          href={entityHref(sheet.documents[0])}
-          className="font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-        >
-          {sheet.documents[0].name}
-        </Link>
-      ) : (
-        w.unknown
-      ),
-    },
-    {
-      label: w.sources,
-      value: sheet.source_kinds.length ? (
-        <span className="flex gap-1.5">
-          {sheet.source_kinds.map((kind) => (
-            <SourceLogo key={kind} kind={kind as SourceKind} className="size-4" />
-          ))}
-        </span>
-      ) : (
-        w.unknown
-      ),
-    },
-  ];
-  return (
-    <Card title={w.title}>
-      <dl className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] gap-x-3 gap-y-2 text-[0.8125rem]">
-        {rows.map((row) => (
-          <div key={row.label} className="contents">
-            <dt className="text-shell-muted">{row.label}</dt>
-            <dd className="min-w-0 truncate text-brand-navy">{row.value}</dd>
-          </div>
-        ))}
-      </dl>
-    </Card>
   );
 }
