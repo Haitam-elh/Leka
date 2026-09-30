@@ -1,15 +1,21 @@
 "use client";
 
 import {
+  CircleDot,
   Cloud,
   Database,
   FileText,
   FolderGit2,
+  FolderKanban,
+  GitCommitHorizontal,
+  GitPullRequest,
   type LucideIcon,
   Rocket,
   Server,
+  Tag,
   TriangleAlert,
   User,
+  Users,
 } from "lucide-react";
 
 import { cn } from "cn";
@@ -30,6 +36,12 @@ export const ENTITY_ICONS: Record<EntityType, LucideIcon> = {
   document: FileText,
   infra_resource: Cloud,
   database: Database,
+  team: Users,
+  project: FolderKanban,
+  issue: CircleDot,
+  pull_request: GitPullRequest,
+  commit: GitCommitHorizontal,
+  release: Tag,
 };
 
 export function EntityIcon({

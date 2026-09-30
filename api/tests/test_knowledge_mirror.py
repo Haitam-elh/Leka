@@ -1,9 +1,9 @@
 """The web app's copy of the knowledge vocabulary matches this one (LEKA-340).
 
-web/lib/knowledge.ts repeats EntityType and RelationshipType because no
-route serves the graph yet, so they are not in the generated API types. A
-repeated list drifts: an entity type added here would render as nothing
-there, silently. This reads the TypeScript and compares.
+web/lib/knowledge.ts repeats EntityType and RelationshipType as lists —
+the generated API types have them as unions (LEKA-361), which cannot be
+iterated. A repeated list drifts: an entity type added here would render as
+nothing there, silently. This reads the TypeScript and compares.
 """
 
 from __future__ import annotations

@@ -1,11 +1,11 @@
 /**
  * The shapes the knowledge components display (LEKA-340).
  *
- * The entity and relationship kinds MIRROR leka/knowledge/models.py. They
- * are not in lib/api-types.ts because no route serves the graph yet; the
- * day one does, these unions are replaced by the generated ones. Until
- * then api/tests/test_knowledge_mirror.py fails if either side changes
- * without the other.
+ * The entity and relationship kinds MIRROR leka/knowledge/models.py. The
+ * company model's routes (LEKA-361) put them in lib/api-types.ts as unions;
+ * these are the same kinds as lists, which a union cannot be iterated as.
+ * api/tests/test_knowledge_mirror.py fails if either side changes without
+ * the other.
  *
  * Everything the backend does not know yet — an entity's operational
  * status, its owner, its metrics — is optional here. A component shows what
@@ -23,6 +23,12 @@ export const ENTITY_TYPES = [
   "document",
   "infra_resource",
   "database",
+  "team",
+  "project",
+  "issue",
+  "pull_request",
+  "commit",
+  "release",
 ] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
@@ -33,6 +39,20 @@ export const RELATIONSHIP_TYPES = [
   "mentions",
   "caused_by",
   "member_of",
+  "part_of",
+  "owned_by",
+  "maintained_by",
+  "authored_by",
+  "assigned_to",
+  "reviewed_by",
+  "reported_by",
+  "led_by",
+  "affects",
+  "resolves",
+  "implements",
+  "merges",
+  "child_of",
+  "in_network",
 ] as const;
 export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
 
