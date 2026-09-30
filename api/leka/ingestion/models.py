@@ -19,7 +19,9 @@ candidates normalisation made of each, the seventh (LEKA-356);
 `resolved_entities`, `resolved_keys`, `resolution_decisions` and
 `resolution_runs`, what entity resolution made of it all (LEKA-357);
 `validated_records`, what validation found of each normalised record
-(LEKA-358).
+(LEKA-358); `enriched_relationships`, `entity_enrichments` and
+`enrichment_runs`, what enrichment added to the resolved entities
+(LEKA-359).
 It is the row half of the split
 described in docs/adr/010-object-storage.md: the bytes live in the object
 store, and this is everything we know about them — where they came from, how
@@ -1041,3 +1043,118 @@ class ValidatedRecordRow(Base, WorkspaceScopedMixin):
         UUID(as_uuid=True), ForeignKey("processing_runs.id", ondelete="SET NULL"), nullable=True
     )
     validated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+# ── enrichment (LEKA-359) ────────────────────────────────────────────────────
+
+
+class EnrichmentRun(Base, WorkspaceScopedMixin):
+    """One run of enrichment over a workspace: when, from which resolution
+    run, by which version, what it added — which enrichers failed inside
+    it, or the type of the error it stopped on."""
+
+    __tablename__ = "enrichment_runs"
+    __table_args__ = (
+        CheckConstraint("status IN ('running', 'succeeded', 'failed', 'abandoned')", name="status"),
+        CheckConstraint(
+            "finished_at IS NULL OR finished_at >= started_at", name="finished_after_started"
+        ),
+        Index("ix_enrichment_runs_workspace_started_at", "workspace_id", "started_at"),
+    )
+
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="running")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The resolution run it read. No foreign key: that history is pruned,
+    # and this says what it was made from, not a link to follow.
+    resolution_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    enricher_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    counts: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # {enricher, error}: an enricher that failed, its output dropped.
+    failures: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    error: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class EnrichedRelationship(Base, WorkspaceScopedMixin):
+    """A relationship between two resolved entities: STATED by a source —
+    between keys, now between the things they are — or INFERRED by an
+    enrichment rule. With its rule, its confidence, its evidence, and its
+    provenance: the records that stated it, or the entities it was
+    inferred from.
+
+    MADE AGAIN WHOLE at each enrichment run. No foreign key to
+    resolved_entities: resolution makes those again at each of its runs,
+    and the last enrichment stays readable until the next replaces it —
+    what reads it joins the entities, whose ids resolution keeps.
+    """
+
+    __tablename__ = "enriched_relationships"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "from_entity_id",
+            "to_entity_id",
+            "type",
+            name="uq_enriched_relationships_edge",
+        ),
+        CheckConstraint("origin IN ('stated', 'inferred')", name="origin"),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
+        CheckConstraint("from_entity_id <> to_entity_id", name="not_to_itself"),
+        Index("ix_enriched_relationships_to", "workspace_id", "to_entity_id", "type"),
+        # The list's order: the surest first.
+        Index("ix_enriched_relationships_workspace_confidence", "workspace_id", "confidence"),
+    )
+
+    from_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    to_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    type: Mapped[str] = mapped_column(String(50), nullable=False)
+    origin: Mapped[str] = mapped_column(String(10), nullable=False)
+    rule: Mapped[str] = mapped_column(String(100), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    # Its two ends are shown by different sources: two tools' things joined.
+    cross_source: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # How many sources state it; 0 for an inferred one.
+    sources: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    evidence: Mapped[str] = mapped_column(String(1000), nullable=False)
+    # Stated: [{source_id, record_id, evidence}] — the first records stating
+    # it. Inferred: [{entity_id}] — what it was inferred from beyond its two
+    # ends: the container an owner is inherited from, a maintainer's items.
+    provenance: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    # The enrichment run that made it. Single-column, as validated_records':
+    # SET NULL through workspace_id would null the workspace too.
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("enrichment_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    enriched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class EntityEnrichment(Base, WorkspaceScopedMixin):
+    """An attribute enrichment added to a resolved entity — never one its
+    sources state — with its rule, its confidence, its evidence and the
+    keys it was made from. Made again whole at each enrichment run; no
+    foreign key to resolved_entities, for the same reason as
+    EnrichedRelationship."""
+
+    __tablename__ = "entity_enrichments"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "entity_id", "attribute", name="uq_entity_enrichments_attribute"
+        ),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
+    )
+
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    attribute: Mapped[str] = mapped_column(String(100), nullable=False)
+    value: Mapped[object] = mapped_column(JSONB, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    rule: Mapped[str] = mapped_column(String(100), nullable=False)
+    evidence: Mapped[str] = mapped_column(String(1000), nullable=False)
+    inputs: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("enrichment_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    enriched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

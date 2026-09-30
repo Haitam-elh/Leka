@@ -4,7 +4,8 @@ What normalisation reads, what it hands to the graph, and the mapping rules
 it applies. LEKA-356. It reads an extraction ([extraction.md](extraction.md))
 and its parse ([parsing.md](parsing.md)); what reads it next is validation
 ([validation.md](validation.md)), then entity resolution
-([resolution.md](resolution.md)), then leka.knowledge.
+([resolution.md](resolution.md)), then enrichment
+([enrichment.md](enrichment.md)), then leka.knowledge.
 
 ```
  ExtractedRecord + ParsedRecord
@@ -197,8 +198,9 @@ new mapping makes the source's rows stale, and they are made again.
 
 ## Not yet
 
-- **Writing the graph**: leka.knowledge, from what entity resolution makes
-  ([resolution.md](resolution.md)).
+- **Writing the graph**: leka.knowledge, from what entity resolution and
+  enrichment make ([resolution.md](resolution.md),
+  [enrichment.md](enrichment.md)).
 - **A Jira link's site**: a link to `acme.atlassian.net/browse/PAY-7` found in
   GitHub comes out as `ticket:PAY-7` — parsing keeps the key, not the site.
 - **A screen**: the route is there; the Sources screen does not show it yet.

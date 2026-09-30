@@ -11,7 +11,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import (
     CursorResult,
@@ -35,6 +35,9 @@ from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
 from leka.ingestion.models import (
     DeliveryStatus,
+    EnrichedRelationship,
+    EnrichmentRun,
+    EntityEnrichment,
     ExtractedRecordRow,
     ExtractionStatus,
     NormalisationStatus,
@@ -58,6 +61,9 @@ from leka.ingestion.models import (
     ValidationStatus,
     WebhookDelivery,
 )
+
+if TYPE_CHECKING:
+    from leka.ingestion.enrichment.engine import Enrichment
 
 
 def _affected_rows(result: Result[Any]) -> int:
@@ -1621,4 +1627,262 @@ class ResolutionRepository(WorkspaceScopedRepository):
             "entities": int(entities or 0),
             "conflicted": int(conflicted or 0),
             **{PLURAL.get(kind, kind): int(n) for kind, n in by_kind.all()},
+        }
+
+
+class EnrichmentRepository(WorkspaceScopedRepository):
+    """Enrichment's rows (LEKA-359): what it reads of resolution and of what
+    the sources stated, and what it made — replaced whole at each run."""
+
+    async def basis(self) -> uuid.UUID | None:
+        """The resolution run enrichment reads: the latest that succeeded."""
+        found = await self._session.scalar(
+            select(ResolutionRun.id)
+            .where(
+                ResolutionRun.workspace_id == self.workspace_id,
+                ResolutionRun.status == "succeeded",
+            )
+            .order_by(ResolutionRun.started_at.desc())
+            .limit(1)
+        )
+        return found
+
+    async def latest_run(self, *, succeeded: bool = False) -> EnrichmentRun | None:
+        statement = self.select(EnrichmentRun)
+        if succeeded:
+            statement = statement.where(EnrichmentRun.status == "succeeded")
+        found = await self._session.execute(
+            statement.order_by(EnrichmentRun.started_at.desc()).limit(1)
+        )
+        return found.scalar_one_or_none()
+
+    async def pending(self, basis: uuid.UUID | None, version: int) -> bool:
+        """Whether enriching now would read anything the last success did
+        not: a newer resolution run, or new rules. Nothing resolved yet:
+        nothing to enrich."""
+        if basis is None:
+            return False
+        last = await self.latest_run(succeeded=True)
+        return last is None or last.resolution_run_id != basis or last.enricher_version != version
+
+    async def start(self, basis: uuid.UUID | None, version: int, *, at: datetime) -> EnrichmentRun:
+        """A new run. One still `running` is one whose worker died — one run
+        at a time per workspace (enrich:<workspace>) — and is closed first."""
+        await self._session.execute(
+            update(EnrichmentRun)
+            .where(
+                EnrichmentRun.workspace_id == self.workspace_id,
+                EnrichmentRun.status == "running",
+            )
+            .values(status="abandoned", finished_at=at, updated_at=func.now())
+        )
+        run = EnrichmentRun(
+            status="running", started_at=at, resolution_run_id=basis, enricher_version=version
+        )
+        self.add(run)
+        await self.flush()
+        return run
+
+    async def entities(self) -> Sequence[tuple[uuid.UUID, str, str, str, dict[str, object]]]:
+        """Every resolved entity: (id, type, key, name, attributes)."""
+        rows = await self._session.execute(
+            select(
+                ResolvedEntity.id,
+                ResolvedEntity.type,
+                ResolvedEntity.key,
+                ResolvedEntity.name,
+                ResolvedEntity.attributes,
+            ).where(ResolvedEntity.workspace_id == self.workspace_id)
+        )
+        return [tuple(row) for row in rows.all()]
+
+    async def keys(self) -> Sequence[tuple[uuid.UUID, str, uuid.UUID]]:
+        """Every key an entity goes by, per source: (entity, key, source)."""
+        rows = await self._session.execute(
+            select(ResolvedKey.entity_id, ResolvedKey.key, ResolvedKey.source_id).where(
+                ResolvedKey.workspace_id == self.workspace_id
+            )
+        )
+        return [tuple(row) for row in rows.all()]
+
+    async def records(
+        self, *, after: uuid.UUID | None, limit: int
+    ) -> Sequence[tuple[uuid.UUID, uuid.UUID, str | None, object, object]]:
+        """The next `limit` normalised rows, by id: (row id, source, its
+        entity's key, that entity's attributes, the relationships it
+        states) — as normalisation wrote them. A QUARANTINED record is not
+        among them (LEKA-358), as resolution does not read its entity."""
+        validated = ValidatedRecordRow
+        statement = (
+            select(
+                NormalisedRecordRow.id,
+                NormalisedRecordRow.source_id,
+                NormalisedRecordRow.entity_key,
+                NormalisedRecordRow.result["entity"]["attributes"],
+                NormalisedRecordRow.result["relationships"],
+            )
+            .outerjoin(validated, validated.normalised_record_id == NormalisedRecordRow.id)
+            .where(
+                NormalisedRecordRow.workspace_id == self.workspace_id,
+                NormalisedRecordRow.status == NormalisationStatus.NORMALISED,
+                or_(validated.id.is_(None), validated.status != ValidationStatus.QUARANTINED),
+            )
+            .order_by(NormalisedRecordRow.id)
+            .limit(limit)
+        )
+        if after is not None:
+            statement = statement.where(NormalisedRecordRow.id > after)
+        rows = await self._session.execute(statement)
+        return [tuple(row) for row in rows.all()]
+
+    async def replace(self, enrichment: Enrichment, *, run_id: uuid.UUID, at: datetime) -> None:
+        """What the last run made, replaced by this one's — in the caller's
+        transaction: all of it, or nothing."""
+        for model in (EnrichedRelationship, EntityEnrichment):
+            await self._session.execute(
+                delete(model).where(model.workspace_id == self.workspace_id)
+            )
+        await self._insert(
+            EnrichedRelationship,
+            [
+                {
+                    "from_entity_id": edge.from_id,
+                    "to_entity_id": edge.to_id,
+                    "type": edge.type,
+                    "origin": edge.origin,
+                    "rule": edge.rule,
+                    "confidence": edge.confidence,
+                    "cross_source": edge.cross_source,
+                    "sources": len(edge.sources),
+                    "evidence": edge.evidence[:1000],
+                    "provenance": edge.provenance,
+                    "run_id": run_id,
+                    "enriched_at": at,
+                }
+                for edge in enrichment.edges
+            ],
+        )
+        await self._insert(
+            EntityEnrichment,
+            [
+                {
+                    "entity_id": fact.entity_id,
+                    "attribute": fact.attribute,
+                    "value": fact.value,
+                    "confidence": fact.confidence,
+                    "rule": fact.rule,
+                    "evidence": fact.evidence[:1000],
+                    "inputs": list(fact.inputs),
+                    "run_id": run_id,
+                    "enriched_at": at,
+                }
+                for fact in enrichment.facts
+            ],
+        )
+
+    async def _insert(self, model: type[Any], rows: list[dict[str, object]]) -> None:
+        for start in range(0, len(rows), 1_000):
+            chunk = rows[start : start + 1_000]
+            await self._session.execute(
+                insert(model).values([{"workspace_id": self.workspace_id, **row} for row in chunk])
+            )
+
+    # ── reads ────────────────────────────────────────────────────────────────
+
+    def _resolved(self) -> Select[tuple[uuid.UUID]]:
+        return select(ResolvedEntity.id).where(ResolvedEntity.workspace_id == self.workspace_id)
+
+    def relationships_page(self) -> Select[tuple[EnrichedRelationship]]:
+        """The workspace's enriched relationships whose two ends resolution
+        still has, for pagination."""
+        return self.select(EnrichedRelationship).where(
+            EnrichedRelationship.from_entity_id.in_(self._resolved()),
+            EnrichedRelationship.to_entity_id.in_(self._resolved()),
+        )
+
+    async def enrichments_of(self, entity_id: uuid.UUID) -> Sequence[EntityEnrichment]:
+        return await self.list(
+            self.select(EntityEnrichment)
+            .where(EntityEnrichment.entity_id == entity_id)
+            .order_by(EntityEnrichment.attribute)
+        )
+
+    async def edges_of(
+        self, entity_id: uuid.UUID, *, outgoing: bool, limit: int
+    ) -> tuple[Sequence[EnrichedRelationship], int]:
+        """An entity's relationships one way — the surest first, by type —
+        whose other end resolution still has; and how many there are."""
+        this, other = (
+            (EnrichedRelationship.from_entity_id, EnrichedRelationship.to_entity_id)
+            if outgoing
+            else (EnrichedRelationship.to_entity_id, EnrichedRelationship.from_entity_id)
+        )
+        where = (
+            EnrichedRelationship.workspace_id == self.workspace_id,
+            this == entity_id,
+            other.in_(self._resolved()),
+        )
+        total = await self._session.scalar(
+            select(func.count()).select_from(EnrichedRelationship).where(*where)
+        )
+        edges = await self.list(
+            select(EnrichedRelationship)
+            .where(*where)
+            .order_by(
+                EnrichedRelationship.type,
+                EnrichedRelationship.confidence.desc(),
+                EnrichedRelationship.id,
+            )
+            .limit(limit)
+        )
+        return edges, int(total or 0)
+
+    async def entities_by_id(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, ResolvedEntity]:
+        if not ids:
+            return {}
+        found = await self.list(self.select(ResolvedEntity).where(ResolvedEntity.id.in_(set(ids))))
+        return {entity.id: entity for entity in found}
+
+    async def counts(self) -> dict[str, int]:
+        """What the workspace's enrichment holds now."""
+        edges = (
+            await self._session.execute(
+                select(
+                    func.count(),
+                    func.count().filter(EnrichedRelationship.origin == "stated"),
+                    func.count().filter(EnrichedRelationship.origin == "inferred"),
+                    func.count().filter(EnrichedRelationship.cross_source.is_(True)),
+                ).where(EnrichedRelationship.workspace_id == self.workspace_id)
+            )
+        ).one()
+        attributes = await self._session.scalar(
+            select(func.count()).where(EntityEnrichment.workspace_id == self.workspace_id)
+        )
+        return {
+            "relationships": int(edges[0]),
+            "stated": int(edges[1]),
+            "inferred": int(edges[2]),
+            "cross_source": int(edges[3]),
+            "attributes": int(attributes or 0),
+        }
+
+    async def by_rule(self) -> dict[str, dict[str, int]]:
+        """How many relationships each rule made, per type; how many of each
+        attribute."""
+        edges = await self._session.execute(
+            select(EnrichedRelationship.type, EnrichedRelationship.rule, func.count())
+            .where(EnrichedRelationship.workspace_id == self.workspace_id)
+            .group_by(EnrichedRelationship.type, EnrichedRelationship.rule)
+        )
+        attributes = await self._session.execute(
+            select(EntityEnrichment.attribute, func.count())
+            .where(EntityEnrichment.workspace_id == self.workspace_id)
+            .group_by(EntityEnrichment.attribute)
+        )
+        relationships: dict[str, int] = {}
+        for kind, rule, n in edges.all():
+            relationships[f"{kind}:{rule}"] = int(n)
+        return {
+            "relationships": relationships,
+            "attributes": {name: int(n) for name, n in attributes.all()},
         }

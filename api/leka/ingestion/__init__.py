@@ -4,8 +4,12 @@ The middle of the background loop. Depends on leka.connectors; knows nothing
 about how the graph is queried or how answers are built.
 """
 
+from leka.ingestion.enrichment import ENRICHER_VERSION
 from leka.ingestion.models import (
     DeliveryStatus,
+    EnrichedRelationship,
+    EnrichmentRun,
+    EntityEnrichment,
     ExtractedRecordRow,
     ExtractionStatus,
     NormalisationStatus,
@@ -31,6 +35,7 @@ from leka.ingestion.models import (
     WebhookDelivery,
 )
 from leka.ingestion.repository import (
+    EnrichmentRepository,
     ExtractionRepository,
     IngestionRunRepository,
     NormalisationRepository,
@@ -47,6 +52,12 @@ from leka.ingestion.repository import (
 from leka.ingestion.resolution import RESOLVER_VERSION
 from leka.ingestion.retention import retention_days
 from leka.ingestion.schemas import (
+    EnrichedAttributeRead,
+    EnrichedEntity,
+    EnrichedRelationshipRead,
+    EnrichmentRunRead,
+    EnrichmentStatus,
+    EntityRef,
     ExtractionFailureRead,
     ExtractorCount,
     NormalisationFailureRead,
@@ -81,8 +92,19 @@ from leka.ingestion.schemas import (
 from leka.ingestion.service import IngestionService
 
 __all__ = [
+    "ENRICHER_VERSION",
     "RESOLVER_VERSION",
     "DeliveryStatus",
+    "EnrichedAttributeRead",
+    "EnrichedEntity",
+    "EnrichedRelationship",
+    "EnrichedRelationshipRead",
+    "EnrichmentRepository",
+    "EnrichmentRun",
+    "EnrichmentRunRead",
+    "EnrichmentStatus",
+    "EntityEnrichment",
+    "EntityRef",
     "ExtractedRecordRow",
     "ExtractionFailureRead",
     "ExtractionRepository",

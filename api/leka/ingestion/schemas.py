@@ -390,3 +390,79 @@ class ResolutionStatus(BaseModel):
     counts: dict[str, int] = Field(
         description="entities, conflicted, and and decisions: merges, links, ambiguous."
     )
+
+
+# ── enrichment (LEKA-359) ────────────────────────────────────────────────────
+
+
+class EntityRef(BaseModel):
+    """A resolved entity, named."""
+
+    id: uuid.UUID
+    type: str
+    key: str
+    name: str
+
+
+class EnrichedAttributeRead(BaseModel):
+    """An attribute enrichment added — never one the sources state."""
+
+    attribute: str
+    value: object
+    confidence: float
+    rule: str = Field(description="The enrichment rule that made it (docs/enrichment.md).")
+    evidence: str
+    inputs: list[str] = Field(description="The keys of what it was made from.")
+
+
+class EnrichedRelationshipRead(BaseModel):
+    """A relationship between two resolved entities, and where it comes from."""
+
+    type: str
+    origin: str = Field(description="stated: by a source; inferred: by an enrichment rule.")
+    rule: str
+    confidence: float
+    cross_source: bool = Field(description="Its two ends are shown by different sources.")
+    sources: int = Field(description="How many sources state it; 0 for an inferred one.")
+    evidence: str
+    provenance: list[dict[str, object]] = Field(
+        description="Stated: {source_id, record_id, evidence} of the first records stating "
+        "it. Inferred: {entity_id} of what it was inferred from beyond its two ends."
+    )
+    from_entity: EntityRef
+    to_entity: EntityRef
+
+
+class EnrichedEntity(ResolvedEntityRead):
+    """A resolved entity as the company model reads it: what its sources
+    say (`attributes`), what enrichment adds (`enriched`), and its
+    relationships both ways."""
+
+    enriched: list[EnrichedAttributeRead]
+    outgoing: list[EnrichedRelationshipRead]
+    outgoing_total: int
+    incoming: list[EnrichedRelationshipRead]
+    incoming_total: int
+
+
+class EnrichmentRunRead(BaseModel):
+    status: str
+    started_at: datetime
+    finished_at: datetime | None
+    counts: dict[str, object]
+    failures: list[dict[str, object]] = Field(
+        description="{enricher, error}: an enricher that failed; its output was dropped."
+    )
+    error: str | None
+
+
+class EnrichmentStatus(BaseModel):
+    """Where the workspace's enrichment stands."""
+
+    pending: bool = Field(description="Resolution made something the last run did not read.")
+    last_run: EnrichmentRunRead | None
+    counts: dict[str, int] = Field(
+        description="relationships — stated, inferred, cross_source — and attributes."
+    )
+    relationships: dict[str, int] = Field(description="How many per `type:rule`.")
+    attributes: dict[str, int] = Field(description="How many of each enriched attribute.")

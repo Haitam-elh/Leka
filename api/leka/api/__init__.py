@@ -15,6 +15,7 @@ from leka.api import (
     capabilities,
     connectors,
     context,
+    enrichment,
     governance,
     health,
     identity,
@@ -38,8 +39,10 @@ api_router.include_router(platform.router)
 api_router.include_router(governance.router)
 api_router.include_router(connectors.router)
 api_router.include_router(ingestion.router)
-# What the workspace's sources resolve to (LEKA-357).
+# What the workspace's sources resolve to (LEKA-357), and what enrichment
+# adds to it (LEKA-359).
 api_router.include_router(resolution.router)
+api_router.include_router(enrichment.router)
 # What systems send, signed rather than signed in (LEKA-350).
 api_router.include_router(webhooks.router)
 api_router.include_router(knowledge.router)

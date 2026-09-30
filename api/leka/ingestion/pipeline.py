@@ -4,8 +4,8 @@ over to the next, and the record of each run.
     collection ──▶ extraction ──▶ parsing ──▶ normalisation ──▶ validation
     (a pass)       extract:<id>   parse:<id>  normalise:<id>   validate:<id>
                                                                     │
-                                                  resolution ◀──────┘
-                                                  resolve:<workspace>
+                    enrichment ◀───────── resolution ◀──────────────┘
+                    enrich:<workspace>    resolve:<workspace>
 
 ONE DEFINITION. `STAGES` is the order; each stage depends on the one before
 it and reads only what that one wrote. The pass and every stage end with
@@ -18,7 +18,9 @@ THEN THE WORKSPACE. Entity resolution (LEKA-357) decides across sources
 what is one thing, so it is the workspace's, not a source's: `advance`,
 finding nothing left for a source, queues `resolve:<workspace>` when
 normalisation made something since its last success
-(leka/ingestion/resolution/job.py).
+(leka/ingestion/resolution/job.py). Enrichment (LEKA-359) follows: queued
+by a resolution run that succeeded, or here when nothing is left to resolve
+but enrichment has something to do (leka/ingestion/enrichment/job.py).
 
 PARALLEL WHERE SAFE. One run of a stage at a time per source (its
 concurrency key); stages of one source run in order; different sources run
@@ -50,6 +52,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.background import Event, enqueue_job
 from leka.connectors import Mapping, Source, SourceService
 from leka.db import session_factory, system_scope, workspace_scope
+from leka.ingestion.enrichment.job import enrich_if_pending
 from leka.ingestion.extraction.engine import versions as extraction_versions
 from leka.ingestion.models import ProcessingRunStatus, ProcessingStage
 from leka.ingestion.normalisation import engine as normalisation_engine
@@ -166,9 +169,11 @@ async def advance(
 async def resolve_if_pending(session: AsyncSession, workspace_id: uuid.UUID) -> bool:
     """Queue the workspace's entity resolution (LEKA-357) when normalisation
     made something since its last success, or its rules changed. Already
-    queued or running: that run takes it — or runs again (ROUNDS)."""
+    queued or running: that run takes it — or runs again (ROUNDS). Nothing
+    to resolve: the enrichment (LEKA-359), if it has something to do."""
     resolution = ResolutionRepository(session, workspace_id)
     if not await resolution.pending(await resolution.fingerprint(), RESOLVER_VERSION):
+        await enrich_if_pending(session, workspace_id)
         return False
     await enqueue_job(
         RESOLVE_JOB,
