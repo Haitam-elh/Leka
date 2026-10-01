@@ -11,7 +11,9 @@ it is in — an AWS account, an Azure resource group and its subscription, a
 Google Cloud project — each an entity too (LEKA-363). A database's schemas
 and tables are keyed by the server and database they were read on, so that
 two sources reading one database meet; the database, by its endpoint, meets
-the cloud instance that serves it (LEKA-364).
+the cloud instance that serves it (LEKA-364). A team's members and leads,
+its parent team; a directory's person, their department and manager —
+each a relationship to that person or team (LEKA-365).
 """
 
 from __future__ import annotations
@@ -48,6 +50,8 @@ CUSTOM_ENTITIES = frozenset(
     | {"infra_resource", "database"}
     # A data catalogue's tables (LEKA-364).
     | {"data_object"}
+    # An HR system's people and teams (LEKA-365).
+    | {"person", "team"}
 )
 
 ENTITY_TYPES = {
@@ -74,6 +78,9 @@ ENTITY_TYPES = {
     # A database's schemas, and its tables, views and collections (LEKA-364).
     C.SCHEMAS: "schema",
     C.TABLES: "data_object",
+    # Who works there, and their teams (LEKA-365).
+    C.PEOPLE: "person",
+    C.TEAMS: "team",
 }
 RESOURCE_KINDS = {
     C.INSTANCES: "instance",
@@ -261,6 +268,10 @@ def entity(build: Build) -> NormalisedEntity:
         key, attributes = _scope(build)
     elif capability in (C.SCHEMAS, C.TABLES):
         key, attributes = _data(build)
+    elif capability is C.TEAMS:
+        key, attributes = _team(build)
+    elif capability is C.PEOPLE:
+        key, attributes = _directory_person(build)
     elif capability in RESOURCE_KINDS:
         if build.kind not in CLOUDS:
             raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
@@ -517,6 +528,13 @@ def _custom(build: Build, declared: str) -> tuple[str, dict[str, object]]:
         key = ids.cloud(*provider_id)
     elif catalogued is not None:
         key = catalogued[0]
+    elif declared == "team":
+        key = ids.team(str(record.title))
+    elif declared == "person":
+        # By address; else by the system's own id, as its teams name them.
+        address = next(iter(_said(build, "email")), None)
+        system_id = record.provenance.external_id.split(":", 1)[-1]
+        key = ids.person_email(address) if address else ids.person_account(build.host, system_id)
     else:
         key = ids.item(f"custom-{build.source_id}", declared, record.provenance.external_id)
     attributes = _common(build)
@@ -528,6 +546,10 @@ def _custom(build: Build, declared: str) -> tuple[str, dict[str, object]]:
         _declared_resource(build, key, attributes, declared, provider_id)
     elif declared == "data_object":
         _declared_data(build, key, attributes, catalogued)
+    elif declared == "person":
+        _declared_person(build, key, attributes)
+    elif declared == "team":
+        _declared_team(build, key, attributes)
     if record.state is not None and declared in {"issue", "incident", *RESOURCES}:
         own = _own(build.mapping.states, record.state)
         state, known = (
@@ -655,6 +677,16 @@ DATA_SAID = {
     "classification": ("classification", "sensitivity", "confidentiality"),
     "data_categories": ("data_categories", "categories"),
     "reads_from": ("reads_from", "upstream", "sources"),
+}
+# What an HR system says of a person, of a team (LEKA-365).
+PEOPLE_SAID = {
+    "email": ("email", "mail", "work_email"),
+    "manager": ("manager", "manager_email", "reports_to"),
+    "job_title": ("job_title", "position", "role"),
+    "department": ("department", "division"),
+    "parent": ("parent", "parent_team"),
+    "members": ("members", "people"),
+    "leads": ("leads", "lead", "managers", "team_lead"),
 }
 ENGINES = {
     "postgresql": "postgresql",
@@ -843,6 +875,57 @@ def _declared_data(
         build.relate("reads_from", key, target, 1.0, "catalogue.reads_from")
 
 
+def _declared_person(build: Build, key: str, attributes: dict[str, object]) -> None:
+    """What an HR system says of a person: their address, title and
+    department — their department a team — their teams, their manager."""
+    for name in {n for names in PEOPLE_SAID.values() for n in names} | set(SAID["teams"]):
+        attributes.pop(name, None)
+    address = next(iter(_said(build, "email")), None)
+    if address:
+        attributes["email"] = address.strip().lower()
+    title = next(iter(_said(build, "job_title", split=False)), None)
+    if title:
+        attributes["job_title"] = title
+    department = next(iter(_said(build, "department", split=False)), None)
+    if department:
+        attributes["department"] = department
+        _department(build, key, department)
+    for team in _said(build, "teams"):
+        target = _named(build, "team", ids.team(team), team, 1.0)
+        build.relate("member_of", key, target, 1.0, "signals")
+    for manager in _said(build, "manager")[:1]:
+        above = build.person(_someone(build, manager))
+        if above is not None and above != key:
+            build.relate("reports_to", key, above, 1.0, "signals")
+
+
+def _declared_team(build: Build, key: str, attributes: dict[str, object]) -> None:
+    """What an HR system says of a team: its parent, its members, who leads
+    it — people by address, or by the system's own id."""
+    for name in {n for names in PEOPLE_SAID.values() for n in names}:
+        attributes.pop(name, None)
+    attributes["team_type"] = "team"
+    for parent in _said(build, "parent")[:1]:
+        above = _named(build, "team", ids.team(parent), parent, 1.0)
+        build.relate("child_of", key, above, 1.0, "signals")
+    for role in ("members", "leads"):
+        for someone in _said(build, role):
+            person = build.person(_someone(build, someone))
+            if person is None:
+                continue
+            build.relate("member_of", person, key, 1.0, "signals")
+            if role == "leads":
+                build.relate("led_by", key, person, 1.0, "signals")
+
+
+def _someone(build: Build, said: str) -> Reference:
+    """A person an HR system names: by address, else by its own id."""
+    value = said.strip()
+    if "@" in value:
+        return Reference(role="person", kind="person", email=value)
+    return Reference(role="person", kind="person", external_id=value, name=value)
+
+
 def _provider_id(build: Build) -> tuple[str, str] | None:
     """The provider's own id a CMDB gives a resource — a field of its own,
     else the record's id — when it reads as one."""
@@ -878,7 +961,7 @@ def _said(build: Build, what: str, *, split: bool = True) -> list[str]:
     """The first of `what`'s fields the record has — its signals, then its
     metadata — as text: a list, or words between commas."""
     for bag in (build.record.signals, build.record.metadata):
-        for name in {**SAID, **RESOURCE_SAID, **DATA_SAID}[what]:
+        for name in {**SAID, **RESOURCE_SAID, **DATA_SAID, **PEOPLE_SAID}[what]:
             value = bag.get(name)
             if isinstance(value, list):
                 found = [str(v).strip() for v in value if str(v).strip()]
@@ -1121,6 +1204,86 @@ def _endpoints(build: Build, attributes: dict[str, object]) -> list[str]:
 
 def _gke(project: str, location: str, name: str) -> str:
     return f"gcp:cluster:{project}/{location.lower()}/{name}"
+
+
+# ── people and teams (LEKA-365) ──────────────────────────────────────────────
+
+
+def _team(build: Build) -> tuple[str, dict[str, object]]:
+    """A team — GitHub's, PagerDuty's — keyed by its name as a tag's and a
+    catalogue's team are, so they meet: its parent team, its members, who
+    leads it."""
+    record = build.record
+    key = ids.team(str(record.title))
+    slug = _text(record.metadata.get("slug"))
+    if slug and ids.team(slug) != key:
+        build.aliases.append(ids.team(slug))
+    attributes = _common(build)
+    attributes.pop("kind", None)
+    attributes["team_type"] = "team"
+    described = next((c.text for c in record.content if c.role == "description"), None)
+    if described:
+        attributes["description"] = described[:2000]
+    for reference in record.references:
+        if reference.kind == "team" and reference.role == "parent":
+            parent = reference.name or reference.external_id
+            if parent:
+                above = _named(build, "team", ids.team(parent), parent, 1.0)
+                build.relate("child_of", key, above, 1.0, "parent")
+        elif reference.kind == "person" and reference.role in ("lead", "member"):
+            person = build.person(reference)
+            if person is None:
+                continue
+            build.relate("member_of", person, key, 1.0, "members")
+            if reference.role == "lead":
+                build.relate("led_by", key, person, 1.0, "members")
+    return key, attributes
+
+
+def _directory_person(build: Build) -> tuple[str, dict[str, object]]:
+    """A person a directory describes — Microsoft 365's, Google Workspace's
+    — keyed by their address, their account at the directory an alias: their
+    title and department, their department a team they are a member of,
+    and who they report to."""
+    record = build.record
+    own = next((r for r in record.references if r.role == "self"), None)
+    email = ids.person_email(own.email) if own and own.email else None
+    account = ids.person_account(build.host, own.external_id) if own and own.external_id else None
+    key = email or account
+    if key is None:
+        raise InvalidRecordError("no address and no id: the person cannot be told apart")
+    if email and account:
+        build.aliases.append(account)
+    attributes = _common(build)
+    attributes.pop("kind", None)
+    attributes["directory"] = build.kind
+    department = _text(attributes.get("department"))
+    if department:
+        _department(build, key, department)
+    manager = next((r for r in record.references if r.role == "manager"), None)
+    if manager is not None:
+        above = build.person(manager)
+        if above is not None and above != key:
+            build.relate("reports_to", key, above, 1.0, "manager")
+    return key, attributes
+
+
+def _department(build: Build, person: str, department: str) -> None:
+    """A department a directory names: a team of its own kind, the person a
+    member of it."""
+    key = ids.team(department)
+    build.add(
+        NormalisedEntity(
+            type="team",
+            key=key,
+            external_id=key,
+            source_id=build.source_id,
+            name=values.name(department) or key,
+            attributes={"team_type": "department"},
+            observed_at=build.observed_at,
+        )
+    )
+    build.relate("member_of", person, key, 1.0, "department")
 
 
 # ── data: databases, schemas, tables (LEKA-364) ──────────────────────────────

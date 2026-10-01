@@ -27,6 +27,10 @@ company model reads them, what those things are together:
        which read what it adds.
     9. DATA: what a schema, a database, the instance serving it hold — the
        kinds of data and how sensitive, from their tables (LEKA-364).
+   10. EXPERTISE: what each person's work shows they know — the
+       repositories, projects and services they work on, how much, in which
+       roles, how lately, and the languages of that code — each with its
+       evidence; and who is a bot (LEKA-365).
 
 ADDED, NEVER OVERWRITTEN. Nothing here changes a resolved entity: what is
 enriched is kept beside it — each attribute and each relationship with its
@@ -66,7 +70,8 @@ from leka.ingestion.resolution import signals as sig
 #    (LEKA-363).
 # 4: a database's and a schema's environment, from what serves them; what
 #    data each holds, from its tables (LEKA-364).
-ENRICHER_VERSION = 4
+# 5: what each person's work shows they know; who is a bot (LEKA-365).
+ENRICHER_VERSION = 5
 
 Origin = Literal["stated", "inferred"]
 
@@ -229,6 +234,22 @@ CONTAINER_ORDER = ("database", "cluster", "resource_group", "cloud_account")
 # a part of it can be.
 DATA_LEVELS = ("restricted", "confidential", "internal", "public")
 DATA_HOLDERS = frozenset({"data_object", "schema", "database"})
+# Expertise (LEKA-365): what work shows someone knows — where it is done,
+# how much of it is enough to say so, how many areas a person shows.
+AREAS = frozenset({"repository", "project", "service"})
+MIN_AREA_ITEMS = 2
+MAX_AREAS = 10
+MAX_LANGUAGES = 3
+# The words of a role, as expertise says them.
+ROLE_WORDS = {
+    "authored_by": "authored",
+    "assigned_to": "assigned",
+    "led_by": "led",
+    "committed_by": "committed",
+    "reviewed_by": "reviewed",
+    "created_by": "created",
+    "reported_by": "reported",
+}
 # What a container says of what it holds — its environment — said a little
 # less surely; and the account a source reads a resource in.
 FROM_CONTAINER = 0.9
@@ -703,6 +724,130 @@ def membership(graph: Graph) -> Made:
         )
         made.counts["members"] += 1
     return made
+
+
+# ── 10. expertise (LEKA-365) ─────────────────────────────────────────────────
+
+
+def expertise(graph: Graph) -> Made:
+    """What each person's work shows they know: the repositories, projects
+    and services the items they work on are part of — a pull request its
+    repository, and that repository's service; an incident the services it
+    affects — weighed as maintainers are (role, recency). Each area kept
+    with its evidence: how many items, in which roles, the last one; the
+    languages of the code. Sourced and attributed: nothing a person did not
+    do, nothing said of a bot — who is one, said too."""
+    made = Made()
+    for person in graph.nodes.values():
+        if person.type != "person":
+            continue
+        if sig.is_bot(person.key, person.name):
+            if "bot" not in person.attributes:
+                made.facts.append(_fact(person, "bot", True, 0.9, "name", "its name or handle"))
+                made.counts["bots"] += 1
+            continue
+        scores: dict[uuid.UUID, float] = defaultdict(float)
+        items: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
+        roles: dict[uuid.UUID, Counter[str]] = defaultdict(Counter)
+        lasts: dict[uuid.UUID, datetime] = {}
+        for edge in graph.into(person.id, WORK):
+            item = graph.nodes[edge.from_id]
+            if item.type in CONTAINERS | {"team", "person"}:
+                continue
+            moment = _last(item, graph.now)
+            recency = 1.0 if moment and graph.now - moment <= MAINTAINED else 0.3
+            for area in _areas(graph, item.id):
+                scores[area] += WORK[edge.type] * recency
+                items[area].add(item.id)
+                roles[area][ROLE_WORDS[edge.type]] += 1
+                if moment and (area not in lasts or moment > lasts[area]):
+                    lasts[area] = moment
+        kept = sorted(
+            (a for a in scores if len(items[a]) >= MIN_AREA_ITEMS),
+            key=lambda a: (-scores[a], graph.nodes[a].key),
+        )[:MAX_AREAS]
+        if not kept:
+            continue
+        total = sum(scores[a] for a in kept)
+        shown: list[dict[str, object]] = []
+        for area in kept:
+            node = graph.nodes[area]
+            done = ", ".join(f"{n} {word}" for word, n in roles[area].most_common())
+            last = f" — the last on {lasts[area].date().isoformat()}" if area in lasts else ""
+            made.edges.append(
+                _inferred(
+                    person.id,
+                    area,
+                    "contributes_to",
+                    "work",
+                    round(min(0.9, 0.4 + 0.5 * scores[area] / total), 2),
+                    f"{len(items[area])} items: {done}{last}",
+                    inputs=sorted(items[area], key=str)[:MAX_PROVENANCE],
+                )
+            )
+            shown.append(
+                {
+                    "key": node.key,
+                    "name": node.name,
+                    "type": node.type,
+                    "items": len(items[area]),
+                    "roles": dict(roles[area].most_common()),
+                    "last_at": _iso(lasts[area]) if area in lasts else None,
+                }
+            )
+        made.counts["contributes_to"] += len(kept)
+        if "expertise" not in person.attributes:
+            made.facts.append(
+                _fact(
+                    person,
+                    "expertise",
+                    shown,
+                    0.9,
+                    "work",
+                    f"what their work on {len(kept)} areas shows",
+                )
+            )
+        languages = _languages(graph, kept, scores)
+        if languages and "languages" not in person.attributes:
+            made.facts.append(
+                _fact(
+                    person,
+                    "languages",
+                    languages,
+                    0.8,
+                    "work",
+                    "the languages of the repositories they work on",
+                )
+            )
+    return made
+
+
+def _areas(graph: Graph, item_id: uuid.UUID) -> set[uuid.UUID]:
+    """Where an item's work is done: the repositories, projects and services
+    it is part of — and their services — or, for an incident, the services
+    it affects."""
+    found: set[uuid.UUID] = set()
+    for edge in graph.out(item_id, {"part_of", "affects"}):
+        if graph.of_type(edge.to_id) in AREAS:
+            found.add(edge.to_id)
+    for area in list(found):
+        if graph.of_type(area) == "repository":
+            found |= {
+                e.to_id for e in graph.out(area, {"part_of"}) if graph.of_type(e.to_id) == "service"
+            }
+    return found
+
+
+def _languages(graph: Graph, areas: list[uuid.UUID], scores: dict[uuid.UUID, float]) -> list[str]:
+    """The languages of the repositories among them, the most worked first."""
+    weights: dict[str, float] = defaultdict(float)
+    for area in areas:
+        language = graph.nodes[area].attributes.get("language")
+        if graph.of_type(area) == "repository" and isinstance(language, str) and language:
+            weights[language.lower()] += scores[area]
+    return [name for name, _ in sorted(weights.items(), key=lambda w: (-w[1], w[0]))][
+        :MAX_LANGUAGES
+    ]
 
 
 # ── 5. activity ──────────────────────────────────────────────────────────────
@@ -1258,6 +1403,7 @@ ENRICHERS: tuple[tuple[str, Enricher], ...] = (
     ("data", data),
     ("ownership", ownership),
     ("membership", membership),
+    ("expertise", expertise),
     ("activity", activity),
     ("category", category),
     ("landscape", landscape),

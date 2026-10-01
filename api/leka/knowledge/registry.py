@@ -40,7 +40,9 @@ from leka.knowledge.models import EntityType, RelationshipType
 #    class, place and cluster; a terminated resource archived (LEKA-363).
 # 4: databases' schemas and data objects, foreign keys and what views read,
 #    data classification (LEKA-364).
-MODEL_VERSION = 4
+# 5: people and teams — a directory's titles and departments, who reports
+#    to whom, teams' hierarchy, what people work on (LEKA-365).
+MODEL_VERSION = 5
 
 
 class Attributes(BaseModel):
@@ -116,6 +118,31 @@ class CommitAttributes(Attributes):
 class IncidentAttributes(Attributes):
     priority: str | None = None
     duration_minutes: int | None = None
+
+
+class PersonAttributes(Attributes):
+    """Someone who works there (LEKA-365): their address, what a directory
+    says of them, whether a bot, what their work shows they know."""
+
+    email: str | None = None
+    job_title: str | None = None
+    department: str | None = None
+    location: str | None = None
+    active: bool | None = None
+    user_type: str | None = None
+    directory: str | None = None
+    bot: bool | None = None
+    # Enrichment's, from their work: [{key, name, type, items, roles, last_at}].
+    expertise: list[dict[str, object]] | None = None
+    languages: list[str] | None = None
+
+
+class TeamAttributes(Attributes):
+    """A team — or a department a directory names (LEKA-365)."""
+
+    team_type: str | None = None
+    slug: str | None = None
+    privacy: str | None = None
 
 
 class Placed(Attributes):
@@ -235,8 +262,8 @@ class EntityKind:
 ENTITY_KINDS: dict[EntityType, EntityKind] = {
     kind.type: kind
     for kind in (
-        EntityKind(EntityType.PERSON, 1, "organisation", Attributes, ("person",)),
-        EntityKind(EntityType.TEAM, 1, "organisation", Attributes, ("team",)),
+        EntityKind(EntityType.PERSON, 2, "organisation", PersonAttributes, ("person",)),
+        EntityKind(EntityType.TEAM, 2, "organisation", TeamAttributes, ("team",)),
         EntityKind(
             EntityType.APPLICATION, 1, "applications", ApplicationAttributes, ("application",)
         ),
@@ -317,6 +344,8 @@ RELATIONSHIP_KINDS: dict[RelationshipType, RelationshipKind] = {
         RelationshipKind(RelationshipType.RUNS_IN, 1, ("runs_in",)),
         RelationshipKind(RelationshipType.REFERENCES, 1, ("references",)),
         RelationshipKind(RelationshipType.READS_FROM, 1, ("reads_from",)),
+        RelationshipKind(RelationshipType.REPORTS_TO, 1, ("reports_to",)),
+        RelationshipKind(RelationshipType.CONTRIBUTES_TO, 1, ("contributes_to",)),
         RelationshipKind(RelationshipType.OWNS, 1, ()),
         RelationshipKind(RelationshipType.DEPLOYED_TO, 1, ()),
         RelationshipKind(RelationshipType.CAUSED_BY, 1, ()),

@@ -134,8 +134,8 @@ def test_pagerduty_is_in_the_catalogue_as_an_observability_source() -> None:
     key = manifest.credentials_schema.model_json_schema()["properties"]["api_key"]
 
     assert manifest.category is ConnectorCategory.OBSERVABILITY
-    assert manifest.capabilities == {C.SERVICES, C.INCIDENTS}
-    assert manifest.listed_whole == {C.SERVICES}
+    assert manifest.capabilities == {C.SERVICES, C.INCIDENTS, C.TEAMS}
+    assert manifest.listed_whole == {C.SERVICES, C.TEAMS}
     assert key["writeOnly"] is True
 
 
@@ -408,3 +408,43 @@ async def test_a_low_quota_mid_stream_keeps_what_was_read(monkeypatch: pytest.Mo
 async def test_pagerduty_reads_only_what_it_declares() -> None:
     with pytest.raises(ValueError, match="does not read"):
         await _stream(PagerDuty(), C.PAGES)
+
+
+# ── teams (LEKA-365) ─────────────────────────────────────────────────────────
+
+PAYMENTS = {
+    "id": "PT1",
+    "name": "Payments",
+    "description": "Billing and the ledger",
+    "html_url": "https://acme.pagerduty.com/teams/PT1",
+    "parent": {"id": "PT0", "summary": "Engineering"},
+}
+SARA = {"id": "PU1", "name": "Sara Martin", "email": "sara@acme.io"}
+
+
+async def test_teams_come_with_their_members_their_roles_and_addresses() -> None:
+    members = [
+        {"user": SARA, "role": "manager"},
+        {"user": {"id": "PU2", "name": "Bob"}, "role": "responder"},
+    ]
+    pagerduty = PagerDuty()
+    pagerduty.answers["/teams"] = lambda r: pagerduty._page(r, "teams", [PAYMENTS])
+    pagerduty.answers["/teams/PT1/members"] = lambda r: pagerduty._page(r, "members", members)
+
+    [team] = await _stream(pagerduty, C.TEAMS)
+
+    assert team.external_id == "PT1"
+    listed = team.payload["members"]
+    assert isinstance(listed, list)
+    assert [m["role"] for m in listed] == ["manager", "responder"]
+    [listing] = pagerduty.requests("/teams/PT1/members")
+    assert listing.url.params.get_list("include[]") == ["users"]
+
+
+async def test_a_key_that_reads_teams_says_so() -> None:
+    pagerduty = PagerDuty()
+    pagerduty.answers["/teams"] = lambda r: pagerduty._page(r, "teams", [PAYMENTS])
+
+    result = await _connector(pagerduty).test_connection()
+
+    assert C.TEAMS in result.capabilities

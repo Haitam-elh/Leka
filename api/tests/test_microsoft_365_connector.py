@@ -154,8 +154,8 @@ def test_microsoft_365_is_in_the_catalogue_as_a_documentation_tool() -> None:
     secrets = manifest.credentials_schema.model_json_schema()["properties"]
 
     assert manifest.category is ConnectorCategory.DOCS
-    assert manifest.capabilities == {Capability.DRIVES, Capability.FILES}
-    assert manifest.listed_whole == {Capability.DRIVES}
+    assert manifest.capabilities == {Capability.DRIVES, Capability.FILES, Capability.PEOPLE}
+    assert manifest.listed_whole == {Capability.DRIVES, Capability.PEOPLE}
     assert list(secrets) == ["client_id", "client_secret"]  # the hint names the app
     assert secrets["client_secret"]["writeOnly"] is True
 
@@ -195,7 +195,8 @@ async def test_the_application_signs_in_to_graph_and_reports_what_it_sees() -> N
 
     assert result.account == "acme.sharepoint.com"
     assert result.metadata == {"root_site": "Acme"}
-    assert set(result.capabilities) == {Capability.DRIVES, Capability.FILES}
+    # The directory too: User.Read.All lists the users (LEKA-365).
+    assert set(result.capabilities) == {Capability.DRIVES, Capability.FILES, Capability.PEOPLE}
     assert result.warnings == []
     form = parse_qs(microsoft.asked[0].content.decode())
     assert form["scope"] == ["https://graph.microsoft.com/.default"]
@@ -288,3 +289,27 @@ async def test_a_listing_that_would_take_too_many_calls_says_so(
 
     assert [o.key for o in listing.options] == [DOCS]
     assert listing.truncated is True
+
+
+# ── the directory (LEKA-365) ─────────────────────────────────────────────────
+
+
+async def test_the_directory_s_people_come_with_their_manager() -> None:
+    nora = {
+        "id": "u-nora",
+        "displayName": "Nora Diallo",
+        "mail": "nora@acme.io",
+        "jobTitle": "SRE",
+        "department": "Platform",
+        "manager": {"id": "u-sara", "mail": "sara@acme.io"},
+    }
+    microsoft = Microsoft({"/users": {"value": [nora]}})
+
+    [person] = [r async for r in _connector(microsoft).iter_resources(Capability.PEOPLE)]
+
+    manager = person.payload["manager"]
+    assert isinstance(manager, dict)
+    assert (person.external_id, manager["mail"]) == ("u-nora", "sara@acme.io")
+    [listing] = microsoft.requests("/users")
+    assert "manager" in listing.url.params["$expand"]
+    assert "department" in listing.url.params["$select"]

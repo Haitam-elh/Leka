@@ -41,7 +41,9 @@ from leka.ingestion.parsing import ParsedRecord
 # 6: databases, their schemas and tables, keyed by where they were read;
 #    foreign keys, what views read, what kinds of data columns hold; a data
 #    catalogue's tables (LEKA-364).
-NORMALISER_VERSION = 6
+# 7: teams — their members, leads and parent — directories' people — their
+#    department and manager — an HR system's people and teams (LEKA-365).
+NORMALISER_VERSION = 7
 
 
 def normalise(

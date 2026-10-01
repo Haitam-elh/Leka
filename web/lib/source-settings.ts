@@ -206,4 +206,6 @@ export const ENTITY_TYPES = [
   "cloud_account",
   "schema",
   "data_object",
+  "person",
+  "team",
 ] as const;

@@ -25,7 +25,9 @@ incremental one (SharePoint and OneDrive for Business take one in place of
 a delta token). Folders, deleted items and OneNote packages are left out.
 A file comes with its text where one can be had: Word, Excel, PowerPoint
 and plain text files, downloaded and read (leka/connectors/office.py), up
-to MAX_DOWNLOAD.
+to MAX_DOWNLOAD. `people` (LEKA-365), whole each pass: the directory's
+users — name, address, title, department, office, whether their account is
+on — each with their manager, under the same User.Read.All.
 
 A file's content is not at Graph: Graph answers 302 with a
 pre-authenticated link on the tenant's SharePoint host. The link is
@@ -138,6 +140,15 @@ class Microsoft365Credentials(BaseModel):
     )
 
 
+# The directory (LEKA-365): what a person is to the company, and their
+# manager — expanded on the listing, one call a page.
+PEOPLE_QUERY = {
+    "$select": "id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,"
+    "accountEnabled,userType",
+    "$expand": "manager($select=id,displayName,mail,userPrincipalName)",
+}
+
+
 @register_connector
 class Microsoft365Connector(Connector[Microsoft365Config, Microsoft365Credentials]):
     manifest = ConnectorManifest(
@@ -147,9 +158,9 @@ class Microsoft365Connector(Connector[Microsoft365Config, Microsoft365Credential
         auth_type="token",
         config_schema=Microsoft365Config,
         credentials_schema=Microsoft365Credentials,
-        capabilities=frozenset({Capability.DRIVES, Capability.FILES}),
+        capabilities=frozenset({Capability.DRIVES, Capability.FILES, Capability.PEOPLE}),
         # Drives come whole every pass; files through delta, from a time.
-        listed_whole=frozenset({Capability.DRIVES}),
+        listed_whole=frozenset({Capability.DRIVES, Capability.PEOPLE}),
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -170,12 +181,14 @@ class Microsoft365Connector(Connector[Microsoft365Config, Microsoft365Credential
                 default = await client.get("/sites/root/drive", params={"$select": "id"}, empty=404)
                 sample = None if default.status_code == 404 else str(default.json()["id"])
             warnings: list[str] = []
+            capabilities = [Capability.DRIVES]
             if await client.get_if_answered("/users?$select=id&$top=1") is None:
                 warnings.append(
-                    "Sans la permission User.Read.All, LEKA ne voit pas les OneDrive des "
-                    "utilisateurs : seulement les bibliothèques SharePoint."
+                    "Sans la permission User.Read.All, LEKA ne voit ni les OneDrive des "
+                    "utilisateurs ni l'annuaire : seulement les bibliothèques SharePoint."
                 )
-            capabilities = [Capability.DRIVES]
+            else:
+                capabilities.append(Capability.PEOPLE)
             if sample is not None:
                 capabilities += await client.probe(
                     {Capability.FILES: f"/drives/{sample}/root/children?$top=1&$select=id"}
@@ -218,6 +231,10 @@ class Microsoft365Connector(Connector[Microsoft365Config, Microsoft365Credential
             msg = f"Microsoft 365 does not read {capability}"
             raise ValueError(msg)
         async with await self._client() as client:
+            if capability is Capability.PEOPLE:
+                async for user in client.pages("/users", PEOPLE_QUERY):
+                    yield record(capability, user, external_id=str(user["id"]))
+                return
             drives = [drive async for drive in self._drives(client)]
             if capability is Capability.DRIVES:
                 for drive in drives:

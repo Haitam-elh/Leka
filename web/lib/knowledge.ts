@@ -62,6 +62,8 @@ export const RELATIONSHIP_TYPES = [
   "runs_in",
   "references",
   "reads_from",
+  "reports_to",
+  "contributes_to",
 ] as const;
 export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
 

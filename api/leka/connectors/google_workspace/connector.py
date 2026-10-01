@@ -27,6 +27,12 @@ export), Word, Excel and PowerPoint files and plain text downloaded and
 read (leka/connectors/office.py), up to MAX_DOWNLOAD. Other files come
 without text.
 
+`people` (LEKA-365): the domain's users, from the Admin SDK's Directory API
+— name, address, title, department, organisational unit, manager — under a
+second token, for `admin.directory.user.readonly`. It needs domain-wide
+delegation listing that scope too, and a `subject` who may read the
+directory; without them, it is left out, said so, and the rest is read.
+
 LEKA READS. Every call is a GET; the one POST is the token exchange.
 """
 
@@ -70,6 +76,10 @@ API = "https://www.googleapis.com/drive/v3"
 READ_ONLY_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
 MY_DRIVE = "user"
 FILE_PAGE = 1000  # Drive's maximum
+# The directory (LEKA-365): its own API, scope and page size.
+DIRECTORY = "https://admin.googleapis.com/admin/directory/v1"
+DIRECTORY_SCOPE = "https://www.googleapis.com/auth/admin.directory.user.readonly"
+USER_PAGE = 500  # the Directory API's maximum
 DRIVE_PAGE = 100  # Drive's maximum for shared drives
 MAX_SCOPE_OPTIONS = 1000
 MAX_DOWNLOAD = 10 * 1024 * 1024  # bytes: Drive's own export limit
@@ -166,14 +176,16 @@ class GoogleWorkspaceConnector(Connector[GoogleWorkspaceConfig, GoogleWorkspaceC
         auth_type="token",
         config_schema=GoogleWorkspaceConfig,
         credentials_schema=GoogleWorkspaceCredentials,
-        capabilities=frozenset({Capability.DRIVES, Capability.FILES}),
-        # Shared drives come whole every pass; files by `modifiedTime`.
-        listed_whole=frozenset({Capability.DRIVES}),
+        capabilities=frozenset({Capability.DRIVES, Capability.FILES, Capability.PEOPLE}),
+        # Shared drives and the directory come whole every pass; files by
+        # `modifiedTime`.
+        listed_whole=frozenset({Capability.DRIVES, Capability.PEOPLE}),
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._token: str | None = None
+        self._directory_token: str | None = None
 
     # ── the contract ─────────────────────────────────────────────────────────
 
@@ -196,6 +208,16 @@ class GoogleWorkspaceConnector(Connector[GoogleWorkspaceConfig, GoogleWorkspaceC
         listed = body.get("files") or []
         visible = f"{len(listed)}+" if body.get("nextPageToken") else len(listed)
         warnings: list[str] = []
+        capabilities = [Capability.DRIVES, Capability.FILES]
+        if self.config.subject:
+            if await self._directory_readable():
+                capabilities.append(Capability.PEOPLE)
+            else:
+                warnings.append(
+                    "L'annuaire n'est pas lisible : ajoutez le scope "
+                    f"{DIRECTORY_SCOPE} à la délégation au niveau du domaine, et choisissez "
+                    "un utilisateur délégué qui peut lire l'annuaire."
+                )
         if not listed and not drives:
             warnings.append(
                 "Rien n'est visible : partagez des dossiers ou des Drive partagés avec "
@@ -209,7 +231,7 @@ class GoogleWorkspaceConnector(Connector[GoogleWorkspaceConfig, GoogleWorkspaceC
                 "shared_drives_visible": len(drives),
                 "files_visible": visible,
             },
-            capabilities=[Capability.DRIVES, Capability.FILES],
+            capabilities=capabilities,
             warnings=warnings,
         )
 
@@ -243,6 +265,14 @@ class GoogleWorkspaceConnector(Connector[GoogleWorkspaceConfig, GoogleWorkspaceC
     async def iter_resources(
         self, capability: Capability, *, since: datetime | None = None
     ) -> AsyncIterator[RawRecord]:
+        if capability is Capability.PEOPLE:
+            async with await self._directory() as directory:
+                async for user in directory.pages(
+                    "/users",
+                    {"customer": "my_customer", "projection": "full", "viewType": "admin_view"},
+                ):
+                    yield record(capability, user, external_id=str(user["id"]))
+            return
         if capability not in self.manifest.capabilities:
             msg = f"Google Workspace does not read {capability}"
             raise ValueError(msg)
@@ -301,6 +331,42 @@ class GoogleWorkspaceConnector(Connector[GoogleWorkspaceConfig, GoogleWorkspaceC
             in_body=("files", "nextPageToken"),
             page_cursor_param="pageToken",
         )
+
+    async def _directory(self) -> VendorHttp:
+        """The Directory API, acting as `subject` — its own token: the
+        delegation lists each scope."""
+        if self._directory_token is None:
+            self._directory_token = await google.service_account_token(
+                self.http, self._key(), DIRECTORY_SCOPE, subject=self.config.subject
+            )
+        return VendorHttp(
+            self.http(
+                DIRECTORY,
+                headers={"Authorization": f"Bearer {self._directory_token}", "User-Agent": "LEKA"},
+            ),
+            secret=self._key()["private_key"],
+            refuse=self._refuse,
+            page_size=USER_PAGE,
+            page_size_param="maxResults",
+            in_body=("users", "nextPageToken"),
+            page_cursor_param="pageToken",
+        )
+
+    async def _directory_readable(self) -> bool:
+        """Whether the directory answers: the delegation lists its scope,
+        the subject may read it. A refusal is an answer, not a failure."""
+        try:
+            async with await self._directory() as directory:
+                await directory.get("/users", params={"customer": "my_customer", "maxResults": 1})
+        except ConnectorError as error:
+            if error.diagnostic.code in (
+                DiagnosticCode.PERMISSION_DENIED,
+                DiagnosticCode.NOT_FOUND,
+                DiagnosticCode.AUTH_INVALID,
+            ):
+                return False
+            raise
+        return True
 
     def _key(self) -> dict[str, str]:
         return google.service_account_key(self.credentials.service_account_key.get_secret_value())

@@ -51,6 +51,8 @@ ENTITY_TYPES = frozenset(
         "cloud_account",
         "schema",
         "data_object",
+        "person",
+        "team",
     }
 )
 WORK_STATES = frozenset({"open", "in_progress", "closed", "merged"})

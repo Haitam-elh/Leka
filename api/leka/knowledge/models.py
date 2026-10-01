@@ -116,6 +116,10 @@ class RelationshipType(enum.StrEnum):
     # reads from (LEKA-364).
     REFERENCES = "references"
     READS_FROM = "reads_from"
+    # A person, to who they report; a person, to what they work on — their
+    # expertise, as their work shows it (LEKA-365).
+    REPORTS_TO = "reports_to"
+    CONTRIBUTES_TO = "contributes_to"
 
 
 class Lifecycle(enum.StrEnum):

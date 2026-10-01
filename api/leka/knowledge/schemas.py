@@ -482,3 +482,117 @@ class DataObjectDetail(DataObjectRead):
     referenced_by: list[EntityBrief]
     reads_from: list[EntityBrief]
     read_by: list[EntityBrief]
+
+
+# ── people and teams (LEKA-365) ──────────────────────────────────────────────
+
+
+class Tie(BaseModel):
+    """Another entity, and how sure and whence the relationship to it: a
+    source stated it, or a rule inferred it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    origin: str = Field(description="stated, inferred.")
+    rule: str = Field(description="stated, or the rule that inferred it: inherited, works_with…")
+    confidence: float
+
+
+class Expertise(BaseModel):
+    """What a person's work shows they know, and the evidence."""
+
+    model_config = ConfigDict(frozen=True)
+
+    key: str
+    name: str
+    type: str = Field(description="repository, project, service.")
+    items: int = Field(description="How many of their items are in it.")
+    roles: dict[str, int] = Field(description="authored, reviewed, assigned, led… how many each.")
+    last_at: str | None
+
+
+class TeamRead(BaseModel):
+    """A team — or a department — its place in the organisation, its
+    people, what it owns."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    name: str
+    lifecycle: Lifecycle
+    team_type: str | None = Field(description="team, department.")
+    parent: EntityBrief | None
+    sub_team_count: int
+    member_count: int = Field(description="Its members a source states.")
+    inferred_member_count: int = Field(description="Those its work suggests (works_with).")
+    leads: list[EntityBrief]
+    owns: dict[str, int] = Field(description="What it owns, by type, not removed.")
+
+
+class TeamDetail(TeamRead):
+    """One team: its parents up to the top, its sub-teams, its members —
+    each said or inferred — what it owns, where each piece came from."""
+
+    description: str | None
+    attributes: dict[str, object]
+    provenance: dict[str, object]
+    ancestors: list[EntityBrief] = Field(description="Its parent, then theirs.")
+    sub_teams: list[EntityBrief]
+    members: list[Tie]
+    owned: list[Tie] = Field(description="The surest first, up to 200.")
+
+
+class PersonRead(BaseModel):
+    """Someone who works there: what a directory says of them, their teams
+    and manager, what their work shows they know."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    name: str
+    lifecycle: Lifecycle
+    email: str | None
+    job_title: str | None
+    department: str | None
+    active: bool | None = Field(description="Their account at a directory: on, off — or unknown.")
+    bot: bool
+    teams: list[EntityBrief]
+    manager: EntityBrief | None
+    report_count: int
+    maintains: int = Field(description="The repositories, projects, services they maintain.")
+    expertise: list[Expertise] = Field(description="The first three.")
+    languages: list[str]
+    last_activity_at: str | None
+
+
+class PersonDetail(PersonRead):
+    """One person: their teams — each said or inferred — their managers up
+    to the top, their reports, what they maintain and own, everything their
+    work shows they know."""
+
+    attributes: dict[str, object]
+    provenance: dict[str, object]
+    memberships: list[Tie]
+    managers: list[EntityBrief] = Field(description="Their manager, then theirs.")
+    reports: list[EntityBrief]
+    maintained: list[Tie]
+    owned: list[EntityBrief]
+    contributions: list[Tie] = Field(description="contributes_to, the surest first.")
+    all_expertise: list[Expertise]
+
+
+class Responsibility(BaseModel):
+    """Who owns and operates a thing, and who knows it — each with its
+    origin: what a source says, what a rule inferred."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    owners: list[Tie] = Field(description="Its teams — or people.")
+    leads: list[EntityBrief] = Field(description="Who leads its owning teams.")
+    maintainers: list[Tie]
+    experts: list[Tie] = Field(description="Whose work shows they know it, the surest first.")
+    escalation_policy: str | None
