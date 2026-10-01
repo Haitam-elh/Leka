@@ -48,8 +48,8 @@ the one still holding data past what was promised.
 
 | Source | Days | Why |
 |---|---|---|
-| GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace (`google_workspace`), Microsoft 365 (`microsoft_365`), PagerDuty, PostgreSQL, Supabase, MySQL, MariaDB, SQL Server (`sqlserver`), Oracle, MongoDB, a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | 90 | Describe structure. Small, slow-moving, and how "when did this change?" gets answered |
-| Slack, AWS, Azure, Google Cloud (`gcp`), Datadog, Grafana | 30 | Observability and chatter. Enormous, and worthless within days |
+| GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace (`google_workspace`), Microsoft 365 (`microsoft_365`), PagerDuty, Kibana — its cases are incidents —, PostgreSQL, Supabase, MySQL, MariaDB, SQL Server (`sqlserver`), Oracle, MongoDB, a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | 90 | Describe structure. Small, slow-moving, and how "when did this change?" gets answered |
+| Slack, AWS, Azure, Google Cloud (`gcp`), Datadog, Grafana, Splunk | 30 | Observability and chatter. Enormous, and worthless within days |
 
 A source kind nobody has thought about falls back to **30 days**, the
 shortest policy, because keeping too little means a resync and keeping too

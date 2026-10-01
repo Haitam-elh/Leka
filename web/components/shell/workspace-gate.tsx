@@ -21,7 +21,8 @@ import { workspace } from "@/lib/workspace";
  * only a workspace gives, so the shell used to show an empty sidebar and a
  * refusal — a person who had just registered from leka-core.com found no
  * way in and no connectors. Now they create their workspace, its name
- * taken from the company they gave at registration, and land on Sources.
+ * taken from the company they gave at registration, and are asked which
+ * of their tools to connect (components/sources/welcome-page.tsx).
  *
  * Someone with workspaces but none open (a session from before they were
  * let in) is offered those instead.
@@ -62,7 +63,7 @@ function CreateOne({ company }: { company: string }) {
       const created = await workspace.create(name.trim());
       await workspace.enter(created.id);
       // Where a new workspace has something to do: connecting its tools.
-      router.push(routes.sources());
+      router.push(routes.welcome());
       retry();
     } catch {
       setFailed(true);

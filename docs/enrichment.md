@@ -234,7 +234,7 @@ what no source says is said missing, never invented.**
 |---|---|---|
 | service | incident | an open incident `affects` it |
 | | attention | an incident affecting it moved in the last 7 days |
-| | operational | a monitoring source — PagerDuty, Datadog, Grafana (connector category `observability`) — shows it, and nothing above |
+| | operational | a monitoring source — PagerDuty, Datadog, Grafana, Splunk, Kibana (connector category `observability`) — shows it, and nothing above |
 | | unmonitored | no monitoring source shows it |
 | database, cloud resource | operational · attention · incident | `running` · `starting`, `stopping`, `stopped`, `deleting` · `failed` |
 | incident | incident · operational | open or in progress · closed |

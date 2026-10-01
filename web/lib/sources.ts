@@ -157,6 +157,8 @@ export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
   datadog: "observability",
   pagerduty: "observability",
   grafana: "observability",
+  splunk: "observability",
+  kibana: "observability",
   postgresql: "data",
   mysql: "data",
   mariadb: "data",
@@ -169,6 +171,20 @@ export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
   mongodb: "data",
   slack: "chat",
 };
+
+/** The categories in the order they are shown — Sources' filters, the
+ * welcome page's sections. */
+export const CATEGORY_ORDER = [
+  "code",
+  "project",
+  "docs",
+  "cloud",
+  "observability",
+  "data",
+  "chat",
+  "custom",
+  "other",
+] as const satisfies readonly (ConnectorCategory | "other")[];
 
 /** Can be switched on: tested against the settings it has now. */
 export function canActivate(source: Source): boolean {

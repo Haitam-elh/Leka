@@ -33,6 +33,7 @@ import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import {
+  CATEGORY_ORDER,
   type ConnectorCategory,
   isConnected,
   KIND_CATEGORY,
@@ -270,18 +271,6 @@ function Stat({
 }
 
 // ── Filters ─────────────────────────────────────────────────────────────────
-
-const CATEGORY_ORDER: Category[] = [
-  "code",
-  "project",
-  "docs",
-  "cloud",
-  "observability",
-  "data",
-  "chat",
-  "custom",
-  "other",
-];
 
 function Filters({
   sources,

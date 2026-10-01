@@ -1,6 +1,6 @@
 # Observability and operations — what LEKA asks for, and what it reads
 
-Datadog, PagerDuty and Grafana, through
+Datadog, PagerDuty, Grafana, Splunk and Kibana, through
 [the connector framework](framework.md). LEKA-348. **LEKA only reads**: every call is a GET, with keys that can only
 read. What each source contributes then goes through extraction
 ([extraction.md](../extraction.md)), parsing and normalisation like any
@@ -307,3 +307,140 @@ Kept **30 days**, like Datadog.
   Viewer role, 404 → `NOT_FOUND` (often: the address is not a Grafana),
   an address refused by the transport → `CONFIG_INVALID`. The token is
   removed from every detail.
+
+## Splunk
+
+| | |
+|---|---|
+| Endpoint | Splunk's REST API, on its **management port** — Splunk Cloud Platform (`https://acme.splunkcloud.com:8089`) or a Splunk Enterprise of the customer's own |
+| Credentials | `token`, an authentication token (write-only), as Bearer |
+| Config | `base_url` |
+| Category | `observability` |
+| Capabilities | `alerts` (the saved searches that alert), `events` (the alerts that fired), `dashboards` |
+
+### What to create at Splunk
+
+1. **A role** that sees the apps whose alerts and dashboards LEKA should
+   read — Splunk's `user` role, or a copy of it limited to those apps.
+   Nothing that writes.
+2. **A user** with that role, then, as an admin, **Settings → Tokens →
+   New Token** for that user, with an expiry date. Token authentication
+   must be on (Settings → Tokens → Token Settings).
+3. **Splunk Cloud Platform**: the REST API is reached only from allowed
+   addresses — add LEKA's server's to the allow list (Settings → Server
+   settings → IP allow list, *Search head API access*).
+4. In LEKA, **Sources → Add → Splunk**: the address with its port, and the
+   token. Test, activate.
+
+### The address
+
+As every address an admin types: **https** and **public**, checked when
+saved and again when connecting (`leka/connectors/network.py`). The
+certificate must be one a known authority signed: Splunk Enterprise ships
+its management port with a self-signed one, which LEKA refuses — install a
+real one, or put the port behind a proxy that has one.
+
+### Scope
+
+The token's role is the boundary. The source's **scope rules**
+([scope-and-mapping.md](scope-and-mapping.md)) apply to each record's
+container: its **app**.
+
+### The connection test
+
+1. `GET /services/authentication/current-context` — whose token it is: the
+   user's name is the account, its roles are kept.
+2. One small read of each capability, at once. A refusal leaves that
+   capability out; none readable is a pass with a warning naming what the
+   role must see.
+
+### What is read
+
+| Capability | What (Splunk REST API, `output_mode=json`) | Incremental | Id, timestamp |
+|---|---|---|---|
+| `alerts` | each saved search that **alerts** — scheduled, with a triggering condition or a tracked alert, not a report: its search, schedule, condition, severity, actions, app, owner, author (`GET /servicesNS/-/-/saved/searches`) | whole each pass | its place, `owner/app/saved/searches/name`; `updated` |
+| `events` | each alert that **fired**: its search, trigger time, severity, search id, app (`GET /services/alerts/fired_alerts/-`) — what Splunk keeps, each alert's own expiry (24 hours by default) | every pass reads what Splunk keeps, at most 10 000 | search id; trigger time |
+| `dashboards` | each dashboard — label, description, app, author; not its source (`GET /servicesNS/-/-/data/ui/views`, its fields chosen) | whole each pass | its place; `updated` |
+
+Pages of 100, by Splunk's `count` and `offset`, until its `paging.total`.
+A view that is not a dashboard (the search page itself) is left out.
+Not read: search results, indexes' events, reports, lookups, users.
+
+Extraction (`extraction/observability.py`): an alert's name, whether it is
+on, its search, schedule, condition, severity in words (`info` to
+`fatal`), actions, app, author; a fired alert's search, time, severity; a
+dashboard's label, description, app. Alerts, fired alerts and dashboards
+are evidence, not entities of the company model.
+
+### Retention
+
+Kept **30 days**, like Datadog and Grafana.
+
+### Limits
+
+- **Errors**: 401 → `AUTH_INVALID`, 403 → `PERMISSION_DENIED` naming the
+  role, 404 → `NOT_FOUND` (often: not the management port), 429 →
+  `RATE_LIMITED`. The token is removed from every detail.
+
+## Kibana
+
+| | |
+|---|---|
+| Endpoint | the Kibana's address — Elastic Cloud (`https://acme.kb.europe-west1.gcp.cloud.es.io`) or one of the customer's own |
+| Credentials | `api_key`, an Elastic API key in its **encoded** form (write-only), sent as `ApiKey` |
+| Config | `base_url` |
+| Category | `observability` |
+| Capabilities | `alerts` (alerting rules), `incidents` (cases), `dashboards` |
+
+### What to create at Kibana
+
+**Stack Management → Security → API keys → Create API key**, with an
+expiry date and, under *Control security privileges*, the Kibana features
+**read** in the spaces to read: *Alerts and Insights → Rules*, *Cases*
+(in the solution that holds them: Management, Observability, Security),
+*Analytics → Dashboard*. Copy the **Encoded** value. In LEKA, **Sources →
+Add → Kibana**: the address and the key. Test, activate.
+
+### Scope
+
+Every space the key sees is read (`GET /api/spaces/space`; a Kibana with
+no spaces is its default space). The source's **scope rules** apply to
+each record's container: its **space**.
+
+### The connection test
+
+1. `GET /api/status` — the Kibana's name is the account, its version kept.
+2. One small read of each capability in the default space. A refusal
+   leaves that capability out; none readable is a pass with a warning.
+
+### What is read
+
+| Capability | What (Kibana API) | Incremental | Id, timestamp |
+|---|---|---|---|
+| `alerts` | each alerting rule: name, type, tags, enabled, interval, how its last run went, author (`GET /api/alerting/rules/_find`) | whole each pass | `space/rule id`; `updated_at` |
+| `incidents` | each **case**: title, description, status (`open`, `in-progress`, `closed`), severity, tags, the solution it belongs to, who opened it, comments count, dates (`GET /api/cases/_find`, newest first) | whole each pass | `space/case id`; `updated_at` (else `created_at`) |
+| `dashboards` | each dashboard's title and description (`GET /api/saved_objects/_find?type=dashboard`) | whole each pass | `space/dashboard id`; `updated_at` |
+
+Every record carries its space and the link to open it — a case in its
+solution's app. Requests carry `elastic-api-version: 2023-10-31`, which
+serverless projects ask for. Not read: the alerts a rule raised (they
+live in Elasticsearch), connectors, data views, documents.
+
+Extraction (`extraction/observability.py`): a rule's name, state, type,
+interval, its tags with `service`, `env`, `team`; a case's title, status,
+severity, description, author, its `service:` tags as the services it
+affects. Normalisation ([normalisation.md](../normalisation.md)) makes a
+case an **incident** — `incident:kibana:<id>`, its status and severity on
+LEKA's scales, its author a person, the services it affects — as
+PagerDuty's and Datadog's.
+
+### Retention
+
+Kept **90 days**, like PagerDuty: its cases are incidents.
+
+### Limits
+
+- **Errors**: 401 → `AUTH_INVALID`, 403 → `PERMISSION_DENIED` naming the
+  features to grant, 404 → `NOT_FOUND`, 429 → `RATE_LIMITED`. The key is
+  removed from every detail.
+

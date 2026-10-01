@@ -35,6 +35,7 @@ const fr = {
     entityDetail: "Entité",
     sources: "Sources",
     sourceDetail: "Source",
+    welcome: "Bienvenue",
     capabilities: "Capacités",
     capabilityDetail: "Capacité",
     governance: "Sécurité & gouvernance",
@@ -862,6 +863,8 @@ const fr = {
       gitlab: { pull_requests: "merge requests" },
       datadog: { alerts: "moniteurs et leurs alertes", metrics: "définitions de métriques" },
       grafana: { alerts: "règles d'alerte et leur état", events: "annotations" },
+      splunk: { alerts: "alertes (recherches enregistrées)", events: "alertes déclenchées" },
+      kibana: { alerts: "règles d'alerte et leur dernier passage", incidents: "cas" },
       notion: { databases: "bases Notion" },
       mysql: { schemas: "bases" },
       mariadb: { schemas: "bases" },
@@ -1187,6 +1190,29 @@ const fr = {
       webhookNext:
         "Donnez cette adresse à votre outil, avec le secret. Une fois la source activée, chaque livraison apparaît dans « Réception », sur la page de la source.",
     },
+    welcome: {
+      title: "Bienvenue sur LEKA",
+      subtitle:
+        "Quels outils votre entreprise utilise-t-elle ? Choisissez-les : LEKA vous guide pour les connecter, un par un.",
+      chosen: "{count} outil(s) choisi(s)",
+      none: "Aucun outil choisi pour l'instant.",
+      connect: "Connecter mes outils",
+      later: "Plus tard",
+      connected: "Connecté",
+      started: "À terminer",
+      waiting: "À connecter",
+      connectOne: "Connecter",
+      resume: "Reprendre",
+      see: "Voir la source",
+      connectTitle: "Connectez vos outils",
+      connectBody:
+        "Chaque connexion est testée avant d'être activée. Une connexion interrompue reste en brouillon : reprenez-la d'ici, ou depuis Sources.",
+      progress: "{done} sur {total} connecté(s)",
+      change: "Modifier mon choix",
+      finish: "Terminer",
+      customBody:
+        "Un connecteur sur mesure le lit par son API REST ou GraphQL, ou reçoit ses données par webhook.",
+    },
     add: {
       open: "Ajouter une source",
       title: "Ajouter une source",
@@ -1223,7 +1249,7 @@ const fr = {
       saved: "{name} est enregistrée, à activer quand vous voudrez",
       missingTitle: "Un outil manquant ?",
       missingBody:
-        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase et MongoDB — et, sur mesure, à toute API REST ou GraphQL, ou par webhook.",
+        "LEKA se connecte aujourd'hui à GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, Splunk, Kibana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase et MongoDB — et, sur mesure, à toute API REST ou GraphQL, ou par webhook.",
       steps: {
         connector: "Outil",
         settings: "Connexion",
@@ -1317,6 +1343,26 @@ const fr = {
      * back to `fields`.
      */
     fieldsOf: {
+      splunk: {
+        base_url: {
+          label: "Adresse de l'API Splunk",
+          help: "Sur le port de gestion : https://acme.splunkcloud.com:8089, ou celle de votre Splunk — en https, avec un certificat reconnu, accessible depuis Internet.",
+        },
+        token: {
+          label: "Token d'authentification",
+          help: "Settings → Tokens, pour un utilisateur dont le rôle voit les applications à lire. Chiffré, et plus jamais affiché.",
+        },
+      },
+      kibana: {
+        base_url: {
+          label: "Adresse du Kibana",
+          help: "https://acme.kb.europe-west1.gcp.cloud.es.io, ou celle de votre Kibana — en https, accessible depuis Internet.",
+        },
+        api_key: {
+          label: "Clé d'API Elastic",
+          help: "Sa forme encodée (Stack Management → API keys), avec la lecture des règles d'alerte, des cas et des tableaux de bord. Chiffrée, et plus jamais affichée.",
+        },
+      },
       grafana: {
         base_url: {
           label: "Adresse du Grafana",
@@ -1770,6 +1816,7 @@ const en: Dictionary = {
     entityDetail: "Entity",
     sources: "Sources",
     sourceDetail: "Source",
+    welcome: "Welcome",
     capabilities: "Capabilities",
     capabilityDetail: "Capability",
     governance: "Security & governance",
@@ -2537,6 +2584,8 @@ const en: Dictionary = {
       gitlab: { pull_requests: "merge requests" },
       datadog: { alerts: "monitors and their alerts", metrics: "metric definitions" },
       grafana: { alerts: "alert rules and their state", events: "annotations" },
+      splunk: { alerts: "alerts (saved searches)", events: "fired alerts" },
+      kibana: { alerts: "alert rules and their last run", incidents: "cases" },
       notion: { databases: "Notion databases" },
       mysql: { schemas: "databases" },
       mariadb: { schemas: "databases" },
@@ -2861,6 +2910,29 @@ const en: Dictionary = {
       webhookNext:
         "Give this address to your tool, with the secret. Once the source is activated, each delivery shows in “Reception”, on the source's page.",
     },
+    welcome: {
+      title: "Welcome to LEKA",
+      subtitle:
+        "Which tools does your company use? Choose them: LEKA guides you through connecting them, one by one.",
+      chosen: "{count} tool(s) chosen",
+      none: "No tool chosen yet.",
+      connect: "Connect my tools",
+      later: "Later",
+      connected: "Connected",
+      started: "To finish",
+      waiting: "To connect",
+      connectOne: "Connect",
+      resume: "Resume",
+      see: "See the source",
+      connectTitle: "Connect your tools",
+      connectBody:
+        "Each connection is tested before it is switched on. One left halfway stays a draft: take it up again here, or from Sources.",
+      progress: "{done} of {total} connected",
+      change: "Change my choice",
+      finish: "Finish",
+      customBody:
+        "A custom connector reads it through its REST or GraphQL API, or receives its data by webhook.",
+    },
     add: {
       open: "Add a source",
       title: "Add a source",
@@ -2897,7 +2969,7 @@ const en: Dictionary = {
       saved: "{name} is saved, to activate when you want",
       missingTitle: "A tool missing?",
       missingBody:
-        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase and MongoDB today — and, custom, to any REST or GraphQL API, or by webhook.",
+        "LEKA connects to GitHub, GitLab, Bitbucket, Jira, Confluence, Linear, Notion, Asana, Trello, ClickUp, Monday, Slab, Guru, Google Workspace, Microsoft 365, Datadog, PagerDuty, Grafana, Splunk, Kibana, PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, Supabase and MongoDB today — and, custom, to any REST or GraphQL API, or by webhook.",
       steps: {
         connector: "Tool",
         settings: "Connection",
@@ -2986,6 +3058,26 @@ const en: Dictionary = {
       },
     },
     fieldsOf: {
+      splunk: {
+        base_url: {
+          label: "Splunk API address",
+          help: "On the management port: https://acme.splunkcloud.com:8089, or your own Splunk's — https, with a recognised certificate, reachable from the internet.",
+        },
+        token: {
+          label: "Authentication token",
+          help: "Settings → Tokens, for a user whose role sees the apps to read. Encrypted, and never shown again.",
+        },
+      },
+      kibana: {
+        base_url: {
+          label: "Kibana address",
+          help: "https://acme.kb.europe-west1.gcp.cloud.es.io, or your own Kibana's — https, reachable from the internet.",
+        },
+        api_key: {
+          label: "Elastic API key",
+          help: "Its encoded form (Stack Management → API keys), with read access to alert rules, cases and dashboards. Encrypted, and never shown again.",
+        },
+      },
       grafana: {
         base_url: {
           label: "Grafana address",

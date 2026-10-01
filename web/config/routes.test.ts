@@ -67,6 +67,7 @@ describe("the route registry", () => {
       routes.activity(),
       routes.environment(),
       routes.sources(),
+      routes.welcome(),
       routes.capabilities(),
       routes.governance(),
       routes.team(),

@@ -74,6 +74,9 @@ DEFAULT_RETENTION_DAYS: dict[SourceKind, int] = {
     SourceKind.GCP: 30,
     SourceKind.DATADOG: 30,
     SourceKind.GRAFANA: 30,
+    SourceKind.SPLUNK: 30,
+    # Its cases are incidents, kept as PagerDuty's are.
+    SourceKind.KIBANA: 90,
 }
 
 # A source kind nobody thought about must not mean "keep for ever". The

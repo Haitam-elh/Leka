@@ -4,7 +4,7 @@
  * The case behind it: a new account registered from leka-core.com, signed
  * in, and found an empty shell — every page refused, no connectors. It is
  * now asked to create its workspace, named after its company, and sent to
- * Sources.
+ * choose the tools to connect.
  */
 
 import { render, screen } from "@testing-library/react";
@@ -93,7 +93,7 @@ describe("the workspace gate", () => {
 
     expect(create).toHaveBeenCalledWith("Acme");
     expect(enter).toHaveBeenCalledWith("w-new");
-    expect(push).toHaveBeenCalledWith("/sources");
+    expect(push).toHaveBeenCalledWith("/welcome");
     expect(retry).toHaveBeenCalled();
   });
 

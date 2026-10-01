@@ -1,5 +1,5 @@
-"""Datadog's, PagerDuty's and Grafana's records, extracted for what comes
-after (LEKA-348 → LEKA-354).
+"""Datadog's, PagerDuty's, Grafana's, Splunk's and Kibana's records,
+extracted for what comes after (LEKA-348 → LEKA-354).
 
 The payloads are the ones the Datadog connector stores — its stand-in's,
 in tests/test_datadog_*.py. What matters: Datadog's own id and timestamp
@@ -19,9 +19,15 @@ from tests.test_extraction import SECRET, _extract, _failure
 from tests.test_grafana_connector import FIRING as GRAFANA_FIRING
 from tests.test_grafana_connector import LATENCY as GRAFANA_LATENCY
 from tests.test_grafana_connector import annotation as grafana_annotation
+from tests.test_kibana_connector import CASE as KIBANA_CASE
+from tests.test_kibana_connector import DASHBOARD as KIBANA_DASHBOARD
+from tests.test_kibana_connector import RULE as KIBANA_RULE
 from tests.test_pagerduty_connector import CHECKOUT as PAGERDUTY_CHECKOUT
 from tests.test_pagerduty_connector import ONLINE_SHOP
 from tests.test_pagerduty_connector import incident as pagerduty_incident
+from tests.test_splunk_connector import DISK_FULL as SPLUNK_ALERT
+from tests.test_splunk_connector import FIRED as SPLUNK_FIRED
+from tests.test_splunk_connector import OPS as SPLUNK_DASHBOARD
 
 C = Capability
 DATADOG = SourceKind.DATADOG
@@ -243,3 +249,64 @@ def test_a_grafana_annotation_keeps_its_time_from_milliseconds() -> None:
     assert found.title == "Deploy 7"
     assert found.created_at == found.updated_at == when
     assert found.metadata["dashboard_uid"] == "abc123"
+
+
+# ── Splunk ───────────────────────────────────────────────────────────────────
+
+
+def test_a_splunk_alert_is_its_search_schedule_severity_and_actions() -> None:
+    found = _extract(SourceKind.SPLUNK, C.ALERTS, SPLUNK_ALERT)
+
+    assert (found.title, found.state) == ("Disk full", "enabled")
+    assert found.metadata["search"] == "index=web status>=500 | stats count"
+    assert found.metadata["schedule"] == "*/5 * * * *"
+    assert found.metadata["severity"] == "high"
+    assert found.metadata["actions"] == ["email", "webhook"]
+    assert found.signals["app"] == "search"
+    assert found.references[0].name == "nora"
+    assert found.extractor == "splunk.alerts"
+
+
+def test_a_fired_splunk_alert_keeps_when_it_fired() -> None:
+    found = _extract(SourceKind.SPLUNK, C.EVENTS, SPLUNK_FIRED)
+
+    assert (found.title, found.state) == ("Disk full", "triggered")
+    assert found.created_at == datetime.fromtimestamp(1790762700, tz=UTC)
+    assert found.metadata["severity"] == "high"
+
+
+def test_a_splunk_dashboard_is_its_label_and_description() -> None:
+    found = _extract(SourceKind.SPLUNK, C.DASHBOARDS, SPLUNK_DASHBOARD)
+
+    assert found.title == "Ops overview"
+    assert found.content[0].text == "5xx and latency"
+
+
+# ── Kibana ───────────────────────────────────────────────────────────────────
+
+
+def test_a_kibana_rule_says_how_its_last_run_went_and_its_service() -> None:
+    found = _extract(SourceKind.KIBANA, C.ALERTS, {**KIBANA_RULE, "space": "default"})
+
+    assert (found.title, found.state) == ("Checkout 5xx", "active")
+    assert found.metadata["rule_type"] == "apm.error_rate"
+    assert found.metadata["interval"] == "1m"
+    assert (found.signals["service"], found.signals["team"]) == ("checkout", "payments")
+
+
+def test_a_kibana_case_is_an_incident_with_its_severity_and_author() -> None:
+    payload = {**KIBANA_CASE, "space": "default", "web_url": "https://kb.test/c-42"}
+
+    found = _extract(SourceKind.KIBANA, C.INCIDENTS, payload)
+
+    assert (found.title, found.state) == ("Checkout errors after deploy", "in-progress")
+    assert found.metadata["severity"] == "high"
+    assert found.signals["services"] == ["checkout"]
+    author = found.references[0]
+    assert (author.role, author.name, author.email) == ("creator", "Nora Diallo", "nora@acme.io")
+
+
+def test_a_kibana_dashboard_is_its_title() -> None:
+    found = _extract(SourceKind.KIBANA, C.DASHBOARDS, {**KIBANA_DASHBOARD, "space": "default"})
+
+    assert found.title == "Ops overview"

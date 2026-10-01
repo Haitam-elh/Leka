@@ -219,6 +219,15 @@ export const ROUTES: readonly RouteEntry[] = [
     requiredPermission: "source:read",
   },
   {
+    // Where a new workspace starts: choosing the tools to connect, then
+    // connecting them. Reached from the workspace gate, not the sidebar.
+    id: "welcome",
+    path: "/welcome",
+    labelKey: "welcome",
+    showInSidebar: false,
+    requiredPermission: "source:manage",
+  },
+  {
     id: "governance",
     path: "/governance",
     labelKey: "governance",
@@ -285,6 +294,7 @@ export const routes = {
       : `/environment/${entityType}/${entityId}`,
   sources: () => "/sources",
   source: (sourceId: string) => `/sources/${sourceId}`,
+  welcome: () => "/welcome",
   capabilities: () => "/capabilities",
   capability: (capabilityId: string) => `/capabilities/${capabilityId}`,
   governance: () => "/governance",

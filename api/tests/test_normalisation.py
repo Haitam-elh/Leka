@@ -33,6 +33,7 @@ from tests.test_datadog_connector import CHECKOUT as DATADOG_MONITOR
 from tests.test_datadog_resources import incident as datadog_incident
 from tests.test_extraction import BITBUCKET_PR, GITHUB_PR, GITLAB_MR, JIRA_ISSUE, _extract
 from tests.test_extraction_tools import LINEAR_ISSUE, NOTION_PAGE
+from tests.test_kibana_connector import CASE as KIBANA_CASE
 from tests.test_microsoft_365_resources import item as m365_item
 from tests.test_monday_resources import _item as monday_item
 from tests.test_notion_connector import WIKI
@@ -454,6 +455,19 @@ def test_a_pagerduty_service_meets_a_datadog_service_tag_on_one_key() -> None:
     assert (service.entity.type, service.entity.key) == ("service", "service:checkout")
     assert ("owned_by", "team:payments") in _edges(service)
     assert ("affects", service.entity.key) in _edges(incident)
+
+
+def test_a_kibana_case_is_an_incident_on_leka_s_scales() -> None:
+    payload = {**KIBANA_CASE, "space": "default", "web_url": "https://kb.test/c-42"}
+
+    record = _normalised(SourceKind.KIBANA, Capability.INCIDENTS, payload, external_id="c-42")
+
+    attributes = record.entity.attributes
+    assert (record.entity.type, record.entity.key) == ("incident", "incident:kibana:c-42")
+    assert (attributes["state"], attributes["state_raw"]) == ("in_progress", "in-progress")
+    assert attributes["priority"] == "high"
+    assert ("affects", "service:checkout") in _edges(record)
+    assert ("created_by", "person:email:nora@acme.io") in _edges(record)
 
 
 def test_an_unknown_incident_state_is_kept_and_said() -> None:
