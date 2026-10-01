@@ -68,6 +68,8 @@ One fact per (type, target) — or (type, value) — the surest kept.
 | `criticality` | same | | a `tier` tag that says a level: `tier=1`, `tier=T3`, `tier=low` — one that says neither an environment nor a level says nothing | 0.9 |
 | `owner` | the tag's value | | a `team` / `owner` / `squad` / `maintainer` tag | 0.9 |
 | `exposure` | `public`, `internal` | | `public` flag, a load balancer's scheme | 0.95 |
+| `data_category` | `contact`, `identity`, `location`, `financial`, `credential`, `health` — its target the column | | a table's column's name: `email`, `customerEmail`, `date_of_birth`, `iban`, `password_hash` — its words, two words in a row, or the whole name (`zip`, `token`); never a value, which LEKA does not read (LEKA-364) | 0.8 — **0.95** when its comment says it is personal or sensitive (`PII`, `GDPR`, `RGPD`, `données personnelles`, `confidential`…); `personal` for a column only its comment says it of |
+| `classification` | `confidential`, `restricted` | | a table's comment, or a column's: `confidential`, `sensitive`, `PII`… — `restricted`, `secret` | 0.95 |
 | `cluster` | the cluster's name | | the tags EKS, GKE and AKS put on a cluster's nodes: `eks:cluster-name`, `aws:eks:cluster-name`, `goog-k8s-cluster-name`, `aks-managed-cluster-name`; or `kubernetes.io/cluster/<name>` in a tag's key (LEKA-363) | 1.0 |
 
 What is **not** read, deliberately:
@@ -106,8 +108,9 @@ described.
 
 ## 5. Versions
 
-`PARSER_VERSION` (`parsing/engine.py`; 3 since LEKA-363's accounts and
-clusters, 2 since LEKA-362's application and criticality tags) is raised
+`PARSER_VERSION` (`parsing/engine.py`; 4 since LEKA-364's columns, 3 since
+LEKA-363's accounts and clusters, 2 since LEKA-362's application and
+criticality tags) is raised
 when what parsing finds changes: what the old version parsed is parsed
 again.
 

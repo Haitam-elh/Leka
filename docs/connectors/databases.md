@@ -6,8 +6,16 @@ through [the connector framework](framework.md). LEKA-349.
 itself — its schemas, tables, views, columns, keys, indexes, and what each
 view reads from — and not one value of the data. What it contributes then
 goes through extraction ([extraction.md](../extraction.md)) like any other
-source. Becoming entities of the company model — a table, its schema, its
-dependencies — is LEKA-364.
+source, and becomes the company model's databases, schemas and data objects
+([company-model.md § 11](../company-model.md), LEKA-364).
+
+**Where it was read.** Every schema and table a connector hands over says
+its `server` — the engine, the host, the port, the database — so that what
+two sources read on one database is one thing in the model, and a database
+meets the cloud instance serving it at its endpoint. A MySQL, MariaDB or
+MongoDB source reads a server: its databases are its schemas. A Supabase
+source names the project's own database, `db.<project-ref>.supabase.co`,
+not the pooler it connects through — one pooler serves many projects.
 
 All hand over their tables — a MongoDB collection is one — in the same
 shape (`leka/connectors/databases.py`), within the same bounds — over TLS,
@@ -174,7 +182,8 @@ Kept **90 days**, like the other sources that describe structure.
 - Row counts and sizes are PostgreSQL's estimates (`reltuples`, as of the
   last `ANALYZE`), rounded.
 - Functions, triggers, sequences, types, roles and grants are not read.
-- Schemas and tables are extracted, not yet entities (LEKA-364).
+- A table's classification is read from its columns' names and comments,
+  never from a value (LEKA-364).
 
 ---
 
@@ -321,7 +330,7 @@ marked gone; at most 20 000 tables and views a pass. Kept **90 days**.
 ### Limits
 
 - As PostgreSQL's: no private network, the certificate not verified,
-  estimates rounded, schemas and tables not yet entities (LEKA-364).
+  estimates rounded.
 - A view's definition and dependencies need `SELECT` on it (above).
 - Routines, triggers, events, users and grants are not read.
 - PlanetScale is not supported: its roles cannot be kept to `REFERENCES`,
@@ -393,8 +402,7 @@ is **1969** (`TIMEOUT`).
 ### Limits
 
 - As MySQL's: no private network, the certificate not verified, a view's
-  definition and dependencies need `SELECT` on it, schemas and tables not
-  yet entities (LEKA-364).
+  definition and dependencies need `SELECT` on it.
 - What a view reads is found in its definition, as MariaDB writes it back:
   a table named only inside a stored function the view calls is not seen.
 - Sequences, routines, triggers, events, users and grants are not read.
@@ -509,8 +517,7 @@ tables a pass; kept 90 days.
 
 ### Limits
 
-- As the others: no private network, the certificate not verified,
-  schemas and tables not yet entities (LEKA-364).
+- As the others: no private network, the certificate not verified.
 - A SQL login only: Microsoft Entra ID and Windows sign-in are not
   supported.
 - Azure SQL Database and Managed Instance are SQL Server, but not tried
@@ -614,8 +621,7 @@ tables and views a pass; kept 90 days.
 
 ### Limits
 
-- As the others: no private network, the certificate not verified,
-  schemas and tables not yet entities (LEKA-364).
+- As the others: no private network, the certificate not verified.
 - `REFERENCES` object by object: a new table is not seen until granted.
 - Tested against Oracle 26ai; 19c has the same `ALL_*` views, not tried.
 - A view's dependencies and a table's size are not read (above).
@@ -709,7 +715,6 @@ collections a pass; kept 90 days.
 
 ### Limits
 
-- No private network, the certificate not verified, collections not yet
-  entities (LEKA-364) — as the others.
+- No private network, the certificate not verified — as the others.
 - Fields are the validator's, not inferred from documents.
 - Not read: users, roles, the oplog, sharding.
