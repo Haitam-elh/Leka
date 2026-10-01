@@ -16,6 +16,14 @@
     GET /knowledge/applications                they run, whose, what they depend on
     GET /knowledge/services/{id}               one, what it is made of, its
     GET /knowledge/applications/{id}           dependencies both ways
+    GET /knowledge/infrastructure              the cloud resources and databases: what
+                                               kind and class, where, in which
+                                               environment, whose (LEKA-363)
+    GET /knowledge/infrastructure/{id}         one, what it holds, its dependencies
+    GET /knowledge/cloud-accounts              the accounts, subscriptions, projects:
+                                               how much is in each, of what, where
+    GET /knowledge/cloud-accounts/{id}         one — or a resource group — and its
+                                               resource groups
 
 Read by every member (`workspace:read`): it is the company's own picture. A
 route validates, calls one repository or service, and returns (architecture
@@ -41,6 +49,8 @@ from leka.knowledge import (
     ENTITY_KINDS,
     MODEL_VERSION,
     RELATIONSHIP_KINDS,
+    CloudAccountDetail,
+    CloudAccountRead,
     Dependencies,
     Entity,
     EntityBrief,
@@ -50,6 +60,9 @@ from leka.knowledge import (
     EntityRepository,
     EntityType,
     EntityVersionRead,
+    InfrastructureDetail,
+    InfrastructureFilters,
+    InfrastructureRead,
     KnowledgeService,
     LandscapeDetail,
     LandscapeFilters,
@@ -369,3 +382,121 @@ async def dependencies(
     if found is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
     return found
+
+
+# ── infrastructure and cloud (LEKA-363) ──────────────────────────────────────
+
+Provider = Literal["aws", "azure", "gcp"]
+ResourceClass = Literal["compute", "network", "storage", "database"]
+ResourceKind = Literal[
+    "instance", "function", "cluster", "network", "load_balancer", "bucket", "database"
+]
+State = Literal["running", "starting", "stopping", "stopped", "deleting", "terminated", "failed"]
+
+
+@router.get("/infrastructure", response_model=PageEnvelope[InfrastructureRead])
+async def infrastructure(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    resource_class: ResourceClass | None = None,
+    resource_kind: ResourceKind | None = None,
+    provider: Provider | None = None,
+    account_id: Annotated[
+        uuid.UUID | None,
+        Query(description="An account, subscription or project — or a resource group."),
+    ] = None,
+    region: Annotated[str | None, Query(max_length=50)] = None,
+    environment: Annotated[str | None, Query(max_length=50)] = None,
+    state: State | None = None,
+    exposure: Literal["public", "internal"] | None = None,
+    criticality: Level | None = None,
+    service_id: uuid.UUID | None = None,
+    team_id: uuid.UUID | None = None,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the name.")] = None,
+) -> PageEnvelope[InfrastructureRead]:
+    """The cloud resources and databases, by name: what kind and class,
+    where — provider, account, group, region — in which environment and who
+    says so, how reachable and critical, whose, what they serve."""
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.infrastructure(
+        InfrastructureFilters(
+            lifecycle=lifecycle,
+            resource_class=resource_class,
+            resource_kind=resource_kind,
+            provider=provider,
+            account_id=account_id,
+            region=region,
+            environment=environment,
+            state=state,
+            exposure=exposure,
+            criticality=criticality,
+            service_id=service_id,
+            team_id=team_id,
+            q=q,
+        )
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=ENTITY_SORTS, id_column=Entity.id
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).infrastructure(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/infrastructure/{entity_id}", response_model=InfrastructureDetail)
+async def resource(
+    entity_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> InfrastructureDetail:
+    """One resource: where it is and whose, what it holds — a cluster's
+    nodes, a network's resources — and its dependencies both ways."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type not in (EntityType.INFRA_RESOURCE, EntityType.DATABASE):
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such resource.")
+    return await KnowledgeService(repository).resource(found)
+
+
+@router.get("/cloud-accounts", response_model=PageEnvelope[CloudAccountRead])
+async def cloud_accounts(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    provider: Provider | None = None,
+    environment: Annotated[str | None, Query(max_length=50)] = None,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the name.")] = None,
+) -> PageEnvelope[CloudAccountRead]:
+    """The AWS accounts, Azure subscriptions and Google Cloud projects, by
+    name: how many resources each holds, of which class, in which regions;
+    its environment and its team."""
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.cloud_accounts(
+        lifecycle=lifecycle, provider=provider, environment=environment, q=q
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=ENTITY_SORTS, id_column=Entity.id
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).cloud_accounts(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/cloud-accounts/{entity_id}", response_model=CloudAccountDetail)
+async def cloud_account(
+    entity_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> CloudAccountDetail:
+    """One account, subscription or project — or an Azure resource group:
+    what it holds, its resource groups, where each piece came from."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type not in (EntityType.CLOUD_ACCOUNT, EntityType.RESOURCE_GROUP):
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such account.")
+    return await KnowledgeService(repository).cloud_account(found)

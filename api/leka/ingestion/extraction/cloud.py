@@ -1,10 +1,15 @@
-"""Cloud platforms: AWS, Azure, Google Cloud — seven kinds of resource.
+"""Cloud platforms: AWS, Azure, Google Cloud — seven kinds of resource, and
+what they are in.
 
 Every resource comes out with the same technical signals whatever its
 provider: `provider`, `resource_type`, `region`, `tags` ('key=value'), and
 what its kind has — `instance_type`, `engine`, `runtime`, `version`,
 `network`. Its `title` is the name a person gave it (AWS's Name tag), else
 its id.
+
+What they are in (`accounts`, LEKA-363): an AWS account — its alias and its
+organisation — Azure's subscriptions and resource groups, Google Cloud's
+projects — their names, states, tags or labels, and what is above them.
 
 The payloads are the ones leka/connectors/{aws,azure,gcp} store: boto3's
 answers (dates as text), Azure Resource Manager's resource list, Cloud
@@ -67,7 +72,7 @@ def aws_instance(r: RawRecord) -> Extracted:
     )
 
 
-@record_strategy("aws.db_instances", 1, (AWS, C.DB_INSTANCES))
+@record_strategy("aws.db_instances", 2, (AWS, C.DB_INSTANCES))
 def aws_database(r: RawRecord) -> Extracted:
     p = r.payload
     return _aws(
@@ -86,6 +91,9 @@ def aws_database(r: RawRecord) -> Extracted:
             "storage_gb": number(p, "AllocatedStorage"),
             "encrypted": flag(p, "StorageEncrypted"),
             "public": flag(p, "PubliclyAccessible"),
+            # Where a client connects: what a database source names (LEKA-364).
+            "endpoint": lower(p, "Endpoint", "Address"),
+            "port": number(p, "Endpoint", "Port"),
         },
     )
 
@@ -254,6 +262,77 @@ def gcp_asset(p: Payload) -> Extracted:
             "storage_class": lower(d, "storageClass"),
             "scheme": lower(d, "loadBalancingScheme"),
         },
+    )
+
+
+# ── what the resources are in (LEKA-363) ─────────────────────────────────────
+
+
+@record_strategy("aws.accounts", 1, (AWS, C.ACCOUNTS))
+def aws_account(r: RawRecord) -> Extracted:
+    """The account: its alias — the name its admins gave it — else its id;
+    its organisation, when the policy allowed reading it."""
+    p = r.payload
+    account = required(p, "Account")
+    aliases = strings(p, "AccountAliases")
+    return Extracted(
+        title=aliases[0] if aliases else account,
+        metadata={
+            "id": account,
+            "organization": string(p, "Organization", "Id"),
+            "management_account": string(p, "Organization", "MasterAccountId"),
+        },
+        signals={"provider": "aws", "resource_type": "account"},
+    )
+
+
+@record_strategy("azure.accounts", 1, (AZURE, C.ACCOUNTS))
+def azure_scope(r: RawRecord) -> Extracted:
+    """A subscription — its name, state, tenant, tags — or one of its
+    resource groups, with its location and tags."""
+    p = r.payload
+    if "subscriptionId" in p:
+        subscription = required(p, "subscriptionId").lower()
+        return Extracted(
+            title=string(p, "displayName") or subscription,
+            state=lower(p, "state"),
+            metadata={"id": f"/subscriptions/{subscription}", "tenant": string(p, "tenantId")},
+            signals={"provider": "azure", "resource_type": "subscription", "tags": tags(p, "tags")},
+        )
+    resource_id = required(p, "id").lower()
+    return Extracted(
+        title=required(p, "name"),
+        state=lower(p, "properties", "provisioningState"),
+        metadata={
+            "id": resource_id,
+            "subscription": r.container,
+            "resource_group": _segment_after(resource_id, "resourceGroups"),
+        },
+        signals={
+            "provider": "azure",
+            "resource_type": "resource_group",
+            "region": lower(p, "location"),
+            "tags": tags(p, "tags"),
+        },
+    )
+
+
+@strategy("gcp.accounts", 1, (GCP, C.ACCOUNTS))
+def gcp_project(p: Payload) -> Extracted:
+    """A project: its name, labels and state, its number — some APIs name
+    it by that — and the folder or organisation it is in."""
+    project = required(p, "projectId")
+    return Extracted(
+        title=string(p, "displayName") or project,
+        state=lower(p, "state"),
+        created_at=when(p, "createTime"),
+        updated_at=when(p, "updateTime"),
+        metadata={
+            "id": project,
+            "number": last_segment(string(p, "name")),
+            "parent": string(p, "parent"),
+        },
+        signals={"provider": "gcp", "resource_type": "project", "tags": tags(p, "labels")},
     )
 
 

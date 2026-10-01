@@ -34,6 +34,15 @@ VM = {
 }
 
 
+GROUP: dict[str, Any] = {
+    "id": f"/subscriptions/{SUB}/resourceGroups/Prod",
+    "name": "Prod",
+    "type": "Microsoft.Resources/resourceGroups",
+    "location": "westeurope",
+    "tags": {"env": "prod"},
+}
+
+
 class Microsoft:
     """Both hosts. `resources` maps a subscription to its pages of resources."""
 
@@ -45,6 +54,7 @@ class Microsoft:
             "value": [{"subscriptionId": SUB, "displayName": "Prod", "state": "Enabled"}]
         }
         self.resources: dict[str, Any] = {SUB: [[VM]]}
+        self.groups: dict[str, Any] = {SUB: [[GROUP]]}
         self.__dict__.update(overrides)
         self.requests: list[httpx.Request] = []
 
@@ -63,7 +73,8 @@ class Microsoft:
                 else httpx.Response(200, json=self.subscriptions)
             )
         subscription = path.split("/")[2]
-        answer = self.resources.get(subscription, [[]])
+        listing = self.groups if path.endswith("/resourcegroups") else self.resources
+        answer = listing.get(subscription, [[]])
         if isinstance(answer, httpx.Response):
             return answer
         page = int(request.url.params.get("page", "1"))
@@ -218,3 +229,25 @@ def test_the_hint_names_the_application_and_the_secret_never_shows() -> None:
 
     assert next(iter(credentials.model_dump())) == "client_id"
     assert SECRET not in repr(credentials)
+
+
+async def test_the_subscriptions_in_scope_are_read_then_their_resource_groups() -> None:
+    microsoft = Microsoft(
+        subscriptions={
+            "value": [
+                {"subscriptionId": SUB, "displayName": "Prod", "state": "Enabled"},
+                {"subscriptionId": OTHER, "displayName": "Sandbox", "state": "Enabled"},
+            ]
+        }
+    )
+    connector = _connector(microsoft, subscriptions=[SUB])
+
+    records = [r async for r in connector.iter_resources(Capability.ACCOUNTS)]
+
+    assert [(r.external_id, r.container) for r in records] == [
+        (f"/subscriptions/{SUB}", None),
+        (GROUP["id"].lower(), SUB),
+    ]
+    assert records[0].payload["displayName"] == "Prod"
+    # The other subscription, out of scope, is not read.
+    assert not any(OTHER in r.url.path for r in microsoft.requests)

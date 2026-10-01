@@ -5,7 +5,10 @@ whether it breaks; a branch name carries its ticket; labels and issue types
 say what kind of work it is. Cloud resources: their tags — and, less surely,
 their names — say which environment, service, application and team they
 belong to, and how critical they are; their configuration says whether the
-internet reaches them.
+internet reaches them; the tags a Kubernetes service puts on its nodes say
+which cluster they are a node of. What resources are in — an account, a
+subscription, a resource group, a project — is read the same way: its name
+says its environment more surely than a resource's (LEKA-363).
 
 Every rule reads the extraction's unified fields (docs/extraction.md), so it
 holds for GitHub, GitLab and Bitbucket alike, for AWS, Azure and Google
@@ -63,6 +66,7 @@ CLOUD = frozenset(
         Capability.CLUSTERS,
         Capability.NETWORKS,
         Capability.LOAD_BALANCERS,
+        Capability.ACCOUNTS,
     }
 )
 ENVIRONMENT_KEYS = frozenset({"env", "environment", "stage"})
@@ -86,6 +90,22 @@ CRITICALITIES = {
 }
 TIER_NUMBER = re.compile(r"^(?:tier-?|t)?(\d)$")
 TIERS = ("critical", "critical", "high", "medium", "low")
+# The tags EKS, GKE and AKS put on a cluster's nodes, naming the cluster;
+# `kubernetes.io/cluster/<name>` says it in its key.
+CLUSTER_KEYS = frozenset(
+    {
+        "eks:cluster-name",
+        "aws:eks:cluster-name",
+        "goog-k8s-cluster-name",
+        "aks-managed-cluster-name",
+    }
+)
+CLUSTER_PREFIX = "kubernetes.io/cluster/"
+# How surely a name says an environment: an account, a subscription, a
+# resource group, a project is named for its environment more often than
+# not ("acme-prod", "Production"); a resource's name, less so.
+NAMED_ENVIRONMENT = 0.5
+NAMED_SCOPE_ENVIRONMENT = 0.7
 ENVIRONMENTS = {
     "production": ("prod", "production", "prd", "live"),
     "staging": ("staging", "stage", "stg", "preprod", "pre-prod", "uat"),
@@ -276,14 +296,36 @@ def _cloud(record: ExtractedRecord) -> list[Fact]:
             facts.append(
                 Fact(type=FactType.OWNER, value=value.strip(), confidence=0.9, evidence=evidence)
             )
+        elif normalized_key in CLUSTER_KEYS:
+            facts.append(
+                Fact(type=FactType.CLUSTER, value=value.strip(), confidence=1.0, evidence=evidence)
+            )
+    named = {f.value for f in facts if f.type is FactType.CLUSTER}
+    for key, _ in pairs:
+        # `kubernetes.io/cluster/billing=owned`: the cluster is in the key.
+        cluster = key.strip()
+        if not cluster.lower().startswith(CLUSTER_PREFIX):
+            continue
+        cluster = cluster[len(CLUSTER_PREFIX) :]
+        if cluster and cluster not in named:
+            named.add(cluster)
+            facts.append(
+                Fact(
+                    type=FactType.CLUSTER,
+                    value=cluster,
+                    confidence=1.0,
+                    evidence=Evidence(field="signals.tags", excerpt=key[:120]),
+                )
+            )
     if not any(f.type is FactType.ENVIRONMENT for f in facts) and record.title:
         guess = _environment_in_name(record.title)
         if guess:
+            scope = record.provenance.capability is Capability.ACCOUNTS
             facts.append(
                 Fact(
                     type=FactType.ENVIRONMENT,
                     value=guess,
-                    confidence=0.5,
+                    confidence=NAMED_SCOPE_ENVIRONMENT if scope else NAMED_ENVIRONMENT,
                     evidence=Evidence(field="title", excerpt=record.title[:120]),
                 )
             )

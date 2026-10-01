@@ -241,3 +241,109 @@ class Dependencies(BaseModel):
     nodes: list[DependencyNode] = Field(description="Without the root, the nearest first.")
     relationships: list[RelationshipRead]
     truncated: bool = Field(description="More was reached than a response holds.")
+
+
+# ── infrastructure and cloud (LEKA-363) ──────────────────────────────────────
+
+
+class ResourceEnvironment(BaseModel):
+    """Where a resource runs, and who says so."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(description="production, staging, development, test — or the source's word.")
+    origin: str = Field(
+        description="source: a tag, a name, a CMDB said it; enrichment: what it is in runs there."
+    )
+    confidence: float | None
+
+
+class InfrastructureRead(BaseModel):
+    """A cloud resource or a database: what kind, of which class, where —
+    its provider, account, group, region — in which environment, how
+    reachable and critical, whose it is, what it serves."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    type: EntityType
+    key: str
+    name: str
+    lifecycle: Lifecycle
+    provider: str | None = Field(description="aws, azure, gcp — none for a CMDB's own server.")
+    resource_kind: str | None = Field(
+        description="instance, function, cluster, network, load_balancer, bucket, database."
+    )
+    resource_class: str | None = Field(description="compute, network, storage, database.")
+    resource_type: str | None = Field(description="The provider's own: ec2:instance, …")
+    state: str | None = Field(
+        description="running, starting, stopping, stopped, deleting, terminated, failed."
+    )
+    account: EntityBrief | None = Field(description="The account, subscription or project.")
+    resource_group: EntityBrief | None = Field(description="An Azure resource's group.")
+    region: str | None
+    zone: str | None
+    environment: ResourceEnvironment | None
+    exposure: str | None = Field(description="public, internal.")
+    criticality: Criticality | None
+    services: list[EntityBrief] = Field(description="The services it is part of.")
+    applications: list[EntityBrief] = Field(description="The applications it is part of.")
+    owners: list[EntityBrief] = Field(description="Its teams.")
+    network: EntityBrief | None = Field(description="The network it is in.")
+    cluster: EntityBrief | None = Field(description="The cluster it is a node of.")
+    dependencies: int = Field(description="What it depends on, directly.")
+    dependents: int = Field(description="What depends on it, directly.")
+    last_seen_at: datetime | None
+
+
+class InfrastructureDetail(InfrastructureRead):
+    """One resource: everything above, what it holds — a cluster's nodes, a
+    network's resources — what it depends on and what depends on it, where
+    each piece came from."""
+
+    attributes: dict[str, object]
+    provenance: dict[str, object]
+    holds: list[EntityBrief] = Field(description="What is part of it, or in it.")
+    holds_total: int
+    depends_on: list[DependencyRead]
+    depended_on_by: list[DependencyRead]
+
+
+class CloudAccountRead(BaseModel):
+    """What resources are in — an AWS account, an Azure subscription or
+    resource group, a Google Cloud project — and how much is in it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    type: EntityType
+    key: str
+    name: str
+    lifecycle: Lifecycle
+    provider: str | None
+    account_type: str | None = Field(
+        description="aws_account, azure_subscription, gcp_project — none for a resource group."
+    )
+    account_id: str | None = Field(description="The provider's id: 123456789012, acme-prod.")
+    state: str | None = Field(description="active, disabled, deleted.")
+    organization: str | None = Field(
+        description="What it is in: an AWS organisation, an Azure tenant, a folder or "
+        "organisation at Google."
+    )
+    parent: EntityBrief | None = Field(description="A resource group's subscription.")
+    environment: ResourceEnvironment | None
+    criticality: Criticality | None
+    owners: list[EntityBrief]
+    resources: int = Field(description="The resources in it — in its groups too — not removed.")
+    classes: dict[str, int] = Field(description="Of them, how many of each class.")
+    regions: list[str]
+    last_seen_at: datetime | None
+
+
+class CloudAccountDetail(CloudAccountRead):
+    """One account, subscription, project or resource group: everything
+    above, its resource groups, and where each piece came from."""
+
+    attributes: dict[str, object]
+    provenance: dict[str, object]
+    resource_groups: list[CloudAccountRead]

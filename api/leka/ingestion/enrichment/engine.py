@@ -19,6 +19,11 @@ company model reads them, what those things are together:
     6. CATEGORY: the kind of work a title says, where parsing found none.
     7. LANDSCAPE: where a service or an application runs, and how critical
        it is, where no catalogue says — what its parts show (LEKA-362).
+    8. INFRASTRUCTURE: the account a cloud resource's source reads it in,
+       where its own record names none; the environment its cluster, its
+       resource group or its account runs in, where its own tags say none
+       (LEKA-363). Run before ownership and the landscape, which read what
+       it adds.
 
 ADDED, NEVER OVERWRITTEN. Nothing here changes a resolved entity: what is
 enriched is kept beside it — each attribute and each relationship with its
@@ -53,7 +58,10 @@ from leka.ingestion.resolution import signals as sig
 
 # 2: where services and applications run, how critical they are; an
 #    application's team inherited by its services (LEKA-362).
-ENRICHER_VERSION = 2
+# 3: a resource's account, and its container's environment; a team
+#    inherited through an account less surely than through a service
+#    (LEKA-363).
+ENRICHER_VERSION = 3
 
 Origin = Literal["stated", "inferred"]
 
@@ -205,6 +213,19 @@ LEVELS = ("critical", "high", "medium", "low")
 ENVIRONMENT_ORDER = ("production", "staging", "development", "test")
 # A part's criticality, said of its whole: at most this sure.
 FROM_PARTS = 0.8
+# Infrastructure (LEKA-363): what resources are in, and what is placed in it.
+SCOPES = frozenset({"cloud_account", "resource_group"})
+PLACED = frozenset({"infra_resource", "database", "resource_group"})
+# Where an environment is inherited from, the nearest first: a node's
+# cluster, a resource's group, its account.
+CONTAINER_ORDER = ("cluster", "resource_group", "cloud_account")
+# What a container says of what it holds — its environment — said a little
+# less surely; and the account a source reads a resource in.
+FROM_CONTAINER = 0.9
+SOURCE_ACCOUNT = 0.9
+# A team inherited through an account or a resource group: less sure than
+# through a service — billing groups resources, a service says whose they are.
+SCOPE_OWNERSHIP = 0.8
 
 
 # ── what it reads ────────────────────────────────────────────────────────────
@@ -610,8 +631,10 @@ def _inherited_owner(
                 visited.add(parent)
                 reach = sure * edge.confidence
                 following.append((parent, reach))
+                scope = SCOPE_OWNERSHIP if graph.of_type(parent) in SCOPES else 1.0
                 for owner in _owners(graph, parent):
-                    found.append((reach * owner.confidence * INHERITED**hop, owner.to_id, parent))
+                    surety = reach * owner.confidence * INHERITED**hop * scope
+                    found.append((surety, owner.to_id, parent))
         if found:
             found.sort(key=lambda f: -f[0])
             best, team_id, via = found[0]
@@ -1004,9 +1027,132 @@ def _one_holder(graph: Graph, key: str) -> uuid.UUID | None:
     return next(iter(holders)) if len(holders) == 1 else None
 
 
+# ── 8. infrastructure (LEKA-363) ────────────────────────────────────────────
+
+
+def infrastructure(graph: Graph) -> Made:
+    """What a cloud resource's place says, where its own sources say
+    nothing. Its account: an S3 bucket's ARN names none, but the source
+    that reads it reads one account of its provider. Its environment: its
+    cluster's, else its resource group's, else its account's — a company
+    that keeps production in an account of its own says so once, there."""
+    made = Made()
+    accounts: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
+    for node in graph.nodes.values():
+        if node.type == "cloud_account":
+            for source in node.sources:
+                accounts[source].add(node.id)
+    for node in graph.nodes.values():
+        if node.type not in PLACED or _containers(graph, node.id):
+            continue
+        provider = node.attributes.get("provider")
+        held = {
+            account
+            for source in node.sources
+            for account in accounts.get(source, ())
+            if graph.nodes[account].attributes.get("provider") == provider
+        }
+        if len(held) != 1:
+            continue
+        account = graph.nodes[next(iter(held))]
+        evidence = f"its source reads it in {account.key}"
+        made.edges.append(
+            _inferred(node.id, account.id, "part_of", "source_account", SOURCE_ACCOUNT, evidence)
+        )
+        identifier = account.attributes.get("account_id")
+        if isinstance(identifier, str) and "account" not in node.attributes:
+            made.facts.append(
+                _fact(node, "account", identifier, SOURCE_ACCOUNT, "source_account", evidence)
+            )
+        made.counts["account"] += 1
+
+    # Containers before what they hold — groups, then clusters: a group's
+    # environment, inherited from its account, is what its resources inherit.
+    inherited: dict[uuid.UUID, tuple[str, float]] = {}
+    placed = sorted(
+        (n for n in graph.nodes.values() if n.type in PLACED),
+        key=lambda n: (n.type != "resource_group", _container_word(n) != "cluster", n.key),
+    )
+    for node in placed:
+        if "environment" in node.attributes or graph.out(node.id, {"runs_in"}):
+            continue
+        for edge, container in _containers(graph, node.id, made.edges):
+            found = _placed_environment(graph, container, inherited)
+            if found is None:
+                continue
+            name, sure = found
+            surety = round(sure * edge.confidence * FROM_CONTAINER, 2)
+            if surety < MIN_CONFIDENCE:
+                break
+            inherited[node.id] = (name, surety)
+            evidence = f"its {_container_word(container)} {container.key} runs in {name}"
+            made.facts.append(_fact(node, "environment", name, surety, "container", evidence))
+            target = _one_holder(graph, f"environment:{name}")
+            if target is not None:
+                made.edges.append(
+                    _inferred(
+                        node.id,
+                        target,
+                        "runs_in",
+                        "container",
+                        surety,
+                        evidence,
+                        inputs=[container.id],
+                    )
+                )
+            made.counts["environment"] += 1
+            break
+    return made
+
+
+def _containers(
+    graph: Graph, node_id: uuid.UUID, made: Iterable[Edge] = ()
+) -> list[tuple[Edge, Node]]:
+    """What a resource is in — its cluster, its resource group, its account —
+    the nearest first: stated, or found by this enricher."""
+    edges = [*graph.out(node_id, {"part_of"}), *(e for e in made if e.from_id == node_id)]
+    found = []
+    for edge in edges:
+        container = graph.nodes.get(edge.to_id)
+        if container is None:
+            continue
+        word = _container_word(container)
+        if word in CONTAINER_ORDER:
+            found.append((CONTAINER_ORDER.index(word), edge, container))
+    return [(edge, container) for _, edge, container in sorted(found, key=lambda f: f[0])]
+
+
+def _container_word(node: Node) -> str:
+    if node.type == "infra_resource" and node.attributes.get("resource_kind") == "cluster":
+        return "cluster"
+    return node.type
+
+
+def _placed_environment(
+    graph: Graph, node: Node, inherited: dict[uuid.UUID, tuple[str, float]]
+) -> tuple[str, float] | None:
+    """The one environment a container runs in, and how surely: its own, or
+    what this enricher found for it — none where it runs in several."""
+    environment = node.attributes.get("environment")
+    if isinstance(environment, str) and environment in ENVIRONMENT_ORDER:
+        sure = node.attributes.get("environment_confidence", 1.0)
+        return environment, float(sure) if isinstance(sure, int | float) else 1.0
+    if node.id in inherited:
+        return inherited[node.id]
+    places = {
+        graph.nodes[e.to_id].key.removeprefix("environment:"): e.confidence
+        for e in graph.out(node.id, {"runs_in"})
+    }
+    if len(places) == 1:
+        [(name, sure)] = places.items()
+        return name, sure
+    return None
+
+
 ENRICHERS: tuple[tuple[str, Enricher], ...] = (
     ("relationships", relationships),
     ("links", links),
+    ("infrastructure", infrastructure),
     ("ownership", ownership),
     ("membership", membership),
     ("activity", activity),

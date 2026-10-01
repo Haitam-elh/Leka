@@ -16,6 +16,9 @@ Azure Resource Manager's resource list filtered by type, following
 `nextLink`. Every resource is known by its ARM id, lower-cased — Azure's ids
 are case-insensitive, and the same resource must not be two records. Azure
 has no "changed since" here: every capability is `listed_whole`.
+`accounts` is what the resources are in (LEKA-363): each subscription of the
+scope — its name, state, tenant, tags — and its resource groups, with
+theirs.
 
 LEKA READS. Every call to Azure Resource Manager is a GET. The one POST is
 the token request to Microsoft's identity platform — an exchange of the
@@ -85,7 +88,8 @@ TYPES: dict[Capability, tuple[str, ...]] = {
         "Microsoft.Network/applicationGateways",
     ),
 }
-CLOUD_CAPABILITIES = frozenset(TYPES)
+# The subscriptions and their resource groups: what the resources are in.
+CLOUD_CAPABILITIES = frozenset({*TYPES, Capability.ACCOUNTS})
 
 
 class AzureConfig(BaseModel):
@@ -166,7 +170,7 @@ class AzureConnector(Connector[AzureConfig, AzureCredentials]):
                     {Capability.INSTANCES: _resources_path(scope[0])},
                     params={"api-version": RESOURCES_API, "$top": 1},
                 )
-                capabilities = sorted(TYPES) if readable else []
+                capabilities = sorted(CLOUD_CAPABILITIES) if readable else []
             warnings = (
                 [] if scope else ["Aucun abonnement n'est visible avec ce service principal."]
             )
@@ -200,11 +204,14 @@ class AzureConnector(Connector[AzureConfig, AzureCredentials]):
         self, capability: Capability, *, since: datetime | None = None
     ) -> AsyncIterator[RawRecord]:
         """`since` is not used: Azure lists these whole, and says so in the manifest."""
-        types = TYPES[capability]
         async with await self._client() as client:
-            scope = self.config.subscriptions or [
-                str(s["subscriptionId"]) for s in await self._subscriptions(client)
-            ]
+            visible = await self._subscriptions(client)
+            scope = self.config.subscriptions or [str(s["subscriptionId"]) for s in visible]
+            if capability is Capability.ACCOUNTS:
+                async for found in self._accounts(client, visible, scope):
+                    yield found
+                return
+            types = TYPES[capability]
             query = {
                 "api-version": RESOURCES_API,
                 "$filter": " or ".join(f"resourceType eq '{t}'" for t in types),
@@ -252,6 +259,29 @@ class AzureConnector(Connector[AzureConfig, AzureCredentials]):
         if code is DiagnosticCode.RATE_LIMITED:
             return refusal(response, path, secret, code, retry_after=retry_after(response))
         return refusal(response, path, secret, code)
+
+    async def _accounts(
+        self, client: VendorHttp, visible: list[Item], scope: list[str]
+    ) -> AsyncIterator[RawRecord]:
+        """Each subscription of the scope, then its resource groups — each
+        known by its ARM id, lower-cased, as its resources are."""
+        wanted = {s.lower() for s in scope}
+        for subscription in visible:
+            identifier = str(subscription["subscriptionId"]).lower()
+            if identifier not in wanted:
+                continue
+            yield record(
+                Capability.ACCOUNTS, subscription, external_id=f"/subscriptions/{identifier}"
+            )
+            async for group in client.pages(
+                f"/subscriptions/{identifier}/resourcegroups", {"api-version": RESOURCES_API}
+            ):
+                yield record(
+                    Capability.ACCOUNTS,
+                    group,
+                    external_id=str(group["id"]).lower(),
+                    container=identifier,
+                )
 
     async def _subscriptions(self, client: VendorHttp) -> list[Item]:
         return [s async for s in client.pages("/subscriptions", {"api-version": SUBSCRIPTIONS_API})]

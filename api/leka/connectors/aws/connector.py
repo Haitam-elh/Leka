@@ -17,6 +17,9 @@ list, being global, once — page by page through boto3's paginators, each
 resource known by its ARN. AWS has no "changed since" for any of these:
 every pass reads them whole (`listed_whole`), and the index keeps a pass
 from writing what did not change and marks gone what is no longer listed.
+`accounts` is the account itself (LEKA-363): its id, its alias — the name
+its admins gave it — and its organisation, each read when the policy allows
+it and left out when it does not.
 
 BOTO3, NOT self.http(). AWS signs every request (SigV4) and each service
 speaks its own protocol; reimplementing that over httpx would be a second
@@ -79,6 +82,7 @@ CLOUD_CAPABILITIES = frozenset(
         Capability.CLUSTERS,
         Capability.NETWORKS,
         Capability.LOAD_BALANCERS,
+        Capability.ACCOUNTS,
     }
 )
 # Where the calls that are not regional go (STS, the region list).
@@ -106,6 +110,8 @@ _DENIED = {
     "UnauthorizedException",
     "AuthorizationError",
 }
+# What is not there to read: an account in no organisation.
+_ABSENT = {"AWSOrganizationsNotInUseException"}
 _THROTTLED = {
     "Throttling",
     "ThrottlingException",
@@ -240,6 +246,9 @@ class AwsConnector(Connector[AwsConfig, AwsCredentials]):
         """`since` is not used: AWS lists these whole, and says so in the manifest."""
         identity = await self._call("sts", HOME_REGION, lambda sts: sts.get_caller_identity())
         account = str(identity["Account"])
+        if capability is Capability.ACCOUNTS:
+            yield _record(capability, account, None, await self._account(account))
+            return
         if capability is Capability.BUCKETS:
             # Global: one list for the account, whatever the regions in scope.
             answer = await self._call("s3", HOME_REGION, lambda s3: s3.list_buckets())
@@ -296,6 +305,35 @@ class AwsConnector(Connector[AwsConfig, AwsCredentials]):
             msg = f"AWS does not read {capability}"
             raise ValueError(msg)
 
+    async def _account(self, account: str) -> dict[str, Any]:
+        """The account: its id, its aliases and its organisation — the two
+        last only where the policy allows reading them (docs/connectors/
+        cloud.md), and none where the account is in no organisation."""
+        found: dict[str, Any] = {"Account": account}
+        aliases = await self._optional("iam", lambda iam: iam.list_account_aliases())
+        if aliases is not None:
+            found["AccountAliases"] = list(aliases.get("AccountAliases", []))
+        organization = await self._optional(
+            "organizations", lambda organizations: organizations.describe_organization()
+        )
+        if organization is not None and organization.get("Organization"):
+            found["Organization"] = organization["Organization"]
+        stored: dict[str, Any] = json.loads(json.dumps(found, default=str))
+        return stored
+
+    async def _optional(self, service: str, call: Callable[[Any], Any]) -> Any:
+        """A call whose refusal, or whose nothing to read, is not a failure:
+        None, and the rest is read."""
+        try:
+            return await self._call(service, HOME_REGION, call)
+        except ConnectorError as error:
+            if error.diagnostic.code in (
+                DiagnosticCode.PERMISSION_DENIED,
+                DiagnosticCode.NOT_FOUND,
+            ):
+                return None
+            raise
+
     async def _pages(
         self, service: str, region: str, operation: str
     ) -> AsyncIterator[dict[str, Any]]:
@@ -343,7 +381,9 @@ class AwsConnector(Connector[AwsConfig, AwsCredentials]):
             if isinstance(answer, BaseException):
                 raise answer
             found.append(capability)
-        return found
+        # The account is read wherever its resources are: who am I always
+        # answers, and its alias and organisation are read when allowed.
+        return [*found, Capability.ACCOUNTS] if found else []
 
     async def _call(self, service: str, region: str, call: Callable[[Any], Any]) -> Any:
         """One AWS call, in a thread — boto3 is synchronous — its failures
@@ -414,6 +454,8 @@ class AwsConnector(Connector[AwsConfig, AwsCredentials]):
             code = DiagnosticCode.PERMISSION_DENIED
         elif code_name in _THROTTLED:
             code = DiagnosticCode.RATE_LIMITED
+        elif code_name in _ABSENT:
+            code = DiagnosticCode.NOT_FOUND
         elif isinstance(status, int) and status >= 500:
             code = DiagnosticCode.PROVIDER_ERROR
         else:

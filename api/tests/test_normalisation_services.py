@@ -72,6 +72,8 @@ def test_an_application_tag_beside_a_service_tag_says_the_service_s_application(
         "service:billing-api": "service",
         "application:billing": "application",
         "environment:production": "environment",
+        # What it is in (LEKA-363).
+        "aws:account:123456789012": "cloud_account",
     }
     assert {
         (key, "part_of", "service:billing-api"),

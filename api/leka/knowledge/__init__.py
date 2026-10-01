@@ -20,8 +20,15 @@ from leka.knowledge.models import (
     RelationshipType,
 )
 from leka.knowledge.registry import ENTITY_KINDS, MODEL_VERSION, RELATIONSHIP_KINDS
-from leka.knowledge.repository import EntityRepository, LandscapeFilters, ModelRepository
+from leka.knowledge.repository import (
+    EntityRepository,
+    InfrastructureFilters,
+    LandscapeFilters,
+    ModelRepository,
+)
 from leka.knowledge.schemas import (
+    CloudAccountDetail,
+    CloudAccountRead,
     Criticality,
     Dependencies,
     DependencyNode,
@@ -31,6 +38,8 @@ from leka.knowledge.schemas import (
     EntityKindRead,
     EntityRead,
     EntityVersionRead,
+    InfrastructureDetail,
+    InfrastructureRead,
     LandscapeDetail,
     LandscapeRead,
     LinkRead,
@@ -41,6 +50,7 @@ from leka.knowledge.schemas import (
     Registry,
     RelationshipKindRead,
     RelationshipRead,
+    ResourceEnvironment,
 )
 from leka.knowledge.service import KnowledgeService
 
@@ -48,6 +58,8 @@ __all__ = [
     "ENTITY_KINDS",
     "MODEL_VERSION",
     "RELATIONSHIP_KINDS",
+    "CloudAccountDetail",
+    "CloudAccountRead",
     "Criticality",
     "Dependencies",
     "DependencyNode",
@@ -61,6 +73,9 @@ __all__ = [
     "EntityType",
     "EntityVersion",
     "EntityVersionRead",
+    "InfrastructureDetail",
+    "InfrastructureFilters",
+    "InfrastructureRead",
     "KnowledgeService",
     "LandscapeDetail",
     "LandscapeFilters",
@@ -78,4 +93,5 @@ __all__ = [
     "RelationshipKindRead",
     "RelationshipRead",
     "RelationshipType",
+    "ResourceEnvironment",
 ]

@@ -230,12 +230,15 @@ def test_tags_become_a_service_a_team_and_an_environment() -> None:
         ("service", "service:billing-api", "Billing API"),
         ("team", "team:payments", "Payments"),
         ("environment", "environment:production", "production"),
+        # The account it is in, named by its id until its own record names it.
+        ("cloud_account", "aws:account:123456789012", "123456789012"),
     }
     edges = _edges(instance)
     assert {
         ("part_of", "service:billing-api"),
         ("owned_by", "team:payments"),
         ("runs_in", "environment:production"),
+        ("part_of", "aws:account:123456789012"),
     } <= edges
     # The instance's network is the VPC record's own key.
     assert ("in_network", vpc.entity.key) in edges
@@ -279,7 +282,10 @@ def test_work_states(raw: str, category: str | None, canonical: str) -> None:
         ("RUNNING", "running"),
         ("Succeeded", "running"),
         ("available", "running"),
-        ("terminated", "stopped"),
+        # Gone at the provider, still listed a while (LEKA-363).
+        ("terminated", "terminated"),
+        ("deleted", "terminated"),
+        ("stopped", "stopped"),
         ("shutting-down", "stopping"),
         ("PROVISIONING", "starting"),
     ],

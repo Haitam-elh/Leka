@@ -86,9 +86,9 @@ no clock — registered for the (source kind, capability) pairs it knows
 | GitLab (v4) | the same | `extraction/code.py` |
 | Bitbucket (2.0) | repositories, commits, pull_requests, issues, branches | `extraction/code.py` |
 | Jira Cloud (REST v3) | projects, issues | `extraction/tickets.py` |
-| AWS | instances, db_instances, buckets, functions, clusters, networks, load_balancers — one strategy per service | `extraction/cloud.py` |
-| Azure | the same seven — one strategy: Resource Manager's list has one shape | `extraction/cloud.py` |
-| Google Cloud | the same seven — one strategy: an asset around each API's resource | `extraction/cloud.py` |
+| AWS | instances, db_instances (with the endpoint a client connects to), buckets, functions, clusters, networks, load_balancers — one strategy per service; accounts: the account, its alias and organisation (LEKA-363) | `extraction/cloud.py` |
+| Azure | the same seven — one strategy: Resource Manager's list has one shape; accounts: a subscription or a resource group | `extraction/cloud.py` |
+| Google Cloud | the same seven — one strategy: an asset around each API's resource; accounts: a project, its number, labels and parent | `extraction/cloud.py` |
 | Datadog | alerts (monitors), events, incidents, metrics, logs — `service`, `env`, `host`, `tags` as signals; Datadog's id and timestamp kept | `extraction/observability.py` |
 | PagerDuty, Grafana | services, incidents; dashboards, alert rules, annotations | `extraction/observability.py` |
 | Splunk, Kibana | alerts (saved searches that alert, alerting rules), fired alerts, cases — Kibana's incidents —, dashboards; tags as signals, the app or space kept | `extraction/observability.py` |

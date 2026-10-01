@@ -6,11 +6,14 @@ said, dates in UTC, states and priorities on LEKA's scale, the facts parsing
 was surest of. The people it names become person entities; the services,
 applications, teams and environments its tags and catalogues name, entities
 of their own. What it points at becomes a relationship to that thing's key,
-whether or not any source has shown it.
+whether or not any source has shown it. A cloud resource is placed in what
+it is in — an AWS account, an Azure resource group and its subscription, a
+Google Cloud project — each an entity too (LEKA-363).
 """
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -35,8 +38,12 @@ PROJECT_TOOLS = frozenset({"linear", "asana", "trello", "clickup", "monday"})
 DOCUMENT_TOOLS = frozenset(
     {"confluence", "notion", "slab", "guru", "google_workspace", "microsoft_365"}
 )
-# What a custom source's resource may declare its records to be (LEKA-350).
-CUSTOM_ENTITIES = frozenset({"issue", "incident", "service", "application", "project", "document"})
+# What a custom source's resource may declare its records to be (LEKA-350):
+# a CMDB's servers and databases too (LEKA-363).
+CUSTOM_ENTITIES = frozenset(
+    {"issue", "incident", "service", "application", "project", "document"}
+    | {"infra_resource", "database"}
+)
 
 ENTITY_TYPES = {
     C.REPOSITORIES: "repository",
@@ -57,6 +64,8 @@ ENTITY_TYPES = {
     C.SERVICES: "service",
     C.PAGES: "document",
     C.FILES: "document",
+    # What resources are in; an Azure resource group says so itself.
+    C.ACCOUNTS: "cloud_account",
 }
 RESOURCE_KINDS = {
     C.INSTANCES: "instance",
@@ -67,6 +76,42 @@ RESOURCE_KINDS = {
     C.NETWORKS: "network",
     C.LOAD_BALANCERS: "load_balancer",
 }
+# How the company reads its infrastructure (LEKA-363): what computes, what
+# carries the traffic, what stores, what holds the data.
+RESOURCE_CLASSES = {
+    "instance": "compute",
+    "function": "compute",
+    "cluster": "compute",
+    "network": "network",
+    "load_balancer": "network",
+    "bucket": "storage",
+    "database": "database",
+}
+# A CMDB's words for a kind of resource.
+RESOURCE_WORDS = {
+    "instance": (
+        "instance",
+        "server",
+        "vm",
+        "virtual machine",
+        "virtual-machine",
+        "host",
+        "machine",
+    ),
+    "function": ("function", "lambda", "serverless"),
+    "cluster": ("cluster", "kubernetes", "k8s"),
+    "network": ("network", "vpc", "vnet", "subnet"),
+    "load_balancer": ("load balancer", "load_balancer", "load-balancer", "lb", "alb", "elb"),
+    "bucket": ("bucket", "storage", "object storage", "storage account"),
+    "database": ("database", "db", "rds", "sql"),
+}
+ACCOUNT_TYPES = {"aws": "aws_account", "azure": "azure_subscription", "gcp": "gcp_project"}
+# A Google Cloud zone: its region and a letter — europe-west1-b.
+GCP_ZONE = re.compile(r"^([a-z]+-[a-z]+\d+)-[a-z]$")
+# The tags AKS and GKE put on a node beside its cluster's name: where the
+# cluster is.
+AKS_CLUSTER_GROUP = "aks-managed-cluster-rg"
+GKE_CLUSTER_LOCATION = "goog-k8s-cluster-location"
 # The record's roles towards the people it names: item → person.
 PERSON_ROLES = {
     "author": "authored_by",
@@ -189,6 +234,10 @@ def entity(build: Build) -> NormalisedEntity:
         raise InvalidRecordError("no name: the extraction has no title")
     if declared is not None:
         key, attributes = _custom(build, declared)
+    elif capability is C.ACCOUNTS:
+        if build.kind not in CLOUDS:
+            raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
+        key, attributes = _scope(build)
     elif capability in RESOURCE_KINDS:
         if build.kind not in CLOUDS:
             raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
@@ -430,12 +479,18 @@ def _custom(build: Build, declared: str) -> tuple[str, dict[str, object]]:
     """A custom source's record, as the entity its resource declared: keyed
     by the source — nothing tells two unknown systems' ids apart — except a
     service, keyed by its name as PagerDuty's and a `service:` tag's are, so
-    they meet; its state and priority on LEKA's scales; its author."""
+    they meet, and a cloud resource a CMDB names by its provider's id — an
+    ARN, an ARM id, a Google full resource name — keyed by it as the cloud
+    connector's record is (LEKA-363); its state and priority on LEKA's
+    scales; its author."""
     record = build.record
+    provider_id = _provider_id(build) if declared in RESOURCES else None
     if declared == "service":
         key = ids.service(str(record.title))
     elif declared == "application":
         key = ids.application(str(record.title))
+    elif provider_id is not None:
+        key = ids.cloud(*provider_id)
     else:
         key = ids.item(f"custom-{build.source_id}", declared, record.provenance.external_id)
     attributes = _common(build)
@@ -443,13 +498,17 @@ def _custom(build: Build, declared: str) -> tuple[str, dict[str, object]]:
         # A CMDB, a Backstage catalogue read as a custom source: what its
         # admin mapped, in the words below.
         _catalogued(build, key, attributes, application=declared == "application")
-    if record.state is not None and declared in ("issue", "incident"):
+    elif declared in RESOURCES:
+        _declared_resource(build, key, attributes, declared, provider_id)
+    if record.state is not None and declared in {"issue", "incident", *RESOURCES}:
         own = _own(build.mapping.states, record.state)
         state, known = (
             (own, True)
             if own
             else values.incident_state(record.state)
             if declared == "incident"
+            else values.resource_state(record.state)
+            if declared in RESOURCES
             else values.work_state(record.state)
         )
         attributes["state"], attributes["state_raw"] = state, record.state
@@ -547,6 +606,14 @@ SAID = {
     "stage": ("lifecycle", "stage"),
     "environments": ("environments", "environment"),
 }
+# What a CMDB says of a resource, beyond a catalogue's words (LEKA-363):
+# the provider's id it goes by, what kind of resource it is, its service.
+RESOURCE_SAID = {
+    "resource_id": ("resource_id", "arn", "cloud_id", "provider_id"),
+    "resource_kind": ("resource_kind", "kind", "type"),
+    "service": ("service", "services"),
+}
+RESOURCES = frozenset({"infra_resource", "database"})
 # Read here, kept as relationships or on LEKA's scales, not as attributes.
 CATALOGUE_FIELDS = frozenset(
     {"kind", "application", "system", "product", "services", "depends_on", "dependencies"}
@@ -595,11 +662,100 @@ def _catalogued(
         _runs_in(build, key, own or usual or word.lower(), 1.0)
 
 
+def _declared_resource(
+    build: Build,
+    key: str,
+    attributes: dict[str, object],
+    declared: str,
+    provider_id: tuple[str, str] | None,
+) -> None:
+    """What a CMDB says of a server, a database: its kind and class; whose
+    it is, its service and application, how critical, where it runs; what
+    it depends on — a resource by its provider's id, or another record of
+    the same resource by its id. In its words, then on LEKA's scales."""
+    # Read from the record below; kept as relationships or on LEKA's scales.
+    for name in CATALOGUE_FIELDS | {n for names in RESOURCE_SAID.values() for n in names}:
+        attributes.pop(name, None)
+    for name in SAID["teams"]:
+        attributes.pop(name, None)
+    if provider_id is not None:
+        attributes["provider"] = provider_id[0]
+    word = next(iter(_said(build, "resource_kind", split=False)), None)
+    kind = "database" if declared == "database" else _resource_kind(word)
+    if kind:
+        attributes["resource_kind"] = kind
+        attributes["resource_class"] = RESOURCE_CLASSES[kind]
+    for team in _said(build, "teams"):
+        owner = _named(build, "team", ids.team(team), team, 1.0)
+        build.relate("owned_by", key, owner, 1.0, "signals")
+    for name in _said(build, "service"):
+        service = _named(build, "service", ids.service(name), name, 1.0)
+        build.relate("part_of", key, service, 1.0, "catalogue.service")
+    for group in _said(build, "application")[:1]:
+        target = _named(build, "application", ids.application(group), group, 1.0)
+        build.relate("part_of", key, target, 1.0, "catalogue.application")
+    resource = str(build.record.signals.get("resource") or "")
+    for other in _said(build, "depends_on"):
+        found = _provider_of(other)
+        if found is not None:
+            target = ids.cloud(*found)
+        elif resource:
+            target = ids.item(f"custom-{build.source_id}", declared, f"{resource}:{other}")
+        else:
+            continue
+        build.relate("depends_on", key, target, 1.0, "catalogue.depends_on")
+    raw = next(iter(_said(build, "criticality", split=False)), None)
+    if raw:
+        level = criticality(raw)
+        attributes["criticality"], attributes["criticality_raw"] = level or raw.lower(), raw
+        if level is None:
+            build.diagnostics.append("unknown criticality: kept as the system wrote it")
+    places: list[str] = []
+    for word in _said(build, "environments"):
+        own = _own(build.mapping.environments, word)
+        usual = next((env for env, words in ENVIRONMENTS.items() if word.lower() in words), None)
+        places.append(own or usual or word.lower())
+        _runs_in(build, key, places[-1], 1.0)
+    if len(places) == 1:
+        attributes["environment"] = places[0]
+
+
+def _provider_id(build: Build) -> tuple[str, str] | None:
+    """The provider's own id a CMDB gives a resource — a field of its own,
+    else the record's id — when it reads as one."""
+    for value in _said(build, "resource_id", split=False):
+        found = _provider_of(value)
+        if found is not None:
+            return found
+    own = build.record.provenance.external_id.split(":", 1)[-1]
+    return _provider_of(own)
+
+
+def _provider_of(value: str) -> tuple[str, str] | None:
+    """('aws', an ARN), ('azure', an ARM id), ('gcp', a full resource name)
+    — or None for an id that is none of them."""
+    value = value.strip()
+    if value.startswith("arn:aws"):
+        return "aws", value
+    if value.lower().startswith("/subscriptions/"):
+        return "azure", value
+    if value.startswith("//") and ".googleapis.com/" in value:
+        return "gcp", value
+    return None
+
+
+def _resource_kind(word: str | None) -> str | None:
+    if not word:
+        return None
+    folded = word.strip().lower()
+    return next((kind for kind, words in RESOURCE_WORDS.items() if folded in words), None)
+
+
 def _said(build: Build, what: str, *, split: bool = True) -> list[str]:
     """The first of `what`'s fields the record has — its signals, then its
     metadata — as text: a list, or words between commas."""
     for bag in (build.record.signals, build.record.metadata):
-        for name in SAID[what]:
+        for name in {**SAID, **RESOURCE_SAID}[what]:
             value = bag.get(name)
             if isinstance(value, list):
                 found = [str(v).strip() for v in value if str(v).strip()]
@@ -627,15 +783,41 @@ def _runs_in(build: Build, key: str, environment: str | None, confidence: float)
 
 
 def _cloud(build: Build) -> tuple[str, dict[str, object]]:
+    """A cloud resource: keyed by the provider's own id; its kind and class;
+    where it is — its region and zone, the account, resource group or
+    project it is in; what its tags say — environment, service,
+    application, team, how critical, the cluster it is a node of; the
+    network it is in."""
     record, capability = build.record, build.record.provenance.capability
     key = ids.cloud(build.kind, record.provenance.external_id)
     attributes = _common(build, resource=True)
-    attributes["resource_kind"] = RESOURCE_KINDS[capability]
-    tags = record.signals.get("tags")
-    attributes["tags"] = (
-        dict(t.split("=", 1) for t in tags if "=" in t) if isinstance(tags, list) else {}
-    )
+    kind = RESOURCE_KINDS[capability]
+    attributes["resource_kind"] = kind
+    attributes["resource_class"] = RESOURCE_CLASSES[kind]
+    attributes["tags"] = _tag_dict(record.signals.get("tags"))
+    _placed(build, key, attributes)
+    _described(build, key, attributes)
+    if kind == "cluster":
+        build.aliases += _cluster_aliases(build, attributes)
+    for fact in build.parsed.facts:
+        if fact.type is FactType.CLUSTER and fact.value and kind != "cluster":
+            cluster = _cluster_key(build, fact.value, attributes)
+            if cluster:
+                _resource(build, cluster, fact.value, "cluster", attributes)
+                build.relate("part_of", key, cluster, fact.confidence, fact.evidence.field)
 
+    network = next((r.external_id for r in record.references if r.kind == "network"), None)
+    if network:
+        network_key = _network_key(build, network)
+        if network_key:
+            build.relate("in_network", key, network_key, 1.0, "references")
+    return key, attributes
+
+
+def _described(build: Build, key: str, attributes: dict[str, object]) -> None:
+    """What a cloud thing's tags say — and, less surely, its name: its
+    environment, exposure and criticality as attributes; its service, its
+    application and its team as relationships; where it runs."""
     for fact_type in (FactType.ENVIRONMENT, FactType.EXPOSURE, FactType.CRITICALITY):
         best = _best(build.parsed, fact_type)
         if best is not None:
@@ -674,12 +856,188 @@ def _cloud(build: Build) -> tuple[str, dict[str, object]]:
         float(str(attributes.get("environment_confidence", 1.0))),
     )
 
-    network = next((r.external_id for r in record.references if r.kind == "network"), None)
-    if network:
-        network_key = _network_key(build, network)
-        if network_key:
-            build.relate("in_network", key, network_key, 1.0, "references")
+
+def _placed(build: Build, key: str, attributes: dict[str, object]) -> None:
+    """Where a resource is: its region and zone, and what it is in — an AWS
+    account or a Google Cloud project; an Azure resource group, in its
+    subscription — each an entity of its own, the resource part of it. An
+    S3 bucket's ARN names no account: enrichment finds it (enrichment.md)."""
+    record, provenance = build.record, build.record.provenance
+    account: str | None = None
+    if build.kind == "aws":
+        arn = provenance.external_id.split(":")
+        account = arn[4] if len(arn) > 5 and arn[4].isdigit() else None
+    elif build.kind == "azure":
+        found = provenance.container or _after(provenance.external_id, "subscriptions")
+        account = found.lower() if found else None
+    elif build.kind == "gcp":
+        # The project as the scope names it: some APIs say its number.
+        account = provenance.container or _text(record.metadata.get("project"))
+        location = _text(attributes.get("region"))
+        zone = GCP_ZONE.match(location or "")
+        if zone:
+            attributes["zone"], attributes["region"] = location, zone.group(1)
+    if not account:
+        return
+    attributes["account"] = account
+    parent = _account(build, account)
+    group = _text(record.metadata.get("resource_group"))
+    if build.kind != "azure" or not group:
+        build.relate("part_of", key, parent, 1.0, "hierarchy")
+        return
+    group_key = ids.cloud("azure", f"/subscriptions/{account}/resourceGroups/{group}")
+    build.add(
+        NormalisedEntity(
+            type="resource_group",
+            key=group_key,
+            external_id=group_key,
+            source_id=build.source_id,
+            name=values.name(group) or group_key,
+            attributes={"provider": "azure", "account": account, "resource_group": group},
+            observed_at=build.observed_at,
+        )
+    )
+    # The resource is in its group, the group in its subscription.
+    build.relate("part_of", key, group_key, 1.0, "hierarchy")
+    build.relate("part_of", group_key, parent, 1.0, "hierarchy")
+
+
+def _account(build: Build, account: str) -> str:
+    """The account, subscription or project a thing is in, as an entity —
+    named by its id until its own record names it."""
+    key = ids.cloud_account(build.kind, account)
+    if key not in build.related:
+        build.add(
+            NormalisedEntity(
+                type="cloud_account",
+                key=key,
+                external_id=key,
+                source_id=build.source_id,
+                name=account,
+                attributes={
+                    "provider": build.kind,
+                    "account_type": ACCOUNT_TYPES[build.kind],
+                    "account_id": account,
+                },
+                observed_at=build.observed_at,
+            )
+        )
+    return key
+
+
+def _resource(build: Build, key: str, name: str, kind: str, near: dict[str, object]) -> None:
+    """A resource a record names — a node's cluster — as an entity, with
+    what is known of it until its own record says more."""
+    build.add(
+        NormalisedEntity(
+            type="infra_resource",
+            key=key,
+            external_id=key,
+            source_id=build.source_id,
+            name=values.name(name) or key,
+            attributes={
+                "provider": build.kind,
+                "resource_kind": kind,
+                "resource_class": RESOURCE_CLASSES[kind],
+                **{k: near[k] for k in ("account", "region") if near.get(k)},
+            },
+            observed_at=build.observed_at,
+        )
+    )
+
+
+def _cluster_key(build: Build, name: str, attributes: dict[str, object]) -> str | None:
+    """A node's cluster, by the key the cluster's own record has: its ARN, its
+    ARM id — from the region, the account and the group the node's tags
+    name — or, at Google, the project, location and name its record is
+    also known by. None when the node does not say enough."""
+    tags = attributes.get("tags")
+    tagged = {str(k).lower(): str(v) for k, v in tags.items()} if isinstance(tags, dict) else {}
+    account, region = _text(attributes.get("account")), _text(attributes.get("region"))
+    if build.kind == "aws" and account and region:
+        return ids.cloud("aws", f"arn:aws:eks:{region}:{account}:cluster/{name}")
+    if build.kind == "azure" and account and tagged.get(AKS_CLUSTER_GROUP):
+        group = tagged[AKS_CLUSTER_GROUP]
+        return ids.cloud(
+            "azure",
+            f"/subscriptions/{account}/resourceGroups/{group}"
+            f"/providers/Microsoft.ContainerService/managedClusters/{name}",
+        )
+    if build.kind == "gcp" and account and tagged.get(GKE_CLUSTER_LOCATION):
+        return _gke(account, tagged[GKE_CLUSTER_LOCATION], name)
+    return None
+
+
+def _cluster_aliases(build: Build, attributes: dict[str, object]) -> list[str]:
+    """A GKE cluster's other key: its project, location and name — what its
+    nodes' labels say of it."""
+    account = _text(attributes.get("account"))
+    # A zonal cluster's location is its zone; a regional one's, its region.
+    location = _text(attributes.get("zone")) or _text(attributes.get("region"))
+    name = values.name(build.record.title)
+    if build.kind == "gcp" and account and location and name:
+        return [_gke(account, location, name)]
+    return []
+
+
+def _gke(project: str, location: str, name: str) -> str:
+    return f"gcp:cluster:{project}/{location.lower()}/{name}"
+
+
+# ── what resources are in (LEKA-363) ─────────────────────────────────────────
+
+
+def _scope(build: Build) -> tuple[str, dict[str, object]]:
+    """What resources are in, as its provider describes it: an AWS account
+    — its alias, its organisation — an Azure subscription or resource
+    group, a Google Cloud project — its labels, its folder or organisation.
+    Its state on one scale; what its tags and name say, as a resource's."""
+    record = build.record
+    meta = record.metadata
+    attributes = _common(build)
+    attributes.pop("state", None)
+    if record.state is not None:
+        state, known = values.account_state(record.state)
+        attributes["state"], attributes["state_raw"] = state, record.state
+        if not known:
+            build.diagnostics.append("unknown state: kept as the provider wrote it")
+    attributes["tags"] = _tag_dict(record.signals.get("tags"))
+    identifier = str(meta.get("id") or record.provenance.external_id)
+    if record.signals.get("resource_type") == "resource_group":
+        build.as_type = "resource_group"
+        key = ids.cloud("azure", identifier)
+        subscription = _text(meta.get("subscription")) or _after(identifier, "subscriptions")
+        if subscription:
+            attributes["account"] = subscription.lower()
+            build.relate("part_of", key, _account(build, subscription.lower()), 1.0, "hierarchy")
+    else:
+        account = identifier.removeprefix("/subscriptions/")
+        key = ids.cloud_account(build.kind, account)
+        attributes["account_type"] = ACCOUNT_TYPES[build.kind]
+        attributes["account_id"] = account
+        number = _text(meta.get("number"))
+        if build.kind == "gcp" and number and number != account:
+            # What an API that names the project by its number calls it.
+            build.aliases.append(ids.cloud_account("gcp", number))
+    _described(build, key, attributes)
     return key, attributes
+
+
+def _tag_dict(tags: object) -> dict[str, object]:
+    return dict(t.split("=", 1) for t in tags if "=" in t) if isinstance(tags, list) else {}
+
+
+def _after(path: str, marker: str) -> str | None:
+    """'/subscriptions/s/resourceGroups/Prod/…' → 's' for 'subscriptions'."""
+    parts = path.split("/")
+    for index, part in enumerate(parts[:-1]):
+        if part.lower() == marker.lower():
+            return parts[index + 1] or None
+    return None
+
+
+def _text(value: object) -> str | None:
+    return value.strip() or None if isinstance(value, str) else None
 
 
 def _named(build: Build, kind: str, key: str, name: str, confidence: float) -> str:

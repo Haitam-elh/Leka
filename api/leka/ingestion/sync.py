@@ -640,9 +640,11 @@ def _capabilities(source: Source, offered: frozenset[Capability]) -> list[Capabi
     what the others hang from first — repositories, projects, and the spaces,
     databases and drives a documentation tool's pages and files sit in
     (LEKA-346), the services an incident tool's incidents are about
-    (LEKA-348), the schemas a database's tables are in (LEKA-349)."""
+    (LEKA-348), the schemas a database's tables are in (LEKA-349), the
+    accounts a cloud's resources are in (LEKA-363)."""
     found = {c for c in Capability if c.value in source.capabilities and c in offered}
     roots = (
+        Capability.ACCOUNTS,
         Capability.REPOSITORIES,
         Capability.PROJECTS,
         Capability.SPACES,

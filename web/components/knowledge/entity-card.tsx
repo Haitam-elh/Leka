@@ -2,6 +2,8 @@
 
 import {
   AppWindow,
+  Boxes,
+  Building2,
   CircleDot,
   Cloud,
   Database,
@@ -46,6 +48,8 @@ export const ENTITY_ICONS: Record<EntityType, LucideIcon> = {
   release: Tag,
   application: AppWindow,
   environment: Layers,
+  cloud_account: Building2,
+  resource_group: Boxes,
 };
 
 export function EntityIcon({

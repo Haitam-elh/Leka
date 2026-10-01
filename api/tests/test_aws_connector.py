@@ -49,6 +49,11 @@ HEALTHY: dict[str, Answer] = {
     "list_clusters": {"clusters": []},
     "describe_vpcs": {"Vpcs": []},
     "describe_load_balancers": {"LoadBalancers": []},
+    # The account (LEKA-363): read with the resources, never probed.
+    "list_account_aliases": {"AccountAliases": ["acme-prod"]},
+    "describe_organization": {
+        "Organization": {"Id": "o-abc123", "MasterAccountId": "999999999999"}
+    },
 }
 
 

@@ -203,4 +203,5 @@ export const ENTITY_TYPES = [
   "deployment",
   "database",
   "infra_resource",
+  "cloud_account",
 ] as const;
