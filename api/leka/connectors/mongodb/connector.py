@@ -63,6 +63,7 @@ from leka.connectors.databases import (
     public_host,
     rounded,
     schema_names,
+    server,
     too_many_tables,
 )
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
@@ -347,6 +348,7 @@ class MongoDBConnector(Connector[MongoDBConfig, MongoDBCredentials]):
                         "collections": sum(kind != "view" for kind in kinds),
                         "views": kinds.count("view"),
                         "size_bytes": rounded(_int(stats.get("storageSize")) or None),
+                        "server": self._server(),
                     }
                     # Its own container, as a repository is: the scope rules
                     # keep or leave a database and its collections alike.
@@ -359,7 +361,13 @@ class MongoDBConnector(Connector[MongoDBConfig, MongoDBCredentials]):
                     if read > MAX_TABLES:
                         raise too_many_tables()
                     external_id = f"{name}.{collection['name']}"
-                    yield _record(C.TABLES, collection, external_id, name, fetched)
+                    payload = {**collection, "server": self._server()}
+                    yield _record(C.TABLES, payload, external_id, name, fetched)
+
+    def _server(self) -> dict[str, object]:
+        """Where its catalogue is read: the address's hosts — a cluster, its
+        databases its schemas (leka/connectors/databases.py)."""
+        return server("mongodb", urlsplit(self.config.address).netloc, None, None)
 
     # ── inside ───────────────────────────────────────────────────────────────
 

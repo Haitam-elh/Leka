@@ -24,6 +24,13 @@
                                                how much is in each, of what, where
     GET /knowledge/cloud-accounts/{id}         one — or a resource group — and its
                                                resource groups
+    GET /knowledge/databases                   the databases: where, what they hold
+                                               (LEKA-364)
+    GET /knowledge/databases/{id}              one, its schemas
+    GET /knowledge/data-objects                the tables, views, collections
+    GET /knowledge/data-objects/{id}           one: its columns, what it is tied to
+    GET /knowledge/data-objects/{id}/lineage   what it reads from and references —
+                                               or what reads from it — 1 to 5 steps
 
 Read by every member (`workspace:read`): it is the company's own picture. A
 route validates, calls one repository or service, and returns (architecture
@@ -51,6 +58,11 @@ from leka.knowledge import (
     RELATIONSHIP_KINDS,
     CloudAccountDetail,
     CloudAccountRead,
+    DatabaseDetail,
+    DatabaseRead,
+    DataFilters,
+    DataObjectDetail,
+    DataObjectRead,
     Dependencies,
     Entity,
     EntityBrief,
@@ -500,3 +512,148 @@ async def cloud_account(
     if found is None or found.type not in (EntityType.CLOUD_ACCOUNT, EntityType.RESOURCE_GROUP):
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such account.")
     return await KnowledgeService(repository).cloud_account(found)
+
+
+# ── data: databases, schemas, data objects (LEKA-364) ────────────────────────
+
+Classification = Literal["restricted", "confidential", "internal", "public"]
+DataCategory = Literal[
+    "contact", "identity", "location", "financial", "credential", "health", "personal"
+]
+ObjectKind = Literal[
+    "table", "partitioned_table", "view", "materialized_view", "foreign_table", "collection"
+]
+
+
+@router.get("/databases", response_model=PageEnvelope[DatabaseRead])
+async def databases(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    engine: Annotated[str | None, Query(max_length=50)] = None,
+    classification: Classification | None = None,
+    personal_data: bool | None = None,
+    environment: Annotated[str | None, Query(max_length=50)] = None,
+    team_id: uuid.UUID | None = None,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the name.")] = None,
+) -> PageEnvelope[DatabaseRead]:
+    """The databases, by name — what database sources read, and the cloud
+    instances serving them: where each is, the instance serving it, how
+    many schemas and objects, what data it holds and how sensitive."""
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.databases(
+        lifecycle=lifecycle,
+        engine=engine,
+        classification=classification,
+        personal_data=personal_data,
+        environment=environment,
+        team_id=team_id,
+        q=q,
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=ENTITY_SORTS, id_column=Entity.id
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).databases(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/databases/{entity_id}", response_model=DatabaseDetail)
+async def database(entity_id: uuid.UUID, session: SessionDep, principal: Reader) -> DatabaseDetail:
+    """One database: its schemas — what each holds — the databases it serves
+    when it is an instance, where each piece came from."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not EntityType.DATABASE:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such database.")
+    return await KnowledgeService(repository).database(found)
+
+
+@router.get("/data-objects", response_model=PageEnvelope[DataObjectRead])
+async def data_objects(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    database_id: uuid.UUID | None = None,
+    schema_id: uuid.UUID | None = None,
+    object_kind: ObjectKind | None = None,
+    classification: Classification | None = None,
+    category: DataCategory | None = None,
+    personal_data: bool | None = None,
+    service_id: uuid.UUID | None = None,
+    team_id: uuid.UUID | None = None,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the name.")] = None,
+) -> PageEnvelope[DataObjectRead]:
+    """The tables, views and collections, by name: their database and
+    schema, their size, what data they hold, how they are tied."""
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.data_objects(
+        DataFilters(
+            lifecycle=lifecycle,
+            database_id=database_id,
+            schema_id=schema_id,
+            object_kind=object_kind,
+            classification=classification,
+            category=category,
+            personal_data=personal_data,
+            service_id=service_id,
+            team_id=team_id,
+            q=q,
+        )
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=ENTITY_SORTS, id_column=Entity.id
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).data_objects(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/data-objects/{entity_id}", response_model=DataObjectDetail)
+async def data_object(
+    entity_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> DataObjectDetail:
+    """One data object: its columns — what each holds — its keys, what it
+    references and reads from, what references and reads from it."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not EntityType.DATA_OBJECT:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such data object.")
+    return await KnowledgeService(repository).data_object(found)
+
+
+@router.get("/data-objects/{entity_id}/lineage", response_model=Dependencies)
+async def lineage(
+    entity_id: uuid.UUID,
+    session: SessionDep,
+    principal: Reader,
+    direction: Annotated[
+        Literal["downstream", "upstream"],
+        Query(
+            description="upstream: what it reads from and references; downstream: what reads "
+            "from or references it."
+        ),
+    ] = "upstream",
+    depth: Annotated[int, Query(ge=1, le=5)] = 3,
+) -> Dependencies:
+    """A data object's lineage: through foreign keys and what views read,
+    `depth` steps at most — each thing reached, how far, the relationships
+    walked."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not EntityType.DATA_OBJECT:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such data object.")
+    walked = await KnowledgeService(repository).dependencies(
+        entity_id, direction=direction, depth=depth, environment=None, lineage=True
+    )
+    if walked is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such data object.")
+    return walked

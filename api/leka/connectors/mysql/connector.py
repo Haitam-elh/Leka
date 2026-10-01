@@ -66,6 +66,7 @@ from leka.connectors.databases import (
     public_host,
     rounded,
     schema_names,
+    server,
     too_many_tables,
 )
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
@@ -362,11 +363,19 @@ class MySQLConnector(Connector[MySQLConfig, MySQLCredentials]):
                     if name in wanted:
                         # Its own container, as a repository is: the scope
                         # rules keep or leave a database and its tables alike.
-                        yield _record(C.SCHEMAS, dict(row), name, name, fetched)
+                        payload = {**dict(row), "server": self._server()}
+                        yield _record(C.SCHEMAS, payload, name, name, fetched)
                 return
             for table in await self._tables(db, wanted):
                 external_id = f"{table['schema']}.{table['name']}"
-                yield _record(C.TABLES, table, external_id, str(table["schema"]), fetched)
+                payload = {**table, "server": self._server()}
+                yield _record(C.TABLES, payload, external_id, str(table["schema"]), fetched)
+
+    def _server(self) -> dict[str, object]:
+        """Where its catalogue is read: a server, whose databases are its
+        schemas (leka/connectors/databases.py)."""
+        engine = self.manifest.key.value  # mysql, or mariadb
+        return server(engine, self.config.host, self.config.port, None)
 
     # ── inside ───────────────────────────────────────────────────────────────
 

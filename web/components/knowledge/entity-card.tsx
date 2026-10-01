@@ -10,12 +10,14 @@ import {
   FileText,
   FolderGit2,
   FolderKanban,
+  FolderTree,
   GitCommitHorizontal,
   GitPullRequest,
   Layers,
   type LucideIcon,
   Rocket,
   Server,
+  Table2,
   Tag,
   TriangleAlert,
   User,
@@ -50,6 +52,8 @@ export const ENTITY_ICONS: Record<EntityType, LucideIcon> = {
   environment: Layers,
   cloud_account: Building2,
   resource_group: Boxes,
+  schema: FolderTree,
+  data_object: Table2,
 };
 
 export function EntityIcon({

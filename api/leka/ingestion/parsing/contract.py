@@ -42,6 +42,11 @@ class FactType(enum.StrEnum):
     EXPOSURE = "exposure"  # public, internal
     CRITICALITY = "criticality"  # critical, high, medium, low
     CLUSTER = "cluster"  # the Kubernetes cluster a machine is a node of
+    # What a column holds — contact, identity, location, financial,
+    # credential, health, personal — its target the column (LEKA-364).
+    DATA_CATEGORY = "data_category"
+    # How a table's own documentation classifies it: confidential, restricted.
+    CLASSIFICATION = "classification"
 
 
 class Target(BaseModel):

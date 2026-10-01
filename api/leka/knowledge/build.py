@@ -59,6 +59,9 @@ MEASURES = frozenset(
         "mttr_minutes",
         "stale",
         "lifecycle",
+        # A table's size moves with every write (LEKA-364).
+        "estimated_rows",
+        "size_bytes",
     }
 )
 # Its source says it is no more: archived; a resource terminated, an account

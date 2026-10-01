@@ -22,8 +22,11 @@ company model reads them, what those things are together:
     8. INFRASTRUCTURE: the account a cloud resource's source reads it in,
        where its own record names none; the environment its cluster, its
        resource group or its account runs in, where its own tags say none
-       (LEKA-363). Run before ownership and the landscape, which read what
-       it adds.
+       (LEKA-363) — and a database's and a schema's, from the instance
+       that serves it (LEKA-364). Run before ownership and the landscape,
+       which read what it adds.
+    9. DATA: what a schema, a database, the instance serving it hold — the
+       kinds of data and how sensitive, from their tables (LEKA-364).
 
 ADDED, NEVER OVERWRITTEN. Nothing here changes a resolved entity: what is
 enriched is kept beside it — each attribute and each relationship with its
@@ -61,7 +64,9 @@ from leka.ingestion.resolution import signals as sig
 # 3: a resource's account, and its container's environment; a team
 #    inherited through an account less surely than through a service
 #    (LEKA-363).
-ENRICHER_VERSION = 3
+# 4: a database's and a schema's environment, from what serves them; what
+#    data each holds, from its tables (LEKA-364).
+ENRICHER_VERSION = 4
 
 Origin = Literal["stated", "inferred"]
 
@@ -215,10 +220,15 @@ ENVIRONMENT_ORDER = ("production", "staging", "development", "test")
 FROM_PARTS = 0.8
 # Infrastructure (LEKA-363): what resources are in, and what is placed in it.
 SCOPES = frozenset({"cloud_account", "resource_group"})
-PLACED = frozenset({"infra_resource", "database", "resource_group"})
-# Where an environment is inherited from, the nearest first: a node's
-# cluster, a resource's group, its account.
-CONTAINER_ORDER = ("cluster", "resource_group", "cloud_account")
+PLACED = frozenset({"infra_resource", "database", "resource_group", "schema"})
+# Where an environment is inherited from, the nearest first: a schema's
+# database, a database's instance (LEKA-364), a node's cluster, a
+# resource's group, its account.
+CONTAINER_ORDER = ("database", "cluster", "resource_group", "cloud_account")
+# Data (LEKA-364): how sensitive, the most first; what holds data, and what
+# a part of it can be.
+DATA_LEVELS = ("restricted", "confidential", "internal", "public")
+DATA_HOLDERS = frozenset({"data_object", "schema", "database"})
 # What a container says of what it holds — its environment — said a little
 # less surely; and the account a source reads a resource in.
 FROM_CONTAINER = 0.9
@@ -1066,12 +1076,13 @@ def infrastructure(graph: Graph) -> Made:
             )
         made.counts["account"] += 1
 
-    # Containers before what they hold — groups, then clusters: a group's
-    # environment, inherited from its account, is what its resources inherit.
+    # Containers before what they hold — groups, clusters, the instances
+    # serving databases, databases, schemas: a group's environment,
+    # inherited from its account, is what its resources inherit.
     inherited: dict[uuid.UUID, tuple[str, float]] = {}
     placed = sorted(
         (n for n in graph.nodes.values() if n.type in PLACED),
-        key=lambda n: (n.type != "resource_group", _container_word(n) != "cluster", n.key),
+        key=lambda n: (_depth(n), n.key),
     )
     for node in placed:
         if "environment" in node.attributes or graph.out(node.id, {"runs_in"}):
@@ -1122,6 +1133,17 @@ def _containers(
     return [(edge, container) for _, edge, container in sorted(found, key=lambda f: f[0])]
 
 
+def _depth(node: Node) -> int:
+    """How deep a thing sits among what holds things: the shallowest first."""
+    if node.type == "resource_group":
+        return 0
+    if _container_word(node) == "cluster":
+        return 1
+    if node.type == "database":
+        return 2 if node.attributes.get("provider") else 3  # an instance, then its databases
+    return 4 if node.type == "schema" else 5
+
+
 def _container_word(node: Node) -> str:
     if node.type == "infra_resource" and node.attributes.get("resource_kind") == "cluster":
         return "cluster"
@@ -1149,10 +1171,91 @@ def _placed_environment(
     return None
 
 
+# ── 9. data (LEKA-364) ───────────────────────────────────────────────────────
+
+
+def data(graph: Graph) -> Made:
+    """What a schema holds, from its tables; a database, from its schemas;
+    the instance serving databases, from them: the kinds of data, the most
+    sensitive classification, whether personal data — where its sources say
+    none. At most FROM_PARTS sure: a part's word, said of its whole."""
+    made = Made()
+    held: dict[uuid.UUID, tuple[set[str], str | None, bool, uuid.UUID | None]] = {}
+    holders = sorted(
+        (n for n in graph.nodes.values() if n.type in ("schema", "database")),
+        key=lambda n: (n.type != "schema", bool(n.attributes.get("provider")), n.key),
+    )
+    for node in holders:
+        categories: set[str] = set()
+        levels: list[tuple[int, uuid.UUID]] = []
+        personal = False
+        for edge in graph.into(node.id, {"part_of"}):
+            part = graph.nodes[edge.from_id]
+            if part.type not in DATA_HOLDERS:
+                continue
+            kinds, level, personal_part, _ = held.get(part.id) or _holds(part)
+            categories |= kinds
+            personal = personal or personal_part
+            if level is not None:
+                levels.append((DATA_LEVELS.index(level), part.id))
+        level = DATA_LEVELS[min(levels)[0]] if levels else None
+        via = min(levels)[1] if levels else None
+        own = _holds(node)
+        # What goes up is the most sensitive: a schema said internal that
+        # holds a restricted table holds restricted data.
+        known = [lv for lv in (own[1], level) if lv is not None]
+        most = min(known, key=DATA_LEVELS.index) if known else None
+        held[node.id] = (categories | own[0], most, personal or own[2], via)
+        if categories and "data_categories" not in node.attributes:
+            made.facts.append(
+                _fact(
+                    node,
+                    "data_categories",
+                    sorted(categories),
+                    FROM_PARTS,
+                    "objects",
+                    f"its tables hold {', '.join(sorted(categories))} data",
+                )
+            )
+            made.counts["data_categories"] += 1
+        if personal and "personal_data" not in node.attributes:
+            made.facts.append(
+                _fact(node, "personal_data", True, FROM_PARTS, "objects", "its tables hold some")
+            )
+        if level is not None and via is not None and "classification" not in node.attributes:
+            part = graph.nodes[via]
+            made.facts.append(
+                _fact(
+                    node,
+                    "classification",
+                    level,
+                    FROM_PARTS,
+                    "objects",
+                    f"its {part.type} {part.key} is {level}",
+                )
+            )
+            made.counts["classification"] += 1
+    return made
+
+
+def _holds(node: Node) -> tuple[set[str], str | None, bool, None]:
+    """What a thing's sources say of the data it holds."""
+    found = node.attributes.get("data_categories")
+    categories = {str(c) for c in found} if isinstance(found, list) else set()
+    level = node.attributes.get("classification")
+    return (
+        categories,
+        str(level) if level in DATA_LEVELS else None,
+        node.attributes.get("personal_data") is True,
+        None,
+    )
+
+
 ENRICHERS: tuple[tuple[str, Enricher], ...] = (
     ("relationships", relationships),
     ("links", links),
     ("infrastructure", infrastructure),
+    ("data", data),
     ("ownership", ownership),
     ("membership", membership),
     ("activity", activity),

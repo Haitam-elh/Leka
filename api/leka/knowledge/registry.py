@@ -38,7 +38,9 @@ from leka.knowledge.models import EntityType, RelationshipType
 #    kept (LEKA-362).
 # 3: what resources are in — cloud accounts, resource groups — resources'
 #    class, place and cluster; a terminated resource archived (LEKA-363).
-MODEL_VERSION = 3
+# 4: databases' schemas and data objects, foreign keys and what views read,
+#    data classification (LEKA-364).
+MODEL_VERSION = 4
 
 
 class Attributes(BaseModel):
@@ -149,6 +151,48 @@ class ResourceAttributes(Placed):
     created_at: str | None = None
 
 
+class Classified(Attributes):
+    """What a database, a schema or a data object says of the data it holds
+    (LEKA-364): what kinds — contact, identity, location, financial,
+    credential, health, personal — how sensitive, whether personal data."""
+
+    data_categories: list[str] | None = None
+    classification: str | None = None
+    personal_data: bool | None = None
+    engine: str | None = None
+    owner_role: str | None = None
+
+
+class DatabaseAttributes(ResourceAttributes):
+    """A database: a cloud instance, or the database a source reads on a
+    server — its host, port and name — and the data it holds."""
+
+    host: str | None = None
+    port: int | None = None
+    database_name: str | None = None
+    data_categories: list[str] | None = None
+    classification: str | None = None
+    personal_data: bool | None = None
+
+
+class SchemaAttributes(Classified):
+    """A schema of a database — a MySQL or MongoDB database, on a server."""
+
+
+class DataObjectAttributes(Classified):
+    """A table, a view, a materialized view, a collection: its columns and
+    keys, its size, what each column holds."""
+
+    object_kind: str | None = None
+    # Not `schema`: BaseModel has one.
+    schema_name: str | None = None
+    columns: list[str] | None = None
+    primary_key: list[str] | None = None
+    column_categories: dict[str, str] | None = None
+    estimated_rows: int | None = None
+    size_bytes: int | None = None
+
+
 class CloudAccountAttributes(Placed):
     """An AWS account, an Azure subscription, a Google Cloud project: what
     resources are in — its id, its state, what is above it."""
@@ -208,7 +252,9 @@ ENTITY_KINDS: dict[EntityType, EntityKind] = {
         EntityKind(
             EntityType.INFRA_RESOURCE, 3, "infrastructure", ResourceAttributes, ("infra_resource",)
         ),
-        EntityKind(EntityType.DATABASE, 3, "infrastructure", ResourceAttributes, ("database",)),
+        EntityKind(EntityType.DATABASE, 4, "data", DatabaseAttributes, ("database",)),
+        EntityKind(EntityType.SCHEMA, 1, "data", SchemaAttributes, ("schema",)),
+        EntityKind(EntityType.DATA_OBJECT, 1, "data", DataObjectAttributes, ("data_object",)),
         EntityKind(
             EntityType.CLOUD_ACCOUNT,
             1,
@@ -269,6 +315,8 @@ RELATIONSHIP_KINDS: dict[RelationshipType, RelationshipKind] = {
         RelationshipKind(RelationshipType.MENTIONS, 1, ("mentions",)),
         RelationshipKind(RelationshipType.IN_NETWORK, 1, ("in_network",)),
         RelationshipKind(RelationshipType.RUNS_IN, 1, ("runs_in",)),
+        RelationshipKind(RelationshipType.REFERENCES, 1, ("references",)),
+        RelationshipKind(RelationshipType.READS_FROM, 1, ("reads_from",)),
         RelationshipKind(RelationshipType.OWNS, 1, ()),
         RelationshipKind(RelationshipType.DEPLOYED_TO, 1, ()),
         RelationshipKind(RelationshipType.CAUSED_BY, 1, ()),

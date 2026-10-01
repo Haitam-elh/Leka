@@ -402,6 +402,8 @@ const fr = {
       environment: "Environnement",
       cloud_account: "Compte cloud",
       resource_group: "Groupe de ressources",
+      schema: "Schéma",
+      data_object: "Table",
     },
     relationships: {
       depends_on: "dépend de",
@@ -425,6 +427,8 @@ const fr = {
       child_of: "est une sous-tâche de",
       in_network: "est dans le réseau",
       runs_in: "tourne en",
+      references: "référence",
+      reads_from: "lit",
     },
     events: {
       deployment: "Déploiement",
@@ -2145,6 +2149,8 @@ const en: Dictionary = {
       environment: "Environment",
       cloud_account: "Cloud account",
       resource_group: "Resource group",
+      schema: "Schema",
+      data_object: "Table",
     },
     relationships: {
       depends_on: "depends on",
@@ -2168,6 +2174,8 @@ const en: Dictionary = {
       child_of: "is a subtask of",
       in_network: "is in the network",
       runs_in: "runs in",
+      references: "references",
+      reads_from: "reads from",
     },
     events: {
       deployment: "Deployment",

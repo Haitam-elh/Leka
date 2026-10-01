@@ -77,7 +77,10 @@ async def test_a_table_reads_as_its_columns_its_keys_and_what_it_points_to(
     assert invoices.metadata["kind"] == "table"
     assert invoices.metadata["primary_key"] == ["id"]
     assert invoices.metadata["columns"] == ["id", "customer_id", "amount", "paid"]
-    assert invoices.signals == {"engine": "postgresql"}
+    # Where it was read (LEKA-364): what makes it one table whichever
+    # source reads it.
+    assert invoices.signals == {"engine": "postgresql", "host": "db.acme.example", "port": 5432}
+    assert invoices.metadata["database"] == catalogue.database
     assert invoices.provenance.container == b
 
     customers = tables[f"{b}.customers"]

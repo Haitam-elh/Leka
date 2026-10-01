@@ -350,6 +350,14 @@ async def test_schemas_are_read_with_their_database(catalogue: Catalogue) -> Non
         "owner": catalogue.billing,
         "comment": None,
         "database": SERVICE,
+        # Where it was read (LEKA-364): the service, as Oracle's names are,
+        # case-insensitive.
+        "server": {
+            "engine": "oracle",
+            "host": HOST,
+            "port": TLS_PORT,
+            "database": SERVICE.lower(),
+        },
     }
 
 
@@ -730,4 +738,5 @@ async def test_a_table_extracts_as_the_others_do_under_its_own_engine(
         ("schema", b),
         ("references", f"{b}.CUSTOMERS"),
     ]
-    assert found.signals == {"engine": "oracle"}
+    assert found.signals == {"engine": "oracle", "host": HOST, "port": TLS_PORT}
+    assert found.metadata["database"] == SERVICE.lower()

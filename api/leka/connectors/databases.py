@@ -13,8 +13,16 @@ A table's payload, whichever the engine:
                                   references: {schema, table, columns}}]
     indexes                     [{name, definition, unique, primary}]
     reads_from                  ["schema.table", …] — what a view reads
+    server                      {engine, host, port, database} — where it
+                                was read (below)
 
 `type` of a constraint is primary_key, unique, foreign_key or check.
+
+SERVER (LEKA-364): every schema and table says where it was read — the
+engine, the host and port, the database — so that what two sources read on
+one database is one thing in the company model, and a database meets the
+cloud instance that serves it at its endpoint. A MySQL, MariaDB or MongoDB
+source reads a server: its database is none, its schemas are its databases.
 """
 
 from __future__ import annotations
@@ -40,6 +48,12 @@ def public_host(value: str) -> str:
         msg = f"{value!r} is not a public address"
         raise ValueError(msg)
     return host
+
+
+def server(engine: str, host: str, port: int | None, database: str | None) -> dict[str, object]:
+    """Where a catalogue was read: its engine, host — lower-cased — port and
+    database, the same for every schema and table of the source."""
+    return {"engine": engine, "host": host.strip().lower(), "port": port, "database": database}
 
 
 def rounded(number: int | None) -> int | None:

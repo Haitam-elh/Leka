@@ -14,6 +14,10 @@ answers, one object per schema and per table — a table's in the same shape
 whichever the engine (leka/connectors/databases.py), so one reading serves
 them all. A MySQL or MariaDB schema is a database, and has no comment; a
 MongoDB collection's columns are its validator's fields, when it has one.
+
+Where each was read — the server's engine, host, port and database
+(LEKA-364) — comes out as signals and metadata: what makes a table one
+thing whichever source reads it.
 """
 
 from __future__ import annotations
@@ -35,32 +39,32 @@ MONGODB = SourceKind.MONGODB
 SUPABASE = SourceKind.SUPABASE  # PostgreSQL, read by its connector
 
 
-@strategy("postgresql.schemas", 1, (POSTGRESQL, C.SCHEMAS), (SUPABASE, C.SCHEMAS))
+@strategy("postgresql.schemas", 2, (POSTGRESQL, C.SCHEMAS), (SUPABASE, C.SCHEMAS))
 def postgresql_schema(p: Payload) -> Extracted:
     return _schema(p, "postgresql")
 
 
-@strategy("sqlserver.schemas", 1, (SQLSERVER, C.SCHEMAS))
+@strategy("sqlserver.schemas", 2, (SQLSERVER, C.SCHEMAS))
 def sqlserver_schema(p: Payload) -> Extracted:
     return _schema(p, "sqlserver")
 
 
-@strategy("oracle.schemas", 1, (ORACLE, C.SCHEMAS))
+@strategy("oracle.schemas", 2, (ORACLE, C.SCHEMAS))
 def oracle_schema(p: Payload) -> Extracted:
     return _schema(p, "oracle")
 
 
-@strategy("mysql.schemas", 1, (MYSQL, C.SCHEMAS))
+@strategy("mysql.schemas", 2, (MYSQL, C.SCHEMAS))
 def mysql_schema(p: Payload) -> Extracted:
     return _database(p, "mysql")
 
 
-@strategy("mariadb.schemas", 1, (MARIADB, C.SCHEMAS))
+@strategy("mariadb.schemas", 2, (MARIADB, C.SCHEMAS))
 def mariadb_schema(p: Payload) -> Extracted:
     return _database(p, "mariadb")
 
 
-@strategy("mongodb.schemas", 1, (MONGODB, C.SCHEMAS))
+@strategy("mongodb.schemas", 2, (MONGODB, C.SCHEMAS))
 def mongodb_database(p: Payload) -> Extracted:
     return Extracted(
         title=required(p, "name"),
@@ -68,37 +72,38 @@ def mongodb_database(p: Payload) -> Extracted:
             "collections": number(p, "collections"),
             "views": number(p, "views"),
             "size_bytes": number(p, "size_bytes"),
+            **_where(p)[0],
         },
-        signals={"engine": "mongodb"},
+        signals={"engine": "mongodb", **_where(p)[1]},
     )
 
 
-@strategy("postgresql.tables", 1, (POSTGRESQL, C.TABLES), (SUPABASE, C.TABLES))
+@strategy("postgresql.tables", 2, (POSTGRESQL, C.TABLES), (SUPABASE, C.TABLES))
 def postgresql_table(p: Payload) -> Extracted:
     return _table(p, "postgresql")
 
 
-@strategy("mysql.tables", 1, (MYSQL, C.TABLES))
+@strategy("mysql.tables", 2, (MYSQL, C.TABLES))
 def mysql_table(p: Payload) -> Extracted:
     return _table(p, "mysql")
 
 
-@strategy("mariadb.tables", 1, (MARIADB, C.TABLES))
+@strategy("mariadb.tables", 2, (MARIADB, C.TABLES))
 def mariadb_table(p: Payload) -> Extracted:
     return _table(p, "mariadb")
 
 
-@strategy("sqlserver.tables", 1, (SQLSERVER, C.TABLES))
+@strategy("sqlserver.tables", 2, (SQLSERVER, C.TABLES))
 def sqlserver_table(p: Payload) -> Extracted:
     return _table(p, "sqlserver")
 
 
-@strategy("oracle.tables", 1, (ORACLE, C.TABLES))
+@strategy("oracle.tables", 2, (ORACLE, C.TABLES))
 def oracle_table(p: Payload) -> Extracted:
     return _table(p, "oracle")
 
 
-@strategy("mongodb.tables", 1, (MONGODB, C.TABLES))
+@strategy("mongodb.tables", 2, (MONGODB, C.TABLES))
 def mongodb_collection(p: Payload) -> Extracted:
     return _table(p, "mongodb")
 
@@ -110,8 +115,12 @@ def _schema(p: Payload, engine: str) -> Extracted:
         title=required(p, "name"),
         content=content("description", string(p, "comment")),
         references=ref("database", "database", external_id=string(p, "database")),
-        metadata={"owner": string(p, "owner"), "database": string(p, "database")},
-        signals={"engine": engine},
+        # The server's database, as its tables say it — else the schema's.
+        metadata={
+            "owner": string(p, "owner"),
+            "database": string(p, "server", "database") or string(p, "database"),
+        },
+        signals={"engine": engine, **_where(p)[1]},
     )
 
 
@@ -119,8 +128,12 @@ def _database(p: Payload, engine: str) -> Extracted:
     """A MySQL or MariaDB database: a name, its character set and collation."""
     return Extracted(
         title=required(p, "name"),
-        metadata={"charset": string(p, "charset"), "collation": string(p, "collation")},
-        signals={"engine": engine},
+        metadata={
+            "charset": string(p, "charset"),
+            "collation": string(p, "collation"),
+            **_where(p)[0],
+        },
+        signals={"engine": engine, **_where(p)[1]},
     )
 
 
@@ -153,8 +166,9 @@ def _table(p: Payload, engine: str) -> Extracted:
             "primary_key": [str(c) for c in keys[0].get("columns") or []] if keys else [],
             "estimated_rows": number(p, "estimated_rows"),
             "size_bytes": number(p, "size_bytes"),
+            **_where(p)[0],
         },
-        signals={"engine": engine, "storage_engine": string(p, "engine")},
+        signals={"engine": engine, "storage_engine": string(p, "engine"), **_where(p)[1]},
     )
 
 
@@ -215,6 +229,15 @@ def _referenced(constraints: list[dict[str, Any]]) -> list[Reference]:
         if constraint.get("type") == "foreign_key" and isinstance(target, dict):
             found[f"{target.get('schema')}.{target.get('table')}"] = None
     return [r for table in found for r in ref("references", "table", external_id=table)]
+
+
+def _where(p: Payload) -> tuple[dict[str, str | None], dict[str, str | int | float | None]]:
+    """Where it was read (LEKA-364): its database as metadata; the server's
+    host and port as signals."""
+    return (
+        {"database": string(p, "server", "database")},
+        {"host": string(p, "server", "host"), "port": number(p, "server", "port")},
+    )
 
 
 def _dicts(p: Payload, key: str) -> list[dict[str, Any]]:

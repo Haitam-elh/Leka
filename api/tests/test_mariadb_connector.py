@@ -644,4 +644,9 @@ async def test_a_table_extracts_as_mysql_s_do_under_its_own_engine(catalogue: Ca
         ("schema", b),
         ("references", f"{b}.customers"),
     ]
-    assert found.signals == {"engine": "mariadb", "storage_engine": "InnoDB"}
+    assert found.signals == {
+        "engine": "mariadb",
+        "storage_engine": "InnoDB",
+        "host": "db.acme.example",
+        "port": 3307,
+    }

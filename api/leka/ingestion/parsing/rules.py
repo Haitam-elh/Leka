@@ -8,7 +8,10 @@ belong to, and how critical they are; their configuration says whether the
 internet reaches them; the tags a Kubernetes service puts on its nodes say
 which cluster they are a node of. What resources are in — an account, a
 subscription, a resource group, a project — is read the same way: its name
-says its environment more surely than a resource's (LEKA-363).
+says its environment more surely than a resource's (LEKA-363). Tables: what
+kind of data each column holds, by its name and its comment — never by a
+value, which LEKA does not read — and how the table's documentation
+classifies it (LEKA-364).
 
 Every rule reads the extraction's unified fields (docs/extraction.md), so it
 holds for GitHub, GitLab and Bitbucket alike, for AWS, Azure and Google
@@ -118,6 +121,8 @@ def for_record(record: ExtractedRecord) -> list[Fact]:
     capability = record.provenance.capability
     if capability in CLOUD:
         return _cloud(record)
+    if capability is Capability.TABLES:
+        return _data(record)
     facts = _categories(record)
     if capability in {Capability.COMMITS, Capability.PULL_REQUESTS}:
         facts += _change(record)
@@ -236,6 +241,148 @@ def _categories(record: ExtractedRecord) -> list[Fact]:
                 )
                 break
     return facts
+
+
+# ── data (LEKA-364) ──────────────────────────────────────────────────────────
+
+# What kind of data a column's name says it holds: words of the name, two
+# words in a row, or the whole name — `customer_email`, `dateOfBirth`,
+# `zip`. A guess, from a name: never from a value, which LEKA does not read.
+DATA_WORDS: dict[str, tuple[frozenset[str], frozenset[str], frozenset[str]]] = {
+    # category: (words, two words, whole names)
+    "contact": (
+        frozenset({"email", "phone", "telephone", "mobile", "fax", "msisdn"}),
+        frozenset({"e mail", "phone number"}),
+        frozenset({"tel"}),
+    ),
+    "identity": (
+        frozenset(
+            {"firstname", "lastname", "surname", "fullname", "birthdate", "birthday", "dob"}
+            | {"gender", "nationality", "passport", "ssn", "nir"}
+        ),
+        frozenset(
+            {"first name", "last name", "full name", "given name", "family name", "birth date"}
+            | {"date of birth", "national id", "social security", "tax id", "id card"}
+            | {"driver license", "driving licence", "driving license"}
+        ),
+        frozenset(),
+    ),
+    "location": (
+        frozenset({"postcode", "zipcode", "latitude", "longitude", "geolocation", "street"}),
+        frozenset(
+            {"postal code", "post code", "zip code", "ip address", "home address"}
+            | {"billing address", "shipping address", "address line", "street address"}
+        ),
+        frozenset({"address", "zip", "ip", "lat", "lng", "lon"}),
+    ),
+    "financial": (
+        frozenset({"iban", "bic", "swift", "salary", "income", "cvv", "cvc"}),
+        frozenset({"card number", "credit card", "account number", "bank account"}),
+        frozenset({"pan"}),
+    ),
+    "credential": (
+        frozenset({"password", "passwd", "passphrase"}),
+        frozenset(
+            {"api key", "access token", "refresh token", "private key", "secret key"}
+            | {"client secret", "password hash", "otp secret", "totp secret"}
+        ),
+        frozenset({"pwd", "secret", "token", "salt"}),
+    ),
+    "health": (
+        frozenset({"diagnosis", "medical", "allergy", "allergies", "disability", "prescription"}),
+        frozenset({"blood type", "health record"}),
+        frozenset(),
+    ),
+}
+# What a comment says when it says the data is personal or sensitive, in
+# English and French.
+DATA_DOCUMENTED = re.compile(
+    r"\b(pii|gdpr|rgpd|personal data|personally identifiable|donn[ée]es? personnelles?"
+    r"|sensitive|sensible|confidential|confidentiel(le)?|restricted|secret)\b",
+    re.IGNORECASE,
+)
+RESTRICTED_WORDS = re.compile(r"\b(restricted|secret|highly confidential)\b", re.IGNORECASE)
+NAMED = 0.8
+DOCUMENTED = 0.95
+
+
+def _data(record: ExtractedRecord) -> list[Fact]:
+    """What each column of a table holds, by its name — surer when its
+    comment says it is personal or sensitive — and how the table's own
+    comments classify it."""
+    columns = record.metadata.get("columns")
+    names = [c for c in columns if isinstance(c, str)] if isinstance(columns, list) else []
+    comments = _column_comments(record)
+    facts: list[Fact] = []
+    for name in names:
+        comment = comments.get(name, "")
+        documented = bool(DATA_DOCUMENTED.search(comment))
+        category = _column_category(name) or ("personal" if documented else None)
+        if category is None:
+            continue
+        facts.append(
+            Fact(
+                type=FactType.DATA_CATEGORY,
+                value=category,
+                target=Target(kind="column", key=name[:200]),
+                confidence=DOCUMENTED if documented else NAMED,
+                evidence=Evidence(
+                    field="content.columns" if documented else "metadata.columns",
+                    excerpt=(f"{name} — {comment}" if documented else name)[:120],
+                ),
+            )
+        )
+    said = [("content.description", c.text) for c in record.content if c.role == "description"]
+    said += [("content.columns", comment) for comment in comments.values()]
+    for field, text in said:
+        if DATA_DOCUMENTED.search(text):
+            level = "restricted" if RESTRICTED_WORDS.search(text) else "confidential"
+            facts.append(
+                Fact(
+                    type=FactType.CLASSIFICATION,
+                    value=level,
+                    confidence=DOCUMENTED,
+                    evidence=Evidence(field=field, excerpt=text[:120]),
+                )
+            )
+    return facts
+
+
+def _column_comments(record: ExtractedRecord) -> dict[str, str]:
+    """Each column's comment, from the extraction's lines —
+    `email text NOT NULL — Where invoices go`."""
+    found: dict[str, str] = {}
+    for content in record.content:
+        if content.role != "columns":
+            continue
+        for line in content.text.splitlines():
+            head, separator, comment = line.partition(" — ")
+            if separator and head.split():
+                found[head.split()[0]] = comment.strip()
+    return found
+
+
+def _column_category(name: str) -> str | None:
+    """The kind of data a column's name says it holds — the first category
+    whose words it has."""
+    words = [
+        w
+        for w in re.split(r"[^a-z0-9]+", re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", name).lower())
+        if w
+    ]
+    if not words:
+        return None
+    whole = " ".join(words)
+    padded = f" {whole} "
+    for category, (singles, pairs, wholes) in DATA_WORDS.items():
+        if (
+            any(word in singles for word in words)
+            or any(f" {pair} " in padded for pair in pairs)
+            or whole in wholes
+            or whole.replace(" ", "") in wholes
+        ):
+            return category
+    return None
 
 
 # ── cloud resources ──────────────────────────────────────────────────────────

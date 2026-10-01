@@ -346,6 +346,13 @@ async def test_schemas_are_read_with_their_database(catalogue: Catalogue) -> Non
         "owner": "dbo",
         "comment": "Money",
         "database": catalogue.database,
+        # Where it was read (LEKA-364).
+        "server": {
+            "engine": "sqlserver",
+            "host": HOST,
+            "port": PORT,
+            "database": catalogue.database,
+        },
     }
 
 
@@ -787,4 +794,5 @@ async def test_a_table_extracts_as_the_others_do_under_its_own_engine(
         ("schema", "billing"),
         ("references", "billing.customers"),
     ]
-    assert found.signals == {"engine": "sqlserver"}
+    assert found.signals == {"engine": "sqlserver", "host": HOST, "port": PORT}
+    assert found.metadata["database"] == catalogue.database
