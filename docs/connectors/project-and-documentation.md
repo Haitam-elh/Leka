@@ -733,6 +733,13 @@ is a file without text, not a failed pass; a quota reached is.
 3. In LEKA, **Sources → Add → Google Workspace**: the key, and `subject` if
    delegation was chosen. Test, choose the drives, activate.
 
+**The directory** (`people`, LEKA-365) — each user's name, address,
+title, department, organisational unit and manager — needs the delegation
+to list a second scope, `https://www.googleapis.com/auth/admin.directory.user.readonly`,
+and a `subject` who may read the directory (an admin, or a delegated
+read-only admin role). Without them, `people` is left out at the
+connection test, with a warning naming the scope: Drive is read as before.
+
 The token is always asked for `drive.readonly`: whoever the account acts
 as, it cannot write. A delegation that does not list that scope, or a
 `subject` outside the domain, is refused by Google — the test says
@@ -763,6 +770,7 @@ not a member of a shared drive in scope.
 |---|---|---|
 | `drives` | each shared drive | whole each pass |
 | `files` | each file — not folders, not the trash — with owners, last modifier, link, and its text | `modifiedTime >` the last pass less two minutes, filtered by Drive |
+| `people` | each user of the domain — name, primary address, title and department (their primary organisation), organisational unit, whether suspended, their manager (`relations`, by address) — from the Admin SDK's Directory API (`GET admin/directory/v1/users?customer=my_customer`), its own token | whole each pass |
 
 Files are listed one corpus at a time — My Drive, then each shared drive —
 rather than with Drive's `allDrives`, which may answer incompletely. A file
@@ -817,8 +825,8 @@ tenant's listing says it was cut. The connection test fails with
    connector) for Microsoft Graph.
 2. `GET /sites/root` — the tenant's SharePoint host is the account.
 3. `GET /drives/{id}` for each drive in scope.
-4. `GET /users` — without `User.Read.All`, a warning: the OneDrives are
-   left out, SharePoint is read.
+4. `GET /users` — without `User.Read.All`, a warning: the OneDrives and
+   the directory are left out, SharePoint is read.
 5. One page of the first drive: `files`.
 
 ### What is read
@@ -827,6 +835,7 @@ tenant's listing says it was cut. The connection test fails with
 |---|---|---|
 | `drives` | each document library and OneDrive | whole each pass |
 | `files` | each file — not folders, not OneNote notebooks, not deleted items — with its path, author, last modifier, link, and its text | Graph's delta from the last pass less two minutes |
+| `people` | the directory (LEKA-365): each user — name, address (`mail`, else the sign-in name), title, department, office, whether their account is on, guest or member — **with their manager**, expanded on the listing (`GET /users?$expand=manager`), under the same `User.Read.All` | whole each pass |
 
 Files are read drive by drive through `/drives/{id}/root/delta`: every item
 on an initial pass, and on an incremental one from a time — SharePoint and

@@ -58,7 +58,9 @@ something no source has shown yet — a ticket in a tool not connected.
 | pages, files (Confluence, Notion, Slab, Guru, Google Workspace, Microsoft 365) | `document` |
 | incidents (Datadog, PagerDuty; Kibana's cases) | `incident` |
 | services (PagerDuty, the Datadog service catalog) | `service` — a PagerDuty **business service** is an `application` (LEKA-362) |
-| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object` — keyed by the source, a service or an application by its name, a resource by its provider's id when the record gives it, a catalogue's table by where it is ([custom.md](connectors/custom.md)) |
+| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object`, `person`, `team` — keyed by the source, a service or an application by its name, a resource by its provider's id when the record gives it, a catalogue's table by where it is ([custom.md](connectors/custom.md)) |
+| teams (GitHub, PagerDuty) | `team` — `attributes.team_type`: `team` (LEKA-365) |
+| people (Microsoft 365, Google Workspace) | `person` — and their department, a `team` with `team_type: department` |
 | named by a record | `person`, `service`, `application`, `team`, `environment`; what a resource is in — `cloud_account`, `resource_group` — and a node's cluster |
 
 Alerts, events, metrics, logs and dashboards (Datadog, Grafana, Splunk, Kibana) are
@@ -95,7 +97,8 @@ One thing, one key — built from what every mention of it carries
 | a database a source reads | `db:<engine>://<host>:<port>/<database>` — `db:postgresql://ledger.abc.rds.amazonaws.com:5432/ledger`; a MySQL, MariaDB or MongoDB server without its database: `db:mysql://shop.acme.io:3306` |
 | a schema, a data object | `<database>/<schema>`, `<database>/<schema>/<name>` — `…/ledger/billing/invoices`: whichever source reads it |
 | where a client connects to a database | `endpoint:<host>:<port>` — an **alias** of the RDS instance at that endpoint, of an Azure flexible server at `<name>.postgres.database.azure.com:5432` (or MySQL's); what a database is `part_of` |
-| service, team | `service:billing-api`, `team:payments` — a slug of the tag's value, or of a PagerDuty or Datadog service's name: the same service meets on one key |
+| service, team | `service:billing-api`, `team:payments` — a slug of the tag's value, or of a PagerDuty or Datadog service's name, of a GitHub or PagerDuty team's, of a directory's department: the same service, the same team meets on one key; a GitHub team's slug is an **alias** (`team:platform-eng`) |
+| a directory's person | `person:email:<address>` — **alias** their account at the directory, `person:microsoft_365:<id>`, `person:google_workspace:<id>` (LEKA-365) |
 | application | `application:billing` — a slug of an `application` / `system` / `product` tag, a catalog's application, a PagerDuty business service's name |
 | environment | `environment:production` — one of the four canonical names only (§ 4): `prd-eu-2` is a name, not an environment |
 | incident | `incident:pagerduty:Q1ABC…`, `incident:datadog:<uuid>`, `incident:kibana:<case id>` — the tool and its own id, not its per-account number |
@@ -131,6 +134,8 @@ Every entity carries the extraction's `metadata` and `signals`, plus:
 | `resource_kind`, `resource_class` (cloud) | § 2 |
 | `account`, `region`, `zone` (cloud) | the account, subscription or project id it is in; its region — a Google zone (`europe-west1-b`) is a `zone`, its region `europe-west1` |
 | `resource_group` (Azure) | the group it is in |
+| `job_title`, `department`, `location`, `active`, `user_type`, `directory` (a directory's person) | what the directory says: `location` an office, or Google's organisational unit; `active` whether their account is on (LEKA-365) |
+| `team_type`, `description`, `slug`, `privacy` (a team) | `team`, or `department` for one a directory names |
 | `account_type`, `account_id` (accounts) | `aws_account`, `azure_subscription`, `gcp_project`; the provider's id. An AWS account's `organization`, an Azure subscription's `tenant`, a project's `parent` folder or organisation |
 | `endpoint`, `port` (RDS) | where a client connects |
 | `engine`, `host`, `port`, `database_name` (a database) | where a source reads it (LEKA-364) |
@@ -164,6 +169,10 @@ attribute: the raw word is in `*_raw`. A `name` has its spaces collapsed, at mos
 | `part_of` | a data object → its schema → its database → the instance at its endpoint (LEKA-364) | where it was read; a catalogue's schema |
 | `references` | a table → the table a foreign key points at | the catalogue's constraints |
 | `reads_from` | a view → what it reads; a catalogue's dataset → its upstream | the view's definition; a catalogue's `reads_from` |
+| `member_of` | a person → a team (LEKA-365) | a team's members and leads; a directory's department; an HR system's teams |
+| `led_by` | a team → a person | a GitHub team's maintainers, a PagerDuty team's managers, an HR system's leads |
+| `child_of` | a team → its parent team | GitHub's and PagerDuty's parent team, an HR system's `parent` |
+| `reports_to` | a person → their manager | a directory's manager, an HR system's `manager` |
 
 Confidence is the fact's: 1.0 for what the vendor said, the parse's
 confidence for what was read in text or tags.
@@ -186,7 +195,8 @@ changes: what the old rules normalised is normalised again. 4: applications,
 environments, dependencies, criticality and stage (LEKA-362). 5: what
 resources are in, their class, a node's cluster, a CMDB's servers and
 databases, a terminated resource (LEKA-363). 6: databases, schemas and data
-objects, foreign keys and what views read, what columns hold (LEKA-364).
+objects, foreign keys and what views read, what columns hold (LEKA-364). 7:
+teams, a directory's people, an HR system's (LEKA-365).
 
 ## 8. Where results are kept, and when they are made
 

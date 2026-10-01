@@ -96,6 +96,8 @@ no clock — registered for the (source kind, capability) pairs it knows
 | Confluence, Notion, Slab, Guru | spaces, databases, topics, collections; pages, posts, cards — their **text** read out of Confluence's storage XHTML, Guru's HTML, Notion's blocks, Slab's Quill delta | `extraction/documents.py` |
 | Google Workspace, Microsoft 365 | drives; files, with the text the connector read | `extraction/documents.py` |
 | PostgreSQL, Supabase, MySQL, MariaDB, SQL Server, Oracle, MongoDB | schemas (a MySQL, MariaDB or MongoDB database, an Oracle user); tables, views, collections — the name as a query writes it, the columns one line each with their type, keys and comment, a view's definition; the tables a foreign key references and a view reads from as references ; where each was read — the server's engine, host, port and database — as signals and metadata (LEKA-364) | `extraction/data.py` |
+| GitHub, PagerDuty — teams | a team's name, description, parent team; its people as references, `lead` (maintainers, managers) and `member` — by login, by address (LEKA-365) | `extraction/people.py` |
+| Microsoft 365, Google Workspace — people | a person's name, address, title, department, office or organisational unit, `active`; themselves (`self`) and their manager (`manager`) as references | `extraction/people.py` |
 | A custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | records — what the source's mapping read: title, url, state, dates, description, author, the metadata named; the resource and the entity it declares as signals ([custom.md](connectors/custom.md)) | `extraction/custom.py` |
 
 A test fails if one of these connectors reads a capability no strategy
