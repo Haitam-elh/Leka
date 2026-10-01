@@ -14,8 +14,8 @@ LEKA-361).
         │                                quarantined left out (validation.md)
         ▼
  enrich()                                leka/ingestion/enrichment
-        │  1 relationships  2 links  3 ownership  4 membership  5 activity  6 category
-        │  7 landscape
+        │  1 relationships  2 links  infrastructure (§ 7)  3 ownership  4 membership
+        │  5 activity  6 category  7 landscape
         ▼
  enriched_relationships   every relationship between two entities: stated or inferred
  entity_enrichments       every attribute added to an entity
@@ -86,6 +86,12 @@ An **application**'s team is inherited the same way by its services
 (LEKA-362): a service a catalogue names as the application's, with no team
 of its own, is the application's team's.
 
+A team inherited through **what resources are in** — an account, a
+subscription, a resource group, a project (LEKA-363) — is **0.8 times** as
+sure: billing groups resources, a service says whose they are. A resource
+of Billing API (owned by Payments) in an account owned by Platform is
+Payments'; one no service holds is Platform's.
+
 **The maintainers** of a repository, a project, a service: the three people
 most active on what it holds (a service: what is part of it and of its
 repositories), with a share of the work of 20 % or more and two items or
@@ -148,6 +154,23 @@ only where the entity has one holder. An attribute its sources state is
 never enriched: a catalogue's `criticality` stands, and it is what an
 application's is read from. Nothing known of its parts: nothing said.
 
+### Infrastructure — where a resource is (LEKA-363)
+
+What a cloud resource is in says what its own tags do not. Run before
+ownership and the landscape, which read what it adds.
+
+| Attribute or relationship | Of | Rule | Confidence |
+|---|---|---|---|
+| `part_of` → an account, and `account` | a resource whose record names no account — an S3 bucket's ARN names none | `source_account`: the one account of its provider its sources read — none where they read several | 0.9 |
+| `environment`, and `runs_in` → it | a resource, a resource group, with no environment of its own | `container`: its nearest container's — a node's cluster, a resource's group, else its account — that runs in one environment | the container's × the `part_of`'s × **0.9**; below 0.5, nothing |
+
+A company that keeps production in an account of its own — `acme-prod`,
+the subscription `Production`, the project labelled `env=prod` — says it
+once, there: every resource in it runs in production, said as enrichment's,
+with its rule. The nearest container decides: a node of a staging cluster in
+a production account runs in staging. Groups and clusters first, so what
+they hold reads what they inherited.
+
 ## 8. What fails, fails alone
 
 - **An enricher that raises** is recorded in the run's `failures`
@@ -196,8 +219,8 @@ A **workspace** stage, after resolution
 - **Queued by a resolution run that succeeded.** It reads what the latest
   successful resolution run made; that run's id is what it was made from.
 - **Queued by `advance`**, when nothing is left to resolve but enrichment
-  has something to do: a new `ENRICHER_VERSION` (2 since LEKA-362's
-  landscape), a run that used up its
+  has something to do: a new `ENRICHER_VERSION` (3 since LEKA-363's
+  infrastructure, 2 since LEKA-362's landscape), a run that used up its
   retries.
 - One run at a time per workspace; a run that sees resolution succeed again
   while it reads is closed `abandoned` and reads again (up to three times);
@@ -236,7 +259,7 @@ what no source says is said missing, never invented.**
 | | attention | an incident affecting it moved in the last 7 days |
 | | operational | a monitoring source — PagerDuty, Datadog, Grafana, Splunk, Kibana (connector category `observability`) — shows it, and nothing above |
 | | unmonitored | no monitoring source shows it |
-| database, cloud resource | operational · attention · incident | `running` · `starting`, `stopping`, `stopped`, `deleting` · `failed` |
+| database, cloud resource | operational · attention · incident | `running` · `starting`, `stopping`, `stopped`, `deleting` · `failed` — a `terminated` one has none: it is gone |
 | incident | incident · operational | open or in progress · closed |
 | repository, team | none | no state of its own |
 

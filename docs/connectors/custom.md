@@ -151,7 +151,7 @@ know — is refused, so a typo is found when saved, not at the first sync.
 | Key | | |
 |---|---|---|
 | `name` | required | `tickets` — lower case, digits, `_`. What LEKA shows, what the scope keeps or leaves |
-| `entity` | | What its records are in LEKA's model: `issue`, `incident`, `service`, `application`, `project`, `document`. Without it, they are extracted and stay out of the model |
+| `entity` | | What its records are in LEKA's model: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`. Without it, they are extracted and stay out of the model |
 | `path` | required | From `base_url`: `/tickets`. No scheme, no host, no query, no `..` |
 | `params` | | The query, as a map: `{"status": "open"}`. Not secret — the secret goes in the credentials |
 | `items` | | Where the records are in a page: `data`, `result.items`. Absent: the page is the list |
@@ -229,6 +229,19 @@ changes `fields` — and so, at the next pass, what is extracted.
   on; `criticality` / `tier` → how critical, on LEKA's scale; `lifecycle` /
   `stage` → where in its life; `environments` / `environment` → where it
   runs. A list, or words between commas: `"prod, staging"`.
+- **Reads a CMDB's servers and databases** — an `infra_resource` or a
+  `database` resource (LEKA-363). One that gives the **provider's own id**
+  — an ARN, an Azure ARM id, a Google full resource name — in `resource_id`
+  / `arn` / `cloud_id` / `provider_id`, or as the record's id, is **keyed by
+  it**, as the AWS, Azure or Google Cloud connector keys it: the two are one
+  entity, every source kept, what they disagree on kept with who said it.
+  One that does not — a server of its own — is keyed by the source. From
+  its `metadata`: `resource_kind` / `kind` / `type` → what kind (`server`,
+  `vm` → instance; `db` → database; `lb` → load balancer…); `team` /
+  `owner` → its team; `service` / `services` → the service it is part of;
+  `application` → its application; `criticality` / `tier`; `environments` /
+  `environment`; `depends_on` / `dependencies` → what it depends on: a
+  provider id, or the id of another record of the same resource.
 - **Keeps** its payloads 90 days, as the other structured sources'.
 
 ## GraphQL

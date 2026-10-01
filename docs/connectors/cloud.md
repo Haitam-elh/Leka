@@ -37,13 +37,19 @@ Attach to the user (or to the role LEKA assumes):
         "lambda:ListFunctions",
         "eks:ListClusters",
         "eks:DescribeCluster",
-        "elasticloadbalancing:DescribeLoadBalancers"
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "iam:ListAccountAliases",
+        "organizations:DescribeOrganization"
       ],
       "Resource": "*"
     }
   ]
 }
 ```
+
+The last two name the account (LEKA-363): its alias — the name its admins
+gave it, often its environment's (`acme-prod`) — and its organisation.
+Neither is required: left out, the account is known by its id.
 
 A service left out of the policy is a **capability left out** at the
 connection test, not a failure: the source reads what it may, and says what
@@ -83,6 +89,7 @@ temporary credentials are never stored.
 | `clusters` | EKS clusters | `eks:ListClusters`, `eks:DescribeCluster` |
 | `networks` | VPCs | `ec2:DescribeVpcs` |
 | `load_balancers` | Application and network load balancers | `elasticloadbalancing:DescribeLoadBalancers` |
+| `accounts` | The account itself: its id, its alias, its organisation (LEKA-363) — read with the resources, never alone | `sts:GetCallerIdentity`; `iam:ListAccountAliases`, `organizations:DescribeOrganization` when allowed |
 
 ### How it is read
 
@@ -161,6 +168,7 @@ subscription as container.
 | `clusters` | `Microsoft.ContainerService/managedClusters` |
 | `networks` | `Microsoft.Network/virtualNetworks` |
 | `load_balancers` | `Microsoft.Network/loadBalancers`, `…/applicationGateways` |
+| `accounts` | The subscriptions of the scope — name, state, tenant, tags — then each one's **resource groups**, with their location and tags (LEKA-363). The Reader role allows both |
 
 Like AWS, every capability is **listed whole** at every pass: nothing
 unchanged is written, and a deleted resource is gone at the next pass. The
@@ -233,6 +241,7 @@ Google Cloud — with its project as container.
 | `clusters` | `container.googleapis.com/Cluster` |
 | `networks` | `compute.googleapis.com/Network` |
 | `load_balancers` | `compute.googleapis.com/ForwardingRule`, `…/BackendService` |
+| `accounts` | The projects of the scope, from Resource Manager's search — name, number, labels, state, parent folder or organisation (LEKA-363). The Browser role allows it |
 
 Like AWS and Azure, every capability is **listed whole** at every pass.
 Cloud Asset Inventory answers for every kind at once, or for none, so the

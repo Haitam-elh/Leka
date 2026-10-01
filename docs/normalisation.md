@@ -51,13 +51,14 @@ something no source has shown yet — a ticket in a tool not connected.
 |---|---|
 | repositories, pull_requests, issues, commits, branches, releases, projects | `repository`, `pull_request`, `issue`, `commit`, `branch`, `release`, `project` |
 | db_instances | `database` |
-| instances, buckets, functions, clusters, networks, load_balancers | `infra_resource`, with `attributes.resource_kind`: `instance`, `bucket`, `function`, `cluster`, `network`, `load_balancer` |
+| instances, buckets, functions, clusters, networks, load_balancers | `infra_resource`, with `attributes.resource_kind`: `instance`, `bucket`, `function`, `cluster`, `network`, `load_balancer` — and its `resource_class`: `compute` (instance, function, cluster), `network` (network, load balancer), `storage` (bucket); a database's is `database` (LEKA-363) |
+| accounts (AWS, Azure, Google Cloud) | `cloud_account` — an AWS account, an Azure subscription, a Google Cloud project — or `resource_group`, an Azure resource group (LEKA-363) |
 | projects, issues of Linear, Asana, Trello, ClickUp, Monday | `project`, `issue` — a task, a card, an item is an `issue` |
 | pages, files (Confluence, Notion, Slab, Guru, Google Workspace, Microsoft 365) | `document` |
 | incidents (Datadog, PagerDuty; Kibana's cases) | `incident` |
 | services (PagerDuty, the Datadog service catalog) | `service` — a PagerDuty **business service** is an `application` (LEKA-362) |
-| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `application`, `project`, `document` — keyed by the source, a service or an application by its name ([custom.md](connectors/custom.md)) |
-| named by a record | `person`, `service`, `application`, `team`, `environment` |
+| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database` — keyed by the source, a service or an application by its name, a resource by its provider's id when the record gives it ([custom.md](connectors/custom.md)) |
+| named by a record | `person`, `service`, `application`, `team`, `environment`; what a resource is in — `cloud_account`, `resource_group` — and a node's cluster |
 
 Alerts, events, metrics, logs and dashboards (Datadog, Grafana, Splunk, Kibana) are
 extracted and parsed, but are not entities: they are the evidence about
@@ -88,7 +89,9 @@ One thing, one key — built from what every mention of it carries
 | Jira issue, project | `acme.atlassian.net/PAY-42`, `acme.atlassian.net/PAY` — the key upper-cased; **alias `ticket:PAY-42`** |
 | a ticket named where its site is unknown | `ticket:PAY-42` |
 | person | `person:email:sara@acme.io` when an email is known, **alias** `person:github.com:sara`; else the account: `person:github.com:sara`, `person:acme.atlassian.net:<account id>` |
-| cloud resource | `aws:<ARN>`, `azure:<ARM id, lower-cased>`, `gcp:<full resource name>` |
+| cloud resource | `aws:<ARN>`, `azure:<ARM id, lower-cased>`, `gcp:<full resource name>` — a CMDB's resource that gives one, the same key |
+| what resources are in | `aws:account:123456789012`; an Azure subscription by its ARM id, `azure:/subscriptions/<id>`, a resource group too, `azure:/subscriptions/<id>/resourcegroups/<name>`; `gcp:project:acme-prod`, **alias** `gcp:project:<number>` — from a resource's ARN, ARM id or project, and from the account's own record: they meet |
+| a GKE cluster | its full resource name, **alias** `gcp:cluster:<project>/<location>/<name>` — what its nodes' labels say of it; an EKS or AKS cluster's ARN or ARM id is built from its node's tags |
 | service, team | `service:billing-api`, `team:payments` — a slug of the tag's value, or of a PagerDuty or Datadog service's name: the same service meets on one key |
 | application | `application:billing` — a slug of an `application` / `system` / `product` tag, a catalog's application, a PagerDuty business service's name |
 | environment | `environment:production` — one of the four canonical names only (§ 4): `prd-eu-2` is a name, not an environment |
@@ -111,7 +114,8 @@ Every entity carries the extraction's `metadata` and `signals`, plus:
 |---|---|
 | `created_at`, `updated_at`, any `*_at` | ISO 8601 **in UTC**, to the second: `2026-09-20T08:00:00Z` |
 | `state` (issues, pull requests) | `open`, `in_progress`, `closed`, `merged` — GitLab `opened` → open, Bitbucket `declined` → closed; a **tool's own class of state** wins over its status name: Jira's category (`new`, `indeterminate`, `done`), Linear's workflow type (`backlog`, `unstarted`, `started`, `completed`, `canceled`), ClickUp's status type (`open`, `custom`, `closed`); Monday's `Working on it` and `Stuck` → in_progress |
-| `state` (cloud resources) | `running`, `starting`, `stopping`, `stopped`, `deleting`, `failed` — EC2 `running`, RDS `available`, Azure `Succeeded`, GCE `RUNNING` → running |
+| `state` (cloud resources) | `running`, `starting`, `stopping`, `stopped`, `deleting`, `terminated`, `failed` — EC2 `running`, RDS `available`, Azure `Succeeded`, GCE `RUNNING` → running; EC2 `terminated`, a `deleted` resource → terminated: gone at the provider, still listed a while |
+| `state` (accounts) | `active`, `disabled`, `deleted` — Azure `Enabled`, `Warned`, `PastDue` → active (billing's words: it still runs); Google `DELETE_REQUESTED` → deleted |
 | `state` (incidents) | `open`, `in_progress`, `closed` — PagerDuty `triggered` and Datadog `active` → open, `acknowledged` and `stable` → in_progress, `resolved` → closed |
 | `state_raw` | the vendor's word, always kept |
 | `priority`, `priority_raw` | `highest`, `high`, `medium`, `low`, `lowest` — `blocker`/`critical` → highest, `major` → high, `normal` → medium, `minor` → low, `trivial` → lowest; an incident's priority (PagerDuty `P1`…`P5`) or severity (Datadog `SEV-0`…`SEV-5`): P1, SEV-0 and SEV-1 → highest, P2 and SEV-2 → high, and so on |
@@ -121,7 +125,11 @@ Every entity carries the extraction's `metadata` and `signals`, plus:
 | `stage`, `stage_raw` (services, applications) | where it is in its life: `experimental` (alpha, beta, pilot), `production` (GA, live, stable), `deprecated` (sunset, legacy), `retired` (decommissioned, EOL). A catalogue's `lifecycle` |
 | `service_type`, `languages`, `display_name`, `runbook_url`, `repository_url`, `dashboard_url`, `docs_url` (Datadog catalog) | what its team wrote: `web`, `grpc`; `["python"]`; the first link of each kind |
 | `tags` (cloud) | a `{key: value}` object |
-| `resource_kind` (cloud) | § 2 |
+| `resource_kind`, `resource_class` (cloud) | § 2 |
+| `account`, `region`, `zone` (cloud) | the account, subscription or project id it is in; its region — a Google zone (`europe-west1-b`) is a `zone`, its region `europe-west1` |
+| `resource_group` (Azure) | the group it is in |
+| `account_type`, `account_id` (accounts) | `aws_account`, `azure_subscription`, `gcp_project`; the provider's id. An AWS account's `organization`, an Azure subscription's `tenant`, a project's `parent` folder or organisation |
+| `endpoint`, `port` (RDS) | where a client connects |
 | `url`, `source_kind`, `quality` | the link, the connector, the parse's quality score |
 
 A state, a priority, a criticality or a stage no table knows is **kept**,
@@ -145,6 +153,8 @@ attribute: the raw word is in `*_raw`. A `name` has its spaces collapsed, at mos
 | `mentions` | an item → a person | `@handle` on a code host |
 | `owned_by` | a resource → a team; a service, an application → its teams | a `team` / `owner` tag; a PagerDuty service's teams, a business service's team, a catalog's team or owner |
 | `in_network` | a resource → its VPC or network, by that record's own key | the extraction's `network` |
+| `part_of` | a resource → its account or project; an Azure resource → its resource group → its subscription; a node → its cluster; a CMDB's resource → its service, its application (LEKA-363) | the resource's ARN, ARM id or project; a resource group's own record; the tags a Kubernetes service puts on its nodes |
+| `depends_on` | a CMDB's resource → a resource | its `depends_on`: a provider id, or another record's id |
 
 Confidence is the fact's: 1.0 for what the vendor said, the parse's
 confidence for what was read in text or tags.
@@ -164,7 +174,9 @@ metadata.number` — never a value. Its neighbours are normalised.
 
 `NORMALISER_VERSION` (`normalisation/engine.py`) is raised when a rule
 changes: what the old rules normalised is normalised again. 4: applications,
-environments, dependencies, criticality and stage (LEKA-362).
+environments, dependencies, criticality and stage (LEKA-362). 5: what
+resources are in, their class, a node's cluster, a CMDB's servers and
+databases, a terminated resource (LEKA-363).
 
 ## 8. Where results are kept, and when they are made
 

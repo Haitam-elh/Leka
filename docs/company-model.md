@@ -46,7 +46,9 @@ are checked against.
 | | `issue`, `pull_request` | priority, category, labels, components, stale, cycle time |
 | | `commit` | category, change type |
 | operations | `incident` | priority, duration |
-| infrastructure | `infra_resource`, `database` | resource kind, environment, exposure, criticality, region, tags |
+| infrastructure | `infra_resource`, `database` | provider, account, region, zone, resource group; resource kind and class, the provider's type; environment, exposure, criticality; instance type, engine, version, runtime, endpoint; tags — § 10 |
+| | `cloud_account` | an AWS account, an Azure subscription, a Google Cloud project: its type and id, its state, its organisation, tenant or parent; environment, criticality, tags — § 10 |
+| | `resource_group` | an Azure resource group: its subscription, region, environment, tags — § 10 |
 | | `environment` | — `production`, `staging`, `development`, `test` |
 | knowledge | `document` | — |
 
@@ -112,7 +114,7 @@ it (`origin`, `rule`), how sure it is, whether it joins two tools' things
 |---|---|
 | `active` | shown by a source, and not one of the below |
 | `dormant` | enrichment finds nothing done to it for 180 days ([enrichment.md § 5](enrichment.md)) |
-| `archived` | its source says so (`state: archived`), or its catalogue says it is retired (`stage: retired`) |
+| `archived` | its source says so (`state: archived`), or its catalogue says it is retired (`stage: retired`), or its provider that it is gone (`state: terminated` — a terminated instance, a deleted resource; an account `deleted`) |
 | `removed` | **no source shows it any more** |
 
 A removed thing is **kept, never deleted**: its history stays, `removed_at`
@@ -181,6 +183,10 @@ Read by every member (`workspace:read`); another workspace's entity is 404.
 | `GET /knowledge/services`, `GET /knowledge/applications` | the landscape (§ 9), by name, paged: `criticality`, `stage`, `environment`, `application_id` (services), `team_id`, `lifecycle`, `q` |
 | `GET /knowledge/services/{id}`, `GET /knowledge/applications/{id}` | one: its landscape, what it is made of and in which environments, its dependencies both ways, its attributes and provenance. A service's id on the applications' route is 404 |
 | `GET /knowledge/entities/{id}/dependencies` | `direction=downstream` (what it depends on) or `upstream` (what depends on it: what its failure reaches), `depth=1..5`, `environment`: each thing reached and how far, the `depends_on` walked — up to 500, `truncated` beyond |
+| `GET /knowledge/infrastructure` | the cloud resources and databases (§ 10), by name, paged: `resource_class`, `resource_kind`, `provider`, `account_id` (an account, subscription, project — or resource group: what is in it and in its groups), `region`, `environment`, `state`, `exposure`, `criticality`, `service_id`, `team_id`, `lifecycle`, `q` |
+| `GET /knowledge/infrastructure/{id}` | one: its place, environment and who says so, services, team, network, cluster; what it holds — a cluster's nodes, a network's resources — and its dependencies both ways; its attributes and provenance. Anything but a resource is 404 |
+| `GET /knowledge/cloud-accounts` | the accounts, subscriptions and projects, by name, paged: `provider`, `environment`, `lifecycle`, `q` — each with how many resources it holds (in its groups too), of which class, in which regions; its environment and team |
+| `GET /knowledge/cloud-accounts/{id}` | one — or a resource group — its resource groups and theirs, its attributes and provenance |
 
 ## 8. What reads it
 
@@ -239,6 +245,78 @@ landscape; one service's detail says what it is made of in which
 environment; `/entities/{id}/dependencies` walks `depends_on` — what a
 service needs, or what its failure reaches — in one environment or all.
 
+## 10. Infrastructure and cloud (LEKA-363)
+
+The company's **infrastructure**: what computes, carries the traffic,
+stores and holds the data — and what it is in, where, in which environment,
+whose, what it serves and depends on. Built from the tools that know it:
+
+| Tool | What it says |
+|---|---|
+| AWS | an account's instances, databases, buckets, functions, EKS clusters, VPCs, load balancers; the account itself — its alias, its organisation |
+| Azure | the same in each subscription of the scope; the subscriptions — name, state, tags — and their **resource groups** |
+| Google Cloud | the same in each project; the projects — name, labels, parent folder or organisation |
+| a custom source — a CMDB | servers and databases: by the provider's id when it gives one, else its own; their team, service, criticality, environment, dependencies ([custom.md](connectors/custom.md)) |
+
+**Canonical.** A resource is keyed by its provider's own id — `aws:<ARN>`,
+`azure:<ARM id>`, `gcp:<full resource name>` — whatever reads it: two AWS
+sources on one account, the cloud connector and a CMDB that names the
+resource by its ARN, make **one** entity, every source kept in its
+provenance, what they disagree on kept with who said it
+(`provenance.conflicts`). Its kind (`resource_kind`) and its **class** —
+`compute` (instances, functions, clusters), `network` (networks, load
+balancers), `storage` (buckets), `database` — whatever the provider calls
+it; the provider's own type beside (`resource_type`).
+
+**The hierarchy, kept.** What resources are in is an entity of its own:
+
+```
+ AWS            organisation (attribute) ─▶ cloud_account ◀── resource ── region, zone
+ Azure          tenant (attribute) ─▶ cloud_account (subscription) ◀── resource_group ◀── resource
+ Google Cloud   folder or organisation (attribute) ─▶ cloud_account (project) ◀── resource
+```
+
+Each resource is `part_of` its account, project or resource group, and a
+group `part_of` its subscription — named from the resource's own id even
+before the account is read, and by its own record's name (`acme-prod`,
+`Acme Staging`) once the `accounts` capability is ([cloud.md](connectors/cloud.md);
+an existing source reads it after its next connection test). A resource
+says its `account`, `region` and `zone` as attributes too. An S3 bucket's
+ARN names no account: it is the one account its source reads (enrichment,
+`source_account`).
+
+| On a resource | Values | From |
+|---|---|---|
+| `environment` | the canonical four, or the source's word | a tag, a name (0.5), a CMDB; else its nearest container's — its cluster, its group, its account — 0.9 times as sure ([enrichment.md § 7](enrichment.md)) |
+| `exposure` | `public`, `internal` | a public flag, a load balancer's scheme |
+| `criticality` | `critical`, `high`, `medium`, `low` | a tag, a CMDB's tier |
+| `state` | `running`, `starting`, `stopping`, `stopped`, `deleting`, `terminated`, `failed` | its provider; `terminated` makes it `archived` (§ 4) |
+| owners | `owned_by` → a team | a tag, a CMDB; else inherited — from its service, else from what it is in, less surely ([enrichment.md § 3](enrichment.md)) |
+| service, application | `part_of` | a tag, a CMDB |
+| where it runs | `runs_in` → an environment | its environment |
+| network | `in_network` → a VPC, a network | the provider |
+| cluster | `part_of` → the cluster it is a node of | the tags EKS, GKE and AKS put on nodes |
+| dependencies | `depends_on` → a resource | a CMDB: by provider id, or between its own records |
+
+**Environment context.** An account, a subscription, a resource group or a
+project says its environment by its tags, else by its name (0.7: named for
+it more often than not — a resource's name says it at 0.5); a resource
+that says none runs where what it is in runs. So a company that separates
+its environments by account is read right without a tag on every
+resource; each value says whether a source or enrichment said it
+(`provenance.attributes`), and the API says it too (`environment.origin`).
+
+**Lifecycle.** A resource or an account gone from its provider's listing is
+`removed` — kept, with its history (§ 4); one its provider says is
+terminated or deleted is `archived` meanwhile.
+
+**Queried.** `GET /knowledge/infrastructure` lists the resources — by
+class, kind, provider, account, region, environment, state, exposure,
+criticality, service, team; one resource's detail says where it is, what it
+holds and what depends on it; `GET /knowledge/cloud-accounts` what each
+account holds. `/entities/{id}/dependencies` walks a resource's
+`depends_on` as a service's.
+
 ## Not yet
 
 - **The environment screens** ([enrichment.md § 12](enrichment.md)) still
@@ -248,9 +326,16 @@ service needs, or what its failure reaches — in one environment or all.
   appeared and went is not kept yet.
 - **A person's word**: correcting an entity or a relationship by hand, kept
   across builds.
-- **Kinds promised by connectors not built**: a Kubernetes cluster, a
-  dashboard, an alert — each an entry in the registry the day a connector
-  makes it.
+- **Kinds promised by connectors not built**: Kubernetes workloads — a
+  deployment, a pod — a dashboard, an alert — each an entry in the registry
+  the day a connector makes it.
+- **What a load balancer sends traffic to**: its targets are one more call
+  per load balancer at each provider; not read yet.
+- **An Azure machine's network**: Azure names it through the machine's
+  network interface, not in the resource list; not read yet.
+- **A resource known by its address**: a CMDB that names an instance by its
+  host name or IP, a database source's host and the RDS endpoint
+  (LEKA-364) — matched by the provider's id only, today.
 - **Backstage files in repositories** (`catalog-info.yaml`): read today
   through a custom source on Backstage's API; reading the files from the
   code hosts is the next step.
