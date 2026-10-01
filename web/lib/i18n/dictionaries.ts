@@ -35,6 +35,7 @@ const fr = {
     entityDetail: "Entité",
     sources: "Sources",
     sourceDetail: "Source",
+    welcome: "Bienvenue",
     capabilities: "Capacités",
     capabilityDetail: "Capacité",
     governance: "Sécurité & gouvernance",
@@ -1189,6 +1190,29 @@ const fr = {
       webhookNext:
         "Donnez cette adresse à votre outil, avec le secret. Une fois la source activée, chaque livraison apparaît dans « Réception », sur la page de la source.",
     },
+    welcome: {
+      title: "Bienvenue sur LEKA",
+      subtitle:
+        "Quels outils votre entreprise utilise-t-elle ? Choisissez-les : LEKA vous guide pour les connecter, un par un.",
+      chosen: "{count} outil(s) choisi(s)",
+      none: "Aucun outil choisi pour l'instant.",
+      connect: "Connecter mes outils",
+      later: "Plus tard",
+      connected: "Connecté",
+      started: "À terminer",
+      waiting: "À connecter",
+      connectOne: "Connecter",
+      resume: "Reprendre",
+      see: "Voir la source",
+      connectTitle: "Connectez vos outils",
+      connectBody:
+        "Chaque connexion est testée avant d'être activée. Une connexion interrompue reste en brouillon : reprenez-la d'ici, ou depuis Sources.",
+      progress: "{done} sur {total} connecté(s)",
+      change: "Modifier mon choix",
+      finish: "Terminer",
+      customBody:
+        "Un connecteur sur mesure le lit par son API REST ou GraphQL, ou reçoit ses données par webhook.",
+    },
     add: {
       open: "Ajouter une source",
       title: "Ajouter une source",
@@ -1792,6 +1816,7 @@ const en: Dictionary = {
     entityDetail: "Entity",
     sources: "Sources",
     sourceDetail: "Source",
+    welcome: "Welcome",
     capabilities: "Capabilities",
     capabilityDetail: "Capability",
     governance: "Security & governance",
@@ -2884,6 +2909,29 @@ const en: Dictionary = {
       },
       webhookNext:
         "Give this address to your tool, with the secret. Once the source is activated, each delivery shows in “Reception”, on the source's page.",
+    },
+    welcome: {
+      title: "Welcome to LEKA",
+      subtitle:
+        "Which tools does your company use? Choose them: LEKA guides you through connecting them, one by one.",
+      chosen: "{count} tool(s) chosen",
+      none: "No tool chosen yet.",
+      connect: "Connect my tools",
+      later: "Later",
+      connected: "Connected",
+      started: "To finish",
+      waiting: "To connect",
+      connectOne: "Connect",
+      resume: "Resume",
+      see: "See the source",
+      connectTitle: "Connect your tools",
+      connectBody:
+        "Each connection is tested before it is switched on. One left halfway stays a draft: take it up again here, or from Sources.",
+      progress: "{done} of {total} connected",
+      change: "Change my choice",
+      finish: "Finish",
+      customBody:
+        "A custom connector reads it through its REST or GraphQL API, or receives its data by webhook.",
     },
     add: {
       open: "Add a source",

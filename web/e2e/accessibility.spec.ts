@@ -39,6 +39,7 @@ test.describe("the core screens", () => {
     "/intentions/new?step=decision",
     "/settings",
     "/sources",
+    "/welcome",
     "/environment",
     "/governance",
   ]) {

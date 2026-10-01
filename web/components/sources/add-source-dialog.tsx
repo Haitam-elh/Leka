@@ -30,6 +30,7 @@ import {
   type Diagnostic,
   receivingAddress,
   type Source,
+  type SourceKind,
   sources,
   type TestOutcome,
 } from "@/lib/sources";
@@ -58,6 +59,9 @@ import { z } from "@/lib/validation";
  * Nothing is lost by stopping: the source exists from step 2, in draft, and
  * its own page takes it from there. Going back from 3 or 4 edits it.
  *
+ * A tool chosen beforehand — on the welcome page, where a new workspace
+ * picks its tools — skips step 1: the wizard opens at its connection.
+ *
  * A CUSTOM CONNECTOR (LEKA-426) — a tool LEKA has no connector for — is the
  * same wizard, from its own entry: its first step is the method (REST,
  * GraphQL, webhook), with what each needs and what none can do; the
@@ -78,6 +82,7 @@ export function AddSourceDialog({
   editing,
   start = "native",
   reconnecting = false,
+  tool,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -88,15 +93,18 @@ export function AddSourceDialog({
   start?: Kind;
   /** Changing a source to connect it again — a new secret, most often. */
   reconnecting?: boolean;
+  /** A tool already chosen: the wizard starts at its connection. */
+  tool?: SourceKind;
 }) {
   const t = useDictionary();
   const catalog = useCatalog();
-  const [step, setStep] = useState<Step>(editing ? "settings" : "connector");
+  const first: Step = editing || tool ? "settings" : "connector";
+  const [step, setStep] = useState<Step>(first);
   const [kind, setKind] = useState<Kind>(start);
   const [picked, setEntry] = useState<CatalogEntry | null>(null);
   const [source, setSource] = useState<Source | null>(editing ?? null);
-  const entry =
-    picked ?? (editing ? (catalog.data?.find((e) => e.key === editing.type) ?? null) : null);
+  const known = editing?.type ?? tool;
+  const entry = picked ?? (known ? (catalog.data?.find((e) => e.key === known) ?? null) : null);
   const custom = kind === "custom" || (entry !== null && isCustom(entry.key));
 
   // Opened again from another entry — "Ajouter", "Connecteur sur mesure".
@@ -107,7 +115,7 @@ export function AddSourceDialog({
   function close(next: boolean) {
     onOpenChange(next);
     if (!next) {
-      setStep(editing ? "settings" : "connector");
+      setStep(first);
       setKind(start);
       setEntry(null);
       setSource(editing ?? null);
@@ -167,12 +175,13 @@ export function AddSourceDialog({
             onBack={start === "native" ? () => setKind("native") : undefined}
           />
         ) : null}
+        {step === "settings" && !entry ? <LoadingState size="section" /> : null}
         {step === "settings" && entry ? (
           <SettingsStep
             entry={entry}
             source={source}
             reconnecting={reconnecting}
-            onBack={source ? undefined : () => setStep("connector")}
+            onBack={source || tool ? undefined : () => setStep("connector")}
             onSaved={(saved) => {
               setSource(saved);
               setStep(scopeFieldOf(entry.config_schema) ? "scope" : "test");

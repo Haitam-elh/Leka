@@ -172,6 +172,20 @@ export const KIND_CATEGORY: Record<SourceKind, ConnectorCategory> = {
   slack: "chat",
 };
 
+/** The categories in the order they are shown — Sources' filters, the
+ * welcome page's sections. */
+export const CATEGORY_ORDER = [
+  "code",
+  "project",
+  "docs",
+  "cloud",
+  "observability",
+  "data",
+  "chat",
+  "custom",
+  "other",
+] as const satisfies readonly (ConnectorCategory | "other")[];
+
 /** Can be switched on: tested against the settings it has now. */
 export function canActivate(source: Source): boolean {
   return source.status === "tested" || source.status === "disabled";
