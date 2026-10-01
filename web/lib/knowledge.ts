@@ -33,6 +33,8 @@ export const ENTITY_TYPES = [
   "environment",
   "cloud_account",
   "resource_group",
+  "schema",
+  "data_object",
 ] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
@@ -58,6 +60,8 @@ export const RELATIONSHIP_TYPES = [
   "child_of",
   "in_network",
   "runs_in",
+  "references",
+  "reads_from",
 ] as const;
 export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
 

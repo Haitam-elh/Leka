@@ -162,7 +162,19 @@ ownership and the landscape, which read what it adds.
 | Attribute or relationship | Of | Rule | Confidence |
 |---|---|---|---|
 | `part_of` → an account, and `account` | a resource whose record names no account — an S3 bucket's ARN names none | `source_account`: the one account of its provider its sources read — none where they read several | 0.9 |
-| `environment`, and `runs_in` → it | a resource, a resource group, with no environment of its own | `container`: its nearest container's — a node's cluster, a resource's group, else its account — that runs in one environment | the container's × the `part_of`'s × **0.9**; below 0.5, nothing |
+| `environment`, and `runs_in` → it | a resource, a resource group, a database, a schema, with no environment of its own | `container`: its nearest container's — a schema's database, a database's instance (LEKA-364), a node's cluster, a resource's group, else its account — that runs in one environment | the container's × the `part_of`'s × **0.9**; below 0.5, nothing |
+
+### Data — what a database holds (LEKA-364)
+
+| Attribute | Of | Rule | Confidence |
+|---|---|---|---|
+| `data_categories` | a schema, a database, the instance serving it | `objects`: every kind of data its tables — its schemas, its databases — hold | 0.8 |
+| `classification` | the same | `objects`: the most sensitive of what it holds — `restricted`, `confidential`, `internal`, `public` — even where its own word is milder | 0.8 |
+| `personal_data` | the same | `objects`: one of them holds personal data | 0.8 |
+
+What a source says of it is never enriched; what goes up is the most
+sensitive, so a schema documented `internal` that holds a table of
+password hashes makes its database `restricted`.
 
 A company that keeps production in an account of its own — `acme-prod`,
 the subscription `Production`, the project labelled `env=prod` — says it
@@ -219,8 +231,8 @@ A **workspace** stage, after resolution
 - **Queued by a resolution run that succeeded.** It reads what the latest
   successful resolution run made; that run's id is what it was made from.
 - **Queued by `advance`**, when nothing is left to resolve but enrichment
-  has something to do: a new `ENRICHER_VERSION` (3 since LEKA-363's
-  infrastructure, 2 since LEKA-362's landscape), a run that used up its
+  has something to do: a new `ENRICHER_VERSION` (4 since LEKA-364's data,
+  3 since LEKA-363's infrastructure, 2 since LEKA-362's landscape), a run that used up its
   retries.
 - One run at a time per workspace; a run that sees resolution succeed again
   while it reads is closed `abandoned` and reads again (up to three times);

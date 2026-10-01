@@ -59,6 +59,9 @@ const LAYER: Record<EntityType, number> = {
   // What resources are in: under them, with them (LEKA-363).
   cloud_account: 4,
   resource_group: 4,
+  // A database's schemas and tables, beside it (LEKA-364).
+  schema: 3,
+  data_object: 3,
 };
 
 /** Past this many, a layer wraps onto another row: 80 services side by side

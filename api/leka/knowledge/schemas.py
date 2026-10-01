@@ -347,3 +347,138 @@ class CloudAccountDetail(CloudAccountRead):
     attributes: dict[str, object]
     provenance: dict[str, object]
     resource_groups: list[CloudAccountRead]
+
+
+# ── data: databases, schemas, data objects (LEKA-364) ────────────────────────
+
+
+class Holds(BaseModel):
+    """What data something holds: the kinds, the most sensitive
+    classification, whether personal data — and who says so."""
+
+    model_config = ConfigDict(frozen=True)
+
+    classification: str | None = Field(
+        description="restricted, confidential, internal, public — or the source's word."
+    )
+    data_categories: list[str] = Field(
+        description="contact, identity, location, financial, credential, health, personal."
+    )
+    personal_data: bool
+    origin: str | None = Field(
+        description="source: its columns, its documentation, a catalogue said it; "
+        "enrichment: what it holds does."
+    )
+
+
+class DatabaseRead(BaseModel):
+    """A database: what a database source reads on a server — or a cloud
+    instance serving databases — where it is, what it holds."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    name: str
+    lifecycle: Lifecycle
+    engine: str | None = Field(
+        description="postgresql, mysql, mariadb, sqlserver, oracle, mongodb."
+    )
+    host: str | None
+    port: int | None
+    database_name: str | None = Field(description="None for a server whose schemas are databases.")
+    provider: str | None = Field(description="aws, azure — a cloud instance's.")
+    instance: EntityBrief | None = Field(description="The cloud instance serving it.")
+    schema_count: int
+    object_count: int = Field(description="Its tables, views, collections — not removed.")
+    holds: Holds
+    environment: ResourceEnvironment | None
+    owners: list[EntityBrief]
+    services: list[EntityBrief]
+    last_seen_at: datetime | None
+
+
+class SchemaRead(BaseModel):
+    """A schema — a MySQL or MongoDB database — and what is in it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    name: str
+    lifecycle: Lifecycle
+    object_count: int
+    kinds: dict[str, int] = Field(description="Of them, how many tables, views, collections…")
+    holds: Holds
+    owners: list[EntityBrief]
+    services: list[EntityBrief]
+
+
+class DatabaseDetail(DatabaseRead):
+    """One database: everything above, its schemas, the databases it serves
+    (an instance), where each piece came from."""
+
+    attributes: dict[str, object]
+    provenance: dict[str, object]
+    schemas: list[SchemaRead] = Field(description="By name.")
+    serves: list[EntityBrief] = Field(description="An instance's databases.")
+
+
+class Ties(BaseModel):
+    """How a data object is tied to the others, counted."""
+
+    model_config = ConfigDict(frozen=True)
+
+    references: int = Field(description="The tables its foreign keys point at.")
+    referenced_by: int
+    reads_from: int = Field(description="What a view reads.")
+    read_by: int
+
+
+class DataObjectRead(BaseModel):
+    """A table, a view, a collection: where it is, how big, what it holds,
+    how it is tied to the others."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    name: str
+    lifecycle: Lifecycle
+    object_kind: str | None = Field(
+        description="table, partitioned_table, view, materialized_view, foreign_table, collection."
+    )
+    engine: str | None
+    database: EntityBrief | None
+    schema_name: str | None
+    container: EntityBrief | None = Field(description="Its schema.")
+    column_count: int
+    estimated_rows: int | None
+    size_bytes: int | None
+    holds: Holds
+    owners: list[EntityBrief]
+    services: list[EntityBrief]
+    ties: Ties
+    last_seen_at: datetime | None
+
+
+class ColumnRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    category: str | None = Field(description="What kind of data it holds, when known.")
+    primary_key: bool
+
+
+class DataObjectDetail(DataObjectRead):
+    """One data object: everything above, its columns, what it is tied to,
+    where each piece came from."""
+
+    description: str | None
+    columns: list[ColumnRead]
+    attributes: dict[str, object]
+    provenance: dict[str, object]
+    references: list[EntityBrief]
+    referenced_by: list[EntityBrief]
+    reads_from: list[EntityBrief]
+    read_by: list[EntityBrief]

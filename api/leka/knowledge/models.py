@@ -82,6 +82,10 @@ class EntityType(enum.StrEnum):
     # subscription, a Google Cloud project — and an Azure resource group.
     CLOUD_ACCOUNT = "cloud_account"
     RESOURCE_GROUP = "resource_group"
+    # A database's schemas, and what holds its data — a table, a view, a
+    # collection (LEKA-364).
+    SCHEMA = "schema"
+    DATA_OBJECT = "data_object"
 
 
 class RelationshipType(enum.StrEnum):
@@ -108,6 +112,10 @@ class RelationshipType(enum.StrEnum):
     CHILD_OF = "child_of"
     IN_NETWORK = "in_network"
     RUNS_IN = "runs_in"
+    # A table's foreign key, to the table it references; a view, to what it
+    # reads from (LEKA-364).
+    REFERENCES = "references"
+    READS_FROM = "reads_from"
 
 
 class Lifecycle(enum.StrEnum):

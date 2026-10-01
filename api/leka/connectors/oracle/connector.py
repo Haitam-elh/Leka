@@ -65,6 +65,7 @@ from leka.connectors.databases import (
     public_host,
     rounded,
     schema_names,
+    server,
     too_many_tables,
 )
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
@@ -367,6 +368,7 @@ class OracleConnector(Connector[OracleConfig, OracleCredentials]):
                         "owner": name,  # a schema is its user
                         "comment": None,
                         "database": who["database_name"],
+                        "server": self._server(),
                     }
                     # Its own container, as a repository is: the scope
                     # rules keep or leave a schema and its tables alike.
@@ -374,7 +376,14 @@ class OracleConnector(Connector[OracleConfig, OracleCredentials]):
                 return
             for table in await self._tables(db, wanted):
                 external_id = f"{table['schema']}.{table['name']}"
-                yield _record(C.TABLES, table, external_id, str(table["schema"]), fetched)
+                payload = {**table, "server": self._server()}
+                yield _record(C.TABLES, payload, external_id, str(table["schema"]), fetched)
+
+    def _server(self) -> dict[str, object]:
+        """Where its catalogue is read: the service it connects to — case-
+        insensitive, as Oracle's names are (leka/connectors/databases.py)."""
+        service = self.config.service_name.strip().lower()
+        return server("oracle", self.config.host, self.config.port, service)
 
     # ── inside ───────────────────────────────────────────────────────────────
 

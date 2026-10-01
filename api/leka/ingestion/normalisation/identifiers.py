@@ -109,6 +109,31 @@ def cloud_account(provider: str, account_id: str) -> str:
     return f"{provider}:{'project' if provider == 'gcp' else 'account'}:{account_id}"
 
 
+def database(engine: str, host: str, port: int | None, name: str | None) -> str:
+    """What a database source reads (LEKA-364): its engine, server and
+    database — `db:postgresql://ledger.abc.rds.amazonaws.com:5432/ledger`;
+    a MySQL, MariaDB or MongoDB server, whose databases are its schemas,
+    without one. Whichever source reads it, the same key."""
+    where = f"{host.strip().lower()}:{port}" if port else host.strip().lower()
+    return f"db:{engine}://{where}" + (f"/{name.strip()}" if name and name.strip() else "")
+
+
+def data_schema(database_key: str, schema: str) -> str:
+    """A schema of a database: `<database>/billing`."""
+    return f"{database_key}/{schema}"
+
+
+def data_object(database_key: str, schema: str, name: str) -> str:
+    """A table, a view, a collection: `<database>/billing/invoices`."""
+    return f"{database_key}/{schema}/{name}"
+
+
+def endpoint(host: str, port: int | str | None) -> str:
+    """Where a client connects to a database server: what a cloud database
+    instance is also known by, and what a database source names."""
+    return f"endpoint:{host.strip().lower()}:{port}" if port else f"endpoint:{host.strip().lower()}"
+
+
 def slug(name: str) -> str:
     """'Billing API ' → 'billing-api'; accents dropped, anything else a dash."""
     ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()

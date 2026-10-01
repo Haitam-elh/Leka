@@ -8,7 +8,10 @@ applications, teams and environments its tags and catalogues name, entities
 of their own. What it points at becomes a relationship to that thing's key,
 whether or not any source has shown it. A cloud resource is placed in what
 it is in — an AWS account, an Azure resource group and its subscription, a
-Google Cloud project — each an entity too (LEKA-363).
+Google Cloud project — each an entity too (LEKA-363). A database's schemas
+and tables are keyed by the server and database they were read on, so that
+two sources reading one database meet; the database, by its endpoint, meets
+the cloud instance that serves it (LEKA-364).
 """
 
 from __future__ import annotations
@@ -43,6 +46,8 @@ DOCUMENT_TOOLS = frozenset(
 CUSTOM_ENTITIES = frozenset(
     {"issue", "incident", "service", "application", "project", "document"}
     | {"infra_resource", "database"}
+    # A data catalogue's tables (LEKA-364).
+    | {"data_object"}
 )
 
 ENTITY_TYPES = {
@@ -66,6 +71,9 @@ ENTITY_TYPES = {
     C.FILES: "document",
     # What resources are in; an Azure resource group says so itself.
     C.ACCOUNTS: "cloud_account",
+    # A database's schemas, and its tables, views and collections (LEKA-364).
+    C.SCHEMAS: "schema",
+    C.TABLES: "data_object",
 }
 RESOURCE_KINDS = {
     C.INSTANCES: "instance",
@@ -106,6 +114,19 @@ RESOURCE_WORDS = {
     "database": ("database", "db", "rds", "sql"),
 }
 ACCOUNT_TYPES = {"aws": "aws_account", "azure": "azure_subscription", "gcp": "gcp_project"}
+# Where a client connects to an Azure database server: its name, and the
+# engine's domain and port.
+AZURE_ENDPOINTS = {
+    "microsoft.dbforpostgresql/flexibleservers": ("postgres.database.azure.com", 5432),
+    "microsoft.dbformysql/flexibleservers": ("mysql.database.azure.com", 3306),
+}
+# How sensitive what a column holds is (LEKA-364): a credential, a payment
+# card or an account, health — restricted; who someone is, how to reach
+# them, where they are — confidential, and personal data.
+RESTRICTED = frozenset({"credential", "financial", "health"})
+PERSONAL = frozenset({"contact", "identity", "location", "personal"})
+LEVELS = ("restricted", "confidential", "internal", "public")
+MAX_COLUMNS = 200
 # A Google Cloud zone: its region and a letter — europe-west1-b.
 GCP_ZONE = re.compile(r"^([a-z]+-[a-z]+\d+)-[a-z]$")
 # The tags AKS and GKE put on a node beside its cluster's name: where the
@@ -238,6 +259,8 @@ def entity(build: Build) -> NormalisedEntity:
         if build.kind not in CLOUDS:
             raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
         key, attributes = _scope(build)
+    elif capability in (C.SCHEMAS, C.TABLES):
+        key, attributes = _data(build)
     elif capability in RESOURCE_KINDS:
         if build.kind not in CLOUDS:
             raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
@@ -485,12 +508,15 @@ def _custom(build: Build, declared: str) -> tuple[str, dict[str, object]]:
     scales; its author."""
     record = build.record
     provider_id = _provider_id(build) if declared in RESOURCES else None
+    catalogued = _catalogued_object(build) if declared == "data_object" else None
     if declared == "service":
         key = ids.service(str(record.title))
     elif declared == "application":
         key = ids.application(str(record.title))
     elif provider_id is not None:
         key = ids.cloud(*provider_id)
+    elif catalogued is not None:
+        key = catalogued[0]
     else:
         key = ids.item(f"custom-{build.source_id}", declared, record.provenance.external_id)
     attributes = _common(build)
@@ -500,6 +526,8 @@ def _custom(build: Build, declared: str) -> tuple[str, dict[str, object]]:
         _catalogued(build, key, attributes, application=declared == "application")
     elif declared in RESOURCES:
         _declared_resource(build, key, attributes, declared, provider_id)
+    elif declared == "data_object":
+        _declared_data(build, key, attributes, catalogued)
     if record.state is not None and declared in {"issue", "incident", *RESOURCES}:
         own = _own(build.mapping.states, record.state)
         state, known = (
@@ -614,6 +642,40 @@ RESOURCE_SAID = {
     "service": ("service", "services"),
 }
 RESOURCES = frozenset({"infra_resource", "database"})
+# What a data catalogue says of a table (LEKA-364): where it is — the same
+# engine, server, database and schema a database source reads it on — its
+# classification, what kinds of data it holds, what it reads from.
+DATA_SAID = {
+    "engine": ("engine", "database_engine", "platform"),
+    "host": ("host", "server", "hostname"),
+    "port": ("port",),
+    "database": ("database", "database_name", "db"),
+    "schema": ("schema", "schema_name", "namespace"),
+    "table": ("table", "table_name"),
+    "classification": ("classification", "sensitivity", "confidentiality"),
+    "data_categories": ("data_categories", "categories"),
+    "reads_from": ("reads_from", "upstream", "sources"),
+}
+ENGINES = {
+    "postgresql": "postgresql",
+    "postgres": "postgresql",
+    "supabase": "postgresql",
+    "mysql": "mysql",
+    "mariadb": "mariadb",
+    "sqlserver": "sqlserver",
+    "sql server": "sqlserver",
+    "mssql": "sqlserver",
+    "oracle": "oracle",
+    "mongodb": "mongodb",
+    "mongo": "mongodb",
+}
+# A catalogue's words for how sensitive, in English and French.
+CLASSIFICATION_WORDS = {
+    "restricted": ("restricted", "secret", "highly confidential", "strictement confidentiel"),
+    "confidential": ("confidential", "confidentiel", "sensitive", "sensible", "pii", "personal"),
+    "internal": ("internal", "interne", "internal use"),
+    "public": ("public",),
+}
 # Read here, kept as relationships or on LEKA's scales, not as attributes.
 CATALOGUE_FIELDS = frozenset(
     {"kind", "application", "system", "product", "services", "depends_on", "dependencies"}
@@ -720,6 +782,67 @@ def _declared_resource(
         attributes["environment"] = places[0]
 
 
+def _catalogued_object(build: Build) -> tuple[str, str, str] | None:
+    """A catalogue's table, by the server, database and schema a database
+    source reads it on: (its key, its database's, its schema's) — or None
+    when the catalogue does not say where it is."""
+    said = {name: next(iter(_said(build, name, split=False)), None) for name in DATA_SAID}
+    engine = ENGINES.get(str(said["engine"] or "").strip().lower())
+    host, schema = said["host"], said["schema"]
+    if engine is None or not host or not schema:
+        return None
+    port = int(said["port"]) if said["port"] and str(said["port"]).isdigit() else None
+    database = ids.database(engine, host, port, said["database"])
+    name = said["table"] or str(build.record.title)
+    schema_key = ids.data_schema(database, schema)
+    return ids.data_object(database, schema, name), database, schema_key
+
+
+def _declared_data(
+    build: Build,
+    key: str,
+    attributes: dict[str, object],
+    catalogued: tuple[str, str, str] | None,
+) -> None:
+    """What a data catalogue says of a table: whose it is, its service and
+    application, how it is classified and what kinds of data it holds, what
+    it reads from — in its words, then on LEKA's scales."""
+    for name in {n for names in DATA_SAID.values() for n in names} | set(SAID["teams"]):
+        attributes.pop(name, None)
+    for name in ("service", "services"):
+        attributes.pop(name, None)
+    for team in _said(build, "teams"):
+        owner = _named(build, "team", ids.team(team), team, 1.0)
+        build.relate("owned_by", key, owner, 1.0, "signals")
+    for name in _said(build, "service"):
+        service = _named(build, "service", ids.service(name), name, 1.0)
+        build.relate("part_of", key, service, 1.0, "catalogue.service")
+    for group in _said(build, "application")[:1]:
+        target = _named(build, "application", ids.application(group), group, 1.0)
+        build.relate("part_of", key, target, 1.0, "catalogue.application")
+    raw = next(iter(_said(build, "classification", split=False)), None)
+    if raw:
+        word = raw.strip().lower()
+        level = next((lv for lv, words in CLASSIFICATION_WORDS.items() if word in words), None)
+        attributes["classification"] = level or word
+        attributes["classification_raw"] = raw
+        if level is None:
+            build.diagnostics.append("unknown classification: kept as the catalogue wrote it")
+    categories = sorted({c.strip().lower() for c in _said(build, "data_categories")})
+    if categories:
+        attributes["data_categories"] = categories
+        attributes["personal_data"] = any(c in PERSONAL for c in categories)
+    if catalogued is None:
+        return
+    _, database, schema_key = catalogued
+    build.relate("part_of", key, schema_key, 1.0, "catalogue.schema")
+    build.relate("part_of", schema_key, database, 1.0, "catalogue.database")
+    for table in _said(build, "reads_from"):
+        other_schema, _, other = table.partition(".")
+        target = ids.data_object(database, other_schema, other or other_schema)
+        build.relate("reads_from", key, target, 1.0, "catalogue.reads_from")
+
+
 def _provider_id(build: Build) -> tuple[str, str] | None:
     """The provider's own id a CMDB gives a resource — a field of its own,
     else the record's id — when it reads as one."""
@@ -755,7 +878,7 @@ def _said(build: Build, what: str, *, split: bool = True) -> list[str]:
     """The first of `what`'s fields the record has — its signals, then its
     metadata — as text: a list, or words between commas."""
     for bag in (build.record.signals, build.record.metadata):
-        for name in {**SAID, **RESOURCE_SAID}[what]:
+        for name in {**SAID, **RESOURCE_SAID, **DATA_SAID}[what]:
             value = bag.get(name)
             if isinstance(value, list):
                 found = [str(v).strip() for v in value if str(v).strip()]
@@ -797,6 +920,8 @@ def _cloud(build: Build) -> tuple[str, dict[str, object]]:
     attributes["tags"] = _tag_dict(record.signals.get("tags"))
     _placed(build, key, attributes)
     _described(build, key, attributes)
+    if kind == "database":
+        build.aliases += _endpoints(build, attributes)
     if kind == "cluster":
         build.aliases += _cluster_aliases(build, attributes)
     for fact in build.parsed.facts:
@@ -980,8 +1105,129 @@ def _cluster_aliases(build: Build, attributes: dict[str, object]) -> list[str]:
     return []
 
 
+def _endpoints(build: Build, attributes: dict[str, object]) -> list[str]:
+    """Where a client connects to a cloud database instance — RDS's endpoint,
+    an Azure flexible server's name in its engine's domain: the key a
+    database source names it by (LEKA-364)."""
+    host, port = _text(attributes.get("endpoint")), attributes.get("port")
+    if build.kind == "aws" and host:
+        return [ids.endpoint(host, port if isinstance(port, int) else None)]
+    domain = AZURE_ENDPOINTS.get(str(attributes.get("resource_type") or ""))
+    name = values.name(build.record.title)
+    if build.kind == "azure" and domain and name:
+        return [ids.endpoint(f"{name.lower()}.{domain[0]}", domain[1])]
+    return []
+
+
 def _gke(project: str, location: str, name: str) -> str:
     return f"gcp:cluster:{project}/{location.lower()}/{name}"
+
+
+# ── data: databases, schemas, tables (LEKA-364) ──────────────────────────────
+
+
+def _data(build: Build) -> tuple[str, dict[str, object]]:
+    """A schema, or a table, a view, a collection — keyed by the server and
+    database it was read on, part of its schema, the schema of its
+    database; the tables its foreign keys reference and a view reads from;
+    what kind of data its columns hold, and how sensitive. The database
+    itself is named, part of the cloud instance at its endpoint."""
+    record, capability = build.record, build.record.provenance.capability
+    engine, host = _text(record.signals.get("engine")), _text(record.signals.get("host"))
+    if engine is None or host is None:
+        raise InvalidRecordError("no server: the record was read before it said its own")
+    port = record.signals.get("port")
+    database = _database(
+        build,
+        engine,
+        host,
+        port if isinstance(port, int) else None,
+        _text(record.metadata.get("database")),
+    )
+    attributes = _common(build)
+    for raw in ("host", "port", "database"):
+        attributes.pop(raw, None)
+    owner = attributes.pop("owner", None)
+    if isinstance(owner, str) and owner:
+        attributes["owner_role"] = owner  # a role of the database, not a team
+    described = next((c.text for c in record.content if c.role == "description"), None)
+    if described:
+        attributes["description"] = described[:2000]
+    if capability is C.SCHEMAS:
+        key = ids.data_schema(database, str(record.title))
+        build.relate("part_of", key, database, 1.0, "server")
+        return key, attributes
+
+    schema = str(record.metadata.get("schema") or "")
+    title = str(record.title)
+    name = title[len(schema) + 1 :] if schema and title.startswith(f"{schema}.") else title
+    key = ids.data_object(database, schema, name)
+    attributes["object_kind"] = str(attributes.pop("kind", None) or "table")
+    attributes["schema_name"] = attributes.pop("schema", schema)
+    build.relate("part_of", key, ids.data_schema(database, schema), 1.0, "container")
+    for reference in record.references:
+        if reference.kind != "table" or not reference.external_id:
+            continue
+        other_schema, _, other = reference.external_id.partition(".")
+        target = ids.data_object(database, other_schema, other or other_schema)
+        relation = "reads_from" if reference.role == "reads" else "references"
+        build.relate(relation, key, target, 1.0, "references")
+    _classified(build, attributes)
+    return key, attributes
+
+
+def _database(build: Build, engine: str, host: str, port: int | None, name: str | None) -> str:
+    """The database a record was read on, as an entity — and part of the
+    cloud instance a client reaches at its address, if one is known."""
+    key = ids.database(engine, host, port, name)
+    build.add(
+        NormalisedEntity(
+            type="database",
+            key=key,
+            external_id=key,
+            source_id=build.source_id,
+            name=name or host,
+            attributes={
+                "engine": engine,
+                "host": host,
+                **({"port": port} if port else {}),
+                **({"database_name": name} if name else {}),
+                "resource_kind": "database",
+                "resource_class": "database",
+            },
+            observed_at=build.observed_at,
+        )
+    )
+    build.relate("part_of", key, ids.endpoint(host, port), 1.0, "endpoint")
+    return key
+
+
+def _classified(build: Build, attributes: dict[str, object]) -> None:
+    """What kind of data a table's columns hold, and how sensitive it is:
+    restricted — a credential, a card, an account, health — confidential —
+    who someone is, how to reach them, where — or what its documentation
+    says, the most sensitive of them."""
+    columns: dict[str, str] = {}
+    surety: dict[str, float] = {}
+    for fact in build.parsed.facts:
+        if fact.type is FactType.DATA_CATEGORY and fact.value and fact.target:
+            columns[fact.target.key] = fact.value
+            surety[fact.value] = max(surety.get(fact.value, 0.0), fact.confidence)
+    levels: dict[str, float] = {}
+    for category, sure in surety.items():
+        level = "restricted" if category in RESTRICTED else "confidential"
+        levels[level] = max(levels.get(level, 0.0), sure)
+    for fact in build.parsed.facts:
+        if fact.type is FactType.CLASSIFICATION and fact.value in LEVELS:
+            levels[fact.value] = max(levels.get(fact.value, 0.0), fact.confidence)
+    if columns:
+        attributes["data_categories"] = sorted(set(columns.values()))
+        attributes["column_categories"] = dict(sorted(columns.items())[:MAX_COLUMNS])
+        attributes["personal_data"] = any(c in PERSONAL for c in columns.values())
+    if levels:
+        level = min(levels, key=LEVELS.index)
+        attributes["classification"] = level
+        attributes["classification_confidence"] = levels[level]
 
 
 # ── what resources are in (LEKA-363) ─────────────────────────────────────────

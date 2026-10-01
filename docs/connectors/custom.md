@@ -151,7 +151,7 @@ know — is refused, so a typo is found when saved, not at the first sync.
 | Key | | |
 |---|---|---|
 | `name` | required | `tickets` — lower case, digits, `_`. What LEKA shows, what the scope keeps or leaves |
-| `entity` | | What its records are in LEKA's model: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`. Without it, they are extracted and stay out of the model |
+| `entity` | | What its records are in LEKA's model: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object`. Without it, they are extracted and stay out of the model |
 | `path` | required | From `base_url`: `/tickets`. No scheme, no host, no query, no `..` |
 | `params` | | The query, as a map: `{"status": "open"}`. Not secret — the secret goes in the credentials |
 | `items` | | Where the records are in a page: `data`, `result.items`. Absent: the page is the list |
@@ -242,6 +242,16 @@ changes `fields` — and so, at the next pass, what is extracted.
   `application` → its application; `criticality` / `tier`; `environments` /
   `environment`; `depends_on` / `dependencies` → what it depends on: a
   provider id, or the id of another record of the same resource.
+- **Reads a data catalogue's tables** — a `data_object` resource
+  (LEKA-364). One that says **where it is** — `engine` (`postgres`, `mysql`,
+  `sqlserver`…), `host`, `port`, `database`, `schema`, and `table` or its
+  title — is **keyed by it**, as the database source reading that table
+  keys it: one entity, every source kept. One that does not is the
+  catalogue's own. From its `metadata`: `team` / `owner` → its team;
+  `service`; `application`; `classification` / `sensitivity` → on LEKA's
+  scale (`restricted`, `confidential`, `internal`, `public`, in English or
+  French); `data_categories`; `reads_from` / `upstream` → the tables it is
+  made from, `schema.table`.
 - **Keeps** its payloads 90 days, as the other structured sources'.
 
 ## GraphQL

@@ -18,6 +18,7 @@ from typing import Any, cast
 from sqlalchemy import CursorResult, Select, delete, exists, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.expression import Exists
 
 from leka.db import WorkspaceScopedRepository
 from leka.knowledge.build import Built, Current
@@ -68,6 +69,23 @@ class InfrastructureFilters:
     state: str | None = None
     exposure: str | None = None
     criticality: str | None = None
+    service_id: uuid.UUID | None = None
+    team_id: uuid.UUID | None = None
+    q: str | None = None
+
+
+@dataclass(frozen=True)
+class DataFilters:
+    """What a list of data objects is narrowed to (LEKA-364): where they
+    are, what kind, what they hold, whose they are."""
+
+    lifecycle: Lifecycle | None = None
+    database_id: uuid.UUID | None = None
+    schema_id: uuid.UUID | None = None
+    object_kind: str | None = None
+    classification: str | None = None
+    category: str | None = None
+    personal_data: bool | None = None
     service_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
     q: str | None = None
@@ -372,11 +390,13 @@ class EntityRepository(WorkspaceScopedRepository):
         depth: int,
         environment: str | None,
         limit: int,
+        types: Sequence[RelationshipType] = (RelationshipType.DEPENDS_ON,),
     ) -> tuple[dict[uuid.UUID, int], list[Relationship]]:
         """What an entity depends on (downstream) — or what depends on it
         (upstream: what a failure of it reaches) — `depth` steps of
-        `depends_on` away, in one environment or all: each reached entity
-        and its distance, and the edges walked. One recursive query,
+        `depends_on` away — or of `types`: a table's foreign keys and what
+        a view reads (LEKA-364) — in one environment or all: each reached
+        entity and its distance, and the edges walked. One recursive query,
         bounded by depth and by `limit` entities (docs/adr/001-postgresql.md)."""
         near, far = (
             ("from_entity_id", "to_entity_id") if downstream else ("to_entity_id", "from_entity_id")
@@ -391,7 +411,7 @@ class EntityRepository(WorkspaceScopedRepository):
                 JOIN relationships r
                   ON r.workspace_id = :workspace
                  AND r.{near} = reach.id
-                 AND r.type = 'depends_on'
+                 AND r.type = ANY(CAST(:types AS text[]))
                  AND (CAST(:environment AS text) IS NULL
                       OR NOT jsonb_exists(r.attributes, 'environments')
                       OR jsonb_exists(r.attributes -> 'environments', :environment))
@@ -413,6 +433,7 @@ class EntityRepository(WorkspaceScopedRepository):
                 "depth": depth,
                 "environment": environment,
                 "limit": limit,
+                "types": [kind.value for kind in types],
             },
         )
         reached = {row[0]: int(row[1]) for row in rows.all()}
@@ -420,7 +441,7 @@ class EntityRepository(WorkspaceScopedRepository):
             return {}, []
         edges = await self.list(
             self.select(Relationship).where(
-                Relationship.type == RelationshipType.DEPENDS_ON,
+                Relationship.type.in_(types),
                 Relationship.from_entity_id.in_(reached),
                 Relationship.to_entity_id.in_(reached),
             )
@@ -604,6 +625,112 @@ class EntityRepository(WorkspaceScopedRepository):
         found = await self.list(statement.order_by(Entity.name, Entity.id).limit(limit))
         return found, int(total or 0)
 
+    # ── data (LEKA-364) ──────────────────────────────────────────────────────
+
+    def databases(
+        self,
+        *,
+        lifecycle: Lifecycle | None,
+        engine: str | None,
+        classification: str | None,
+        personal_data: bool | None,
+        environment: str | None,
+        team_id: uuid.UUID | None,
+        q: str | None,
+    ) -> Select[tuple[Entity]]:
+        """The databases of the workspace — what database sources read, and
+        the cloud instances serving them — for a page."""
+        statement = _lifecycle(
+            self.select(Entity).where(Entity.type == EntityType.DATABASE), lifecycle
+        )
+        for name, value in (
+            ("engine", engine),
+            ("classification", classification),
+            ("environment", environment),
+        ):
+            if value:
+                statement = statement.where(Entity.attributes[name].astext == value)
+        statement = _personal(statement, personal_data)
+        if q:
+            statement = statement.where(Entity.name.ilike(f"%{q}%"))
+        if team_id is not None:
+            statement = statement.where(self._points_at(team_id, RelationshipType.OWNED_BY))
+        return statement
+
+    def data_objects(self, filters: DataFilters) -> Select[tuple[Entity]]:
+        """The tables, views and collections of the workspace, for a page:
+        in that database or schema, of that kind, holding that data, of
+        that service or team."""
+        f = filters
+        statement = _lifecycle(
+            self.select(Entity).where(Entity.type == EntityType.DATA_OBJECT), f.lifecycle
+        )
+        for name, value in (("object_kind", f.object_kind), ("classification", f.classification)):
+            if value:
+                statement = statement.where(Entity.attributes[name].astext == value)
+        if f.category:
+            statement = statement.where(
+                Entity.attributes.contains({"data_categories": [f.category]})
+            )
+        statement = _personal(statement, f.personal_data)
+        if f.q:
+            statement = statement.where(Entity.name.ilike(f"%{f.q}%"))
+        if f.schema_id is not None:
+            statement = statement.where(self._points_at(f.schema_id, RelationshipType.PART_OF))
+        if f.database_id is not None:
+            schemas = select(Relationship.from_entity_id).where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.type == RelationshipType.PART_OF,
+                Relationship.to_entity_id == f.database_id,
+            )
+            statement = statement.where(
+                exists().where(
+                    Relationship.workspace_id == self.workspace_id,
+                    Relationship.from_entity_id == Entity.id,
+                    Relationship.type == RelationshipType.PART_OF,
+                    Relationship.to_entity_id.in_(schemas),
+                )
+            )
+        for other, relation in (
+            (f.service_id, RelationshipType.PART_OF),
+            (f.team_id, RelationshipType.OWNED_BY),
+        ):
+            if other is not None:
+                statement = statement.where(self._points_at(other, relation))
+        return statement
+
+    def _points_at(self, other: uuid.UUID, relation: RelationshipType) -> Exists:
+        return exists().where(
+            Relationship.workspace_id == self.workspace_id,
+            Relationship.from_entity_id == Entity.id,
+            Relationship.to_entity_id == other,
+            Relationship.type == relation,
+        )
+
+    async def parts(
+        self, holders: Sequence[uuid.UUID], kind: EntityType
+    ) -> dict[uuid.UUID, list[Entity]]:
+        """What is part of each of these — of a kind — not removed."""
+        if not holders:
+            return {}
+        rows = await self._session.execute(
+            select(Relationship.to_entity_id, Entity)
+            .join(Entity, Entity.id == Relationship.from_entity_id)
+            .where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.type == RelationshipType.PART_OF,
+                Relationship.to_entity_id.in_(set(holders)),
+                Entity.workspace_id == self.workspace_id,
+                Entity.type == kind,
+                Entity.lifecycle != Lifecycle.REMOVED,
+            )
+            .order_by(Entity.name, Entity.id)
+        )
+        found: dict[uuid.UUID, list[Entity]] = {holder: [] for holder in holders}
+        for holder, part in rows.tuples().all():
+            found[holder].append(part)
+        return found
+
     async def counts(self) -> dict[str, dict[str, int]]:
         """How many entities of each type and in each lifecycle; how many
         relationships of each type."""
@@ -627,6 +754,15 @@ class EntityRepository(WorkspaceScopedRepository):
             "lifecycles": {state.value: int(n) for state, n in by_lifecycle.all()},
             "relationships": {kind.value: int(n) for kind, n in by_relationship.all()},
         }
+
+
+def _personal(statement: Select[tuple[Entity]], personal: bool | None) -> Select[tuple[Entity]]:
+    """Holding personal data, or not — said so, or not said."""
+    if personal is None:
+        return statement
+    said = Entity.attributes["personal_data"].astext == "true"
+    unsaid = or_(~said, Entity.attributes["personal_data"].astext.is_(None))
+    return statement.where(said if personal else unsaid)
 
 
 def _lifecycle(

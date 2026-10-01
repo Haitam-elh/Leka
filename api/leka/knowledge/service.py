@@ -3,7 +3,9 @@
 What leka.context and leka.intentions ask of the graph: an entity, its
 neighbourhood, its history; the landscape of applications and services,
 and what depends on what (LEKA-362); the infrastructure — its resources,
-the accounts they are in, where and whose each is (LEKA-363). The registry (registry.py) is what
+the accounts they are in, where and whose each is (LEKA-363); the data —
+databases, schemas, tables — what each holds and what it is tied to
+(LEKA-364). The registry (registry.py) is what
 they read to know what kinds of things a company is made of.
 
 Depends on leka.ingestion. Must not import leka.context or leka.intentions
@@ -22,12 +24,18 @@ from leka.knowledge.repository import EntityRepository, Holding
 from leka.knowledge.schemas import (
     CloudAccountDetail,
     CloudAccountRead,
+    ColumnRead,
     Criticality,
+    DatabaseDetail,
+    DatabaseRead,
+    DataObjectDetail,
+    DataObjectRead,
     Dependencies,
     DependencyNode,
     DependencyRead,
     EntityBrief,
     EntityRead,
+    Holds,
     InfrastructureDetail,
     InfrastructureRead,
     LandscapeDetail,
@@ -36,6 +44,8 @@ from leka.knowledge.schemas import (
     PartRead,
     RelationshipRead,
     ResourceEnvironment,
+    SchemaRead,
+    Ties,
 )
 
 MAX_DEPTH = 3
@@ -51,6 +61,10 @@ AROUND = (
     RelationshipType.MAINTAINED_BY,
     RelationshipType.DEPENDS_ON,
 )
+# A data object's lineage: its foreign keys, what views read (LEKA-364).
+LINEAGE = (RelationshipType.REFERENCES, RelationshipType.READS_FROM)
+# What a data object's row reads around it.
+DATA_AROUND = (RelationshipType.PART_OF, RelationshipType.OWNED_BY, *LINEAGE)
 # What a resource's row reads around it (LEKA-363).
 PLACED = (
     RelationshipType.PART_OF,
@@ -126,17 +140,23 @@ class KnowledgeService:
         direction: Literal["downstream", "upstream"],
         depth: int,
         environment: str | None,
+        lineage: bool = False,
     ) -> Dependencies | None:
         """What an entity depends on, `depth` steps away at most — or what
         depends on it — in one environment or all. None when the workspace
-        has no such entity."""
+        has no such entity.
+
+        A data object's LINEAGE (LEKA-364) walks its foreign keys and what
+        views read instead, in data's words: upstream, what it reads from
+        and references; downstream, what reads from or references it."""
         depth = min(max(depth, 1), MAX_DEPENDENCY_DEPTH)
         reached, edges = await self._entities.dependencies(
             entity_id,
-            downstream=direction == "downstream",
+            downstream=(direction == "upstream") if lineage else (direction == "downstream"),
             depth=depth,
             environment=environment,
             limit=MAX_DEPENDENCIES + 1,
+            types=LINEAGE if lineage else (RelationshipType.DEPENDS_ON,),
         )
         if entity_id not in reached:
             return None
@@ -424,6 +444,246 @@ class KnowledgeService:
         return {
             resource: of_group[group] for resource, group in groups.items() if group in of_group
         }
+
+    # ── data (LEKA-364) ──────────────────────────────────────────────────────
+
+    async def databases(self, found: Sequence[Entity]) -> list[DatabaseRead]:
+        """A page of databases, each with what it holds and where it is."""
+        ids = [entity.id for entity in found]
+        edges = list(
+            await self._entities.around(ids, (RelationshipType.PART_OF, RelationshipType.OWNED_BY))
+        )
+        outgoing = [e for e in edges if e.from_entity_id in set(ids)]
+        others = await self._entities.by_ids([e.to_entity_id for e in outgoing])
+        schemas = await self._entities.parts(ids, EntityType.SCHEMA)
+        objects = await self._entities.parts(
+            [s.id for held in schemas.values() for s in held], EntityType.DATA_OBJECT
+        )
+        rows = []
+        for entity in found:
+            a = entity.attributes
+            instances = _briefs(
+                outgoing, others, entity.id, RelationshipType.PART_OF, EntityType.DATABASE
+            )
+            port = a.get("port")
+            rows.append(
+                DatabaseRead(
+                    id=entity.id,
+                    key=entity.key,
+                    name=entity.name,
+                    lifecycle=entity.lifecycle,
+                    engine=_text(a.get("engine")),
+                    host=_text(a.get("host")) or _text(a.get("endpoint")),
+                    port=port if isinstance(port, int) else None,
+                    database_name=_text(a.get("database_name")),
+                    provider=_text(a.get("provider")),
+                    instance=instances[0] if instances else None,
+                    schema_count=len(schemas.get(entity.id, [])),
+                    object_count=sum(
+                        len(objects.get(s.id, [])) for s in schemas.get(entity.id, [])
+                    ),
+                    holds=_holds(entity),
+                    environment=_environment(entity),
+                    owners=_briefs(
+                        outgoing, others, entity.id, RelationshipType.OWNED_BY, EntityType.TEAM
+                    ),
+                    services=_briefs(
+                        outgoing, others, entity.id, RelationshipType.PART_OF, EntityType.SERVICE
+                    ),
+                    last_seen_at=entity.last_seen_at,
+                )
+            )
+        return rows
+
+    async def database(self, entity: Entity) -> DatabaseDetail:
+        """One database: its row, its schemas with theirs, the databases it
+        serves when it is an instance."""
+        [row] = await self.databases([entity])
+        schemas = (await self._entities.parts([entity.id], EntityType.SCHEMA))[entity.id]
+        serves = (await self._entities.parts([entity.id], EntityType.DATABASE))[entity.id]
+        return DatabaseDetail(
+            **row.model_dump(),
+            attributes=dict(entity.attributes),
+            provenance=dict(entity.provenance),
+            schemas=await self._schemas(schemas),
+            serves=[EntityBrief.model_validate(d) for d in serves],
+        )
+
+    async def _schemas(self, found: Sequence[Entity]) -> list[SchemaRead]:
+        ids = [entity.id for entity in found]
+        objects = await self._entities.parts(ids, EntityType.DATA_OBJECT)
+        edges = list(
+            await self._entities.around(ids, (RelationshipType.PART_OF, RelationshipType.OWNED_BY))
+        )
+        outgoing = [e for e in edges if e.from_entity_id in set(ids)]
+        others = await self._entities.by_ids([e.to_entity_id for e in outgoing])
+        rows = []
+        for entity in found:
+            held = objects.get(entity.id, [])
+            kinds: dict[str, int] = defaultdict(int)
+            for item in held:
+                kinds[_text(item.attributes.get("object_kind")) or "table"] += 1
+            rows.append(
+                SchemaRead(
+                    id=entity.id,
+                    key=entity.key,
+                    name=entity.name,
+                    lifecycle=entity.lifecycle,
+                    object_count=len(held),
+                    kinds=dict(sorted(kinds.items())),
+                    holds=_holds(entity),
+                    owners=_briefs(
+                        outgoing, others, entity.id, RelationshipType.OWNED_BY, EntityType.TEAM
+                    ),
+                    services=_briefs(
+                        outgoing, others, entity.id, RelationshipType.PART_OF, EntityType.SERVICE
+                    ),
+                )
+            )
+        return rows
+
+    async def data_objects(self, found: Sequence[Entity]) -> list[DataObjectRead]:
+        """A page of tables, views and collections: where each is, what it
+        holds, how it is tied to the others."""
+        rows, _, _ = await self._data_objects(found)
+        return rows
+
+    async def data_object(self, entity: Entity) -> DataObjectDetail:
+        """One data object: its row, its columns, and what it is tied to —
+        each way."""
+        [row], edges, others = await self._data_objects([entity])
+        a = entity.attributes
+        found = a.get("column_categories")
+        categories = found if isinstance(found, dict) else {}
+        key = a.get("primary_key")
+        primary = {str(c) for c in key} if isinstance(key, list) else set()
+        listed = a.get("columns")
+        names = [str(name) for name in listed] if isinstance(listed, list) else []
+
+        def tied(relation: RelationshipType, *, outgoing: bool) -> list[EntityBrief]:
+            ends = [
+                others.get(e.to_entity_id if outgoing else e.from_entity_id)
+                for e in edges
+                if e.type is relation
+                and (e.from_entity_id if outgoing else e.to_entity_id) == entity.id
+            ]
+            return sorted(
+                (EntityBrief.model_validate(end) for end in ends if end is not None),
+                key=lambda brief: brief.name.lower(),
+            )
+
+        return DataObjectDetail(
+            **row.model_dump(),
+            description=_text(a.get("description")),
+            columns=[
+                ColumnRead(
+                    name=name,
+                    category=_text(categories.get(name)),
+                    primary_key=name in primary,
+                )
+                for name in names
+            ],
+            attributes=dict(a),
+            provenance=dict(entity.provenance),
+            references=tied(RelationshipType.REFERENCES, outgoing=True),
+            referenced_by=tied(RelationshipType.REFERENCES, outgoing=False),
+            reads_from=tied(RelationshipType.READS_FROM, outgoing=True),
+            read_by=tied(RelationshipType.READS_FROM, outgoing=False),
+        )
+
+    async def _data_objects(
+        self, found: Sequence[Entity]
+    ) -> tuple[list[DataObjectRead], list[Relationship], dict[uuid.UUID, Entity]]:
+        ids = [entity.id for entity in found]
+        edges = list(await self._entities.around(ids, DATA_AROUND))
+        ends = {e.from_entity_id for e in edges} | {e.to_entity_id for e in edges}
+        others = await self._entities.by_ids(list(ends - set(ids)))
+        others |= {entity.id: entity for entity in found}
+        outgoing = [e for e in edges if e.from_entity_id in set(ids)]
+        schemas = {
+            e.from_entity_id: e.to_entity_id
+            for e in outgoing
+            if e.type is RelationshipType.PART_OF
+            and (s := others.get(e.to_entity_id)) is not None
+            and s.type is EntityType.SCHEMA
+        }
+        above = [
+            e
+            for e in await self._entities.around(
+                list(set(schemas.values())), (RelationshipType.PART_OF,)
+            )
+            if e.from_entity_id in set(schemas.values())
+        ]
+        databases = await self._entities.by_ids([e.to_entity_id for e in above])
+        of_schema = {
+            e.from_entity_id: EntityBrief.model_validate(databases[e.to_entity_id])
+            for e in above
+            if e.to_entity_id in databases and databases[e.to_entity_id].type is EntityType.DATABASE
+        }
+
+        def count(of: uuid.UUID, relation: RelationshipType, *, outgoing: bool) -> int:
+            return sum(
+                1
+                for e in edges
+                if e.type is relation and (e.from_entity_id if outgoing else e.to_entity_id) == of
+            )
+
+        rows = []
+        for entity in found:
+            a = entity.attributes
+            columns = a.get("columns")
+            rows_, size = a.get("estimated_rows"), a.get("size_bytes")
+            schema = schemas.get(entity.id)
+            rows.append(
+                DataObjectRead(
+                    id=entity.id,
+                    key=entity.key,
+                    name=entity.name,
+                    lifecycle=entity.lifecycle,
+                    object_kind=_text(a.get("object_kind")),
+                    engine=_text(a.get("engine")),
+                    database=of_schema.get(schema) if schema else None,
+                    schema_name=_text(a.get("schema_name")),
+                    container=EntityBrief.model_validate(others[schema]) if schema else None,
+                    column_count=len(columns) if isinstance(columns, list) else 0,
+                    estimated_rows=rows_ if isinstance(rows_, int) else None,
+                    size_bytes=size if isinstance(size, int) else None,
+                    holds=_holds(entity),
+                    owners=_briefs(
+                        outgoing, others, entity.id, RelationshipType.OWNED_BY, EntityType.TEAM
+                    ),
+                    services=_briefs(
+                        outgoing, others, entity.id, RelationshipType.PART_OF, EntityType.SERVICE
+                    ),
+                    ties=Ties(
+                        references=count(entity.id, RelationshipType.REFERENCES, outgoing=True),
+                        referenced_by=count(entity.id, RelationshipType.REFERENCES, outgoing=False),
+                        reads_from=count(entity.id, RelationshipType.READS_FROM, outgoing=True),
+                        read_by=count(entity.id, RelationshipType.READS_FROM, outgoing=False),
+                    ),
+                    last_seen_at=entity.last_seen_at,
+                )
+            )
+        return rows, edges, others
+
+
+def _holds(entity: Entity) -> Holds:
+    """What data it holds, and who says so: its columns, its documentation,
+    a catalogue — or enrichment, from what it holds."""
+    a = entity.attributes
+    found = a.get("data_categories")
+    origins = entity.provenance.get("attributes")
+    said = (
+        origins.get("classification") or origins.get("data_categories")
+        if isinstance(origins, dict)
+        else None
+    )
+    return Holds(
+        classification=_text(a.get("classification")),
+        data_categories=[str(c) for c in found] if isinstance(found, list) else [],
+        personal_data=a.get("personal_data") is True,
+        origin=str(said.get("origin") or "source") if isinstance(said, dict) else None,
+    )
 
 
 def _briefs(

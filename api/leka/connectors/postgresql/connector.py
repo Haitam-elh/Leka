@@ -63,6 +63,7 @@ from leka.connectors.databases import (
     public_host,
     rounded,
     schema_names,
+    server,
     too_many_tables,
 )
 from leka.connectors.errors import ConnectorError, DiagnosticCode, diagnose
@@ -290,7 +291,11 @@ class PostgreSQLConnector(Connector[PostgreSQLConfig, PostgreSQLCredentials]):
             if capability is C.SCHEMAS:
                 for row in rows:
                     if row["name"] in wanted:
-                        payload = {**dict(row), "database": self.config.database}
+                        payload = {
+                            **dict(row),
+                            "database": self.config.database,
+                            "server": self._server(),
+                        }
                         # Its own container, as a repository is: the scope
                         # rules keep or leave a schema and its tables alike.
                         name = str(row["name"])
@@ -298,9 +303,14 @@ class PostgreSQLConnector(Connector[PostgreSQLConfig, PostgreSQLCredentials]):
                 return
             for table in await self._tables(db, sorted(wanted)):
                 external_id = f"{table['schema']}.{table['name']}"
-                yield _record(C.TABLES, table, external_id, str(table["schema"]), fetched)
+                payload = {**table, "server": self._server()}
+                yield _record(C.TABLES, payload, external_id, str(table["schema"]), fetched)
 
     # ── inside ───────────────────────────────────────────────────────────────
+
+    def _server(self) -> dict[str, object]:
+        """Where its catalogue is read (leka/connectors/databases.py)."""
+        return server("postgresql", self.config.host, self.config.port, self.config.database)
 
     async def _open(self) -> asyncpg.Connection:
         """A connection to the address checked — not to the name, which could

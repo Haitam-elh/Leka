@@ -615,4 +615,5 @@ async def test_a_collection_extracts_as_a_table_does(catalogue: Catalogue) -> No
         "name string|null",
     ]
     assert found.metadata["primary_key"] == ["_id"]
-    assert found.signals == {"engine": "mongodb"}
+    # Where it was read: the address's hosts (LEKA-364).
+    assert found.signals == {"engine": "mongodb", "host": "localhost:27017"}

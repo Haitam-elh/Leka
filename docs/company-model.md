@@ -46,10 +46,13 @@ are checked against.
 | | `issue`, `pull_request` | priority, category, labels, components, stale, cycle time |
 | | `commit` | category, change type |
 | operations | `incident` | priority, duration |
-| infrastructure | `infra_resource`, `database` | provider, account, region, zone, resource group; resource kind and class, the provider's type; environment, exposure, criticality; instance type, engine, version, runtime, endpoint; tags — § 10 |
+| infrastructure | `infra_resource` | provider, account, region, zone, resource group; resource kind and class, the provider's type; environment, exposure, criticality; instance type, engine, version, runtime, endpoint; tags — § 10 |
 | | `cloud_account` | an AWS account, an Azure subscription, a Google Cloud project: its type and id, its state, its organisation, tenant or parent; environment, criticality, tags — § 10 |
 | | `resource_group` | an Azure resource group: its subscription, region, environment, tags — § 10 |
 | | `environment` | — `production`, `staging`, `development`, `test` |
+| data | `database` | a cloud instance's, as a resource's (§ 10); a database a source reads: its engine, host, port, name; what it holds — § 11 |
+| | `schema` | its database's role that owns it; what it holds — § 11 |
+| | `data_object` | a table, a view, a collection: its kind, schema, columns, primary key, size; what each column holds, its classification — § 11 |
 | knowledge | `document` | — |
 
 Each **relationship kind** is built from enrichment's relationships
@@ -57,7 +60,8 @@ Each **relationship kind** is built from enrichment's relationships
 `depends_on`, `owned_by`, `maintained_by`, `member_of`, `authored_by`
 (and normalisation's `committed_by`), `assigned_to`, `reviewed_by`,
 `reported_by` (and `created_by`), `led_by`, `affects`, `resolves`,
-`implements`, `merges`, `mentions`, `in_network`, `runs_in` (LEKA-362).
+`implements`, `merges`, `mentions`, `in_network`, `runs_in` (LEKA-362),
+`references` and `reads_from` (LEKA-364).
 `owns`, `deployed_to` and `caused_by` are kept for what states them later;
 nothing does yet.
 
@@ -134,9 +138,9 @@ refused by the database.
 
 **A change of the thing, not of the clock.** Measures that move with time
 alone — last activity, activity over 90 days, incidents over 90 days, open
-incidents, MTTR, stale, enrichment's lifecycle word — are kept current but
-make no version of their own. A thing whose only news is that a day passed
-is not a new version of itself.
+incidents, MTTR, stale, enrichment's lifecycle word, a table's estimated
+rows and size — are kept current but make no version of their own. A thing
+whose only news is that a day passed is not a new version of itself.
 
 Relationships are the model's present: made again whole at each build.
 
@@ -187,6 +191,11 @@ Read by every member (`workspace:read`); another workspace's entity is 404.
 | `GET /knowledge/infrastructure/{id}` | one: its place, environment and who says so, services, team, network, cluster; what it holds — a cluster's nodes, a network's resources — and its dependencies both ways; its attributes and provenance. Anything but a resource is 404 |
 | `GET /knowledge/cloud-accounts` | the accounts, subscriptions and projects, by name, paged: `provider`, `environment`, `lifecycle`, `q` — each with how many resources it holds (in its groups too), of which class, in which regions; its environment and team |
 | `GET /knowledge/cloud-accounts/{id}` | one — or a resource group — its resource groups and theirs, its attributes and provenance |
+| `GET /knowledge/databases` | the databases (§ 11), by name, paged: `engine`, `classification`, `personal_data`, `environment`, `team_id`, `lifecycle`, `q` — each with the instance serving it, how many schemas and objects, what it holds and who says so |
+| `GET /knowledge/databases/{id}` | one: its schemas — how many tables, views, collections, what each holds — the databases it serves (an instance), its attributes and provenance |
+| `GET /knowledge/data-objects` | the tables, views, collections, by name, paged: `database_id`, `schema_id`, `object_kind`, `classification`, `category`, `personal_data`, `service_id`, `team_id`, `lifecycle`, `q` — each with its database and schema, size, what it holds, how many ties each way |
+| `GET /knowledge/data-objects/{id}` | one: its columns — what each holds, the primary key — what it references and reads from, what references and reads from it |
+| `GET /knowledge/data-objects/{id}/lineage` | `direction=upstream` (what it reads from and references) or `downstream` (what reads from or references it — what a change of it reaches), `depth=1..5`: each reached and how far, the relationships walked |
 
 ## 8. What reads it
 
@@ -317,6 +326,65 @@ holds and what depends on it; `GET /knowledge/cloud-accounts` what each
 account holds. `/entities/{id}/dependencies` walks a resource's
 `depends_on` as a service's.
 
+## 11. Data (LEKA-364)
+
+The company's **data landscape**: the databases, their schemas and data
+objects — tables, views, collections — whose they are, what they hold, how
+sensitive, and what is made from what. Built from the tools that know it:
+
+| Tool | What it says |
+|---|---|
+| PostgreSQL, Supabase, MySQL, MariaDB, SQL Server, Oracle, MongoDB | the catalogue — never a row: schemas, tables, views, collections, their columns, keys, comments, sizes, what each view reads ([databases.md](connectors/databases.md)) |
+| AWS, Azure | the instance serving a database, and its endpoint (§ 10) |
+| a custom source — a data catalogue | a table's owner, service, classification, kinds of data, upstream ([custom.md](connectors/custom.md)) |
+| the source's own mapping | a schema's service and team ([scope-and-mapping.md](connectors/scope-and-mapping.md)) |
+
+**Canonical.** What a source reads is keyed by **where** it reads it — the
+engine, the host, the port, the database — `db:postgresql://ledger.abc.rds.amazonaws.com:5432/ledger`;
+a schema, `…/ledger/billing`; a data object, `…/ledger/billing/invoices`.
+Two sources on one database — one scoped to a schema, a Supabase source
+and a PostgreSQL one on the same project, a catalogue that says where a
+table is — make **one** entity, every source kept. A MySQL, MariaDB or
+MongoDB source reads a server: the `database` is the server, its databases
+are `schema`s.
+
+**The hierarchy, kept.**
+
+```
+ cloud instance (database, § 10) ◀── database ◀── schema ◀── data_object
+       endpoint:<host>:<port>         host, port, name                 table, view, collection
+```
+
+A data object is `part_of` its schema, a schema of its database, and a
+database of the cloud instance a client reaches at its address — an RDS
+instance by its endpoint, an Azure flexible server by its name in its
+engine's domain: the PostgreSQL source's and AWS's things joined.
+
+| On a data object | Values | From |
+|---|---|---|
+| `object_kind` | `table`, `partitioned_table`, `view`, `materialized_view`, `foreign_table`, `collection` | the catalogue |
+| `columns`, `primary_key`, `estimated_rows`, `size_bytes`, `description` | as the catalogue says them — sizes rounded, and no version of their own (§ 5) | the catalogue |
+| `owner_role` | the database's role that owns it — not a team | the catalogue |
+| `column_categories`, `data_categories` | what each column holds: `contact`, `identity`, `location`, `financial`, `credential`, `health`, `personal` | its name (0.8), its comment (0.95) — **never a value**; a catalogue ([parsing.md](parsing.md)) |
+| `classification` | `restricted` (a credential, a card or an account, health), `confidential` (personal data), `internal`, `public` | the most sensitive of its columns, its documentation, a catalogue |
+| `personal_data` | `true` when it holds personal data | its columns, a catalogue |
+| owners | `owned_by` → a team | a catalogue, the source's mapping of its schema; else inherited — from its schema, its database, the instance ([enrichment.md § 3](enrichment.md)) |
+| service | `part_of` → a service | a catalogue, the source's mapping |
+| foreign keys | `references` → the table it points at | the catalogue |
+| what it is made from | `reads_from` → a table | a view's definition, a catalogue's upstream |
+
+**Up and down.** What a schema, a database and the instance serving it
+hold is what their tables hold — every kind, the most sensitive
+classification, said as enrichment's (`objects`); a database and its
+schemas run where the instance serving them runs (`container`). Nothing is
+guessed: a table no column, comment or catalogue says anything of has no
+classification.
+
+**Lineage.** `/data-objects/{id}/lineage` walks `references` and
+`reads_from`: upstream, what a view or a table is made from; downstream,
+what a change of it reaches. And through the graph (§ 8), a table reaches
+its service, its team, its database's instance and its account.
+
 ## Not yet
 
 - **The environment screens** ([enrichment.md § 12](enrichment.md)) still
@@ -334,8 +402,16 @@ account holds. `/entities/{id}/dependencies` walks a resource's
 - **An Azure machine's network**: Azure names it through the machine's
   network interface, not in the resource list; not read yet.
 - **A resource known by its address**: a CMDB that names an instance by its
-  host name or IP, a database source's host and the RDS endpoint
-  (LEKA-364) — matched by the provider's id only, today.
+  host name or IP — matched by the provider's id only, today. A database
+  source meets an RDS instance and an Azure flexible server at their
+  endpoint (§ 11); a Cloud SQL instance, an Azure SQL database, a MongoDB
+  Atlas cluster are not matched yet.
+- **What the code reads and writes**: which service queries which table —
+  from code or query logs — is not read; a table's service comes from a
+  catalogue or the source's mapping.
+- **A database's own classification**: SQL Server's sensitivity labels,
+  Oracle's data redaction policies are not read; columns' names and
+  comments, and catalogues, are.
 - **Backstage files in repositories** (`catalog-info.yaml`): read today
   through a custom source on Backstage's API; reading the files from the
   code hosts is the next step.

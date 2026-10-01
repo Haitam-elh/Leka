@@ -579,4 +579,9 @@ async def test_a_table_extracts_as_postgresql_s_do(catalogue: Catalogue) -> None
         ("schema", b),
         ("references", f"{b}.customers"),
     ]
-    assert found.signals == {"engine": "mysql", "storage_engine": "InnoDB"}
+    assert found.signals == {
+        "engine": "mysql",
+        "storage_engine": "InnoDB",
+        "host": "db.acme.example",
+        "port": 3306,
+    }

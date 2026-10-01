@@ -53,11 +53,12 @@ something no source has shown yet — a ticket in a tool not connected.
 | db_instances | `database` |
 | instances, buckets, functions, clusters, networks, load_balancers | `infra_resource`, with `attributes.resource_kind`: `instance`, `bucket`, `function`, `cluster`, `network`, `load_balancer` — and its `resource_class`: `compute` (instance, function, cluster), `network` (network, load balancer), `storage` (bucket); a database's is `database` (LEKA-363) |
 | accounts (AWS, Azure, Google Cloud) | `cloud_account` — an AWS account, an Azure subscription, a Google Cloud project — or `resource_group`, an Azure resource group (LEKA-363) |
+| schemas, tables (PostgreSQL, Supabase, MySQL, MariaDB, SQL Server, Oracle, MongoDB) | `schema` — a MySQL or MongoDB database too — and `data_object`, with `attributes.object_kind`: `table`, `partitioned_table`, `view`, `materialized_view`, `foreign_table`, `collection`; the database they were read on, named: `database` (LEKA-364) |
 | projects, issues of Linear, Asana, Trello, ClickUp, Monday | `project`, `issue` — a task, a card, an item is an `issue` |
 | pages, files (Confluence, Notion, Slab, Guru, Google Workspace, Microsoft 365) | `document` |
 | incidents (Datadog, PagerDuty; Kibana's cases) | `incident` |
 | services (PagerDuty, the Datadog service catalog) | `service` — a PagerDuty **business service** is an `application` (LEKA-362) |
-| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database` — keyed by the source, a service or an application by its name, a resource by its provider's id when the record gives it ([custom.md](connectors/custom.md)) |
+| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object` — keyed by the source, a service or an application by its name, a resource by its provider's id when the record gives it, a catalogue's table by where it is ([custom.md](connectors/custom.md)) |
 | named by a record | `person`, `service`, `application`, `team`, `environment`; what a resource is in — `cloud_account`, `resource_group` — and a node's cluster |
 
 Alerts, events, metrics, logs and dashboards (Datadog, Grafana, Splunk, Kibana) are
@@ -65,8 +66,7 @@ extracted and parsed, but are not entities: they are the evidence about
 incidents and services, not things of the company model. Nor are the
 containers of documents — spaces, Notion databases, topics, collections,
 drives: a document names what it is part of. Both stay `unsupported`.
-So do a database's schemas and tables (PostgreSQL, Supabase, MySQL, MariaDB, SQL Server, Oracle, MongoDB): representing them in
-the company model is LEKA-364. And so do a custom API's records whose
+And so do a custom API's records whose
 resource declares no `entity`: extracted, not modelled.
 
 A GitLab merge request is a `pull_request`; a Jira issue and a GitHub issue
@@ -92,6 +92,9 @@ One thing, one key — built from what every mention of it carries
 | cloud resource | `aws:<ARN>`, `azure:<ARM id, lower-cased>`, `gcp:<full resource name>` — a CMDB's resource that gives one, the same key |
 | what resources are in | `aws:account:123456789012`; an Azure subscription by its ARM id, `azure:/subscriptions/<id>`, a resource group too, `azure:/subscriptions/<id>/resourcegroups/<name>`; `gcp:project:acme-prod`, **alias** `gcp:project:<number>` — from a resource's ARN, ARM id or project, and from the account's own record: they meet |
 | a GKE cluster | its full resource name, **alias** `gcp:cluster:<project>/<location>/<name>` — what its nodes' labels say of it; an EKS or AKS cluster's ARN or ARM id is built from its node's tags |
+| a database a source reads | `db:<engine>://<host>:<port>/<database>` — `db:postgresql://ledger.abc.rds.amazonaws.com:5432/ledger`; a MySQL, MariaDB or MongoDB server without its database: `db:mysql://shop.acme.io:3306` |
+| a schema, a data object | `<database>/<schema>`, `<database>/<schema>/<name>` — `…/ledger/billing/invoices`: whichever source reads it |
+| where a client connects to a database | `endpoint:<host>:<port>` — an **alias** of the RDS instance at that endpoint, of an Azure flexible server at `<name>.postgres.database.azure.com:5432` (or MySQL's); what a database is `part_of` |
 | service, team | `service:billing-api`, `team:payments` — a slug of the tag's value, or of a PagerDuty or Datadog service's name: the same service meets on one key |
 | application | `application:billing` — a slug of an `application` / `system` / `product` tag, a catalog's application, a PagerDuty business service's name |
 | environment | `environment:production` — one of the four canonical names only (§ 4): `prd-eu-2` is a name, not an environment |
@@ -130,6 +133,9 @@ Every entity carries the extraction's `metadata` and `signals`, plus:
 | `resource_group` (Azure) | the group it is in |
 | `account_type`, `account_id` (accounts) | `aws_account`, `azure_subscription`, `gcp_project`; the provider's id. An AWS account's `organization`, an Azure subscription's `tenant`, a project's `parent` folder or organisation |
 | `endpoint`, `port` (RDS) | where a client connects |
+| `engine`, `host`, `port`, `database_name` (a database) | where a source reads it (LEKA-364) |
+| `object_kind`, `schema_name`, `columns`, `primary_key`, `estimated_rows`, `size_bytes`, `owner_role`, `description` (a data object) | what the catalogue says; `owner_role` is the database's role, not a team |
+| `data_categories`, `column_categories`, `personal_data`, `classification` (a data object) | what each column holds, by its name and its comment ([parsing.md](parsing.md)): `contact`, `identity`, `location`, `financial`, `credential`, `health`, `personal`; `restricted` for a credential, a card or an account, health, `confidential` for personal data — or what the table's documentation, a catalogue says, the most sensitive |
 | `url`, `source_kind`, `quality` | the link, the connector, the parse's quality score |
 
 A state, a priority, a criticality or a stage no table knows is **kept**,
@@ -155,6 +161,9 @@ attribute: the raw word is in `*_raw`. A `name` has its spaces collapsed, at mos
 | `in_network` | a resource → its VPC or network, by that record's own key | the extraction's `network` |
 | `part_of` | a resource → its account or project; an Azure resource → its resource group → its subscription; a node → its cluster; a CMDB's resource → its service, its application (LEKA-363) | the resource's ARN, ARM id or project; a resource group's own record; the tags a Kubernetes service puts on its nodes |
 | `depends_on` | a CMDB's resource → a resource | its `depends_on`: a provider id, or another record's id |
+| `part_of` | a data object → its schema → its database → the instance at its endpoint (LEKA-364) | where it was read; a catalogue's schema |
+| `references` | a table → the table a foreign key points at | the catalogue's constraints |
+| `reads_from` | a view → what it reads; a catalogue's dataset → its upstream | the view's definition; a catalogue's `reads_from` |
 
 Confidence is the fact's: 1.0 for what the vendor said, the parse's
 confidence for what was read in text or tags.
@@ -176,7 +185,8 @@ metadata.number` — never a value. Its neighbours are normalised.
 changes: what the old rules normalised is normalised again. 4: applications,
 environments, dependencies, criticality and stage (LEKA-362). 5: what
 resources are in, their class, a node's cluster, a CMDB's servers and
-databases, a terminated resource (LEKA-363).
+databases, a terminated resource (LEKA-363). 6: databases, schemas and data
+objects, foreign keys and what views read, what columns hold (LEKA-364).
 
 ## 8. Where results are kept, and when they are made
 

@@ -38,7 +38,10 @@ from leka.ingestion.parsing import ParsedRecord
 # 5: what resources are in — accounts, subscriptions, resource groups,
 #    projects — their class, the cluster a machine is a node of, a CMDB's
 #    servers and databases; a terminated resource (LEKA-363).
-NORMALISER_VERSION = 5
+# 6: databases, their schemas and tables, keyed by where they were read;
+#    foreign keys, what views read, what kinds of data columns hold; a data
+#    catalogue's tables (LEKA-364).
+NORMALISER_VERSION = 6
 
 
 def normalise(

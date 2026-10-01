@@ -21,6 +21,7 @@ from leka.knowledge.models import (
 )
 from leka.knowledge.registry import ENTITY_KINDS, MODEL_VERSION, RELATIONSHIP_KINDS
 from leka.knowledge.repository import (
+    DataFilters,
     EntityRepository,
     InfrastructureFilters,
     LandscapeFilters,
@@ -30,6 +31,10 @@ from leka.knowledge.schemas import (
     CloudAccountDetail,
     CloudAccountRead,
     Criticality,
+    DatabaseDetail,
+    DatabaseRead,
+    DataObjectDetail,
+    DataObjectRead,
     Dependencies,
     DependencyNode,
     DependencyRead,
@@ -61,6 +66,11 @@ __all__ = [
     "CloudAccountDetail",
     "CloudAccountRead",
     "Criticality",
+    "DataFilters",
+    "DataObjectDetail",
+    "DataObjectRead",
+    "DatabaseDetail",
+    "DatabaseRead",
     "Dependencies",
     "DependencyNode",
     "DependencyRead",

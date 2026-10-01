@@ -28,7 +28,9 @@ from leka.ingestion.parsing.contract import (
 # 2: application and criticality tags (LEKA-362); `tier` read by its value.
 # 3: what resources are in — accounts, subscriptions, resource groups,
 #    projects — and the cluster a machine is a node of (LEKA-363).
-PARSER_VERSION = 3
+# 4: what kind of data a table's columns hold, and how its documentation
+#    classifies it (LEKA-364).
+PARSER_VERSION = 4
 CODE_HOSTS = frozenset({"github", "gitlab", "bitbucket"})
 MAX_FACTS = 500  # a page listing a thousand tickets says little about each
 

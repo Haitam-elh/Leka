@@ -16,7 +16,7 @@ from __future__ import annotations
 from pydantic import Field
 
 from leka.connectors.base import Capability, ConnectorCategory, ConnectorManifest
-from leka.connectors.databases import HOST
+from leka.connectors.databases import HOST, server
 from leka.connectors.models import SourceKind
 from leka.connectors.postgresql.connector import (
     IDENTIFIER_MAX,
@@ -58,3 +58,12 @@ class SupabaseConnector(PostgreSQLConnector):
         capabilities=frozenset({Capability.SCHEMAS, Capability.TABLES}),
         listed_whole=frozenset({Capability.SCHEMAS, Capability.TABLES}),
     )
+
+    def _server(self) -> dict[str, object]:
+        """The project's database, not the pooler's: one pooler serves many
+        projects, and the project is in the role's name — `leka_reader.<ref>`
+        is db.<ref>.supabase.co's, the project's own host (LEKA-364)."""
+        role, _, project = self.credentials.username.rpartition(".")
+        if role and project and self.config.host.endswith(".pooler.supabase.com"):
+            return server("postgresql", f"db.{project}.supabase.co", 5432, self.config.database)
+        return super()._server()
