@@ -994,7 +994,8 @@ async def test_an_office_suite_end_to_end(
 
         tested = (await client.post(f"{url}/test")).json()
         assert tested["ok"] is True, tested
-        assert sorted(tested["source"]["capabilities"]) == ["drives", "files"]
+        # And the directory, where it answers (LEKA-365).
+        assert sorted(tested["source"]["capabilities"]) == ["drives", "files", "people"]
 
         offered = (await client.get(f"{url}/scope/options")).json()
         assert kept in [option["key"] for option in offered["options"]]

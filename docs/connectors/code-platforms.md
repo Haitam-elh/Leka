@@ -13,11 +13,19 @@ in its warnings.
 |---|---|
 | Token | fine-grained personal access token |
 | Repository access | the repositories LEKA should read, or all of them |
-| Permissions, all **read-only** | Metadata, Contents, Pull requests, Issues |
+| Permissions, all **read-only** | Metadata, Contents, Pull requests, Issues — and, to read the organisation's teams, **Members** (organisation permission) |
 | Config | `organization` (empty: the token owner's repositories), `base_url` for GitHub Enterprise Server, `repositories` |
 
-A classic token works too; one with `repo`, `workflow`, `admin:*` or any
-`write:*` scope draws a warning.
+A classic token works too (`read:org` for the teams); one with `repo`,
+`workflow`, `admin:*` or any `write:*` scope draws a warning.
+
+**Teams** (`teams`, LEKA-365), with an `organization`: each team — name,
+description, privacy, its parent team — with its **maintainers** and its
+**members**, by login (`GET /orgs/{org}/teams`, then
+`…/teams/{slug}/members?role=maintainer|member`: two calls a team), whole
+each pass. A token without the Members permission leaves them out at the
+connection test — never a failure. A team's maintainers lead it in the
+company model ([company-model.md § 12](../company-model.md)).
 
 ## GitLab
 

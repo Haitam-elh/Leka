@@ -151,7 +151,7 @@ know — is refused, so a typo is found when saved, not at the first sync.
 | Key | | |
 |---|---|---|
 | `name` | required | `tickets` — lower case, digits, `_`. What LEKA shows, what the scope keeps or leaves |
-| `entity` | | What its records are in LEKA's model: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object`. Without it, they are extracted and stay out of the model |
+| `entity` | | What its records are in LEKA's model: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object`, `person`, `team`. Without it, they are extracted and stay out of the model |
 | `path` | required | From `base_url`: `/tickets`. No scheme, no host, no query, no `..` |
 | `params` | | The query, as a map: `{"status": "open"}`. Not secret — the secret goes in the credentials |
 | `items` | | Where the records are in a page: `data`, `result.items`. Absent: the page is the list |
@@ -252,6 +252,14 @@ changes `fields` — and so, at the next pass, what is extracted.
   scale (`restricted`, `confidential`, `internal`, `public`, in English or
   French); `data_categories`; `reads_from` / `upstream` → the tables it is
   made from, `schema.table`.
+- **Reads an HR system's people and teams** — a `person` or a `team`
+  resource (LEKA-365). A person is keyed by their address (`email` /
+  `mail`), so they meet the one GitHub, PagerDuty or a directory knows;
+  without one, by the system's own id. From its `metadata`: `job_title` /
+  `position`; `department` → a team of its own kind they are a member of;
+  `team` / `teams` → their teams; `manager` / `reports_to` → who they report
+  to, by address or id. A team is keyed by its name: `parent` → the team
+  it is part of; `members`; `lead` / `leads` / `managers` → who leads it.
 - **Keeps** its payloads 90 days, as the other structured sources'.
 
 ## GraphQL

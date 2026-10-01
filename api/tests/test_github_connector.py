@@ -37,6 +37,7 @@ def github(overrides: dict[str, httpx.Response] | None = None) -> Handler:
         "/orgs/acme": httpx.Response(200, json={"login": "acme"}),
         "/orgs/acme/repos": httpx.Response(200, json=[{"full_name": "acme/api"}]),
         "/repos/acme/api": httpx.Response(200, json={"full_name": "acme/api"}),
+        "/orgs/acme/teams": httpx.Response(200, json=[]),
         "/rate_limit": httpx.Response(
             200, json={"resources": {"core": {"limit": 5000, "remaining": 4900}}}
         ),
@@ -179,3 +180,51 @@ def test_the_token_never_shows_in_a_repr() -> None:
 
     assert TOKEN not in repr(credentials)
     assert TOKEN not in str(credentials.model_dump())
+
+
+# ── the organisation's teams (LEKA-365) ──────────────────────────────────────
+
+PLATFORM = {
+    "node_id": "T_platform",
+    "slug": "platform",
+    "name": "Platform",
+    "description": "Runs the infrastructure",
+    "privacy": "closed",
+    "parent": {"slug": "engineering", "name": "Engineering"},
+    "html_url": "https://github.com/orgs/acme/teams/platform",
+}
+
+
+async def test_teams_come_with_their_maintainers_and_members() -> None:
+    asked: list[httpx.Request] = []
+    healthy = github({"/orgs/acme/teams": httpx.Response(200, json=[PLATFORM])})
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        asked.append(request)
+        if request.url.path == "/orgs/acme/teams/platform/members":
+            role = request.url.params.get("role")
+            people = [{"login": "sara"}] if role == "maintainer" else [{"login": "bob"}]
+            return httpx.Response(200, json=people)
+        return healthy(request)
+
+    [team] = [r async for r in _connector(handle).iter_resources(Capability.TEAMS)]
+
+    assert (team.external_id, team.container) == ("T_platform", "acme")
+    assert (team.payload["maintainers"], team.payload["members"]) == (["sara"], ["bob"])
+    roles = {r.url.params.get("role") for r in asked if r.url.path.endswith("/members")}
+    assert roles == {"maintainer", "member"}
+
+
+async def test_without_an_organisation_there_are_no_teams() -> None:
+    connector = _connector(github(), organization=None)
+
+    assert [r async for r in connector.iter_resources(Capability.TEAMS)] == []
+
+
+async def test_a_token_that_may_not_read_the_teams_leaves_them_out() -> None:
+    refused = httpx.Response(403, json={"message": "Must have admin rights"})
+
+    result = await _connector(github({"/orgs/acme/teams": refused})).test_connection()
+
+    assert Capability.TEAMS not in result.capabilities
+    assert Capability.REPOSITORIES in result.capabilities

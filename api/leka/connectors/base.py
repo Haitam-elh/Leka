@@ -99,6 +99,11 @@ class Capability(enum.StrEnum):
     # and their tables and views — never the rows.
     SCHEMAS = "schemas"
     TABLES = "tables"
+    # Who works there, and how they are organised (LEKA-365): a directory's
+    # people — their title, department, manager — and a tool's teams —
+    # their members, leads, parent team.
+    PEOPLE = "people"
+    TEAMS = "teams"
     # A system LEKA has no connector for (LEKA-350): what its admin declared
     # in the source's definition — tickets, assets, whatever it holds — each
     # record's resource its container.

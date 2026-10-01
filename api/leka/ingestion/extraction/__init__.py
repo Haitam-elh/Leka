@@ -10,6 +10,7 @@ from leka.ingestion.extraction import (  # noqa: F401 — importing registers th
     data,
     documents,
     observability,
+    people,
     projects,
     tickets,
 )

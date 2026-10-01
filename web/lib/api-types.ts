@@ -1759,6 +1759,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Teams
+         * @description The teams and departments, by name: their parent, how many sub-teams
+         *     and members — said or inferred — who leads them, what they own.
+         */
+        get: operations["teams_api_v1_knowledge_teams_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/teams/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Team
+         * @description One team: its parents up to the top, its sub-teams, its members —
+         *     each said or inferred, how surely — and what it owns.
+         */
+        get: operations["team_api_v1_knowledge_teams__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * People
+         * @description The people, by name: their title and department, their teams and
+         *     manager, what they maintain, what their work shows they know.
+         */
+        get: operations["people_api_v1_knowledge_people_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/people/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Person
+         * @description One person: their teams, their managers up to the top, their
+         *     reports, what they maintain and own, and everything their work shows
+         *     they know — with its evidence.
+         */
+        get: operations["person_api_v1_knowledge_people__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/entities/{entity_id}/responsibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Responsibility
+         * @description Who owns and operates a thing — its teams, said or inherited, who
+         *     leads them, who maintains it — and whose work shows they know it.
+         */
+        get: operations["responsibility_api_v1_knowledge_entities__entity_id__responsibility_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1799,7 +1905,7 @@ export interface components {
          *     discovered for each source: a token may see repositories and not issues.
          * @enum {string}
          */
-        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "accounts" | "spaces" | "pages" | "databases" | "drives" | "files" | "alerts" | "events" | "incidents" | "metrics" | "logs" | "services" | "dashboards" | "schemas" | "tables" | "records";
+        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "accounts" | "spaces" | "pages" | "databases" | "drives" | "files" | "alerts" | "events" | "incidents" | "metrics" | "logs" | "services" | "dashboards" | "schemas" | "tables" | "people" | "teams" | "records";
         /** CatalogEntry */
         CatalogEntry: {
             key: components["schemas"]["SourceKind"];
@@ -3011,6 +3117,35 @@ export interface components {
             error: components["schemas"]["ErrorBody"];
         };
         /**
+         * Expertise
+         * @description What a person's work shows they know, and the evidence.
+         */
+        Expertise: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Type
+             * @description repository, project, service.
+             */
+            type: string;
+            /**
+             * Items
+             * @description How many of their items are in it.
+             */
+            items: number;
+            /**
+             * Roles
+             * @description authored, reviewed, assigned, led… how many each.
+             */
+            roles: {
+                [key: string]: number;
+            };
+            /** Last At */
+            last_at: string | null;
+        };
+        /**
          * ExtractionFailureRead
          * @description One record extraction could not make sense of.
          */
@@ -3952,6 +4087,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[PersonRead] */
+        PageEnvelope_PersonRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["PersonRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[ProcessingRunRead] */
         PageEnvelope_ProcessingRunRead_: {
             /**
@@ -4043,6 +4191,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[TeamRead] */
+        PageEnvelope_TeamRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["TeamRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[WebhookDeliveryRead] */
         PageEnvelope_WebhookDeliveryRead_: {
             /**
@@ -4097,6 +4258,133 @@ export interface components {
             entity: components["schemas"]["EntityBrief"];
             /** Environments */
             environments: string[];
+        };
+        /**
+         * PersonDetail
+         * @description One person: their teams — each said or inferred — their managers up
+         *     to the top, their reports, what they maintain and own, everything their
+         *     work shows they know.
+         */
+        PersonDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /** Email */
+            email: string | null;
+            /** Job Title */
+            job_title: string | null;
+            /** Department */
+            department: string | null;
+            /**
+             * Active
+             * @description Their account at a directory: on, off — or unknown.
+             */
+            active: boolean | null;
+            /** Bot */
+            bot: boolean;
+            /** Teams */
+            teams: components["schemas"]["EntityBrief"][];
+            manager: components["schemas"]["EntityBrief"] | null;
+            /** Report Count */
+            report_count: number;
+            /**
+             * Maintains
+             * @description The repositories, projects, services they maintain.
+             */
+            maintains: number;
+            /**
+             * Expertise
+             * @description The first three.
+             */
+            expertise: components["schemas"]["Expertise"][];
+            /** Languages */
+            languages: string[];
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Provenance */
+            provenance: {
+                [key: string]: unknown;
+            };
+            /** Memberships */
+            memberships: components["schemas"]["Tie"][];
+            /**
+             * Managers
+             * @description Their manager, then theirs.
+             */
+            managers: components["schemas"]["EntityBrief"][];
+            /** Reports */
+            reports: components["schemas"]["EntityBrief"][];
+            /** Maintained */
+            maintained: components["schemas"]["Tie"][];
+            /** Owned */
+            owned: components["schemas"]["EntityBrief"][];
+            /**
+             * Contributions
+             * @description contributes_to, the surest first.
+             */
+            contributions: components["schemas"]["Tie"][];
+            /** All Expertise */
+            all_expertise: components["schemas"]["Expertise"][];
+        };
+        /**
+         * PersonRead
+         * @description Someone who works there: what a directory says of them, their teams
+         *     and manager, what their work shows they know.
+         */
+        PersonRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /** Email */
+            email: string | null;
+            /** Job Title */
+            job_title: string | null;
+            /** Department */
+            department: string | null;
+            /**
+             * Active
+             * @description Their account at a directory: on, off — or unknown.
+             */
+            active: boolean | null;
+            /** Bot */
+            bot: boolean;
+            /** Teams */
+            teams: components["schemas"]["EntityBrief"][];
+            manager: components["schemas"]["EntityBrief"] | null;
+            /** Report Count */
+            report_count: number;
+            /**
+             * Maintains
+             * @description The repositories, projects, services they maintain.
+             */
+            maintains: number;
+            /**
+             * Expertise
+             * @description The first three.
+             */
+            expertise: components["schemas"]["Expertise"][];
+            /** Languages */
+            languages: string[];
+            /** Last Activity At */
+            last_activity_at: string | null;
         };
         /** PipelineQueued */
         PipelineQueued: {
@@ -4337,7 +4625,7 @@ export interface components {
          * @description How two entities relate. Direction matters: from -> to.
          * @enum {string}
          */
-        RelationshipType: "depends_on" | "owns" | "deployed_to" | "mentions" | "caused_by" | "member_of" | "part_of" | "owned_by" | "maintained_by" | "authored_by" | "assigned_to" | "reviewed_by" | "reported_by" | "led_by" | "affects" | "resolves" | "implements" | "merges" | "child_of" | "in_network" | "runs_in" | "references" | "reads_from";
+        RelationshipType: "depends_on" | "owns" | "deployed_to" | "mentions" | "caused_by" | "member_of" | "part_of" | "owned_by" | "maintained_by" | "authored_by" | "assigned_to" | "reviewed_by" | "reported_by" | "led_by" | "affects" | "resolves" | "implements" | "merges" | "child_of" | "in_network" | "runs_in" | "references" | "reads_from" | "reports_to" | "contributes_to";
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
             /** Password */
@@ -4570,6 +4858,33 @@ export interface components {
             origin: string;
             /** Confidence */
             confidence: number | null;
+        };
+        /**
+         * Responsibility
+         * @description Who owns and operates a thing, and who knows it — each with its
+         *     origin: what a source says, what a rule inferred.
+         */
+        Responsibility: {
+            entity: components["schemas"]["EntityBrief"];
+            /**
+             * Owners
+             * @description Its teams — or people.
+             */
+            owners: components["schemas"]["Tie"][];
+            /**
+             * Leads
+             * @description Who leads its owning teams.
+             */
+            leads: components["schemas"]["EntityBrief"][];
+            /** Maintainers */
+            maintainers: components["schemas"]["Tie"][];
+            /**
+             * Experts
+             * @description Whose work shows they know it, the surest first.
+             */
+            experts: components["schemas"]["Tie"][];
+            /** Escalation Policy */
+            escalation_policy: string | null;
         };
         /** Retention */
         Retention: {
@@ -5282,6 +5597,138 @@ export interface components {
             owner?: string[];
             /** Criticality */
             criticality?: string[];
+        };
+        /**
+         * TeamDetail
+         * @description One team: its parents up to the top, its sub-teams, its members —
+         *     each said or inferred — what it owns, where each piece came from.
+         */
+        TeamDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /**
+             * Team Type
+             * @description team, department.
+             */
+            team_type: string | null;
+            parent: components["schemas"]["EntityBrief"] | null;
+            /** Sub Team Count */
+            sub_team_count: number;
+            /**
+             * Member Count
+             * @description Its members a source states.
+             */
+            member_count: number;
+            /**
+             * Inferred Member Count
+             * @description Those its work suggests (works_with).
+             */
+            inferred_member_count: number;
+            /** Leads */
+            leads: components["schemas"]["EntityBrief"][];
+            /**
+             * Owns
+             * @description What it owns, by type, not removed.
+             */
+            owns: {
+                [key: string]: number;
+            };
+            /** Description */
+            description: string | null;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Provenance */
+            provenance: {
+                [key: string]: unknown;
+            };
+            /**
+             * Ancestors
+             * @description Its parent, then theirs.
+             */
+            ancestors: components["schemas"]["EntityBrief"][];
+            /** Sub Teams */
+            sub_teams: components["schemas"]["EntityBrief"][];
+            /** Members */
+            members: components["schemas"]["Tie"][];
+            /**
+             * Owned
+             * @description The surest first, up to 200.
+             */
+            owned: components["schemas"]["Tie"][];
+        };
+        /**
+         * TeamRead
+         * @description A team — or a department — its place in the organisation, its
+         *     people, what it owns.
+         */
+        TeamRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /**
+             * Team Type
+             * @description team, department.
+             */
+            team_type: string | null;
+            parent: components["schemas"]["EntityBrief"] | null;
+            /** Sub Team Count */
+            sub_team_count: number;
+            /**
+             * Member Count
+             * @description Its members a source states.
+             */
+            member_count: number;
+            /**
+             * Inferred Member Count
+             * @description Those its work suggests (works_with).
+             */
+            inferred_member_count: number;
+            /** Leads */
+            leads: components["schemas"]["EntityBrief"][];
+            /**
+             * Owns
+             * @description What it owns, by type, not removed.
+             */
+            owns: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * Tie
+         * @description Another entity, and how sure and whence the relationship to it: a
+         *     source stated it, or a rule inferred it.
+         */
+        Tie: {
+            entity: components["schemas"]["EntityBrief"];
+            /**
+             * Origin
+             * @description stated, inferred.
+             */
+            origin: string;
+            /**
+             * Rule
+             * @description stated, or the rule that inferred it: inherited, works_with…
+             */
+            rule: string;
+            /** Confidence */
+            confidence: number;
         };
         /**
          * Ties
@@ -14122,6 +14569,506 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Dependencies"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    teams_api_v1_knowledge_teams_get: {
+        parameters: {
+            query?: {
+                team_type?: ("team" | "department") | null;
+                parent_id?: string | null;
+                /** @description Absent: every lifecycle but removed. */
+                lifecycle?: components["schemas"]["Lifecycle"] | null;
+                /** @description In the name. */
+                q?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_TeamRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    team_api_v1_knowledge_teams__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    people_api_v1_knowledge_people_get: {
+        parameters: {
+            query?: {
+                team_id?: string | null;
+                department?: string | null;
+                /** @description true: those whose work shows what they know. */
+                contributors?: boolean | null;
+                /** @description Bots too. */
+                bots?: boolean;
+                /** @description Absent: every lifecycle but removed. */
+                lifecycle?: components["schemas"]["Lifecycle"] | null;
+                /** @description In the name or address. */
+                q?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_PersonRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    person_api_v1_knowledge_people__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    responsibility_api_v1_knowledge_entities__entity_id__responsibility_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Responsibility"];
                 };
             };
             /** @description The request could not be understood. */

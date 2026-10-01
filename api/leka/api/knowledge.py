@@ -31,6 +31,15 @@
     GET /knowledge/data-objects/{id}           one: its columns, what it is tied to
     GET /knowledge/data-objects/{id}/lineage   what it reads from and references —
                                                or what reads from it — 1 to 5 steps
+    GET /knowledge/teams                       the teams and departments: their parent,
+                                               members, leads, what they own (LEKA-365)
+    GET /knowledge/teams/{id}                  one, its sub-teams, members and owned
+    GET /knowledge/people                      the people: title, department, teams,
+                                               manager, what their work shows they know
+    GET /knowledge/people/{id}                 one, their managers and reports, what
+                                               they maintain and know
+    GET /knowledge/entities/{id}/responsibility who owns and operates a thing, who
+                                               leads its teams, who knows it
 
 Read by every member (`workspace:read`): it is the company's own picture. A
 route validates, calls one repository or service, and returns (architecture
@@ -85,8 +94,13 @@ from leka.knowledge import (
     ModelRunRead,
     ModelStatus,
     Neighbourhood,
+    PersonDetail,
+    PersonRead,
     Registry,
     RelationshipKindRead,
+    Responsibility,
+    TeamDetail,
+    TeamRead,
 )
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -657,3 +671,103 @@ async def lineage(
     if walked is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such data object.")
     return walked
+
+
+# ── people and teams (LEKA-365) ──────────────────────────────────────────────
+
+
+@router.get("/teams", response_model=PageEnvelope[TeamRead])
+async def teams(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    team_type: Literal["team", "department"] | None = None,
+    parent_id: uuid.UUID | None = None,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the name.")] = None,
+) -> PageEnvelope[TeamRead]:
+    """The teams and departments, by name: their parent, how many sub-teams
+    and members — said or inferred — who leads them, what they own."""
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.teams(lifecycle=lifecycle, team_type=team_type, parent_id=parent_id, q=q)
+    result = await serve_page(
+        session, statement, request=page, catalogue=ENTITY_SORTS, id_column=Entity.id
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).teams(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/teams/{entity_id}", response_model=TeamDetail)
+async def team(entity_id: uuid.UUID, session: SessionDep, principal: Reader) -> TeamDetail:
+    """One team: its parents up to the top, its sub-teams, its members —
+    each said or inferred, how surely — and what it owns."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not EntityType.TEAM:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such team.")
+    return await KnowledgeService(repository).team(found)
+
+
+@router.get("/people", response_model=PageEnvelope[PersonRead])
+async def people(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    team_id: uuid.UUID | None = None,
+    department: Annotated[str | None, Query(max_length=200)] = None,
+    contributors: Annotated[
+        bool | None, Query(description="true: those whose work shows what they know.")
+    ] = None,
+    bots: Annotated[bool, Query(description="Bots too.")] = False,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the name or address.")] = None,
+) -> PageEnvelope[PersonRead]:
+    """The people, by name: their title and department, their teams and
+    manager, what they maintain, what their work shows they know."""
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.people(
+        lifecycle=lifecycle,
+        team_id=team_id,
+        department=department,
+        bots=bots,
+        contributors=contributors,
+        q=q,
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=ENTITY_SORTS, id_column=Entity.id
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).people(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/people/{entity_id}", response_model=PersonDetail)
+async def person(entity_id: uuid.UUID, session: SessionDep, principal: Reader) -> PersonDetail:
+    """One person: their teams, their managers up to the top, their
+    reports, what they maintain and own, and everything their work shows
+    they know — with its evidence."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not EntityType.PERSON:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such person.")
+    return await KnowledgeService(repository).person(found)
+
+
+@router.get("/entities/{entity_id}/responsibility", response_model=Responsibility)
+async def responsibility(
+    entity_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> Responsibility:
+    """Who owns and operates a thing — its teams, said or inherited, who
+    leads them, who maintains it — and whose work shows they know it."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
+    return await KnowledgeService(repository).responsibility(found)

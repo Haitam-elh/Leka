@@ -62,6 +62,9 @@ MEASURES = frozenset(
         # A table's size moves with every write (LEKA-364).
         "estimated_rows",
         "size_bytes",
+        # What someone's work shows they know moves with their work (LEKA-365).
+        "expertise",
+        "languages",
     }
 )
 # Its source says it is no more: archived; a resource terminated, an account

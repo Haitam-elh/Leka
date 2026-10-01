@@ -66,6 +66,17 @@ def drive_file(
     return found
 
 
+DIRECTORY_USER: dict[str, Any] = {
+    "id": "u-1",
+    "primaryEmail": "nora@acme.test",
+    "name": {"fullName": "Nora Diallo"},
+    "organizations": [{"title": "SRE", "department": "Platform", "primary": True}],
+    "relations": [{"type": "manager", "value": "sara@acme.test"}],
+    "orgUnitPath": "/Engineering",
+    "suspended": False,
+}
+
+
 class Google:
     """A healthy Google, unless a path is overridden. Records what was asked."""
 
@@ -78,6 +89,8 @@ class Google:
             ENGINEERING["id"]: [drive_file("design", drive=ENGINEERING["id"])],
         }
         self.contents: dict[str, bytes] = {}
+        # The Admin SDK's directory (LEKA-365), at its own host.
+        self.directory: Answer = {"users": [DIRECTORY_USER]}
         self.answers: dict[str, Answer] = {
             "/about": {"user": {"displayName": "LEKA", "emailAddress": "leka@acme.test"}},
             "/drives": lambda _: httpx.Response(200, json={"drives": self.drives}),
@@ -103,6 +116,12 @@ class Google:
             assert (request.method, request.url.path) == ("POST", "/token")
             return self.token
         assert request.method == "GET", "LEKA reads Google Drive with GETs"
+        if request.url.host == "admin.googleapis.com":
+            assert request.url.path == "/admin/directory/v1/users"
+            directory = self.directory
+            if isinstance(directory, httpx.Response):
+                return directory
+            return httpx.Response(200, json=directory)
         assert request.url.host == "www.googleapis.com"
         assert request.headers["authorization"] == "Bearer tok"
         path = request.url.path.removeprefix(PREFIX)
@@ -149,8 +168,8 @@ def test_google_workspace_is_in_the_catalogue_as_a_documentation_tool() -> None:
     key = manifest.credentials_schema.model_json_schema()["properties"]["service_account_key"]
 
     assert manifest.category is ConnectorCategory.DOCS
-    assert manifest.capabilities == {Capability.DRIVES, Capability.FILES}
-    assert manifest.listed_whole == {Capability.DRIVES}
+    assert manifest.capabilities == {Capability.DRIVES, Capability.FILES, Capability.PEOPLE}
+    assert manifest.listed_whole == {Capability.DRIVES, Capability.PEOPLE}
     assert key["writeOnly"] is True
 
 
@@ -284,3 +303,41 @@ async def test_the_scope_offers_my_drive_then_every_shared_drive() -> None:
         ("0ALegalDrive00", "Legal"),
     ]
     assert "reader@acme.test" in (listing.options[0].description or "")
+
+
+# ── the directory (LEKA-365) ─────────────────────────────────────────────────
+
+
+async def test_with_delegation_for_the_directory_its_people_are_read() -> None:
+    google = Google()
+    connector = _connector(google, subject="admin@acme.test")
+
+    result = await connector.test_connection()
+    people = [r async for r in connector.iter_resources(Capability.PEOPLE)]
+
+    assert Capability.PEOPLE in result.capabilities
+    assert [p.payload["primaryEmail"] for p in people] == ["nora@acme.test"]
+    listing = next(r for r in google.asked if r.url.host == "admin.googleapis.com")
+    assert listing.url.params["customer"] == "my_customer"
+
+
+async def test_a_directory_the_delegation_does_not_open_is_left_out_and_said() -> None:
+    refused = httpx.Response(
+        403, json={"error": {"message": "Not Authorized to access this resource"}}
+    )
+    google = Google()
+    google.directory = refused
+
+    result = await _connector(google, subject="admin@acme.test").test_connection()
+
+    assert Capability.PEOPLE not in result.capabilities
+    assert "admin.directory.user.readonly" in result.warnings[-1]
+
+
+async def test_without_a_delegated_user_the_directory_is_not_asked() -> None:
+    google = Google()
+
+    result = await _connector(google).test_connection()
+
+    assert Capability.PEOPLE not in result.capabilities
+    assert not any(r.url.host == "admin.googleapis.com" for r in google.asked)

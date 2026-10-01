@@ -38,7 +38,8 @@ are checked against.
 
 | Category | Kinds | Schema declares, beyond url, description, state, lifecycle, last activity |
 |---|---|---|
-| organisation | `person`, `team` | — |
+| organisation | `person` | address, title, department, location, whether active, the directory; bot; expertise and languages (enrichment's) — § 12 |
+| | `team` | team or department, description, slug — § 12 |
 | applications | `application` | criticality, stage, environments, point of contact — § 9 |
 | | `service` | the same, and its type, languages, escalation policy, links; incidents over 90 days, open incidents, MTTR — § 9 |
 | | `repository` | visibility, default branch, language, topics, fork |
@@ -61,7 +62,8 @@ Each **relationship kind** is built from enrichment's relationships
 (and normalisation's `committed_by`), `assigned_to`, `reviewed_by`,
 `reported_by` (and `created_by`), `led_by`, `affects`, `resolves`,
 `implements`, `merges`, `mentions`, `in_network`, `runs_in` (LEKA-362),
-`references` and `reads_from` (LEKA-364).
+`references` and `reads_from` (LEKA-364), `reports_to` and `contributes_to`
+(LEKA-365).
 `owns`, `deployed_to` and `caused_by` are kept for what states them later;
 nothing does yet.
 
@@ -195,6 +197,11 @@ Read by every member (`workspace:read`); another workspace's entity is 404.
 | `GET /knowledge/databases/{id}` | one: its schemas — how many tables, views, collections, what each holds — the databases it serves (an instance), its attributes and provenance |
 | `GET /knowledge/data-objects` | the tables, views, collections, by name, paged: `database_id`, `schema_id`, `object_kind`, `classification`, `category`, `personal_data`, `service_id`, `team_id`, `lifecycle`, `q` — each with its database and schema, size, what it holds, how many ties each way |
 | `GET /knowledge/data-objects/{id}` | one: its columns — what each holds, the primary key — what it references and reads from, what references and reads from it |
+| `GET /knowledge/teams` | the teams and departments (§ 12), by name, paged: `team_type`, `parent_id`, `lifecycle`, `q` — each with its parent, sub-teams, members said and inferred, leads, what it owns by type |
+| `GET /knowledge/teams/{id}` | one: its parents up to the top, its sub-teams, its members — each said or inferred, how surely — what it owns, the surest first |
+| `GET /knowledge/people` | the people, by name, paged: `team_id`, `department`, `contributors`, `bots` (left out unless asked), `lifecycle`, `q` (name or address) — each with title, department, teams, manager, reports, what they maintain, their first expertise |
+| `GET /knowledge/people/{id}` | one: their teams, their managers up to the top, their reports, what they maintain and own, everything their work shows they know with its evidence |
+| `GET /knowledge/entities/{id}/responsibility` | who owns a thing — its teams, said or inherited — who leads them, who maintains it, whose work shows they know it, its escalation policy |
 | `GET /knowledge/data-objects/{id}/lineage` | `direction=upstream` (what it reads from and references) or `downstream` (what reads from or references it — what a change of it reaches), `depth=1..5`: each reached and how far, the relationships walked |
 
 ## 8. What reads it
@@ -384,6 +391,72 @@ classification.
 `reads_from`: upstream, what a view or a table is made from; downstream,
 what a change of it reaches. And through the graph (§ 8), a table reaches
 its service, its team, its database's instance and its account.
+
+## 12. People and organisation (LEKA-365)
+
+Who works there, how they are organised, who owns and operates what, and
+who knows it. **Every piece says where it came from**: a source stated it,
+or a rule inferred it from the work — never invented.
+
+**What each source gives.**
+
+| Source | People | Teams | Hierarchy | Ownership, responsibility | Expertise signals |
+|---|---|---|---|---|---|
+| GitHub | logins; addresses from commits | the organisation's teams: maintainers, members | a team's parent | — | commits, pull requests, reviews, issues |
+| GitLab, Bitbucket | usernames, addresses | — | — | — | the same |
+| PagerDuty | names, addresses | teams: managers, responders | a team's parent | services' teams; escalation policy | incidents led, assigned |
+| Microsoft 365 | the directory: address, title, department, office, active | departments | **who reports to whom** | — | documents |
+| Google Workspace | the directory (with delegation): address, title, department, unit, active | departments | **who reports to whom** | — | documents |
+| Jira, Linear, Asana, ClickUp, Monday, Trello | accounts, addresses | — | — | — | issues assigned, reported |
+| Datadog, a CMDB, cloud tags, a source's mapping | — | teams named | — | a service's, a resource's, a schema's team | — |
+| an HR system (custom source) | address, title, department | teams, members, leads | a team's parent, a person's manager | — | — |
+
+**Canonical.** A person is their address, `person:email:sara@acme.io` —
+their accounts aliases: a GitHub login, a directory's id — and resolution
+makes one of what names them ([resolution.md](resolution.md)): her
+commits, her PagerDuty user, her directory entry. A team is its name,
+`team:payments`, whichever tool names it; a directory's department is a
+team of `team_type: department` — one a tool names too keeps the tool's
+word.
+
+| Relationship | From → to | Said by | Inferred by |
+|---|---|---|---|
+| `member_of` | a person → a team | a team's members, a directory's department, an HR system | `works_with`: most of what they work on is the team's ([enrichment.md § 4](enrichment.md)) |
+| `led_by` | a team → a person | GitHub maintainers, PagerDuty managers, an HR system's leads | — |
+| `child_of` | a team → its parent | GitHub, PagerDuty, an HR system | — |
+| `reports_to` | a person → their manager | a directory, an HR system | — |
+| `owned_by` | a thing → a team | a catalogue, a tag, PagerDuty, a CMDB, a mapping | `inherited`: from its container, 0.9 a step — less through an account (§ 10) |
+| `maintained_by` | a repository, project, service → a person | — | `most_active`: the most active on what it holds |
+| `contributes_to` | a person → a repository, project, service | — | `work`: their items there — with the evidence (§ below) |
+
+**Expertise, attributed.** A person's `expertise` lists the areas their
+work shows they know — each with how many items, in which roles, the last
+— and `languages`, those of the code: [enrichment.md § 7](enrichment.md).
+What a person never touched in a source LEKA reads is not their expertise;
+a bot has none, and says it is one (`bot`).
+
+**Queried.** `/knowledge/teams`, `/knowledge/people` and their details;
+`/entities/{id}/responsibility` answers "who owns this, who leads them,
+who knows it" for anything. Every tie says `origin` (`stated`,
+`inferred`), its `rule` and its `confidence`.
+
+**Limits, and coverage.**
+
+- **The org chart is a directory's**: without Microsoft 365, Google
+  Workspace (with delegation) or an HR system, there is no `reports_to`.
+- **Teams are the tools'**: GitLab groups, Slack user groups, Jira and
+  Linear teams, Microsoft Teams are not read as teams.
+- **Ownership by code**: `CODEOWNERS` files are not read; a GitHub team's
+  repository permissions are not taken for ownership — an admin team on
+  every repository would own them all.
+- **Who is on call**: PagerDuty's escalation policy is named, its
+  schedules and on-call shifts are not read.
+- **Departments are words**: a directory's department is a team by its
+  name; two departments written differently are two teams.
+- **A person without an address** in one tool and an address in another
+  meets by name only where resolution is sure ([resolution.md](resolution.md));
+  else they are two.
+- **LEKA's own users** are not tied to the people of the model yet.
 
 ## Not yet
 

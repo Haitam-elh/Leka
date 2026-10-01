@@ -169,7 +169,7 @@ Both keys are removed from every detail.
 | Credentials | `api_key`, a **read-only** REST API key (write-only here), sent as `Token token=…` |
 | Config | `region` (`us`, `eu`), `services` |
 | Category | `observability` |
-| Capabilities | `services`, `incidents` |
+| Capabilities | `services`, `incidents`, `teams` |
 
 ### What to create at PagerDuty
 
@@ -200,6 +200,7 @@ see a service in scope.
 |---|---|---|---|
 | `services` | each service: name, description, status, teams, escalation policy, last incident (`GET /services`) — and the services it depends on (`GET /service_dependencies/technical_services/{id}`, one call a service, the first 2 000 a pass); each **business service** — what an application is to PagerDuty — with its team, point of contact and the services supporting it (`GET /business_services`, `GET /service_dependencies/business_services/{id}`) | whole each pass | service id, `updated_at` |
 | `incidents` | each incident: title, status, urgency, priority, service, assignees, escalation policy, teams, number, link (`GET /incidents`) | every pass reads the incidents **created in the last 90 days** again — PagerDuty lists by creation, not by change | incident id, `updated_at` |
+| `teams` | each team: name, description, parent team (where the account has team hierarchy), and its **members** — name, address, role: a `manager` leads it (`GET /teams`, `GET /teams/{id}/members?include[]=users`, one call a team) — LEKA-365 | whole each pass | team id |
 
 An incident's **container** is its service; the sync reads services
 before the incidents about them. A plan or a key that does not show

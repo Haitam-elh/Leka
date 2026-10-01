@@ -18,7 +18,10 @@ iter_resources: services, whole each pass, each with the services it
 depends on (GET /service_dependencies/technical_services/{id}); the business
 services too — what the company's applications are to PagerDuty — each with
 the services that support it (…/business_services/{id}), those supporting a
-service in scope when there is a scope (LEKA-362). An account whose plan or
+service in scope when there is a scope (LEKA-362). Teams (LEKA-365), whole
+each pass: each with its members — their name, address and role, a manager
+leading it — and its parent team where the account has team hierarchy; a
+key that may not read teams leaves them out. An account whose plan or
 key does not show dependencies or business services is read without them.
 Incidents created in the last
 INCIDENT_WINDOW, every pass — PagerDuty lists incidents by when they were
@@ -132,9 +135,10 @@ class PagerDutyConnector(Connector[PagerDutyConfig, PagerDutyCredentials]):
         auth_type="token",
         config_schema=PagerDutyConfig,
         credentials_schema=PagerDutyCredentials,
-        capabilities=frozenset({C.SERVICES, C.INCIDENTS}),
-        # Services come whole every pass; incidents by their creation window.
-        listed_whole=frozenset({C.SERVICES}),
+        capabilities=frozenset({C.SERVICES, C.INCIDENTS, C.TEAMS}),
+        # Services and teams come whole every pass; incidents by their
+        # creation window.
+        listed_whole=frozenset({C.SERVICES, C.TEAMS}),
     )
 
     # ── the contract ─────────────────────────────────────────────────────────
@@ -151,6 +155,8 @@ class PagerDutyConnector(Connector[PagerDutyConfig, PagerDutyCredentials]):
             except ConnectorError as error:
                 if error.diagnostic.code is not DiagnosticCode.PERMISSION_DENIED:
                     raise
+            if await self._optional_response(client, "/teams?limit=1") is not None:
+                capabilities.append(C.TEAMS)
         warnings: list[str] = []
         if not services:
             warnings.append("Aucun service n'est visible avec cette clé.")
@@ -200,6 +206,23 @@ class PagerDutyConnector(Connector[PagerDutyConfig, PagerDutyCredentials]):
             if capability is C.SERVICES:
                 async for found in self._services_whole(client):
                     yield found
+                return
+            if capability is C.TEAMS:
+                async for team in self._pages(client, "/teams", {}):
+                    members = [
+                        member
+                        async for member in self._pages(
+                            client,
+                            f"/teams/{team['id']}/members",
+                            {"include[]": "users"},
+                            field="members",
+                        )
+                    ]
+                    yield record(
+                        capability,
+                        {**team, "members": members},
+                        external_id=str(team["id"]),
+                    )
                 return
             async for incident in self._pages(client, "/incidents", self._incident_params()):
                 yield record(
@@ -327,10 +350,13 @@ class PagerDutyConnector(Connector[PagerDutyConfig, PagerDutyCredentials]):
                 raise
             return None
 
-    async def _pages(self, client: VendorHttp, path: str, params: Params) -> AsyncIterator[Item]:
+    async def _pages(
+        self, client: VendorHttp, path: str, params: Params, *, field: str | None = None
+    ) -> AsyncIterator[Item]:
         """Every item of a listing, PagerDuty's offset after offset, while it
-        says there are `more`."""
-        field = path.strip("/")
+        says there are `more`. Its items are in the field the path names —
+        `/teams` → `teams` — unless said."""
+        field = field or path.strip("/")
         offset = 0
         for _ in range(MAX_PAGES):
             query: dict[str, Any] = {**params, "limit": PAGE_SIZE, "offset": offset}

@@ -5,7 +5,8 @@ neighbourhood, its history; the landscape of applications and services,
 and what depends on what (LEKA-362); the infrastructure — its resources,
 the accounts they are in, where and whose each is (LEKA-363); the data —
 databases, schemas, tables — what each holds and what it is tied to
-(LEKA-364). The registry (registry.py) is what
+(LEKA-364); the organisation — teams, people, who owns and operates what,
+who knows it (LEKA-365). The registry (registry.py) is what
 they read to know what kinds of things a company is made of.
 
 Depends on leka.ingestion. Must not import leka.context or leka.intentions
@@ -19,7 +20,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from typing import Literal
 
-from leka.knowledge.models import Entity, EntityType, Relationship, RelationshipType
+from leka.knowledge.models import Entity, EntityType, Lifecycle, Relationship, RelationshipType
 from leka.knowledge.repository import EntityRepository, Holding
 from leka.knowledge.schemas import (
     CloudAccountDetail,
@@ -35,6 +36,7 @@ from leka.knowledge.schemas import (
     DependencyRead,
     EntityBrief,
     EntityRead,
+    Expertise,
     Holds,
     InfrastructureDetail,
     InfrastructureRead,
@@ -42,9 +44,15 @@ from leka.knowledge.schemas import (
     LandscapeRead,
     Neighbourhood,
     PartRead,
+    PersonDetail,
+    PersonRead,
     RelationshipRead,
     ResourceEnvironment,
+    Responsibility,
     SchemaRead,
+    TeamDetail,
+    TeamRead,
+    Tie,
     Ties,
 )
 
@@ -63,6 +71,20 @@ AROUND = (
 )
 # A data object's lineage: its foreign keys, what views read (LEKA-364).
 LINEAGE = (RelationshipType.REFERENCES, RelationshipType.READS_FROM)
+# The organisation (LEKA-365): what a team's and a person's rows read
+# around them; how far a chain of managers or parents goes.
+ORGANISATION = (
+    RelationshipType.MEMBER_OF,
+    RelationshipType.LED_BY,
+    RelationshipType.CHILD_OF,
+    RelationshipType.REPORTS_TO,
+    RelationshipType.MAINTAINED_BY,
+    RelationshipType.OWNED_BY,
+    RelationshipType.CONTRIBUTES_TO,
+)
+MAX_CHAIN = 10
+MAX_EXPERTS = 10
+SHOWN_EXPERTISE = 3
 # What a data object's row reads around it.
 DATA_AROUND = (RelationshipType.PART_OF, RelationshipType.OWNED_BY, *LINEAGE)
 # What a resource's row reads around it (LEKA-363).
@@ -445,6 +467,270 @@ class KnowledgeService:
             resource: of_group[group] for resource, group in groups.items() if group in of_group
         }
 
+    # ── people and teams (LEKA-365) ──────────────────────────────────────────
+
+    async def _around(
+        self, found: Sequence[Entity]
+    ) -> tuple[list[Relationship], dict[uuid.UUID, Entity]]:
+        """The organisation's relationships of these entities, and every end
+        of them — these included: a manager, a parent team on the same page."""
+        ids = [entity.id for entity in found]
+        edges = list(await self._entities.around(ids, ORGANISATION))
+        ends = {e.from_entity_id for e in edges} | {e.to_entity_id for e in edges}
+        others = await self._entities.by_ids(list(ends - set(ids)))
+        return edges, others | {entity.id: entity for entity in found}
+
+    async def teams(self, found: Sequence[Entity]) -> list[TeamRead]:
+        """A page of teams: their parent, how many sub-teams and members,
+        who leads them, what they own."""
+        rows, _, _ = await self._teams(found)
+        return rows
+
+    async def team(self, entity: Entity) -> TeamDetail:
+        """One team: its parents up to the top, its sub-teams, its members —
+        said or inferred — and what it owns, the surest first."""
+        [row], edges, others = await self._teams([entity])
+        alive = {k: v for k, v in others.items() if v.lifecycle is not Lifecycle.REMOVED}
+        members = sorted(
+            (
+                _tie(e, alive[e.from_entity_id])
+                for e in edges
+                if e.type is RelationshipType.MEMBER_OF
+                and e.to_entity_id == entity.id
+                and e.from_entity_id in alive
+            ),
+            key=lambda tie: (tie.origin != "stated", -tie.confidence, tie.entity.name.lower()),
+        )
+        owned = sorted(
+            (
+                _tie(e, alive[e.from_entity_id])
+                for e in edges
+                if e.type is RelationshipType.OWNED_BY
+                and e.to_entity_id == entity.id
+                and e.from_entity_id in alive
+            ),
+            key=lambda tie: (tie.origin != "stated", -tie.confidence, tie.entity.name.lower()),
+        )[:MAX_LISTED]
+        sub_teams = sorted(
+            (
+                EntityBrief.model_validate(alive[e.from_entity_id])
+                for e in edges
+                if e.type is RelationshipType.CHILD_OF
+                and e.to_entity_id == entity.id
+                and e.from_entity_id in alive
+                and alive[e.from_entity_id].type is EntityType.TEAM
+            ),
+            key=lambda brief: brief.name.lower(),
+        )
+        ancestors = await self._entities.chain(
+            entity.id, RelationshipType.CHILD_OF, limit=MAX_CHAIN
+        )
+        return TeamDetail(
+            **row.model_dump(),
+            description=_text(entity.attributes.get("description")),
+            attributes=dict(entity.attributes),
+            provenance=dict(entity.provenance),
+            ancestors=[EntityBrief.model_validate(a) for a in ancestors],
+            sub_teams=sub_teams,
+            members=members,
+            owned=owned,
+        )
+
+    async def _teams(
+        self, found: Sequence[Entity]
+    ) -> tuple[list[TeamRead], list[Relationship], dict[uuid.UUID, Entity]]:
+        ids = [entity.id for entity in found]
+        edges, others = await self._around(found)
+        owns = await self._entities.owned_counts(ids)
+        rows = []
+        for entity in found:
+            members = [
+                e
+                for e in edges
+                if e.type is RelationshipType.MEMBER_OF
+                and e.to_entity_id == entity.id
+                and (p := others.get(e.from_entity_id)) is not None
+                and p.lifecycle is not Lifecycle.REMOVED
+            ]
+            parents = [
+                others[e.to_entity_id]
+                for e in edges
+                if e.type is RelationshipType.CHILD_OF
+                and e.from_entity_id == entity.id
+                and e.to_entity_id in others
+                and others[e.to_entity_id].type is EntityType.TEAM
+            ]
+            rows.append(
+                TeamRead(
+                    id=entity.id,
+                    key=entity.key,
+                    name=entity.name,
+                    lifecycle=entity.lifecycle,
+                    team_type=_text(entity.attributes.get("team_type")),
+                    parent=EntityBrief.model_validate(parents[0]) if parents else None,
+                    sub_team_count=sum(
+                        1
+                        for e in edges
+                        if e.type is RelationshipType.CHILD_OF
+                        and e.to_entity_id == entity.id
+                        and (t := others.get(e.from_entity_id)) is not None
+                        and t.type is EntityType.TEAM
+                    ),
+                    member_count=sum(1 for e in members if e.origin == "stated"),
+                    inferred_member_count=sum(1 for e in members if e.origin != "stated"),
+                    leads=sorted(
+                        (
+                            EntityBrief.model_validate(others[e.to_entity_id])
+                            for e in edges
+                            if e.type is RelationshipType.LED_BY
+                            and e.from_entity_id == entity.id
+                            and e.to_entity_id in others
+                        ),
+                        key=lambda brief: brief.name.lower(),
+                    ),
+                    owns=dict(sorted(owns.get(entity.id, {}).items())),
+                )
+            )
+        return rows, edges, others
+
+    async def people(self, found: Sequence[Entity]) -> list[PersonRead]:
+        """A page of people: their teams, their manager, how many report to
+        them, what they maintain, what their work shows they know."""
+        rows, _, _ = await self._people(found)
+        return rows
+
+    async def person(self, entity: Entity) -> PersonDetail:
+        """One person: their teams — said or inferred — their managers up to
+        the top, their reports, what they maintain and own, everything their
+        work shows they know."""
+        [row], edges, others = await self._people([entity])
+
+        def ties(relation: RelationshipType, *, outgoing: bool) -> list[Tie]:
+            found = [
+                _tie(e, others[e.to_entity_id if outgoing else e.from_entity_id])
+                for e in edges
+                if e.type is relation
+                and (e.from_entity_id if outgoing else e.to_entity_id) == entity.id
+                and (e.to_entity_id if outgoing else e.from_entity_id) in others
+            ]
+            return sorted(found, key=lambda tie: (tie.origin != "stated", -tie.confidence))
+
+        managers = await self._entities.chain(
+            entity.id, RelationshipType.REPORTS_TO, limit=MAX_CHAIN
+        )
+        return PersonDetail(
+            **row.model_dump(),
+            attributes=dict(entity.attributes),
+            provenance=dict(entity.provenance),
+            memberships=ties(RelationshipType.MEMBER_OF, outgoing=True),
+            managers=[EntityBrief.model_validate(m) for m in managers],
+            reports=sorted(
+                (t.entity for t in ties(RelationshipType.REPORTS_TO, outgoing=False)),
+                key=lambda brief: brief.name.lower(),
+            ),
+            maintained=ties(RelationshipType.MAINTAINED_BY, outgoing=False),
+            owned=[t.entity for t in ties(RelationshipType.OWNED_BY, outgoing=False)],
+            contributions=ties(RelationshipType.CONTRIBUTES_TO, outgoing=True),
+            all_expertise=_expertise(entity),
+        )
+
+    async def _people(
+        self, found: Sequence[Entity]
+    ) -> tuple[list[PersonRead], list[Relationship], dict[uuid.UUID, Entity]]:
+        edges, others = await self._around(found)
+        rows = []
+        for entity in found:
+            a = entity.attributes
+            teams = sorted(
+                (
+                    EntityBrief.model_validate(others[e.to_entity_id])
+                    for e in edges
+                    if e.type is RelationshipType.MEMBER_OF
+                    and e.from_entity_id == entity.id
+                    and e.to_entity_id in others
+                ),
+                key=lambda brief: brief.name.lower(),
+            )
+            managers = sorted(
+                (
+                    e
+                    for e in edges
+                    if e.type is RelationshipType.REPORTS_TO
+                    and e.from_entity_id == entity.id
+                    and e.to_entity_id in others
+                ),
+                key=lambda e: -e.confidence,
+            )
+            active = a.get("active")
+            languages = a.get("languages")
+            rows.append(
+                PersonRead(
+                    id=entity.id,
+                    key=entity.key,
+                    name=entity.name,
+                    lifecycle=entity.lifecycle,
+                    email=_text(a.get("email")) or _email_of(entity.key),
+                    job_title=_text(a.get("job_title")),
+                    department=_text(a.get("department")),
+                    active=active if isinstance(active, bool) else None,
+                    bot=a.get("bot") is True,
+                    teams=teams,
+                    manager=EntityBrief.model_validate(others[managers[0].to_entity_id])
+                    if managers
+                    else None,
+                    report_count=sum(
+                        1
+                        for e in edges
+                        if e.type is RelationshipType.REPORTS_TO and e.to_entity_id == entity.id
+                    ),
+                    maintains=sum(
+                        1
+                        for e in edges
+                        if e.type is RelationshipType.MAINTAINED_BY and e.to_entity_id == entity.id
+                    ),
+                    expertise=_expertise(entity)[:SHOWN_EXPERTISE],
+                    languages=[str(x) for x in languages] if isinstance(languages, list) else [],
+                    last_activity_at=_text(a.get("last_activity_at")),
+                )
+            )
+        return rows, edges, others
+
+    async def responsibility(self, entity: Entity) -> Responsibility:
+        """Who owns a thing — its teams, said or inherited — who leads them,
+        who maintains it, whose work shows they know it."""
+        edges, others = await self._around([entity])
+        alive = {k: v for k, v in others.items() if v.lifecycle is not Lifecycle.REMOVED}
+
+        def ties(relation: RelationshipType, *, outgoing: bool) -> list[Tie]:
+            found = [
+                _tie(e, alive[e.to_entity_id if outgoing else e.from_entity_id])
+                for e in edges
+                if e.type is relation
+                and (e.from_entity_id if outgoing else e.to_entity_id) == entity.id
+                and (e.to_entity_id if outgoing else e.from_entity_id) in alive
+            ]
+            return sorted(found, key=lambda tie: (tie.origin != "stated", -tie.confidence))
+
+        owners = ties(RelationshipType.OWNED_BY, outgoing=True)
+        teams = [t.entity.id for t in owners if t.entity.type is EntityType.TEAM]
+        lead_edges = [
+            e
+            for e in await self._entities.around(teams, (RelationshipType.LED_BY,))
+            if e.from_entity_id in set(teams)
+        ]
+        leads = await self._entities.by_ids([e.to_entity_id for e in lead_edges])
+        return Responsibility(
+            entity=EntityBrief.model_validate(entity),
+            owners=owners,
+            leads=sorted(
+                (EntityBrief.model_validate(p) for p in leads.values()),
+                key=lambda brief: brief.name.lower(),
+            ),
+            maintainers=ties(RelationshipType.MAINTAINED_BY, outgoing=True),
+            experts=ties(RelationshipType.CONTRIBUTES_TO, outgoing=False)[:MAX_EXPERTS],
+            escalation_policy=_text(entity.attributes.get("escalation_policy")),
+        )
+
     # ── data (LEKA-364) ──────────────────────────────────────────────────────
 
     async def databases(self, found: Sequence[Entity]) -> list[DatabaseRead]:
@@ -665,6 +951,43 @@ class KnowledgeService:
                 )
             )
         return rows, edges, others
+
+
+def _expertise(entity: Entity) -> list[Expertise]:
+    """What a person's work shows they know, as enrichment kept it."""
+    found = entity.attributes.get("expertise")
+    shown: list[Expertise] = []
+    for area in found if isinstance(found, list) else []:
+        if not isinstance(area, dict):
+            continue
+        roles = area.get("roles")
+        items = area.get("items")
+        shown.append(
+            Expertise(
+                key=str(area.get("key") or ""),
+                name=str(area.get("name") or ""),
+                type=str(area.get("type") or ""),
+                items=items if isinstance(items, int) else 0,
+                roles={str(k): v for k, v in roles.items() if isinstance(v, int)}
+                if isinstance(roles, dict)
+                else {},
+                last_at=_text(area.get("last_at")),
+            )
+        )
+    return shown
+
+
+def _email_of(key: str) -> str | None:
+    return key.removeprefix("person:email:") if key.startswith("person:email:") else None
+
+
+def _tie(edge: Relationship, other: Entity) -> Tie:
+    return Tie(
+        entity=EntityBrief.model_validate(other),
+        origin=edge.origin,
+        rule=edge.rule,
+        confidence=edge.confidence,
+    )
 
 
 def _holds(entity: Entity) -> Holds:

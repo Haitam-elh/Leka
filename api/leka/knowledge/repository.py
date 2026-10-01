@@ -731,6 +731,115 @@ class EntityRepository(WorkspaceScopedRepository):
             found[holder].append(part)
         return found
 
+    # ── people and teams (LEKA-365) ──────────────────────────────────────────
+
+    def teams(
+        self,
+        *,
+        lifecycle: Lifecycle | None,
+        team_type: str | None,
+        parent_id: uuid.UUID | None,
+        q: str | None,
+    ) -> Select[tuple[Entity]]:
+        """The teams — and departments — of the workspace, for a page."""
+        statement = _lifecycle(self.select(Entity).where(Entity.type == EntityType.TEAM), lifecycle)
+        if team_type:
+            statement = statement.where(Entity.attributes["team_type"].astext == team_type)
+        if parent_id is not None:
+            statement = statement.where(self._points_at(parent_id, RelationshipType.CHILD_OF))
+        if q:
+            statement = statement.where(Entity.name.ilike(f"%{q}%"))
+        return statement
+
+    def people(
+        self,
+        *,
+        lifecycle: Lifecycle | None,
+        team_id: uuid.UUID | None,
+        department: str | None,
+        bots: bool,
+        contributors: bool | None,
+        q: str | None,
+    ) -> Select[tuple[Entity]]:
+        """The people of the workspace, for a page — bots left out unless
+        asked; those of a team, of a department, who contribute."""
+        statement = _lifecycle(
+            self.select(Entity).where(Entity.type == EntityType.PERSON), lifecycle
+        )
+        if not bots:
+            statement = statement.where(
+                or_(
+                    Entity.attributes["bot"].astext.is_(None),
+                    Entity.attributes["bot"].astext != "true",
+                )
+            )
+        if team_id is not None:
+            statement = statement.where(self._points_at(team_id, RelationshipType.MEMBER_OF))
+        if department:
+            statement = statement.where(Entity.attributes["department"].astext == department)
+        if contributors is not None:
+            contributing = exists().where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.from_entity_id == Entity.id,
+                Relationship.type == RelationshipType.CONTRIBUTES_TO,
+            )
+            statement = statement.where(contributing if contributors else ~contributing)
+        if q:
+            statement = statement.where(
+                or_(Entity.name.ilike(f"%{q}%"), Entity.attributes["email"].astext.ilike(f"%{q}%"))
+            )
+        return statement
+
+    async def owned_counts(self, owners: Sequence[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
+        """What each of these owns, by type, not removed."""
+        if not owners:
+            return {}
+        rows = await self._session.execute(
+            select(Relationship.to_entity_id, Entity.type, func.count())
+            .join(Entity, Entity.id == Relationship.from_entity_id)
+            .where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.type == RelationshipType.OWNED_BY,
+                Relationship.to_entity_id.in_(set(owners)),
+                Entity.workspace_id == self.workspace_id,
+                Entity.lifecycle != Lifecycle.REMOVED,
+            )
+            .group_by(Relationship.to_entity_id, Entity.type)
+        )
+        found: dict[uuid.UUID, dict[str, int]] = {owner: {} for owner in owners}
+        for owner, kind, count in rows.tuples().all():
+            found[owner][kind.value] = int(count)
+        return found
+
+    async def chain(
+        self, start: uuid.UUID, relation: RelationshipType, *, limit: int
+    ) -> list[Entity]:
+        """What `start` points at through `relation`, then what that points
+        at — a manager's manager, a team's parent's parent — the surest
+        first at each step, never twice: up to `limit`."""
+        found: list[Entity] = []
+        seen = {start}
+        current = start
+        for _ in range(limit):
+            edge = await self._session.scalar(
+                self.select(Relationship)
+                .where(
+                    Relationship.from_entity_id == current,
+                    Relationship.type == relation,
+                )
+                .order_by(Relationship.confidence.desc(), Relationship.id)
+                .limit(1)
+            )
+            if edge is None or edge.to_entity_id in seen:
+                break
+            entity = await self.get(Entity, edge.to_entity_id)
+            if entity is None:
+                break
+            found.append(entity)
+            seen.add(entity.id)
+            current = entity.id
+        return found
+
     async def counts(self) -> dict[str, dict[str, int]]:
         """How many entities of each type and in each lifecycle; how many
         relationships of each type."""

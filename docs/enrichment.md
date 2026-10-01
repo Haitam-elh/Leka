@@ -164,6 +164,20 @@ ownership and the landscape, which read what it adds.
 | `part_of` → an account, and `account` | a resource whose record names no account — an S3 bucket's ARN names none | `source_account`: the one account of its provider its sources read — none where they read several | 0.9 |
 | `environment`, and `runs_in` → it | a resource, a resource group, a database, a schema, with no environment of its own | `container`: its nearest container's — a schema's database, a database's instance (LEKA-364), a node's cluster, a resource's group, else its account — that runs in one environment | the container's × the `part_of`'s × **0.9**; below 0.5, nothing |
 
+### Expertise — what someone's work shows they know (LEKA-365)
+
+| Relationship or attribute | Of | Rule | Confidence |
+|---|---|---|---|
+| `contributes_to` → a repository, a project, a service | a person, not a bot | `work`: the items they work on — authored, assigned, led, committed, reviewed, created, reported — are part of it: a pull request of its repository and of that repository's service, an issue of its project, an incident of the services it affects. Two items at least; the ten areas with the most work; weighed as maintainers are (§ 3: role, the last 180 days in full) | 0.4 + 0.5 × its share of the person's work, 0.9 at most |
+| `expertise` | the same | `work`: each of those areas with its **evidence** — how many items, how many in each role, the last one | 0.9 |
+| `languages` | the same | `work`: the languages of the repositories among them, the most worked first, three at most | 0.8 |
+| `bot` | a person | `name`: a bot's address, handle or name (`[bot]`, `dependabot`, `noreply`…) — and then no expertise | 0.9 |
+
+**Sourced, not invented.** Expertise is what a person did, where: never a
+skill they were said to have, never a guess from a title. Each area says
+its numbers; each `contributes_to` says the items it was read from
+(`provenance`). Someone whose work LEKA does not read has none.
+
 ### Data — what a database holds (LEKA-364)
 
 | Attribute | Of | Rule | Confidence |
@@ -231,8 +245,9 @@ A **workspace** stage, after resolution
 - **Queued by a resolution run that succeeded.** It reads what the latest
   successful resolution run made; that run's id is what it was made from.
 - **Queued by `advance`**, when nothing is left to resolve but enrichment
-  has something to do: a new `ENRICHER_VERSION` (4 since LEKA-364's data,
-  3 since LEKA-363's infrastructure, 2 since LEKA-362's landscape), a run that used up its
+  has something to do: a new `ENRICHER_VERSION` (5 since LEKA-365's expertise,
+  4 since LEKA-364's data, 3 since LEKA-363's infrastructure, 2 since
+  LEKA-362's landscape), a run that used up its
   retries.
 - One run at a time per workspace; a run that sees resolution succeed again
   while it reads is closed `abandoned` and reads again (up to three times);

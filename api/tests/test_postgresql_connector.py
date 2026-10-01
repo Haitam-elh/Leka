@@ -118,6 +118,11 @@ async def catalogue() -> AsyncIterator[Catalogue]:
             GRANT CONNECT ON DATABASE {made.database} TO {made.reader};
             GRANT USAGE ON SCHEMA {b} TO {made.reader};
         """)  # noqa: S608
+        # The tables' estimates and sizes, settled: a vacuum or an analyze
+        # landing between two passes — the server's own, at its own time —
+        # would change them, and a pass would rightly write the table again.
+        # Done here, nothing moves them while a test reads.
+        await admin.execute(f"VACUUM (ANALYZE) {b}.customers, {b}.invoices, {b}.events, {b}.totals")
         yield made
     finally:
         await admin.execute(f"""

@@ -17,7 +17,9 @@ branches, commits (default branch), pull requests, issues and releases,
 following GitHub's pagination. Commits and issues are
 filtered by `since` on GitHub's side; pull requests are read newest-updated
 first and stop at `since`; branches and releases have no such filter and
-come whole.
+come whole. `teams`, with an organisation (LEKA-365): its teams — each with
+its parent team, its maintainers and its members — whole each pass; a token
+that may not read the organisation's members leaves them out.
 
 LEKA READS. A classic token that carries write scopes is accepted — GitHub
 is where it is scoped, not here — but the test says so, in its warnings.
@@ -133,8 +135,11 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                 Capability.RELEASES,
                 Capability.ISSUES,
                 Capability.BRANCHES,
+                Capability.TEAMS,
             }
         ),
+        # A team gone from the organisation is gone at the next pass.
+        listed_whole=frozenset({Capability.TEAMS}),
     )
 
     # ── the contract ─────────────────────────────────────────────────────────
@@ -174,6 +179,11 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                 )
             else:
                 warnings.append("Aucun dépôt n'est visible avec ce token.")
+            if org:
+                # The organisation's teams: read:org, or Members read.
+                capabilities += await client.probe(
+                    {Capability.TEAMS: f"/orgs/{org}/teams"}, params={"per_page": 1}
+                )
 
         return ConnectionTestResult(
             account=str(metadata["login"]),
@@ -217,6 +227,10 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
         self, capability: Capability, *, since: datetime | None = None
     ) -> AsyncIterator[RawRecord]:
         async with self._client() as client:
+            if capability is Capability.TEAMS:
+                async for team in self._teams(client):
+                    yield team
+                return
             async for repository in self._repositories(client):
                 if capability is Capability.REPOSITORIES:
                     yield record(
@@ -265,6 +279,31 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
             )
             return refusal(response, path, secret, code, message=message)
         return refusal(response, path, secret, code)
+
+    async def _teams(self, client: VendorHttp) -> AsyncIterator[RawRecord]:
+        """The organisation's teams, each with its maintainers and members —
+        their logins: GitHub says no more of them here."""
+        org = self.config.organization
+        if not org:
+            return
+        async for team in client.pages(f"/orgs/{org}/teams"):
+            slug = str(team["slug"])
+            people: dict[str, list[str]] = {}
+            for role in ("maintainer", "member"):
+                people[role] = [
+                    str(user["login"])
+                    async for user in client.pages(
+                        f"/orgs/{org}/teams/{slug}/members", {"role": role}
+                    )
+                    if user.get("login")
+                ]
+            yield record(
+                Capability.TEAMS,
+                {**team, "maintainers": people["maintainer"], "members": people["member"]},
+                external_id=str(team["node_id"]),
+                container=org,
+                updated=team.get("updated_at"),
+            )
 
     def _visible_repositories(self, client: VendorHttp) -> AsyncIterator[Item]:
         org = self.config.organization

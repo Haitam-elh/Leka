@@ -11,6 +11,8 @@ import { useSourceSyncs } from "@/lib/sources-queries";
 
 /** The sync's own order: what the rest hangs from first. */
 const ORDER = [
+  "teams",
+  "people",
   "repositories",
   "projects",
   "branches",
