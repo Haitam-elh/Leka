@@ -1566,6 +1566,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/infrastructure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Infrastructure
+         * @description The cloud resources and databases, by name: what kind and class,
+         *     where — provider, account, group, region — in which environment and who
+         *     says so, how reachable and critical, whose, what they serve.
+         */
+        get: operations["infrastructure_api_v1_knowledge_infrastructure_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/infrastructure/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resource
+         * @description One resource: where it is and whose, what it holds — a cluster's
+         *     nodes, a network's resources — and its dependencies both ways.
+         */
+        get: operations["resource_api_v1_knowledge_infrastructure__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/cloud-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cloud Accounts
+         * @description The AWS accounts, Azure subscriptions and Google Cloud projects, by
+         *     name: how many resources each holds, of which class, in which regions;
+         *     its environment and its team.
+         */
+        get: operations["cloud_accounts_api_v1_knowledge_cloud_accounts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/cloud-accounts/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cloud Account
+         * @description One account, subscription or project — or an Azure resource group:
+         *     what it holds, its resource groups, where each piece came from.
+         */
+        get: operations["cloud_account_api_v1_knowledge_cloud_accounts__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1606,7 +1692,7 @@ export interface components {
          *     discovered for each source: a token may see repositories and not issues.
          * @enum {string}
          */
-        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "spaces" | "pages" | "databases" | "drives" | "files" | "alerts" | "events" | "incidents" | "metrics" | "logs" | "services" | "dashboards" | "schemas" | "tables" | "records";
+        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "accounts" | "spaces" | "pages" | "databases" | "drives" | "files" | "alerts" | "events" | "incidents" | "metrics" | "logs" | "services" | "dashboards" | "schemas" | "tables" | "records";
         /** CatalogEntry */
         CatalogEntry: {
             key: components["schemas"]["SourceKind"];
@@ -1646,6 +1732,140 @@ export interface components {
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /**
+         * CloudAccountDetail
+         * @description One account, subscription, project or resource group: everything
+         *     above, its resource groups, and where each piece came from.
+         */
+        CloudAccountDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            type: components["schemas"]["EntityType"];
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /** Provider */
+            provider: string | null;
+            /**
+             * Account Type
+             * @description aws_account, azure_subscription, gcp_project — none for a resource group.
+             */
+            account_type: string | null;
+            /**
+             * Account Id
+             * @description The provider's id: 123456789012, acme-prod.
+             */
+            account_id: string | null;
+            /**
+             * State
+             * @description active, disabled, deleted.
+             */
+            state: string | null;
+            /**
+             * Organization
+             * @description What it is in: an AWS organisation, an Azure tenant, a folder or organisation at Google.
+             */
+            organization: string | null;
+            /** @description A resource group's subscription. */
+            parent: components["schemas"]["EntityBrief"] | null;
+            environment: components["schemas"]["ResourceEnvironment"] | null;
+            criticality: components["schemas"]["Criticality"] | null;
+            /** Owners */
+            owners: components["schemas"]["EntityBrief"][];
+            /**
+             * Resources
+             * @description The resources in it — in its groups too — not removed.
+             */
+            resources: number;
+            /**
+             * Classes
+             * @description Of them, how many of each class.
+             */
+            classes: {
+                [key: string]: number;
+            };
+            /** Regions */
+            regions: string[];
+            /** Last Seen At */
+            last_seen_at: string | null;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Provenance */
+            provenance: {
+                [key: string]: unknown;
+            };
+            /** Resource Groups */
+            resource_groups: components["schemas"]["CloudAccountRead"][];
+        };
+        /**
+         * CloudAccountRead
+         * @description What resources are in — an AWS account, an Azure subscription or
+         *     resource group, a Google Cloud project — and how much is in it.
+         */
+        CloudAccountRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            type: components["schemas"]["EntityType"];
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /** Provider */
+            provider: string | null;
+            /**
+             * Account Type
+             * @description aws_account, azure_subscription, gcp_project — none for a resource group.
+             */
+            account_type: string | null;
+            /**
+             * Account Id
+             * @description The provider's id: 123456789012, acme-prod.
+             */
+            account_id: string | null;
+            /**
+             * State
+             * @description active, disabled, deleted.
+             */
+            state: string | null;
+            /**
+             * Organization
+             * @description What it is in: an AWS organisation, an Azure tenant, a folder or organisation at Google.
+             */
+            organization: string | null;
+            /** @description A resource group's subscription. */
+            parent: components["schemas"]["EntityBrief"] | null;
+            environment: components["schemas"]["ResourceEnvironment"] | null;
+            criticality: components["schemas"]["Criticality"] | null;
+            /** Owners */
+            owners: components["schemas"]["EntityBrief"][];
+            /**
+             * Resources
+             * @description The resources in it — in its groups too — not removed.
+             */
+            resources: number;
+            /**
+             * Classes
+             * @description Of them, how many of each class.
+             */
+            classes: {
+                [key: string]: number;
+            };
+            /** Regions */
+            regions: string[];
+            /** Last Seen At */
+            last_seen_at: string | null;
         };
         /**
          * CompanySize
@@ -2267,7 +2487,7 @@ export interface components {
          *     statement. See docs/adr/006-enum-storage.md.
          * @enum {string}
          */
-        EntityType: "service" | "repository" | "incident" | "deployment" | "person" | "document" | "infra_resource" | "database" | "team" | "project" | "issue" | "pull_request" | "commit" | "release" | "application" | "environment";
+        EntityType: "service" | "repository" | "incident" | "deployment" | "person" | "document" | "infra_resource" | "database" | "team" | "project" | "issue" | "pull_request" | "commit" | "release" | "application" | "environment" | "cloud_account" | "resource_group";
         /** EntityVersionRead */
         EntityVersionRead: {
             /** Version */
@@ -2541,6 +2761,205 @@ export interface components {
          * @enum {string}
          */
         HealthStatus: "unknown" | "healthy" | "degraded" | "unhealthy";
+        /**
+         * InfrastructureDetail
+         * @description One resource: everything above, what it holds — a cluster's nodes, a
+         *     network's resources — what it depends on and what depends on it, where
+         *     each piece came from.
+         */
+        InfrastructureDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            type: components["schemas"]["EntityType"];
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /**
+             * Provider
+             * @description aws, azure, gcp — none for a CMDB's own server.
+             */
+            provider: string | null;
+            /**
+             * Resource Kind
+             * @description instance, function, cluster, network, load_balancer, bucket, database.
+             */
+            resource_kind: string | null;
+            /**
+             * Resource Class
+             * @description compute, network, storage, database.
+             */
+            resource_class: string | null;
+            /**
+             * Resource Type
+             * @description The provider's own: ec2:instance, …
+             */
+            resource_type: string | null;
+            /**
+             * State
+             * @description running, starting, stopping, stopped, deleting, terminated, failed.
+             */
+            state: string | null;
+            /** @description The account, subscription or project. */
+            account: components["schemas"]["EntityBrief"] | null;
+            /** @description An Azure resource's group. */
+            resource_group: components["schemas"]["EntityBrief"] | null;
+            /** Region */
+            region: string | null;
+            /** Zone */
+            zone: string | null;
+            environment: components["schemas"]["ResourceEnvironment"] | null;
+            /**
+             * Exposure
+             * @description public, internal.
+             */
+            exposure: string | null;
+            criticality: components["schemas"]["Criticality"] | null;
+            /**
+             * Services
+             * @description The services it is part of.
+             */
+            services: components["schemas"]["EntityBrief"][];
+            /**
+             * Applications
+             * @description The applications it is part of.
+             */
+            applications: components["schemas"]["EntityBrief"][];
+            /**
+             * Owners
+             * @description Its teams.
+             */
+            owners: components["schemas"]["EntityBrief"][];
+            /** @description The network it is in. */
+            network: components["schemas"]["EntityBrief"] | null;
+            /** @description The cluster it is a node of. */
+            cluster: components["schemas"]["EntityBrief"] | null;
+            /**
+             * Dependencies
+             * @description What it depends on, directly.
+             */
+            dependencies: number;
+            /**
+             * Dependents
+             * @description What depends on it, directly.
+             */
+            dependents: number;
+            /** Last Seen At */
+            last_seen_at: string | null;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Provenance */
+            provenance: {
+                [key: string]: unknown;
+            };
+            /**
+             * Holds
+             * @description What is part of it, or in it.
+             */
+            holds: components["schemas"]["EntityBrief"][];
+            /** Holds Total */
+            holds_total: number;
+            /** Depends On */
+            depends_on: components["schemas"]["DependencyRead"][];
+            /** Depended On By */
+            depended_on_by: components["schemas"]["DependencyRead"][];
+        };
+        /**
+         * InfrastructureRead
+         * @description A cloud resource or a database: what kind, of which class, where —
+         *     its provider, account, group, region — in which environment, how
+         *     reachable and critical, whose it is, what it serves.
+         */
+        InfrastructureRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            type: components["schemas"]["EntityType"];
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /**
+             * Provider
+             * @description aws, azure, gcp — none for a CMDB's own server.
+             */
+            provider: string | null;
+            /**
+             * Resource Kind
+             * @description instance, function, cluster, network, load_balancer, bucket, database.
+             */
+            resource_kind: string | null;
+            /**
+             * Resource Class
+             * @description compute, network, storage, database.
+             */
+            resource_class: string | null;
+            /**
+             * Resource Type
+             * @description The provider's own: ec2:instance, …
+             */
+            resource_type: string | null;
+            /**
+             * State
+             * @description running, starting, stopping, stopped, deleting, terminated, failed.
+             */
+            state: string | null;
+            /** @description The account, subscription or project. */
+            account: components["schemas"]["EntityBrief"] | null;
+            /** @description An Azure resource's group. */
+            resource_group: components["schemas"]["EntityBrief"] | null;
+            /** Region */
+            region: string | null;
+            /** Zone */
+            zone: string | null;
+            environment: components["schemas"]["ResourceEnvironment"] | null;
+            /**
+             * Exposure
+             * @description public, internal.
+             */
+            exposure: string | null;
+            criticality: components["schemas"]["Criticality"] | null;
+            /**
+             * Services
+             * @description The services it is part of.
+             */
+            services: components["schemas"]["EntityBrief"][];
+            /**
+             * Applications
+             * @description The applications it is part of.
+             */
+            applications: components["schemas"]["EntityBrief"][];
+            /**
+             * Owners
+             * @description Its teams.
+             */
+            owners: components["schemas"]["EntityBrief"][];
+            /** @description The network it is in. */
+            network: components["schemas"]["EntityBrief"] | null;
+            /** @description The cluster it is a node of. */
+            cluster: components["schemas"]["EntityBrief"] | null;
+            /**
+             * Dependencies
+             * @description What it depends on, directly.
+             */
+            dependencies: number;
+            /**
+             * Dependents
+             * @description What depends on it, directly.
+             */
+            dependents: number;
+            /** Last Seen At */
+            last_seen_at: string | null;
+        };
         /**
          * InvitationCreate
          * @description An invitation request.
@@ -3043,6 +3462,19 @@ export interface components {
             /** Team */
             team: string;
         };
+        /** PageEnvelope[CloudAccountRead] */
+        PageEnvelope_CloudAccountRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["CloudAccountRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[EnrichedRelationshipRead] */
         PageEnvelope_EnrichedRelationshipRead_: {
             /**
@@ -3063,6 +3495,19 @@ export interface components {
              * @description The rows on this page, in the requested order.
              */
             data: components["schemas"]["EntityRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[InfrastructureRead] */
+        PageEnvelope_InfrastructureRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["InfrastructureRead"][];
             /**
              * Next Cursor
              * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
@@ -3708,6 +4153,24 @@ export interface components {
             first_seen_at: string | null;
             /** Last Seen At */
             last_seen_at: string | null;
+        };
+        /**
+         * ResourceEnvironment
+         * @description Where a resource runs, and who says so.
+         */
+        ResourceEnvironment: {
+            /**
+             * Name
+             * @description production, staging, development, test — or the source's word.
+             */
+            name: string;
+            /**
+             * Origin
+             * @description source: a tag, a name, a CMDB said it; enrichment: what it is in runs there.
+             */
+            origin: string;
+            /** Confidence */
+            confidence: number | null;
         };
         /** Retention */
         Retention: {
@@ -12289,6 +12752,418 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Dependencies"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    infrastructure_api_v1_knowledge_infrastructure_get: {
+        parameters: {
+            query?: {
+                resource_class?: ("compute" | "network" | "storage" | "database") | null;
+                resource_kind?: ("instance" | "function" | "cluster" | "network" | "load_balancer" | "bucket" | "database") | null;
+                provider?: ("aws" | "azure" | "gcp") | null;
+                /** @description An account, subscription or project — or a resource group. */
+                account_id?: string | null;
+                region?: string | null;
+                environment?: string | null;
+                state?: ("running" | "starting" | "stopping" | "stopped" | "deleting" | "terminated" | "failed") | null;
+                exposure?: ("public" | "internal") | null;
+                criticality?: ("critical" | "high" | "medium" | "low") | null;
+                service_id?: string | null;
+                team_id?: string | null;
+                /** @description Absent: every lifecycle but removed. */
+                lifecycle?: components["schemas"]["Lifecycle"] | null;
+                /** @description In the name. */
+                q?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_InfrastructureRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    resource_api_v1_knowledge_infrastructure__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InfrastructureDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    cloud_accounts_api_v1_knowledge_cloud_accounts_get: {
+        parameters: {
+            query?: {
+                provider?: ("aws" | "azure" | "gcp") | null;
+                environment?: string | null;
+                /** @description Absent: every lifecycle but removed. */
+                lifecycle?: components["schemas"]["Lifecycle"] | null;
+                /** @description In the name. */
+                q?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_CloudAccountRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    cloud_account_api_v1_knowledge_cloud_accounts__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudAccountDetail"];
                 };
             };
             /** @description The request could not be understood. */

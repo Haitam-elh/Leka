@@ -31,6 +31,8 @@ export const ENTITY_TYPES = [
   "release",
   "application",
   "environment",
+  "cloud_account",
+  "resource_group",
 ] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 

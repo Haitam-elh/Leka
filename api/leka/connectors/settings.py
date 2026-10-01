@@ -48,10 +48,13 @@ ENTITY_TYPES = frozenset(
         "deployment",
         "database",
         "infra_resource",
+        "cloud_account",
     }
 )
 WORK_STATES = frozenset({"open", "in_progress", "closed", "merged"})
-RESOURCE_STATES = frozenset({"running", "starting", "stopping", "stopped", "deleting", "failed"})
+RESOURCE_STATES = frozenset(
+    {"running", "starting", "stopping", "stopped", "deleting", "terminated", "failed"}
+)
 PRIORITIES = frozenset({"highest", "high", "medium", "low", "lowest"})
 ENVIRONMENTS = frozenset({"production", "staging", "development", "test"})
 

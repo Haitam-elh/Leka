@@ -41,6 +41,7 @@ class FactType(enum.StrEnum):
     OWNER = "owner"  # the team or person responsible
     EXPOSURE = "exposure"  # public, internal
     CRITICALITY = "criticality"  # critical, high, medium, low
+    CLUSTER = "cluster"  # the Kubernetes cluster a machine is a node of
 
 
 class Target(BaseModel):

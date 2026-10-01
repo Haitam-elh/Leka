@@ -400,6 +400,8 @@ const fr = {
       release: "Version publiée",
       application: "Application",
       environment: "Environnement",
+      cloud_account: "Compte cloud",
+      resource_group: "Groupe de ressources",
     },
     relationships: {
       depends_on: "dépend de",
@@ -811,6 +813,7 @@ const fr = {
       clusters: "clusters Kubernetes",
       networks: "réseaux",
       load_balancers: "load balancers",
+      accounts: "comptes",
       spaces: "espaces",
       pages: "pages",
       databases: "bases",
@@ -841,6 +844,7 @@ const fr = {
         clusters: "clusters EKS",
         networks: "VPC",
         load_balancers: "load balancers ELB",
+        accounts: "compte et son organisation",
       },
       gcp: {
         instances: "instances Compute Engine",
@@ -850,6 +854,7 @@ const fr = {
         clusters: "clusters GKE",
         networks: "réseaux VPC",
         load_balancers: "load balancers",
+        accounts: "projets",
       },
       azure: {
         instances: "machines virtuelles",
@@ -859,6 +864,7 @@ const fr = {
         clusters: "clusters AKS",
         networks: "réseaux virtuels",
         load_balancers: "load balancers et Application Gateway",
+        accounts: "abonnements et groupes de ressources",
       },
       gitlab: { pull_requests: "merge requests" },
       datadog: { alerts: "moniteurs et leurs alertes", metrics: "définitions de métriques" },
@@ -2137,6 +2143,8 @@ const en: Dictionary = {
       release: "Release",
       application: "Application",
       environment: "Environment",
+      cloud_account: "Cloud account",
+      resource_group: "Resource group",
     },
     relationships: {
       depends_on: "depends on",
@@ -2537,6 +2545,7 @@ const en: Dictionary = {
       clusters: "Kubernetes clusters",
       networks: "networks",
       load_balancers: "load balancers",
+      accounts: "accounts",
       spaces: "spaces",
       pages: "pages",
       databases: "databases",
@@ -2562,6 +2571,7 @@ const en: Dictionary = {
         clusters: "EKS clusters",
         networks: "VPCs",
         load_balancers: "ELB load balancers",
+        accounts: "the account and its organisation",
       },
       gcp: {
         instances: "Compute Engine instances",
@@ -2571,6 +2581,7 @@ const en: Dictionary = {
         clusters: "GKE clusters",
         networks: "VPC networks",
         load_balancers: "load balancers",
+        accounts: "projects",
       },
       azure: {
         instances: "virtual machines",
@@ -2580,6 +2591,7 @@ const en: Dictionary = {
         clusters: "AKS clusters",
         networks: "virtual networks",
         load_balancers: "load balancers and Application Gateway",
+        accounts: "subscriptions and resource groups",
       },
       gitlab: { pull_requests: "merge requests" },
       datadog: { alerts: "monitors and their alerts", metrics: "metric definitions" },

@@ -35,7 +35,10 @@ from leka.ingestion.parsing import ParsedRecord
 #    office suites' documents (LEKA-346).
 # 4: applications, environments, what services depend on, how critical and
 #    where in their life they are (LEKA-362).
-NORMALISER_VERSION = 4
+# 5: what resources are in — accounts, subscriptions, resource groups,
+#    projects — their class, the cluster a machine is a node of, a CMDB's
+#    servers and databases; a terminated resource (LEKA-363).
+NORMALISER_VERSION = 5
 
 
 def normalise(

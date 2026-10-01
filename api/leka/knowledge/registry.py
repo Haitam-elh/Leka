@@ -36,7 +36,9 @@ from leka.knowledge.models import EntityType, RelationshipType
 # 2: applications and environments, where things run, how critical they are,
 #    relationships true in some environments only, sources' disagreements
 #    kept (LEKA-362).
-MODEL_VERSION = 2
+# 3: what resources are in — cloud accounts, resource groups — resources'
+#    class, place and cluster; a terminated resource archived (LEKA-363).
+MODEL_VERSION = 3
 
 
 class Attributes(BaseModel):
@@ -114,15 +116,55 @@ class IncidentAttributes(Attributes):
     duration_minutes: int | None = None
 
 
-class ResourceAttributes(Attributes):
-    """Cloud resources and databases."""
+class Placed(Attributes):
+    """What every cloud thing says of where it is (LEKA-363): its provider,
+    the account, subscription or project it is in, its region; the
+    environment it runs in, how critical it is; its tags as they are."""
+
+    provider: str | None = None
+    account: str | None = None
+    region: str | None = None
+    environment: str | None = None
+    criticality: str | None = None
+    tags: dict[str, object] | None = None
+
+
+class ResourceAttributes(Placed):
+    """Cloud resources and databases: what kind — instance, function,
+    cluster, network, load balancer, bucket, database — of which class —
+    compute, network, storage, database — the provider's own type, where
+    exactly, how reachable."""
 
     resource_kind: str | None = None
-    environment: str | None = None
+    resource_class: str | None = None
+    resource_type: str | None = None
+    resource_group: str | None = None
+    zone: str | None = None
     exposure: str | None = None
-    criticality: str | None = None
-    region: str | None = None
-    tags: dict[str, object] | None = None
+    instance_type: str | None = None
+    engine: str | None = None
+    version: str | None = None
+    runtime: str | None = None
+    endpoint: str | None = None
+    created_at: str | None = None
+
+
+class CloudAccountAttributes(Placed):
+    """An AWS account, an Azure subscription, a Google Cloud project: what
+    resources are in — its id, its state, what is above it."""
+
+    account_type: str | None = None
+    account_id: str | None = None
+    organization: str | None = None
+    management_account: str | None = None
+    tenant: str | None = None
+    parent: str | None = None
+
+
+class ResourceGroupAttributes(Placed):
+    """An Azure resource group: resources grouped in a subscription."""
+
+    resource_group: str | None = None
 
 
 class EnvironmentAttributes(Attributes):
@@ -164,9 +206,23 @@ ENTITY_KINDS: dict[EntityType, EntityKind] = {
         EntityKind(EntityType.DEPLOYMENT, 1, "delivery", Attributes, ("deployment",)),
         EntityKind(EntityType.INCIDENT, 1, "operations", IncidentAttributes, ("incident",)),
         EntityKind(
-            EntityType.INFRA_RESOURCE, 2, "infrastructure", ResourceAttributes, ("infra_resource",)
+            EntityType.INFRA_RESOURCE, 3, "infrastructure", ResourceAttributes, ("infra_resource",)
         ),
-        EntityKind(EntityType.DATABASE, 2, "infrastructure", ResourceAttributes, ("database",)),
+        EntityKind(EntityType.DATABASE, 3, "infrastructure", ResourceAttributes, ("database",)),
+        EntityKind(
+            EntityType.CLOUD_ACCOUNT,
+            1,
+            "infrastructure",
+            CloudAccountAttributes,
+            ("cloud_account",),
+        ),
+        EntityKind(
+            EntityType.RESOURCE_GROUP,
+            1,
+            "infrastructure",
+            ResourceGroupAttributes,
+            ("resource_group",),
+        ),
         EntityKind(
             EntityType.ENVIRONMENT, 1, "infrastructure", EnvironmentAttributes, ("environment",)
         ),

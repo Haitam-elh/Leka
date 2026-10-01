@@ -17,10 +17,11 @@ WHAT IT SAYS. Its sources' attributes; where they say nothing, enrichment's
 (registry.py).
 
 LIFECYCLE. `archived` when its source says so — or its catalogue says it is
-retired; `dormant` when enrichment finds nothing done to it for 180 days;
-`removed` when no source shows it any more — kept with its history, never
-deleted; `active` otherwise. A removed thing that comes back is active
-again, the same entity.
+retired, its provider that it is terminated or deleted; `dormant` when
+enrichment finds nothing done to it for 180 days; `removed` when no source
+shows it any more — kept with its history, never deleted; `active`
+otherwise. A removed thing that comes back is active again, the same
+entity.
 
 VERSIONS. What it says — its name, its attributes, its lifecycle — hashed:
 a different hash is a new version, recorded with what changed. Measures
@@ -60,7 +61,9 @@ MEASURES = frozenset(
         "lifecycle",
     }
 )
-ARCHIVED_STATES = frozenset({"archived"})
+# Its source says it is no more: archived; a resource terminated, an account
+# deleted, at its provider (LEKA-363).
+ARCHIVED_STATES = frozenset({"archived", "terminated", "deleted"})
 MAX_SOURCES = 20
 # The sources' disagreements kept in an entity's provenance: this many, of
 # this many values each.

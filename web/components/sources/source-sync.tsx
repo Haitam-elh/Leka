@@ -18,6 +18,7 @@ const ORDER = [
   "pull_requests",
   "issues",
   "releases",
+  "accounts",
   "networks",
   "instances",
   "clusters",

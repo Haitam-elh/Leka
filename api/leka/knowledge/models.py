@@ -78,6 +78,10 @@ class EntityType(enum.StrEnum):
     RELEASE = "release"
     APPLICATION = "application"
     ENVIRONMENT = "environment"
+    # What resources are in (LEKA-363): an AWS account, an Azure
+    # subscription, a Google Cloud project — and an Azure resource group.
+    CLOUD_ACCOUNT = "cloud_account"
+    RESOURCE_GROUP = "resource_group"
 
 
 class RelationshipType(enum.StrEnum):
@@ -113,7 +117,8 @@ class Lifecycle(enum.StrEnum):
     ACTIVE = "active"
     # Still there, nothing done to it for 180 days (enrichment's lifecycle).
     DORMANT = "dormant"
-    # Its source says so: an archived repository, a deleted document.
+    # Its source says so: an archived repository, a deleted document, a
+    # terminated instance, a deleted subscription.
     ARCHIVED = "archived"
     # Gone from every source: kept, with its history, never shown as current.
     REMOVED = "removed"

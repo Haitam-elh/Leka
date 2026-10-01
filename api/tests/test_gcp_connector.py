@@ -237,3 +237,25 @@ def test_a_project_id_is_checked() -> None:
     with pytest.raises(ValidationError):
         GcpConfig(projects=["Acme Prod"])
     assert GcpConfig(projects=["acme-prod"]).projects == ["acme-prod"]
+
+
+async def test_the_projects_in_scope_are_the_accounts() -> None:
+    google = Google(
+        projects=[
+            [
+                {"projectId": "acme-prod", "displayName": "Prod", "state": "ACTIVE"},
+                {"projectId": "acme-dev", "displayName": "Dev", "state": "ACTIVE"},
+            ]
+        ]
+    )
+
+    records = [
+        r
+        async for r in _connector(google, projects=["acme-prod"]).iter_resources(
+            Capability.ACCOUNTS
+        )
+    ]
+
+    assert [(r.external_id, r.payload["displayName"]) for r in records] == [("acme-prod", "Prod")]
+    # The projects are Resource Manager's: Cloud Asset Inventory is not asked.
+    assert not any(r.url.host == "cloudasset.googleapis.com" for r in google.requests)

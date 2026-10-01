@@ -98,6 +98,17 @@ def cloud(provider: str, resource_id: str) -> str:
     return f"{provider}:{resource_id.lower() if provider == 'azure' else resource_id}"
 
 
+def cloud_account(provider: str, account_id: str) -> str:
+    """What a provider's resources are in, by its own id (LEKA-363): an AWS
+    account, `aws:account:123456789012`; an Azure subscription, by its ARM
+    id as its resources' keys begin; a Google Cloud project, by its id —
+    `gcp:project:acme-prod`."""
+    account_id = account_id.strip()
+    if provider == "azure":
+        return cloud("azure", f"/subscriptions/{account_id}")
+    return f"{provider}:{'project' if provider == 'gcp' else 'account'}:{account_id}"
+
+
 def slug(name: str) -> str:
     """'Billing API ' → 'billing-api'; accents dropped, anything else a dash."""
     ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()

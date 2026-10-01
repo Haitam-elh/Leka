@@ -72,6 +72,10 @@ class Capability(enum.StrEnum):
     CLUSTERS = "clusters"
     NETWORKS = "networks"
     LOAD_BALANCERS = "load_balancers"
+    # What the resources are in (LEKA-363): an AWS account, Azure's
+    # subscriptions and their resource groups, Google Cloud's projects —
+    # their names, states, tags, the organisation above them.
+    ACCOUNTS = "accounts"
     # Documentation tools (LEKA-346).
     SPACES = "spaces"
     PAGES = "pages"

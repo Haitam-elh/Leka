@@ -47,6 +47,42 @@ class LandscapeFilters:
     q: str | None = None
 
 
+# What the infrastructure is made of (LEKA-363), and what resources are in.
+RESOURCE_TYPES = (EntityType.INFRA_RESOURCE, EntityType.DATABASE)
+SCOPE_TYPES = (EntityType.CLOUD_ACCOUNT, EntityType.RESOURCE_GROUP)
+
+
+@dataclass(frozen=True)
+class InfrastructureFilters:
+    """What a list of resources is narrowed to (LEKA-363): by what they are,
+    where they are, whose they are."""
+
+    lifecycle: Lifecycle | None = None
+    resource_class: str | None = None
+    resource_kind: str | None = None
+    provider: str | None = None
+    # An account, a subscription, a project — or a resource group.
+    account_id: uuid.UUID | None = None
+    region: str | None = None
+    environment: str | None = None
+    state: str | None = None
+    exposure: str | None = None
+    criticality: str | None = None
+    service_id: uuid.UUID | None = None
+    team_id: uuid.UUID | None = None
+    q: str | None = None
+
+
+@dataclass(frozen=True)
+class Holding:
+    """How many resources of a class, in a region, an account holds."""
+
+    holder: uuid.UUID
+    resource_class: str | None
+    region: str | None
+    count: int
+
+
 class ModelRepository(WorkspaceScopedRepository):
     """The company model's builds: where they stand, what the last left, and
     writing the next."""
@@ -396,6 +432,178 @@ class EntityRepository(WorkspaceScopedRepository):
         ]
         return reached, kept
 
+    # ── infrastructure and cloud (LEKA-363) ──────────────────────────────────
+
+    def infrastructure(self, filters: InfrastructureFilters) -> Select[tuple[Entity]]:
+        """The cloud resources and databases of the workspace, for a page:
+        every lifecycle but removed unless asked, and only those of that
+        class, kind, provider, region, environment, state, exposure, how
+        critical — in that account or group, of that service or team."""
+        statement = self.select(Entity).where(Entity.type.in_(RESOURCE_TYPES))
+        f = filters
+        statement = _lifecycle(statement, f.lifecycle)
+        for name, value in (
+            ("resource_class", f.resource_class),
+            ("resource_kind", f.resource_kind),
+            ("provider", f.provider),
+            ("region", f.region),
+            ("environment", f.environment),
+            ("state", f.state),
+            ("exposure", f.exposure),
+            ("criticality", f.criticality),
+        ):
+            if value:
+                statement = statement.where(Entity.attributes[name].astext == value)
+        if f.q:
+            statement = statement.where(Entity.name.ilike(f"%{f.q}%"))
+        if f.account_id is not None:
+            # In it, or in one of its resource groups.
+            groups = self._groups_in(f.account_id)
+            statement = statement.where(
+                exists().where(
+                    Relationship.workspace_id == self.workspace_id,
+                    Relationship.from_entity_id == Entity.id,
+                    Relationship.type == RelationshipType.PART_OF,
+                    or_(
+                        Relationship.to_entity_id == f.account_id,
+                        Relationship.to_entity_id.in_(groups),
+                    ),
+                )
+            )
+        for other, relation in (
+            (f.service_id, RelationshipType.PART_OF),
+            (f.team_id, RelationshipType.OWNED_BY),
+        ):
+            if other is not None:
+                statement = statement.where(
+                    exists().where(
+                        Relationship.workspace_id == self.workspace_id,
+                        Relationship.from_entity_id == Entity.id,
+                        Relationship.to_entity_id == other,
+                        Relationship.type == relation,
+                    )
+                )
+        return statement
+
+    def cloud_accounts(
+        self,
+        *,
+        lifecycle: Lifecycle | None,
+        provider: str | None,
+        environment: str | None,
+        q: str | None,
+    ) -> Select[tuple[Entity]]:
+        """The accounts, subscriptions and projects of the workspace, for a
+        page."""
+        statement = _lifecycle(
+            self.select(Entity).where(Entity.type == EntityType.CLOUD_ACCOUNT), lifecycle
+        )
+        for name, value in (("provider", provider), ("environment", environment)):
+            if value:
+                statement = statement.where(Entity.attributes[name].astext == value)
+        if q:
+            statement = statement.where(Entity.name.ilike(f"%{q}%"))
+        return statement
+
+    def _groups_in(self, account_id: uuid.UUID) -> Select[tuple[uuid.UUID]]:
+        """The ids of an account's resource groups."""
+        group = Entity.__table__.alias()
+        return (
+            select(Relationship.from_entity_id)
+            .join(group, group.c.id == Relationship.from_entity_id)
+            .where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.type == RelationshipType.PART_OF,
+                Relationship.to_entity_id == account_id,
+                group.c.type == EntityType.RESOURCE_GROUP,
+            )
+        )
+
+    async def groups_of(self, account_id: uuid.UUID) -> Sequence[Entity]:
+        """An account's resource groups, by name."""
+        return await self.list(
+            self.select(Entity)
+            .where(
+                Entity.type == EntityType.RESOURCE_GROUP,
+                exists().where(
+                    Relationship.workspace_id == self.workspace_id,
+                    Relationship.from_entity_id == Entity.id,
+                    Relationship.type == RelationshipType.PART_OF,
+                    Relationship.to_entity_id == account_id,
+                ),
+            )
+            .order_by(Entity.name, Entity.id)
+        )
+
+    async def holdings(self, holders: Sequence[uuid.UUID]) -> list[Holding]:
+        """How many resources — not removed — each of these accounts and
+        groups holds, by class and region: those in it, and those in its
+        resource groups."""
+        if not holders:
+            return []
+        resource = select(Entity).subquery()
+        found: list[Holding] = []
+        for via_group in (False, True):
+            outer = Relationship.__table__.alias()
+            inner = Relationship.__table__.alias()
+            holder = outer.c.to_entity_id
+            group = Entity.__table__.alias()
+            # Through a resource group — not a cluster: its nodes are in the
+            # account already.
+            joined = (
+                outer.join(inner, inner.c.to_entity_id == outer.c.from_entity_id).join(
+                    group,
+                    (group.c.id == outer.c.from_entity_id)
+                    & (group.c.type == EntityType.RESOURCE_GROUP),
+                )
+                if via_group
+                else outer
+            )
+            member = inner.c.from_entity_id if via_group else outer.c.from_entity_id
+            statement = (
+                select(
+                    holder,
+                    resource.c.attributes["resource_class"].astext.label("resource_class"),
+                    resource.c.attributes["region"].astext.label("region"),
+                    func.count(),
+                )
+                .select_from(joined.join(resource, resource.c.id == member))
+                .where(
+                    outer.c.workspace_id == self.workspace_id,
+                    outer.c.type == RelationshipType.PART_OF,
+                    holder.in_(set(holders)),
+                    resource.c.workspace_id == self.workspace_id,
+                    resource.c.type.in_(RESOURCE_TYPES),
+                    resource.c.lifecycle != Lifecycle.REMOVED,
+                )
+                # By the labels: each `->>` is a parameter of its own.
+                .group_by(holder, "resource_class", "region")
+            )
+            if via_group:
+                statement = statement.where(
+                    inner.c.workspace_id == self.workspace_id,
+                    inner.c.type == RelationshipType.PART_OF,
+                )
+            rows = await self._session.execute(statement)
+            found += [Holding(h, c, r, int(n)) for h, c, r, n in rows.all()]
+        return found
+
+    async def held(self, entity_id: uuid.UUID, *, limit: int) -> tuple[Sequence[Entity], int]:
+        """What is part of a resource, or in it — a cluster's nodes, a
+        network's resources — not removed, by name: up to `limit`, and how
+        many."""
+        inside = select(Relationship.from_entity_id).where(
+            Relationship.workspace_id == self.workspace_id,
+            Relationship.to_entity_id == entity_id,
+            Relationship.type.in_((RelationshipType.PART_OF, RelationshipType.IN_NETWORK)),
+        )
+        statement = self.select(Entity).where(
+            Entity.id.in_(inside), Entity.lifecycle != Lifecycle.REMOVED
+        )
+        total = await self._session.scalar(select(func.count()).select_from(statement.subquery()))
+        found = await self.list(statement.order_by(Entity.name, Entity.id).limit(limit))
+        return found, int(total or 0)
+
     async def counts(self) -> dict[str, dict[str, int]]:
         """How many entities of each type and in each lifecycle; how many
         relationships of each type."""
@@ -419,6 +627,15 @@ class EntityRepository(WorkspaceScopedRepository):
             "lifecycles": {state.value: int(n) for state, n in by_lifecycle.all()},
             "relationships": {kind.value: int(n) for kind, n in by_relationship.all()},
         }
+
+
+def _lifecycle(
+    statement: Select[tuple[Entity]], lifecycle: Lifecycle | None
+) -> Select[tuple[Entity]]:
+    """Every lifecycle but removed, unless one is asked."""
+    if lifecycle is None:
+        return statement.where(Entity.lifecycle != Lifecycle.REMOVED)
+    return statement.where(Entity.lifecycle == lifecycle)
 
 
 def _environments(edge: Relationship) -> list[str]:

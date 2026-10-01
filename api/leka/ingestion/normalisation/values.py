@@ -78,14 +78,33 @@ RESOURCE_STATES = {
     "shutting-down": "stopping",
     "suspending": "stopping",
     "stopped": "stopped",
-    "terminated": "stopped",
     "suspended": "stopped",
     "inactive": "stopped",
     "deleting": "deleting",
-    "deleted": "deleting",
+    # Gone at the provider, still listed a while: EC2 keeps a terminated
+    # instance an hour (LEKA-363).
+    "terminated": "terminated",
+    "deleted": "terminated",
     "failed": "failed",
     "error": "failed",
     "degraded": "failed",
+}
+
+# What resources are in — an account, a subscription, a project — on one
+# scale: active, disabled, deleted (LEKA-363). Azure's Warned and PastDue
+# are billing's words: the subscription still runs.
+ACCOUNT_STATES = {
+    "active": "active",
+    "enabled": "active",
+    "succeeded": "active",
+    "warned": "active",
+    "pastdue": "active",
+    "disabled": "disabled",
+    "suspended": "disabled",
+    "expired": "disabled",
+    "deleted": "deleted",
+    "deleting": "deleted",
+    "delete requested": "deleted",
 }
 
 # Priorities on one scale: highest, high, medium, low, lowest.
@@ -172,6 +191,10 @@ def incident_state(raw: str | None) -> tuple[str | None, bool]:
 
 def resource_state(raw: str | None) -> tuple[str | None, bool]:
     return _lookup(RESOURCE_STATES, raw)
+
+
+def account_state(raw: str | None) -> tuple[str | None, bool]:
+    return _lookup(ACCOUNT_STATES, raw)
 
 
 def priority(raw: str | None) -> tuple[str | None, bool]:

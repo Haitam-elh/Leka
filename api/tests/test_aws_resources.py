@@ -138,3 +138,60 @@ async def test_a_quota_hit_mid_listing_keeps_what_was_read_and_says_when_to_retu
     assert len(read) == 1
     assert caught.value.diagnostic.code is DiagnosticCode.RATE_LIMITED
     assert caught.value.diagnostic.retry_after == 60
+
+
+# ── the account (LEKA-363) ───────────────────────────────────────────────────
+
+
+async def test_the_account_is_read_with_its_alias_and_its_organisation() -> None:
+    connector, calls = _connector(regions=["eu-west-3"])
+
+    [account] = [r async for r in connector.iter_resources(Capability.ACCOUNTS)]
+
+    assert (account.external_id, account.container) == ("123456789012", None)
+    assert account.payload == {
+        "Account": "123456789012",
+        "AccountAliases": ["acme-prod"],
+        "Organization": {"Id": "o-abc123", "MasterAccountId": "999999999999"},
+    }
+    # Global calls, once: no region is walked for the account.
+    assert {op for op, _ in calls} == {
+        "get_caller_identity",
+        "list_account_aliases",
+        "describe_organization",
+    }
+
+
+@pytest.mark.parametrize(
+    ("aliases", "organization"),
+    [
+        (denied("ListAccountAliases"), denied("DescribeOrganization")),
+        (
+            {"AccountAliases": []},
+            denied("DescribeOrganization", "AWSOrganizationsNotInUseException", 400),
+        ),
+    ],
+)
+async def test_what_the_policy_refuses_or_is_not_there_is_left_out(
+    aliases: Any, organization: Any
+) -> None:
+    connector, _ = _connector(
+        {"list_account_aliases": aliases, "describe_organization": organization}
+    )
+
+    [account] = [r async for r in connector.iter_resources(Capability.ACCOUNTS)]
+
+    assert account.payload["Account"] == "123456789012"
+    assert "Organization" not in account.payload
+    assert account.payload.get("AccountAliases", []) == []
+
+
+async def test_a_throttled_account_read_is_still_a_failure() -> None:
+    connector, _ = _connector(
+        {"list_account_aliases": denied("ListAccountAliases", "Throttling", 400)}
+    )
+
+    with pytest.raises(ConnectorError) as caught:
+        _ = [r async for r in connector.iter_resources(Capability.ACCOUNTS)]
+
+    assert caught.value.diagnostic.code is DiagnosticCode.RATE_LIMITED

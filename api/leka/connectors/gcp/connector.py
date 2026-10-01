@@ -15,6 +15,8 @@ every project of the scope, following `nextPageToken`. Every asset is known
 by its full resource name — '//compute.googleapis.com/projects/p/zones/z/
 instances/i', unique across Google Cloud — with its project as container.
 Google has no "changed since" here: every capability is `listed_whole`.
+`accounts` is the projects themselves (LEKA-363): their names, labels,
+state and parent — the folder or organisation they are in.
 
 LEKA READS. Every call to Google Cloud's APIs is a GET, under the
 `cloud-platform.read-only` scope. The one POST is the token exchange at
@@ -77,7 +79,8 @@ TYPES: dict[Capability, tuple[str, ...]] = {
         "compute.googleapis.com/BackendService",
     ),
 }
-CLOUD_CAPABILITIES = frozenset(TYPES)
+# The projects: what the resources are in.
+CLOUD_CAPABILITIES = frozenset({*TYPES, Capability.ACCOUNTS})
 
 
 class GcpConfig(BaseModel):
@@ -154,7 +157,7 @@ class GcpConnector(Connector[GcpConfig, GcpCredentials]):
                     {Capability.INSTANCES: f"/v1/projects/{scope[0]}/assets"},
                     params={"pageSize": 1, "contentType": "RESOURCE"},
                 )
-            capabilities = sorted(TYPES) if readable else []
+            capabilities = sorted(CLOUD_CAPABILITIES) if readable else []
             if not readable:
                 warnings.append(
                     "Cloud Asset Inventory ne répond pas pour ce projet : activez l'API "
@@ -189,7 +192,18 @@ class GcpConnector(Connector[GcpConfig, GcpCredentials]):
         self, capability: Capability, *, since: datetime | None = None
     ) -> AsyncIterator[RawRecord]:
         """`since` is not used: Google lists these whole, and says so in the manifest."""
-        scope = self.config.projects or [str(p["projectId"]) for p in await self._projects()]
+        visible = await self._projects()
+        scope = self.config.projects or [str(p["projectId"]) for p in visible]
+        if capability is Capability.ACCOUNTS:
+            for found in visible:
+                if str(found["projectId"]) in scope:
+                    yield record(
+                        capability,
+                        found,
+                        external_id=str(found["projectId"]),
+                        updated=found.get("updateTime"),
+                    )
+            return
         query: dict[str, str | int | list[str]] = {
             "contentType": "RESOURCE",
             "assetTypes": list(TYPES[capability]),
