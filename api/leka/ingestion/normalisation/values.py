@@ -148,6 +148,8 @@ INCIDENT_STATES = {
     "active": "open",
     "open": "open",
     "acknowledged": "in_progress",
+    # Kibana's cases.
+    "in-progress": "in_progress",
     "stable": "in_progress",
     "investigating": "in_progress",
     "mitigated": "in_progress",

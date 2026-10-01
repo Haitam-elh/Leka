@@ -10,7 +10,8 @@ comes from:
     service         incident      an open incident affects it
                     attention     an incident affecting it moved in 7 days
                     operational   a monitoring source (PagerDuty, Datadog,
-                                  Grafana) shows it, and nothing above
+                                  Grafana, Splunk, Kibana) shows it, and
+                                  nothing above
                     unmonitored   no monitoring source shows it
     database,       operational   running          attention  starting,
     cloud resource  incident      failed                      stopping,

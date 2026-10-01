@@ -54,12 +54,12 @@ something no source has shown yet — a ticket in a tool not connected.
 | instances, buckets, functions, clusters, networks, load_balancers | `infra_resource`, with `attributes.resource_kind`: `instance`, `bucket`, `function`, `cluster`, `network`, `load_balancer` |
 | projects, issues of Linear, Asana, Trello, ClickUp, Monday | `project`, `issue` — a task, a card, an item is an `issue` |
 | pages, files (Confluence, Notion, Slab, Guru, Google Workspace, Microsoft 365) | `document` |
-| incidents (Datadog, PagerDuty) | `incident` |
+| incidents (Datadog, PagerDuty; Kibana's cases) | `incident` |
 | services (PagerDuty, the Datadog service catalog) | `service` — a PagerDuty **business service** is an `application` (LEKA-362) |
 | records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `application`, `project`, `document` — keyed by the source, a service or an application by its name ([custom.md](connectors/custom.md)) |
 | named by a record | `person`, `service`, `application`, `team`, `environment` |
 
-Alerts, events, metrics, logs and dashboards (Datadog, Grafana) are
+Alerts, events, metrics, logs and dashboards (Datadog, Grafana, Splunk, Kibana) are
 extracted and parsed, but are not entities: they are the evidence about
 incidents and services, not things of the company model. Nor are the
 containers of documents — spaces, Notion databases, topics, collections,
@@ -92,7 +92,7 @@ One thing, one key — built from what every mention of it carries
 | service, team | `service:billing-api`, `team:payments` — a slug of the tag's value, or of a PagerDuty or Datadog service's name: the same service meets on one key |
 | application | `application:billing` — a slug of an `application` / `system` / `product` tag, a catalog's application, a PagerDuty business service's name |
 | environment | `environment:production` — one of the four canonical names only (§ 4): `prd-eu-2` is a name, not an environment |
-| incident | `incident:pagerduty:Q1ABC…`, `incident:datadog:<uuid>` — the tool and its own id, not its per-account number |
+| incident | `incident:pagerduty:Q1ABC…`, `incident:datadog:<uuid>`, `incident:kibana:<case id>` — the tool and its own id, not its per-account number |
 | Linear issue | `linear.app/acme/ENG-42` — its workspace and identifier; **alias `ticket:ENG-42`**, so `ENG-42` in a pull request finds it |
 | another tool's project, issue | `asana:project:1204…`, `trello:issue:5f1e…`, `clickup:issue:86…`, `monday:issue:123…` — the tool, what it is, its id |
 | document | `acme.atlassian.net/wiki/pages/1001` (Confluence's ids are its site's), `microsoft_365:document:<drive>/<item>`, `notion:document:<id>`, `slab:…`, `guru:…`, `google_workspace:…` |

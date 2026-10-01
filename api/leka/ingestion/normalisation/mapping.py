@@ -27,8 +27,9 @@ from leka.ingestion.schemas import NormalisedEntity, NormalisedRelationship
 C = Capability
 CODE_HOSTS = frozenset({"github", "gitlab", "bitbucket"})
 CLOUDS = frozenset({"aws", "azure", "gcp"})
-# The operations tools whose incidents and services are mapped (LEKA-348).
-OPERATIONS = frozenset({"datadog", "pagerduty"})
+# The operations tools whose incidents and services are mapped (LEKA-348);
+# Kibana's cases are incidents too.
+OPERATIONS = frozenset({"datadog", "pagerduty", "kibana"})
 # The project and documentation tools beyond Jira (LEKA-346).
 PROJECT_TOOLS = frozenset({"linear", "asana", "trello", "clickup", "monday"})
 DOCUMENT_TOOLS = frozenset(

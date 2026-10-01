@@ -70,7 +70,7 @@ NOT_EVENTS = (
 
 def monitoring_kinds() -> frozenset[str]:
     """The kinds of source that watch services run: PagerDuty, Datadog,
-    Grafana — their connectors' category."""
+    Grafana, Splunk, Kibana — their connectors' category."""
     return frozenset(
         m.key.value for m in manifests() if m.category is ConnectorCategory.OBSERVABILITY
     )

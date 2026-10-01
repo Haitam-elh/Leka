@@ -1,6 +1,8 @@
 """Observability: Datadog's monitors, events, incidents, metrics, logs and
 service catalog; PagerDuty's services, business services and incidents;
-Grafana's dashboards, alert rules and annotations.
+Grafana's dashboards, alert rules and annotations; Splunk's alerts, the
+alerts that fired and dashboards; Kibana's alert rules, cases and
+dashboards.
 
 What an operations question needs, the same way whatever the tool: the
 record's `title`, its `state` (a monitor's, an incident's, a log's
@@ -8,8 +10,8 @@ status), when it happened, its text, and technical `signals` — `service`,
 `env`, `host`, `tags` ('key:value', as Datadog writes them), `severity`.
 Datadog's own id stays the record's id, and its timestamp its date.
 
-The payloads are the ones leka/connectors/{datadog,pagerduty,grafana}
-store: the APIs' answers — Datadog's and Grafana's with `web_url` beside
+The payloads are the ones leka/connectors/{datadog,pagerduty,grafana,
+splunk,kibana} store: the APIs' answers — Datadog's and Grafana's with `web_url` beside
 them, Datadog's incidents with their people resolved, Grafana's rules with
 their group and folder.
 """
@@ -40,6 +42,10 @@ C = Capability
 DATADOG = SourceKind.DATADOG
 PAGERDUTY = SourceKind.PAGERDUTY
 GRAFANA = SourceKind.GRAFANA
+SPLUNK = SourceKind.SPLUNK
+KIBANA = SourceKind.KIBANA
+# Splunk's alert severities, 1 to 6, in its words.
+SPLUNK_SEVERITIES = {1: "info", 2: "low", 3: "medium", 4: "high", 5: "critical", 6: "fatal"}
 
 
 @strategy("datadog.alerts", 1, (DATADOG, C.ALERTS))
@@ -355,6 +361,156 @@ def grafana_annotation(p: Payload) -> Extracted:
             "ends_at": _iso(_from_ms(number(p, "timeEnd"))),
         },
         signals={"tags": sorted(tags)},
+    )
+
+
+# ── Splunk ───────────────────────────────────────────────────────────────────
+
+
+@strategy("splunk.alerts", 1, (SPLUNK, C.ALERTS))
+def splunk_alert(p: Payload) -> Extracted:
+    """A saved search that alerts: its search, when it runs, how severe it
+    says it is, what it does when it fires."""
+    c = dig(p, "content")
+    return Extracted(
+        title=required(p, "name"),
+        state="disabled" if _yes(dig(c, "disabled")) else "enabled",
+        updated_at=when(p, "updated"),
+        content=content("description", string(c, "description")),
+        references=ref("creator", "person", name=string(p, "author")),
+        metadata={
+            "search": string(c, "search"),
+            "schedule": string(c, "cron_schedule"),
+            "condition": lower(c, "alert_type"),
+            "severity": _splunk_severity(dig(c, "alert.severity")),
+            "actions": [a.strip() for a in (string(c, "actions") or "").split(",") if a.strip()],
+            "owner": string(p, "acl", "owner"),
+        },
+        signals={"app": string(p, "acl", "app")},
+    )
+
+
+@strategy("splunk.events", 1, (SPLUNK, C.EVENTS))
+def splunk_fired_alert(p: Payload) -> Extracted:
+    """An alert that fired: which search, when, how severe."""
+    c = dig(p, "content")
+    fired = _from_seconds(number(c, "trigger_time"))
+    return Extracted(
+        title=string(c, "savedsearch_name") or required(p, "name"),
+        state="triggered",
+        created_at=fired,
+        updated_at=fired or when(p, "updated"),
+        metadata={
+            "severity": _splunk_severity(dig(c, "severity")),
+            "sid": string(c, "sid"),
+            "expires_at": _iso(_from_seconds(number(c, "expiration_time"))),
+        },
+        signals={"app": string(c, "app") or string(p, "acl", "app")},
+    )
+
+
+@strategy("splunk.dashboards", 1, (SPLUNK, C.DASHBOARDS))
+def splunk_dashboard(p: Payload) -> Extracted:
+    c = dig(p, "content")
+    return Extracted(
+        title=string(c, "label") or required(p, "name"),
+        updated_at=when(p, "updated"),
+        content=content("description", string(c, "description")),
+        references=ref("creator", "person", name=string(p, "author")),
+        metadata={"name": string(p, "name"), "owner": string(p, "acl", "owner")},
+        signals={"app": string(p, "acl", "app")},
+    )
+
+
+def _splunk_severity(value: object) -> str | None:
+    try:
+        return SPLUNK_SEVERITIES.get(int(str(value)))
+    except ValueError:
+        return None
+
+
+def _yes(value: object) -> bool:
+    return value is True or value == 1 or str(value).strip().lower() in ("1", "true")
+
+
+def _from_seconds(value: int | float | None) -> datetime | None:
+    """Splunk's times: seconds since the epoch."""
+    if value is None or value <= 0:
+        return None
+    return datetime.fromtimestamp(value, tz=UTC)
+
+
+# ── Kibana ───────────────────────────────────────────────────────────────────
+
+
+@strategy("kibana.alerts", 1, (KIBANA, C.ALERTS))
+def kibana_rule(p: Payload) -> Extracted:
+    """An alerting rule: what kind, on or off, how its last run went."""
+    tags = strings(p, "tags")
+    enabled = flag(p, "enabled")
+    return Extracted(
+        title=required(p, "name"),
+        url=string(p, "web_url"),
+        state=lower(p, "execution_status", "status")
+        or lower(p, "last_run", "outcome")
+        or (None if enabled is None else "enabled" if enabled else "disabled"),
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "updated_at"),
+        references=ref("creator", "person", name=string(p, "created_by")),
+        metadata={
+            "rule_type": string(p, "rule_type_id"),
+            "consumer": string(p, "consumer"),
+            "enabled": enabled,
+            "interval": string(p, "schedule", "interval"),
+            "last_run_at": _iso(when(p, "execution_status", "last_execution_date")),
+        },
+        signals={**_signals(tags), "space": string(p, "space")},
+    )
+
+
+@strategy("kibana.incidents", 1, (KIBANA, C.INCIDENTS))
+def kibana_case(p: Payload) -> Extracted:
+    """A case — Kibana's incident: its status, its severity, who opened it,
+    its tags."""
+    tags = strings(p, "tags")
+    return Extracted(
+        title=required(p, "title"),
+        url=string(p, "web_url"),
+        state=lower(p, "status"),
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "updated_at") or when(p, "created_at"),
+        content=content("description", string(p, "description"), "markdown"),
+        references=ref(
+            "creator",
+            "person",
+            external_id=dig(p, "created_by", "username"),
+            name=dig(p, "created_by", "full_name") or dig(p, "created_by", "username"),
+            email=dig(p, "created_by", "email"),
+        ),
+        metadata={
+            "severity": lower(p, "severity"),
+            "owner": string(p, "owner"),
+            "comments": number(p, "totalComment"),
+            "closed_at": _iso(when(p, "closed_at")),
+        },
+        signals={
+            **_signals(tags),
+            # The services it affects, as the incidents of the other tools
+            # name them: its `service:` tags.
+            "services": [s for s in (_tag(tags, "service"),) if s],
+            "space": string(p, "space"),
+        },
+    )
+
+
+@strategy("kibana.dashboards", 1, (KIBANA, C.DASHBOARDS))
+def kibana_dashboard(p: Payload) -> Extracted:
+    return Extracted(
+        title=required(p, "attributes", "title"),
+        url=string(p, "web_url"),
+        updated_at=when(p, "updated_at"),
+        content=content("description", string(p, "attributes", "description")),
+        signals={"space": string(p, "space")},
     )
 
 

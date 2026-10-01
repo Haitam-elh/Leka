@@ -91,6 +91,7 @@ no clock — registered for the (source kind, capability) pairs it knows
 | Google Cloud | the same seven — one strategy: an asset around each API's resource | `extraction/cloud.py` |
 | Datadog | alerts (monitors), events, incidents, metrics, logs — `service`, `env`, `host`, `tags` as signals; Datadog's id and timestamp kept | `extraction/observability.py` |
 | PagerDuty, Grafana | services, incidents; dashboards, alert rules, annotations | `extraction/observability.py` |
+| Splunk, Kibana | alerts (saved searches that alert, alerting rules), fired alerts, cases — Kibana's incidents —, dashboards; tags as signals, the app or space kept | `extraction/observability.py` |
 | Linear, Asana, Trello, ClickUp, Monday | projects, and their issues — a task, a card, an item — with the tool's `key`, `status_category` when it has one (Linear's workflow type, ClickUp's status type), priority, labels, people, project, parent | `extraction/projects.py` |
 | Confluence, Notion, Slab, Guru | spaces, databases, topics, collections; pages, posts, cards — their **text** read out of Confluence's storage XHTML, Guru's HTML, Notion's blocks, Slab's Quill delta | `extraction/documents.py` |
 | Google Workspace, Microsoft 365 | drives; files, with the text the connector read | `extraction/documents.py` |
