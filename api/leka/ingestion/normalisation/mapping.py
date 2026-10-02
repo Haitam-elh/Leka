@@ -13,7 +13,12 @@ and tables are keyed by the server and database they were read on, so that
 two sources reading one database meet; the database, by its endpoint, meets
 the cloud instance that serves it (LEKA-364). A team's members and leads,
 its parent team; a directory's person, their department and manager —
-each a relationship to that person or team (LEKA-365).
+each a relationship to that person or team (LEKA-365). Where documents are
+kept — a space, a Notion database, a topic, a collection, a drive — an
+entity its documents are part of; a document's owner and last editor, what
+it links to; a catalogue's documentation, what it describes; a business
+system's capabilities and processes, what supports them, what they use
+(LEKA-366).
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ from leka.ingestion.normalisation import identifiers as ids
 from leka.ingestion.normalisation import values
 from leka.ingestion.parsing import Fact, FactType, ParsedRecord, Target
 from leka.ingestion.parsing.rules import ENVIRONMENTS, criticality
+from leka.ingestion.parsing.text import url_target
 from leka.ingestion.schemas import NormalisedEntity, NormalisedRelationship
 
 C = Capability
@@ -52,6 +58,8 @@ CUSTOM_ENTITIES = frozenset(
     | {"data_object"}
     # An HR system's people and teams (LEKA-365).
     | {"person", "team"}
+    # A business system's capabilities and processes; a wiki's spaces (LEKA-366).
+    | {"business_capability", "business_process", "knowledge_space"}
 )
 
 ENTITY_TYPES = {
@@ -73,6 +81,10 @@ ENTITY_TYPES = {
     C.SERVICES: "service",
     C.PAGES: "document",
     C.FILES: "document",
+    # Where documents are kept (LEKA-366).
+    C.SPACES: "knowledge_space",
+    C.DATABASES: "knowledge_space",
+    C.DRIVES: "knowledge_space",
     # What resources are in; an Azure resource group says so itself.
     C.ACCOUNTS: "cloud_account",
     # A database's schemas, and its tables, views and collections (LEKA-364).
@@ -152,6 +164,42 @@ PERSON_ROLES = {
     "commander": "led_by",
     "owner": "led_by",
 }
+# A document's people, by their role (LEKA-366): its creator is its author;
+# its owner owns it; who last changed it edited it.
+DOCUMENT_ROLES = {
+    **PERSON_ROLES,
+    "creator": "authored_by",
+    "owner": "owned_by",
+    "editor": "edited_by",
+}
+# What each tool calls a document, and where it keeps them.
+DOCUMENT_KINDS = {
+    "confluence": "page",
+    "notion": "page",
+    "slab": "post",
+    "guru": "card",
+    "google_workspace": "file",
+    "microsoft_365": "file",
+}
+SPACE_KINDS = {
+    "confluence": "space",
+    "notion": "database",
+    "slab": "topic",
+    "guru": "collection",
+    "google_workspace": "shared_drive",
+}
+# Microsoft 365's drive types: a SharePoint library, a OneDrive.
+DRIVE_KINDS = {
+    "documentlibrary": "document_library",
+    "business": "onedrive",
+    "personal": "onedrive",
+}
+SPACE_CAPABILITIES = frozenset({C.SPACES, C.DATABASES, C.DRIVES})
+# Google Drive's own drive: no shared drive, not a space.
+MY_DRIVE = "user"
+# Guru's word for a card its experts vouch for — or that wants them again.
+VERIFIED = {"trusted": True, "verified": True, "needs_verification": False, "unverified": False}
+MAX_DESCRIPTION = 1_000
 # How parsing said one thing points at another.
 REFERENCE_TYPES = {
     "closes": "resolves",
@@ -272,13 +320,17 @@ def entity(build: Build) -> NormalisedEntity:
         key, attributes = _team(build)
     elif capability is C.PEOPLE:
         key, attributes = _directory_person(build)
+    elif capability in SPACE_CAPABILITIES and build.kind in DOCUMENT_TOOLS:
+        key, attributes = _space(build)
+    elif capability in (C.PAGES, C.FILES) and build.kind in DOCUMENT_TOOLS:
+        key, attributes = _documentation(build)
     elif capability in RESOURCE_KINDS:
         if build.kind not in CLOUDS:
             raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
         key, attributes = _cloud(build)
     elif capability in (C.INCIDENTS, C.SERVICES):
         key, attributes = _operations(build)
-    elif build.kind in PROJECT_TOOLS or build.kind in DOCUMENT_TOOLS:
+    elif build.kind in PROJECT_TOOLS:
         key, attributes = _tool(build)
     else:
         key, attributes = _work(build)
@@ -423,9 +475,8 @@ def _target_key(build: Build, target: Target) -> str | None:
 
 
 def _tool(build: Build) -> tuple[str, dict[str, object]]:
-    """A project tool's project or issue, a documentation tool's or an office
-    suite's document — keyed by the tool and its own id, with its project,
-    its people and its parent."""
+    """A project tool's project or issue — keyed by the tool and its own id,
+    with its project, its people and its parent."""
     record, capability = build.record, build.record.provenance.capability
     own_id, container = record.provenance.external_id, record.provenance.container
     if capability is C.PROJECTS and build.kind in PROJECT_TOOLS:
@@ -439,8 +490,6 @@ def _tool(build: Build) -> tuple[str, dict[str, object]]:
         )
         if project:
             build.relate("part_of", key, ids.item(build.kind, "project", project), 1.0, "container")
-    elif capability in (C.PAGES, C.FILES) and build.kind in DOCUMENT_TOOLS:
-        key = _document(build, own_id, container)
     else:
         raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
 
@@ -458,11 +507,7 @@ def _tool(build: Build) -> tuple[str, dict[str, object]]:
             if person:
                 build.relate(PERSON_ROLES[reference.role], key, person, 1.0, "references")
         elif reference.role == "parent" and reference.external_id:
-            parent = (
-                _tool_issue(build, reference.external_id)
-                if reference.kind == "issue"
-                else _document(build, reference.external_id, container)
-            )
+            parent = _tool_issue(build, reference.external_id)
             build.relate("child_of", key, parent, 1.0, "references")
     _references(build, key)
     return key, attributes
@@ -483,15 +528,130 @@ def _tool_issue(build: Build, own_id: str) -> str:
     return f"linear.app/{path[0].lower()}/{identifier.upper()}" if path else ticket
 
 
+# ── documentation and knowledge (LEKA-346, LEKA-366) ─────────────────────────
+
+
+def _documentation(build: Build) -> tuple[str, dict[str, object]]:
+    """A documentation tool's or an office suite's document — keyed by the
+    tool and its own id — in its space, under its parent page, with its
+    people: who wrote it, owns it, last changed it; what it links to; what
+    its tool says of its verification."""
+    record = build.record
+    own_id, container = record.provenance.external_id, record.provenance.container
+    key = _document(build, own_id, container)
+    attributes = _common(build)
+    attributes["document_kind"] = DOCUMENT_KINDS[build.kind]
+    links = attributes.pop("links", None)
+    if build.kind == "guru":
+        verified = VERIFIED.get(record.state or "")
+        if verified is not None:
+            attributes["verified"] = verified
+        slug = record.metadata.get("slug")
+        if isinstance(slug, str) and slug:
+            build.aliases.append(ids.item("guru", "card", slug))
+    space = _space_of(build, container)
+    if space is not None:
+        build.relate("part_of", key, space, 1.0, "container")
+    for reference in record.references:
+        if reference.kind == "person" and reference.role in DOCUMENT_ROLES:
+            person = build.person(reference)
+            if person:
+                build.relate(DOCUMENT_ROLES[reference.role], key, person, 1.0, "references")
+        elif reference.role == "parent" and reference.external_id:
+            if reference.kind == "space":
+                space = ids.space(build.kind, reference.external_id)
+                build.relate("part_of", key, space, 1.0, "references")
+            else:
+                parent = _document(build, reference.external_id, container)
+                build.relate("child_of", key, parent, 1.0, "references")
+    _references(build, key)
+    _links(build, key, links)
+    return key, attributes
+
+
 def _document(build: Build, own_id: str, container: str | None) -> str:
     """A document's key: the tool and its id. Confluence's ids are its
     site's, so its key is the site's; a Microsoft 365 item's, its drive's."""
+    return ids.document(build.kind, own_id, site=ids.site_of(build.record.url), drive=container)
+
+
+def _space_of(build: Build, container: str | None) -> str | None:
+    """The space a document's container is: a Confluence space by its key,
+    a Slab topic, a Guru collection, a drive — never Google's own drive,
+    nor a Notion page's parent, which its references say."""
+    if not container or build.kind == "notion":
+        return None
+    if build.kind == "google_workspace" and container == MY_DRIVE:
+        return None
+    return ids.space(build.kind, container, site=ids.site_of(build.record.url))
+
+
+def _space(build: Build) -> tuple[str, dict[str, object]]:
+    """Where a tool keeps its documents — a Confluence space, a Notion
+    database, a Slab topic, a Guru collection, a shared drive, a SharePoint
+    library, a OneDrive — keyed as its documents name it; its kind, its
+    owner where its tool says, the team and service the source's mapping
+    gives its documents."""
+    record = build.record
+    own_id = record.provenance.external_id
+    attributes = _common(build)
+    raw = attributes.pop("type", None)
+    for name in ("key", "owner"):
+        attributes.pop(name, None)
     if build.kind == "confluence":
-        site = ids.site_of(build.record.url)
-        return f"{site}/wiki/pages/{own_id}" if site else ids.item("confluence", "page", own_id)
-    if build.kind == "microsoft_365" and container:
-        return ids.item("microsoft_365", "document", f"{container}/{own_id}")
-    return ids.item(build.kind, "document", own_id)
+        own_id = str(record.metadata.get("key") or own_id).upper()
+        attributes["space_key"] = own_id
+    key = ids.space(build.kind, own_id, site=ids.site_of(record.url))
+    if build.kind == "notion":
+        # A link to a database reads as a link to a page: the same id.
+        build.aliases.append(ids.item("notion", "document", own_id))
+    kind = DRIVE_KINDS.get(str(raw)) if build.kind == "microsoft_365" else None
+    attributes["space_kind"] = kind or SPACE_KINDS.get(build.kind) or "drive"
+    if isinstance(raw, str) and raw:
+        attributes["space_type"] = raw
+    description = next((c.text for c in record.content if c.role == "description"), None)
+    if description:
+        attributes["description"] = description[:MAX_DESCRIPTION]
+    for reference in record.references:
+        if reference.role != "owner":
+            continue
+        if reference.kind == "team" and reference.name:
+            team = _named(build, "team", ids.team(reference.name), reference.name, 1.0)
+            build.relate("owned_by", key, team, 1.0, "references")
+        elif reference.kind == "person":
+            person = build.person(reference)
+            if person:
+                build.relate("owned_by", key, person, 1.0, "references")
+    _mapped_containers(build, key, own_id)
+    return key, attributes
+
+
+def _links(build: Build, key: str, links: object) -> None:
+    """What a document links to — in its markup (the extraction's) and in
+    its text (parsing's): another document, a space — `references`; a
+    repository, an issue, a pull request, a commit — `mentions`."""
+    urls = [u for u in links if isinstance(u, str)] if isinstance(links, list) else []
+    urls += [f.target.key for f in build.parsed.facts if f.type is FactType.LINKS_TO and f.target]
+    for url in dict.fromkeys(urls):
+        found = ids.linked(url)
+        if found is not None:
+            what, target = found
+            kind = "mentions" if what == "repository" else "references"
+            build.relate(kind, key, target, 0.9, "links")
+            continue
+        aimed = url_target(url)
+        item = _target_key(build, aimed) if aimed is not None else None
+        if item:
+            build.relate("mentions", key, item, 0.9, "links")
+
+
+def _documented(build: Build, key: str, urls: list[str], evidence: str) -> None:
+    """The documents a catalogue or a business system links as a thing's
+    documentation: each `describes` it."""
+    for url in urls:
+        found = ids.linked(url)
+        if found is not None and found[0] != "repository":
+            build.relate("describes", found[1], key, 1.0, evidence)
 
 
 # ── custom sources (LEKA-350) ────────────────────────────────────────────────
@@ -530,6 +690,13 @@ def _custom(build: Build, declared: str) -> tuple[str, dict[str, object]]:
         key = catalogued[0]
     elif declared == "team":
         key = ids.team(str(record.title))
+    elif declared == "business_capability":
+        key = ids.capability(str(record.title))
+    elif declared == "business_process":
+        # An activity under its process: the process's name — or its path,
+        # `Order to cash/Invoicing` — then its own.
+        above = next(iter(_said(build, "above", split=False)), None)
+        key = ids.process(f"{above}/{record.title}" if above else str(record.title))
     elif declared == "person":
         # By address; else by the system's own id, as its teams name them.
         address = next(iter(_said(build, "email")), None)
@@ -550,6 +717,10 @@ def _custom(build: Build, declared: str) -> tuple[str, dict[str, object]]:
         _declared_person(build, key, attributes)
     elif declared == "team":
         _declared_team(build, key, attributes)
+    elif declared in ("business_capability", "business_process"):
+        _declared_business(build, key, attributes, process=declared == "business_process")
+    elif declared == "document":
+        _declared_document(build, key, attributes)
     if record.state is not None and declared in {"issue", "incident", *RESOURCES}:
         own = _own(build.mapping.states, record.state)
         state, known = (
@@ -708,10 +879,29 @@ CLASSIFICATION_WORDS = {
     "internal": ("internal", "interne", "internal use"),
     "public": ("public",),
 }
+# What a business system says of a capability, of a process (LEKA-366):
+# what it is under, its level, a process's type and step, what realizes or
+# supports it, the data it uses, its business owner, its documentation.
+BUSINESS_SAID = {
+    "above": ("parent", "parent_capability", "parent_process"),
+    "level": ("level",),
+    "process_type": ("process_type", "type", "kind"),
+    "step": ("step", "order", "sequence"),
+    "capabilities": ("capabilities", "capability", "business_capabilities"),
+    "processes": ("processes", "process", "business_processes"),
+    "supporting_applications": ("applications", "application", "systems", "system"),
+    "supporting_services": ("services", "service"),
+    "data_used": ("data", "data_objects", "tables", "datasets"),
+    "business_owner": ("business_owner", "owner", "owners"),
+}
+# Where a catalogue, a business system, a wiki says a thing's documentation is.
+DOCUMENTATION = ("docs_url", "runbook_url", "documentation", "docs", "runbook")
 # Read here, kept as relationships or on LEKA's scales, not as attributes.
 CATALOGUE_FIELDS = frozenset(
     {"kind", "application", "system", "product", "services", "depends_on", "dependencies"}
     | {"dependsOn", "criticality", "tier", "lifecycle", "stage", "environments", "environment"}
+    | {"capabilities", "capability", "business_capabilities"}
+    | {"processes", "process", "business_processes"}
 )
 
 
@@ -736,8 +926,27 @@ def _catalogued(
     for name in _said(build, "depends_on"):
         other = _named(build, kind, key_of(name), name, 1.0)
         build.relate("depends_on", key, other, 1.0, "catalogue.depends_on")
+    # The business capabilities and processes it supports (LEKA-366).
+    for name in _said(build, "capabilities"):
+        capability = _named(build, "business_capability", ids.capability(name), name, 1.0)
+        build.relate("supported_by", capability, key, 1.0, "catalogue.capabilities")
+    for name in _said(build, "processes"):
+        last = name.rsplit("/", 1)[-1]
+        process = _named(build, "business_process", ids.process(name), last, 1.0)
+        build.relate("supported_by", process, key, 1.0, "catalogue.processes")
+    _documented(build, key, _documentation_urls(build), "catalogue.links")
     for name in CATALOGUE_FIELDS:
         attributes.pop(name, None)
+    _rated(build, attributes)
+    for word in _said(build, "environments"):
+        own = _own(build.mapping.environments, word)
+        usual = next((env for env, words in ENVIRONMENTS.items() if word.lower() in words), None)
+        _runs_in(build, key, own or usual or word.lower(), 1.0)
+
+
+def _rated(build: Build, attributes: dict[str, object]) -> None:
+    """How critical a catalogue says a thing is, where in its life — in its
+    words, then on LEKA's scales."""
     raw = next(iter(_said(build, "criticality", split=False)), None)
     if raw:
         level = criticality(raw)
@@ -750,10 +959,101 @@ def _catalogued(
         attributes["stage"], attributes["stage_raw"] = stage, raw
         if not known:
             build.diagnostics.append("unknown lifecycle: kept as the catalogue wrote it")
-    for word in _said(build, "environments"):
-        own = _own(build.mapping.environments, word)
-        usual = next((env for env, words in ENVIRONMENTS.items() if word.lower() in words), None)
-        _runs_in(build, key, own or usual or word.lower(), 1.0)
+
+
+def _documentation_urls(build: Build) -> list[str]:
+    """Every link a record gives as documentation — its docs, its runbook."""
+    found: list[str] = []
+    for bag in (build.record.signals, build.record.metadata):
+        for name in DOCUMENTATION:
+            value = bag.get(name)
+            items = value if isinstance(value, list) else [value]
+            found += [v.strip() for v in items if isinstance(v, str) and v.strip()]
+    return list(dict.fromkeys(found))
+
+
+def _declared_business(
+    build: Build, key: str, attributes: dict[str, object], *, process: bool
+) -> None:
+    """What a business system — an architecture repository, a process
+    catalogue — says of a capability or a process: what it is under, its
+    level, a process's type and step; the capabilities a process realizes,
+    the processes realizing a capability; the applications and services
+    supporting it; the data it uses — kept by name, found by enrichment —
+    its business owner, a person or a team; how critical; its
+    documentation."""
+    said = {n for names in BUSINESS_SAID.values() for n in names}
+    for name in said | set(SAID["teams"]) | set(SAID["criticality"]) | set(SAID["stage"]):
+        attributes.pop(name, None)
+    for name in DOCUMENTATION:
+        attributes.pop(name, None)
+    for above in _said(build, "above", split=False)[:1]:
+        if process:
+            name = above.rsplit("/", 1)[-1]
+            target = _named(build, "business_process", ids.process(above), name, 1.0)
+            build.relate("part_of", key, target, 1.0, "signals")
+        else:
+            target = _named(build, "business_capability", ids.capability(above), above, 1.0)
+            build.relate("child_of", key, target, 1.0, "signals")
+    for name, wanted in (("level", "level"), ("step", "step")):
+        raw = next(iter(_said(build, name, split=False)), None)
+        if raw is not None and raw.lstrip("Ll").isdigit():
+            attributes[wanted] = int(raw.lstrip("Ll"))
+    kind = next(iter(_said(build, "process_type", split=False)), None)
+    if process and kind:
+        attributes["process_type"] = kind.strip().lower()
+    if process:
+        for name in _said(build, "capabilities"):
+            target = _named(build, "business_capability", ids.capability(name), name, 1.0)
+            build.relate("realizes", key, target, 1.0, "signals")
+    else:
+        for name in _said(build, "processes"):
+            own = name.rsplit("/", 1)[-1]
+            target = _named(build, "business_process", ids.process(name), own, 1.0)
+            build.relate("realizes", target, key, 1.0, "signals")
+    for what, kind_of, key_of in (
+        ("supporting_applications", "application", ids.application),
+        ("supporting_services", "service", ids.service),
+    ):
+        for name in _said(build, what):
+            target = _named(build, kind_of, key_of(name), name, 1.0)
+            build.relate("supported_by", key, target, 1.0, "signals")
+    data = _said(build, "data_used")
+    if data:
+        attributes["data_names"] = data
+    owners = list(dict.fromkeys([*_said(build, "business_owner"), *_said(build, "teams")]))
+    for owner in owners:
+        if "@" in owner:
+            person = build.person(_someone(build, owner))
+            if person is not None:
+                build.relate("owned_by", key, person, 1.0, "signals")
+        else:
+            team = _named(build, "team", ids.team(owner), owner, 1.0)
+            build.relate("owned_by", key, team, 1.0, "signals")
+    _rated(build, attributes)
+    _documented(build, key, _documentation_urls(build), "signals")
+
+
+def _declared_document(build: Build, key: str, attributes: dict[str, object]) -> None:
+    """What a wiki, an intranet, read as a custom source, says of a
+    document: the services, applications, capabilities it is about; its
+    team."""
+    attributes.setdefault("document_kind", "document")
+    for what, kind_of, key_of, fields in (
+        ("services", "service", ids.service, ("services", "service")),
+        ("application", "application", ids.application, ("application", "applications")),
+        ("capabilities", "business_capability", ids.capability, ("capabilities", "capability")),
+    ):
+        for field_name in fields:
+            attributes.pop(field_name, None)
+        for name in _said(build, what):
+            target = _named(build, kind_of, key_of(name), name, 1.0)
+            build.relate("describes", key, target, 1.0, "signals")
+    for team in _said(build, "teams"):
+        owner = _named(build, "team", ids.team(team), team, 1.0)
+        build.relate("owned_by", key, owner, 1.0, "signals")
+    for name in SAID["teams"]:
+        attributes.pop(name, None)
 
 
 def _declared_resource(
@@ -961,7 +1261,7 @@ def _said(build: Build, what: str, *, split: bool = True) -> list[str]:
     """The first of `what`'s fields the record has — its signals, then its
     metadata — as text: a list, or words between commas."""
     for bag in (build.record.signals, build.record.metadata):
-        for name in {**SAID, **RESOURCE_SAID, **DATA_SAID, **PEOPLE_SAID}[what]:
+        for name in {**SAID, **RESOURCE_SAID, **DATA_SAID, **PEOPLE_SAID, **BUSINESS_SAID}[what]:
             value = bag.get(name)
             if isinstance(value, list):
                 found = [str(v).strip() for v in value if str(v).strip()]
@@ -1530,14 +1830,20 @@ def _own(table: dict[str, str], raw: str | None) -> str | None:
     return next((v for k, v in table.items() if k.strip().lower() == word), None)
 
 
-def _mapped_containers(build: Build, key: str) -> None:
+def _mapped_containers(build: Build, key: str, container: str | None = None) -> None:
     """The service and the team the source's mapping gives the record's
-    container — surer than any tag: an administrator said so."""
-    container = build.record.provenance.container
+    container — surer than any tag: an administrator said so. A document,
+    or the space it is kept in, is not part of its service: it describes
+    it (LEKA-366)."""
+    container = container or build.record.provenance.container
     service = first_match(container, build.mapping.services)
     if service:
         target = _named(build, "service", ids.service(service), service, 1.0)
-        build.relate("part_of", key, target, 1.0, "mapping.services")
+        documentation = build.kind in DOCUMENT_TOOLS and build.record.provenance.capability in (
+            SPACE_CAPABILITIES | {C.PAGES, C.FILES}
+        )
+        kind = "describes" if documentation else "part_of"
+        build.relate(kind, key, target, 1.0, "mapping.services")
     team = first_match(container, build.mapping.owners)
     if team:
         target = _named(build, "team", ids.team(team), team, 1.0)

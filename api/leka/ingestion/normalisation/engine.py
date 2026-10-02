@@ -43,7 +43,11 @@ from leka.ingestion.parsing import ParsedRecord
 #    catalogue's tables (LEKA-364).
 # 7: teams — their members, leads and parent — directories' people — their
 #    department and manager — an HR system's people and teams (LEKA-365).
-NORMALISER_VERSION = 7
+# 8: where documents are kept — spaces, Notion databases, topics,
+#    collections, drives — documents in them, their owner and last editor,
+#    what they link to; a catalogue's documentation; a business system's
+#    capabilities and processes (LEKA-366).
+NORMALISER_VERSION = 8
 
 
 def normalise(

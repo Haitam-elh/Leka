@@ -53,6 +53,7 @@ ENTITY_TYPES = frozenset(
         "data_object",
         "person",
         "team",
+        "knowledge_space",
     }
 )
 WORK_STATES = frozenset({"open", "in_progress", "closed", "merged"})

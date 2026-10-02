@@ -583,7 +583,11 @@ def test_documents_of_the_other_tools_are_keyed_by_tool_and_id() -> None:
     assert microsoft.entity.key == "microsoft_365:document:b!docs/report"
 
 
-def test_containers_of_documents_are_not_entities() -> None:
+def test_containers_of_documents_are_knowledge_spaces() -> None:
+    # LEKA-366 — the rest in tests/test_documentation_model.py.
     extracted, parsed = _pipeline(SourceKind.CONFLUENCE, Capability.SPACES, CONFLUENCE_ENG)
 
-    assert _failure(normalise(extracted, parsed)).code.value == "unsupported"
+    result = normalise(extracted, parsed)
+
+    assert isinstance(result, NormalisedRecord)
+    assert (result.entity.type, result.entity.key) == ("knowledge_space", "confluence:space:ENG")

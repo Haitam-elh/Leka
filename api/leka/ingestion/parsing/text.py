@@ -114,7 +114,7 @@ def facts(field: str, text: str, *, system: str | None) -> list[Fact]:
 
     for match in URL.finditer(prose):
         url = match.group(0).rstrip(".,;:!?")
-        target = _from_url(url)
+        target = url_target(url)
         if target is not None:
             out.append(
                 _fact(FactType.REFERENCES, "mentions", target, 0.9, field, prose, match.span())
@@ -209,8 +209,9 @@ def _numbered(ref: str, kind: str, system: str | None) -> Target | None:
     return Target(kind=kind, key=ref, system=system)
 
 
-def _from_url(url: str) -> Target | None:
-    """A link to a work item LEKA knows the shape of."""
+def url_target(url: str) -> Target | None:
+    """A link to a work item LEKA knows the shape of — what a document's
+    links are read for too (LEKA-366)."""
     parts = urlsplit(url)
     host = (parts.hostname or "").lower()
     path = [p for p in parts.path.split("/") if p]
