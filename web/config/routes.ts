@@ -148,6 +148,16 @@ export const ROUTES: readonly RouteEntry[] = [
     requiredPermission: "workspace:read",
   },
   {
+    // The graph explored: the dependency view, or what surrounds one thing
+    // (LEKA-369).
+    id: "environment-graph",
+    path: "/environment/graph",
+    labelKey: "environmentGraph",
+    parentId: "environment",
+    showInSidebar: false,
+    requiredPermission: "workspace:read",
+  },
+  {
     id: "entity-detail",
     path: "/environment/:entityType/:entityId",
     labelKey: "entityDetail",
@@ -288,6 +298,9 @@ export const routes = {
   approval: (approvalId: string) => `/approvals/${approvalId}`,
   activity: () => "/activity",
   environment: () => "/environment",
+  /** The detailed map — centred on one thing when given. */
+  environmentGraph: (entityId?: string) =>
+    entityId ? `/environment/graph?entity=${encodeURIComponent(entityId)}` : "/environment/graph",
   entity: (entityType: string, entityId: string, tab?: (typeof ENTITY_TABS)[number]) =>
     tab
       ? `/environment/${entityType}/${entityId}/${tab}`

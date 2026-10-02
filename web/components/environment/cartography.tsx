@@ -17,22 +17,54 @@ import {
   typeIcon,
   type TileTone,
 } from "@/components/environment/parts";
-import type { EnvironmentEdge, EnvironmentNode, EnvironmentStatus } from "@/lib/environment";
+import type { EnvironmentStatus } from "@/lib/environment";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import type { SourceKind } from "@/lib/sources";
 
-/** The rows of mockup 10, top to bottom. */
-export const LAYERS = ["users", "applications", "services", "data", "infrastructure"] as const;
-export type Layer = (typeof LAYERS)[number];
+/** A box of the map: an entity, or a provider's cloud resources together. */
+export interface MapNode {
+  id: string;
+  type: string;
+  layer: string;
+  name: string;
+  status: string | null;
+  entity_id: string | null;
+  detail: string | null;
+  count: number;
+}
+
+export interface MapEdge {
+  from_id: string;
+  to_id: string;
+  status: string | null;
+}
+
+/** A row: its name, the kinds it holds, how many there are in all. */
+export interface MapRow {
+  name: string;
+  types: readonly string[];
+  total: number;
+}
 
 /** What to connect for an empty row: the tools that fill it. */
-const HINT_LOGOS: Record<Layer, SourceKind[]> = {
+const HINT_LOGOS: Record<string, SourceKind[]> = {
   users: [],
   applications: ["github", "gitlab", "bitbucket"],
+  code: ["github", "gitlab", "bitbucket"],
   services: ["pagerduty", "datadog", "grafana"],
-  data: ["aws", "azure", "gcp"],
+  data: ["postgresql", "mysql", "aws"],
+  databases: ["postgresql", "mysql", "mongodb"],
+  schemas: ["postgresql", "mysql", "oracle"],
+  objects: ["postgresql", "mysql", "oracle"],
   infrastructure: ["aws", "azure", "gcp"],
+  accounts: ["aws", "azure", "gcp"],
+  resources: ["aws", "azure", "gcp"],
+  teams: ["github", "microsoft_365", "google_workspace"],
+  people: ["github", "microsoft_365", "google_workspace"],
+  capabilities: ["custom_rest"],
+  processes: ["custom_rest"],
+  business: ["custom_rest"],
 };
 
 /** Boxes a row shows before "+N": five fit the mockup's width. */
@@ -49,9 +81,15 @@ const EDGE_TONE: Record<EnvironmentStatus, keyof typeof TONES> = {
 
 const TILE: Record<string, TileTone> = {
   service: "violet",
+  application: "violet",
   repository: "info",
   database: "success",
+  schema: "success",
+  data_object: "success",
   provider: "neutral",
+  team: "info",
+  business_capability: "warning",
+  business_process: "warning",
 };
 
 interface Path {
@@ -60,25 +98,33 @@ interface Path {
   stroke: string;
 }
 
+/** What a row says under its name: how many, in its kind's words. */
+export function rowCount(t: ReturnType<typeof useDictionary>, row: MapRow): string {
+  const w = t.environment.map;
+  if (row.types.length === 0) return w.noSource;
+  const [only] = row.types;
+  const words = row.types.length === 1 ? (w.counts as Record<string, string>)[only] : undefined;
+  return fill(words ?? w.countsMixed, { count: row.total });
+}
+
 /**
- * The map of mockup 10: one row per layer, its name and how many it holds
- * on the left, its things in boxes — the most troubled first — and a line
- * between two boxes that are related, coloured by the worse of their
- * states. The lines are decoration: every relationship is also said on the
- * things' own pages and in the list view.
+ * The map of mockup 10 — and of each landscape (LEKA-369): one row per
+ * layer, its name and how many it holds on the left, its things in boxes —
+ * the most troubled first — and a line between two boxes of different rows
+ * that are related, coloured by the worse of their states. The lines are
+ * decoration: every relationship is also said on the things' own pages, in
+ * the list view and on the detailed map.
  */
 export function Cartography({
   nodes,
   edges,
-  layers,
   rows,
   all = false,
   onMore,
 }: {
-  nodes: readonly EnvironmentNode[];
-  edges: readonly EnvironmentEdge[];
-  layers: Record<string, number>;
-  rows: readonly Layer[];
+  nodes: readonly MapNode[];
+  edges: readonly MapEdge[];
+  rows: readonly MapRow[];
   /** Every box, rather than the first five of each row. */
   all?: boolean;
   onMore?: () => void;
@@ -88,15 +134,20 @@ export function Cartography({
   const frame = useRef<HTMLDivElement>(null);
   const [paths, setPaths] = useState<Path[]>([]);
 
-  // The services in state order — the most troubled first. Every other row
-  // under or over the service it is related to, so the lines cross little.
+  // The anchor row — the services where there are, else the first that
+  // holds anything — in state order, the most troubled first. Every other
+  // row under or over what it is related to there, so the lines cross little.
   const byLayer = useMemo(() => {
-    const grouped = new Map<string, EnvironmentNode[]>();
+    const grouped = new Map<string, MapNode[]>();
     for (const node of nodes) grouped.set(node.layer, [...(grouped.get(node.layer) ?? []), node]);
-    const byState = (a: EnvironmentNode, b: EnvironmentNode) =>
+    const byState = (a: MapNode, b: MapNode) =>
       (ORDER[a.status ?? ""] ?? 4) - (ORDER[b.status ?? ""] ?? 4) || a.name.localeCompare(b.name);
-    const services = (grouped.get("services") ?? []).sort(byState);
-    const place = new Map(services.map((service, index) => [service.id, index]));
+    const anchorName = grouped.has("services")
+      ? "services"
+      : rows.find((row) => grouped.has(row.name))?.name;
+    const anchor = (anchorName ? grouped.get(anchorName) : undefined) ?? [];
+    anchor.sort(byState);
+    const place = new Map(anchor.map((node, index) => [node.id, index]));
     const near = new Map<string, number[]>();
     for (const edge of edges) {
       for (const [one, other] of [
@@ -107,20 +158,20 @@ export function Cartography({
         if (index !== undefined) near.set(one, [...(near.get(one) ?? []), index]);
       }
     }
-    const centre = (node: EnvironmentNode) => {
+    const centre = (node: MapNode) => {
       const indexes = near.get(node.id);
-      return indexes ? indexes.reduce((a, b) => a + b, 0) / indexes.length : services.length;
+      return indexes ? indexes.reduce((a, b) => a + b, 0) / indexes.length : anchor.length;
     };
     for (const [layer, list] of grouped) {
-      if (layer !== "services") list.sort((a, b) => centre(a) - centre(b) || byState(a, b));
+      if (layer !== anchorName) list.sort((a, b) => centre(a) - centre(b) || byState(a, b));
     }
     return grouped;
-  }, [nodes, edges]);
+  }, [nodes, edges, rows]);
 
   const shown = useMemo(() => {
     const ids = new Set<string>();
-    for (const layer of rows) {
-      for (const node of (byLayer.get(layer) ?? []).slice(0, all ? undefined : PER_ROW)) {
+    for (const row of rows) {
+      for (const node of (byLayer.get(row.name) ?? []).slice(0, all ? undefined : PER_ROW)) {
         ids.add(node.id);
       }
     }
@@ -155,7 +206,9 @@ export function Cartography({
       next.push({
         id: `${edge.from_id}->${edge.to_id}`,
         d: `M ${x1} ${y1} C ${x1} ${middle}, ${x2} ${middle}, ${x2} ${y2}`,
-        stroke: TONES[EDGE_TONE[(edge.status ?? "unmonitored") as EnvironmentStatus]].stroke,
+        stroke:
+          TONES[EDGE_TONE[(edge.status ?? "unmonitored") as EnvironmentStatus] ?? "neutral"]
+            .stroke,
       });
     }
     setPaths(next);
@@ -184,28 +237,23 @@ export function Cartography({
           />
         ))}
       </svg>
-      {rows.map((layer) => {
-        const members = byLayer.get(layer) ?? [];
+      {rows.map((row) => {
+        const members = byLayer.get(row.name) ?? [];
         const visible = all ? members : members.slice(0, PER_ROW);
         const hidden = members.length - visible.length;
-        const count = layers[layer] ?? 0;
+        const label = (w.layers as Record<string, string>)[row.name] ?? row.name;
         return (
           <div
-            key={layer}
+            key={row.name}
             className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-2 border-b border-shell-line/60 py-4 last:border-b-0"
-            data-testid={`layer-${layer}`}
+            data-testid={`layer-${row.name}`}
           >
             <div>
-              <p className="text-[0.8125rem] font-medium text-brand-navy">{w.layers[layer]}</p>
-              <p className="text-xs text-shell-muted">
-                {fill(w.counts[layer], { count })}
-              </p>
+              <p className="text-[0.8125rem] font-medium text-brand-navy">{label}</p>
+              <p className="text-xs text-shell-muted">{rowCount(t, row)}</p>
             </div>
-            <ul
-              aria-label={w.layers[layer]}
-              className="flex flex-wrap items-center justify-center gap-2"
-            >
-              {layer === "users" && visible.length === 0 ? (
+            <ul aria-label={label} className="flex flex-wrap items-center justify-center gap-2">
+              {row.name === "users" && visible.length === 0 ? (
                 <li className="relative z-10 flex items-center gap-2 rounded-lg border border-dashed border-shell-line bg-white px-3 py-2 text-xs text-shell-muted">
                   <UsersRound className="size-4" aria-hidden="true" />
                   {w.usersEmpty}
@@ -213,12 +261,12 @@ export function Cartography({
               ) : visible.length === 0 ? (
                 <li className="relative z-10 flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-shell-line bg-white px-3 py-2 text-xs text-shell-muted">
                   <span className="flex gap-1.5">
-                    {HINT_LOGOS[layer].map((kind) => (
+                    {(HINT_LOGOS[row.name] ?? []).map((kind) => (
                       <SourceLogo key={kind} kind={kind} className="size-4" />
                     ))}
                   </span>
                   <span className="max-w-md">
-                    {(w.hints as Record<string, string>)[layer] ?? w.layerEmpty}
+                    {(w.hints as Record<string, string>)[row.name] ?? w.layerEmpty}
                   </span>
                   <Link
                     href={routes.sources()}
@@ -254,7 +302,7 @@ export function Cartography({
   );
 }
 
-function NodeBox({ node }: { node: EnvironmentNode }) {
+function NodeBox({ node }: { node: MapNode }) {
   const t = useDictionary();
   const provider = node.type === "provider";
   // A repository by its own name — payment-api of acme/payment-api — the

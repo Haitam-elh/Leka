@@ -25,7 +25,8 @@ import { KnowledgeTable, type KnowledgeColumn } from "@/components/knowledge/kno
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { TONES } from "@/components/knowledge/status";
 import { timeAgo } from "@/components/knowledge/time";
-import { Cartography, LAYERS, type Layer } from "@/components/environment/cartography";
+import { Cartography } from "@/components/environment/cartography";
+import { CoveragePanel } from "@/components/environment/coverage";
 import {
   AttentionList,
   type AttentionRow,
@@ -47,7 +48,6 @@ import {
   sourceLines,
 } from "@/components/sources/connected-sources";
 import { ErrorState } from "@/components/states/error-state";
-import { StatePanel } from "@/components/states/state-panel";
 import {
   Select,
   SelectContent,
@@ -56,13 +56,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { routes } from "@/config/routes";
-import type {
-  Environment,
-  EnvironmentEdge,
-  EnvironmentNode,
-  EnvironmentStatus,
-} from "@/lib/environment";
+import type { Environment, EnvironmentStatus } from "@/lib/environment";
 import { useEnvironment } from "@/lib/environment-queries";
+import type { LandscapeView, ViewName, ViewNode } from "@/lib/knowledge-graph";
+import { useLandscapeView } from "@/lib/knowledge-graph-queries";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { isConnected, type Source } from "@/lib/sources";
@@ -77,18 +74,23 @@ import { useSources } from "@/lib/sources-queries";
  * mockup's structure, and each part says what would fill it: the map's rows
  * name the tools to connect, the cards what they will show. No number is
  * ever invented.
+ *
+ * Each tab is a landscape of the company model (LEKA-369, GET
+ * /knowledge/views/{view}): its rows, its boxes and lines, how well its
+ * kinds are known and which sources it comes from. The detailed map
+ * explores the graph behind them (graph-explorer.tsx).
  */
 
-const TABS = ["company", "domains", "applications", "services", "infrastructure"] as const;
+const TABS = [
+  "company",
+  "domains",
+  "applications",
+  "services",
+  "data",
+  "infrastructure",
+  "organisation",
+] as const satisfies readonly ViewName[];
 type Tab = (typeof TABS)[number];
-
-const ROWS: Record<Tab, readonly Layer[]> = {
-  company: LAYERS,
-  domains: [],
-  applications: ["applications"],
-  services: ["services"],
-  infrastructure: ["data", "infrastructure"],
-};
 
 const LEGEND = ["operational", "attention", "incident", "unmonitored"] as const;
 const LEGEND_TONE = {
@@ -121,14 +123,11 @@ interface Figures {
   changes: number;
 }
 
-/** Everything the screen shows. */
+/** Everything the screen shows but the map, which is its tab's. */
 interface Model {
   updatedAt: string | null;
   environments: string[];
   kpi: Figures;
-  nodes: EnvironmentNode[];
-  edges: EnvironmentEdge[];
-  layers: Record<string, number>;
   insights: Insight[];
   sources: SourceLine[] | null;
   events: EventRow[];
@@ -174,9 +173,6 @@ function real(
       impacted: data.services_impacted,
       changes: data.changes_24h,
     },
-    nodes: data.nodes,
-    edges: data.edges,
-    layers: data.layers,
     insights: [],
     sources: sources ? sourceLines(sources) : null,
     events: eventRows(t, data.events),
@@ -191,14 +187,14 @@ export function EnvironmentScreen() {
   const [tab, setTab] = useState<Tab>("company");
   const [view, setView] = useState<"map" | "list">("map");
   const [scope, setScope] = useState(GLOBAL);
-  const [detailed, setDetailed] = useState(false);
+  const landscape = useLandscapeView(tab);
 
   const nodes = useMemo(() => {
-    const all = model?.nodes ?? [];
+    const all = landscape.data?.nodes ?? [];
     return scope === GLOBAL
       ? all
       : all.filter((node) => !node.environment || node.environment === scope);
-  }, [model, scope]);
+  }, [landscape.data, scope]);
 
   return (
     <PageContainer>
@@ -245,12 +241,11 @@ export function EnvironmentScreen() {
           <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
             <div className="flex min-w-0 flex-col gap-4">
               <MapCard
-                model={model}
+                landscape={landscape.data}
+                error={landscape.isError ? landscape.error : null}
+                onRetry={() => void landscape.refetch()}
                 nodes={nodes}
-                tab={tab}
                 view={view}
-                detailed={detailed}
-                onDetailed={() => setDetailed((current) => !current)}
                 onMore={() => setView("list")}
               />
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
@@ -479,48 +474,36 @@ function FigureTiles({ figures }: { figures: Figures | undefined }) {
 }
 
 function MapCard({
-  model,
+  landscape,
+  error,
+  onRetry,
   nodes,
-  tab,
   view,
-  detailed,
-  onDetailed,
   onMore,
 }: {
-  model: Model | undefined;
-  nodes: readonly EnvironmentNode[];
-  tab: Tab;
+  landscape: LandscapeView | undefined;
+  error: unknown;
+  onRetry: () => void;
+  nodes: readonly ViewNode[];
   view: "map" | "list";
-  detailed: boolean;
-  onDetailed: () => void;
   onMore: () => void;
 }) {
   const t = useDictionary();
   const w = t.environment.map;
-  const rows = ROWS[tab];
 
   let body: React.ReactNode;
-  if (model === undefined) {
+  if (error) {
+    body = <ErrorState error={error} onRetry={onRetry} />;
+  } else if (landscape === undefined) {
     body = <div className="h-80 animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />;
-  } else if (tab === "domains") {
-    body = (
-      <StatePanel
-        icon={Network}
-        title={w.domainsTitle}
-        description={w.domainsBody}
-        size="section"
-      />
-    );
   } else if (view === "list") {
-    body = <NodeList nodes={nodes.filter((node) => rows.includes(node.layer as Layer))} />;
+    body = <NodeList nodes={nodes} />;
   } else {
     body = (
       <Cartography
         nodes={nodes}
-        edges={model.edges}
-        layers={model.layers}
-        rows={rows}
-        all={detailed}
+        edges={landscape.edges}
+        rows={landscape.layers}
         onMore={onMore}
       />
     );
@@ -531,28 +514,27 @@ function MapCard({
       title={w.title}
       icon={<IconTile icon={Network} tone="violet" className="size-9" />}
       action={
-        view === "map" && tab !== "domains" && model ? (
-          <button
-            type="button"
-            onClick={onDetailed}
-            aria-pressed={detailed}
-            className="flex items-center gap-1.5 rounded-lg border border-shell-line px-3 py-1.5 text-[0.8125rem] font-medium text-shell-nav-active outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-          >
-            {detailed ? w.compact : w.detailed}
-            <ArrowRight className="size-3.5" aria-hidden="true" />
-          </button>
-        ) : null
+        <Link
+          href={routes.environmentGraph()}
+          className="flex items-center gap-1.5 rounded-lg border border-shell-line px-3 py-1.5 text-[0.8125rem] font-medium text-shell-nav-active outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+        >
+          {w.detailed}
+          <ArrowRight className="size-3.5" aria-hidden="true" />
+        </Link>
       }
     >
       {body}
+      {landscape ? (
+        <CoveragePanel coverage={landscape.coverage} sources={landscape.sources} />
+      ) : null}
     </Card>
   );
 }
 
-function NodeList({ nodes }: { nodes: readonly EnvironmentNode[] }) {
+function NodeList({ nodes }: { nodes: readonly ViewNode[] }) {
   const t = useDictionary();
   const w = t.environment;
-  const columns: KnowledgeColumn<EnvironmentNode>[] = [
+  const columns: KnowledgeColumn<ViewNode>[] = [
     {
       id: "name",
       header: w.list.name,

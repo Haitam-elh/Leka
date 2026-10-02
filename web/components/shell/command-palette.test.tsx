@@ -1,17 +1,19 @@
 /**
  * The palette: find and go, entirely from the keyboard.
  *
- * The rule under test is not "search works" — nothing searches yet — but
- * that the palette never becomes a second, worse place to ask LEKA a
- * question. Typing one offers to create an intention; it never answers.
+ * The rule under test is not only that search works — it finds the company
+ * model's things since LEKA-369 — but that the palette never becomes a
+ * second, worse place to ask LEKA a question. Typing one offers to create
+ * an intention; it never answers.
  */
 
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DICTIONARIES } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
+import type { SearchProvider } from "@/lib/search";
 
 const push = vi.hoisted(() => vi.fn());
 const OWNER = vi.hoisted(() => [
@@ -56,12 +58,12 @@ const { ShellProvider } = await import("@/components/shell/shell-provider");
 
 const fr = DICTIONARIES.fr;
 
-async function openPalette() {
+async function openPalette(search?: SearchProvider) {
   const user = userEvent.setup();
   render(
     <LocaleProvider>
       <ShellProvider>
-        <CommandPalette open onOpenChange={vi.fn()} />
+        <CommandPalette open onOpenChange={vi.fn()} search={search} />
       </ShellProvider>
     </LocaleProvider>,
   );
@@ -120,6 +122,47 @@ describe("what the palette offers", () => {
     const empty = screen.getByTestId("palette-no-results");
     expect(within(empty).getByText(fr.palette.noResults)).toBeVisible();
     expect(within(empty).getByText(fr.palette.searchHint)).toBeVisible();
+  });
+});
+
+describe("what the company model knows", () => {
+  const PAYMENT = "0c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+
+  it("lists what the search finds, each to its page — once the typing pauses", async () => {
+    const search = vi.fn<SearchProvider>().mockResolvedValue([
+      {
+        id: PAYMENT,
+        label: "Payment API — Shop",
+        kind: "Service",
+        href: `/environment/services/${PAYMENT}`,
+      },
+    ]);
+    const user = await openPalette(search);
+
+    await user.type(screen.getByTestId("palette-input"), "payment");
+
+    const found = await screen.findByTestId(`palette-${PAYMENT}`);
+    expect(found).toHaveTextContent("Payment API — Shop · Service");
+    // One search for the word, not one a letter.
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(search).toHaveBeenCalledWith("payment");
+    await user.click(found);
+    expect(push).toHaveBeenCalledWith(`/environment/services/${PAYMENT}`);
+  });
+
+  it("still offers the intention first when something is found", async () => {
+    const search = vi.fn<SearchProvider>().mockResolvedValue([
+      { id: PAYMENT, label: "Payment API", kind: "Service", href: "/x" },
+    ]);
+    const user = await openPalette(search);
+
+    await user.type(screen.getByTestId("palette-input"), "payment");
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("option").at(-1)).toHaveTextContent("Payment API"),
+    );
+    expect(screen.getAllByRole("option")[0]).toHaveTextContent("payment");
+    expect(screen.getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
   });
 });
 

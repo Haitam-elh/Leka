@@ -62,4 +62,12 @@ describe("the document title", () => {
   it("says so when the address matches nothing", () => {
     expect(documentTitle("/nowhere", fr)).toBe("Page introuvable · LEKA");
   });
+
+  it("takes the name a page says it has over its identifier", () => {
+    const id = "0c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+    expect(documentTitle(`/environment/services/${id}`, fr, "Payment API")).toBe(
+      "Payment API · LEKA",
+    );
+    expect(documentTitle("/nowhere", fr, "Payment API")).toBe("Page introuvable · LEKA");
+  });
 });

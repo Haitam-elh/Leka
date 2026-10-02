@@ -26,6 +26,7 @@ import Link from "next/link";
 
 import { cn } from "cn";
 
+import { ENTITY_ICONS } from "@/components/knowledge/entity-card";
 import { shortWhen } from "@/components/knowledge/time";
 import { hasSourceLogo, SourceLogo } from "@/components/sources/source-logo";
 import { routes } from "@/config/routes";
@@ -37,6 +38,7 @@ import {
 } from "@/lib/environment";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import type { EntityType } from "@/lib/knowledge";
 import type { SourceKind } from "@/lib/sources";
 
 /**
@@ -146,7 +148,7 @@ export const TYPE_ICONS: Record<string, LucideIcon> = {
 };
 
 export function typeIcon(type: string): LucideIcon {
-  return TYPE_ICONS[type] ?? Info;
+  return TYPE_ICONS[type] ?? ENTITY_ICONS[type as EntityType] ?? Info;
 }
 
 /** An entity's own page. */
@@ -155,7 +157,11 @@ export function entityHref(entity: Pick<EntityRef, "id" | "type">): string {
 }
 
 export function typeLabel(t: ReturnType<typeof useDictionary>, type: string): string {
-  return (t.environment.types as Record<string, string>)[type] ?? type;
+  return (
+    (t.environment.types as Record<string, string>)[type] ??
+    (t.knowledge.entityTypes as Record<string, string>)[type] ??
+    type
+  );
 }
 
 // ── events ───────────────────────────────────────────────────────────────────

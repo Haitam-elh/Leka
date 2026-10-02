@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { entityHref, typeLabel } from "@/components/environment/parts";
 import { AppHeader } from "@/components/shell/app-header";
 import { AppSidebar } from "@/components/shell/app-sidebar";
 import { CommandPalette, useCommandShortcut } from "@/components/shell/command-palette";
@@ -13,6 +14,8 @@ import { OfflineBanner } from "@/components/states/offline-banner";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import type { BadgeKey } from "@/config/routes";
 import { useDictionary } from "@/lib/i18n/locale-provider";
+import { knowledgeGraph } from "@/lib/knowledge-graph";
+import { knowledgeSearchProvider } from "@/lib/search";
 import { cn } from "cn";
 
 /** Remembered per browser, so folding the sidebar survives a reload. */
@@ -52,6 +55,16 @@ export function AppShell({
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  // ⌘K finds what the company model knows (LEKA-369).
+  const search = useMemo(
+    () =>
+      knowledgeSearchProvider(
+        (type) => typeLabel(t, type),
+        entityHref,
+        (q) => knowledgeGraph.search(q, { limit: 8 }),
+      ),
+    [t],
+  );
 
   const searchTrigger = useRef<HTMLButtonElement>(null);
 
@@ -136,6 +149,7 @@ export function AppShell({
         <CommandPalette
           open={searchOpen}
           onOpenChange={setSearchOpen}
+          search={search}
           finalFocus={searchTrigger}
         />
 

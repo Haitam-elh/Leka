@@ -21,10 +21,11 @@ export interface Crumb {
 /**
  * What a dynamic segment is called on screen.
  *
- * `payment-api` is not a name, it is an identifier. Until the pages that own
- * these entities can say what they are called — LEKA-369 for the environment,
- * the intention screens for the rest — this turns the identifier into
- * something readable rather than printing a slug at a customer.
+ * `payment-api` is not a name, it is an identifier. A page that knows what
+ * it shows says so — an entity's sheet names its trail and, through
+ * page-name.ts, its browser tab (LEKA-369); until it knows, and for the
+ * pages that cannot say yet, this turns the identifier into something
+ * readable rather than printing a slug at a customer.
  */
 export type EntityLabelResolver = (match: RouteMatch) => string | undefined;
 
@@ -91,10 +92,14 @@ export function buildBreadcrumb(
   }));
 }
 
-/** `"Payment API · LEKA"` — what a browser tab and a bookmark show. */
-export function documentTitle(pathname: string, dictionary: Dictionary): string {
+/**
+ * `"Payment API · LEKA"` — what a browser tab and a bookmark show: the name
+ * the page said it has (page-name.ts), else what the registry calls it.
+ */
+export function documentTitle(pathname: string, dictionary: Dictionary, name?: string): string {
   const match = matchRoute(pathname);
   if (match === undefined) return `${dictionary.shell.notFoundTitle} · LEKA`;
+  if (name) return `${name} · LEKA`;
   const crumbs = buildBreadcrumb(pathname, dictionary);
   const last = crumbs.at(-1)?.label ?? dictionary.nav[match.route.labelKey];
   return `${last} · LEKA`;
