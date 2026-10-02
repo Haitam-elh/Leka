@@ -332,7 +332,9 @@ what no source says is said missing, never invented.**
   their worst state); a line per `part_of`, `depends_on`, `owned_by` or
   `in_network` between two boxes, coloured by the worse of their states;
   each row the surest-troubled first, the others ordered under their
-  services;
+  services. Since LEKA-369 the screen draws its map from the company
+  model's views instead, a tab each, by these same states
+  ([company-model.md § 16](company-model.md)); this route still serves it;
 - **the figures**: services, and how many are operational; open incidents,
   and how many services they affect; changes (pull requests, commits,
   releases, deployments) in the last 24 hours; the environments things say
@@ -356,8 +358,9 @@ services, databases, resources, projects related to it, each way, with the
 relationship's origin, confidence and whether it joins two tools; the
 documents that name it or describe it (LEKA-366); what needs attention.
 
-In their place, and saying what they wait for: the users and the business
-domains (the company model, LEKA-361 on), the metrics — latency, errors,
+In their place, and saying what they wait for: the users (no source
+describes them yet; the business domains are the Domaines tab's since
+LEKA-369, from the capabilities and processes declared), the metrics — latency, errors,
 requests, availability — and their chart (a metrics source's metrics read),
 the deployments, logs and configuration tabs, LEKA's insights and analysis
 (its analysis engine, sprint 4).
@@ -374,5 +377,5 @@ the deployments, logs and configuration tabs, LEKA's insights and analysis
   surest owner there is.
 - **A person's word**: confirming or rejecting an inference by hand, kept
   across runs.
-- **The users, the business domains, the metrics** on the screens: they
-  wait for sources and models that read them (§ 12).
+- **The users and the metrics** on the screens: they wait for sources and
+  models that read them (§ 12).
