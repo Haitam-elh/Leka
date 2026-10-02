@@ -43,10 +43,13 @@ are checked against.
 | applications | `application` | criticality, stage, environments, point of contact — § 9 |
 | | `service` | the same, and its type, languages, escalation policy, links; incidents over 90 days, open incidents, MTTR — § 9 |
 | | `repository` | visibility, default branch, language, topics, fork |
-| delivery | `project`, `release`, `deployment` | — |
-| | `issue`, `pull_request` | priority, category, labels, components, stale, cycle time |
+| delivery | `project` | — |
+| | `release` | its tag, draft, prerelease; when made and published — § 14 |
+| | `deployment` | its environment, production or not, its commit and ref, each status with when; when made, started, finished, how long — § 14 |
+| | `issue`, `pull_request` | priority, category, labels, components, stale, cycle time; a pull request's opening, merge and closing dates — § 14 |
 | | `commit` | category, change type |
-| operations | `incident` | priority, duration |
+| operations | `incident` | priority, severity, urgency, number, customers hit; when opened, detected, acknowledged, resolved; how long to acknowledge and to resolve — § 14 |
+| | `change` | its type, risk, environment; when asked, planned, started, finished — § 14 |
 | infrastructure | `infra_resource` | provider, account, region, zone, resource group; resource kind and class, the provider's type; environment, exposure, criticality; instance type, engine, version, runtime, endpoint; tags — § 10 |
 | | `cloud_account` | an AWS account, an Azure subscription, a Google Cloud project: its type and id, its state, its organisation, tenant or parent; environment, criticality, tags — § 10 |
 | | `resource_group` | an Azure resource group: its subscription, region, environment, tags — § 10 |
@@ -66,9 +69,8 @@ Each **relationship kind** is built from enrichment's relationships
 `implements`, `merges`, `mentions`, `in_network`, `runs_in` (LEKA-362),
 `references` and `reads_from` (LEKA-364), `reports_to` and `contributes_to`
 (LEKA-365), `describes`, `edited_by`, `supported_by`, `uses` and `realizes`
-(LEKA-366).
-`owns`, `deployed_to` and `caused_by` are kept for what states them later;
-nothing does yet.
+(LEKA-366), `deploys`, `deployed_to` and `caused_by` (LEKA-367).
+`owns` is kept for what states it later; nothing does yet.
 
 `GET /knowledge/registry` serves all of it.
 
@@ -105,12 +107,13 @@ shows it and the key it goes by there (up to 20).
 |---|---|
 | `name` | resolution's choice |
 | `attributes` | what its sources say; where they say nothing, what enrichment added — **never enrichment's over a source's**. Checked against its kind's schema |
-| `provenance.attributes` | each attribute's origin: `{"origin": "source"}`, or `{"origin": "enrichment", "rule", "confidence"}` |
+| `provenance.attributes` | each attribute's origin: `{"origin": "source"}` — `{"origin": "source", "rule": "record"}` for what enrichment carries from the records as they say it, a date, a link, resolution keeping none (LEKA-366, LEKA-367) — or `{"origin": "enrichment", "rule", "confidence"}` |
 | `provenance.sources` | `{source_id, key, kind}` per source and key |
 | `provenance.conflicts` | what its sources **disagree** on (resolution's conflicts, LEKA-362): `{attribute, chosen, values: [{value, source_id}]}` — every value kept with who said it, the attribute marked `disputed` in `provenance.attributes` |
 | `confidence` | how sure the merges that made it are (resolution) |
 | `quality` | the best quality of its records (validation, LEKA-358) |
 | `first_seen_at`, `last_seen_at` | the earliest and latest a source showed it |
+| `occurred_at` | when an event happened (LEKA-367): an incident opened — the earliest of detected and opened — a deployment done, a change made, a release published, a pull request merged — else, for all but a pull request, when a source first showed it. None for what is not an event. Indexed with the workspace and the type: lists and timelines go by it |
 
 A relationship says whether a source **stated** it or a rule **inferred**
 it (`origin`, `rule`), how sure it is, whether it joins two tools' things
@@ -216,13 +219,22 @@ Read by every member (`workspace:read`); another workspace's entity is 404.
 | `GET /knowledge/business-capabilities`, `GET /knowledge/business-processes` | by name, paged: `parent_id`, `top`, `capability_id` (processes), `team_id`, `application_id` (supported by), `data_id` (using), `lifecycle`, `q` — each with its parent, parts, what supports it, its data, owners, documents |
 | `GET /knowledge/business-capabilities/{id}`, `GET /knowledge/business-processes/{id}` | one: its parents, its parts — activities by step, each with what supports it and its data — the processes realizing it, the applications and services supporting it and the services of those applications, its data, owners and documentation |
 | `GET /knowledge/entities/{id}/business` | what a technical thing means to the business: the capabilities and processes relying on it — directly, through what holds it (its service, its application) or through what depends on it — each with how, and who says so |
+| `GET /knowledge/incidents` | the incidents (§ 14), the latest first (`sort=occurred_at`, or `name`), paged: `state`, `priority`, `service_id` (affecting it), `cause_id` (caused by that change or deployment), `since`, `until`, `lifecycle`, `q` — each with its dates, what it affects, who leads it, its causes said or suspected |
+| `GET /knowledge/incidents/{id}` | one: its timeline — the dates its sources give, each state LEKA saw it take — what it affects, who handled it, its causes with origin and rule, what changed on what it affects in the 72 hours before, what it reaches: dependents, applications, the business |
+| `GET /knowledge/changes`, `GET /knowledge/deployments` | the latest first, paged: `state`, `change_type` or `environment`, `service_id` (a deployment's own or its repositories'), `repository_id` (deployments), `since`, `until`, `lifecycle`, `q` — each with its dates, what it touched, who made it, how many incidents follow from it |
+| `GET /knowledge/changes/{id}`, `GET /knowledge/deployments/{id}` | one: a change's timeline, a deployment's statuses with when; what it affects or shipped, where it went; the incidents said or suspected to follow from it |
+| `GET /knowledge/timeline` | what happened between `since` and `until` (a month by default, a year at most), the latest first — incidents opened and resolved, deployments, changes, releases, merges — around `entity_id` (itself, what is part of it two steps down, what affects it, each with `via`) or everywhere; `kinds`, `limit` (500 at most) |
 
 ## 8. What reads it
 
 `leka.context`, through `KnowledgeService.neighbourhood`: an entity and
 what surrounds it, as one subgraph — the unit an answer is assembled from.
 The traversal is one recursive query, bounded by depth and size
-([ADR 001](adr/001-postgresql.md)).
+([ADR 001](adr/001-postgresql.md)). What happened is there too
+(LEKA-367): `KnowledgeService.timeline` — what happened around a thing
+between two dates — and `incident`, `change`, `deployment` — one event with
+its causes, what changed before it and what it reaches — for what explains
+a change and assesses its impact.
 
 ## 9. Applications and services (LEKA-362)
 
@@ -565,6 +577,87 @@ through what depends on it — each with how (`path`, `via`) and who says so.
 - **Where it opens**: documents and spaces keep their link; other kinds
   do not yet — resolution keeps links as provenance.
 
+## 14. Incidents, changes and deployments (LEKA-367)
+
+What happens to the company's systems — what broke, what changed, what was
+shipped where — with **when**, as the sources date it, so LEKA can say what
+changed and what it reached. Every piece says where it came from: a date its
+source gives, a relationship a source states or a rule infers.
+
+**What each source gives.**
+
+| Source | Incidents | Changes | Deployments |
+|---|---|---|---|
+| PagerDuty | incidents: urgency, priority, number, opened, first acknowledged, resolved; their service | change events (`changes`): what a pipeline or a tool sent it, its services | — |
+| Datadog | incidents: severity, customers hit, detected, declared, resolved; their services | an event tagged as a change | an event tagged as a deployment (`event_type:deployment`, `deploy`…) or sent by a delivery tool (Argo CD, Spinnaker, Octopus…): its service, environment, version |
+| Kibana | cases: severity, opened, closed | — | — |
+| Grafana | — | an annotation tagged as a change | an annotation tagged `deploy`: its region's end, when it finished |
+| GitHub, GitLab | — | — | `deployments`: environment, commit, ref, who; GitHub's statuses, GitLab's status, started and finished |
+| Jira Service Management | issues of type Incident | change requests (Normal, Standard, Emergency change): type, state | — |
+| a change management tool, a CI/CD tool (custom sources) | — | a change: type, risk, plan, what it affects, who made and asked for it | a deployment: service, environment, version, commit, who |
+
+**Canonical.** An incident is `incident:<tool>:<id>` — a Jira one, its
+ticket's key. A deployment is its repository's, `github.com/acme/api/deployments/42`,
+or its tool's, `deployment:datadog:<id>`. A change is `change:pagerduty:<id>`,
+a Jira change its ticket's key. States on LEKA's scales: an incident `open`,
+`in_progress`, `closed`; a deployment `pending`, `in_progress`, `succeeded`,
+`failed`, `canceled`, `inactive` (replaced by a later one); a change
+`requested`, `scheduled`, `in_progress`, `completed`, `failed`, `canceled`
+— the source's word kept beside, where it has one.
+
+| Relationship | From → to | Said by | Inferred by |
+|---|---|---|---|
+| `affects` | an incident, a change → a service, an application, a resource | its tool: the incident's service, the change event's services, a change request's configuration items | `named_in_title`, `component`, `label`: its title, a component, a label names the service (0.6–0.85) |
+| `part_of` | a deployment → its repository, its service | its code host, an event's `service:` tag, a CI/CD tool | — |
+| `deploys` | a deployment → its commit, the release its ref names | its code host, a CI/CD tool | — |
+| `deployed_to` | a deployment → an environment — or a resource | its environment, canonical (a GitLab tier, GitHub's production flag) | — |
+| `caused_by` | an incident → a change, a deployment, a ticket | Jira's cause links (`Causes`, `Problem/Incident`) | `preceded`: a deployment of its service — or of a repository of it — a change to it or to the application holding it, done within the day before it opened, in its environment: 0.7 within the hour, 0.6 within six, 0.5 within the day; three at most; none where a source says the cause |
+| `assigned_to`, `reported_by`, `led_by` | an incident, a change → a person | its tool | — |
+| `reported_by` | a deployment → who made it | its code host, a CI/CD tool | — |
+
+**Historical state, kept.** Each event's own dates, as its sources give
+them — an incident opened, detected, acknowledged, resolved; a deployment
+made, started, finished, and each of its statuses with when; a change
+asked, planned, started, finished; a release published; a pull request
+merged — carried by enrichment from the records, their origin the source's.
+And each version LEKA made of it (§ 5): the states it saw it take, when it
+saw them — an incident's detail and a change's give both, in time order
+(`timeline`). How long an incident waited to be acknowledged and lasted, a
+deployment ran — enrichment's, from those dates.
+
+**What changed, and what it reached.** An incident's detail lists what
+changed on what it affects in the 72 hours before it opened — deployments,
+changes, releases, merges — its causes, said or suspected, each with its
+rule, and its **impact**: what depends on what it affects (two steps), the
+applications holding them, the capabilities and processes relying on them
+(§ 13). `/knowledge/timeline` gives what happened around anything — a
+service, its repositories and resources, an application and its services —
+or everywhere, between two dates.
+
+**Limits, and coverage.**
+
+- **A suspected cause is a suspect**: `preceded` says a change came
+  shortly before, on what the incident affects — never that it caused it.
+  A change to a database a service reads, a dependency's deployment, are
+  not suspected.
+- **Existing sources read deployments and change events after a
+  re-test**: their capabilities come from the last connection test. A
+  GitHub token needs the **Deployments** permission (read).
+- **History starts with LEKA**: GitHub's and GitLab's deployments of the
+  last 90 days at the first pass, PagerDuty's change events and incidents
+  of the last 90 days; a state LEKA did not see — between two passes — is
+  known only by the dates the source gives.
+- **Bitbucket, Jenkins, Argo CD, Kubernetes** are not read for deployments
+  — a CI/CD tool can be, as a custom source; Datadog's and Grafana's events
+  are deployments only when tagged so.
+- **ServiceNow** is read as a custom source: its change requests and their
+  configuration items, by name.
+- **Change approvals, maintenance windows, freezes, postmortems** are not
+  modelled yet.
+- **DORA measures** — deployment frequency, lead time, change failure
+  rate — are not computed yet; the deployments and causes they need are
+  here.
+
 ## Not yet
 
 - **The environment screens** ([enrichment.md § 12](enrichment.md)) still
@@ -575,7 +668,7 @@ through what depends on it — each with how (`path`, `via`) and who says so.
 - **A person's word**: correcting an entity or a relationship by hand, kept
   across builds.
 - **Kinds promised by connectors not built**: Kubernetes workloads — a
-  deployment, a pod — a dashboard, an alert — each an entry in the registry
+  pod, a replica set — a dashboard, an alert — each an entry in the registry
   the day a connector makes it.
 - **What a load balancer sends traffic to**: its targets are one more call
   per load balancer at each provider; not read yet.
@@ -598,4 +691,5 @@ through what depends on it — each with how (`path`, `via`) and who says so.
 - **Datadog's traced dependencies** (APM service maps, per environment):
   the catalog's declared ones are read; the observed ones are not.
 - **The landscape on a screen**: the API is there; the views are
-  LEKA-369's — the documentation's and the business's too (LEKA-366).
+  LEKA-369's — the documentation's and the business's too (LEKA-366), the
+  incidents', changes' and timelines' (LEKA-367).

@@ -124,7 +124,10 @@ incidents `incident` entities — state and priority on LEKA's scales, the
 commander as a person, the services they affect — and PagerDuty's and the
 catalog's services `service` entities, on the same key as Datadog's
 `service:` tags: their team, their application, what they depend on, their
-tier as a criticality and their lifecycle as a stage. Alerts,
+tier as a criticality and their lifecycle as a stage. PagerDuty's change
+events are `change` entities, affecting their services; a Datadog event or
+a Grafana annotation tagged as a deployment or a change is one of those
+(LEKA-367, [company-model.md § 14](../company-model.md)). Alerts, other
 events, metrics, logs and dashboards stay evidence, not entities.
 
 ### Retention
@@ -193,6 +196,8 @@ see a service in scope.
    (the key, or the region).
 2. `GET /services` — every service; those in scope must be there.
 3. One page of incidents: `incidents` if PagerDuty answers.
+4. One page of teams, of change events: `teams`, `changes` if it answers —
+   never a failure.
 
 ### What is read
 
@@ -201,6 +206,7 @@ see a service in scope.
 | `services` | each service: name, description, status, teams, escalation policy, last incident (`GET /services`) — and the services it depends on (`GET /service_dependencies/technical_services/{id}`, one call a service, the first 2 000 a pass); each **business service** — what an application is to PagerDuty — with its team, point of contact and the services supporting it (`GET /business_services`, `GET /service_dependencies/business_services/{id}`) | whole each pass | service id, `updated_at` |
 | `incidents` | each incident: title, status, urgency, priority, service, assignees, escalation policy, teams, number, link (`GET /incidents`) | every pass reads the incidents **created in the last 90 days** again — PagerDuty lists by creation, not by change | incident id, `updated_at` |
 | `teams` | each team: name, description, parent team (where the account has team hierarchy), and its **members** — name, address, role: a `manager` leads it (`GET /teams`, `GET /teams/{id}/members?include[]=users`, one call a team) — LEKA-365 | whole each pass | team id |
+| `changes` | each **change event** — a deploy, a configuration change a pipeline or a tool sent PagerDuty: summary, time, services, source, links, details (`GET /change_events`) — LEKA-367 | every pass reads those of the **last 90 days** again; with `services`, those of a service in scope | change event id, its time |
 
 An incident's **container** is its service; the sync reads services
 before the incidents about them. A plan or a key that does not show

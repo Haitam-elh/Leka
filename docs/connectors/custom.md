@@ -151,7 +151,7 @@ know — is refused, so a typo is found when saved, not at the first sync.
 | Key | | |
 |---|---|---|
 | `name` | required | `tickets` — lower case, digits, `_`. What LEKA shows, what the scope keeps or leaves |
-| `entity` | | What its records are in LEKA's model: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object`, `person`, `team`, `business_capability`, `business_process`, `knowledge_space`. Without it, they are extracted and stay out of the model |
+| `entity` | | What its records are in LEKA's model: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object`, `person`, `team`, `business_capability`, `business_process`, `knowledge_space`, `change`, `deployment`. Without it, they are extracted and stay out of the model |
 | `path` | required | From `base_url`: `/tickets`. No scheme, no host, no query, no `..` |
 | `params` | | The query, as a map: `{"status": "open"}`. Not secret — the secret goes in the credentials |
 | `items` | | Where the records are in a page: `data`, `result.items`. Absent: the page is the list |
@@ -277,6 +277,20 @@ changes `fields` — and so, at the next pass, what is extracted.
   address or a team; `team`; `criticality`, `lifecycle`; `documentation` /
   `docs` → its documents, by their link. A `service` or an `application`
   resource's `capabilities` / `processes` → what it supports.
+- **Reads a change management tool's changes, a CI/CD tool's
+  deployments** — ServiceNow's change requests, a pipeline's runs: a
+  `change` or a `deployment` resource (LEKA-367), keyed by the source. Its
+  `state` on LEKA's scale — a change `requested`, `scheduled`,
+  `in_progress`, `completed`, `failed`, `canceled`; a deployment
+  `pending`, `in_progress`, `succeeded`, `failed`, `canceled`. From its
+  `metadata`: `type` / `change_type`, `risk`; `services` / `service` /
+  `cmdb_ci`, `applications`, `resources` (a provider's id) → what a change
+  affects, what a deployment is part of; `environment`; `planned_start`,
+  `planned_end`, `work_start`, `work_end` → when; `assigned_to` /
+  `implementer` / `deployer` and `requested_by` → who; a deployment's
+  `version`, `commit` and `repository` (`github.com/acme/api`) → what it
+  shipped. What changed before an incident, and its impact, read them
+  ([company-model.md § 14](../company-model.md)).
 - **Reads a wiki's documents** — a `document` resource: `services`,
   `application`, `capabilities` → what it describes; `team` → whose it is.
   A catalogue's `docs_url` / `runbook_url` / `documentation` → the

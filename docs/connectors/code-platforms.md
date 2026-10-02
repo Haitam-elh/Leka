@@ -13,7 +13,7 @@ in its warnings.
 |---|---|
 | Token | fine-grained personal access token |
 | Repository access | the repositories LEKA should read, or all of them |
-| Permissions, all **read-only** | Metadata, Contents, Pull requests, Issues — and, to read the organisation's teams, **Members** (organisation permission) |
+| Permissions, all **read-only** | Metadata, Contents, Pull requests, Issues, **Deployments** — and, to read the organisation's teams, **Members** (organisation permission) |
 | Config | `organization` (empty: the token owner's repositories), `base_url` for GitHub Enterprise Server, `repositories` |
 
 A classic token works too (`read:org` for the teams); one with `repo`,
@@ -27,6 +27,15 @@ each pass. A token without the Members permission leaves them out at the
 connection test — never a failure. A team's maintainers lead it in the
 company model ([company-model.md § 12](../company-model.md)).
 
+**Deployments** (`deployments`, LEKA-367): each repository's, newest first
+(`GET /repos/{repo}/deployments`) — those of the last 90 days at the first
+pass, then those made since the last pass less a day — each with its
+statuses (`…/deployments/{id}/statuses`: one call a deployment): how it
+went, and when. A token without the Deployments permission leaves them out
+at the connection test; an existing source reads them after its next test.
+In the model: what shipped where, and what changed before an incident
+([company-model.md § 14](../company-model.md)).
+
 ## GitLab
 
 | | |
@@ -35,6 +44,12 @@ company model ([company-model.md § 12](../company-model.md)).
 | Scope | `read_api` — nothing else |
 | Role | Reporter, on the group or the projects LEKA should read |
 | Config | `group` with its subgroups (empty: the projects the token's owner is a member of), `base_url` for a self-managed GitLab, `projects` |
+
+**Deployments** (`deployments`, LEKA-367): each project's, those updated
+since the last pass — the last 90 days at the first
+(`GET /projects/{id}/deployments?order_by=updated_at&updated_after=…`) —
+with their environment and tier, commit, user, job and pipeline. A project
+whose environments are switched off is not asked.
 
 A token with `api`, `write_repository`, `write_registry`, `sudo` or
 `admin_mode` draws a warning. When GitLab says when the token expires, the

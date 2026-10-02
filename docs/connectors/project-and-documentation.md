@@ -101,6 +101,12 @@ updated ASC`), so a search is always bounded and every record knows its
 project (`container`). They are known by Jira's numeric id, which survives
 a move to another project; the key (`PAY-12`) is in the payload.
 
+A Jira Service Management issue of type **Incident**, or **Change** (a
+change request; Normal, Standard, Emergency change) is an incident or a
+change in the company model, and a link of a type that says cause —
+`Causes`, `Problem/Incident` — says what caused it (LEKA-367,
+[company-model.md § 14](../company-model.md)).
+
 An incremental pass needs care: JQL reads a date **to the minute, in the
 account's time zone**. LEKA reads the zone at the start of the pass
 (`/myself`), converts, and asks from a minute earlier. When Jira does not
