@@ -134,7 +134,7 @@ def test_pagerduty_is_in_the_catalogue_as_an_observability_source() -> None:
     key = manifest.credentials_schema.model_json_schema()["properties"]["api_key"]
 
     assert manifest.category is ConnectorCategory.OBSERVABILITY
-    assert manifest.capabilities == {C.SERVICES, C.INCIDENTS, C.TEAMS}
+    assert manifest.capabilities == {C.SERVICES, C.INCIDENTS, C.TEAMS, C.CHANGES}
     assert manifest.listed_whole == {C.SERVICES, C.TEAMS}
     assert key["writeOnly"] is True
 
@@ -448,3 +448,35 @@ async def test_a_key_that_reads_teams_says_so() -> None:
     result = await _connector(pagerduty).test_connection()
 
     assert C.TEAMS in result.capabilities
+
+
+# ── change events (LEKA-367) ─────────────────────────────────────────────────
+
+
+def change(number: int, service: str = "PCHKOUT") -> dict[str, Any]:
+    return {
+        "id": f"PCE{number}",
+        "summary": f"Deploy checkout v{number}",
+        "timestamp": "2026-09-28T10:00:00Z",
+        "services": [{"id": service, "summary": service}],
+    }
+
+
+async def test_change_events_are_read_those_of_the_services_in_scope() -> None:
+    changes = [change(1), change(2, "PSEARCH")]
+    pagerduty = PagerDuty()
+    pagerduty.answers["/change_events"] = lambda r: pagerduty._page(r, "change_events", changes)
+
+    records = await _stream(pagerduty, C.CHANGES, services=["PCHKOUT"])
+
+    assert [(r.external_id, r.container) for r in records] == [("PCE1", "PCHKOUT")]
+    [asked] = pagerduty.requests("/change_events")
+    assert "since" in asked.url.params
+
+
+async def test_a_key_that_may_read_change_events_says_so_at_the_test() -> None:
+    pagerduty = PagerDuty({"/change_events": {"change_events": [], "more": False}})
+
+    result = await _connector(pagerduty).test_connection()
+
+    assert C.CHANGES in result.capabilities

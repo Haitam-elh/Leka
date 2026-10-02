@@ -59,6 +59,9 @@ class Capability(enum.StrEnum):
     COMMITS = "commits"
     PULL_REQUESTS = "pull_requests"
     RELEASES = "releases"
+    # What was shipped where (LEKA-367): a code host's deployments — to an
+    # environment, of a commit — and their statuses.
+    DEPLOYMENTS = "deployments"
     ISSUES = "issues"
     BRANCHES = "branches"
     # Project tools (LEKA-346). Their issues are ISSUES, as a code host's are.
@@ -89,6 +92,9 @@ class Capability(enum.StrEnum):
     ALERTS = "alerts"
     EVENTS = "events"
     INCIDENTS = "incidents"
+    # What changed (LEKA-367): an incident tool's change events — a deploy,
+    # a configuration change, as the tool that made it said it.
+    CHANGES = "changes"
     METRICS = "metrics"
     LOGS = "logs"
     # What an incident is about, in an incident tool's own catalogue.

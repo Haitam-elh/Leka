@@ -1,5 +1,5 @@
-"""The PagerDuty connector — its services, what they depend on, and their
-incidents.
+"""The PagerDuty connector — its services, what they depend on, their
+incidents, and what changed.
 
 PagerDuty is read at https://api.pagerduty.com (or api.eu.pagerduty.com for
 an account in its EU service region) with a REST API key, sent as
@@ -27,7 +27,11 @@ Incidents created in the last
 INCIDENT_WINDOW, every pass — PagerDuty lists incidents by when they were
 created, not when they last changed, so a pass reads the whole window
 again and an incident that changed in it is read again. With `services`,
-only theirs. An incident's service is its container.
+only theirs. An incident's service is its container. Change events
+(LEKA-367) — the deploys and changes a CI pipeline or a tool sent to
+PagerDuty — those of the last CHANGE_WINDOW, every pass; with `services`,
+those of theirs; their first service is their container. A key or a plan
+that does not show them leaves them out.
 """
 
 from __future__ import annotations
@@ -75,6 +79,9 @@ MAX_SCOPE_OPTIONS = 1000
 # How far back each pass reads incidents: PagerDuty allows six months at
 # most, and an incident rarely changes three months after it was opened.
 INCIDENT_WINDOW = timedelta(days=90)
+# How far back each pass reads change events (LEKA-367): PagerDuty keeps
+# them 90 days.
+CHANGE_WINDOW = timedelta(days=90)
 LOW_QUOTA_RATIO = 0.1
 # One read per service for its dependencies: past this many a pass, the
 # rest are read without them.
@@ -135,7 +142,7 @@ class PagerDutyConnector(Connector[PagerDutyConfig, PagerDutyCredentials]):
         auth_type="token",
         config_schema=PagerDutyConfig,
         credentials_schema=PagerDutyCredentials,
-        capabilities=frozenset({C.SERVICES, C.INCIDENTS, C.TEAMS}),
+        capabilities=frozenset({C.SERVICES, C.INCIDENTS, C.TEAMS, C.CHANGES}),
         # Services and teams come whole every pass; incidents by their
         # creation window.
         listed_whole=frozenset({C.SERVICES, C.TEAMS}),
@@ -157,6 +164,8 @@ class PagerDutyConnector(Connector[PagerDutyConfig, PagerDutyCredentials]):
                     raise
             if await self._optional_response(client, "/teams?limit=1") is not None:
                 capabilities.append(C.TEAMS)
+            if await self._optional_response(client, "/change_events?limit=1") is not None:
+                capabilities.append(C.CHANGES)
         warnings: list[str] = []
         if not services:
             warnings.append("Aucun service n'est visible avec cette clé.")
@@ -224,6 +233,10 @@ class PagerDutyConnector(Connector[PagerDutyConfig, PagerDutyCredentials]):
                         external_id=str(team["id"]),
                     )
                 return
+            if capability is C.CHANGES:
+                async for change in self._changes(client):
+                    yield change
+                return
             async for incident in self._pages(client, "/incidents", self._incident_params()):
                 yield record(
                     capability,
@@ -258,6 +271,29 @@ class PagerDutyConnector(Connector[PagerDutyConfig, PagerDutyCredentials]):
         if self.config.services:
             params["service_ids[]"] = self.config.services
         return params
+
+    async def _changes(self, client: VendorHttp) -> AsyncIterator[RawRecord]:
+        """The change events of the last CHANGE_WINDOW — with `services`,
+        those of a service in scope."""
+        now = datetime.now(UTC)
+        params = {"since": (now - CHANGE_WINDOW).isoformat(), "until": now.isoformat()}
+        wanted = set(self.config.services or [])
+        async for change in self._pages(client, "/change_events", params):
+            listed = change.get("services")
+            services = [
+                str(s["id"])
+                for s in (listed if isinstance(listed, list) else [])
+                if isinstance(s, dict) and s.get("id")
+            ]
+            if wanted and not wanted.intersection(services):
+                continue
+            yield record(
+                C.CHANGES,
+                change,
+                external_id=str(change["id"]),
+                container=services[0] if services else None,
+                updated=change.get("timestamp"),
+            )
 
     async def _services(self, client: VendorHttp) -> AsyncIterator[Item]:
         async for service in self._pages(client, "/services", {"include[]": "teams"}):
