@@ -29,6 +29,7 @@ import struct
 import threading
 import uuid
 from collections.abc import AsyncIterator, Iterator
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -87,6 +88,13 @@ class Catalogue:
     password: str
 
 
+# FreeTDS keeps one query timeout for the whole process, set by the last
+# connection that gave one — pymssql leaves it as it is when given none. Each
+# admin connection gives its own: what a test shortened (a query too slow,
+# cut at one second) never reaches the fixtures after it.
+ADMIN_TIMEOUT = 120
+
+
 def _admin(database: str = "master") -> Any:
     return pymssql.connect(
         server=str(SERVER.hostname),
@@ -96,6 +104,7 @@ def _admin(database: str = "master") -> Any:
         database=database,
         autocommit=True,
         login_timeout=5,
+        timeout=ADMIN_TIMEOUT,
     )
 
 
@@ -196,16 +205,18 @@ def catalogue(server: None) -> Iterator[Catalogue]:
         f"GRANT VIEW DEFINITION ON SCHEMA::billing TO {made.reader}",
     )
     db.close()
+    master.close()
     try:
         yield made
     finally:
-        _run(
-            master,
-            f"ALTER DATABASE {made.database} SET SINGLE_USER WITH ROLLBACK IMMEDIATE",
-            f"DROP DATABASE {made.database}",
-            f"DROP LOGIN {made.reader}",
-        )
-        master.close()
+        # A connection of its own: it sets the timeout the test may have cut.
+        with closing(_admin()) as admin:
+            _run(
+                admin,
+                f"ALTER DATABASE {made.database} SET SINGLE_USER WITH ROLLBACK IMMEDIATE",
+                f"DROP DATABASE {made.database}",
+                f"DROP LOGIN {made.reader}",
+            )
 
 
 def _connector(
@@ -542,6 +553,20 @@ async def test_a_query_too_slow_is_a_timeout(
             await db.fetch("WAITFOR DELAY '00:00:03'")
 
     assert caught.value.diagnostic.code is DiagnosticCode.TIMEOUT
+
+
+async def test_a_timeout_a_test_shortens_does_not_outlive_it(
+    catalogue: Catalogue, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # FreeTDS keeps one query timeout for the whole process, set by the last
+    # connection that gave one: a fixture after a test that shortened it must
+    # not inherit it (CI, 2026-10-02: a CREATE DATABASE cut at one second).
+    monkeypatch.setattr(ms, "STATEMENT_TIMEOUT_MS", 1000)
+    async with _connector(catalogue)._session() as db:
+        await db.fetch("SELECT 1 AS one")
+
+    with closing(_admin()) as admin:
+        _run(admin, "WAITFOR DELAY '00:00:02'")
 
 
 async def test_more_tables_than_a_pass_reads_is_a_failure_not_a_cut(
