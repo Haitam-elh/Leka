@@ -17,9 +17,11 @@ from leka.knowledge.models import (
     Lifecycle,
     ModelRun,
     Relationship,
+    RelationshipChange,
+    RelationshipIssue,
     RelationshipType,
 )
-from leka.knowledge.registry import ENTITY_KINDS, MODEL_VERSION, RELATIONSHIP_KINDS
+from leka.knowledge.registry import DEPENDENCIES, ENTITY_KINDS, MODEL_VERSION, RELATIONSHIP_KINDS
 from leka.knowledge.repository import (
     BusinessFilters,
     DataFilters,
@@ -29,6 +31,7 @@ from leka.knowledge.repository import (
     InfrastructureFilters,
     LandscapeFilters,
     ModelRepository,
+    RelationshipFilters,
 )
 from leka.knowledge.schemas import (
     BusinessContext,
@@ -58,6 +61,7 @@ from leka.knowledge.schemas import (
     EntityRead,
     EntityVersionRead,
     Expertise,
+    GraphRelationshipRead,
     IncidentDetail,
     IncidentRead,
     InfrastructureDetail,
@@ -74,6 +78,8 @@ from leka.knowledge.schemas import (
     PersonDetail,
     PersonRead,
     Registry,
+    RelationshipChangeRead,
+    RelationshipIssueRead,
     RelationshipKindRead,
     RelationshipRead,
     ResourceEnvironment,
@@ -86,6 +92,7 @@ from leka.knowledge.schemas import (
 from leka.knowledge.service import KnowledgeService
 
 __all__ = [
+    "DEPENDENCIES",
     "ENTITY_KINDS",
     "MODEL_VERSION",
     "RELATIONSHIP_KINDS",
@@ -124,6 +131,7 @@ __all__ = [
     "EntityVersionRead",
     "EventFilters",
     "Expertise",
+    "GraphRelationshipRead",
     "IncidentDetail",
     "IncidentRead",
     "InfrastructureDetail",
@@ -147,6 +155,11 @@ __all__ = [
     "PersonRead",
     "Registry",
     "Relationship",
+    "RelationshipChange",
+    "RelationshipChangeRead",
+    "RelationshipFilters",
+    "RelationshipIssue",
+    "RelationshipIssueRead",
     "RelationshipKindRead",
     "RelationshipRead",
     "RelationshipType",

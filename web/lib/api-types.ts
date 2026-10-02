@@ -1554,8 +1554,8 @@ export interface paths {
         /**
          * Dependencies
          * @description What an entity depends on — or what a failure of it reaches — through
-         *     `depends_on`, `depth` steps at most: each thing reached, how far, and
-         *     the relationships walked.
+         *     `depends_on` (or the dependency relationships asked), `depth` steps at
+         *     most: each thing reached, how far, and the relationships walked.
          */
         get: operations["dependencies_api_v1_knowledge_entities__entity_id__dependencies_get"];
         put?: never;
@@ -2245,6 +2245,73 @@ export interface paths {
          *     or in the whole workspace. A year at most.
          */
         get: operations["timeline_api_v1_knowledge_timeline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/relationships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Relationships
+         * @description The graph's relationships, the latest changed first: both ends named,
+         *     stated or inferred and by what rule, how sure, the records they come
+         *     from, when each first appeared and last changed.
+         */
+        get: operations["relationships_api_v1_knowledge_relationships_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/relationships/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Relationship Changes
+         * @description The relationships' history, the latest first: each that appeared,
+         *     changed — its origin, rule, environments, its confidence by 0.05 — or
+         *     went, at each build, before and after.
+         */
+        get: operations["relationship_changes_api_v1_knowledge_relationships_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/relationships/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Relationship Issues
+         * @description What the last build found wrong: an end its contract does not take —
+         *     dropped, an error — an inferred link closing a loop where none may be —
+         *     dropped — a loop its sources state, a dependency loop, two of what a
+         *     thing has one of — kept, warnings.
+         */
+        get: operations["relationship_issues_api_v1_knowledge_relationships_issues_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4304,6 +4371,57 @@ export interface components {
             /** Email */
             email: string;
         };
+        /**
+         * GraphRelationshipRead
+         * @description A relationship of the graph: both ends named, where it came from,
+         *     when it first appeared and last changed.
+         */
+        GraphRelationshipRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * From Entity Id
+             * Format: uuid
+             */
+            from_entity_id: string;
+            /**
+             * To Entity Id
+             * Format: uuid
+             */
+            to_entity_id: string;
+            type: components["schemas"]["RelationshipType"];
+            /** Confidence */
+            confidence: number;
+            /**
+             * Origin
+             * @description stated by a source, or inferred by an enrichment rule.
+             */
+            origin: string;
+            /** Rule */
+            rule: string;
+            /** Cross Source */
+            cross_source: boolean;
+            /**
+             * Attributes
+             * @description environments: the ones it is true in. Empty: everywhere, or unknown.
+             */
+            attributes: {
+                [key: string]: unknown;
+            };
+            from_entity: components["schemas"]["EntityBrief"];
+            to_entity: components["schemas"]["EntityBrief"];
+            /** Provenance */
+            provenance: {
+                [key: string]: unknown;
+            }[];
+            /** First Seen At */
+            first_seen_at: string | null;
+            /** Changed At */
+            changed_at: string | null;
+        };
         /** HealthRead */
         HealthRead: {
             status: components["schemas"]["SourceStatus"];
@@ -5466,6 +5584,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[GraphRelationshipRead] */
+        PageEnvelope_GraphRelationshipRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["GraphRelationshipRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[IncidentRead] */
         PageEnvelope_IncidentRead_: {
             /**
@@ -5564,6 +5695,32 @@ export interface components {
              * @description The rows on this page, in the requested order.
              */
             data: components["schemas"]["ProcessingRunRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[RelationshipChangeRead] */
+        PageEnvelope_RelationshipChangeRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["RelationshipChangeRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[RelationshipIssueRead] */
+        PageEnvelope_RelationshipIssueRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["RelationshipIssueRead"][];
             /**
              * Next Cursor
              * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
@@ -6032,13 +6189,128 @@ export interface components {
             /** Relationships */
             relationships: components["schemas"]["RelationshipKindRead"][];
         };
-        /** RelationshipKindRead */
+        /**
+         * RelationshipChangeRead
+         * @description A relationship that appeared, changed or went at a build.
+         */
+        RelationshipChangeRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "added" | "changed" | "removed";
+            from_entity: components["schemas"]["EntityBrief"] | null;
+            to_entity: components["schemas"]["EntityBrief"] | null;
+            /**
+             * Before
+             * @description {confidence, origin, rule, environments}; None when it was not there.
+             */
+            before: {
+                [key: string]: unknown;
+            } | null;
+            /** After */
+            after: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            /** Run Id */
+            run_id: string | null;
+        };
+        /**
+         * RelationshipIssueRead
+         * @description What the last build found wrong with a relationship.
+         */
+        RelationshipIssueRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /**
+             * Issue
+             * @enum {string}
+             */
+            issue: "wrong_end" | "cycle_broken" | "cycle" | "several_targets";
+            /**
+             * Severity
+             * @description error: dropped from the graph; warning: kept — but a cycle_broken's link, dropped.
+             * @enum {string}
+             */
+            severity: "error" | "warning";
+            from_entity: components["schemas"]["EntityBrief"] | null;
+            to_entity: components["schemas"]["EntityBrief"] | null;
+            /** Origin */
+            origin: string;
+            /** Rule */
+            rule: string;
+            /** Confidence */
+            confidence: number;
+            /**
+             * Detail
+             * @description wrong_end: {end, found, expected}; cycle, cycle_broken: {members}; several_targets: {targets}.
+             */
+            detail: {
+                [key: string]: unknown;
+            };
+            /**
+             * Found At
+             * Format: date-time
+             */
+            found_at: string;
+        };
+        /**
+         * RelationshipKindRead
+         * @description A kind of relationship and its contract (LEKA-368).
+         */
         RelationshipKindRead: {
             type: components["schemas"]["RelationshipType"];
             /** Version */
             version: number;
             /** Built From */
             built_from: string[];
+            /**
+             * Meaning
+             * @description Read from → to: `is part of`, `depends on`…
+             */
+            meaning: string;
+            /**
+             * Sources
+             * @description The kinds its start may be; None: any.
+             */
+            sources: components["schemas"]["EntityType"][] | null;
+            /**
+             * Targets
+             * @description The kinds its end may be; None: any.
+             */
+            targets: components["schemas"]["EntityType"][] | null;
+            /**
+             * Single
+             * @description A thing has one: a person's manager, a ticket's parent.
+             */
+            single: boolean;
+            /**
+             * Acyclic
+             * @description A loop of it is a contradiction.
+             */
+            acyclic: boolean;
+            /**
+             * Dependency
+             * @description What a thing needs to work: a dependency walk's.
+             */
+            dependency: boolean;
         };
         /** RelationshipRead */
         RelationshipRead: {
@@ -15168,6 +15440,8 @@ export interface operations {
                 depth?: number;
                 /** @description Only what holds there. Absent: all. */
                 environment?: string | null;
+                /** @description The dependency relationships followed (LEKA-368): depends_on, reads_from, references, supported_by, uses. Absent: depends_on. */
+                through?: ("depends_on" | "reads_from" | "references" | "supported_by" | "uses")[] | null;
             };
             header?: never;
             path: {
@@ -18456,6 +18730,335 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Timeline"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    relationships_api_v1_knowledge_relationships_get: {
+        parameters: {
+            query?: {
+                /** @description Of this kind. */
+                type?: components["schemas"]["RelationshipType"] | null;
+                /** @description Touching it: either end. */
+                entity_id?: string | null;
+                origin?: ("stated" | "inferred") | null;
+                rule?: string | null;
+                min_confidence?: number | null;
+                /** @description Changed from this date. */
+                since?: string | null;
+                /** @description Changed before this date. */
+                until?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_GraphRelationshipRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    relationship_changes_api_v1_knowledge_relationships_changes_get: {
+        parameters: {
+            query?: {
+                /** @description Of this kind. */
+                type?: components["schemas"]["RelationshipType"] | null;
+                /** @description Touching it: either end. */
+                entity_id?: string | null;
+                change?: ("added" | "changed" | "removed") | null;
+                /** @description Recorded from this date. */
+                since?: string | null;
+                /** @description Recorded before this date. */
+                until?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_RelationshipChangeRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    relationship_issues_api_v1_knowledge_relationships_issues_get: {
+        parameters: {
+            query?: {
+                /** @description Of this kind. */
+                type?: components["schemas"]["RelationshipType"] | null;
+                /** @description Touching it: either end. */
+                entity_id?: string | null;
+                severity?: ("error" | "warning") | null;
+                issue?: ("wrong_end" | "cycle_broken" | "cycle" | "several_targets") | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_RelationshipIssueRead_"];
                 };
             };
             /** @description The request could not be understood. */

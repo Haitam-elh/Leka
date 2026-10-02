@@ -35,6 +35,12 @@ dates — what enrichment carries from the records, resolution keeping none
 (LEKA-367) — else when a source first showed it. Such an attribute's
 origin is its source's.
 
+RELATIONSHIPS are checked against their kinds' contracts (contracts.py,
+LEKA-368): one whose ends a contract does not take is dropped; an inferred
+link closing a loop where none may be is dropped; the rest said. Each
+keeps when it first appeared and last changed; what appeared, changed or
+went since the last build is recorded.
+
 RELATIONSHIPS keep the environments they are true in: an end that runs in a
 single environment — a production instance, a service seen in production
 only, the production environment itself — makes the edge that
@@ -52,6 +58,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from leka.knowledge.contracts import Previous, check, history
 from leka.knowledge.models import Lifecycle
 from leka.knowledge.registry import BUILT_FROM, RELATIONSHIP_FROM, clean
 
@@ -181,6 +188,9 @@ class Built:
     versions: list[dict[str, object]]
     relationships: list[dict[str, object]]
     counts: Counter[str]
+    # What appeared, changed or went; what is wrong (LEKA-368).
+    changes: list[dict[str, object]] = field(default_factory=list)
+    issues: list[dict[str, object]] = field(default_factory=list)
 
 
 def content_of(name: str, attributes: dict[str, object], lifecycle: str) -> dict[str, object]:
@@ -280,12 +290,14 @@ def build(
     current: dict[uuid.UUID, Current],
     *,
     now: datetime,
+    previous: dict[tuple[uuid.UUID, uuid.UUID, str], Previous] | None = None,
 ) -> Built:
     # What a build did, said even when it is nothing.
     counts: Counter[str] = Counter(dict.fromkeys(("created", "changed", "unchanged", "removed"), 0))
     entities: list[dict[str, object]] = []
     versions: list[dict[str, object]] = []
     modelled: set[uuid.UUID] = set()
+    types: dict[uuid.UUID, str] = {}
     # The one environment a thing runs in, when it runs in one.
     scope: dict[uuid.UUID, str | None] = {}
 
@@ -390,6 +402,7 @@ def build(
             }
         )
         modelled.add(candidate.id)
+        types[candidate.id] = kind.type.value
         scope[candidate.id] = _environment_of(kind.type.value, candidate.key, attributes)
         counts[f"type.{kind.type.value}"] += 1
 
@@ -475,11 +488,20 @@ def build(
                 "attributes": {"environments": environments} if environments else {},
                 "provenance": list(link.provenance),
             }
+    # Their contracts, then their history (LEKA-368).
+    kept, issues = check(relationships, types)
+    moved = history(kept, previous or {}, now)
+    counts["relationships_invalid"] = sum(1 for i in issues if i.severity == "error")
+    counts["relationship_warnings"] = sum(1 for i in issues if i.severity == "warning")
+    for change in moved:
+        counts[f"relationships_{change['change']}"] += 1
     counts["entities"] = len(modelled)
-    counts["relationships"] = len(relationships)
+    counts["relationships"] = len(kept)
     return Built(
         entities=entities,
         versions=versions,
-        relationships=list(relationships.values()),
+        relationships=list(kept.values()),
         counts=counts,
+        changes=moved,
+        issues=[issue.row() for issue in issues],
     )

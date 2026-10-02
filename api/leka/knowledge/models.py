@@ -286,6 +286,62 @@ class Relationship(Base, WorkspaceScopedMixin):
     provenance: Mapped[list[dict[str, object]]] = mapped_column(
         JSONB, nullable=False, server_default="[]"
     )
+    # Its life (LEKA-368): the first build it was in, the last that changed
+    # it — its origin, rule, environments, its confidence by 0.05 at least.
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RelationshipChange(Base, WorkspaceScopedMixin):
+    """A relationship that appeared, changed or went, at a build (LEKA-368):
+    the relationships' history, append-only. Its ends are ids — an entity is
+    never deleted, a removed one is kept."""
+
+    __tablename__ = "relationship_changes"
+    __table_args__ = (
+        CheckConstraint("change IN ('added', 'changed', 'removed')", name="change"),
+        Index("ix_relationship_changes_workspace_recorded", "workspace_id", "recorded_at"),
+        Index("ix_relationship_changes_from", "workspace_id", "from_entity_id"),
+        Index("ix_relationship_changes_to", "workspace_id", "to_entity_id"),
+    )
+
+    from_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    to_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    type: Mapped[str] = mapped_column(String(50), nullable=False)
+    change: Mapped[str] = mapped_column(String(10), nullable=False)
+    # {confidence, origin, rule, environments} before and after; none for
+    # what was not there.
+    before: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    after: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("model_runs.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class RelationshipIssue(Base, WorkspaceScopedMixin):
+    """What the last build found wrong with a relationship (LEKA-368): an
+    end its contract does not take — dropped — a loop where none may be, more
+    than one of what a thing has one of. Made again at each build."""
+
+    __tablename__ = "relationship_issues"
+    __table_args__ = (
+        CheckConstraint("severity IN ('error', 'warning')", name="severity"),
+        Index("ix_relationship_issues_workspace_type", "workspace_id", "type"),
+    )
+
+    from_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    to_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    type: Mapped[str] = mapped_column(String(50), nullable=False)
+    issue: Mapped[str] = mapped_column(String(30), nullable=False)
+    severity: Mapped[str] = mapped_column(String(10), nullable=False)
+    origin: Mapped[str] = mapped_column(String(10), nullable=False)
+    rule: Mapped[str] = mapped_column(String(100), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("model_runs.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class EntityVersion(Base, WorkspaceScopedMixin):

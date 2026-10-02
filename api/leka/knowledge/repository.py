@@ -35,6 +35,7 @@ from sqlalchemy.sql.expression import Exists
 
 from leka.db import WorkspaceScopedRepository
 from leka.knowledge.build import Built, Current
+from leka.knowledge.contracts import Previous
 from leka.knowledge.models import (
     Entity,
     EntityType,
@@ -42,6 +43,8 @@ from leka.knowledge.models import (
     Lifecycle,
     ModelRun,
     Relationship,
+    RelationshipChange,
+    RelationshipIssue,
     RelationshipType,
 )
 
@@ -188,6 +191,23 @@ class EventFilters:
 
 
 @dataclass(frozen=True)
+class RelationshipFilters:
+    """What a list of relationships, of their changes or of their issues is
+    narrowed to (LEKA-368)."""
+
+    type: str | None = None
+    entity_id: uuid.UUID | None = None
+    origin: str | None = None
+    rule: str | None = None
+    min_confidence: float | None = None
+    change: str | None = None
+    severity: str | None = None
+    issue: str | None = None
+    since: datetime | None = None
+    until: datetime | None = None
+
+
+@dataclass(frozen=True)
 class Documented:
     """How one thing is documented: by how many documents, the latest
     changed when."""
@@ -263,6 +283,21 @@ class ModelRepository(WorkspaceScopedRepository):
             for row in rows
         }
 
+    async def current_links(self) -> dict[tuple[uuid.UUID, uuid.UUID, str], Previous]:
+        """The relationships as the last build left them (LEKA-368)."""
+        rows = await self.list(self.select(Relationship))
+        return {
+            (row.from_entity_id, row.to_entity_id, row.type.value): Previous(
+                first_seen_at=row.first_seen_at,
+                changed_at=row.changed_at,
+                confidence=row.confidence,
+                origin=row.origin,
+                rule=row.rule,
+                environments=tuple(_environments(row)),
+            )
+            for row in rows
+        }
+
     async def write(self, built: Built, *, run_id: uuid.UUID) -> None:
         """The build's rows, in the caller's transaction: entities upserted —
         their ids kept — versions recorded, relationships replaced."""
@@ -291,6 +326,16 @@ class ModelRepository(WorkspaceScopedRepository):
             delete(Relationship).where(Relationship.workspace_id == self.workspace_id)
         )
         await self._insert(Relationship, built.relationships)
+        # Their history, and what is wrong with them now (LEKA-368).
+        await self._insert(
+            RelationshipChange, [{**change, "run_id": run_id} for change in built.changes]
+        )
+        await self._session.execute(
+            delete(RelationshipIssue).where(RelationshipIssue.workspace_id == self.workspace_id)
+        )
+        await self._insert(
+            RelationshipIssue, [{**issue, "run_id": run_id} for issue in built.issues]
+        )
 
     async def _insert(self, model: type[Any], rows: list[dict[str, object]]) -> None:
         for start in range(0, len(rows), CHUNK):
@@ -337,6 +382,13 @@ class ModelSweeper:
             update(ModelRun)
             .where(ModelRun.status == "running", ModelRun.started_at < before)
             .values(status="abandoned", finished_at=at, updated_at=func.now())
+        )
+        return int(cast("CursorResult[Any]", result).rowcount or 0)
+
+    async def prune_changes(self, *, before: datetime) -> int:
+        """The relationships' history recorded before `before` (LEKA-368)."""
+        result = await self._session.execute(
+            delete(RelationshipChange).where(RelationshipChange.recorded_at < before)
         )
         return int(cast("CursorResult[Any]", result).rowcount or 0)
 
@@ -1348,6 +1400,80 @@ class EntityRepository(WorkspaceScopedRepository):
             seen.setdefault(entity.id, (entity, via))
         found = list(seen.values())
         return found[:limit], len(found) > limit or len(rows) > limit * 3
+
+    # ── relationships (LEKA-368) ────────────────────────────────────────────
+
+    def relationships(self, filters: RelationshipFilters) -> Select[tuple[Relationship]]:
+        """The graph's relationships, for a page: of a type, touching an
+        entity — either end — said or inferred, by a rule, at least this
+        sure, changed between those dates."""
+        f = filters
+        statement = self.select(Relationship)
+        if f.type:
+            statement = statement.where(Relationship.type == f.type)
+        if f.entity_id is not None:
+            statement = statement.where(
+                or_(
+                    Relationship.from_entity_id == f.entity_id,
+                    Relationship.to_entity_id == f.entity_id,
+                )
+            )
+        if f.origin:
+            statement = statement.where(Relationship.origin == f.origin)
+        if f.rule:
+            statement = statement.where(Relationship.rule == f.rule)
+        if f.min_confidence is not None:
+            statement = statement.where(Relationship.confidence >= f.min_confidence)
+        if f.since is not None:
+            statement = statement.where(Relationship.changed_at >= f.since)
+        if f.until is not None:
+            statement = statement.where(Relationship.changed_at < f.until)
+        return statement
+
+    def relationship_changes(
+        self, filters: RelationshipFilters
+    ) -> Select[tuple[RelationshipChange]]:
+        """The relationships' history, for a page: of a type, touching an
+        entity, added, changed or removed, between those dates."""
+        f = filters
+        statement = self.select(RelationshipChange)
+        if f.type:
+            statement = statement.where(RelationshipChange.type == f.type)
+        if f.change:
+            statement = statement.where(RelationshipChange.change == f.change)
+        if f.entity_id is not None:
+            statement = statement.where(
+                or_(
+                    RelationshipChange.from_entity_id == f.entity_id,
+                    RelationshipChange.to_entity_id == f.entity_id,
+                )
+            )
+        if f.since is not None:
+            statement = statement.where(RelationshipChange.recorded_at >= f.since)
+        if f.until is not None:
+            statement = statement.where(RelationshipChange.recorded_at < f.until)
+        return statement
+
+    def relationship_issues(self, filters: RelationshipFilters) -> Select[tuple[RelationshipIssue]]:
+        """What the last build found wrong, for a page: of a type, of a
+        severity, of a kind of issue, touching an entity."""
+        f = filters
+        statement = self.select(RelationshipIssue)
+        for column, value in (
+            (RelationshipIssue.type, f.type),
+            (RelationshipIssue.severity, f.severity),
+            (RelationshipIssue.issue, f.issue),
+        ):
+            if value:
+                statement = statement.where(column == value)
+        if f.entity_id is not None:
+            statement = statement.where(
+                or_(
+                    RelationshipIssue.from_entity_id == f.entity_id,
+                    RelationshipIssue.to_entity_id == f.entity_id,
+                )
+            )
+        return statement
 
     async def counts(self) -> dict[str, dict[str, int]]:
         """How many entities of each type and in each lifecycle; how many

@@ -140,9 +140,17 @@ class EntityKindRead(BaseModel):
 
 
 class RelationshipKindRead(BaseModel):
+    """A kind of relationship and its contract (LEKA-368)."""
+
     type: RelationshipType
     version: int
     built_from: list[str]
+    meaning: str = Field(description="Read from → to: `is part of`, `depends on`…")
+    sources: list[EntityType] | None = Field(description="The kinds its start may be; None: any.")
+    targets: list[EntityType] | None = Field(description="The kinds its end may be; None: any.")
+    single: bool = Field(description="A thing has one: a person's manager, a ticket's parent.")
+    acyclic: bool = Field(description="A loop of it is a contradiction.")
+    dependency: bool = Field(description="What a thing needs to work: a dependency walk's.")
 
 
 class Registry(BaseModel):
@@ -1004,3 +1012,59 @@ class ChangeDetail(ChangeRead):
     affected: list[Tie]
     people: list[Tie]
     incidents: list[Tie]
+
+
+# ── relationships (LEKA-368) ─────────────────────────────────────────────────
+
+
+class GraphRelationshipRead(RelationshipRead):
+    """A relationship of the graph: both ends named, where it came from,
+    when it first appeared and last changed."""
+
+    from_entity: EntityBrief
+    to_entity: EntityBrief
+    provenance: list[dict[str, object]]
+    first_seen_at: datetime | None
+    changed_at: datetime | None
+
+
+class RelationshipChangeRead(BaseModel):
+    """A relationship that appeared, changed or went at a build."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    type: str
+    change: Literal["added", "changed", "removed"]
+    from_entity: EntityBrief | None
+    to_entity: EntityBrief | None
+    before: dict[str, object] | None = Field(
+        description="{confidence, origin, rule, environments}; None when it was not there."
+    )
+    after: dict[str, object] | None
+    recorded_at: datetime
+    run_id: uuid.UUID | None
+
+
+class RelationshipIssueRead(BaseModel):
+    """What the last build found wrong with a relationship."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    type: str
+    issue: Literal["wrong_end", "cycle_broken", "cycle", "several_targets"]
+    severity: Literal["error", "warning"] = Field(
+        description="error: dropped from the graph; warning: kept — but a cycle_broken's link, "
+        "dropped."
+    )
+    from_entity: EntityBrief | None
+    to_entity: EntityBrief | None
+    origin: str
+    rule: str
+    confidence: float
+    detail: dict[str, object] = Field(
+        description="wrong_end: {end, found, expected}; cycle, cycle_broken: {members}; "
+        "several_targets: {targets}."
+    )
+    found_at: datetime
