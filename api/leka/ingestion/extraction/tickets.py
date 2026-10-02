@@ -51,7 +51,7 @@ def jira_project(p: Payload) -> Extracted:
     )
 
 
-@strategy("jira.issues", 1, (JIRA, Capability.ISSUES))
+@strategy("jira.issues", 2, (JIRA, Capability.ISSUES))
 def jira_issue(p: Payload) -> Extracted:
     key = required(p, "key")
     f = dig(p, "fields")
@@ -73,6 +73,7 @@ def jira_issue(p: Payload) -> Extracted:
                 name=dig(f, "project", "name"),
             ),
             *ref("parent", "issue", external_id=dig(f, "parent", "key")),
+            *_causes(f),
         ],
         metadata={
             "key": key,
@@ -89,6 +90,23 @@ def jira_issue(p: Payload) -> Extracted:
             "due": string(f, "duedate"),
         },
     )
+
+
+def _causes(fields: object) -> list[Reference]:
+    """What this issue is caused by, and what it causes, as Jira's links of
+    a type that says so — `Causes`, Jira Service Management's
+    `Problem/Incident` — read (LEKA-367): the issue on the other end, as
+    `caused_by` or `causes`."""
+    links = dig(fields, "issuelinks")
+    found: list[Reference] = []
+    for link in links if isinstance(links, list) else []:
+        words = " ".join(lower(link, "type", part) or "" for part in ("name", "inward", "outward"))
+        if "cause" not in words:
+            continue
+        # An inward issue: this one "is caused by" it; an outward: "causes" it.
+        found += ref("caused_by", "issue", external_id=dig(link, "inwardIssue", "key"))
+        found += ref("causes", "issue", external_id=dig(link, "outwardIssue", "key"))
+    return found
 
 
 def _person(role: str, user: object) -> list[Reference]:

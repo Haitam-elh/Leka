@@ -209,4 +209,5 @@ export const ENTITY_TYPES = [
   "person",
   "team",
   "knowledge_space",
+  "change",
 ] as const;

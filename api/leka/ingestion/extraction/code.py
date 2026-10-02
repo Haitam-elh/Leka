@@ -1,11 +1,13 @@
-"""Code hosts: GitHub, GitLab, Bitbucket — six kinds of record, one shape.
+"""Code hosts: GitHub, GitLab, Bitbucket — seven kinds of record, one shape.
 
 A pull request is a pull request whichever host it is on: the same title,
 body, state, author, branches, labels. What each host calls them stays in
 `extractor` and in the provenance; what they mean is the same field.
 
 The payloads are the ones the connectors store (leka/connectors/<kind>/):
-GitHub's REST v3, GitLab's v4, Bitbucket's 2.0.
+GitHub's REST v3, GitLab's v4, Bitbucket's 2.0. A deployment (LEKA-367):
+what ref of which commit to which environment, how it went — GitHub's
+statuses, oldest first — when it started and finished.
 """
 
 from __future__ import annotations
@@ -30,6 +32,9 @@ from leka.ingestion.extraction.fields import (
 
 C = Capability
 GITHUB, GITLAB, BITBUCKET = SourceKind.GITHUB, SourceKind.GITLAB, SourceKind.BITBUCKET
+# A deployment's statuses that say it started, and that it is over.
+STARTED = frozenset({"in_progress"})
+FINISHED = frozenset({"success", "failure", "error"})
 
 # ── GitHub ───────────────────────────────────────────────────────────────────
 
@@ -157,6 +162,50 @@ def github_branch(p: Payload) -> Extracted:
         title=required(p, "name"),
         references=ref("head", "commit", external_id=dig(p, "commit", "sha")),
         metadata={"protected": flag(p, "protected")},
+    )
+
+
+@strategy("github.deployments", 1, (GITHUB, C.DEPLOYMENTS))
+def github_deployment(p: Payload) -> Extracted:
+    environment = string(p, "environment") or string(p, "original_environment")
+    shipped = string(p, "ref") or required(p, "sha")
+    found = dig(p, "statuses")
+    statuses = (
+        [s for s in reversed(found) if isinstance(s, dict)] if isinstance(found, list) else []
+    )
+    latest = statuses[-1] if statuses else None
+    history = [
+        {"state": lower(s, "state"), "at": string(s, "created_at")}
+        for s in statuses
+        if lower(s, "state")
+    ]
+    return Extracted(
+        title=f"{shipped} to {environment}" if environment else shipped,
+        url=string(latest, "log_url")
+        or string(latest, "target_url")
+        or string(latest, "environment_url"),
+        state=lower(latest, "state") or "created",
+        created_at=when(p, "created_at"),
+        updated_at=when(latest, "created_at") or when(p, "updated_at"),
+        content=content("description", string(p, "description")),
+        references=ref("creator", "person", external_id=dig(p, "creator", "login")),
+        metadata={
+            "id": number(p, "id"),
+            # Its API link: where its repository lives — its own link is
+            # its pipeline's.
+            "api_url": string(p, "url"),
+            "sha": string(p, "sha"),
+            "ref": string(p, "ref"),
+            "task": string(p, "task"),
+            "environment": environment,
+            "production": flag(p, "production_environment"),
+            "environment_url": string(latest, "environment_url"),
+            # Each status as `state@when`, the oldest first: metadata holds text.
+            "status_history": [f"{h['state']}@{h['at'] or ''}" for h in history],
+            "started_at": _first_at(history, STARTED),
+            "finished_at": _first_at(history, FINISHED),
+        },
+        signals={"environment": environment},
     )
 
 
@@ -293,6 +342,37 @@ def gitlab_branch(p: Payload) -> Extracted:
     )
 
 
+@strategy("gitlab.deployments", 1, (GITLAB, C.DEPLOYMENTS))
+def gitlab_deployment(p: Payload) -> Extracted:
+    environment = string(p, "environment", "name")
+    shipped = string(p, "ref") or required(p, "sha")
+    return Extracted(
+        title=f"{shipped} to {environment}" if environment else shipped,
+        url=string(p, "deployable", "web_url") or string(p, "environment", "external_url"),
+        state=lower(p, "status"),
+        created_at=when(p, "created_at"),
+        updated_at=when(p, "updated_at") or when(p, "created_at"),
+        references=ref(
+            "creator", "person", external_id=dig(p, "user", "username"), name=dig(p, "user", "name")
+        ),
+        metadata={
+            "id": number(p, "id"),
+            "iid": number(p, "iid"),
+            "sha": string(p, "sha"),
+            "ref": string(p, "ref"),
+            "environment": environment,
+            "tier": lower(p, "environment", "tier"),
+            "environment_url": string(p, "environment", "external_url"),
+            "job": string(p, "deployable", "name"),
+            "job_url": string(p, "deployable", "web_url"),
+            "pipeline_url": string(p, "deployable", "pipeline", "web_url"),
+            "started_at": string(p, "deployable", "started_at"),
+            "finished_at": string(p, "finished_at") or string(p, "deployable", "finished_at"),
+        },
+        signals={"environment": environment},
+    )
+
+
 # ── Bitbucket ────────────────────────────────────────────────────────────────
 
 
@@ -422,3 +502,8 @@ def _raw_author(raw: str | None) -> tuple[str | None, str | None]:
     name, _, rest = raw.partition("<")
     email = rest.rstrip(">").strip() or None
     return name.strip() or None, email
+
+
+def _first_at(history: list[dict[str, str | None]], states: frozenset[str]) -> str | None:
+    """When a deployment's statuses first said one of these."""
+    return next((h["at"] for h in history if h["state"] in states and h["at"]), None)

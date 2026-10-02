@@ -178,6 +178,71 @@ INCIDENT_STATES = {
 }
 
 
+# A deployment's life (LEKA-367): waiting, running, done — succeeded,
+# failed, canceled — or replaced by a later one (GitHub's `inactive`).
+DEPLOYMENT_STATES = {
+    "created": "pending",
+    "queued": "pending",
+    "pending": "pending",
+    "waiting": "pending",
+    "blocked": "pending",
+    "scheduled": "pending",
+    "in progress": "in_progress",
+    "running": "in_progress",
+    "started": "in_progress",
+    "deploying": "in_progress",
+    "success": "succeeded",
+    "succeeded": "succeeded",
+    "successful": "succeeded",
+    "deployed": "succeeded",
+    "completed": "succeeded",
+    "failure": "failed",
+    "failed": "failed",
+    "error": "failed",
+    "errored": "failed",
+    "rolled back": "failed",
+    "canceled": "canceled",
+    "cancelled": "canceled",
+    "skipped": "canceled",
+    "aborted": "canceled",
+    "inactive": "inactive",
+    "superseded": "inactive",
+}
+# A change's life (LEKA-367), from a change management tool's words —
+# ServiceNow's, Jira Service Management's: asked, planned, made, over.
+CHANGE_STATES = {
+    "new": "requested",
+    "draft": "requested",
+    "open": "requested",
+    "requested": "requested",
+    "assess": "requested",
+    "review": "requested",
+    "authorize": "requested",
+    "awaiting approval": "requested",
+    "planning": "requested",
+    "approved": "scheduled",
+    "scheduled": "scheduled",
+    "planned": "scheduled",
+    "implement": "in_progress",
+    "implementing": "in_progress",
+    "in progress": "in_progress",
+    "work in progress": "in_progress",
+    "closed": "completed",
+    "completed": "completed",
+    "complete": "completed",
+    "done": "completed",
+    "implemented": "completed",
+    "successful": "completed",
+    "failed": "failed",
+    "unsuccessful": "failed",
+    "rolled back": "failed",
+    "canceled": "canceled",
+    "cancelled": "canceled",
+    "rejected": "canceled",
+    "declined": "canceled",
+}
+
+
 def work_state(raw: str | None, *, category: str | None = None) -> tuple[str | None, bool]:
     """(canonical state, known). Jira's status category wins over its name."""
     if category and category in STATUS_CATEGORIES:
@@ -187,6 +252,14 @@ def work_state(raw: str | None, *, category: str | None = None) -> tuple[str | N
 
 def incident_state(raw: str | None) -> tuple[str | None, bool]:
     return _lookup(INCIDENT_STATES, raw)
+
+
+def deployment_state(raw: str | None) -> tuple[str | None, bool]:
+    return _lookup(DEPLOYMENT_STATES, raw)
+
+
+def change_state(raw: str | None) -> tuple[str | None, bool]:
+    return _lookup(CHANGE_STATES, raw)
 
 
 def resource_state(raw: str | None) -> tuple[str | None, bool]:

@@ -25,6 +25,9 @@ from what every mention of the thing carries, spelled one way:
     document          notion:document:1a2b…, acme.atlassian.net/wiki/pages/1001
     knowledge space   acme.atlassian.net/wiki/spaces/ENG,      where documents are kept:
                       notion:space:…, google_workspace:space:…  the tool and its own id
+    deployment        github.com/acme/api/deployments/42       its repository's, the tool's id;
+                      deployment:datadog:<id>                  an event's: its tool and id
+    change            change:pagerduty:<id>                    its tool and its id (LEKA-367)
     capability        capability:payments                      a slug of the name (LEKA-366)
     process           process:order-to-cash,                   an activity under its
                       process:order-to-cash/invoice            process's name
@@ -258,6 +261,18 @@ def _repository_link(host: str, path: list[str]) -> tuple[str, str] | None:
         project = path[: path.index("-")] if "-" in path else path
         return ("repository", repository(host, "/".join(project))) if len(project) >= 2 else None
     return "repository", repository(host, "/".join(path[:2]))
+
+
+def deployment(repository_key: str, deployment_id: str) -> str:
+    """A code host's deployment, in its repository (LEKA-367)."""
+    return f"{repository_key}/deployments/{deployment_id.strip()}"
+
+
+def event(kind: str, system: str, event_id: str) -> str:
+    """A change or a deployment an operations tool records — an incident
+    tool's change event, a monitoring tool's deploy event: its tool and its
+    own id (LEKA-367)."""
+    return f"{kind}:{system}:{event_id.strip()}"
 
 
 def capability(name: str) -> str:

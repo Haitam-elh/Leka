@@ -73,7 +73,8 @@ Name = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,39}$")]
 # tests/test_documentation_model.py keeps the two in step): a CMDB's
 # servers and databases (LEKA-363), a data catalogue's tables (LEKA-364),
 # an HR system's people and teams (LEKA-365), a business system's
-# capabilities and processes, a wiki's spaces (LEKA-366).
+# capabilities and processes, a wiki's spaces (LEKA-366), a change
+# management tool's changes and a CI/CD tool's deployments (LEKA-367).
 Entity = Literal[
     "issue",
     "incident",
@@ -89,6 +90,8 @@ Entity = Literal[
     "business_capability",
     "business_process",
     "knowledge_space",
+    "change",
+    "deployment",
 ]
 # A GraphQL variable's name, as the spec spells them.
 Variable = Annotated[str, StringConstraints(pattern=r"^[_A-Za-z][_0-9A-Za-z]{0,63}$")]
