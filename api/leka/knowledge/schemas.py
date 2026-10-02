@@ -1068,3 +1068,166 @@ class RelationshipIssueRead(BaseModel):
         "several_targets: {targets}."
     )
     found_at: datetime
+
+
+# ── the knowledge graph: search, walks, paths, views (LEKA-369) ──────────────
+
+
+class SearchHit(BaseModel):
+    """An entity search found."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    score: float = Field(
+        description="How well it matches: the very name, then a name it starts, then the words."
+    )
+    holder: EntityBrief | None = Field(
+        description="Where it is: what it is part of, a child or a member of — the surest."
+    )
+    sources: list[str] = Field(description="The kinds of the sources that show it.")
+
+
+class SearchResults(BaseModel):
+    """What a search found: entities, the best first, and what they say of
+    one another."""
+
+    model_config = ConfigDict(frozen=True)
+
+    query: str
+    entities: list[SearchHit]
+    relationships: list[GraphRelationshipRead] = Field(
+        description="The relationships among the entities found."
+    )
+
+
+class GraphNodeRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    depth: int = Field(description="Steps from the nearest root; 0 for a root.")
+    sources: list[str] = Field(description="The kinds of the sources that show it.")
+
+
+class GraphRead(BaseModel):
+    """What a walk reached from its roots: the entities and the
+    relationships among them."""
+
+    model_config = ConfigDict(frozen=True)
+
+    roots: list[EntityBrief]
+    depth: int
+    direction: Literal["outgoing", "incoming", "both"]
+    nodes: list[GraphNodeRead] = Field(description="The roots first, then the nearest.")
+    relationships: list[RelationshipRead]
+    truncated: bool = Field(description="More was reached than a response holds.")
+
+
+class PathRead(BaseModel):
+    """A way from one entity to another: the entities in order, and the
+    relationship between each and the next — read either way."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entities: list[EntityBrief]
+    relationships: list[RelationshipRead]
+
+
+class PathsRead(BaseModel):
+    """The shortest ways between two entities."""
+
+    model_config = ConfigDict(frozen=True)
+
+    start: EntityBrief
+    end: EntityBrief
+    length: int | None = Field(
+        description="Steps of the shortest; none when none was found within max_depth."
+    )
+    paths: list[PathRead]
+    truncated: bool = Field(description="The walk stopped before it was done: too much reached.")
+
+
+class ViewLayerRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    types: list[EntityType] = Field(description="What it holds; none for a row no source fills.")
+    total: int
+    shown: int
+
+
+class ViewNodeRead(BaseModel):
+    """A box of a view: an entity, or a provider's cloud resources together."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    type: str = Field(description="The entity's type — or provider.")
+    layer: str
+    name: str
+    status: str | None = Field(
+        description="operational, attention, incident, unmonitored — none when it has no state."
+    )
+    entity_id: uuid.UUID | None
+    key: str | None
+    detail: str | None = Field(description="A provider's region; an engine, a class, a title.")
+    count: int = Field(description="A provider's resources; 1 for an entity.")
+    environment: str | None
+    team: EntityBrief | None
+
+
+class ViewEdgeRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    from_id: str
+    to_id: str
+    type: str
+    status: str | None = Field(description="The worse state of its two ends.")
+
+
+class KindCoverageRead(BaseModel):
+    """How well LEKA knows one kind of thing."""
+
+    model_config = ConfigDict(frozen=True)
+
+    type: EntityType
+    total: int
+    owned: int | None = Field(description="With an owner; none where it does not apply.")
+    documented: int | None = Field(description="Described by a document.")
+    corroborated: int = Field(description="Said by two sources or more.")
+    connected: int = Field(description="Tied to anything at all.")
+
+
+class ViewSourceRead(BaseModel):
+    """A source, and how many of the kinds asked it shows."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_id: uuid.UUID
+    kind: str
+    entities: int
+
+
+class LandscapeViewRead(BaseModel):
+    """A landscape of the company: its layers, their boxes and the lines
+    between them, how well it is known, and where it comes from."""
+
+    model_config = ConfigDict(frozen=True)
+
+    view: str
+    built_at: datetime | None = Field(description="When the model was last built.")
+    layers: list[ViewLayerRead]
+    nodes: list[ViewNodeRead]
+    edges: list[ViewEdgeRead]
+    coverage: list[KindCoverageRead]
+    sources: list[ViewSourceRead]
+
+
+class KnowledgeCoverageRead(BaseModel):
+    """How well LEKA knows the company, kind by kind, and from which sources."""
+
+    model_config = ConfigDict(frozen=True)
+
+    built_at: datetime | None
+    kinds: list[KindCoverageRead]
+    sources: list[ViewSourceRead]

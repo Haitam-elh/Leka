@@ -29,6 +29,7 @@ from datetime import datetime
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Computed,
     DateTime,
     Enum,
     Float,
@@ -37,12 +38,21 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from leka.db import Base, WorkspaceScopedMixin
+
+# An entity's words, for search (LEKA-369): 'simple', no stemming — names are
+# not prose, and the company speaks French and English. Written as
+# PostgreSQL reads it back, so that `alembic check` sees no difference.
+SEARCH_VECTOR = (
+    "(setweight(to_tsvector('simple'::regconfig, search_name), 'A'::\"char\") || "
+    "setweight(to_tsvector('simple'::regconfig, search_text), 'B'::\"char\"))"
+)
 
 
 def _values(enum_class: type[enum.StrEnum]) -> list[str]:
@@ -170,6 +180,8 @@ class Entity(Base, WorkspaceScopedMixin):
         Index("ix_entities_workspace_type_occurred", "workspace_id", "type", "occurred_at"),
         # Queries filter on attributes -> GIN, not btree.
         Index("ix_entities_attributes", "attributes", postgresql_using="gin"),
+        # Search: the words of its names and of what says what it is (LEKA-369).
+        Index("ix_entities_search", "search_vector", postgresql_using="gin"),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
         CheckConstraint("version >= 1", name="version_positive"),
         CheckConstraint(
@@ -222,6 +234,16 @@ class Entity(Base, WorkspaceScopedMixin):
     # deployment done, a change made, a release published, a pull request
     # merged; none for what is not an event (LEKA-367).
     occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # What search reads (search.py, LEKA-369): its names, and what else says
+    # what it is — folded, written at each build — and their words, indexed:
+    # the names weigh more.
+    search_name: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    search_text: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed(SEARCH_VECTOR, persisted=True),
+        nullable=False,
+    )
 
 
 class Relationship(Base, WorkspaceScopedMixin):

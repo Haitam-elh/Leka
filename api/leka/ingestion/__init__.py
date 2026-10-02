@@ -6,7 +6,11 @@ about how the graph is queried or how answers are built.
 
 from leka.ingestion.enrichment import ENRICHER_VERSION
 from leka.ingestion.enrichment.screens import environment as environment_screen
+from leka.ingestion.enrichment.screens import monitoring_kinds
 from leka.ingestion.enrichment.screens import sheet as entity_sheet
+from leka.ingestion.enrichment.view import Thing as EnvironmentThing
+from leka.ingestion.enrichment.view import provider_of
+from leka.ingestion.enrichment.view import status as environment_status
 from leka.ingestion.models import (
     DeliveryStatus,
     EnrichedRelationship,
@@ -113,6 +117,7 @@ __all__ = [
     "EntityRef",
     "EntitySheetRead",
     "EnvironmentRead",
+    "EnvironmentThing",
     "ExtractedRecordRow",
     "ExtractionFailureRead",
     "ExtractionRepository",
@@ -181,5 +186,8 @@ __all__ = [
     "WebhookDeliveryRepository",
     "entity_sheet",
     "environment_screen",
+    "environment_status",
+    "monitoring_kinds",
+    "provider_of",
     "retention_days",
 ]

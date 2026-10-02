@@ -17,6 +17,7 @@ from leka.api import (
     context,
     enrichment,
     governance,
+    graph,
     health,
     identity,
     ingestion,
@@ -46,6 +47,8 @@ api_router.include_router(enrichment.router)
 # What systems send, signed rather than signed in (LEKA-350).
 api_router.include_router(webhooks.router)
 api_router.include_router(knowledge.router)
+# The graph explored: search, walks, paths, the landscapes (LEKA-369).
+api_router.include_router(graph.router)
 api_router.include_router(context.router)
 api_router.include_router(capabilities.router)
 api_router.include_router(intentions.router)

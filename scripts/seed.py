@@ -31,7 +31,7 @@ from leka.connectors import Source, SourceKind, SourceStatus
 from leka.core.security import hash_password
 from leka.db import session_factory, system_scope
 from leka.identity import User as Account
-from leka.knowledge import Entity, EntityType, Relationship, RelationshipType
+from leka.knowledge import Entity, EntityType, Relationship, RelationshipType, search_fields
 from leka.platform import Membership, Role, Workspace
 
 WORKSPACE_SLUG = "acme"
@@ -143,7 +143,9 @@ async def _build_demo_workspace() -> None:
         ) -> Entity:
             # The company model (LEKA-361) is built from what resolution
             # made; the demo writes it directly, saying where each thing
-            # was "seen" as a build would.
+            # was "seen" — and what search reads of it (LEKA-369) — as a
+            # build would.
+            search_name, search_text = search_fields(external_id, name, attributes)
             row = Entity(
                 workspace_id=workspace.id,
                 type=type_,
@@ -158,6 +160,8 @@ async def _build_demo_workspace() -> None:
                 },
                 first_seen_at=last_seen or NOW,
                 last_seen_at=last_seen or NOW,
+                search_name=search_name,
+                search_text=search_text,
             )
             session.add(row)
             return row

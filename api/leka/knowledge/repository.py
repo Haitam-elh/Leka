@@ -19,20 +19,25 @@ from sqlalchemy import (
     CursorResult,
     Select,
     and_,
+    any_,
+    case,
     delete,
     exists,
     func,
     literal,
+    literal_column,
     or_,
     select,
     text,
+    union_all,
     update,
 )
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import ARRAY, UUID, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import Exists
 
+from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
 from leka.knowledge.build import Built, Current
 from leka.knowledge.contracts import Previous
@@ -47,6 +52,7 @@ from leka.knowledge.models import (
     RelationshipIssue,
     RelationshipType,
 )
+from leka.knowledge.search import NAMES_APART
 
 CHUNK = 1_000
 
@@ -1498,6 +1504,411 @@ class EntityRepository(WorkspaceScopedRepository):
             "lifecycles": {state.value: int(n) for state, n in by_lifecycle.all()},
             "relationships": {kind.value: int(n) for kind, n in by_relationship.all()},
         }
+
+
+# ── the knowledge graph: search, walks, views (LEKA-369) ──────────────────────
+
+# Where a thing is, to tell two of the same name apart in search.
+HELD_BY = (RelationshipType.PART_OF, RelationshipType.CHILD_OF, RelationshipType.MEMBER_OF)
+# The sources in an entity's provenance, as rows.
+SOURCES = """
+    jsonb_array_elements(
+        CASE WHEN jsonb_typeof(e.provenance -> 'sources') = 'array'
+             THEN e.provenance -> 'sources' ELSE '[]'::jsonb END
+    ) AS s
+"""
+
+
+class GraphRepository(EntityRepository):
+    """The graph as people and services explore it (LEKA-369): search, a
+    walk one step at a time, the relationships among a set, a view's
+    layers, what the model knows of each kind and from which sources."""
+
+    async def search(
+        self,
+        query: str,
+        folded: str,
+        *,
+        types: Sequence[EntityType],
+        removed: bool,
+        limit: int,
+    ) -> list[tuple[Entity, float]]:
+        """The entities whose words match `query` (a tsquery, search.py),
+        the best first: one of its names the very one typed, then a name it
+        starts, then how well the words match — a name's weigh more — and
+        the living before the dormant and archived."""
+        tsquery = func.to_tsquery(literal_column("'simple'::regconfig"), query)
+        # Each name between two separators: " | billing api | payments | ".
+        names = literal(NAMES_APART) + Entity.search_name + literal(NAMES_APART)
+        score = (
+            case(
+                (names.contains(f"{NAMES_APART}{folded}{NAMES_APART}", autoescape=True), 2.0),
+                else_=0.0,
+            )
+            + case((names.contains(f"{NAMES_APART}{folded}", autoescape=True), 1.0), else_=0.0)
+            + case((Entity.lifecycle == Lifecycle.ACTIVE, 0.1), else_=0.0)
+            + func.ts_rank_cd(Entity.search_vector, tsquery)
+        ).label("score")
+        statement = (
+            select(Entity, score)
+            .where(Entity.workspace_id == self.workspace_id, Entity.search_vector.op("@@")(tsquery))
+            .order_by(score.desc(), Entity.name, Entity.id)
+            .limit(limit)
+        )
+        if types:
+            statement = statement.where(Entity.type.in_(types))
+        if not removed:
+            statement = statement.where(Entity.lifecycle != Lifecycle.REMOVED)
+        rows = await self._session.execute(statement)
+        return [(entity, float(found)) for entity, found in rows.tuples().all()]
+
+    async def holders(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, Entity]:
+        """Where each is — what it is part of, a child or a member of — the
+        surest."""
+        if not ids:
+            return {}
+        edges = await self.list(
+            self.select(Relationship)
+            .where(Relationship.from_entity_id.in_(set(ids)), Relationship.type.in_(HELD_BY))
+            .order_by(Relationship.confidence.desc(), Relationship.id)
+        )
+        first: dict[uuid.UUID, uuid.UUID] = {}
+        for edge in edges:
+            first.setdefault(edge.from_entity_id, edge.to_entity_id)
+        found = await self.by_ids(list(first.values()))
+        return {one: found[other] for one, other in first.items() if other in found}
+
+    async def step(
+        self,
+        frontier: Sequence[uuid.UUID],
+        *,
+        outgoing: bool | None,
+        types: Sequence[RelationshipType],
+        entity_types: Sequence[EntityType] = (),
+        min_confidence: float | None = None,
+        environment: str | None = None,
+        limit: int,
+    ) -> list[tuple[Relationship, Entity]]:
+        """One step of a walk: the relationships leaving these entities
+        (outgoing), reaching them (incoming) or both (None) — each with the
+        entity at its other end, never a removed one — the surest first, at
+        most `limit` each way. Each way is one query on its own index
+        (ix_relationships_from, ix_relationships_to)."""
+        if not frontier:
+            return []
+        found: list[tuple[Relationship, Entity]] = []
+        for leaving in (True, False) if outgoing is None else (outgoing,):
+            near, far = (
+                (Relationship.from_entity_id, Relationship.to_entity_id)
+                if leaving
+                else (Relationship.to_entity_id, Relationship.from_entity_id)
+            )
+            statement = (
+                select(Relationship, Entity)
+                .join(
+                    Entity,
+                    and_(Entity.id == far, Entity.workspace_id == Relationship.workspace_id),
+                )
+                .where(
+                    Relationship.workspace_id == self.workspace_id,
+                    near.in_(set(frontier)),
+                    Entity.lifecycle != Lifecycle.REMOVED,
+                )
+                .order_by(Relationship.confidence.desc(), Relationship.id)
+                .limit(limit)
+            )
+            if entity_types:
+                statement = statement.where(Entity.type.in_(entity_types))
+            statement = _edges(statement, types, min_confidence, environment)
+            rows = await self._session.execute(statement)
+            found += list(rows.tuples().all())
+        return found
+
+    async def ties(
+        self,
+        frontier: Sequence[uuid.UUID],
+        *,
+        types: Sequence[RelationshipType],
+        min_confidence: float | None = None,
+        limit: int,
+    ) -> list[tuple[uuid.UUID, uuid.UUID, uuid.UUID, float]]:
+        """One step of a search for a way: the relationships touching these
+        entities, either way — their id, ends and confidence only, nothing
+        loaded — never to a removed entity, the surest first, at most
+        `limit` each way."""
+        if not frontier:
+            return []
+        found: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID, float]] = []
+        for near, far in (
+            (Relationship.from_entity_id, Relationship.to_entity_id),
+            (Relationship.to_entity_id, Relationship.from_entity_id),
+        ):
+            statement = (
+                select(
+                    Relationship.id,
+                    Relationship.from_entity_id,
+                    Relationship.to_entity_id,
+                    Relationship.confidence,
+                )
+                .join(
+                    Entity,
+                    and_(Entity.id == far, Entity.workspace_id == Relationship.workspace_id),
+                )
+                .where(
+                    Relationship.workspace_id == self.workspace_id,
+                    near.in_(set(frontier)),
+                    Entity.lifecycle != Lifecycle.REMOVED,
+                )
+                .order_by(Relationship.confidence.desc(), Relationship.id)
+                .limit(limit)
+            )
+            rows = await self._session.execute(_edges(statement, types, min_confidence, None))
+            found += [(one, a, b, float(sure)) for one, a, b, sure in rows.tuples().all()]
+        return found
+
+    async def edges_by_ids(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, Relationship]:
+        if not ids:
+            return {}
+        found = await self.list(self.select(Relationship).where(Relationship.id.in_(set(ids))))
+        return {edge.id: edge for edge in found}
+
+    async def between(
+        self,
+        ids: Sequence[uuid.UUID],
+        *,
+        types: Sequence[RelationshipType] = (),
+        min_confidence: float | None = None,
+        environment: str | None = None,
+        limit: int,
+    ) -> list[Relationship]:
+        """The relationships among these entities, the surest first, at
+        most `limit`."""
+        if not ids:
+            return []
+        wanted = set(ids)
+        statement = (
+            select(Relationship)
+            .where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.from_entity_id.in_(wanted),
+                Relationship.to_entity_id.in_(wanted),
+            )
+            .order_by(Relationship.confidence.desc(), Relationship.id)
+            .limit(limit)
+        )
+        statement = _edges(statement, types, min_confidence, environment)
+        return list((await self._session.execute(statement)).scalars().all())
+
+    async def tied(
+        self, links: Sequence[RelationshipType], among: Sequence[EntityType]
+    ) -> dict[str, set[uuid.UUID]]:
+        """The entities a relationship of `links` joins to one of `among`'s
+        kinds, either way — the removed left out at the other end — by
+        type.
+
+        Each way is asked on its own, on its own column: one condition with
+        an OR between the ways checked every relationship against every
+        entity — minutes on 60,000 relationships, not milliseconds. A view
+        asks it once for the layers that share it, each reading its own
+        types' (graph.py)."""
+        near_entity, other = aliased(Entity), aliased(Entity)
+
+        def ends(near: Any, far: Any) -> Select[Any]:
+            return (
+                select(near, near_entity.type)
+                .join(
+                    near_entity,
+                    and_(
+                        near_entity.id == near,
+                        near_entity.workspace_id == Relationship.workspace_id,
+                    ),
+                )
+                .join(other, and_(other.id == far, other.workspace_id == Relationship.workspace_id))
+                .where(
+                    Relationship.workspace_id == self.workspace_id,
+                    Relationship.type.in_(links),
+                    other.type.in_(among),
+                    other.lifecycle != Lifecycle.REMOVED,
+                )
+            )
+
+        # Both ways' rows as they come: the sets below drop the twice-tied.
+        rows = await self._session.execute(
+            union_all(
+                ends(Relationship.from_entity_id, Relationship.to_entity_id),
+                ends(Relationship.to_entity_id, Relationship.from_entity_id),
+            )
+        )
+        found: dict[str, set[uuid.UUID]] = {}
+        for one, kind in rows.tuples().all():
+            found.setdefault(str(kind), set()).add(one)
+        return found
+
+    async def layer(
+        self,
+        types: Sequence[EntityType],
+        *,
+        within: set[uuid.UUID] | None,
+        limit: int,
+    ) -> tuple[list[Entity], int]:
+        """A view's layer: its entities — only those `within`, when given —
+        the most connected first, at most `limit`; and how many there are,
+        counted by the same query."""
+        if within is not None and not within:
+            return [], 0
+
+        def ties(end: Any) -> Any:
+            # One way's count, on its own index: ix_relationships_from or _to.
+            return (
+                select(func.count())
+                .where(Relationship.workspace_id == self.workspace_id, end == Entity.id)
+                .correlate(Entity)
+                .scalar_subquery()
+            )
+
+        degree = ties(Relationship.from_entity_id) + ties(Relationship.to_entity_id)
+        statement = (
+            select(Entity, func.count().over())
+            .where(
+                Entity.workspace_id == self.workspace_id,
+                Entity.type.in_(types),
+                Entity.lifecycle != Lifecycle.REMOVED,
+            )
+            .order_by(degree.desc(), Entity.name, Entity.id)
+            .limit(limit)
+        )
+        if within is not None:
+            statement = statement.where(
+                Entity.id == any_(literal(list(within), ARRAY(UUID(as_uuid=True))))
+            )
+        rows = (await self._session.execute(statement)).tuples().all()
+        return [entity for entity, _ in rows], int(rows[0][1]) if rows else 0
+
+    async def recently_hit(self, ids: Sequence[uuid.UUID], *, since: datetime) -> set[uuid.UUID]:
+        """Those an incident affecting them opened, or was resolved, since
+        `since`."""
+        if not ids:
+            return set()
+        incident = aliased(Entity)
+        rows = await self._session.execute(
+            select(Relationship.to_entity_id)
+            .join(
+                incident,
+                and_(
+                    incident.id == Relationship.from_entity_id,
+                    incident.workspace_id == Relationship.workspace_id,
+                ),
+            )
+            .where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.type == RelationshipType.AFFECTS,
+                Relationship.to_entity_id.in_(set(ids)),
+                incident.type == EntityType.INCIDENT,
+                or_(
+                    incident.occurred_at >= since,
+                    incident.attributes["resolved_at"].astext >= _stamp(since),
+                ),
+            )
+        )
+        return set(rows.scalars().all())
+
+    async def known(self, types: Sequence[EntityType]) -> list[tuple[str, int, int, int, int, int]]:
+        """Each kind's entities — the removed left out — and how many of
+        them have an owner, are described by a document, are said by two
+        sources or more, are tied to anything."""
+        rows = await self._session.execute(
+            text(
+                f"""
+                SELECT e.type, count(*),
+                  count(*) FILTER (WHERE EXISTS (
+                    SELECT 1 FROM relationships r WHERE r.workspace_id = :workspace
+                       AND r.from_entity_id = e.id AND r.type = 'owned_by')),
+                  count(*) FILTER (WHERE EXISTS (
+                    SELECT 1 FROM relationships r WHERE r.workspace_id = :workspace
+                       AND r.to_entity_id = e.id AND r.type = 'describes')),
+                  count(*) FILTER (WHERE (
+                    SELECT count(DISTINCT s ->> 'source_id') FROM {SOURCES}) >= 2),
+                  count(*) FILTER (WHERE EXISTS (
+                    SELECT 1 FROM relationships r WHERE r.workspace_id = :workspace
+                       AND r.from_entity_id = e.id)
+                    OR EXISTS (
+                    SELECT 1 FROM relationships r WHERE r.workspace_id = :workspace
+                       AND r.to_entity_id = e.id))
+                FROM entities e
+                WHERE e.workspace_id = :workspace AND e.lifecycle <> 'removed'
+                  AND e.type = ANY(CAST(:types AS text[]))
+                GROUP BY e.type
+                ORDER BY e.type
+                """  # noqa: S608 — SOURCES is this module's own text
+            ),
+            {"workspace": self.workspace_id, "types": [kind.value for kind in types]},
+        )
+        return [
+            (str(kind), int(total), int(owned), int(documented), int(said), int(tied))
+            for kind, total, owned, documented, said, tied in rows.tuples().all()
+        ]
+
+    async def sources_of(self, types: Sequence[EntityType]) -> list[tuple[uuid.UUID, str, int]]:
+        """The sources these kinds' entities come from: each, its kind, and
+        how many of them it shows — the most first."""
+        rows = await self._session.execute(
+            text(
+                f"""
+                SELECT src.id, src.kind, count(DISTINCT e.id)
+                FROM entities e, {SOURCES}
+                JOIN sources src
+                  ON src.workspace_id = :workspace AND src.id::text = s ->> 'source_id'
+                WHERE e.workspace_id = :workspace AND e.lifecycle <> 'removed'
+                  AND e.type = ANY(CAST(:types AS text[]))
+                GROUP BY 1, 2
+                ORDER BY 3 DESC, 2
+                """  # noqa: S608 — SOURCES is this module's own text
+            ),
+            {"workspace": self.workspace_id, "types": [kind.value for kind in types]},
+        )
+        return [(source, str(kind), int(count)) for source, kind, count in rows.tuples().all()]
+
+    async def source_kinds(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, str]:
+        """The kind of each of these sources: github, pagerduty…"""
+        if not ids:
+            return {}
+        rows = await self._session.execute(
+            select(Source.id, Source.kind).where(
+                Source.workspace_id == self.workspace_id, Source.id.in_(set(ids))
+            )
+        )
+        return {source: kind.value for source, kind in rows.tuples().all()}
+
+    async def built_at(self) -> datetime | None:
+        """When the model was last built."""
+        found = await self._session.scalar(
+            select(func.max(ModelRun.finished_at)).where(
+                ModelRun.workspace_id == self.workspace_id, ModelRun.status == "succeeded"
+            )
+        )
+        return found if isinstance(found, datetime) else None
+
+
+def _edges(
+    statement: Select[Any],
+    types: Sequence[RelationshipType],
+    min_confidence: float | None,
+    environment: str | None,
+) -> Select[Any]:
+    """Relationships of these types, this sure, true in this environment —
+    or in every one, when they say none."""
+    if types:
+        statement = statement.where(Relationship.type.in_(types))
+    if min_confidence is not None:
+        statement = statement.where(Relationship.confidence >= min_confidence)
+    if environment is not None:
+        statement = statement.where(
+            or_(
+                ~func.jsonb_exists(Relationship.attributes, "environments"),
+                func.jsonb_exists(Relationship.attributes["environments"], environment),
+            )
+        )
+    return statement
 
 
 def _personal(statement: Select[tuple[Entity]], personal: bool | None) -> Select[tuple[Entity]]:
