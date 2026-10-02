@@ -18,7 +18,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from leka.knowledge.contracts import Previous, check, history
+from leka.knowledge.contracts import Issue, Previous, check, history
 from leka.knowledge.models import RelationshipType
 from leka.knowledge.registry import DEPENDENCIES, RELATIONSHIP_KINDS
 
@@ -56,8 +56,8 @@ def _edge(
     }
 
 
-def _issues(found: list[object]) -> set[tuple[str, str, str]]:
-    return {(i.type, i.issue, i.severity) for i in found}  # type: ignore[attr-defined]
+def _issues(found: list[Issue]) -> set[tuple[str, str, str]]:
+    return {(i.type, i.issue, i.severity) for i in found}
 
 
 def test_every_kind_of_relationship_has_a_versioned_contract() -> None:
