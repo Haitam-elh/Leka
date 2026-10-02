@@ -70,7 +70,10 @@ Each **relationship kind** is built from enrichment's relationships
 `references` and `reads_from` (LEKA-364), `reports_to` and `contributes_to`
 (LEKA-365), `describes`, `edited_by`, `supported_by`, `uses` and `realizes`
 (LEKA-366), `deploys`, `deployed_to` and `caused_by` (LEKA-367).
-`owns` is kept for what states it later; nothing does yet.
+`owns` is kept for what states it later; nothing does yet. Each has a
+**contract** — what it means, what each end may be, whether a thing has
+one, whether a loop of it is a contradiction, whether it is a dependency —
+checked at every build (§ 15, LEKA-368).
 
 `GET /knowledge/registry` serves all of it.
 
@@ -117,8 +120,9 @@ shows it and the key it goes by there (up to 20).
 
 A relationship says whether a source **stated** it or a rule **inferred**
 it (`origin`, `rule`), how sure it is, whether it joins two tools' things
-(`cross_source`), the records that stated it (`provenance`), and the
-**environments** it is true in (`attributes.environments`, § 9).
+(`cross_source`), the records that stated it (`provenance`), the
+**environments** it is true in (`attributes.environments`, § 9), and when
+it first appeared and last changed (`first_seen_at`, `changed_at`, § 15).
 
 ## 4. Lifecycle
 
@@ -174,10 +178,13 @@ A **workspace** stage, after enrichment: `model:<workspace>`,
   queues what no event will: a workspace enriched before the model existed,
   a build that failed, a new `MODEL_VERSION`. It closes the runs a dead
   worker left, and forgets `model_runs` past 90 days — never a workspace's
-  last success, which says what its model was made from.
+  last success, which says what its model was made from — and the
+  relationships' history past a year (LEKA-368).
 
 `model_runs.counts`: `created`, `changed`, `unchanged`, `removed`,
 `still_removed`, `entities`, `relationships`, `type.<kind>`,
+`relationships_added`, `relationships_changed`, `relationships_removed`,
+`relationships_invalid`, `relationship_warnings` (LEKA-368),
 `not_modelled`, `attributes_dropped`, `relationships_not_modelled`,
 `relationships_to_unmodelled`.
 
@@ -195,7 +202,7 @@ Read by every member (`workspace:read`); another workspace's entity is 404.
 | `GET /knowledge/entities/{id}/neighbourhood?depth=1..3` | what surrounds it, in either direction, the removed left out: up to 200 entities and the relationships between them |
 | `GET /knowledge/services`, `GET /knowledge/applications` | the landscape (§ 9), by name, paged: `criticality`, `stage`, `environment`, `application_id` (services), `team_id`, `lifecycle`, `q` |
 | `GET /knowledge/services/{id}`, `GET /knowledge/applications/{id}` | one: its landscape, what it is made of and in which environments, its dependencies both ways, its attributes and provenance. A service's id on the applications' route is 404 |
-| `GET /knowledge/entities/{id}/dependencies` | `direction=downstream` (what it depends on) or `upstream` (what depends on it: what its failure reaches), `depth=1..5`, `environment`: each thing reached and how far, the `depends_on` walked — up to 500, `truncated` beyond |
+| `GET /knowledge/entities/{id}/dependencies` | `direction=downstream` (what it depends on) or `upstream` (what depends on it: what its failure reaches), `depth=1..5`, `environment`, `through` (the dependency relationships followed: `depends_on` — the default — `reads_from`, `references`, `supported_by`, `uses`; LEKA-368): each thing reached and how far, the relationships walked — up to 500, `truncated` beyond |
 | `GET /knowledge/infrastructure` | the cloud resources and databases (§ 10), by name, paged: `resource_class`, `resource_kind`, `provider`, `account_id` (an account, subscription, project — or resource group: what is in it and in its groups), `region`, `environment`, `state`, `exposure`, `criticality`, `service_id`, `team_id`, `lifecycle`, `q` |
 | `GET /knowledge/infrastructure/{id}` | one: its place, environment and who says so, services, team, network, cluster; what it holds — a cluster's nodes, a network's resources — and its dependencies both ways; its attributes and provenance. Anything but a resource is 404 |
 | `GET /knowledge/cloud-accounts` | the accounts, subscriptions and projects, by name, paged: `provider`, `environment`, `lifecycle`, `q` — each with how many resources it holds (in its groups too), of which class, in which regions; its environment and team |
@@ -223,6 +230,9 @@ Read by every member (`workspace:read`); another workspace's entity is 404.
 | `GET /knowledge/incidents/{id}` | one: its timeline — the dates its sources give, each state LEKA saw it take — what it affects, who handled it, its causes with origin and rule, what changed on what it affects in the 72 hours before, what it reaches: dependents, applications, the business |
 | `GET /knowledge/changes`, `GET /knowledge/deployments` | the latest first, paged: `state`, `change_type` or `environment`, `service_id` (a deployment's own or its repositories'), `repository_id` (deployments), `since`, `until`, `lifecycle`, `q` — each with its dates, what it touched, who made it, how many incidents follow from it |
 | `GET /knowledge/changes/{id}`, `GET /knowledge/deployments/{id}` | one: a change's timeline, a deployment's statuses with when; what it affects or shipped, where it went; the incidents said or suspected to follow from it |
+| `GET /knowledge/relationships` | the graph's relationships (§ 15), the latest changed first (`sort=changed_at`, or `confidence`), paged: `type`, `entity_id` (either end), `origin`, `rule`, `min_confidence`, `since`, `until` — each with both ends named, its provenance, when it first appeared and last changed |
+| `GET /knowledge/relationships/changes` | their history, the latest first: each relationship added, changed or removed at a build, before and after — `type`, `entity_id`, `change`, `since`, `until` |
+| `GET /knowledge/relationships/issues` | what the last build found wrong: `wrong_end` (dropped, an error), `cycle_broken` (an inferred link dropped), `cycle`, `several_targets` (kept, warnings) — `type`, `entity_id`, `severity`, `issue` |
 | `GET /knowledge/timeline` | what happened between `since` and `until` (a month by default, a year at most), the latest first — incidents opened and resolved, deployments, changes, releases, merges — around `entity_id` (itself, what is part of it two steps down, what affects it, each with `via`) or everywhere; `kinds`, `limit` (500 at most) |
 
 ## 8. What reads it
@@ -658,13 +668,88 @@ or everywhere, between two dates.
   rate — are not computed yet; the deployments and causes they need are
   here.
 
+## 15. Relationships and dependencies (LEKA-368)
+
+The relationships are the graph: what `leka.context` follows to gather an
+answer, what a dependency walk follows to know what a failure reaches. Each
+kind has a **contract** in the registry (`leka/knowledge/registry.py`,
+served by `/knowledge/registry`), versioned with it; each build checks
+every relationship against it (`leka/knowledge/contracts.py`).
+
+**Made from processed evidence.** A relationship is **stated** — a record
+of a source said it, normalisation read it ([normalisation.md § 5](normalisation.md))
+— or **inferred** by a rule of enrichment ([enrichment.md](enrichment.md)),
+never invented. Each keeps its `origin`, its `rule`, its `confidence` and
+its `provenance`: the records that stated it, or what it was inferred from.
+
+**The contracts.**
+
+| Kind | Means, from → to | From | To | |
+|---|---|---|---|---|
+| `part_of` | is part of | any | repository, project, service, application, cloud account, resource group, resource, database, schema, knowledge space, business process | no loop |
+| `child_of` | is a child of | issue, incident, change, document, team, capability | the same | one; no loop |
+| `depends_on` | depends on | service, application, resource, database | the same | dependency |
+| `owned_by` | is owned by | any | team, person | |
+| `maintained_by` | is maintained by | repository, project, service, application, knowledge space | person | |
+| `member_of` | is a member of | person | team | |
+| `authored_by`, `assigned_to`, `reviewed_by`, `reported_by`, `led_by` | … by | any | person | |
+| `edited_by` | is edited by | document | person | |
+| `reports_to` | reports to | person | person | one; no loop |
+| `contributes_to` | contributes to | person | repository, project, service, knowledge space | |
+| `affects` | affects | incident, change | service, application, resource, database, table, repository | |
+| `resolves`, `implements` | resolves, implements | pull request, commit, issue | issue, incident, change | |
+| `merges` | merges | commit, pull request | pull request, commit | |
+| `caused_by` | is caused by | issue, incident, change | change, deployment, incident, issue, pull request, commit, release | |
+| `deploys` | deploys | deployment | commit, release | |
+| `deployed_to` | is deployed to | deployment | environment, resource, database | |
+| `runs_in` | runs in | any | environment | |
+| `in_network` | is in the network | resource, database | resource | |
+| `references` | references | table, document | table, document, knowledge space | dependency |
+| `reads_from` | reads from | table | table | dependency |
+| `describes` | describes | document, knowledge space | any | |
+| `supported_by` | is supported by | capability, process | application, service | dependency |
+| `uses` | uses | capability, process | table, schema, database | dependency |
+| `realizes` | realizes | process | capability | |
+| `mentions`, `owns` | mentions, owns | any | any | |
+
+**Validated.** At each build:
+
+| Issue | When | What happens |
+|---|---|---|
+| `wrong_end` | an end of a kind the contract does not take — a team that reports to someone | **dropped**, an error: never written wrong |
+| `cycle_broken` | an inferred link closes a loop of a kind that may have none — A part of B, part of A | the **weakest inferred** link dropped, a warning |
+| `cycle` | a loop its sources state — two teams each the other's parent — or a dependency loop | **kept**, a warning: the sources contradict each other, LEKA says so |
+| `several_targets` | more than one of what a thing has one — two managers, from an HR system and a directory | **kept**, the surest first, a warning |
+
+`/knowledge/relationships/issues` lists what the last build found;
+`model_runs.counts` says how many (`relationships_invalid`,
+`relationship_warnings`).
+
+**Their life, kept.** Each relationship says when it first appeared
+(`first_seen_at`, the first build it was in) and last changed
+(`changed_at`). Each build records in `relationship_changes` what was
+`added`, `removed`, or `changed` — its origin, its rule, its environments,
+or its confidence by 0.05 at least: an inference drifting with the clock is
+no news — before and after, with the build that saw it. Kept a year (the
+hourly sweep forgets what is older). `/knowledge/relationships/changes`
+serves it to whatever reads the graph.
+
+**Dependencies.** `depends_on`, `reads_from`, `references`, `supported_by`
+and `uses` say what a thing needs to work; the dependency walk follows
+`depends_on`, or those asked (`through`): upstream, what a failure reaches;
+downstream, what a thing relies on — in one environment or all (§ 9).
+
+**Limits.** History starts with the first build after LEKA-368: a
+relationship's `first_seen_at` before it is when its last build made it. A
+relationship's change of provenance alone — another record stating it — is
+not a change. A loop longer than the graph's hierarchy is found whatever
+its length; a loop through two kinds (A part of B, B child of A) is not.
+
 ## Not yet
 
 - **The environment screens** ([enrichment.md § 12](enrichment.md)) still
   read enrichment's tables; they move to the model's entities and
   lifecycles next.
-- **Relationships' history**: a relationship is current only; when it
-  appeared and went is not kept yet.
 - **A person's word**: correcting an entity or a relationship by hand, kept
   across builds.
 - **Kinds promised by connectors not built**: Kubernetes workloads — a
