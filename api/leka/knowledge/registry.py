@@ -48,7 +48,10 @@ from leka.knowledge.models import EntityType, RelationshipType
 # 7: incidents, changes and deployments — when each happened, its states,
 #    what it touched and shipped, what caused an incident; the dates of
 #    releases and pull requests; when each event occurred (LEKA-367).
-MODEL_VERSION = 7
+# 8: relationships checked against their kinds' contracts — what breaks one
+#    dropped, what contradicts itself said or broken — and their history:
+#    when each appeared, changed, went (LEKA-368).
+MODEL_VERSION = 8
 
 
 class Attributes(BaseModel):
@@ -445,49 +448,252 @@ NOT_MODELLED = frozenset({"branch"})
 
 @dataclass(frozen=True)
 class RelationshipKind:
+    """A kind of relationship and its contract (LEKA-368): what it means,
+    read from → to; the kinds of entities each end may be; whether a thing
+    has one only, whether a loop of it is a contradiction, whether it says
+    what a thing needs to work. A build drops a relationship whose ends
+    break the contract and says why (contracts.py)."""
+
     type: RelationshipType
     version: int
     # The relationships of enrichment (docs/enrichment.md) it is built from.
     built_from: tuple[str, ...]
+    meaning: str = ""
+    # The kinds its ends may be: None, any.
+    sources: frozenset[EntityType] | None = None
+    targets: frozenset[EntityType] | None = None
+    # One a thing: a person's manager, a ticket's parent — more is said.
+    single: bool = False
+    # A loop is a contradiction — what holds what, who reports to whom: an
+    # inferred link closing one is dropped; stated ones are said.
+    acyclic: bool = False
+    # What a thing needs to work: a loop of it is said; the dependency walk
+    # may follow it.
+    dependency: bool = False
 
+
+E = EntityType
+# What holds things: what `part_of` points at (LEKA-361 → LEKA-367).
+HOLDERS = frozenset(
+    {
+        E.REPOSITORY,
+        E.PROJECT,
+        E.SERVICE,
+        E.APPLICATION,
+        E.CLOUD_ACCOUNT,
+        E.RESOURCE_GROUP,
+        E.INFRA_RESOURCE,
+        E.DATABASE,
+        E.SCHEMA,
+        E.KNOWLEDGE_SPACE,
+        E.BUSINESS_PROCESS,
+    }
+)
+PEOPLE = frozenset({E.PERSON})
+TICKETS = frozenset({E.ISSUE, E.INCIDENT, E.CHANGE})
+RUNNING = frozenset({E.SERVICE, E.APPLICATION, E.INFRA_RESOURCE, E.DATABASE})
+TOUCHED = RUNNING | {E.DATA_OBJECT, E.REPOSITORY}
+BUSINESS = frozenset({E.BUSINESS_CAPABILITY, E.BUSINESS_PROCESS})
+DATA = frozenset({E.DATA_OBJECT, E.SCHEMA, E.DATABASE})
+AREAS = frozenset({E.REPOSITORY, E.PROJECT, E.SERVICE, E.KNOWLEDGE_SPACE})
+SHIPPED = frozenset({E.COMMIT, E.RELEASE})
+CAUSES = TICKETS | {E.DEPLOYMENT, E.PULL_REQUEST, E.COMMIT, E.RELEASE}
+R = RelationshipType
 
 RELATIONSHIP_KINDS: dict[RelationshipType, RelationshipKind] = {
     kind.type: kind
     for kind in (
-        RelationshipKind(RelationshipType.PART_OF, 1, ("part_of",)),
-        RelationshipKind(RelationshipType.CHILD_OF, 1, ("child_of",)),
-        RelationshipKind(RelationshipType.DEPENDS_ON, 1, ("depends_on",)),
-        RelationshipKind(RelationshipType.OWNED_BY, 1, ("owned_by",)),
-        RelationshipKind(RelationshipType.MAINTAINED_BY, 1, ("maintained_by",)),
-        RelationshipKind(RelationshipType.MEMBER_OF, 1, ("member_of",)),
-        RelationshipKind(RelationshipType.AUTHORED_BY, 1, ("authored_by", "committed_by")),
-        RelationshipKind(RelationshipType.ASSIGNED_TO, 1, ("assigned_to",)),
-        RelationshipKind(RelationshipType.REVIEWED_BY, 1, ("reviewed_by",)),
-        RelationshipKind(RelationshipType.REPORTED_BY, 1, ("reported_by", "created_by")),
-        RelationshipKind(RelationshipType.LED_BY, 1, ("led_by",)),
-        RelationshipKind(RelationshipType.AFFECTS, 1, ("affects",)),
-        RelationshipKind(RelationshipType.RESOLVES, 1, ("resolves",)),
-        RelationshipKind(RelationshipType.IMPLEMENTS, 1, ("implements",)),
-        RelationshipKind(RelationshipType.MERGES, 1, ("merges",)),
-        RelationshipKind(RelationshipType.MENTIONS, 1, ("mentions",)),
-        RelationshipKind(RelationshipType.IN_NETWORK, 1, ("in_network",)),
-        RelationshipKind(RelationshipType.RUNS_IN, 1, ("runs_in",)),
-        RelationshipKind(RelationshipType.REFERENCES, 1, ("references",)),
-        RelationshipKind(RelationshipType.READS_FROM, 1, ("reads_from",)),
-        RelationshipKind(RelationshipType.REPORTS_TO, 1, ("reports_to",)),
-        RelationshipKind(RelationshipType.CONTRIBUTES_TO, 1, ("contributes_to",)),
-        RelationshipKind(RelationshipType.DESCRIBES, 1, ("describes",)),
-        RelationshipKind(RelationshipType.EDITED_BY, 1, ("edited_by",)),
-        RelationshipKind(RelationshipType.SUPPORTED_BY, 1, ("supported_by",)),
-        RelationshipKind(RelationshipType.USES, 1, ("uses",)),
-        RelationshipKind(RelationshipType.REALIZES, 1, ("realizes",)),
+        RelationshipKind(R.PART_OF, 2, ("part_of",), "is part of", targets=HOLDERS, acyclic=True),
+        RelationshipKind(
+            R.CHILD_OF,
+            2,
+            ("child_of",),
+            "is a child of",
+            sources=TICKETS | {E.DOCUMENT, E.TEAM, E.BUSINESS_CAPABILITY},
+            targets=TICKETS | {E.DOCUMENT, E.TEAM, E.BUSINESS_CAPABILITY},
+            single=True,
+            acyclic=True,
+        ),
+        RelationshipKind(
+            R.DEPENDS_ON,
+            2,
+            ("depends_on",),
+            "depends on",
+            sources=RUNNING,
+            targets=RUNNING,
+            dependency=True,
+        ),
+        RelationshipKind(
+            R.OWNED_BY, 2, ("owned_by",), "is owned by", targets=frozenset({E.TEAM, E.PERSON})
+        ),
+        RelationshipKind(
+            R.MAINTAINED_BY,
+            2,
+            ("maintained_by",),
+            "is maintained by",
+            sources=AREAS | {E.APPLICATION},
+            targets=PEOPLE,
+        ),
+        RelationshipKind(
+            R.MEMBER_OF,
+            2,
+            ("member_of",),
+            "is a member of",
+            sources=PEOPLE,
+            targets=frozenset({E.TEAM}),
+        ),
+        RelationshipKind(
+            R.AUTHORED_BY, 2, ("authored_by", "committed_by"), "is authored by", targets=PEOPLE
+        ),
+        RelationshipKind(R.ASSIGNED_TO, 2, ("assigned_to",), "is assigned to", targets=PEOPLE),
+        RelationshipKind(R.REVIEWED_BY, 2, ("reviewed_by",), "is reviewed by", targets=PEOPLE),
+        RelationshipKind(
+            R.REPORTED_BY, 2, ("reported_by", "created_by"), "is reported by", targets=PEOPLE
+        ),
+        RelationshipKind(R.LED_BY, 2, ("led_by",), "is led by", targets=PEOPLE),
+        RelationshipKind(
+            R.AFFECTS,
+            2,
+            ("affects",),
+            "affects",
+            sources=frozenset({E.INCIDENT, E.CHANGE}),
+            targets=TOUCHED,
+        ),
+        RelationshipKind(
+            R.RESOLVES,
+            2,
+            ("resolves",),
+            "resolves",
+            sources=frozenset({E.PULL_REQUEST, E.COMMIT, E.ISSUE}),
+            targets=TICKETS,
+        ),
+        RelationshipKind(
+            R.IMPLEMENTS,
+            2,
+            ("implements",),
+            "implements",
+            sources=frozenset({E.PULL_REQUEST, E.COMMIT, E.ISSUE}),
+            targets=TICKETS,
+        ),
+        RelationshipKind(
+            R.MERGES,
+            2,
+            ("merges",),
+            "merges",
+            sources=frozenset({E.COMMIT, E.PULL_REQUEST}),
+            targets=frozenset({E.PULL_REQUEST, E.COMMIT}),
+        ),
+        RelationshipKind(R.MENTIONS, 2, ("mentions",), "mentions"),
+        RelationshipKind(
+            R.IN_NETWORK,
+            2,
+            ("in_network",),
+            "is in the network",
+            sources=frozenset({E.INFRA_RESOURCE, E.DATABASE}),
+            targets=frozenset({E.INFRA_RESOURCE}),
+        ),
+        RelationshipKind(R.RUNS_IN, 2, ("runs_in",), "runs in", targets=frozenset({E.ENVIRONMENT})),
+        RelationshipKind(
+            R.REFERENCES,
+            2,
+            ("references",),
+            "references",
+            sources=frozenset({E.DATA_OBJECT, E.DOCUMENT}),
+            targets=frozenset({E.DATA_OBJECT, E.DOCUMENT, E.KNOWLEDGE_SPACE}),
+            dependency=True,
+        ),
+        RelationshipKind(
+            R.READS_FROM,
+            2,
+            ("reads_from",),
+            "reads from",
+            sources=frozenset({E.DATA_OBJECT}),
+            targets=frozenset({E.DATA_OBJECT}),
+            dependency=True,
+        ),
+        RelationshipKind(
+            R.REPORTS_TO,
+            2,
+            ("reports_to",),
+            "reports to",
+            sources=PEOPLE,
+            targets=PEOPLE,
+            single=True,
+            acyclic=True,
+        ),
+        RelationshipKind(
+            R.CONTRIBUTES_TO,
+            2,
+            ("contributes_to",),
+            "contributes to",
+            sources=PEOPLE,
+            targets=AREAS,
+        ),
+        RelationshipKind(
+            R.DESCRIBES,
+            2,
+            ("describes",),
+            "describes",
+            sources=frozenset({E.DOCUMENT, E.KNOWLEDGE_SPACE}),
+        ),
+        RelationshipKind(
+            R.EDITED_BY,
+            2,
+            ("edited_by",),
+            "is edited by",
+            sources=frozenset({E.DOCUMENT}),
+            targets=PEOPLE,
+        ),
+        RelationshipKind(
+            R.SUPPORTED_BY,
+            2,
+            ("supported_by",),
+            "is supported by",
+            sources=BUSINESS,
+            targets=frozenset({E.APPLICATION, E.SERVICE}),
+            dependency=True,
+        ),
+        RelationshipKind(
+            R.USES, 2, ("uses",), "uses", sources=BUSINESS, targets=DATA, dependency=True
+        ),
+        RelationshipKind(
+            R.REALIZES,
+            2,
+            ("realizes",),
+            "realizes",
+            sources=frozenset({E.BUSINESS_PROCESS}),
+            targets=frozenset({E.BUSINESS_CAPABILITY}),
+        ),
         # What shipped what, where; what caused an incident (LEKA-367).
-        RelationshipKind(RelationshipType.DEPLOYS, 1, ("deploys",)),
-        RelationshipKind(RelationshipType.DEPLOYED_TO, 1, ("deployed_to",)),
-        RelationshipKind(RelationshipType.CAUSED_BY, 1, ("caused_by",)),
-        RelationshipKind(RelationshipType.OWNS, 1, ()),
+        RelationshipKind(
+            R.DEPLOYS,
+            2,
+            ("deploys",),
+            "deploys",
+            sources=frozenset({E.DEPLOYMENT}),
+            targets=SHIPPED,
+        ),
+        RelationshipKind(
+            R.DEPLOYED_TO,
+            2,
+            ("deployed_to",),
+            "is deployed to",
+            sources=frozenset({E.DEPLOYMENT}),
+            targets=frozenset({E.ENVIRONMENT, E.INFRA_RESOURCE, E.DATABASE}),
+        ),
+        RelationshipKind(
+            R.CAUSED_BY,
+            2,
+            ("caused_by",),
+            "is caused by",
+            sources=TICKETS,
+            targets=CAUSES,
+        ),
+        RelationshipKind(R.OWNS, 2, (), "owns"),
     )
 }
+# What a dependency walk may follow (LEKA-368).
+DEPENDENCIES = tuple(kind.type for kind in RELATIONSHIP_KINDS.values() if kind.dependency)
 
 RELATIONSHIP_FROM: dict[str, RelationshipType] = {
     source: kind.type for kind in RELATIONSHIP_KINDS.values() for source in kind.built_from
