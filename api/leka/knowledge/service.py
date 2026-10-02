@@ -8,7 +8,9 @@ databases, schemas, tables — what each holds and what it is tied to
 (LEKA-364); the organisation — teams, people, who owns and operates what,
 who knows it (LEKA-365); the documentation — where it is kept, how fresh,
 what it covers — and the business — its capabilities and processes, what
-supports them, what a technical thing means to them (LEKA-366). The
+supports them, what a technical thing means to them (LEKA-366); what
+happens — incidents, changes, deployments, their timelines, what changed
+before an incident and what it reaches (LEKA-367). The
 registry (registry.py) is what they read to know what kinds of things a
 company is made of.
 
@@ -21,6 +23,7 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 from collections.abc import Callable, Sequence
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from leka.knowledge.models import Entity, EntityType, Lifecycle, Relationship, RelationshipType
@@ -31,6 +34,8 @@ from leka.knowledge.schemas import (
     BusinessPart,
     BusinessRead,
     BusinessTie,
+    ChangeDetail,
+    ChangeRead,
     CloudAccountDetail,
     CloudAccountRead,
     ColumnRead,
@@ -43,6 +48,8 @@ from leka.knowledge.schemas import (
     Dependencies,
     DependencyNode,
     DependencyRead,
+    DeploymentDetail,
+    DeploymentRead,
     DocumentationCoverage,
     DocumentationGap,
     DocumentDetail,
@@ -51,6 +58,9 @@ from leka.knowledge.schemas import (
     EntityRead,
     Expertise,
     Holds,
+    Impact,
+    IncidentDetail,
+    IncidentRead,
     InfrastructureDetail,
     InfrastructureRead,
     KnowledgeSpaceDetail,
@@ -69,6 +79,9 @@ from leka.knowledge.schemas import (
     TeamRead,
     Tie,
     Ties,
+    Timeline,
+    TimelineEvent,
+    TimelineStep,
 )
 
 MAX_DEPTH = 3
@@ -152,6 +165,59 @@ TECHNICAL = frozenset(
 )
 MAX_HOLDERS = 3
 PATHS = ("direct", "contained", "dependent")
+# Incidents, changes, deployments (LEKA-367): what each row reads around
+# it; the dates of an incident's and a change's life, in its words; what
+# changed before an incident is looked for this long before it, around
+# what it affects; how far what depends on it is followed.
+INCIDENT_AROUND = (
+    RelationshipType.AFFECTS,
+    RelationshipType.LED_BY,
+    RelationshipType.ASSIGNED_TO,
+    RelationshipType.REPORTED_BY,
+    RelationshipType.CAUSED_BY,
+)
+DEPLOYMENT_AROUND = (
+    RelationshipType.PART_OF,
+    RelationshipType.DEPLOYS,
+    RelationshipType.DEPLOYED_TO,
+    RelationshipType.REPORTED_BY,
+    RelationshipType.CAUSED_BY,
+)
+CHANGE_AROUND = (
+    RelationshipType.AFFECTS,
+    RelationshipType.ASSIGNED_TO,
+    RelationshipType.REPORTED_BY,
+    RelationshipType.CAUSED_BY,
+)
+INCIDENT_STEPS = (
+    ("created_at", "opened"),
+    ("detected_at", "detected"),
+    ("acknowledged_at", "acknowledged"),
+    ("resolved_at", "resolved"),
+    ("closed_at", "closed"),
+)
+CHANGE_STEPS = (
+    ("created_at", "opened"),
+    ("planned_start_at", "planned_start"),
+    ("planned_end_at", "planned_end"),
+    ("started_at", "started"),
+    ("finished_at", "finished"),
+)
+CHANGE_KINDS = (
+    EntityType.DEPLOYMENT,
+    EntityType.CHANGE,
+    EntityType.RELEASE,
+    EntityType.PULL_REQUEST,
+)
+KIND_EVENTS = {
+    EntityType.DEPLOYMENT: "deployment",
+    EntityType.CHANGE: "change",
+    EntityType.RELEASE: "release",
+    EntityType.PULL_REQUEST: "merge",
+}
+CHANGED_BEFORE = timedelta(hours=72)
+MAX_SCOPE = 2
+IMPACT_DEPTH = 2
 # What a resource's row reads around it (LEKA-363).
 PLACED = (
     RelationshipType.PART_OF,
@@ -1391,6 +1457,384 @@ class KnowledgeService:
             processes=[t for t in ranked if t.entity.type is EntityType.BUSINESS_PROCESS],
         )
 
+    # ── incidents, changes and deployments (LEKA-367) ───────────────────────
+
+    async def incidents(self, found: Sequence[Entity]) -> list[IncidentRead]:
+        """A page of incidents: how bad, where each stands, when it opened
+        and was handled, what it affects, who leads it, what caused it."""
+        rows, _, _ = await self._incidents(found)
+        return rows
+
+    async def incident(self, entity: Entity) -> IncidentDetail:
+        """One incident: its timeline, everything it is tied to, what
+        changed on what it affects before it opened, and what it reaches."""
+        [row], edges, others = await self._incidents([entity])
+        ties = _ties(edges, others, entity.id)
+        affected = ties(RelationshipType.AFFECTS, outgoing=True)
+        opened = entity.occurred_at
+        changed: list[TimelineEvent] = []
+        if opened is not None and affected:
+            scope: set[uuid.UUID] = set()
+            for tie in affected:
+                scope |= await self._entities.scope(tie.entity.id, depth=MAX_SCOPE)
+            changed = await self._events(
+                scope,
+                kinds=CHANGE_KINDS,
+                since=opened - CHANGED_BEFORE,
+                until=opened,
+                limit=MAX_LISTED,
+            )
+        return IncidentDetail(
+            **row.model_dump(),
+            attributes=dict(entity.attributes),
+            provenance=dict(entity.provenance),
+            timeline=await self._steps(entity, INCIDENT_STEPS),
+            affected=affected,
+            people=[
+                *ties(RelationshipType.LED_BY, outgoing=True),
+                *ties(RelationshipType.ASSIGNED_TO, outgoing=True),
+                *ties(RelationshipType.REPORTED_BY, outgoing=True),
+            ],
+            suspected_causes=ties(RelationshipType.CAUSED_BY, outgoing=True),
+            changed_before=[e for e in changed if e.entity.id != entity.id],
+            impact=await self._impact([tie.entity.id for tie in affected]),
+        )
+
+    async def _incidents(
+        self, found: Sequence[Entity]
+    ) -> tuple[list[IncidentRead], list[Relationship], dict[uuid.UUID, Entity]]:
+        edges, others = await self._ends(found, INCIDENT_AROUND)
+        rows = []
+        for entity in found:
+            out = _out(edges, others, entity.id)
+            a = entity.attributes
+            leads = out(RelationshipType.LED_BY)
+            rows.append(
+                IncidentRead(
+                    id=entity.id,
+                    key=entity.key,
+                    name=entity.name,
+                    lifecycle=entity.lifecycle,
+                    url=_text(a.get("url")),
+                    tools=_tools(entity),
+                    state=_text(a.get("state")),
+                    priority=_text(a.get("priority")),
+                    severity=_text(a.get("severity")),
+                    urgency=_text(a.get("urgency")),
+                    opened_at=entity.occurred_at,
+                    acknowledged_at=_text(a.get("acknowledged_at")),
+                    resolved_at=_text(a.get("resolved_at")),
+                    time_to_acknowledge_minutes=_int(a.get("time_to_acknowledge_minutes")),
+                    duration_minutes=_int(a.get("duration_minutes")),
+                    affects=out(RelationshipType.AFFECTS),
+                    commander=leads[0] if leads else None,
+                    assignees=out(RelationshipType.ASSIGNED_TO),
+                    causes=out(RelationshipType.CAUSED_BY),
+                )
+            )
+        return rows, edges, others
+
+    async def deployments(self, found: Sequence[Entity]) -> list[DeploymentRead]:
+        """A page of deployments: what to where, how each went, when, by
+        whom, for which services."""
+        rows, _, _ = await self._deployments(found)
+        return rows
+
+    async def deployment(self, entity: Entity) -> DeploymentDetail:
+        """One deployment: each status with when, what it shipped, where it
+        went, the incidents said or suspected to follow from it."""
+        [row], edges, others = await self._deployments([entity])
+        ties = _ties(edges, others, entity.id)
+        history = entity.attributes.get("status_history")
+        steps = [
+            TimelineStep(at=at, step="state", state=_text(h.get("state")), origin="source")
+            for h in (history if isinstance(history, list) else [])
+            if isinstance(h, dict) and (at := _moment(h.get("at"))) is not None
+        ]
+        return DeploymentDetail(
+            **row.model_dump(),
+            attributes=dict(entity.attributes),
+            provenance=dict(entity.provenance),
+            status_history=sorted(steps, key=lambda step: step.at),
+            ships=ties(RelationshipType.DEPLOYS, outgoing=True),
+            environments=_out(edges, others, entity.id)(RelationshipType.DEPLOYED_TO),
+            incidents=ties(RelationshipType.CAUSED_BY, outgoing=False),
+        )
+
+    async def _deployments(
+        self, found: Sequence[Entity]
+    ) -> tuple[list[DeploymentRead], list[Relationship], dict[uuid.UUID, Entity]]:
+        edges, others = await self._ends(found, DEPLOYMENT_AROUND)
+        repositories = [
+            e.to_entity_id
+            for e in edges
+            if e.type is RelationshipType.PART_OF
+            and (r := others.get(e.to_entity_id)) is not None
+            and r.type is EntityType.REPOSITORY
+        ]
+        above = [
+            e
+            for e in await self._entities.around(repositories, (RelationshipType.PART_OF,))
+            if e.from_entity_id in set(repositories)
+        ]
+        held = await self._entities.by_ids([e.to_entity_id for e in above])
+        rows = []
+        for entity in found:
+            out = _out(edges, others, entity.id)
+            a = entity.attributes
+            parents = out(RelationshipType.PART_OF)
+            repository = next((p for p in parents if p.type is EntityType.REPOSITORY), None)
+            services = {p.id: p for p in parents if p.type is EntityType.SERVICE}
+            for e in above:
+                service = held.get(e.to_entity_id)
+                if (
+                    repository
+                    and e.from_entity_id == repository.id
+                    and service is not None
+                    and service.type is EntityType.SERVICE
+                ):
+                    services.setdefault(service.id, EntityBrief.model_validate(service))
+            deployers = out(RelationshipType.REPORTED_BY)
+            production = a.get("production")
+            rows.append(
+                DeploymentRead(
+                    id=entity.id,
+                    key=entity.key,
+                    name=entity.name,
+                    lifecycle=entity.lifecycle,
+                    url=_text(a.get("url")),
+                    tools=_tools(entity),
+                    state=_text(a.get("state")),
+                    environment=_text(a.get("environment")),
+                    production=production if isinstance(production, bool) else None,
+                    ref=_text(a.get("ref")),
+                    sha=_text(a.get("sha")),
+                    deployed_at=entity.occurred_at,
+                    started_at=_text(a.get("started_at")),
+                    finished_at=_text(a.get("finished_at")),
+                    duration_minutes=_int(a.get("duration_minutes")),
+                    repository=repository,
+                    services=sorted(services.values(), key=lambda b: b.name.lower()),
+                    deployer=deployers[0] if deployers else None,
+                    incident_count=_into(edges, others, entity.id, RelationshipType.CAUSED_BY),
+                )
+            )
+        return rows, edges, others
+
+    async def changes(self, found: Sequence[Entity]) -> list[ChangeRead]:
+        """A page of changes: of what type, how risky, where each stands,
+        when, what it affects, who made it and asked for it."""
+        rows, _, _ = await self._changes(found)
+        return rows
+
+    async def change(self, entity: Entity) -> ChangeDetail:
+        """One change: its timeline, what it affects, who made and asked
+        for it, the incidents said or suspected to follow from it."""
+        [row], edges, others = await self._changes([entity])
+        ties = _ties(edges, others, entity.id)
+        return ChangeDetail(
+            **row.model_dump(),
+            attributes=dict(entity.attributes),
+            provenance=dict(entity.provenance),
+            timeline=await self._steps(entity, CHANGE_STEPS),
+            affected=ties(RelationshipType.AFFECTS, outgoing=True),
+            people=[
+                *ties(RelationshipType.ASSIGNED_TO, outgoing=True),
+                *ties(RelationshipType.REPORTED_BY, outgoing=True),
+            ],
+            incidents=ties(RelationshipType.CAUSED_BY, outgoing=False),
+        )
+
+    async def _changes(
+        self, found: Sequence[Entity]
+    ) -> tuple[list[ChangeRead], list[Relationship], dict[uuid.UUID, Entity]]:
+        edges, others = await self._ends(found, CHANGE_AROUND)
+        rows = []
+        for entity in found:
+            out = _out(edges, others, entity.id)
+            a = entity.attributes
+            assignees, requesters = (
+                out(RelationshipType.ASSIGNED_TO),
+                out(RelationshipType.REPORTED_BY),
+            )
+            rows.append(
+                ChangeRead(
+                    id=entity.id,
+                    key=entity.key,
+                    name=entity.name,
+                    lifecycle=entity.lifecycle,
+                    url=_text(a.get("url")),
+                    tools=_tools(entity),
+                    state=_text(a.get("state")),
+                    change_type=_text(a.get("change_type")),
+                    risk=_text(a.get("risk")),
+                    environment=_text(a.get("environment")),
+                    changed_at=entity.occurred_at,
+                    planned_start_at=_text(a.get("planned_start_at")),
+                    planned_end_at=_text(a.get("planned_end_at")),
+                    affects=out(RelationshipType.AFFECTS),
+                    assignee=assignees[0] if assignees else None,
+                    requester=requesters[0] if requesters else None,
+                    incident_count=_into(edges, others, entity.id, RelationshipType.CAUSED_BY),
+                )
+            )
+        return rows, edges, others
+
+    async def timeline(
+        self,
+        entity: Entity | None,
+        *,
+        since: datetime,
+        until: datetime,
+        kinds: Sequence[EntityType],
+        limit: int,
+    ) -> Timeline:
+        """What happened between two dates, the latest first: around a
+        thing — itself and what is part of it, two steps down, what
+        affects it — or in the whole workspace."""
+        scope = await self._entities.scope(entity.id, depth=MAX_SCOPE) if entity else None
+        events, truncated = await self._timeline(
+            scope, kinds=kinds, since=since, until=until, limit=limit
+        )
+        return Timeline(
+            entity=EntityBrief.model_validate(entity) if entity else None,
+            since=since,
+            until=until,
+            events=events,
+            truncated=truncated,
+        )
+
+    async def _events(
+        self,
+        scope: set[uuid.UUID] | None,
+        *,
+        kinds: Sequence[EntityType],
+        since: datetime,
+        until: datetime,
+        limit: int,
+    ) -> list[TimelineEvent]:
+        events, _ = await self._timeline(scope, kinds=kinds, since=since, until=until, limit=limit)
+        return events
+
+    async def _timeline(
+        self,
+        scope: set[uuid.UUID] | None,
+        *,
+        kinds: Sequence[EntityType],
+        since: datetime,
+        until: datetime,
+        limit: int,
+    ) -> tuple[list[TimelineEvent], bool]:
+        found, truncated = await self._entities.happened(
+            scope=scope, kinds=kinds, since=since, until=until, limit=limit
+        )
+        vias = await self._entities.by_ids([via for _, via in found if via is not None])
+        events: list[TimelineEvent] = []
+        for thing, via_id in found:
+            via = vias.get(via_id) if via_id is not None else None
+            brief = EntityBrief.model_validate(thing)
+            seen = (
+                EntityBrief.model_validate(via) if via is not None and via.id != thing.id else None
+            )
+            a = thing.attributes
+            moments: list[tuple[str, datetime | None]] = []
+            if thing.type is EntityType.INCIDENT:
+                moments = [
+                    ("incident_opened", thing.occurred_at),
+                    ("incident_resolved", _moment(a.get("resolved_at"))),
+                ]
+            else:
+                moments = [(KIND_EVENTS[thing.type], thing.occurred_at)]
+            for kind, at in moments:
+                if at is None or not since <= at < until:
+                    continue
+                events.append(
+                    TimelineEvent(
+                        entity=brief,
+                        kind=kind,
+                        at=at,
+                        state=_text(a.get("state")),
+                        environment=_text(a.get("environment")),
+                        via=seen,
+                    )
+                )
+        events.sort(key=lambda e: (e.at, e.entity.name), reverse=True)
+        return events[:limit], truncated or len(events) > limit
+
+    async def _steps(
+        self, entity: Entity, steps: tuple[tuple[str, str], ...]
+    ) -> list[TimelineStep]:
+        """An event's life: the dates its sources give, and each state a
+        build saw it take — when it saw it."""
+        found = [
+            TimelineStep(at=at, step=step, state=None, origin="source")
+            for name, step in steps
+            if (at := _moment(entity.attributes.get(name))) is not None
+        ]
+        previous: object = None
+        for version in sorted(await self._entities.versions_of(entity.id), key=lambda v: v.version):
+            content = version.content if isinstance(version.content, dict) else {}
+            attributes = content.get("attributes")
+            state = attributes.get("state") if isinstance(attributes, dict) else None
+            if isinstance(state, str) and state != previous:
+                found.append(
+                    TimelineStep(at=version.recorded_at, step="state", state=state, origin="model")
+                )
+            previous = state
+        return sorted(found, key=lambda step: (step.at, step.origin != "source"))
+
+    async def _impact(self, affected: list[uuid.UUID]) -> Impact:
+        """What an incident reaches: what depends on what it affects — two
+        steps — the applications holding them, the business relying on
+        them."""
+        reached: set[uuid.UUID] = set()
+        for thing in affected:
+            found, _ = await self._entities.dependencies(
+                thing,
+                downstream=False,
+                depth=IMPACT_DEPTH,
+                environment=None,
+                limit=MAX_DEPENDENCIES,
+            )
+            reached |= set(found)
+        dependents = reached - set(affected)
+        everything = set(affected) | dependents
+        holders = [
+            e.to_entity_id
+            for e in await self._entities.around(list(everything), (RelationshipType.PART_OF,))
+            if e.from_entity_id in everything
+        ]
+        known = await self._entities.by_ids([*everything, *holders])
+        alive = {k: v for k, v in known.items() if v.lifecycle is not Lifecycle.REMOVED}
+        capabilities: dict[uuid.UUID, BusinessTie] = {}
+        processes: dict[uuid.UUID, BusinessTie] = {}
+        for thing in affected:
+            if thing not in alive:
+                continue
+            context = await self.business_context(alive[thing])
+            for found_ties, kept in (
+                (context.capabilities, capabilities),
+                (context.processes, processes),
+            ):
+                for tie in found_ties:
+                    held = kept.get(tie.entity.id)
+                    if held is None or PATHS.index(tie.path) < PATHS.index(held.path):
+                        kept[tie.entity.id] = tie
+
+        def briefs(ids: set[uuid.UUID] | list[uuid.UUID]) -> list[EntityBrief]:
+            return sorted(
+                (EntityBrief.model_validate(alive[i]) for i in set(ids) if i in alive),
+                key=lambda brief: brief.name.lower(),
+            )
+
+        return Impact(
+            affected=briefs(affected),
+            dependents=briefs(dependents),
+            applications=[b for b in briefs(holders) if b.type is EntityType.APPLICATION],
+            capabilities=sorted(capabilities.values(), key=lambda t: t.entity.name.lower()),
+            processes=sorted(processes.values(), key=lambda t: t.entity.name.lower()),
+        )
+
 
 def _expertise(entity: Entity) -> list[Expertise]:
     """What a person's work shows they know, as enrichment kept it."""
@@ -1485,6 +1929,35 @@ def _ties(
         return found[:MAX_LISTED]
 
     return tied
+
+
+def _into(
+    edges: list[Relationship],
+    others: dict[uuid.UUID, Entity],
+    of: uuid.UUID,
+    relation: RelationshipType,
+) -> int:
+    """How many point at an entity through a relation, not removed."""
+    return sum(
+        1
+        for e in edges
+        if e.type is relation and e.to_entity_id == of and e.from_entity_id in others
+    )
+
+
+def _int(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _moment(value: object) -> datetime | None:
+    """A date an attribute holds — none for what does not read as one."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        found = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return found if found.tzinfo else found.replace(tzinfo=UTC)
 
 
 def _holds(entity: Entity) -> Holds:

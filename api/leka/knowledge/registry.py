@@ -45,7 +45,10 @@ from leka.knowledge.models import EntityType, RelationshipType
 # 6: knowledge spaces, documents' freshness, what each describes, who last
 #    edited it; business capabilities and processes, the applications and
 #    data they rely on (LEKA-366).
-MODEL_VERSION = 6
+# 7: incidents, changes and deployments — when each happened, its states,
+#    what it touched and shipped, what caused an incident; the dates of
+#    releases and pull requests; when each event occurred (LEKA-367).
+MODEL_VERSION = 7
 
 
 class Attributes(BaseModel):
@@ -103,7 +106,8 @@ class RepositoryAttributes(Attributes):
 
 
 class WorkAttributes(Attributes):
-    """Issues and pull requests: tickets, tasks, changes under review."""
+    """Issues and pull requests: tickets, tasks, changes under review — and
+    when a pull request was opened, merged, closed (LEKA-367)."""
 
     priority: str | None = None
     category: str | None = None
@@ -111,6 +115,9 @@ class WorkAttributes(Attributes):
     components: list[str] | None = None
     stale: bool | None = None
     cycle_time_hours: float | None = None
+    created_at: str | None = None
+    merged_at: str | None = None
+    closed_at: str | None = None
 
 
 class CommitAttributes(Attributes):
@@ -119,8 +126,66 @@ class CommitAttributes(Attributes):
 
 
 class IncidentAttributes(Attributes):
+    """An incident (LEKA-367): how urgent and severe, its tool's number,
+    whether customers were hit; when it was opened, detected, acknowledged
+    and resolved — its records' dates — and how long each took."""
+
     priority: str | None = None
     duration_minutes: int | None = None
+    urgency: str | None = None
+    severity: str | None = None
+    incident_number: int | None = None
+    customer_impacted: bool | None = None
+    created_at: str | None = None
+    detected_at: str | None = None
+    acknowledged_at: str | None = None
+    resolved_at: str | None = None
+    closed_at: str | None = None
+    time_to_acknowledge_minutes: int | None = None
+
+
+class DeploymentAttributes(Attributes):
+    """A deployment (LEKA-367): where to — its environment, canonical when
+    known, production or not — what — its commit, its ref — how it went,
+    each status with when; when it was made, started and finished."""
+
+    environment: str | None = None
+    production: bool | None = None
+    sha: str | None = None
+    ref: str | None = None
+    task: str | None = None
+    environment_url: str | None = None
+    status_history: list[dict[str, object]] | None = None
+    created_at: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    duration_minutes: int | None = None
+
+
+class ChangeAttributes(Attributes):
+    """A change (LEKA-367): of what type — normal, standard, emergency, a
+    deployment — how risky, how far it went; when it was asked, planned,
+    made."""
+
+    change_type: str | None = None
+    risk: str | None = None
+    priority: str | None = None
+    environment: str | None = None
+    created_at: str | None = None
+    planned_start_at: str | None = None
+    planned_end_at: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
+class ReleaseAttributes(Attributes):
+    """A release: its tag, and when it was made and published (LEKA-367)."""
+
+    tag: str | None = None
+    draft: bool | None = None
+    prerelease: bool | None = None
+    created_at: str | None = None
+    published_at: str | None = None
 
 
 class PersonAttributes(Attributes):
@@ -317,12 +382,13 @@ ENTITY_KINDS: dict[EntityType, EntityKind] = {
         EntityKind(EntityType.SERVICE, 2, "applications", ServiceAttributes, ("service",)),
         EntityKind(EntityType.REPOSITORY, 1, "applications", RepositoryAttributes, ("repository",)),
         EntityKind(EntityType.PROJECT, 1, "delivery", Attributes, ("project",)),
-        EntityKind(EntityType.ISSUE, 1, "delivery", WorkAttributes, ("issue",)),
-        EntityKind(EntityType.PULL_REQUEST, 1, "delivery", WorkAttributes, ("pull_request",)),
+        EntityKind(EntityType.ISSUE, 2, "delivery", WorkAttributes, ("issue",)),
+        EntityKind(EntityType.PULL_REQUEST, 2, "delivery", WorkAttributes, ("pull_request",)),
         EntityKind(EntityType.COMMIT, 1, "delivery", CommitAttributes, ("commit",)),
-        EntityKind(EntityType.RELEASE, 1, "delivery", Attributes, ("release",)),
-        EntityKind(EntityType.DEPLOYMENT, 1, "delivery", Attributes, ("deployment",)),
-        EntityKind(EntityType.INCIDENT, 1, "operations", IncidentAttributes, ("incident",)),
+        EntityKind(EntityType.RELEASE, 2, "delivery", ReleaseAttributes, ("release",)),
+        EntityKind(EntityType.DEPLOYMENT, 2, "delivery", DeploymentAttributes, ("deployment",)),
+        EntityKind(EntityType.INCIDENT, 2, "operations", IncidentAttributes, ("incident",)),
+        EntityKind(EntityType.CHANGE, 1, "operations", ChangeAttributes, ("change",)),
         EntityKind(
             EntityType.INFRA_RESOURCE, 3, "infrastructure", ResourceAttributes, ("infra_resource",)
         ),
@@ -415,9 +481,11 @@ RELATIONSHIP_KINDS: dict[RelationshipType, RelationshipKind] = {
         RelationshipKind(RelationshipType.SUPPORTED_BY, 1, ("supported_by",)),
         RelationshipKind(RelationshipType.USES, 1, ("uses",)),
         RelationshipKind(RelationshipType.REALIZES, 1, ("realizes",)),
+        # What shipped what, where; what caused an incident (LEKA-367).
+        RelationshipKind(RelationshipType.DEPLOYS, 1, ("deploys",)),
+        RelationshipKind(RelationshipType.DEPLOYED_TO, 1, ("deployed_to",)),
+        RelationshipKind(RelationshipType.CAUSED_BY, 1, ("caused_by",)),
         RelationshipKind(RelationshipType.OWNS, 1, ()),
-        RelationshipKind(RelationshipType.DEPLOYED_TO, 1, ()),
-        RelationshipKind(RelationshipType.CAUSED_BY, 1, ()),
     )
 }
 

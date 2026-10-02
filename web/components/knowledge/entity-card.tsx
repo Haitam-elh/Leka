@@ -13,6 +13,7 @@ import {
   FolderKanban,
   FolderTree,
   GitCommitHorizontal,
+  GitCompareArrows,
   GitPullRequest,
   Layers,
   Library,
@@ -60,6 +61,7 @@ export const ENTITY_ICONS: Record<EntityType, LucideIcon> = {
   knowledge_space: Library,
   business_capability: Briefcase,
   business_process: Workflow,
+  change: GitCompareArrows,
 };
 
 export function EntityIcon({

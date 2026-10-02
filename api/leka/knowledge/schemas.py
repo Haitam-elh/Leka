@@ -814,3 +814,193 @@ class BusinessContext(BaseModel):
     entity: EntityBrief
     capabilities: list[BusinessTie]
     processes: list[BusinessTie]
+
+
+# ── incidents, changes and deployments (LEKA-367) ────────────────────────────
+
+
+class TimelineStep(BaseModel):
+    """A moment of an incident's, a change's, a deployment's life: what its
+    sources date — opened, acknowledged, resolved; planned, started,
+    finished — or a state LEKA saw it take, at a build."""
+
+    model_config = ConfigDict(frozen=True)
+
+    at: datetime
+    step: str = Field(
+        description="opened, detected, acknowledged, resolved, closed, planned_start, "
+        "planned_end, started, finished — or state."
+    )
+    state: str | None = Field(description="For a state: the one it took.")
+    origin: Literal["source", "model"] = Field(
+        description="source: a date its sources give; model: when a build saw the state."
+    )
+
+
+class TimelineEvent(BaseModel):
+    """Something that happened: an incident opened or resolved, a
+    deployment, a change, a release, a merge — and, in a thing's timeline,
+    what of it it happened to."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    kind: Literal[
+        "incident_opened", "incident_resolved", "deployment", "change", "release", "merge"
+    ]
+    at: datetime
+    state: str | None
+    environment: str | None
+    via: EntityBrief | None = Field(
+        description="What of the thing it happened to: its repository, one of its services."
+    )
+
+
+class Timeline(BaseModel):
+    """What happened, the latest first: around a thing — itself, what is
+    part of it, what affects it — or in the whole workspace."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief | None
+    since: datetime
+    until: datetime
+    events: list[TimelineEvent]
+    truncated: bool = Field(description="More happened than the limit.")
+
+
+class Impact(BaseModel):
+    """What an incident reaches: what it affects, what depends on that, the
+    applications holding them, and the business relying on them."""
+
+    model_config = ConfigDict(frozen=True)
+
+    affected: list[EntityBrief]
+    dependents: list[EntityBrief] = Field(description="What depends on them, two steps at most.")
+    applications: list[EntityBrief]
+    capabilities: list[BusinessTie]
+    processes: list[BusinessTie]
+
+
+class IncidentRead(BaseModel):
+    """An incident: how bad, where it stands, when it opened and was
+    handled, what it affects, who leads it, what is said or suspected to
+    have caused it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    name: str
+    lifecycle: Lifecycle
+    url: str | None
+    tools: list[str]
+    state: str | None = Field(description="open, in_progress, closed.")
+    priority: str | None
+    severity: str | None
+    urgency: str | None
+    opened_at: datetime | None
+    acknowledged_at: str | None
+    resolved_at: str | None
+    time_to_acknowledge_minutes: int | None
+    duration_minutes: int | None
+    affects: list[EntityBrief]
+    commander: EntityBrief | None
+    assignees: list[EntityBrief]
+    causes: list[EntityBrief] = Field(description="Said first, then suspected — the surest first.")
+
+
+class IncidentDetail(IncidentRead):
+    """One incident: its timeline, everything it is tied to — each said or
+    inferred — what changed before it, and what it reaches."""
+
+    attributes: dict[str, object]
+    provenance: dict[str, object]
+    timeline: list[TimelineStep]
+    affected: list[Tie]
+    people: list[Tie] = Field(description="Who leads it, is assigned to it, reported it.")
+    suspected_causes: list[Tie] = Field(description="caused_by: said, or `preceded`.")
+    changed_before: list[TimelineEvent] = Field(
+        description="Deployments, changes, releases, merges on what it affects — the 72 hours "
+        "before it opened."
+    )
+    impact: Impact
+
+
+class DeploymentRead(BaseModel):
+    """A deployment: what to where, how it went, when, by whom."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    name: str
+    lifecycle: Lifecycle
+    url: str | None
+    tools: list[str]
+    state: str | None = Field(
+        description="pending, in_progress, succeeded, failed, canceled, inactive."
+    )
+    environment: str | None
+    production: bool | None
+    ref: str | None
+    sha: str | None
+    deployed_at: datetime | None
+    started_at: str | None
+    finished_at: str | None
+    duration_minutes: int | None
+    repository: EntityBrief | None
+    services: list[EntityBrief] = Field(description="Its own, and its repository's.")
+    deployer: EntityBrief | None
+    incident_count: int = Field(description="The incidents said or suspected to follow from it.")
+
+
+class DeploymentDetail(DeploymentRead):
+    """One deployment: each status with when, what it shipped, where it went,
+    the incidents said or suspected to follow from it."""
+
+    attributes: dict[str, object]
+    provenance: dict[str, object]
+    status_history: list[TimelineStep]
+    ships: list[Tie] = Field(description="deploys: its commit, its release.")
+    environments: list[EntityBrief]
+    incidents: list[Tie]
+
+
+class ChangeRead(BaseModel):
+    """A change: of what type, how risky, where it stands, when, what it
+    affects, who made it and asked for it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    name: str
+    lifecycle: Lifecycle
+    url: str | None
+    tools: list[str]
+    state: str | None = Field(
+        description="requested, scheduled, in_progress, completed, failed, canceled."
+    )
+    change_type: str | None
+    risk: str | None
+    environment: str | None
+    changed_at: datetime | None
+    planned_start_at: str | None
+    planned_end_at: str | None
+    affects: list[EntityBrief]
+    assignee: EntityBrief | None
+    requester: EntityBrief | None
+    incident_count: int
+
+
+class ChangeDetail(ChangeRead):
+    """One change: its timeline, what it affects, who made and asked for
+    it, the incidents said or suspected to follow from it."""
+
+    attributes: dict[str, object]
+    provenance: dict[str, object]
+    timeline: list[TimelineStep]
+    affected: list[Tie]
+    people: list[Tie]
+    incidents: list[Tie]

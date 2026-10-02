@@ -67,6 +67,8 @@ const LAYER: Record<EntityType, number> = {
   knowledge_space: 2,
   business_capability: 0,
   business_process: 0,
+  // What changed, with what was shipped (LEKA-367).
+  change: 2,
 };
 
 /** Past this many, a layer wraps onto another row: 80 services side by side

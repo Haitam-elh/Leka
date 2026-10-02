@@ -407,6 +407,7 @@ const fr = {
       knowledge_space: "Espace documentaire",
       business_capability: "Capacité métier",
       business_process: "Processus métier",
+      change: "Changement",
     },
     relationships: {
       depends_on: "dépend de",
@@ -439,6 +440,7 @@ const fr = {
       supported_by: "s'appuie sur",
       uses: "utilise",
       realizes: "réalise",
+      deploys: "déploie",
     },
     events: {
       deployment: "Déploiement",
@@ -817,6 +819,7 @@ const fr = {
       commits: "commits",
       pull_requests: "pull requests",
       releases: "releases",
+      deployments: "déploiements",
       issues: "issues",
       branches: "branches",
       projects: "projets",
@@ -838,6 +841,7 @@ const fr = {
       alerts: "alertes",
       events: "événements",
       incidents: "incidents",
+      changes: "changements",
       metrics: "métriques",
       logs: "logs",
       services: "services",
@@ -908,7 +912,10 @@ const fr = {
         people: "annuaire : postes, services, managers",
       },
       github: { teams: "équipes de l'organisation et leurs membres" },
-      pagerduty: { teams: "équipes, leurs membres et managers" },
+      pagerduty: {
+        teams: "équipes, leurs membres et managers",
+        changes: "change events (déploiements et changements envoyés à PagerDuty)",
+      },
     },
     empty: {
       title: "Aucune source connectée",
@@ -2173,6 +2180,7 @@ const en: Dictionary = {
       knowledge_space: "Knowledge space",
       business_capability: "Business capability",
       business_process: "Business process",
+      change: "Change",
     },
     relationships: {
       depends_on: "depends on",
@@ -2205,6 +2213,7 @@ const en: Dictionary = {
       supported_by: "is supported by",
       uses: "uses",
       realizes: "realizes",
+      deploys: "deploys",
     },
     events: {
       deployment: "Deployment",
@@ -2572,6 +2581,7 @@ const en: Dictionary = {
       commits: "commits",
       pull_requests: "pull requests",
       releases: "releases",
+      deployments: "deployments",
       issues: "issues",
       branches: "branches",
       projects: "projects",
@@ -2593,6 +2603,7 @@ const en: Dictionary = {
       alerts: "alerts",
       events: "events",
       incidents: "incidents",
+      changes: "changes",
       metrics: "metrics",
       logs: "logs",
       services: "services",
@@ -2658,7 +2669,10 @@ const en: Dictionary = {
         people: "directory: titles, departments, managers",
       },
       github: { teams: "the organisation's teams and their members" },
-      pagerduty: { teams: "teams, their members and managers" },
+      pagerduty: {
+        teams: "teams, their members and managers",
+        changes: "change events (deploys and changes sent to PagerDuty)",
+      },
     },
     empty: {
       title: "No source connected",
