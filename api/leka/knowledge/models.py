@@ -86,6 +86,12 @@ class EntityType(enum.StrEnum):
     # collection (LEKA-364).
     SCHEMA = "schema"
     DATA_OBJECT = "data_object"
+    # Where documents are kept — a Confluence space, a Notion database, a
+    # Slab topic, a Guru collection, a shared drive, a SharePoint library —
+    # and what the business is made of: what it does, how (LEKA-366).
+    KNOWLEDGE_SPACE = "knowledge_space"
+    BUSINESS_CAPABILITY = "business_capability"
+    BUSINESS_PROCESS = "business_process"
 
 
 class RelationshipType(enum.StrEnum):
@@ -120,6 +126,15 @@ class RelationshipType(enum.StrEnum):
     # expertise, as their work shows it (LEKA-365).
     REPORTS_TO = "reports_to"
     CONTRIBUTES_TO = "contributes_to"
+    # A document, to what it is about; to who last edited it. A business
+    # capability or process, to the applications and services supporting
+    # it, to the data it uses; a process, to the capability it realizes
+    # (LEKA-366).
+    DESCRIBES = "describes"
+    EDITED_BY = "edited_by"
+    SUPPORTED_BY = "supported_by"
+    USES = "uses"
+    REALIZES = "realizes"
 
 
 class Lifecycle(enum.StrEnum):

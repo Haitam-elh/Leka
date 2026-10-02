@@ -65,6 +65,8 @@ MEASURES = frozenset(
         # What someone's work shows they know moves with their work (LEKA-365).
         "expertise",
         "languages",
+        # A document grows stale with time alone (LEKA-366).
+        "freshness",
     }
 )
 # Its source says it is no more: archived; a resource terminated, an account

@@ -404,6 +404,9 @@ const fr = {
       resource_group: "Groupe de ressources",
       schema: "Schéma",
       data_object: "Table",
+      knowledge_space: "Espace documentaire",
+      business_capability: "Capacité métier",
+      business_process: "Processus métier",
     },
     relationships: {
       depends_on: "dépend de",
@@ -431,6 +434,11 @@ const fr = {
       reads_from: "lit",
       reports_to: "rend compte à",
       contributes_to: "contribue à",
+      describes: "décrit",
+      edited_by: "est modifié par",
+      supported_by: "s'appuie sur",
+      uses: "utilise",
+      realizes: "réalise",
     },
     events: {
       deployment: "Déploiement",
@@ -2162,6 +2170,9 @@ const en: Dictionary = {
       resource_group: "Resource group",
       schema: "Schema",
       data_object: "Table",
+      knowledge_space: "Knowledge space",
+      business_capability: "Business capability",
+      business_process: "Business process",
     },
     relationships: {
       depends_on: "depends on",
@@ -2189,6 +2200,11 @@ const en: Dictionary = {
       reads_from: "reads from",
       reports_to: "reports to",
       contributes_to: "contributes to",
+      describes: "describes",
+      edited_by: "is edited by",
+      supported_by: "is supported by",
+      uses: "uses",
+      realizes: "realizes",
     },
     events: {
       deployment: "Deployment",

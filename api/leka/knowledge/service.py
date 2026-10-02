@@ -6,8 +6,11 @@ and what depends on what (LEKA-362); the infrastructure — its resources,
 the accounts they are in, where and whose each is (LEKA-363); the data —
 databases, schemas, tables — what each holds and what it is tied to
 (LEKA-364); the organisation — teams, people, who owns and operates what,
-who knows it (LEKA-365). The registry (registry.py) is what
-they read to know what kinds of things a company is made of.
+who knows it (LEKA-365); the documentation — where it is kept, how fresh,
+what it covers — and the business — its capabilities and processes, what
+supports them, what a technical thing means to them (LEKA-366). The
+registry (registry.py) is what they read to know what kinds of things a
+company is made of.
 
 Depends on leka.ingestion. Must not import leka.context or leka.intentions
 (architecture rule 1).
@@ -17,15 +20,21 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Literal
 
 from leka.knowledge.models import Entity, EntityType, Lifecycle, Relationship, RelationshipType
-from leka.knowledge.repository import EntityRepository, Holding
+from leka.knowledge.repository import BUSINESS, DOCUMENTED, EntityRepository, Holding
 from leka.knowledge.schemas import (
+    BusinessContext,
+    BusinessDetail,
+    BusinessPart,
+    BusinessRead,
+    BusinessTie,
     CloudAccountDetail,
     CloudAccountRead,
     ColumnRead,
+    CoverageRead,
     Criticality,
     DatabaseDetail,
     DatabaseRead,
@@ -34,12 +43,18 @@ from leka.knowledge.schemas import (
     Dependencies,
     DependencyNode,
     DependencyRead,
+    DocumentationCoverage,
+    DocumentationGap,
+    DocumentDetail,
+    DocumentRead,
     EntityBrief,
     EntityRead,
     Expertise,
     Holds,
     InfrastructureDetail,
     InfrastructureRead,
+    KnowledgeSpaceDetail,
+    KnowledgeSpaceRead,
     LandscapeDetail,
     LandscapeRead,
     Neighbourhood,
@@ -87,6 +102,56 @@ MAX_EXPERTS = 10
 SHOWN_EXPERTISE = 3
 # What a data object's row reads around it.
 DATA_AROUND = (RelationshipType.PART_OF, RelationshipType.OWNED_BY, *LINEAGE)
+# Documentation and business knowledge (LEKA-366): what a document's, a
+# space's, a capability's or a process's row reads around it — and a
+# capability's parts; what documents; what documentation covers.
+DOCUMENTED_AROUND = (
+    RelationshipType.PART_OF,
+    RelationshipType.CHILD_OF,
+    RelationshipType.AUTHORED_BY,
+    RelationshipType.EDITED_BY,
+    RelationshipType.OWNED_BY,
+    RelationshipType.DESCRIBES,
+    RelationshipType.REFERENCES,
+    RelationshipType.MENTIONS,
+)
+SPACE_AROUND = (
+    RelationshipType.OWNED_BY,
+    RelationshipType.DESCRIBES,
+    RelationshipType.MAINTAINED_BY,
+)
+BUSINESS_AROUND = (
+    RelationshipType.CHILD_OF,
+    RelationshipType.PART_OF,
+    RelationshipType.REALIZES,
+    RelationshipType.SUPPORTED_BY,
+    RelationshipType.USES,
+    RelationshipType.OWNED_BY,
+    RelationshipType.DESCRIBES,
+)
+PART_AROUND = (
+    RelationshipType.SUPPORTED_BY,
+    RelationshipType.USES,
+    RelationshipType.OWNED_BY,
+)
+DOCUMENTATION = (EntityType.DOCUMENT, EntityType.KNOWLEDGE_SPACE)
+FRESHNESS = ("fresh", "aging", "stale", "unknown")
+SHOWN_DOCUMENTS = 10
+# A technical thing's business context: what holds it — a table's service,
+# a service's application — and what depends on it, this many steps.
+TECHNICAL = frozenset(
+    {
+        EntityType.SERVICE,
+        EntityType.APPLICATION,
+        EntityType.REPOSITORY,
+        EntityType.DATABASE,
+        EntityType.SCHEMA,
+        EntityType.DATA_OBJECT,
+        EntityType.INFRA_RESOURCE,
+    }
+)
+MAX_HOLDERS = 3
+PATHS = ("direct", "contained", "dependent")
 # What a resource's row reads around it (LEKA-363).
 PLACED = (
     RelationshipType.PART_OF,
@@ -952,6 +1017,380 @@ class KnowledgeService:
             )
         return rows, edges, others
 
+    # ── documentation and business knowledge (LEKA-366) ──────────────────────
+
+    async def _ends(
+        self, found: Sequence[Entity], types: Sequence[RelationshipType]
+    ) -> tuple[list[Relationship], dict[uuid.UUID, Entity]]:
+        """The relationships of these types of these entities, and every end
+        of them — these included — the removed left out."""
+        ids = [entity.id for entity in found]
+        edges = list(await self._entities.around(ids, types))
+        ends = {e.from_entity_id for e in edges} | {e.to_entity_id for e in edges}
+        others = await self._entities.by_ids(list(ends - set(ids)))
+        alive = {k: v for k, v in others.items() if v.lifecycle is not Lifecycle.REMOVED}
+        return edges, alive | {entity.id: entity for entity in found}
+
+    async def documents(self, found: Sequence[Entity]) -> list[DocumentRead]:
+        """A page of documents: where each is kept, who wrote it and last
+        changed it, how fresh, whose, what it describes."""
+        rows, _, _ = await self._documents(found)
+        return rows
+
+    async def document(self, entity: Entity) -> DocumentDetail:
+        """One document: its pages above and below, and everything it is
+        tied to — each said or inferred, how surely."""
+        [row], edges, others = await self._documents([entity])
+        ancestors = await self._entities.chain(
+            entity.id, RelationshipType.CHILD_OF, limit=MAX_CHAIN
+        )
+        children = sorted(
+            (
+                EntityBrief.model_validate(others[e.from_entity_id])
+                for e in edges
+                if e.type is RelationshipType.CHILD_OF
+                and e.to_entity_id == entity.id
+                and e.from_entity_id in others
+            ),
+            key=lambda brief: brief.name.lower(),
+        )
+        ties = _ties(edges, others, entity.id)
+        return DocumentDetail(
+            **row.model_dump(),
+            attributes=dict(entity.attributes),
+            provenance=dict(entity.provenance),
+            verification_due_at=_text(entity.attributes.get("verification_due_at")),
+            ancestors=[EntityBrief.model_validate(a) for a in ancestors],
+            children=children[:MAX_LISTED],
+            descriptions=ties(RelationshipType.DESCRIBES, outgoing=True),
+            ownership=ties(RelationshipType.OWNED_BY, outgoing=True),
+            written_by=ties(RelationshipType.AUTHORED_BY, outgoing=True),
+            edited_by=ties(RelationshipType.EDITED_BY, outgoing=True),
+            links_to=ties(RelationshipType.REFERENCES, outgoing=True),
+            linked_from=ties(RelationshipType.REFERENCES, outgoing=False),
+            mentions=ties(RelationshipType.MENTIONS, outgoing=True),
+        )
+
+    async def _documents(
+        self, found: Sequence[Entity]
+    ) -> tuple[list[DocumentRead], list[Relationship], dict[uuid.UUID, Entity]]:
+        edges, others = await self._ends(found, DOCUMENTED_AROUND)
+        rows = []
+        for entity in found:
+            out = _out(edges, others, entity.id)
+            a = entity.attributes
+            verified = a.get("verified")
+            editors = out(RelationshipType.EDITED_BY)
+            rows.append(
+                DocumentRead(
+                    id=entity.id,
+                    key=entity.key,
+                    name=entity.name,
+                    lifecycle=entity.lifecycle,
+                    url=_text(a.get("url")),
+                    tools=_tools(entity),
+                    document_kind=_text(a.get("document_kind")),
+                    space=next(
+                        (
+                            b
+                            for b in out(RelationshipType.PART_OF)
+                            if b.type is EntityType.KNOWLEDGE_SPACE
+                        ),
+                        None,
+                    ),
+                    freshness=_text(a.get("freshness")),
+                    last_changed_at=_text(a.get("last_activity_at")),
+                    verified=verified if isinstance(verified, bool) else None,
+                    authors=out(RelationshipType.AUTHORED_BY),
+                    last_editor=editors[0] if editors else None,
+                    owners=out(RelationshipType.OWNED_BY),
+                    describes=out(RelationshipType.DESCRIBES),
+                )
+            )
+        return rows, edges, others
+
+    async def spaces(self, found: Sequence[Entity]) -> list[KnowledgeSpaceRead]:
+        """A page of spaces: how many documents each holds, how fresh, whose,
+        what it documents, who writes it most."""
+        rows, _, _ = await self._spaces(found)
+        return rows
+
+    async def space(self, entity: Entity) -> KnowledgeSpaceDetail:
+        """One space: everything it is tied to, its latest documents and its
+        stalest."""
+        [row], edges, others = await self._spaces([entity])
+        ties = _ties(edges, others, entity.id)
+        recent = await self._entities.documents_of(entity.id, stale=False, limit=SHOWN_DOCUMENTS)
+        stalest = await self._entities.documents_of(entity.id, stale=True, limit=SHOWN_DOCUMENTS)
+        return KnowledgeSpaceDetail(
+            **row.model_dump(),
+            attributes=dict(entity.attributes),
+            provenance=dict(entity.provenance),
+            ownership=ties(RelationshipType.OWNED_BY, outgoing=True),
+            descriptions=ties(RelationshipType.DESCRIBES, outgoing=True),
+            maintained_by=ties(RelationshipType.MAINTAINED_BY, outgoing=True),
+            recent=[EntityBrief.model_validate(d) for d in recent],
+            stalest=[EntityBrief.model_validate(d) for d in stalest],
+        )
+
+    async def _spaces(
+        self, found: Sequence[Entity]
+    ) -> tuple[list[KnowledgeSpaceRead], list[Relationship], dict[uuid.UUID, Entity]]:
+        edges, others = await self._ends(found, SPACE_AROUND)
+        held = await self._entities.space_documents([entity.id for entity in found])
+        rows = []
+        for entity in found:
+            out = _out(edges, others, entity.id)
+            a = entity.attributes
+            counts = held.get(entity.id, {})
+            rows.append(
+                KnowledgeSpaceRead(
+                    id=entity.id,
+                    key=entity.key,
+                    name=entity.name,
+                    lifecycle=entity.lifecycle,
+                    url=_text(a.get("url")),
+                    tools=_tools(entity),
+                    space_kind=_text(a.get("space_kind")),
+                    description=_text(a.get("description")),
+                    document_count=sum(counts.values()),
+                    freshness={w: counts[w] for w in FRESHNESS if w in counts},
+                    last_changed_at=_text(a.get("last_activity_at")),
+                    owners=out(RelationshipType.OWNED_BY),
+                    describes=out(RelationshipType.DESCRIBES),
+                    maintainers=out(RelationshipType.MAINTAINED_BY),
+                )
+            )
+        return rows, edges, others
+
+    async def coverage(self) -> DocumentationCoverage:
+        """How much documentation there is, how fresh, and how much of the
+        company it covers — kind by kind."""
+        counts = await self._entities.coverage()
+        by_freshness, unverified, spaces = await self._entities.documentation_counts()
+        return DocumentationCoverage(
+            documents=sum(by_freshness.values()),
+            spaces=spaces,
+            freshness=by_freshness,
+            unverified=unverified,
+            coverage=[
+                CoverageRead(
+                    type=kind,
+                    total=counts.get(kind, (0, 0, 0))[0],
+                    documented=counts.get(kind, (0, 0, 0))[1],
+                    fresh=counts.get(kind, (0, 0, 0))[2],
+                )
+                for kind in DOCUMENTED
+            ],
+        )
+
+    async def gaps(self, found: Sequence[Entity]) -> list[DocumentationGap]:
+        """A page of things without documentation — or with stale only:
+        how critical, whose, how many documents, the latest when."""
+        edges, others = await self._ends(found, (RelationshipType.OWNED_BY,))
+        documented = await self._entities.documented([entity.id for entity in found])
+        return [
+            DocumentationGap(
+                entity=EntityBrief.model_validate(entity),
+                criticality=_level(entity),
+                owners=_out(edges, others, entity.id)(RelationshipType.OWNED_BY),
+                documents=documented[entity.id].count,
+                last_documented_at=documented[entity.id].last_changed_at,
+            )
+            for entity in found
+        ]
+
+    async def business(self, found: Sequence[Entity]) -> list[BusinessRead]:
+        """A page of capabilities or processes: where each sits, whose, what
+        supports it, what it uses, how documented."""
+        rows, _, _ = await self._business(found)
+        return rows
+
+    async def business_detail(self, entity: Entity) -> BusinessDetail:
+        """One capability or process: its parents, its parts in order, the
+        processes realizing it, what supports it — and the services of its
+        applications — the data it uses, its owners, its documentation."""
+        [row], edges, others = await self._business([entity])
+        up = _up(entity)
+        ties = _ties(edges, others, entity.id)
+        ancestors = await self._entities.chain(entity.id, up, limit=MAX_CHAIN)
+        parts = [
+            others[e.from_entity_id]
+            for e in edges
+            if e.type is up
+            and e.to_entity_id == entity.id
+            and e.from_entity_id in others
+            and others[e.from_entity_id].type is entity.type
+        ]
+        part_edges, part_ends = await self._ends(parts, PART_AROUND)
+        listed = []
+        for part in parts:
+            out = _out(part_edges, part_ends, part.id)
+            step = part.attributes.get("step")
+            listed.append(
+                BusinessPart(
+                    entity=EntityBrief.model_validate(part),
+                    step=step if isinstance(step, int) else None,
+                    supported_by=out(RelationshipType.SUPPORTED_BY),
+                    data=out(RelationshipType.USES),
+                    owners=out(RelationshipType.OWNED_BY),
+                )
+            )
+        listed.sort(key=lambda p: (p.step is None, p.step or 0, p.entity.name.lower()))
+        support = ties(RelationshipType.SUPPORTED_BY, outgoing=True)
+        applications = [t.entity.id for t in support if t.entity.type is EntityType.APPLICATION]
+        direct = {t.entity.id for t in support}
+        services = {
+            s.id: s
+            for held in (await self._entities.parts(applications, EntityType.SERVICE)).values()
+            for s in held
+            if s.id not in direct
+        }
+        return BusinessDetail(
+            **row.model_dump(),
+            description=_text(entity.attributes.get("description")),
+            attributes=dict(entity.attributes),
+            provenance=dict(entity.provenance),
+            ancestors=[EntityBrief.model_validate(a) for a in ancestors],
+            parts=listed,
+            processes=sorted(
+                (
+                    t.entity
+                    for t in ties(RelationshipType.REALIZES, outgoing=False)
+                    if t.entity.type is EntityType.BUSINESS_PROCESS
+                ),
+                key=lambda brief: brief.name.lower(),
+            ),
+            support=support,
+            services=sorted(
+                (EntityBrief.model_validate(s) for s in services.values()),
+                key=lambda brief: brief.name.lower(),
+            ),
+            data=ties(RelationshipType.USES, outgoing=True),
+            ownership=ties(RelationshipType.OWNED_BY, outgoing=True),
+            documentation=[
+                t
+                for t in ties(RelationshipType.DESCRIBES, outgoing=False)
+                if t.entity.type in DOCUMENTATION
+            ],
+        )
+
+    async def _business(
+        self, found: Sequence[Entity]
+    ) -> tuple[list[BusinessRead], list[Relationship], dict[uuid.UUID, Entity]]:
+        edges, others = await self._ends(found, BUSINESS_AROUND)
+        rows = []
+        for entity in found:
+            out = _out(edges, others, entity.id)
+            up = _up(entity)
+            a = entity.attributes
+
+            def into(relation: RelationshipType, kinds: Sequence[EntityType], of: uuid.UUID) -> int:
+                return sum(
+                    1
+                    for e in edges
+                    if e.type is relation
+                    and e.to_entity_id == of
+                    and e.from_entity_id in others
+                    and others[e.from_entity_id].type in kinds
+                )
+
+            parents = [b for b in out(up) if b.type is entity.type]
+            level, step = a.get("level"), a.get("step")
+            rows.append(
+                BusinessRead(
+                    id=entity.id,
+                    key=entity.key,
+                    name=entity.name,
+                    type=entity.type,
+                    lifecycle=entity.lifecycle,
+                    level=level if isinstance(level, int) else None,
+                    criticality=_level(entity),
+                    stage=_text(a.get("stage")),
+                    process_type=_text(a.get("process_type")),
+                    step=step if isinstance(step, int) else None,
+                    parent=parents[0] if parents else None,
+                    capabilities=[
+                        b
+                        for b in out(RelationshipType.REALIZES)
+                        if b.type is EntityType.BUSINESS_CAPABILITY
+                    ],
+                    part_count=into(up, (entity.type,), entity.id),
+                    process_count=into(
+                        RelationshipType.REALIZES, (EntityType.BUSINESS_PROCESS,), entity.id
+                    ),
+                    supported_by=out(RelationshipType.SUPPORTED_BY),
+                    data_count=len(out(RelationshipType.USES)),
+                    owners=out(RelationshipType.OWNED_BY),
+                    document_count=into(RelationshipType.DESCRIBES, DOCUMENTATION, entity.id),
+                )
+            )
+        return rows, edges, others
+
+    async def business_context(self, entity: Entity) -> BusinessContext:
+        """What a technical thing means to the business: the capabilities
+        and processes that rely on it — on itself, on what holds it (its
+        service, its application), or on what depends on it."""
+        held: dict[uuid.UUID, tuple[Literal["direct", "contained", "dependent"], Entity | None]]
+        held = {entity.id: ("direct", None)}
+        frontier = [entity.id]
+        for _ in range(MAX_HOLDERS):
+            above = [
+                e.to_entity_id
+                for e in await self._entities.around(frontier, (RelationshipType.PART_OF,))
+                if e.from_entity_id in set(frontier) and e.to_entity_id not in held
+            ]
+            holders = await self._entities.by_ids(above)
+            frontier = [
+                h.id
+                for h in holders.values()
+                if h.type in TECHNICAL and h.lifecycle is not Lifecycle.REMOVED
+            ]
+            held |= {h: ("contained", holders[h]) for h in frontier}
+            if not frontier:
+                break
+        dependents: set[uuid.UUID] = set()
+        for root in list(held):
+            reached, _ = await self._entities.dependencies(
+                root,
+                downstream=False,
+                depth=MAX_HOLDERS,
+                environment=None,
+                limit=MAX_DEPENDENCIES,
+            )
+            dependents |= set(reached) - set(held)
+        for dependent in (await self._entities.by_ids(list(dependents))).values():
+            held[dependent.id] = ("dependent", dependent)
+        best: dict[uuid.UUID, BusinessTie] = {}
+        for edge, relying in await self._entities.pointing(
+            list(held), (RelationshipType.SUPPORTED_BY, RelationshipType.USES), BUSINESS
+        ):
+            path, via = held[edge.to_entity_id]
+            tie = BusinessTie(
+                entity=EntityBrief.model_validate(relying),
+                relation=edge.type,
+                via=EntityBrief.model_validate(via) if via is not None else None,
+                path=path,
+                origin=edge.origin,
+                rule=edge.rule,
+                confidence=edge.confidence,
+            )
+            known = best.get(relying.id)
+            if known is None or (PATHS.index(path), -edge.confidence) < (
+                PATHS.index(known.path),
+                -known.confidence,
+            ):
+                best[relying.id] = tie
+        ranked = sorted(
+            best.values(),
+            key=lambda t: (PATHS.index(t.path), -t.confidence, t.entity.name.lower()),
+        )
+        return BusinessContext(
+            entity=EntityBrief.model_validate(entity),
+            capabilities=[t for t in ranked if t.entity.type is EntityType.BUSINESS_CAPABILITY],
+            processes=[t for t in ranked if t.entity.type is EntityType.BUSINESS_PROCESS],
+        )
+
 
 def _expertise(entity: Entity) -> list[Expertise]:
     """What a person's work shows they know, as enrichment kept it."""
@@ -988,6 +1427,64 @@ def _tie(edge: Relationship, other: Entity) -> Tie:
         rule=edge.rule,
         confidence=edge.confidence,
     )
+
+
+def _tools(entity: Entity) -> list[str]:
+    """The kinds of tools a document or a space is read from: Confluence,
+    Notion… — enrichment's, from its records."""
+    return _names(entity.attributes.get("tools"))
+
+
+def _up(entity: Entity) -> RelationshipType:
+    """What a capability's parent is to it — child_of — or an activity's
+    process: part_of."""
+    if entity.type is EntityType.BUSINESS_CAPABILITY:
+        return RelationshipType.CHILD_OF
+    return RelationshipType.PART_OF
+
+
+def _out(
+    edges: list[Relationship], others: dict[uuid.UUID, Entity], of: uuid.UUID
+) -> Callable[[RelationshipType], list[EntityBrief]]:
+    """What an entity points at, by relation: said first, the surest first."""
+
+    def pointed(relation: RelationshipType) -> list[EntityBrief]:
+        found = sorted(
+            (
+                e
+                for e in edges
+                if e.type is relation and e.from_entity_id == of and e.to_entity_id in others
+            ),
+            key=lambda e: (
+                e.origin != "stated",
+                -e.confidence,
+                others[e.to_entity_id].name.lower(),
+            ),
+        )
+        return [EntityBrief.model_validate(others[e.to_entity_id]) for e in found]
+
+    return pointed
+
+
+def _ties(
+    edges: list[Relationship], others: dict[uuid.UUID, Entity], of: uuid.UUID
+) -> Callable[..., list[Tie]]:
+    """An entity's ties by relation, either way: said first, the surest
+    first — up to MAX_LISTED."""
+
+    def tied(relation: RelationshipType, *, outgoing: bool) -> list[Tie]:
+        found = [
+            _tie(e, others[e.to_entity_id if outgoing else e.from_entity_id])
+            for e in edges
+            if e.type is relation
+            and (e.from_entity_id if outgoing else e.to_entity_id) == of
+            and (e.to_entity_id if outgoing else e.from_entity_id) in others
+            and (e.to_entity_id if outgoing else e.from_entity_id) != of
+        ]
+        found.sort(key=lambda t: (t.origin != "stated", -t.confidence, t.entity.name.lower()))
+        return found[:MAX_LISTED]
+
+    return tied
 
 
 def _holds(entity: Entity) -> Holds:

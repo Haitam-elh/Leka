@@ -62,6 +62,11 @@ const LAYER: Record<EntityType, number> = {
   // A database's schemas and tables, beside it (LEKA-364).
   schema: 3,
   data_object: 3,
+  // Where documents are kept, with them; what the business does, above
+  // what supports it (LEKA-366).
+  knowledge_space: 2,
+  business_capability: 0,
+  business_process: 0,
 };
 
 /** Past this many, a layer wraps onto another row: 80 services side by side

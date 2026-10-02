@@ -18,6 +18,7 @@ from typing import Any, cast
 from sqlalchemy import CursorResult, Select, delete, exists, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import Exists
 
 from leka.db import WorkspaceScopedRepository
@@ -89,6 +90,61 @@ class DataFilters:
     service_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
     q: str | None = None
+
+
+# Documentation (LEKA-366): what documents what, what it can describe, and
+# the freshness that is not stale.
+DOCUMENTATION = (EntityType.DOCUMENT, EntityType.KNOWLEDGE_SPACE)
+DOCUMENTED = (
+    EntityType.APPLICATION,
+    EntityType.SERVICE,
+    EntityType.REPOSITORY,
+    EntityType.DATABASE,
+    EntityType.DATA_OBJECT,
+    EntityType.BUSINESS_CAPABILITY,
+    EntityType.BUSINESS_PROCESS,
+)
+NOT_STALE = ("fresh", "aging")
+BUSINESS = (EntityType.BUSINESS_CAPABILITY, EntityType.BUSINESS_PROCESS)
+
+
+@dataclass(frozen=True)
+class DocumentFilters:
+    """What a list of documents is narrowed to (LEKA-366): where they are
+    kept, how fresh, what they describe, whose they are."""
+
+    lifecycle: Lifecycle | None = None
+    space_id: uuid.UUID | None = None
+    freshness: str | None = None
+    about_id: uuid.UUID | None = None
+    person_id: uuid.UUID | None = None
+    team_id: uuid.UUID | None = None
+    verified: bool | None = None
+    q: str | None = None
+
+
+@dataclass(frozen=True)
+class BusinessFilters:
+    """What a list of capabilities or processes is narrowed to (LEKA-366):
+    where they sit, whose they are, what supports them, what they use."""
+
+    lifecycle: Lifecycle | None = None
+    parent_id: uuid.UUID | None = None
+    top: bool | None = None
+    capability_id: uuid.UUID | None = None
+    team_id: uuid.UUID | None = None
+    application_id: uuid.UUID | None = None
+    data_id: uuid.UUID | None = None
+    q: str | None = None
+
+
+@dataclass(frozen=True)
+class Documented:
+    """How one thing is documented: by how many documents, the latest
+    changed when."""
+
+    count: int
+    last_changed_at: str | None
 
 
 @dataclass(frozen=True)
@@ -839,6 +895,290 @@ class EntityRepository(WorkspaceScopedRepository):
             seen.add(entity.id)
             current = entity.id
         return found
+
+    # ── documentation and business knowledge (LEKA-366) ─────────────────────
+
+    def documents(self, filters: DocumentFilters) -> Select[tuple[Entity]]:
+        """The documents of the workspace, for a page: in that space, that
+        fresh, about that thing, of that person — written, edited, owned —
+        or that team, verified or not."""
+        f = filters
+        statement = _lifecycle(
+            self.select(Entity).where(Entity.type == EntityType.DOCUMENT), f.lifecycle
+        )
+        if f.freshness:
+            statement = statement.where(Entity.attributes["freshness"].astext == f.freshness)
+        if f.verified is not None:
+            word = "true" if f.verified else "false"
+            statement = statement.where(Entity.attributes["verified"].astext == word)
+        if f.q:
+            statement = statement.where(Entity.name.ilike(f"%{f.q}%"))
+        for other, relation in (
+            (f.space_id, RelationshipType.PART_OF),
+            (f.about_id, RelationshipType.DESCRIBES),
+            (f.team_id, RelationshipType.OWNED_BY),
+        ):
+            if other is not None:
+                statement = statement.where(self._points_at(other, relation))
+        if f.person_id is not None:
+            statement = statement.where(
+                exists().where(
+                    Relationship.workspace_id == self.workspace_id,
+                    Relationship.from_entity_id == Entity.id,
+                    Relationship.to_entity_id == f.person_id,
+                    Relationship.type.in_(
+                        (
+                            RelationshipType.AUTHORED_BY,
+                            RelationshipType.EDITED_BY,
+                            RelationshipType.OWNED_BY,
+                        )
+                    ),
+                )
+            )
+        return statement
+
+    def knowledge_spaces(
+        self,
+        *,
+        lifecycle: Lifecycle | None,
+        space_kind: str | None,
+        team_id: uuid.UUID | None,
+        q: str | None,
+    ) -> Select[tuple[Entity]]:
+        """The spaces documents are kept in, for a page."""
+        statement = _lifecycle(
+            self.select(Entity).where(Entity.type == EntityType.KNOWLEDGE_SPACE), lifecycle
+        )
+        if space_kind:
+            statement = statement.where(Entity.attributes["space_kind"].astext == space_kind)
+        if team_id is not None:
+            statement = statement.where(self._points_at(team_id, RelationshipType.OWNED_BY))
+        if q:
+            statement = statement.where(Entity.name.ilike(f"%{q}%"))
+        return statement
+
+    async def space_documents(self, spaces: Sequence[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
+        """How many documents — not removed — each of these spaces holds, by
+        freshness: `unknown` for those without a date."""
+        if not spaces:
+            return {}
+        freshness = Entity.attributes["freshness"].astext.label("freshness")
+        rows = await self._session.execute(
+            select(Relationship.to_entity_id, freshness, func.count())
+            .join(Entity, Entity.id == Relationship.from_entity_id)
+            .where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.type == RelationshipType.PART_OF,
+                Relationship.to_entity_id.in_(set(spaces)),
+                Entity.workspace_id == self.workspace_id,
+                Entity.type == EntityType.DOCUMENT,
+                Entity.lifecycle != Lifecycle.REMOVED,
+            )
+            # By the label: each `->>` is a parameter of its own.
+            .group_by(Relationship.to_entity_id, "freshness")
+        )
+        found: dict[uuid.UUID, dict[str, int]] = {space: {} for space in spaces}
+        for space, word, count in rows.tuples().all():
+            found[space][word or "unknown"] = int(count)
+        return found
+
+    async def documents_of(self, space: uuid.UUID, *, stale: bool, limit: int) -> Sequence[Entity]:
+        """A space's documents, not removed: the latest changed first — or
+        its stale ones, the longest unchanged first."""
+        statement = self.select(Entity).where(
+            Entity.type == EntityType.DOCUMENT,
+            Entity.lifecycle != Lifecycle.REMOVED,
+            self._points_at(space, RelationshipType.PART_OF),
+        )
+        changed = Entity.attributes["last_activity_at"].astext
+        if stale:
+            statement = statement.where(Entity.attributes["freshness"].astext == "stale")
+            ordered = statement.order_by(changed.asc().nulls_last(), Entity.id)
+        else:
+            ordered = statement.order_by(changed.desc().nulls_last(), Entity.id)
+        return await self.list(ordered.limit(limit))
+
+    def _documented(self, *, fresh: bool) -> Exists:
+        """Something a document or a space — not removed — describes; or a
+        document that is not stale."""
+        describer = aliased(Entity)
+        condition = exists().where(
+            Relationship.workspace_id == self.workspace_id,
+            Relationship.to_entity_id == Entity.id,
+            Relationship.type == RelationshipType.DESCRIBES,
+            describer.id == Relationship.from_entity_id,
+            describer.workspace_id == self.workspace_id,
+            describer.lifecycle != Lifecycle.REMOVED,
+        )
+        if fresh:
+            return condition.where(
+                describer.type == EntityType.DOCUMENT,
+                describer.attributes["freshness"].astext.in_(NOT_STALE),
+            )
+        return condition.where(describer.type.in_(DOCUMENTATION))
+
+    async def coverage(self) -> dict[EntityType, tuple[int, int, int]]:
+        """How many of each kind documentation can describe there are — not
+        removed — how many are described, how many by a document that is
+        not stale."""
+        rows = await self._session.execute(
+            select(
+                Entity.type,
+                func.count(),
+                func.count().filter(self._documented(fresh=False)),
+                func.count().filter(self._documented(fresh=True)),
+            )
+            .where(
+                Entity.workspace_id == self.workspace_id,
+                Entity.type.in_(DOCUMENTED),
+                Entity.lifecycle != Lifecycle.REMOVED,
+            )
+            .group_by(Entity.type)
+        )
+        return {kind: (int(t), int(d), int(f)) for kind, t, d, f in rows.tuples().all()}
+
+    async def documentation_counts(self) -> tuple[dict[str, int], int, int]:
+        """The documents — not removed — by freshness, how many their tool
+        says need verifying; and how many spaces."""
+        freshness = Entity.attributes["freshness"].astext.label("freshness")
+        rows = await self._session.execute(
+            select(freshness, func.count())
+            .where(
+                Entity.workspace_id == self.workspace_id,
+                Entity.type == EntityType.DOCUMENT,
+                Entity.lifecycle != Lifecycle.REMOVED,
+            )
+            .group_by("freshness")
+        )
+        by_freshness = {word or "unknown": int(n) for word, n in rows.tuples().all()}
+        unverified = await self._session.scalar(
+            select(func.count()).where(
+                Entity.workspace_id == self.workspace_id,
+                Entity.type == EntityType.DOCUMENT,
+                Entity.lifecycle != Lifecycle.REMOVED,
+                Entity.attributes["verified"].astext == "false",
+            )
+        )
+        spaces = await self._session.scalar(
+            select(func.count()).where(
+                Entity.workspace_id == self.workspace_id,
+                Entity.type == EntityType.KNOWLEDGE_SPACE,
+                Entity.lifecycle != Lifecycle.REMOVED,
+            )
+        )
+        return by_freshness, int(unverified or 0), int(spaces or 0)
+
+    def gaps(
+        self,
+        kind: EntityType,
+        *,
+        stale: bool,
+        lifecycle: Lifecycle | None,
+        criticality: str | None,
+        team_id: uuid.UUID | None,
+        q: str | None,
+    ) -> Select[tuple[Entity]]:
+        """The things of a kind no document or space describes — or, `stale`,
+        only stale documents do — for a page."""
+        statement = _lifecycle(self.select(Entity).where(Entity.type == kind), lifecycle)
+        if stale:
+            statement = statement.where(
+                self._documented(fresh=False), ~self._documented(fresh=True)
+            )
+        else:
+            statement = statement.where(~self._documented(fresh=False))
+        if criticality:
+            statement = statement.where(Entity.attributes["criticality"].astext == criticality)
+        if team_id is not None:
+            statement = statement.where(self._points_at(team_id, RelationshipType.OWNED_BY))
+        if q:
+            statement = statement.where(Entity.name.ilike(f"%{q}%"))
+        return statement
+
+    async def documented(self, things: Sequence[uuid.UUID]) -> dict[uuid.UUID, Documented]:
+        """How many documents and spaces — not removed — describe each of
+        these, and when the latest of them changed."""
+        if not things:
+            return {}
+        changed = func.max(Entity.attributes["last_activity_at"].astext)
+        rows = await self._session.execute(
+            select(Relationship.to_entity_id, func.count(), changed)
+            .join(Entity, Entity.id == Relationship.from_entity_id)
+            .where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.type == RelationshipType.DESCRIBES,
+                Relationship.to_entity_id.in_(set(things)),
+                Entity.workspace_id == self.workspace_id,
+                Entity.type.in_(DOCUMENTATION),
+                Entity.lifecycle != Lifecycle.REMOVED,
+            )
+            .group_by(Relationship.to_entity_id)
+        )
+        found = {thing: Documented(0, None) for thing in things}
+        for thing, count, last in rows.tuples().all():
+            found[thing] = Documented(int(count), last)
+        return found
+
+    def business(self, kind: EntityType, filters: BusinessFilters) -> Select[tuple[Entity]]:
+        """The capabilities — or the processes — of the workspace, for a
+        page: under that one, at the top, realizing that capability, of
+        that team, supported by that application or service, using that
+        data."""
+        f = filters
+        statement = _lifecycle(self.select(Entity).where(Entity.type == kind), f.lifecycle)
+        up = (
+            RelationshipType.CHILD_OF
+            if kind is EntityType.BUSINESS_CAPABILITY
+            else RelationshipType.PART_OF
+        )
+        if f.parent_id is not None:
+            statement = statement.where(self._points_at(f.parent_id, up))
+        if f.top is not None:
+            above = aliased(Entity)
+            parented = exists().where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.from_entity_id == Entity.id,
+                Relationship.type == up,
+                above.id == Relationship.to_entity_id,
+                above.type == kind,
+            )
+            statement = statement.where(~parented if f.top else parented)
+        for other, relation in (
+            (f.capability_id, RelationshipType.REALIZES),
+            (f.team_id, RelationshipType.OWNED_BY),
+            (f.application_id, RelationshipType.SUPPORTED_BY),
+            (f.data_id, RelationshipType.USES),
+        ):
+            if other is not None:
+                statement = statement.where(self._points_at(other, relation))
+        if f.q:
+            statement = statement.where(Entity.name.ilike(f"%{f.q}%"))
+        return statement
+
+    async def pointing(
+        self,
+        targets: Sequence[uuid.UUID],
+        types: Sequence[RelationshipType],
+        kinds: Sequence[EntityType],
+    ) -> list[tuple[Relationship, Entity]]:
+        """The relationships of these types to these entities from entities
+        of these kinds, not removed — and those entities."""
+        if not targets:
+            return []
+        rows = await self._session.execute(
+            select(Relationship, Entity)
+            .join(Entity, Entity.id == Relationship.from_entity_id)
+            .where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.type.in_(types),
+                Relationship.to_entity_id.in_(set(targets)),
+                Entity.workspace_id == self.workspace_id,
+                Entity.type.in_(kinds),
+                Entity.lifecycle != Lifecycle.REMOVED,
+            )
+            .order_by(Relationship.confidence.desc(), Entity.name, Entity.id)
+        )
+        return [(edge, entity) for edge, entity in rows.tuples().all()]
 
     async def counts(self) -> dict[str, dict[str, int]]:
         """How many entities of each type and in each lifecycle; how many

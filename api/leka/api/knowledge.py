@@ -40,6 +40,24 @@
                                                they maintain and know
     GET /knowledge/entities/{id}/responsibility who owns and operates a thing, who
                                                leads its teams, who knows it
+    GET /knowledge/documents                   the documents: where kept, who wrote and
+                                               last changed them, how fresh, what they
+                                               describe (LEKA-366)
+    GET /knowledge/documents/{id}              one, its pages, links, everything tied
+    GET /knowledge/knowledge-spaces            where documents are kept: how many, how
+                                               fresh, whose, what each documents
+    GET /knowledge/knowledge-spaces/{id}       one, its latest and its stalest documents
+    GET /knowledge/documentation/coverage      how much documentation, how fresh, what
+                                               of the company it covers, kind by kind
+    GET /knowledge/documentation/gaps          what no document describes — or only
+                                               stale ones
+    GET /knowledge/business-capabilities       what the company does: its capabilities,
+    GET /knowledge/business-processes          how — its processes and activities —
+                                               whose, what supports them, what they use
+    GET /knowledge/business-capabilities/{id}  one: its parts, processes, technology,
+    GET /knowledge/business-processes/{id}     data, owners, documentation
+    GET /knowledge/entities/{id}/business      what a technical thing means to the
+                                               business: who relies on it, and how
 
 Read by every member (`workspace:read`): it is the company's own picture. A
 route validates, calls one repository or service, and returns (architecture
@@ -65,6 +83,10 @@ from leka.knowledge import (
     ENTITY_KINDS,
     MODEL_VERSION,
     RELATIONSHIP_KINDS,
+    BusinessContext,
+    BusinessDetail,
+    BusinessFilters,
+    BusinessRead,
     CloudAccountDetail,
     CloudAccountRead,
     DatabaseDetail,
@@ -73,6 +95,11 @@ from leka.knowledge import (
     DataObjectDetail,
     DataObjectRead,
     Dependencies,
+    DocumentationCoverage,
+    DocumentationGap,
+    DocumentDetail,
+    DocumentFilters,
+    DocumentRead,
     Entity,
     EntityBrief,
     EntityDetail,
@@ -85,6 +112,8 @@ from leka.knowledge import (
     InfrastructureFilters,
     InfrastructureRead,
     KnowledgeService,
+    KnowledgeSpaceDetail,
+    KnowledgeSpaceRead,
     LandscapeDetail,
     LandscapeFilters,
     LandscapeRead,
@@ -771,3 +800,312 @@ async def responsibility(
     if found is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
     return await KnowledgeService(repository).responsibility(found)
+
+
+# ── documentation and business knowledge (LEKA-366) ─────────────────────────
+
+Freshness = Literal["fresh", "aging", "stale"]
+# What documentation can describe — what its coverage and its gaps are of.
+Documented = Literal[
+    "application",
+    "service",
+    "repository",
+    "database",
+    "data_object",
+    "business_capability",
+    "business_process",
+]
+
+
+@router.get("/documents", response_model=PageEnvelope[DocumentRead])
+async def documents(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    space_id: uuid.UUID | None = None,
+    freshness: Freshness | None = None,
+    about_id: Annotated[
+        uuid.UUID | None, Query(description="Those describing this entity: its documentation.")
+    ] = None,
+    person_id: Annotated[
+        uuid.UUID | None, Query(description="Those this person wrote, edited or owns.")
+    ] = None,
+    team_id: uuid.UUID | None = None,
+    verified: Annotated[
+        bool | None, Query(description="Those their tool says are verified — or are not.")
+    ] = None,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the title.")] = None,
+) -> PageEnvelope[DocumentRead]:
+    """The documents, by title: where each is kept, who wrote it and last
+    changed it, how fresh it is, whose it is, what it describes."""
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.documents(
+        DocumentFilters(
+            lifecycle=lifecycle,
+            space_id=space_id,
+            freshness=freshness,
+            about_id=about_id,
+            person_id=person_id,
+            team_id=team_id,
+            verified=verified,
+            q=q,
+        )
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=ENTITY_SORTS, id_column=Entity.id
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).documents(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/documents/{entity_id}", response_model=DocumentDetail)
+async def document(entity_id: uuid.UUID, session: SessionDep, principal: Reader) -> DocumentDetail:
+    """One document: its pages above and below, what it describes, links
+    to and mentions, who wrote, edited and owns it — each said by a source
+    or inferred by a rule, how surely."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not EntityType.DOCUMENT:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such document.")
+    return await KnowledgeService(repository).document(found)
+
+
+@router.get("/knowledge-spaces", response_model=PageEnvelope[KnowledgeSpaceRead])
+async def knowledge_spaces(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    space_kind: Annotated[
+        str | None,
+        Query(
+            max_length=50,
+            description="space, database, topic, collection, shared_drive, document_library, "
+            "onedrive.",
+        ),
+    ] = None,
+    team_id: uuid.UUID | None = None,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the name.")] = None,
+) -> PageEnvelope[KnowledgeSpaceRead]:
+    """Where documents are kept, by name: how many each holds and how
+    fresh, whose it is, what it documents, who writes it most."""
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.knowledge_spaces(
+        lifecycle=lifecycle, space_kind=space_kind, team_id=team_id, q=q
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=ENTITY_SORTS, id_column=Entity.id
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).spaces(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/knowledge-spaces/{entity_id}", response_model=KnowledgeSpaceDetail)
+async def knowledge_space(
+    entity_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> KnowledgeSpaceDetail:
+    """One space: whose it is, what it documents, who maintains it, its
+    latest documents and its stalest."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not EntityType.KNOWLEDGE_SPACE:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such space.")
+    return await KnowledgeService(repository).space(found)
+
+
+@router.get("/documentation/coverage", response_model=DocumentationCoverage)
+async def documentation_coverage(session: SessionDep, principal: Reader) -> DocumentationCoverage:
+    """How much documentation there is, how fresh, how much needs verifying
+    — and, kind by kind, how much of the company it describes."""
+    repository = EntityRepository(session, principal.workspace_id)
+    return await KnowledgeService(repository).coverage()
+
+
+@router.get("/documentation/gaps", response_model=PageEnvelope[DocumentationGap])
+async def documentation_gaps(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    type: Annotated[Documented, Query(description="The kind of thing.")],  # noqa: A002
+    stale: Annotated[bool, Query(description="true: those only stale documents describe.")] = False,
+    criticality: Literal["critical", "high", "medium", "low"] | None = None,
+    team_id: uuid.UUID | None = None,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the name.")] = None,
+) -> PageEnvelope[DocumentationGap]:
+    """The things of a kind no document or space describes — or only stale
+    documents do — by name: how critical, whose."""
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.gaps(
+        EntityType(type),
+        stale=stale,
+        lifecycle=lifecycle,
+        criticality=criticality,
+        team_id=team_id,
+        q=q,
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=ENTITY_SORTS, id_column=Entity.id
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).gaps(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+async def _business_page(
+    kind: EntityType,
+    session: SessionDep,
+    principal: Principal,
+    page: PageParams,
+    filters: BusinessFilters,
+) -> PageEnvelope[BusinessRead]:
+    repository = EntityRepository(session, principal.workspace_id)
+    result = await serve_page(
+        session,
+        repository.business(kind, filters),
+        request=page,
+        catalogue=ENTITY_SORTS,
+        id_column=Entity.id,
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).business(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/business-capabilities", response_model=PageEnvelope[BusinessRead])
+async def business_capabilities(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    parent_id: uuid.UUID | None = None,
+    top: Annotated[
+        bool | None, Query(description="true: those with no parent; false: the others.")
+    ] = None,
+    team_id: uuid.UUID | None = None,
+    application_id: Annotated[
+        uuid.UUID | None, Query(description="Those this application — or service — supports.")
+    ] = None,
+    data_id: Annotated[uuid.UUID | None, Query(description="Those using this data.")] = None,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the name.")] = None,
+) -> PageEnvelope[BusinessRead]:
+    """What the company does — its business capabilities, by name: where
+    each sits, whose, what supports it, what it uses, how documented."""
+    return await _business_page(
+        EntityType.BUSINESS_CAPABILITY,
+        session,
+        principal,
+        page,
+        BusinessFilters(
+            lifecycle=lifecycle,
+            parent_id=parent_id,
+            top=top,
+            team_id=team_id,
+            application_id=application_id,
+            data_id=data_id,
+            q=q,
+        ),
+    )
+
+
+@router.get("/business-processes", response_model=PageEnvelope[BusinessRead])
+async def business_processes(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    capability_id: Annotated[
+        uuid.UUID | None, Query(description="Those realizing this capability.")
+    ] = None,
+    parent_id: Annotated[
+        uuid.UUID | None, Query(description="The activities of this process.")
+    ] = None,
+    top: Annotated[
+        bool | None, Query(description="true: processes; false: their activities.")
+    ] = None,
+    team_id: uuid.UUID | None = None,
+    application_id: Annotated[
+        uuid.UUID | None, Query(description="Those this application — or service — supports.")
+    ] = None,
+    data_id: Annotated[uuid.UUID | None, Query(description="Those using this data.")] = None,
+    lifecycle: Annotated[
+        Lifecycle | None, Query(description="Absent: every lifecycle but removed.")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=200, description="In the name.")] = None,
+) -> PageEnvelope[BusinessRead]:
+    """How the company works — its business processes and their
+    activities, by name: what each realizes, whose, what supports it, what
+    it uses."""
+    return await _business_page(
+        EntityType.BUSINESS_PROCESS,
+        session,
+        principal,
+        page,
+        BusinessFilters(
+            lifecycle=lifecycle,
+            parent_id=parent_id,
+            top=top,
+            capability_id=capability_id,
+            team_id=team_id,
+            application_id=application_id,
+            data_id=data_id,
+            q=q,
+        ),
+    )
+
+
+@router.get("/business-capabilities/{entity_id}", response_model=BusinessDetail)
+async def business_capability(
+    entity_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> BusinessDetail:
+    """One capability: its parents and sub-capabilities, the processes
+    realizing it, the applications and services supporting it, the data it
+    uses, its owners, its documentation."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not EntityType.BUSINESS_CAPABILITY:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such capability.")
+    return await KnowledgeService(repository).business_detail(found)
+
+
+@router.get("/business-processes/{entity_id}", response_model=BusinessDetail)
+async def business_process(
+    entity_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> BusinessDetail:
+    """One process: the capabilities it realizes, its activities by step —
+    each with what supports it and what it uses — its technology, its data,
+    its owners, its documentation."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not EntityType.BUSINESS_PROCESS:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such process.")
+    return await KnowledgeService(repository).business_detail(found)
+
+
+@router.get("/entities/{entity_id}/business", response_model=BusinessContext)
+async def business_context(
+    entity_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> BusinessContext:
+    """What a technical thing means to the business: the capabilities and
+    processes relying on it — on itself, on what holds it (its service,
+    its application) or on what depends on it — each with how, and who
+    says so."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
+    return await KnowledgeService(repository).business_context(found)
