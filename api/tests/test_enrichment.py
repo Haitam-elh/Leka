@@ -71,13 +71,16 @@ class World:
         type: str,  # noqa: A002 — the entity's own word
         sources: tuple[uuid.UUID, ...] = (GITHUB,),
         aliases: tuple[str, ...] = (),
+        links: tuple[str, ...] = (),
         **attributes: Any,
     ) -> uuid.UUID:
         entity_id = uuid.uuid5(IDS, key)
-        # Resolution keeps no dates; the job gives them from the records.
+        # Resolution keeps no dates, no links; the job gives them from the records.
         dates = {k: v for k, v in attributes.items() if k.endswith("_at")}
         kept = {k: v for k, v in attributes.items() if k not in dates}
-        self.nodes[entity_id] = Node(entity_id, type, key, name, kept, frozenset(sources), dates)
+        self.nodes[entity_id] = Node(
+            entity_id, type, key, name, kept, frozenset(sources), dates, links
+        )
         for held in (key, *aliases):
             self.holders[held].add(entity_id)
         return entity_id
@@ -346,11 +349,16 @@ def test_a_label_names_its_service_less_surely() -> None:
 
 def test_a_service_named_in_a_title_is_mentioned_not_owned() -> None:
     w = acme()
+    w.thing("github.com/acme/web#9", "Billing totals drift", type="issue")
     result = enrich(w.snapshot())
 
-    runbook = edge(result, w, RUNBOOK, "mentions", SERVICE)
+    issue = edge(result, w, "github.com/acme/web#9", "mentions", SERVICE)
+    assert issue is not None
+    assert (issue.rule, issue.confidence) == ("named_in_title", 0.6)
+    # A document whose title names it describes it (LEKA-366).
+    runbook = edge(result, w, RUNBOOK, "describes", SERVICE)
     assert runbook is not None
-    assert (runbook.rule, runbook.confidence) == ("named_in_title", 0.6)
+    assert edge(result, w, RUNBOOK, "mentions", SERVICE) is None
     # An incident a source says affects the service is not "mentioned" too.
     assert edge(result, w, Q1, "mentions", SERVICE) is None
 
