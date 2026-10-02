@@ -38,6 +38,7 @@ export const ENTITY_TYPES = [
   "knowledge_space",
   "business_capability",
   "business_process",
+  "change",
 ] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
@@ -72,6 +73,7 @@ export const RELATIONSHIP_TYPES = [
   "supported_by",
   "uses",
   "realizes",
+  "deploys",
 ] as const;
 export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
 

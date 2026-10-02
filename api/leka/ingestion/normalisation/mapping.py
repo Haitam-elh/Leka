@@ -18,7 +18,9 @@ kept — a space, a Notion database, a topic, a collection, a drive — an
 entity its documents are part of; a document's owner and last editor, what
 it links to; a catalogue's documentation, what it describes; a business
 system's capabilities and processes, what supports them, what they use
-(LEKA-366).
+(LEKA-366). A deployment, part of its repository, deploying its commit, to
+its environment; a change, and what it affects; an incident or a change a
+ticket tool keeps, and what caused what (LEKA-367).
 """
 
 from __future__ import annotations
@@ -60,6 +62,8 @@ CUSTOM_ENTITIES = frozenset(
     | {"person", "team"}
     # A business system's capabilities and processes; a wiki's spaces (LEKA-366).
     | {"business_capability", "business_process", "knowledge_space"}
+    # A change management tool's changes, a CI/CD tool's deployments (LEKA-367).
+    | {"change", "deployment"}
 )
 
 ENTITY_TYPES = {
@@ -85,6 +89,9 @@ ENTITY_TYPES = {
     C.SPACES: "knowledge_space",
     C.DATABASES: "knowledge_space",
     C.DRIVES: "knowledge_space",
+    # What was shipped where, and what changed (LEKA-367).
+    C.DEPLOYMENTS: "deployment",
+    C.CHANGES: "change",
     # What resources are in; an Azure resource group says so itself.
     C.ACCOUNTS: "cloud_account",
     # A database's schemas, and its tables, views and collections (LEKA-364).
@@ -200,6 +207,33 @@ MY_DRIVE = "user"
 # Guru's word for a card its experts vouch for — or that wants them again.
 VERIFIED = {"trusted": True, "verified": True, "needs_verification": False, "unverified": False}
 MAX_DESCRIPTION = 1_000
+# Operations (LEKA-367): a Jira Service Management ticket that is an
+# incident or a change, by its type.
+JIRA_INCIDENTS = frozenset({"incident", "major incident"})
+JIRA_CHANGES = frozenset(
+    {"change", "change request", "normal change", "standard change", "emergency change"}
+)
+# A change's state from a work state, where its own word is unknown.
+WORK_TO_CHANGE = {"open": "requested", "in_progress": "in_progress", "closed": "completed"}
+# What makes a monitoring tool's event a deployment or a change: a tag that
+# says so — alone, or as the value of `event_type:`, `type:`, `category:` —
+# or, for a deployment, the continuous delivery tool that sent it.
+DEPLOY_TAGS = frozenset({"deployment", "deploy", "deployed", "release", "rollout"})
+CHANGE_TAGS = frozenset(
+    {"change", "config_change", "configuration_change", "feature_flag", "change_event"}
+)
+TYPE_TAG_KEYS = frozenset({"event_type", "type", "category", "kind", "event"})
+CD_SOURCES = frozenset(
+    {"argocd", "argo cd", "spinnaker", "octopus deploy", "harness", "codedeploy", "flux"}
+)
+EVENT_TOOLS = frozenset({"datadog", "grafana"})
+# GitLab's environment tiers, on LEKA's environments.
+TIERS = {
+    "production": "production",
+    "staging": "staging",
+    "testing": "test",
+    "development": "development",
+}
 # How parsing said one thing points at another.
 REFERENCE_TYPES = {
     "closes": "resolves",
@@ -231,6 +265,10 @@ class Build:
     # What the record is when its capability does not say: a PagerDuty
     # business service is an application (LEKA-362).
     as_type: str | None = None
+    # Where its accounts and items live, when its link does not say: a
+    # deployment's link is its pipeline's, its code host's is elsewhere
+    # (LEKA-367).
+    code_host: str | None = None
 
     @property
     def kind(self) -> str:
@@ -247,6 +285,8 @@ class Build:
     @property
     def host(self) -> str:
         """Where this record's accounts and items live: a code host, a Jira site."""
+        if self.code_host:
+            return self.code_host
         if self.kind == "jira":
             return ids.site_of(self.record.url) or "jira"
         return ids.host_of(self.record.url, self.kind)
@@ -303,7 +343,8 @@ def entity(build: Build) -> NormalisedEntity:
     """The record itself, as an entity."""
     record, capability = build.record, build.record.provenance.capability
     declared = _declared(build) if capability is C.RECORDS else None
-    if declared is None and capability not in ENTITY_TYPES:
+    happened = _event_kind(build) if capability is C.EVENTS else None
+    if declared is None and happened is None and capability not in ENTITY_TYPES:
         raise UnsupportedRecordError(f"no mapping for {capability.value} yet")
     name = values.name(record.title)
     if not name:
@@ -320,6 +361,17 @@ def entity(build: Build) -> NormalisedEntity:
         key, attributes = _team(build)
     elif capability is C.PEOPLE:
         key, attributes = _directory_person(build)
+    elif happened is not None:
+        build.as_type = happened
+        key, attributes = _event(build, happened)
+    elif capability is C.DEPLOYMENTS:
+        if build.kind not in CODE_HOSTS:
+            raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
+        key, attributes = _deployment(build)
+    elif capability is C.CHANGES:
+        if build.kind != "pagerduty":
+            raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
+        key, attributes = _change_event(build)
     elif capability in SPACE_CAPABILITIES and build.kind in DOCUMENT_TOOLS:
         key, attributes = _space(build)
     elif capability in (C.PAGES, C.FILES) and build.kind in DOCUMENT_TOOLS:
@@ -371,6 +423,12 @@ def _work(build: Build) -> tuple[str, dict[str, object]]:
             build.aliases.append(ids.ticket(issue_key, site=None))
         if capability is C.ISSUES and container:
             build.relate("part_of", key, ids.ticket(container, site=site), 1.0, "container")
+        # A Jira Service Management incident, a change request (LEKA-367).
+        issue_type = str(meta.get("type") or "").strip().lower()
+        if capability is C.ISSUES and issue_type in JIRA_INCIDENTS:
+            build.as_type = "incident"
+        elif capability is C.ISSUES and issue_type in JIRA_CHANGES:
+            build.as_type = "change"
     elif build.kind in CODE_HOSTS:
         repo = record.title if capability is C.REPOSITORIES else container
         if not repo:
@@ -406,6 +464,14 @@ def _work(build: Build) -> tuple[str, dict[str, object]]:
             site = ids.site_of(record.url)
             parent = ids.ticket(reference.external_id, site=site)
             build.relate("child_of", key, parent, 1.0, "references")
+        elif reference.kind == "issue" and reference.role in ("caused_by", "causes"):
+            # Jira's cause links (LEKA-367): this one is caused by the other,
+            # or causes it.
+            other = ids.ticket(str(reference.external_id), site=ids.site_of(record.url))
+            cause, effect = (other, key) if reference.role == "caused_by" else (key, other)
+            build.relate("caused_by", effect, cause, 1.0, "references")
+    if build.as_type == "change":
+        _changed(build, attributes, kind=str(meta.get("type") or ""))
     _references(build, key)
     return key, attributes
 
@@ -721,13 +787,20 @@ def _custom(build: Build, declared: str) -> tuple[str, dict[str, object]]:
         _declared_business(build, key, attributes, process=declared == "business_process")
     elif declared == "document":
         _declared_document(build, key, attributes)
-    if record.state is not None and declared in {"issue", "incident", *RESOURCES}:
+    elif declared in ("change", "deployment"):
+        _declared_operation(build, key, attributes, deployment=declared == "deployment")
+    stated = {"issue", "incident", "change", "deployment", *RESOURCES}
+    if record.state is not None and declared in stated:
         own = _own(build.mapping.states, record.state)
         state, known = (
             (own, True)
             if own
             else values.incident_state(record.state)
             if declared == "incident"
+            else values.change_state(record.state)
+            if declared == "change"
+            else values.deployment_state(record.state)
+            if declared == "deployment"
             else values.resource_state(record.state)
             if declared in RESOURCES
             else values.work_state(record.state)
@@ -814,6 +887,216 @@ def _names(value: object) -> list[str]:
     return [str(v) for v in value if v] if isinstance(value, list) else []
 
 
+# ── changes and deployments (LEKA-367) ───────────────────────────────────────
+
+
+def _deployment(build: Build) -> tuple[str, dict[str, object]]:
+    """A code host's deployment — keyed in its repository by the host's id —
+    part of its repository, deploying its commit and the release its ref
+    names, to the environment it names; who made it; how it went, on LEKA's
+    scale, each status kept with when."""
+    record, meta = build.record, build.record.metadata
+    repo = record.provenance.container
+    if not repo:
+        raise InvalidRecordError("no repository: the record has no container")
+    build.code_host = _code_host(build)
+    host = build.host
+    repository = ids.repository(host, repo)
+    key = ids.deployment(repository, str(meta.get("id") or record.provenance.external_id))
+    attributes = _common(build)
+    for name in ("id", "iid", "api_url", "job_url", "tier"):
+        attributes.pop(name, None)
+    build.relate("part_of", key, repository, 1.0, "container")
+    sha, ref = meta.get("sha"), meta.get("ref")
+    if isinstance(sha, str) and sha:
+        build.relate("deploys", key, ids.commit(host, repo, sha), 1.0, "metadata.sha")
+    if isinstance(ref, str) and ref and ref != sha:
+        # A tag is a release; a branch's name, a key no release has.
+        build.relate("deploys", key, ids.release(host, repo, ref), 0.8, "metadata.ref")
+    _deployment_state(build, attributes)
+    _deployed_to(
+        build,
+        key,
+        attributes,
+        meta.get("environment"),
+        tier=meta.get("tier"),
+        production=meta.get("production") is True,
+    )
+    for reference in record.references:
+        if reference.kind == "person" and reference.role in PERSON_ROLES:
+            person = build.person(reference)
+            if person:
+                build.relate(PERSON_ROLES[reference.role], key, person, 1.0, "references")
+    return key, attributes
+
+
+def _code_host(build: Build) -> str:
+    """Where a deployment's repository lives: its API's host for GitHub —
+    its link is its pipeline's — its job's for GitLab."""
+    meta = build.record.metadata
+    if build.kind == "github":
+        api = meta.get("api_url")
+        host = (urlsplit(api).hostname or "").lower() if isinstance(api, str) else ""
+        return "github.com" if host in ("", "api.github.com") else host
+    job = meta.get("job_url")
+    return ids.host_of(job if isinstance(job, str) else build.record.url, build.kind)
+
+
+def _deployment_state(build: Build, attributes: dict[str, object]) -> None:
+    """How a deployment went, on LEKA's scale — its statuses' too, each with
+    when."""
+    raw = build.record.state
+    if raw is not None:
+        own = _own(build.mapping.states, raw)
+        state, known = (own, True) if own else values.deployment_state(raw)
+        attributes["state"], attributes["state_raw"] = state, raw
+        if not known:
+            build.diagnostics.append("unknown state: kept as the tool wrote it")
+    history = attributes.get("status_history")
+    if isinstance(history, list):
+        # `state@when`, as the extraction keeps them: on LEKA's scale.
+        steps = [str(h).partition("@") for h in history if isinstance(h, str) and h]
+        attributes["status_history"] = [
+            {"state": values.deployment_state(state)[0], "at": _utc(at)}
+            for state, _, at in steps
+            if state
+        ]
+
+
+def _deployed_to(
+    build: Build,
+    key: str,
+    attributes: dict[str, object],
+    word: object,
+    *,
+    tier: object = None,
+    production: bool = False,
+) -> None:
+    """Where a deployment went: one of the company's environments — the
+    source's own word for it, the usual words, GitLab's tier, GitHub's
+    production flag — an entity it is `deployed_to`; else its word."""
+    said = word.strip() if isinstance(word, str) and word.strip() else None
+    own = _own(build.mapping.environments, said)
+    usual = next(
+        (env for env, words in ENVIRONMENTS.items() if said and said.lower() in words), None
+    )
+    tiered = TIERS.get(str(tier).lower()) if isinstance(tier, str) else None
+    canonical = own or usual or tiered or ("production" if production else None)
+    if canonical in ENVIRONMENTS:
+        attributes["environment"] = canonical
+        target = _named(build, "environment", ids.environment(canonical), canonical, 1.0)
+        build.relate("deployed_to", key, target, 1.0, "environment")
+    elif said:
+        attributes["environment"] = said.lower()
+
+
+def _change_event(build: Build) -> tuple[str, dict[str, object]]:
+    """A change event an incident tool keeps — a deploy, a configuration
+    change a pipeline sent PagerDuty: done when it was sent; the services
+    it affects."""
+    record = build.record
+    key = ids.event("change", build.kind, record.provenance.external_id)
+    attributes = _common(build)
+    for name in ("links", "services", "service"):
+        attributes.pop(name, None)
+    attributes["state"] = "completed"
+    services = [r.name for r in record.references if r.kind == "service" and r.name]
+    for name in dict.fromkeys(services):
+        service = _named(build, "service", ids.service(name), name, 1.0)
+        build.relate("affects", key, service, 1.0, "references")
+    _references(build, key)
+    return key, attributes
+
+
+def _event_kind(build: Build) -> str | None:
+    """Whether a monitoring tool's event is a deployment or a change — by a
+    tag that says so, or the delivery tool that sent it — or neither: then
+    it stays evidence, not an entity."""
+    if build.kind not in EVENT_TOOLS:
+        return None
+    tags = _names(build.record.signals.get("tags"))
+    words = {t.lower() for t in tags if ":" not in t}
+    for tag in tags:
+        name, _, value = tag.lower().partition(":")
+        if value and name in TYPE_TAG_KEYS:
+            words.add(value)
+    source = str(build.record.signals.get("source") or "").lower()
+    if words & DEPLOY_TAGS or source in CD_SOURCES:
+        return "deployment"
+    if words & CHANGE_TAGS:
+        return "change"
+    return None
+
+
+def _event(build: Build, kind: str) -> tuple[str, dict[str, object]]:
+    """A deploy or a change a monitoring tool recorded — Datadog's event,
+    Grafana's annotation: keyed by the tool and its id; its service — a
+    deployment part of it, a change affecting it — its environment, its
+    version, by its tags."""
+    record = build.record
+    key = ids.event(kind, build.kind, record.provenance.external_id)
+    attributes = _common(build)
+    tags = _names(record.signals.get("tags"))
+    said = {
+        name: value
+        for tag in tags
+        if ":" in tag
+        for name, _, value in (tag.partition(":"),)
+        if value
+    }
+    for name in ("tags", "source", "host", "team", "service", "env", "monitor_id"):
+        attributes.pop(name, None)
+    for name in ("priority", "aggregation_key", "dashboard_uid", "panel_id"):
+        attributes.pop(name, None)
+    # A Grafana region's end: when a deployment finished.
+    ends = attributes.pop("ends_at", None)
+    if kind == "deployment" and isinstance(ends, str):
+        attributes["finished_at"] = ends
+    state = record.state
+    attributes.pop("state", None)
+    if kind == "deployment":
+        found, known = values.deployment_state(state)
+        if known and found is not None:
+            attributes["state"] = found
+    version = said.get("version")
+    if version:
+        attributes["ref"] = version
+    service = record.signals.get("service") or said.get("service")
+    if isinstance(service, str) and service:
+        target = _named(build, "service", ids.service(service), service, 0.95)
+        build.relate("part_of" if kind == "deployment" else "affects", key, target, 0.95, "tags")
+    environment = record.signals.get("env") or said.get("env") or said.get("environment")
+    if kind == "deployment":
+        _deployed_to(build, key, attributes, environment)
+    elif isinstance(environment, str) and environment:
+        attributes["environment"] = environment.lower()
+    return key, attributes
+
+
+def _changed(build: Build, attributes: dict[str, object], *, kind: str) -> None:
+    """A ticket that is a change: its type — normal, standard, emergency —
+    and its state on a change's scale, else its work state's."""
+    word = kind.strip().lower()
+    if word.endswith(" change"):
+        attributes["change_type"] = word.removesuffix(" change")
+    raw = build.record.state
+    found, known = values.change_state(raw)
+    if raw is not None and known:
+        attributes["state"] = found
+    elif isinstance(attributes.get("state"), str):
+        attributes["state"] = WORK_TO_CHANGE.get(str(attributes["state"]), attributes["state"])
+
+
+def _utc(value: object) -> str | None:
+    """A date as normalisation writes them — or none for what is not one."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return values.utc(value)
+    except ValueError:
+        return None
+
+
 # ── services and applications (LEKA-362) ─────────────────────────────────────
 
 # What a catalogue says, in the fields its tool — or a custom source's admin —
@@ -893,6 +1176,25 @@ BUSINESS_SAID = {
     "supporting_services": ("services", "service"),
     "data_used": ("data", "data_objects", "tables", "datasets"),
     "business_owner": ("business_owner", "owner", "owners"),
+}
+# What a change management tool says of a change, a CI/CD tool of a
+# deployment (LEKA-367): its type and risk, what it touched, who made it and
+# asked for it, when it was planned and made, what it shipped.
+OPERATIONS_SAID = {
+    "change_type": ("change_type", "type", "category"),
+    "risk": ("risk", "risk_level"),
+    "touched_services": ("services", "service", "affected_services", "cmdb_ci"),
+    "touched_applications": ("applications", "application", "affected_applications"),
+    "touched_resources": ("resources", "resource_id", "affected_resources"),
+    "implementer": ("implementer", "assigned_to", "assignee", "deployer", "deployed_by"),
+    "requester": ("requested_by", "requester", "opened_by"),
+    "planned_start": ("planned_start", "planned_start_date", "start_date"),
+    "planned_end": ("planned_end", "planned_end_date", "end_date"),
+    "work_start": ("work_start", "actual_start", "started"),
+    "work_end": ("work_end", "actual_end", "finished"),
+    "version": ("version", "release", "tag"),
+    "commit": ("commit", "sha", "revision"),
+    "repository": ("repository", "repo"),
 }
 # Where a catalogue, a business system, a wiki says a thing's documentation is.
 DOCUMENTATION = ("docs_url", "runbook_url", "documentation", "docs", "runbook")
@@ -1032,6 +1334,78 @@ def _declared_business(
             build.relate("owned_by", key, team, 1.0, "signals")
     _rated(build, attributes)
     _documented(build, key, _documentation_urls(build), "signals")
+
+
+def _declared_operation(
+    build: Build, key: str, attributes: dict[str, object], *, deployment: bool
+) -> None:
+    """What a change management tool — ServiceNow, read as a custom source —
+    says of a change, a CI/CD tool of a deployment: its type and risk; the
+    services, applications and resources it affects — a deployment, the
+    service it is part of, where it went; its environment; who made it and
+    asked for it; when it was planned, started and finished; what it
+    shipped."""
+    for name in {n for names in OPERATIONS_SAID.values() for n in names}:
+        attributes.pop(name, None)
+    for name in SAID["environments"]:
+        attributes.pop(name, None)
+    if not deployment:
+        for what in ("change_type", "risk"):
+            word = next(iter(_said(build, what, split=False)), None)
+            if word:
+                attributes[what] = word.strip().lower()
+    for what, name in (
+        ("planned_start", "planned_start_at"),
+        ("planned_end", "planned_end_at"),
+        ("work_start", "started_at"),
+        ("work_end", "finished_at"),
+    ):
+        when = _utc(next(iter(_said(build, what, split=False)), None))
+        if when:
+            attributes[name] = when
+    touch = "part_of" if deployment else "affects"
+    for name in _said(build, "touched_services"):
+        service = _named(build, "service", ids.service(name), name, 1.0)
+        build.relate(touch, key, service, 1.0, "signals")
+    for name in _said(build, "touched_applications"):
+        application = _named(build, "application", ids.application(name), name, 1.0)
+        build.relate(touch, key, application, 1.0, "signals")
+    for value in _said(build, "touched_resources"):
+        found = _provider_of(value)
+        if found is not None:
+            build.relate(
+                "deployed_to" if deployment else "affects", key, ids.cloud(*found), 1.0, "signals"
+            )
+    environment = next(iter(_said(build, "environments")), None)
+    if deployment:
+        _deployed_to(build, key, attributes, environment)
+    elif environment:
+        own = _own(build.mapping.environments, environment)
+        usual = next(
+            (env for env, words in ENVIRONMENTS.items() if environment.lower() in words), None
+        )
+        attributes["environment"] = own or usual or environment.lower()
+    for what, role in (
+        ("implementer", "created_by" if deployment else "assigned_to"),
+        ("requester", "reported_by"),
+    ):
+        for someone in _said(build, what)[:1]:
+            person = build.person(_someone(build, someone))
+            if person is not None:
+                build.relate(role, key, person, 1.0, "signals")
+    if deployment:
+        version = next(iter(_said(build, "version", split=False)), None)
+        sha = next(iter(_said(build, "commit", split=False)), None)
+        if version:
+            attributes["ref"] = version
+        if sha:
+            attributes["sha"] = sha
+        repository = next(iter(_said(build, "repository", split=False)), "")
+        place = urlsplit(repository if "://" in repository else f"https://{repository}")
+        host, path = (place.hostname or "").lower(), place.path.strip("/")
+        # A repository its host names — github.com/acme/api — only.
+        if sha and "." in host and path.count("/") >= 1:
+            build.relate("deploys", key, ids.commit(host, path, sha), 1.0, "signals")
 
 
 def _declared_document(build: Build, key: str, attributes: dict[str, object]) -> None:
@@ -1261,7 +1635,8 @@ def _said(build: Build, what: str, *, split: bool = True) -> list[str]:
     """The first of `what`'s fields the record has — its signals, then its
     metadata — as text: a list, or words between commas."""
     for bag in (build.record.signals, build.record.metadata):
-        for name in {**SAID, **RESOURCE_SAID, **DATA_SAID, **PEOPLE_SAID, **BUSINESS_SAID}[what]:
+        said = {**SAID, **RESOURCE_SAID, **DATA_SAID, **PEOPLE_SAID, **BUSINESS_SAID}
+        for name in {**said, **OPERATIONS_SAID}[what]:
             value = bag.get(name)
             if isinstance(value, list):
                 found = [str(v).strip() for v in value if str(v).strip()]

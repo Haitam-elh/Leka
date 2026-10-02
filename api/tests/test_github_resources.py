@@ -264,3 +264,38 @@ async def test_a_repository_in_scope_that_github_does_not_show_fails_the_test() 
         await _connector(github, repositories=["acme/gone"]).test_connection()
 
     assert caught.value.diagnostic.code is DiagnosticCode.NOT_FOUND
+
+
+# ── deployments (LEKA-367) ───────────────────────────────────────────────────
+
+
+def _deployment(number: int, created: str) -> dict[str, object]:
+    return {
+        "id": number,
+        "node_id": f"DE_{number}",
+        "sha": "a" * 40,
+        "ref": "v1.4.0",
+        "environment": "production",
+        "created_at": created,
+        "updated_at": created,
+    }
+
+
+async def test_deployments_come_with_their_statuses_since_a_day_before_the_last_pass() -> None:
+    status = {"state": "success", "created_at": "2026-09-21T10:07:00Z"}
+    github = GitHub(
+        {
+            "/repos/acme/api/deployments": [
+                _deployment(2, "2026-09-21T10:00:00Z"),
+                _deployment(1, "2026-09-10T10:00:00Z"),  # before since less a day: the end
+            ],
+            "/repos/acme/api/deployments/2/statuses": [status],
+        }
+    )
+
+    records = await _stream(github, Capability.DEPLOYMENTS, since=SINCE, repositories=["acme/api"])
+
+    assert [(r.external_id, r.container) for r in records] == [("DE_2", "acme/api")]
+    assert records[0].payload["statuses"] == [status]
+    # Statuses are read for what is kept only.
+    assert not github.params("/repos/acme/api/deployments/1/statuses")

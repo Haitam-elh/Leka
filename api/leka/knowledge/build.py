@@ -29,6 +29,12 @@ that move with time alone (last activity, activity over 90 days, incidents
 of the last 90 days) are kept current but make no version: a version is a
 change of the thing, not of the clock.
 
+WHEN IT HAPPENED. An incident, a change, a deployment, a release, a merged
+pull request is an event too: `occurred_at` says when, from its sources'
+dates — what enrichment carries from the records, resolution keeping none
+(LEKA-367) — else when a source first showed it. Such an attribute's
+origin is its source's.
+
 RELATIONSHIPS keep the environments they are true in: an end that runs in a
 single environment — a production instance, a service seen in production
 only, the production environment itself — makes the edge that
@@ -44,11 +50,27 @@ import json
 import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 from leka.knowledge.models import Lifecycle
 from leka.knowledge.registry import BUILT_FROM, RELATIONSHIP_FROM, clean
 
+# When an event happened, by kind: the first of these dates it has — the
+# earliest, for an incident (LEKA-367).
+OCCURRED: dict[str, tuple[str, ...]] = {
+    "incident": ("detected_at", "created_at"),
+    "deployment": ("finished_at", "started_at", "created_at"),
+    "change": ("started_at", "planned_start_at", "created_at"),
+    "release": ("published_at", "created_at"),
+    "pull_request": ("merged_at",),
+}
+EARLIEST = frozenset({"incident"})
+# An incident, a change, a deployment, a release whose sources say no date
+# happened when a source first showed it: an event is always in time. A
+# pull request is an event once merged only.
+UNDATED = frozenset({"incident", "deployment", "change", "release"})
+# What enrichment carries from the records, as they say it: a source's.
+RECORD = "record"
 # Measures that move with the clock: current, but no version of their own.
 MEASURES = frozenset(
     {
@@ -225,6 +247,25 @@ def _environment_of(kind: str, key: str, attributes: dict[str, object]) -> str |
     return found if isinstance(found, str) and found in ENVIRONMENTS else None
 
 
+def occurred(kind: str, attributes: dict[str, object]) -> datetime | None:
+    """When an event happened: its kind's first date — an incident's
+    earliest — none for what is not an event, or says no date."""
+    found = [d for name in OCCURRED.get(kind, ()) if (d := _when(attributes.get(name)))]
+    if not found:
+        return None
+    return min(found) if kind in EARLIEST else found[0]
+
+
+def _when(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
+
+
 def lifecycle_of(attributes: dict[str, object]) -> Lifecycle:
     if attributes.get("state") in ARCHIVED_STATES or attributes.get("stage") == "retired":
         return Lifecycle.ARCHIVED
@@ -259,11 +300,15 @@ def build(
             if name in merged:
                 continue
             merged[name] = value.value
-            origins[name] = {
-                "origin": "enrichment",
-                "rule": value.rule,
-                "confidence": value.confidence,
-            }
+            origins[name] = (
+                {"origin": "source", "rule": RECORD}
+                if value.rule == RECORD
+                else {
+                    "origin": "enrichment",
+                    "rule": value.rule,
+                    "confidence": value.confidence,
+                }
+            )
         attributes, dropped = clean(kind, merged)
         counts["attributes_dropped"] += len(dropped)
         lifecycle = lifecycle_of(attributes)
@@ -340,6 +385,8 @@ def build(
                     if before is None or before.lifecycle != lifecycle.value
                     else before.lifecycle_changed_at
                 ),
+                "occurred_at": occurred(kind.type.value, attributes)
+                or (first_seen if kind.type.value in UNDATED else None),
             }
         )
         modelled.add(candidate.id)
@@ -383,6 +430,8 @@ def build(
                 "last_seen_at": gone.last_seen_at,
                 "removed_at": now,
                 "lifecycle_changed_at": now,
+                "occurred_at": occurred(gone.type, gone.attributes)
+                or (gone.first_seen_at if gone.type in UNDATED else None),
             }
         )
         counts["removed"] += 1

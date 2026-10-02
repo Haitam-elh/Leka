@@ -31,7 +31,7 @@ from leka.background.routes import ROUTES
 from leka.db import session_factory, workspace_scope
 from leka.ingestion.enrichment.job import ENRICHED, enrich_workspace
 from leka.ingestion.resolution.job import resolve_workspace
-from leka.knowledge import Entity, EntityVersion, ModelRun, Relationship
+from leka.knowledge import ENTITY_KINDS, Entity, EntityType, EntityVersion, ModelRun, Relationship
 from leka.knowledge import job as model_job
 from leka.knowledge.job import MODEL_JOB, build_workspace, sweep_models
 from leka.knowledge.registry import MODEL_VERSION
@@ -139,7 +139,7 @@ async def test_the_model_is_made_of_the_processed_data(acme: dict[str, uuid.UUID
     assert (pr.lifecycle.value, pr.version, pr.schema_version, pr.removed_at) == (
         "active",
         1,
-        1,
+        ENTITY_KINDS[EntityType.PULL_REQUEST].version,
         None,
     )
     assert pr.attributes["state"] == "merged"

@@ -85,13 +85,15 @@ no clock — registered for the (source kind, capability) pairs it knows
 | GitHub (REST v3) | repositories, commits, pull_requests, issues, releases, branches | `extraction/code.py` |
 | GitLab (v4) | the same | `extraction/code.py` |
 | Bitbucket (2.0) | repositories, commits, pull_requests, issues, branches | `extraction/code.py` |
-| Jira Cloud (REST v3) | projects, issues | `extraction/tickets.py` |
+| Jira Cloud (REST v3) | projects, issues — and the issues a link of a type that says cause names, as `caused_by` or `causes` (LEKA-367) | `extraction/tickets.py` |
 | AWS | instances, db_instances (with the endpoint a client connects to), buckets, functions, clusters, networks, load_balancers — one strategy per service; accounts: the account, its alias and organisation (LEKA-363) | `extraction/cloud.py` |
 | Azure | the same seven — one strategy: Resource Manager's list has one shape; accounts: a subscription or a resource group | `extraction/cloud.py` |
 | Google Cloud | the same seven — one strategy: an asset around each API's resource; accounts: a project, its number, labels and parent | `extraction/cloud.py` |
 | Datadog | alerts (monitors), events, incidents, metrics, logs — `service`, `env`, `host`, `tags` as signals; Datadog's id and timestamp kept | `extraction/observability.py` |
-| PagerDuty, Grafana | services, incidents; dashboards, alert rules, annotations | `extraction/observability.py` |
+| PagerDuty, Grafana | services, incidents — when first acknowledged (LEKA-367); dashboards, alert rules, annotations | `extraction/observability.py` |
 | Splunk, Kibana | alerts (saved searches that alert, alerting rules), fired alerts, cases — Kibana's incidents —, dashboards; tags as signals, the app or space kept | `extraction/observability.py` |
+| GitHub, GitLab — deployments | what ref of which commit to which environment, by whom; GitHub's statuses, oldest first, as `state@when` — metadata holds text — when it started and finished; GitLab's tier, job, pipeline (LEKA-367) | `extraction/code.py` |
+| PagerDuty — change events | its summary, when, its services, its source, its links, what it said of itself | `extraction/observability.py` |
 | Linear, Asana, Trello, ClickUp, Monday | projects, and their issues — a task, a card, an item — with the tool's `key`, `status_category` when it has one (Linear's workflow type, ClickUp's status type), priority, labels, people, project, parent | `extraction/projects.py` |
 | Confluence, Notion, Slab, Guru | spaces, databases, topics, collections; pages, posts, cards — their **text** read out of Confluence's storage XHTML, Guru's HTML, Notion's blocks, Slab's Quill delta; what they link to (`metadata.links`: anchors, runs, Notion's page links); their owner and last editor; a Notion page's database as its space; a Guru card's verification dates (LEKA-366) | `extraction/documents.py` |
 | Google Workspace, Microsoft 365 | drives — a SharePoint library's group, a OneDrive's person as its owner (LEKA-366); files, with the text the connector read | `extraction/documents.py` |

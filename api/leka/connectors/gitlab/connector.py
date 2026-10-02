@@ -4,7 +4,8 @@ test_connection: who am I (GET /user), what can this token do (GET
 /personal_access_tokens/self, where GitLab answers it), is the group there
 (GET /groups/{group}), what can I see (one page of projects), and — on one
 sample project, in scope if a scope is set — which of commits, merge
-requests, issues, releases and branches this token can actually read.
+requests, issues, releases, branches and deployments this token can
+actually read.
 
 check_health: GET /user, reading the RateLimit headers GitLab sends with
 it. Healthy, or degraded when less than a tenth of the quota is left.
@@ -16,6 +17,9 @@ iter_resources: the projects in scope — all the token sees, unless
 (default branch), merge requests, issues and releases, following GitLab's
 pagination. Commits are filtered by `since` on GitLab's side, merge
 requests and issues by `updated_after`; branches and releases come whole.
+Deployments (LEKA-367): those updated since the last pass — the last
+DEPLOYMENT_HISTORY at the first — with their environment, commit, user and
+job.
 A feature a project has switched off, or an empty repository, is skipped
 rather than asked for.
 
@@ -28,7 +32,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
 import httpx
@@ -65,6 +69,8 @@ LOW_QUOTA_RATIO = 0.1
 PAGE_SIZE = 100  # GitLab's maximum
 MAX_SCOPE_OPTIONS = 1000
 WRITE_SCOPES = ("api", "write_repository", "write_registry", "sudo", "admin_mode")
+# How far back the first pass reads deployments (LEKA-367).
+DEPLOYMENT_HISTORY = timedelta(days=90)
 # A namespace path: "acme", "acme/platform/api". GitLab allows letters,
 # digits, "_", "-" and ".", nests groups, and starts no segment with "." or "-".
 PATH = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$")
@@ -133,6 +139,7 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
                 Capability.RELEASES,
                 Capability.ISSUES,
                 Capability.BRANCHES,
+                Capability.DEPLOYMENTS,
             }
         ),
     )
@@ -167,6 +174,7 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
                         Capability.RELEASES: f"/projects/{sample}/releases",
                         Capability.ISSUES: f"/projects/{sample}/issues",
                         Capability.BRANCHES: f"/projects/{sample}/repository/branches",
+                        Capability.DEPLOYMENTS: f"/projects/{sample}/deployments",
                     },
                     params={"per_page": 1},
                 )
@@ -332,6 +340,13 @@ class GitLabConnector(Connector[GitLabConfig, GitLabCredentials]):
                 key=lambda r: f"{pid}:{r['tag_name']}",
                 updated=lambda r: r.get("released_at") or r.get("created_at"),
             )
+        if capability is Capability.DEPLOYMENTS:
+            start = since or datetime.now(UTC) - DEPLOYMENT_HISTORY
+            items = client.pages(
+                f"/projects/{pid}/deployments",
+                {"order_by": "updated_at", "sort": "desc", "updated_after": start.isoformat()},
+            )
+            return records(capability, items, path, key=_gitlab_id)
         msg = f"GitLab does not read {capability}"
         raise ValueError(msg)
 
@@ -354,6 +369,7 @@ _FEATURE = {
     Capability.PULL_REQUESTS: "merge_requests_access_level",
     Capability.ISSUES: "issues_access_level",
     Capability.RELEASES: "releases_access_level",
+    Capability.DEPLOYMENTS: "environments_access_level",
 }
 _NEEDS_A_REPOSITORY = {Capability.BRANCHES, Capability.COMMITS}
 

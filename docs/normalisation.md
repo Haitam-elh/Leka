@@ -58,8 +58,12 @@ something no source has shown yet — a ticket in a tool not connected.
 | pages, files (Confluence, Notion, Slab, Guru, Google Workspace, Microsoft 365) | `document` — `attributes.document_kind`: `page`, `post`, `card`, `file` |
 | spaces, databases, drives (Confluence, Notion, Slab, Guru, Google Workspace, Microsoft 365) | `knowledge_space` — where documents are kept; `attributes.space_kind`: `space`, `database` (Notion's), `topic`, `collection`, `shared_drive`, `document_library`, `onedrive` (LEKA-366) |
 | incidents (Datadog, PagerDuty; Kibana's cases) | `incident` |
+| deployments (GitHub, GitLab) | `deployment` — its state on LEKA's scale: `pending`, `in_progress`, `succeeded`, `failed`, `canceled`, `inactive` (LEKA-367) |
+| changes (PagerDuty's change events) | `change` — `completed`: a change event says it was done |
+| events (Datadog, Grafana) tagged as a deployment or a change — `deployment`, `deploy`, `event_type:deployment`; `change`, `config_change`… — or sent by a delivery tool (Argo CD, Spinnaker, Octopus, Harness, CodeDeploy, Flux) | `deployment`, `change`; any other event stays `unsupported`: evidence, not an entity |
+| issues of Jira Service Management of type Incident, or Change (a change request; Normal, Standard, Emergency change) | `incident`, `change` — a change's type and its state on a change's scale: `requested`, `scheduled`, `in_progress`, `completed`, `failed`, `canceled` |
 | services (PagerDuty, the Datadog service catalog) | `service` — a PagerDuty **business service** is an `application` (LEKA-362) |
-| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object`, `person`, `team`, `business_capability`, `business_process`, `knowledge_space` — keyed by the source, a service, an application, a capability, a process by its name, a resource by its provider's id when the record gives it, a catalogue's table by where it is ([custom.md](connectors/custom.md)) |
+| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object`, `person`, `team`, `business_capability`, `business_process`, `knowledge_space`, `change`, `deployment` — keyed by the source, a service, an application, a capability, a process by its name, a resource by its provider's id when the record gives it, a catalogue's table by where it is ([custom.md](connectors/custom.md)) |
 | teams (GitHub, PagerDuty) | `team` — `attributes.team_type`: `team` (LEKA-365) |
 | people (Microsoft 365, Google Workspace) | `person` — and their department, a `team` with `team_type: department` |
 | named by a record | `person`, `service`, `application`, `team`, `environment`; what a resource is in — `cloud_account`, `resource_group` — and a node's cluster; a business system's `business_capability` and `business_process` |
@@ -67,7 +71,7 @@ something no source has shown yet — a ticket in a tool not connected.
 Alerts, events, metrics, logs and dashboards (Datadog, Grafana, Splunk, Kibana) are
 extracted and parsed, but are not entities: they are the evidence about
 incidents and services, not things of the company model: they stay
-`unsupported`. And so do a custom API's records whose resource declares no
+`unsupported` — but a deploy event or a change event (above). And so do a custom API's records whose resource declares no
 `entity`: extracted, not modelled.
 
 A GitLab merge request is a `pull_request`; a Jira issue and a GitHub issue
@@ -105,6 +109,8 @@ One thing, one key — built from what every mention of it carries
 | another tool's project, issue | `asana:project:1204…`, `trello:issue:5f1e…`, `clickup:issue:86…`, `monday:issue:123…` — the tool, what it is, its id |
 | document | `acme.atlassian.net/wiki/pages/1001` (Confluence's ids are its site's), `microsoft_365:document:<drive>/<item>`, `notion:document:<id>`, `slab:…`, `guru:…` — **alias** `guru:card:<slug>`, what its link says — `google_workspace:…` |
 | knowledge space | `acme.atlassian.net/wiki/spaces/ENG` — the space's key on its site, its pages' container — `notion:space:<id>` (**alias** `notion:document:<id>`: a link to a database reads as one to a page), `slab:space:<topic>`, `guru:space:<collection>`, `google_workspace:space:<drive>`, `microsoft_365:space:<drive>` (LEKA-366). Google's own drive (`user`) is no space |
+| deployment | `github.com/acme/api/deployments/42` — its repository's, by the code host's id (its host is its API link's, not its pipeline's); `deployment:datadog:<event id>`, `deployment:grafana:<id>` (LEKA-367) |
+| change | `change:pagerduty:<id>`, `change:datadog:<id>`; a Jira change request, its ticket's key |
 | business capability, process | `capability:invoicing`; `process:order-to-cash`, an activity by its path under its process: `process:order-to-cash/send-invoice` — two processes may each have an `Approve` (LEKA-366) |
 
 The host is the record's link's (a self-hosted GitLab keeps its own), else
@@ -184,6 +190,10 @@ attribute: the raw word is in `*_raw`. A `name` has its spaces collapsed, at mos
 | `realizes` | a process → a capability | a process's `capabilities`, a capability's `processes` |
 | `supported_by` | a capability, a process → an application, a service | its `applications`, `services`; an application's or a service's `capabilities`, `processes` (a catalogue) |
 | `owned_by` | a capability, a process → a team or a person | its `business_owner` / `owner` — a person by address — and its `team` |
+| `part_of`, `deploys`, `deployed_to` | a deployment → its repository, its service; its commit and the release its ref names (0.8: a branch's name is no release); its environment, canonical — the source's word, the usual ones, GitLab's tier, GitHub's production flag — or a resource (LEKA-367) | its code host; an event's `service:`, `env:` tags; a CI/CD tool's `service`, `environment`, `commit`, `repository` |
+| `affects` | a change → a service, an application, a resource | a change event's services; an event's `service:` tag; a change request's `services` / `cmdb_ci`, `applications`, `resources` |
+| `caused_by` | an incident → what caused it; a ticket → the ticket causing it | Jira's links of a type that says cause: `Causes`, Jira Service Management's `Problem/Incident` |
+| `created_by`, `assigned_to`, `reported_by` | a deployment → who made it; a change → its implementer, its requester | the code host's creator; a change request's `assigned_to`, `requested_by` |
 
 Confidence is the fact's: 1.0 for what the vendor said, the parse's
 confidence for what was read in text or tags.
@@ -210,6 +220,9 @@ objects, foreign keys and what views read, what columns hold (LEKA-364). 7:
 teams, a directory's people, an HR system's (LEKA-365). 8: knowledge
 spaces, documents' owners, last editors and links, a catalogue's
 documentation, a business system's capabilities and processes (LEKA-366).
+9: deployments, changes, deploy and change events, Jira Service Management's
+incidents and changes and what caused what, a CI/CD tool's and a change
+management tool's records (LEKA-367).
 
 ## 8. Where results are kept, and when they are made
 

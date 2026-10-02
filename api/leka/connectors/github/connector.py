@@ -2,8 +2,8 @@
 
 test_connection: who am I (GET /user), is the organisation there (GET
 /orgs/{org}), what can I see (one page of repositories), and — on one
-sample repository — which of commits, pull requests, releases and issues
-this token can actually read. A fine-grained token says nothing about its
+sample repository — which of commits, pull requests, releases, issues and
+deployments this token can actually read. A fine-grained token says nothing about its
 own permissions; asking is the only way to know.
 
 check_health: GET /rate_limit, which GitHub does not count against the
@@ -20,6 +20,10 @@ first and stop at `since`; branches and releases have no such filter and
 come whole. `teams`, with an organisation (LEKA-365): its teams — each with
 its parent team, its maintainers and its members — whole each pass; a token
 that may not read the organisation's members leaves them out.
+`deployments` (LEKA-367): each repository's, newest first — the last
+DEPLOYMENT_HISTORY at the first pass, then those made since the last pass
+less DEPLOYMENT_MARGIN — each with its statuses, one read per deployment:
+how it went, and when.
 
 LEKA READS. A classic token that carries write scopes is accepted — GitHub
 is where it is scoped, not here — but the test says so, in its warnings.
@@ -29,7 +33,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, model_validator
@@ -73,6 +77,10 @@ FULL_NAME = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 # Classic OAuth scopes that let a token change something. Fine-grained tokens
 # send no X-OAuth-Scopes header at all, so this only ever warns about those.
 WRITE_SCOPES = ("repo", "write:", "admin:", "delete_repo", "workflow", "delete:")
+# Deployments (LEKA-367): how far back the first pass reads; how far before
+# the last pass the next reads again — a status comes after its deployment.
+DEPLOYMENT_HISTORY = timedelta(days=90)
+DEPLOYMENT_MARGIN = timedelta(days=1)
 
 
 class GitHubConfig(BaseModel):
@@ -136,6 +144,7 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                 Capability.ISSUES,
                 Capability.BRANCHES,
                 Capability.TEAMS,
+                Capability.DEPLOYMENTS,
             }
         ),
         # A team gone from the organisation is gone at the next pass.
@@ -174,6 +183,7 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                         Capability.RELEASES: f"/repos/{sample}/releases",
                         Capability.ISSUES: f"/repos/{sample}/issues",
                         Capability.BRANCHES: f"/repos/{sample}/branches",
+                        Capability.DEPLOYMENTS: f"/repos/{sample}/deployments",
                     },
                     params={"per_page": 1},
                 )
@@ -361,8 +371,33 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                 key=_node_id,
                 updated=lambda r: r.get("published_at") or r["created_at"],
             )
+        if capability is Capability.DEPLOYMENTS:
+            return records(
+                capability,
+                self._deployments(client, name, since),
+                name,
+                key=_node_id,
+                updated=lambda d: d.get("updated_at"),
+            )
         msg = f"GitHub does not read {capability}"
         raise ValueError(msg)
+
+    async def _deployments(
+        self, client: VendorHttp, name: str, since: datetime | None
+    ) -> AsyncIterator[Item]:
+        """A repository's deployments, newest first, each with its statuses
+        — newest first too, as GitHub lists them."""
+        after = since - DEPLOYMENT_MARGIN if since else datetime.now(UTC) - DEPLOYMENT_HISTORY
+        found = client.pages(
+            f"/repos/{name}/deployments", stop_before=after, updated_field="created_at"
+        )
+        async for deployment in found:
+            response = await client.get(
+                f"/repos/{name}/deployments/{deployment['id']}/statuses",
+                params={"per_page": PAGE_SIZE},
+            )
+            statuses = response.json()
+            yield {**deployment, "statuses": statuses if isinstance(statuses, list) else []}
 
     @staticmethod
     def _scope_warnings(response: httpx.Response) -> list[str]:

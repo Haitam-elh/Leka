@@ -47,7 +47,11 @@ from leka.ingestion.parsing import ParsedRecord
 #    collections, drives — documents in them, their owner and last editor,
 #    what they link to; a catalogue's documentation; a business system's
 #    capabilities and processes (LEKA-366).
-NORMALISER_VERSION = 8
+# 9: deployments — of a commit, to an environment — changes, a monitoring
+#    tool's deploy and change events, Jira Service Management's incidents
+#    and changes and what caused what, a CI/CD tool's and a change
+#    management tool's records (LEKA-367).
+NORMALISER_VERSION = 9
 
 
 def normalise(

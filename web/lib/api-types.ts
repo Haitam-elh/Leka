@@ -2102,6 +2102,157 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/incidents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Incidents
+         * @description The incidents, the latest first: how bad, where each stands, when it
+         *     opened and was handled, what it affects, who leads it, what is said or
+         *     suspected to have caused it.
+         */
+        get: operations["incidents_api_v1_knowledge_incidents_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/incidents/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Incident
+         * @description One incident: its timeline — the dates its sources give, the states
+         *     LEKA saw — what it affects, who handled it, what is said or suspected to
+         *     have caused it, what changed on what it affects in the 72 hours before,
+         *     and what it reaches: dependents, applications, the business.
+         */
+        get: operations["incident_api_v1_knowledge_incidents__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Changes
+         * @description The changes, the latest first: of what type, how risky, where each
+         *     stands, when, what it affects, who made it and asked for it.
+         */
+        get: operations["changes_api_v1_knowledge_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/changes/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Change
+         * @description One change: its timeline, what it affects, who made and asked for
+         *     it, the incidents said or suspected to follow from it.
+         */
+        get: operations["change_api_v1_knowledge_changes__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/deployments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deployments
+         * @description The deployments, the latest first: what to where, how each went,
+         *     when, by whom, for which services.
+         */
+        get: operations["deployments_api_v1_knowledge_deployments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/deployments/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deployment
+         * @description One deployment: each status with when, what it shipped, where it
+         *     went, the incidents said or suspected to follow from it.
+         */
+        get: operations["deployment_api_v1_knowledge_deployments__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Timeline
+         * @description What happened between two dates, the latest first — incidents opened
+         *     and resolved, deployments, changes, releases, merges — around a thing,
+         *     or in the whole workspace. A year at most.
+         */
+        get: operations["timeline_api_v1_knowledge_timeline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2384,7 +2535,7 @@ export interface components {
          *     discovered for each source: a token may see repositories and not issues.
          * @enum {string}
          */
-        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "accounts" | "spaces" | "pages" | "databases" | "drives" | "files" | "alerts" | "events" | "incidents" | "metrics" | "logs" | "services" | "dashboards" | "schemas" | "tables" | "people" | "teams" | "records";
+        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "deployments" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "accounts" | "spaces" | "pages" | "databases" | "drives" | "files" | "alerts" | "events" | "incidents" | "changes" | "metrics" | "logs" | "services" | "dashboards" | "schemas" | "tables" | "people" | "teams" | "records";
         /** CatalogEntry */
         CatalogEntry: {
             key: components["schemas"]["SourceKind"];
@@ -2418,12 +2569,116 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * ChangeDetail
+         * @description One change: its timeline, what it affects, who made and asked for
+         *     it, the incidents said or suspected to follow from it.
+         */
+        ChangeDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /** Url */
+            url: string | null;
+            /** Tools */
+            tools: string[];
+            /**
+             * State
+             * @description requested, scheduled, in_progress, completed, failed, canceled.
+             */
+            state: string | null;
+            /** Change Type */
+            change_type: string | null;
+            /** Risk */
+            risk: string | null;
+            /** Environment */
+            environment: string | null;
+            /** Changed At */
+            changed_at: string | null;
+            /** Planned Start At */
+            planned_start_at: string | null;
+            /** Planned End At */
+            planned_end_at: string | null;
+            /** Affects */
+            affects: components["schemas"]["EntityBrief"][];
+            assignee: components["schemas"]["EntityBrief"] | null;
+            requester: components["schemas"]["EntityBrief"] | null;
+            /** Incident Count */
+            incident_count: number;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Provenance */
+            provenance: {
+                [key: string]: unknown;
+            };
+            /** Timeline */
+            timeline: components["schemas"]["TimelineStep"][];
+            /** Affected */
+            affected: components["schemas"]["Tie"][];
+            /** People */
+            people: components["schemas"]["Tie"][];
+            /** Incidents */
+            incidents: components["schemas"]["Tie"][];
+        };
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
             /** Current Password */
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /**
+         * ChangeRead
+         * @description A change: of what type, how risky, where it stands, when, what it
+         *     affects, who made it and asked for it.
+         */
+        ChangeRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /** Url */
+            url: string | null;
+            /** Tools */
+            tools: string[];
+            /**
+             * State
+             * @description requested, scheduled, in_progress, completed, failed, canceled.
+             */
+            state: string | null;
+            /** Change Type */
+            change_type: string | null;
+            /** Risk */
+            risk: string | null;
+            /** Environment */
+            environment: string | null;
+            /** Changed At */
+            changed_at: string | null;
+            /** Planned Start At */
+            planned_start_at: string | null;
+            /** Planned End At */
+            planned_end_at: string | null;
+            /** Affects */
+            affects: components["schemas"]["EntityBrief"][];
+            assignee: components["schemas"]["EntityBrief"] | null;
+            requester: components["schemas"]["EntityBrief"] | null;
+            /** Incident Count */
+            incident_count: number;
         };
         /**
          * CloudAccountDetail
@@ -3024,6 +3279,132 @@ export interface components {
              * @description Empty: everywhere, or unknown.
              */
             environments: string[];
+        };
+        /**
+         * DeploymentDetail
+         * @description One deployment: each status with when, what it shipped, where it went,
+         *     the incidents said or suspected to follow from it.
+         */
+        DeploymentDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /** Url */
+            url: string | null;
+            /** Tools */
+            tools: string[];
+            /**
+             * State
+             * @description pending, in_progress, succeeded, failed, canceled, inactive.
+             */
+            state: string | null;
+            /** Environment */
+            environment: string | null;
+            /** Production */
+            production: boolean | null;
+            /** Ref */
+            ref: string | null;
+            /** Sha */
+            sha: string | null;
+            /** Deployed At */
+            deployed_at: string | null;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Duration Minutes */
+            duration_minutes: number | null;
+            repository: components["schemas"]["EntityBrief"] | null;
+            /**
+             * Services
+             * @description Its own, and its repository's.
+             */
+            services: components["schemas"]["EntityBrief"][];
+            deployer: components["schemas"]["EntityBrief"] | null;
+            /**
+             * Incident Count
+             * @description The incidents said or suspected to follow from it.
+             */
+            incident_count: number;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Provenance */
+            provenance: {
+                [key: string]: unknown;
+            };
+            /** Status History */
+            status_history: components["schemas"]["TimelineStep"][];
+            /**
+             * Ships
+             * @description deploys: its commit, its release.
+             */
+            ships: components["schemas"]["Tie"][];
+            /** Environments */
+            environments: components["schemas"]["EntityBrief"][];
+            /** Incidents */
+            incidents: components["schemas"]["Tie"][];
+        };
+        /**
+         * DeploymentRead
+         * @description A deployment: what to where, how it went, when, by whom.
+         */
+        DeploymentRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /** Url */
+            url: string | null;
+            /** Tools */
+            tools: string[];
+            /**
+             * State
+             * @description pending, in_progress, succeeded, failed, canceled, inactive.
+             */
+            state: string | null;
+            /** Environment */
+            environment: string | null;
+            /** Production */
+            production: boolean | null;
+            /** Ref */
+            ref: string | null;
+            /** Sha */
+            sha: string | null;
+            /** Deployed At */
+            deployed_at: string | null;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Duration Minutes */
+            duration_minutes: number | null;
+            repository: components["schemas"]["EntityBrief"] | null;
+            /**
+             * Services
+             * @description Its own, and its repository's.
+             */
+            services: components["schemas"]["EntityBrief"][];
+            deployer: components["schemas"]["EntityBrief"] | null;
+            /**
+             * Incident Count
+             * @description The incidents said or suspected to follow from it.
+             */
+            incident_count: number;
         };
         /**
          * Diagnostic
@@ -3642,7 +4023,7 @@ export interface components {
          *     statement. See docs/adr/006-enum-storage.md.
          * @enum {string}
          */
-        EntityType: "service" | "repository" | "incident" | "deployment" | "person" | "document" | "infra_resource" | "database" | "team" | "project" | "issue" | "pull_request" | "commit" | "release" | "application" | "environment" | "cloud_account" | "resource_group" | "schema" | "data_object" | "knowledge_space" | "business_capability" | "business_process";
+        EntityType: "service" | "repository" | "incident" | "deployment" | "person" | "document" | "infra_resource" | "database" | "team" | "project" | "issue" | "pull_request" | "commit" | "release" | "application" | "environment" | "cloud_account" | "resource_group" | "schema" | "data_object" | "knowledge_space" | "business_capability" | "business_process" | "change";
         /** EntityVersionRead */
         EntityVersionRead: {
             /** Version */
@@ -3968,6 +4349,159 @@ export interface components {
              * @description source: its columns, its documentation, a catalogue said it; enrichment: what it holds does.
              */
             origin: string | null;
+        };
+        /**
+         * Impact
+         * @description What an incident reaches: what it affects, what depends on that, the
+         *     applications holding them, and the business relying on them.
+         */
+        Impact: {
+            /** Affected */
+            affected: components["schemas"]["EntityBrief"][];
+            /**
+             * Dependents
+             * @description What depends on them, two steps at most.
+             */
+            dependents: components["schemas"]["EntityBrief"][];
+            /** Applications */
+            applications: components["schemas"]["EntityBrief"][];
+            /** Capabilities */
+            capabilities: components["schemas"]["BusinessTie"][];
+            /** Processes */
+            processes: components["schemas"]["BusinessTie"][];
+        };
+        /**
+         * IncidentDetail
+         * @description One incident: its timeline, everything it is tied to — each said or
+         *     inferred — what changed before it, and what it reaches.
+         */
+        IncidentDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /** Url */
+            url: string | null;
+            /** Tools */
+            tools: string[];
+            /**
+             * State
+             * @description open, in_progress, closed.
+             */
+            state: string | null;
+            /** Priority */
+            priority: string | null;
+            /** Severity */
+            severity: string | null;
+            /** Urgency */
+            urgency: string | null;
+            /** Opened At */
+            opened_at: string | null;
+            /** Acknowledged At */
+            acknowledged_at: string | null;
+            /** Resolved At */
+            resolved_at: string | null;
+            /** Time To Acknowledge Minutes */
+            time_to_acknowledge_minutes: number | null;
+            /** Duration Minutes */
+            duration_minutes: number | null;
+            /** Affects */
+            affects: components["schemas"]["EntityBrief"][];
+            commander: components["schemas"]["EntityBrief"] | null;
+            /** Assignees */
+            assignees: components["schemas"]["EntityBrief"][];
+            /**
+             * Causes
+             * @description Said first, then suspected — the surest first.
+             */
+            causes: components["schemas"]["EntityBrief"][];
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Provenance */
+            provenance: {
+                [key: string]: unknown;
+            };
+            /** Timeline */
+            timeline: components["schemas"]["TimelineStep"][];
+            /** Affected */
+            affected: components["schemas"]["Tie"][];
+            /**
+             * People
+             * @description Who leads it, is assigned to it, reported it.
+             */
+            people: components["schemas"]["Tie"][];
+            /**
+             * Suspected Causes
+             * @description caused_by: said, or `preceded`.
+             */
+            suspected_causes: components["schemas"]["Tie"][];
+            /**
+             * Changed Before
+             * @description Deployments, changes, releases, merges on what it affects — the 72 hours before it opened.
+             */
+            changed_before: components["schemas"]["TimelineEvent"][];
+            impact: components["schemas"]["Impact"];
+        };
+        /**
+         * IncidentRead
+         * @description An incident: how bad, where it stands, when it opened and was
+         *     handled, what it affects, who leads it, what is said or suspected to
+         *     have caused it.
+         */
+        IncidentRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            lifecycle: components["schemas"]["Lifecycle"];
+            /** Url */
+            url: string | null;
+            /** Tools */
+            tools: string[];
+            /**
+             * State
+             * @description open, in_progress, closed.
+             */
+            state: string | null;
+            /** Priority */
+            priority: string | null;
+            /** Severity */
+            severity: string | null;
+            /** Urgency */
+            urgency: string | null;
+            /** Opened At */
+            opened_at: string | null;
+            /** Acknowledged At */
+            acknowledged_at: string | null;
+            /** Resolved At */
+            resolved_at: string | null;
+            /** Time To Acknowledge Minutes */
+            time_to_acknowledge_minutes: number | null;
+            /** Duration Minutes */
+            duration_minutes: number | null;
+            /** Affects */
+            affects: components["schemas"]["EntityBrief"][];
+            commander: components["schemas"]["EntityBrief"] | null;
+            /** Assignees */
+            assignees: components["schemas"]["EntityBrief"][];
+            /**
+             * Causes
+             * @description Said first, then suspected — the surest first.
+             */
+            causes: components["schemas"]["EntityBrief"][];
         };
         /**
          * InfrastructureDetail
@@ -4815,6 +5349,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[ChangeRead] */
+        PageEnvelope_ChangeRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["ChangeRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[CloudAccountRead] */
         PageEnvelope_CloudAccountRead_: {
             /**
@@ -4848,6 +5395,19 @@ export interface components {
              * @description The rows on this page, in the requested order.
              */
             data: components["schemas"]["DatabaseRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[DeploymentRead] */
+        PageEnvelope_DeploymentRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["DeploymentRead"][];
             /**
              * Next Cursor
              * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
@@ -4900,6 +5460,19 @@ export interface components {
              * @description The rows on this page, in the requested order.
              */
             data: components["schemas"]["EntityRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[IncidentRead] */
+        PageEnvelope_IncidentRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["IncidentRead"][];
             /**
              * Next Cursor
              * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
@@ -5509,7 +6082,7 @@ export interface components {
          * @description How two entities relate. Direction matters: from -> to.
          * @enum {string}
          */
-        RelationshipType: "depends_on" | "owns" | "deployed_to" | "mentions" | "caused_by" | "member_of" | "part_of" | "owned_by" | "maintained_by" | "authored_by" | "assigned_to" | "reviewed_by" | "reported_by" | "led_by" | "affects" | "resolves" | "implements" | "merges" | "child_of" | "in_network" | "runs_in" | "references" | "reads_from" | "reports_to" | "contributes_to" | "describes" | "edited_by" | "supported_by" | "uses" | "realizes";
+        RelationshipType: "depends_on" | "owns" | "deployed_to" | "mentions" | "caused_by" | "member_of" | "part_of" | "owned_by" | "maintained_by" | "authored_by" | "assigned_to" | "reviewed_by" | "reported_by" | "led_by" | "affects" | "resolves" | "implements" | "merges" | "child_of" | "in_network" | "runs_in" | "references" | "reads_from" | "reports_to" | "contributes_to" | "describes" | "edited_by" | "supported_by" | "uses" | "realizes" | "deploys";
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
             /** Password */
@@ -6633,6 +7206,85 @@ export interface components {
             reads_from: number;
             /** Read By */
             read_by: number;
+        };
+        /**
+         * Timeline
+         * @description What happened, the latest first: around a thing — itself, what is
+         *     part of it, what affects it — or in the whole workspace.
+         */
+        Timeline: {
+            entity: components["schemas"]["EntityBrief"] | null;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             */
+            until: string;
+            /** Events */
+            events: components["schemas"]["TimelineEvent"][];
+            /**
+             * Truncated
+             * @description More happened than the limit.
+             */
+            truncated: boolean;
+        };
+        /**
+         * TimelineEvent
+         * @description Something that happened: an incident opened or resolved, a
+         *     deployment, a change, a release, a merge — and, in a thing's timeline,
+         *     what of it it happened to.
+         */
+        TimelineEvent: {
+            entity: components["schemas"]["EntityBrief"];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "incident_opened" | "incident_resolved" | "deployment" | "change" | "release" | "merge";
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** State */
+            state: string | null;
+            /** Environment */
+            environment: string | null;
+            /** @description What of the thing it happened to: its repository, one of its services. */
+            via: components["schemas"]["EntityBrief"] | null;
+        };
+        /**
+         * TimelineStep
+         * @description A moment of an incident's, a change's, a deployment's life: what its
+         *     sources date — opened, acknowledged, resolved; planned, started,
+         *     finished — or a state LEKA saw it take, at a build.
+         */
+        TimelineStep: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * Step
+             * @description opened, detected, acknowledged, resolved, closed, planned_start, planned_end, started, finished — or state.
+             */
+            step: string;
+            /**
+             * State
+             * @description For a state: the one it took.
+             */
+            state: string | null;
+            /**
+             * Origin
+             * @description source: a date its sources give; model: when a build saw the state.
+             * @enum {string}
+             */
+            origin: "source" | "model";
         };
         /** UserRead */
         UserRead: {
@@ -17077,6 +17729,733 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BusinessContext"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    incidents_api_v1_knowledge_incidents_get: {
+        parameters: {
+            query?: {
+                state?: ("open" | "in_progress" | "closed") | null;
+                priority?: string | null;
+                /** @description Those affecting it. */
+                service_id?: string | null;
+                /** @description Those this change or deployment caused. */
+                cause_id?: string | null;
+                /** @description From this date: when it happened. */
+                since?: string | null;
+                /** @description Before this date. */
+                until?: string | null;
+                /** @description Absent: every lifecycle but removed. */
+                lifecycle?: components["schemas"]["Lifecycle"] | null;
+                /** @description In the title. */
+                q?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_IncidentRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    incident_api_v1_knowledge_incidents__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncidentDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    changes_api_v1_knowledge_changes_get: {
+        parameters: {
+            query?: {
+                state?: ("requested" | "scheduled" | "in_progress" | "completed" | "failed" | "canceled") | null;
+                change_type?: string | null;
+                environment?: string | null;
+                /** @description Those affecting it. */
+                service_id?: string | null;
+                /** @description From this date: when it happened. */
+                since?: string | null;
+                /** @description Before this date. */
+                until?: string | null;
+                /** @description Absent: every lifecycle but removed. */
+                lifecycle?: components["schemas"]["Lifecycle"] | null;
+                /** @description In the title. */
+                q?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_ChangeRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    change_api_v1_knowledge_changes__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    deployments_api_v1_knowledge_deployments_get: {
+        parameters: {
+            query?: {
+                state?: ("pending" | "in_progress" | "succeeded" | "failed" | "canceled" | "inactive") | null;
+                environment?: string | null;
+                /** @description Its own, or its repositories'. */
+                service_id?: string | null;
+                repository_id?: string | null;
+                /** @description From this date: when it happened. */
+                since?: string | null;
+                /** @description Before this date. */
+                until?: string | null;
+                /** @description Absent: every lifecycle but removed. */
+                lifecycle?: components["schemas"]["Lifecycle"] | null;
+                /** @description In the title. */
+                q?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_DeploymentRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    deployment_api_v1_knowledge_deployments__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeploymentDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    timeline_api_v1_knowledge_timeline_get: {
+        parameters: {
+            query?: {
+                /** @description Around this thing: itself, what is part of it, what affects it. */
+                entity_id?: string | null;
+                /** @description Absent: 30 days before `until`. */
+                since?: string | null;
+                /** @description Absent: now. */
+                until?: string | null;
+                /** @description Absent: every kind. */
+                kinds?: ("incident" | "deployment" | "change" | "release" | "pull_request")[] | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Timeline"];
                 };
             };
             /** @description The request could not be understood. */

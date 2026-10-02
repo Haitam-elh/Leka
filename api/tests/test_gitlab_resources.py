@@ -145,3 +145,25 @@ async def test_an_exhausted_quota_mid_stream_keeps_what_was_read() -> None:
     assert [r.external_id for r in read] == ["901"]
     assert caught.value.diagnostic.code is DiagnosticCode.RATE_LIMITED
     assert caught.value.diagnostic.retry_after == 30
+
+
+# ── deployments (LEKA-367) ───────────────────────────────────────────────────
+
+
+async def test_deployments_are_those_updated_since_the_last_pass() -> None:
+    deployment = {"id": 77, "iid": 3, "ref": "main", "sha": "b" * 40, "status": "success"}
+    gitlab = Recording({"/projects/11/deployments": [deployment]})
+
+    records = await _stream(gitlab, Capability.DEPLOYMENTS, since=SINCE, projects=["acme/api"])
+
+    assert [(r.external_id, r.container) for r in records] == [("77", "acme/api")]
+    [query] = gitlab.queries["/projects/11/deployments"]
+    assert (query["order_by"], query["updated_after"]) == ("updated_at", SINCE.isoformat())
+
+
+async def test_a_project_without_environments_has_no_deployments_asked_for() -> None:
+    off = {**API, "environments_access_level": "disabled"}
+    gitlab = Recording({"/groups/acme/projects": [off, WEB]})
+
+    assert await _stream(gitlab, Capability.DEPLOYMENTS, projects=["acme/api"]) == []
+    assert "/projects/11/deployments" not in gitlab.queries

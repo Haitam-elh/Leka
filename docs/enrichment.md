@@ -15,7 +15,7 @@ LEKA-361).
         │                                (validation.md)
         ▼
  enrich()                                leka/ingestion/enrichment
-        │  1 relationships  2 links  infrastructure, data, knowledge (§ 7)
+        │  1 relationships  2 links  infrastructure, data, knowledge, operations (§ 7)
         │  3 ownership  4 membership  expertise  5 activity  6 category  7 landscape
         ▼
  enriched_relationships   every relationship between two entities: stated or inferred
@@ -63,9 +63,9 @@ says which name, and in what.
 | Rule | Relationship | When | Confidence |
 |---|---|---|---|
 | `same_name` | repository `part_of` service | the repository's name and the service's have one core (`acme/billing-api` and `Billing`: [resolution.md § 2](resolution.md#2-semantic--what-names-mean)) — one service only, no environment word | 0.8 |
-| `component` | issue `part_of` service | a Jira component names the service | 0.85 |
-| `label` | issue, pull request `part_of` service | a label names it | 0.7 |
-| `named_in_title` | issue, pull request, incident `mentions` service; a document **`describes`** it (LEKA-366) | its title holds the service's name, as whole words — a name of five letters or more, held by one service | 0.6 |
+| `component` | issue `part_of` service — an incident, a change `affects` it (LEKA-367) | a Jira component names the service | 0.85 |
+| `label` | issue, pull request `part_of` service — an incident, a change `affects` it | a label names it | 0.7 |
+| `named_in_title` | issue, pull request `mentions` service; a document **`describes`** it (LEKA-366); an incident, a change **`affects`** it (LEKA-367) | its title holds the service's name, as whole words — a name of five letters or more, held by one service | 0.6 |
 | `named_in_title` | document `describes` application, business capability, business process (LEKA-366) | its title holds the name — an application's without `platform`, `system`, `app`… — held by one of that kind | 0.6 |
 
 Never made: where a source already places the item in a service; where two
@@ -218,6 +218,18 @@ this reads them from the records.
 | `describes` → a service, an application | a knowledge space | `same_name`: it is named for it — `Billing API docs` — one only | 0.7 |
 | `describes` → a service, an application, a capability, a process | a document or a space | `linked`: its `docs_url` or `runbook_url` — a catalogue's — is the document's own address (no scheme, query nor fragment; the path decoded): what normalisation could not read from the address — a SharePoint file's — found here | 0.95 |
 | `uses` → a table, a schema, a database | a business capability or process | `named`: the data its business system names (`data_names`) — `billing.invoices`, or a table's name alone; never a name two tables share (`knowledge.data_ambiguous`), nor one no table has (`knowledge.data_unfound`) | 0.9 qualified, 0.75 a name alone |
+
+### Operations — incidents, changes, deployments (LEKA-367)
+
+| Attribute or relationship | Of | Rule | Confidence |
+|---|---|---|---|
+| `created_at`, `detected_at`, `acknowledged_at`, `resolved_at`, `closed_at` | an incident | `record`: its records' dates, as they give them — resolution keeps none; the model's provenance says the source's | 1.0 |
+| `created_at`, `started_at`, `finished_at`; `planned_start_at`, `planned_end_at` | a deployment; a change | `record` | 1.0 |
+| `created_at`, `published_at`; `created_at`, `merged_at`, `closed_at` | a release; a pull request | `record` | 1.0 |
+| `url`, `tools` | an incident, a change, a deployment — and documents and spaces (above) | `record` | 1.0 |
+| `time_to_acknowledge_minutes` | an incident | `dates`: from its opening to its first acknowledgement | 1.0 |
+| `duration_minutes` | a deployment | `dates`: from its start — else its creation — to its end | 1.0 |
+| `caused_by` → a deployment, a change | an incident no source says the cause of | `preceded`: done — a deployment finished, a change started — within the day before it opened, on what it affects: its service, a repository of it, the application holding it; never a deployment that did not run, nor one to a staging, development or test environment for an incident that says none; three at most, the nearest | 0.7 within the hour, 0.6 within six, 0.5 within the day |
 
 ## 8. What fails, fails alone
 

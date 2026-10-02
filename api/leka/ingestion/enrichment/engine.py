@@ -37,6 +37,11 @@ company model reads them, what those things are together:
        documents a catalogue links as a thing's documentation; the data a
        business system names, found (LEKA-366). Run before ownership, which
        hands a space's team down to its documents.
+   12. OPERATIONS: when each incident, deployment, change, release and
+       pull request happened — its records' dates, carried as they are —
+       how long an incident waited to be acknowledged, a deployment ran;
+       what changed shortly before an incident, on what it affects: a
+       suspected cause (LEKA-367).
 
 ADDED, NEVER OVERWRITTEN. Nothing here changes a resolved entity: what is
 enriched is kept beside it — each attribute and each relationship with its
@@ -82,7 +87,10 @@ from leka.ingestion.resolution import signals as sig
 #    title names; spaces are containers, named for their team or service;
 #    documents' links and freshness; a catalogue's documentation found by
 #    its address; a business system's data found by name (LEKA-366).
-ENRICHER_VERSION = 6
+# 7: incidents, changes, deployments — their dates carried, how long they
+#    took, what changed before an incident; an incident or a change whose
+#    title, component or label names a service affects it (LEKA-367).
+ENRICHER_VERSION = 7
 
 Origin = Literal["stated", "inferred"]
 
@@ -109,7 +117,10 @@ UP = frozenset({"part_of", "child_of"})
 # What holds items; a space holds documents (LEKA-366).
 CONTAINERS = frozenset({"repository", "project", "service", "application", "knowledge_space"})
 # What names a service in its title.
-TITLED = frozenset({"issue", "pull_request", "incident", "document"})
+TITLED = frozenset({"issue", "pull_request", "incident", "document", "change"})
+# What a title, a component, a label naming a service says it affects — not
+# that it is part of it, nor mentions it (LEKA-367).
+AFFECTING = frozenset({"incident", "change"})
 # What a title says the kind of work of.
 WORK_ITEMS = frozenset({"issue", "pull_request", "commit"})
 OPEN = frozenset({"open", "in_progress"})
@@ -298,6 +309,36 @@ LINKED = 0.95
 # when only one table has it.
 NAMED_QUALIFIED = 0.9
 NAMED_ALONE = 0.75
+# Operations (LEKA-367): the events whose records' dates are carried — what
+# a timeline is made of — and which; what opens where its record does.
+EVENT_DATES: dict[str, tuple[str, ...]] = {
+    "incident": ("created_at", "detected_at", "acknowledged_at", "resolved_at", "closed_at"),
+    "deployment": ("created_at", "started_at", "finished_at"),
+    "change": ("created_at", "planned_start_at", "planned_end_at", "started_at", "finished_at"),
+    "release": ("created_at", "published_at"),
+    "pull_request": ("created_at", "merged_at", "closed_at"),
+}
+OPENED = KNOWLEDGE | {"incident", "deployment", "change"}
+CHANGES = frozenset({"deployment", "change"})
+# When a change or a deployment happened, the first of these it has.
+CHANGED_AT = {
+    "deployment": ("finished_at", "started_at", "created_at"),
+    "change": ("started_at", "planned_start_at", "created_at"),
+}
+# A deployment that never ran causes nothing; one to a staging, development
+# or test environment causes no incident but one of that environment — an
+# incident that says none is production's.
+NEVER_RAN = frozenset({"pending", "canceled"})
+ELSEWHERE = frozenset({"staging", "development", "test"})
+# What changed before an incident: within a day, the nearer the surer, three
+# at most.
+CAUSE_WINDOW = timedelta(hours=24)
+CAUSE_STEPS = ((timedelta(hours=1), 0.7), (timedelta(hours=6), 0.6), (CAUSE_WINDOW, 0.5))
+MAX_CAUSES = 3
+# What holds what a change touches, up to this many steps: a repository's
+# service, a service's application.
+HOLDING = frozenset({"repository", "service", "application", "infra_resource", "database"})
+MAX_HOLDING = 2
 
 
 # ── what it reads ────────────────────────────────────────────────────────────
@@ -534,7 +575,8 @@ def links(graph: Graph) -> Made:
                 )
                 linked.add((node.id, service_id))
                 made.counts["same_name"] += 1
-        elif node.type in TITLED and not has_service(node.id, {"part_of"}):
+        elif node.type in TITLED and not has_service(node.id, {"part_of", "affects"}):
+            relation = "affects" if node.type in AFFECTING else "part_of"
             for rule, attribute, confidence in (
                 ("component", "components", 0.85),
                 ("label", "labels", 0.7),
@@ -550,7 +592,7 @@ def links(graph: Graph) -> Made:
                         _inferred(
                             node.id,
                             service_id,
-                            "part_of",
+                            relation,
                             rule,
                             confidence,
                             f"its {rule} names the service {core}",
@@ -562,8 +604,9 @@ def links(graph: Graph) -> Made:
                     break
 
     # A service named in a title: a word of the title, or a few in a row —
-    # mentioned. In a document's title, an application, a business
-    # capability or process too: what the document describes (LEKA-366).
+    # mentioned; affected, by an incident or a change (LEKA-367). In a
+    # document's title, an application, a business capability or process
+    # too: what the document describes (LEKA-366).
     titled = [node for node in graph.nodes.values() if node.type in TITLED]
     crowd = max(TITLE_CROWD, TITLE_SHARE * len(titled))
     for kind, kind_words, titles in TITLE_NAMED:
@@ -593,12 +636,16 @@ def links(graph: Graph) -> Made:
             for node_id in named_in:
                 if target in graph.targets(node_id) or (node_id, target) in linked:
                     continue
-                documented = graph.of_type(node_id) == "document"
+                of = graph.of_type(node_id)
                 made.edges.append(
                     _inferred(
                         node_id,
                         target,
-                        "describes" if documented else "mentions",
+                        "describes"
+                        if of == "document"
+                        else "affects"
+                        if of in AFFECTING
+                        else "mentions",
                         "named_in_title",
                         0.6,
                         f"its title names the {kind.replace('_', ' ')} {'-'.join(phrase)}",
@@ -1471,9 +1518,9 @@ def knowledge(graph: Graph) -> Made:
     made = Made()
     now = graph.now
     for node in graph.nodes.values():
-        if node.type in KNOWLEDGE and node.links:
+        if node.type in OPENED and node.links:
             made.facts.append(_fact(node, "url", node.links[0], 1.0, "record", "its record's link"))
-        if node.type in KNOWLEDGE and node.tools:
+        if node.type in OPENED and node.tools:
             made.facts.append(
                 _fact(node, "tools", list(node.tools), 1.0, "record", "the tools it is read from")
             )
@@ -1629,12 +1676,145 @@ def _named_data(graph: Graph, made: Made) -> list[Edge]:
     return found
 
 
+# ── 12. operations (LEKA-367) ────────────────────────────────────────────────
+
+
+def operations(graph: Graph) -> Made:
+    """Incidents, changes and deployments: when each happened — and each
+    release, each pull request — its records' dates, carried as they are,
+    resolution keeping none; how long an incident waited to be
+    acknowledged, a deployment ran; what changed shortly before an
+    incident, on what it affects: a suspected cause."""
+    made = Made()
+    for node in graph.nodes.values():
+        for name in EVENT_DATES.get(node.type, ()):
+            value = node.dates.get(name)
+            if value:
+                made.facts.append(_fact(node, name, value, 1.0, "record", "its record's date"))
+        if node.type == "incident":
+            waited = _between(node, ("created_at",), "acknowledged_at")
+            if waited is not None:
+                made.facts.append(
+                    _fact(
+                        node,
+                        "time_to_acknowledge_minutes",
+                        waited,
+                        1.0,
+                        "dates",
+                        "from its opening to its first acknowledgement",
+                    )
+                )
+        elif node.type == "deployment":
+            ran = _between(node, ("started_at", "created_at"), "finished_at")
+            if ran is not None:
+                made.facts.append(
+                    _fact(node, "duration_minutes", ran, 1.0, "dates", "from its start to its end")
+                )
+    made.edges += _suspected_causes(graph, made)
+    return made
+
+
+def _between(node: Node, starts: tuple[str, ...], end: str) -> int | None:
+    """Minutes from the first of its start dates to an end — none unless
+    both are dates in order."""
+    start = next((d for name in starts if (d := _date(node.dates.get(name)))), None)
+    stop = _date(node.dates.get(end))
+    if start is None or stop is None or stop < start:
+        return None
+    return round((stop - start).total_seconds() / 60)
+
+
+def _suspected_causes(graph: Graph, made: Made) -> list[Edge]:
+    """What changed shortly before an incident, on what it affects: a
+    deployment of its service — or of a repository of it — a change to it,
+    or to the application holding it, within a day before it opened, in its
+    environment: production, unless it says another. A suspect, said so:
+    the nearer the surer, three at most; none where a source says what
+    caused it."""
+    changed: dict[uuid.UUID, tuple[datetime, set[uuid.UUID], set[uuid.UUID], object]] = {}
+    for node in graph.nodes.values():
+        if node.type not in CHANGES or node.attributes.get("state") in NEVER_RAN:
+            continue
+        where = node.attributes.get("environment")
+        when = next(
+            (
+                m
+                for name in CHANGED_AT[node.type]
+                if (m := _moment(node.dates.get(name), graph.now))
+            ),
+            None,
+        )
+        direct = {e.to_id for e in graph.out(node.id, {"part_of", "affects"})}
+        if when is not None and direct:
+            changed[node.id] = (when, direct, _holders(graph, direct), where)
+    found: list[Edge] = []
+    for incident in graph.nodes.values():
+        if incident.type != "incident":
+            continue
+        if any(e.origin == "stated" for e in graph.out(incident.id, {"caused_by"})):
+            continue
+        opened = min(
+            (m for n in ("detected_at", "created_at") if (m := _date(incident.dates.get(n)))),
+            default=None,
+        )
+        affected = {e.to_id for e in graph.out(incident.id, {"affects"})}
+        if opened is None or not affected:
+            continue
+        held = _holders(graph, affected)
+        place = incident.attributes.get("environment") or "production"
+        near: list[tuple[timedelta, uuid.UUID, uuid.UUID]] = []
+        for change_id, (when, direct, up, where) in changed.items():
+            gap = opened - when
+            if gap < timedelta(0) or gap > CAUSE_WINDOW:
+                continue
+            if where in ELSEWHERE and where != place:
+                continue
+            # Its service, its repository's service — or the application
+            # it changed, holding the service the incident affects.
+            common = (up & affected) or (direct & held)
+            if common:
+                near.append((gap, change_id, min(common)))
+        for gap, change_id, via in sorted(near)[:MAX_CAUSES]:
+            confidence = next(sure for limit, sure in CAUSE_STEPS if gap <= limit)
+            word = "deployed" if graph.of_type(change_id) == "deployment" else "changed"
+            found.append(
+                _inferred(
+                    incident.id,
+                    change_id,
+                    "caused_by",
+                    "preceded",
+                    confidence,
+                    f"{word} {round(gap.total_seconds() / 60)} minutes before it opened, "
+                    f"on {graph.nodes[via].name}",
+                    inputs=[via],
+                )
+            )
+            made.counts["caused_by"] += 1
+    return found
+
+
+def _holders(graph: Graph, things: set[uuid.UUID]) -> set[uuid.UUID]:
+    """These, and what holds them — a repository's service, a service's
+    application — MAX_HOLDING steps up."""
+    found, frontier = set(things), set(things)
+    for _ in range(MAX_HOLDING):
+        frontier = {
+            e.to_id
+            for t in frontier
+            for e in graph.out(t, {"part_of"})
+            if graph.of_type(e.to_id) in HOLDING and e.to_id not in found
+        }
+        found |= frontier
+    return found
+
+
 ENRICHERS: tuple[tuple[str, Enricher], ...] = (
     ("relationships", relationships),
     ("links", links),
     ("infrastructure", infrastructure),
     ("data", data),
     ("knowledge", knowledge),
+    ("operations", operations),
     ("ownership", ownership),
     ("membership", membership),
     ("expertise", expertise),
@@ -1705,7 +1885,10 @@ def _admissible_fact(graph: Graph, fact: Fact) -> bool:
     if node is None or not ATTRIBUTE.match(fact.attribute):
         return False
     stated = fact.attribute in node.attributes or fact.attribute in node.dates
-    if stated or (fact.entity_id, fact.attribute) in graph.facts:
+    # A date its records state, carried as they state it: resolution keeps
+    # none (LEKA-367).
+    carried = fact.rule == "record" and node.dates.get(fact.attribute) == fact.value
+    if (stated and not carried) or (fact.entity_id, fact.attribute) in graph.facts:
         return False
     if fact.value is None or not _confidence(fact.confidence) or not 0 < len(fact.rule) <= 100:
         return False

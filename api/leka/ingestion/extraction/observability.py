@@ -164,7 +164,7 @@ def _links(links: list[object]) -> dict[str, str]:
     return found
 
 
-@strategy("datadog.incidents", 1, (DATADOG, C.INCIDENTS))
+@strategy("datadog.incidents", 2, (DATADOG, C.INCIDENTS))
 def datadog_incident(p: Payload) -> Extracted:
     a = dig(p, "attributes")
     services = strings(a, "fields", "services", "value")
@@ -194,6 +194,8 @@ def datadog_incident(p: Payload) -> Extracted:
             "severity": string(a, "severity"),
             "customer_impacted": flag(a, "customer_impacted"),
             "resolved_at": _iso(when(a, "resolved")),
+            # When it was detected (LEKA-367): before it was declared.
+            "detected_at": _iso(when(a, "detected")),
             "time_to_resolve": number(a, "time_to_resolve"),
         },
         signals={"services": services, "service": services[0] if services else None},
@@ -232,8 +234,13 @@ def datadog_log(p: Payload) -> Extracted:
     )
 
 
-@strategy("pagerduty.incidents", 1, (PAGERDUTY, C.INCIDENTS))
+@strategy("pagerduty.incidents", 2, (PAGERDUTY, C.INCIDENTS))
 def pagerduty_incident(p: Payload) -> Extracted:
+    """An incident: its service, urgency and priority, who it is assigned
+    to; when it was opened, first acknowledged (LEKA-367), resolved."""
+    acknowledged = sorted(
+        moment for a in _list(dig(p, "acknowledgements")) if (moment := when(a, "at"))
+    )
     assignments = dig(p, "assignments")
     assignees = [dig(a, "assignee") for a in assignments] if isinstance(assignments, list) else []
     return Extracted(
@@ -256,12 +263,50 @@ def pagerduty_incident(p: Payload) -> Extracted:
             "incident_number": number(p, "incident_number"),
             "urgency": lower(p, "urgency"),
             "priority": string(p, "priority", "summary"),
+            "acknowledged_at": _iso(acknowledged[0]) if acknowledged else None,
             "resolved_at": _iso(when(p, "resolved_at")),
         },
         signals={
             "service": string(p, "service", "summary"),
             "escalation_policy": string(p, "escalation_policy", "summary"),
             "teams": strings(p, "teams", key="summary"),
+        },
+    )
+
+
+@strategy("pagerduty.changes", 1, (PAGERDUTY, C.CHANGES))
+def pagerduty_change(p: Payload) -> Extracted:
+    """A change event a pipeline or a tool sent PagerDuty (LEKA-367) — a
+    deploy, a configuration change: when, its services, its source, its
+    links, what it said of itself."""
+    services = [s for s in _list(dig(p, "services")) if isinstance(s, dict)]
+    links = [string(link, "href") for link in _list(dig(p, "links"))]
+    happened = when(p, "timestamp")
+    details = dig(p, "custom_details")
+    said = (
+        "\n".join(f"{k}: {v}" for k, v in details.items() if isinstance(v, str | int | float))
+        if isinstance(details, dict)
+        else None
+    )
+    return Extracted(
+        title=required(p, "summary"),
+        url=next((link for link in links if link), None),
+        created_at=happened,
+        updated_at=happened,
+        content=content("details", said or None),
+        references=[
+            r
+            for s in services
+            for r in ref("service", "service", external_id=dig(s, "id"), name=dig(s, "summary"))
+        ],
+        metadata={
+            "source": string(p, "source"),
+            "integration": string(p, "integration", "summary"),
+            "links": [link for link in links if link],
+        },
+        signals={
+            "services": strings(p, "services", key="summary"),
+            "service": string(services[0], "summary") if services else None,
         },
     )
 
@@ -539,3 +584,7 @@ def _tag(tags: list[str], key: str) -> str | None:
 
 def _iso(moment: datetime | None) -> str | None:
     return moment.astimezone(UTC).isoformat() if moment else None
+
+
+def _list(value: object) -> list[object]:
+    return value if isinstance(value, list) else []

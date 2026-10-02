@@ -92,6 +92,9 @@ class EntityType(enum.StrEnum):
     KNOWLEDGE_SPACE = "knowledge_space"
     BUSINESS_CAPABILITY = "business_capability"
     BUSINESS_PROCESS = "business_process"
+    # Something changed in the company's systems: a change request, a
+    # configuration change, a change event (LEKA-367).
+    CHANGE = "change"
 
 
 class RelationshipType(enum.StrEnum):
@@ -135,6 +138,8 @@ class RelationshipType(enum.StrEnum):
     SUPPORTED_BY = "supported_by"
     USES = "uses"
     REALIZES = "realizes"
+    # A deployment, to the commit or the release it ships (LEKA-367).
+    DEPLOYS = "deploys"
 
 
 class Lifecycle(enum.StrEnum):
@@ -161,6 +166,8 @@ class Entity(Base, WorkspaceScopedMixin):
         Index("ix_entities_workspace_type", "workspace_id", "type"),
         Index("ix_entities_workspace_type_name", "workspace_id", "type", "name"),
         Index("ix_entities_workspace_key", "workspace_id", "key"),
+        # Incidents, changes, deployments in time order (LEKA-367).
+        Index("ix_entities_workspace_type_occurred", "workspace_id", "type", "occurred_at"),
         # Queries filter on attributes -> GIN, not btree.
         Index("ix_entities_attributes", "attributes", postgresql_using="gin"),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
@@ -211,6 +218,10 @@ class Entity(Base, WorkspaceScopedMixin):
     lifecycle_changed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # When it happened, by its sources' dates — an incident opened, a
+    # deployment done, a change made, a release published, a pull request
+    # merged; none for what is not an event (LEKA-367).
+    occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Relationship(Base, WorkspaceScopedMixin):

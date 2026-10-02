@@ -58,6 +58,17 @@
     GET /knowledge/business-processes/{id}     data, owners, documentation
     GET /knowledge/entities/{id}/business      what a technical thing means to the
                                                business: who relies on it, and how
+    GET /knowledge/incidents                   the incidents, the latest first: state,
+                                               priority, what they affect, what caused
+                                               them (LEKA-367)
+    GET /knowledge/incidents/{id}              one: its timeline, causes said or
+                                               suspected, what changed before it, impact
+    GET /knowledge/changes                     the changes: type, risk, state, what they
+    GET /knowledge/changes/{id}                affect, who made them
+    GET /knowledge/deployments                 the deployments: what to where, how each
+    GET /knowledge/deployments/{id}            went, its statuses, what it shipped
+    GET /knowledge/timeline                    what happened between two dates — around
+                                               a thing, or everywhere
 
 Read by every member (`workspace:read`): it is the company's own picture. A
 route validates, calls one repository or service, and returns (architecture
@@ -68,6 +79,7 @@ payload (rule 3): another workspace's entity is 404.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, status
@@ -87,6 +99,8 @@ from leka.knowledge import (
     BusinessDetail,
     BusinessFilters,
     BusinessRead,
+    ChangeDetail,
+    ChangeRead,
     CloudAccountDetail,
     CloudAccountRead,
     DatabaseDetail,
@@ -95,6 +109,8 @@ from leka.knowledge import (
     DataObjectDetail,
     DataObjectRead,
     Dependencies,
+    DeploymentDetail,
+    DeploymentRead,
     DocumentationCoverage,
     DocumentationGap,
     DocumentDetail,
@@ -108,6 +124,9 @@ from leka.knowledge import (
     EntityRepository,
     EntityType,
     EntityVersionRead,
+    EventFilters,
+    IncidentDetail,
+    IncidentRead,
     InfrastructureDetail,
     InfrastructureFilters,
     InfrastructureRead,
@@ -130,9 +149,18 @@ from leka.knowledge import (
     Responsibility,
     TeamDetail,
     TeamRead,
+    Timeline,
 )
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+# What a timeline holds (LEKA-367).
+EVENTS = (
+    EntityType.INCIDENT,
+    EntityType.DEPLOYMENT,
+    EntityType.CHANGE,
+    EntityType.RELEASE,
+    EntityType.PULL_REQUEST,
+)
 
 Reader = Annotated[Principal, Depends(require_permission(Permission.WORKSPACE_READ))]
 
@@ -142,6 +170,14 @@ EDGES = 100
 ENTITY_SORTS = SortCatalogue(
     fields=(SortableField("name", Entity.name, "ix_entities_workspace_type_name"),),
     default="name",
+)
+# Incidents, changes, deployments: when they happened first (LEKA-367).
+EVENT_SORTS = SortCatalogue(
+    fields=(
+        SortableField("occurred_at", Entity.occurred_at, "ix_entities_workspace_type_occurred"),
+        SortableField("name", Entity.name, "ix_entities_workspace_type_name"),
+    ),
+    default="occurred_at",
 )
 
 
@@ -1109,3 +1145,228 @@ async def business_context(
     if found is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
     return await KnowledgeService(repository).business_context(found)
+
+
+# ── incidents, changes and deployments (LEKA-367) ───────────────────────────
+
+# A timeline's window: a month by default, a year at most.
+TIMELINE_DAYS = 30
+MAX_TIMELINE = timedelta(days=366)
+Happening = Literal["incident", "deployment", "change", "release", "pull_request"]
+Since = Annotated[datetime | None, Query(description="From this date: when it happened.")]
+Until = Annotated[datetime | None, Query(description="Before this date.")]
+Lifecycles = Annotated[Lifecycle | None, Query(description="Absent: every lifecycle but removed.")]
+Words = Annotated[str | None, Query(max_length=200, description="In the title.")]
+
+
+async def _events_page(
+    kind: EntityType,
+    session: SessionDep,
+    principal: Principal,
+    page: PageParams,
+    filters: EventFilters,
+) -> tuple[EntityRepository, list[Entity], str | None]:
+    repository = EntityRepository(session, principal.workspace_id)
+    result = await serve_page(
+        session,
+        repository.events(kind, filters),
+        request=page,
+        catalogue=EVENT_SORTS,
+        id_column=Entity.id,
+    )
+    return repository, list(result.items), result.next_cursor
+
+
+@router.get("/incidents", response_model=PageEnvelope[IncidentRead])
+async def incidents(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    state: Literal["open", "in_progress", "closed"] | None = None,
+    priority: Annotated[str | None, Query(max_length=50)] = None,
+    service_id: Annotated[uuid.UUID | None, Query(description="Those affecting it.")] = None,
+    cause_id: Annotated[
+        uuid.UUID | None, Query(description="Those this change or deployment caused.")
+    ] = None,
+    since: Since = None,
+    until: Until = None,
+    lifecycle: Lifecycles = None,
+    q: Words = None,
+) -> PageEnvelope[IncidentRead]:
+    """The incidents, the latest first: how bad, where each stands, when it
+    opened and was handled, what it affects, who leads it, what is said or
+    suspected to have caused it."""
+    repository, found, cursor = await _events_page(
+        EntityType.INCIDENT,
+        session,
+        principal,
+        page,
+        EventFilters(
+            lifecycle=lifecycle,
+            state=state,
+            priority=priority,
+            service_id=service_id,
+            cause_id=cause_id,
+            since=since,
+            until=until,
+            q=q,
+        ),
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).incidents(found), next_cursor=cursor
+    )
+
+
+@router.get("/incidents/{entity_id}", response_model=IncidentDetail)
+async def incident(entity_id: uuid.UUID, session: SessionDep, principal: Reader) -> IncidentDetail:
+    """One incident: its timeline — the dates its sources give, the states
+    LEKA saw — what it affects, who handled it, what is said or suspected to
+    have caused it, what changed on what it affects in the 72 hours before,
+    and what it reaches: dependents, applications, the business."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not EntityType.INCIDENT:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such incident.")
+    return await KnowledgeService(repository).incident(found)
+
+
+@router.get("/changes", response_model=PageEnvelope[ChangeRead])
+async def changes(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    state: Literal["requested", "scheduled", "in_progress", "completed", "failed", "canceled"]
+    | None = None,
+    change_type: Annotated[str | None, Query(max_length=50)] = None,
+    environment: Annotated[str | None, Query(max_length=50)] = None,
+    service_id: Annotated[uuid.UUID | None, Query(description="Those affecting it.")] = None,
+    since: Since = None,
+    until: Until = None,
+    lifecycle: Lifecycles = None,
+    q: Words = None,
+) -> PageEnvelope[ChangeRead]:
+    """The changes, the latest first: of what type, how risky, where each
+    stands, when, what it affects, who made it and asked for it."""
+    repository, found, cursor = await _events_page(
+        EntityType.CHANGE,
+        session,
+        principal,
+        page,
+        EventFilters(
+            lifecycle=lifecycle,
+            state=state,
+            change_type=change_type,
+            environment=environment,
+            service_id=service_id,
+            since=since,
+            until=until,
+            q=q,
+        ),
+    )
+    return PageEnvelope(data=await KnowledgeService(repository).changes(found), next_cursor=cursor)
+
+
+@router.get("/changes/{entity_id}", response_model=ChangeDetail)
+async def change(entity_id: uuid.UUID, session: SessionDep, principal: Reader) -> ChangeDetail:
+    """One change: its timeline, what it affects, who made and asked for
+    it, the incidents said or suspected to follow from it."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not EntityType.CHANGE:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such change.")
+    return await KnowledgeService(repository).change(found)
+
+
+@router.get("/deployments", response_model=PageEnvelope[DeploymentRead])
+async def deployments(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    state: Literal["pending", "in_progress", "succeeded", "failed", "canceled", "inactive"]
+    | None = None,
+    environment: Annotated[str | None, Query(max_length=50)] = None,
+    service_id: Annotated[
+        uuid.UUID | None, Query(description="Its own, or its repositories'.")
+    ] = None,
+    repository_id: uuid.UUID | None = None,
+    since: Since = None,
+    until: Until = None,
+    lifecycle: Lifecycles = None,
+    q: Words = None,
+) -> PageEnvelope[DeploymentRead]:
+    """The deployments, the latest first: what to where, how each went,
+    when, by whom, for which services."""
+    repository, found, cursor = await _events_page(
+        EntityType.DEPLOYMENT,
+        session,
+        principal,
+        page,
+        EventFilters(
+            lifecycle=lifecycle,
+            state=state,
+            environment=environment,
+            service_id=service_id,
+            repository_id=repository_id,
+            since=since,
+            until=until,
+            q=q,
+        ),
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).deployments(found), next_cursor=cursor
+    )
+
+
+@router.get("/deployments/{entity_id}", response_model=DeploymentDetail)
+async def deployment(
+    entity_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> DeploymentDetail:
+    """One deployment: each status with when, what it shipped, where it
+    went, the incidents said or suspected to follow from it."""
+    repository = EntityRepository(session, principal.workspace_id)
+    found = await repository.get(Entity, entity_id)
+    if found is None or found.type is not EntityType.DEPLOYMENT:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such deployment.")
+    return await KnowledgeService(repository).deployment(found)
+
+
+@router.get("/timeline", response_model=Timeline)
+async def timeline(
+    session: SessionDep,
+    principal: Reader,
+    entity_id: Annotated[
+        uuid.UUID | None,
+        Query(description="Around this thing: itself, what is part of it, what affects it."),
+    ] = None,
+    since: Annotated[datetime | None, Query(description="Absent: 30 days before `until`.")] = None,
+    until: Annotated[datetime | None, Query(description="Absent: now.")] = None,
+    kinds: Annotated[list[Happening] | None, Query(description="Absent: every kind.")] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> Timeline:
+    """What happened between two dates, the latest first — incidents opened
+    and resolved, deployments, changes, releases, merges — around a thing,
+    or in the whole workspace. A year at most."""
+    end = until or datetime.now(UTC)
+    start = since or end - timedelta(days=TIMELINE_DAYS)
+    if start.tzinfo is None or end.tzinfo is None:
+        # A date without a zone is UTC's.
+        start, end = (
+            start.replace(tzinfo=start.tzinfo or UTC),
+            end.replace(tzinfo=end.tzinfo or UTC),
+        )
+    if start >= end or end - start > MAX_TIMELINE:
+        raise ApiError(
+            422,
+            ErrorCode.VALIDATION_FAILED,
+            "`since` must come before `until`, a year apart at most.",
+        )
+    repository = EntityRepository(session, principal.workspace_id)
+    around = None
+    if entity_id is not None:
+        around = await repository.get(Entity, entity_id)
+        if around is None:
+            raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
+    wanted = [EntityType(kind) for kind in kinds] if kinds else list(EVENTS)
+    return await KnowledgeService(repository).timeline(
+        around, since=start, until=end, kinds=wanted, limit=limit
+    )

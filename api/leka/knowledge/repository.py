@@ -12,10 +12,22 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, Select, delete, exists, func, or_, select, text, update
+from sqlalchemy import (
+    CursorResult,
+    Select,
+    and_,
+    delete,
+    exists,
+    func,
+    literal,
+    or_,
+    select,
+    text,
+    update,
+)
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -135,6 +147,43 @@ class BusinessFilters:
     team_id: uuid.UUID | None = None
     application_id: uuid.UUID | None = None
     data_id: uuid.UUID | None = None
+    q: str | None = None
+
+
+# Operations (LEKA-367): what happens, what an event is tied to the thing it
+# happens to by, and what holds what a timeline gathers.
+EVENTS = (
+    EntityType.INCIDENT,
+    EntityType.DEPLOYMENT,
+    EntityType.CHANGE,
+    EntityType.RELEASE,
+    EntityType.PULL_REQUEST,
+)
+TIED = (RelationshipType.PART_OF, RelationshipType.AFFECTS, RelationshipType.DEPLOYED_TO)
+HOLDING = (
+    EntityType.APPLICATION,
+    EntityType.SERVICE,
+    EntityType.REPOSITORY,
+    EntityType.INFRA_RESOURCE,
+    EntityType.DATABASE,
+)
+
+
+@dataclass(frozen=True)
+class EventFilters:
+    """What a list of incidents, changes or deployments is narrowed to
+    (LEKA-367): their state and kind, where, about what, when."""
+
+    lifecycle: Lifecycle | None = None
+    state: str | None = None
+    priority: str | None = None
+    change_type: str | None = None
+    environment: str | None = None
+    service_id: uuid.UUID | None = None
+    repository_id: uuid.UUID | None = None
+    cause_id: uuid.UUID | None = None
+    since: datetime | None = None
+    until: datetime | None = None
     q: str | None = None
 
 
@@ -1180,6 +1229,126 @@ class EntityRepository(WorkspaceScopedRepository):
         )
         return [(edge, entity) for edge, entity in rows.tuples().all()]
 
+    # ── incidents, changes and deployments (LEKA-367) ───────────────────────
+
+    def events(self, kind: EntityType, filters: EventFilters) -> Select[tuple[Entity]]:
+        """The incidents — or changes, or deployments — of the workspace,
+        for a page: in that state, of that priority or type, in that
+        environment, about that service — a deployment of it or of one of
+        its repositories — caused by that change, between those dates."""
+        f = filters
+        statement = _lifecycle(self.select(Entity).where(Entity.type == kind), f.lifecycle)
+        for name, value in (
+            ("state", f.state),
+            ("priority", f.priority),
+            ("change_type", f.change_type),
+            ("environment", f.environment),
+        ):
+            if value:
+                statement = statement.where(Entity.attributes[name].astext == value)
+        if f.since is not None:
+            statement = statement.where(Entity.occurred_at >= f.since)
+        if f.until is not None:
+            statement = statement.where(Entity.occurred_at < f.until)
+        if f.q:
+            statement = statement.where(Entity.name.ilike(f"%{f.q}%"))
+        if f.service_id is not None and kind is EntityType.DEPLOYMENT:
+            repositories = select(Relationship.from_entity_id).where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.type == RelationshipType.PART_OF,
+                Relationship.to_entity_id == f.service_id,
+            )
+            statement = statement.where(
+                or_(
+                    self._points_at(f.service_id, RelationshipType.PART_OF),
+                    exists().where(
+                        Relationship.workspace_id == self.workspace_id,
+                        Relationship.from_entity_id == Entity.id,
+                        Relationship.type == RelationshipType.PART_OF,
+                        Relationship.to_entity_id.in_(repositories),
+                    ),
+                )
+            )
+        elif f.service_id is not None:
+            statement = statement.where(self._points_at(f.service_id, RelationshipType.AFFECTS))
+        for other, relation in (
+            (f.repository_id, RelationshipType.PART_OF),
+            (f.cause_id, RelationshipType.CAUSED_BY),
+        ):
+            if other is not None:
+                statement = statement.where(self._points_at(other, relation))
+        return statement
+
+    async def scope(self, root: uuid.UUID, *, depth: int) -> set[uuid.UUID]:
+        """A thing and what is part of it, `depth` steps down — an
+        application's services, a service's repositories and resources."""
+        found, frontier = {root}, {root}
+        for _ in range(depth):
+            rows = await self._session.execute(
+                select(Relationship.from_entity_id)
+                .join(Entity, Entity.id == Relationship.from_entity_id)
+                .where(
+                    Relationship.workspace_id == self.workspace_id,
+                    Relationship.type == RelationshipType.PART_OF,
+                    Relationship.to_entity_id.in_(frontier),
+                    Entity.workspace_id == self.workspace_id,
+                    Entity.type.in_(HOLDING),
+                    Entity.lifecycle != Lifecycle.REMOVED,
+                )
+            )
+            frontier = {row[0] for row in rows.all()} - found
+            found |= frontier
+            if not frontier:
+                break
+        return found
+
+    async def happened(
+        self,
+        *,
+        scope: set[uuid.UUID] | None,
+        kinds: Sequence[EntityType],
+        since: datetime,
+        until: datetime,
+        limit: int,
+    ) -> tuple[list[tuple[Entity, uuid.UUID | None]], bool]:
+        """What happened between two dates — occurred then, or, an
+        incident, was resolved then — of these kinds; around a scope: tied
+        to one of it — part of it, affecting it, deployed to it — with the
+        one it is tied to. The latest first, at most `limit`; and whether
+        there was more."""
+        start, end = _stamp(since), _stamp(until)
+        resolved = Entity.attributes["resolved_at"].astext
+        window = or_(
+            and_(Entity.occurred_at >= since, Entity.occurred_at < until),
+            and_(Entity.type == EntityType.INCIDENT, resolved >= start, resolved < end),
+        )
+        tie = aliased(Relationship)
+        statement = (
+            select(Entity, tie.to_entity_id).join(
+                tie,
+                and_(
+                    tie.from_entity_id == Entity.id,
+                    tie.workspace_id == self.workspace_id,
+                    tie.type.in_(TIED),
+                    tie.to_entity_id.in_(scope),
+                ),
+            )
+            if scope is not None
+            else select(Entity, literal(None).label("via"))
+        )
+        statement = statement.where(
+            Entity.workspace_id == self.workspace_id,
+            Entity.type.in_(kinds),
+            Entity.lifecycle != Lifecycle.REMOVED,
+            window,
+        ).order_by(Entity.occurred_at.desc().nulls_last(), Entity.id)
+        rows = (await self._session.execute(statement.limit(limit * 3 + 1))).tuples().all()
+        seen: dict[uuid.UUID, tuple[Entity, uuid.UUID | None]] = {}
+        for entity, via in rows:
+            seen.setdefault(entity.id, (entity, via))
+        found = list(seen.values())
+        return found[:limit], len(found) > limit or len(rows) > limit * 3
+
     async def counts(self) -> dict[str, dict[str, int]]:
         """How many entities of each type and in each lifecycle; how many
         relationships of each type."""
@@ -1226,3 +1395,9 @@ def _lifecycle(
 def _environments(edge: Relationship) -> list[str]:
     found = (edge.attributes or {}).get("environments")
     return [str(e) for e in found] if isinstance(found, list) else []
+
+
+def _stamp(moment: datetime) -> str:
+    """A date as normalisation writes them: `2026-09-20T08:00:00Z` — text
+    that compares as dates."""
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
