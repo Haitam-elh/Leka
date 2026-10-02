@@ -26,8 +26,9 @@ line of the core changing.
     }
 
 `entity` says what a resource's records are in LEKA's model — an `issue`,
-an `incident`, a `service`, a `project`, a `document` — so normalisation
-makes them entities (leka/ingestion/normalisation/mapping.py). Without it,
+an `incident`, a `service`, a `project`, a `document`, a `person`, a
+`business_capability`… (`Entity` below) — so normalisation makes them
+entities (leka/ingestion/normalisation/mapping.py). Without it,
 they are extracted, and stay out of the model.
 
 A path in `items`, `next` and the mapping is a dotted path into the JSON:
@@ -68,7 +69,27 @@ Path = Annotated[
 # A resource's or a metadata's name: what LEKA shows, and a scope matches.
 Name = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,39}$")]
 # What a resource's records may be in LEKA's model.
-Entity = Literal["issue", "incident", "service", "application", "project", "document"]
+# What normalisation makes of a declared resource (its CUSTOM_ENTITIES —
+# tests/test_documentation_model.py keeps the two in step): a CMDB's
+# servers and databases (LEKA-363), a data catalogue's tables (LEKA-364),
+# an HR system's people and teams (LEKA-365), a business system's
+# capabilities and processes, a wiki's spaces (LEKA-366).
+Entity = Literal[
+    "issue",
+    "incident",
+    "service",
+    "application",
+    "project",
+    "document",
+    "infra_resource",
+    "database",
+    "data_object",
+    "person",
+    "team",
+    "business_capability",
+    "business_process",
+    "knowledge_space",
+]
 # A GraphQL variable's name, as the spec spells them.
 Variable = Annotated[str, StringConstraints(pattern=r"^[_A-Za-z][_0-9A-Za-z]{0,63}$")]
 # A query parameter's name, as an API spells it.
