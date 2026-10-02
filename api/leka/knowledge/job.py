@@ -46,6 +46,7 @@ logger = structlog.get_logger(__name__)
 MODEL_JOB = "leka.knowledge.job.run_model_build"
 ROUNDS = 3
 HISTORY_DAYS = 90
+RELATIONSHIP_HISTORY_DAYS = 365
 # Longer than RQ lets a job's work-horse live: a run older than this is dead.
 STUCK_AFTER = timedelta(seconds=RQ_JOB_TIMEOUT) + timedelta(hours=1)
 # Builds one sweep queues at most; the next hour takes the rest.
@@ -95,6 +96,10 @@ async def sweep_models(*, now: datetime | None = None) -> dict[str, int]:
             sweeper = ModelSweeper(session)
             abandoned = await sweeper.abandon_stuck(before=now - STUCK_AFTER, at=now)
             pruned = await sweeper.prune(before=now - timedelta(days=HISTORY_DAYS))
+            # The relationships' history (LEKA-368): a year of it.
+            pruned += await sweeper.prune_changes(
+                before=now - timedelta(days=RELATIONSHIP_HISTORY_DAYS)
+            )
             enriched = await EnrichedWorkspaces(session).latest()
             built = await sweeper.built()
             await session.commit()
@@ -136,7 +141,13 @@ async def build_workspace(workspace_id: uuid.UUID) -> dict[str, object]:
                         run.finished_at = datetime.now(UTC)
                         await session.commit()
                         continue
-                    built = build(candidates, links, await model.current(), now=now)
+                    built = build(
+                        candidates,
+                        links,
+                        await model.current(),
+                        now=now,
+                        previous=await model.current_links(),
+                    )
                     await model.write(built, run_id=run.id)
                     counts = dict(built.counts)
                     run.status = "succeeded"

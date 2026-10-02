@@ -69,6 +69,11 @@
     GET /knowledge/deployments/{id}            went, its statuses, what it shipped
     GET /knowledge/timeline                    what happened between two dates — around
                                                a thing, or everywhere
+    GET /knowledge/relationships               the graph's relationships, both ends named,
+                                               when each appeared and changed (LEKA-368)
+    GET /knowledge/relationships/changes       what appeared, changed, went, at each build
+    GET /knowledge/relationships/issues        what the last build found wrong: an end a
+                                               contract does not take, a loop, two parents
 
 Read by every member (`workspace:read`): it is the company's own picture. A
 route validates, calls one repository or service, and returns (architecture
@@ -125,6 +130,7 @@ from leka.knowledge import (
     EntityType,
     EntityVersionRead,
     EventFilters,
+    GraphRelationshipRead,
     IncidentDetail,
     IncidentRead,
     InfrastructureDetail,
@@ -145,7 +151,14 @@ from leka.knowledge import (
     PersonDetail,
     PersonRead,
     Registry,
+    Relationship,
+    RelationshipChange,
+    RelationshipChangeRead,
+    RelationshipFilters,
+    RelationshipIssue,
+    RelationshipIssueRead,
     RelationshipKindRead,
+    RelationshipType,
     Responsibility,
     TeamDetail,
     TeamRead,
@@ -167,6 +180,9 @@ Reader = Annotated[Principal, Depends(require_permission(Permission.WORKSPACE_RE
 # An entity's relationships in its detail; its neighbourhood pages the rest.
 EDGES = 100
 
+# What a dependency walk may follow (the registry's contracts, LEKA-368).
+Dependency = Literal["depends_on", "reads_from", "references", "supported_by", "uses"]
+DEFAULT_THROUGH = (RelationshipType.DEPENDS_ON,)
 ENTITY_SORTS = SortCatalogue(
     fields=(SortableField("name", Entity.name, "ix_entities_workspace_type_name"),),
     default="name",
@@ -216,7 +232,15 @@ async def registry(principal: Reader) -> Registry:
         ],
         relationships=[
             RelationshipKindRead(
-                type=kind.type, version=kind.version, built_from=list(kind.built_from)
+                type=kind.type,
+                version=kind.version,
+                built_from=list(kind.built_from),
+                meaning=kind.meaning,
+                sources=sorted(kind.sources) if kind.sources is not None else None,
+                targets=sorted(kind.targets) if kind.targets is not None else None,
+                single=kind.single,
+                acyclic=kind.acyclic,
+                dependency=kind.dependency,
             )
             for kind in RELATIONSHIP_KINDS.values()
         ],
@@ -462,13 +486,24 @@ async def dependencies(
     environment: Annotated[
         str | None, Query(max_length=50, description="Only what holds there. Absent: all.")
     ] = None,
+    through: Annotated[
+        list[Dependency] | None,
+        Query(
+            description="The dependency relationships followed (LEKA-368): depends_on, "
+            "reads_from, references, supported_by, uses. Absent: depends_on."
+        ),
+    ] = None,
 ) -> Dependencies:
     """What an entity depends on — or what a failure of it reaches — through
-    `depends_on`, `depth` steps at most: each thing reached, how far, and
-    the relationships walked."""
+    `depends_on` (or the dependency relationships asked), `depth` steps at
+    most: each thing reached, how far, and the relationships walked."""
     service = KnowledgeService(EntityRepository(session, principal.workspace_id))
     found = await service.dependencies(
-        entity_id, direction=direction, depth=depth, environment=environment
+        entity_id,
+        direction=direction,
+        depth=depth,
+        environment=environment,
+        through=[RelationshipType(kind) for kind in through] if through else DEFAULT_THROUGH,
     )
     if found is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
@@ -1369,4 +1404,136 @@ async def timeline(
     wanted = [EntityType(kind) for kind in kinds] if kinds else list(EVENTS)
     return await KnowledgeService(repository).timeline(
         around, since=start, until=end, kinds=wanted, limit=limit
+    )
+
+
+# ── relationships (LEKA-368) ────────────────────────────────────────────────
+
+RELATIONSHIP_SORTS = SortCatalogue(
+    fields=(
+        SortableField("changed_at", Relationship.changed_at, "a sort in memory, per workspace"),
+        SortableField("confidence", Relationship.confidence, "a sort in memory, per workspace"),
+    ),
+    default="changed_at",
+)
+CHANGE_SORTS = SortCatalogue(
+    fields=(
+        SortableField(
+            "recorded_at",
+            RelationshipChange.recorded_at,
+            "ix_relationship_changes_workspace_recorded",
+        ),
+    ),
+    default="recorded_at",
+)
+ISSUE_SORTS = SortCatalogue(
+    fields=(SortableField("found_at", RelationshipIssue.created_at, "a sort in memory"),),
+    default="found_at",
+)
+RelationshipKind = Annotated[
+    RelationshipType | None, Query(alias="type", description="Of this kind.")
+]
+Touching = Annotated[uuid.UUID | None, Query(description="Touching it: either end.")]
+
+
+@router.get("/relationships", response_model=PageEnvelope[GraphRelationshipRead])
+async def relationships(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    kind: RelationshipKind = None,
+    entity_id: Touching = None,
+    origin: Literal["stated", "inferred"] | None = None,
+    rule: Annotated[str | None, Query(max_length=100)] = None,
+    min_confidence: Annotated[float | None, Query(ge=0, le=1)] = None,
+    since: Annotated[datetime | None, Query(description="Changed from this date.")] = None,
+    until: Annotated[datetime | None, Query(description="Changed before this date.")] = None,
+) -> PageEnvelope[GraphRelationshipRead]:
+    """The graph's relationships, the latest changed first: both ends named,
+    stated or inferred and by what rule, how sure, the records they come
+    from, when each first appeared and last changed."""
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.relationships(
+        RelationshipFilters(
+            type=kind.value if kind else None,
+            entity_id=entity_id,
+            origin=origin,
+            rule=rule,
+            min_confidence=min_confidence,
+            since=since,
+            until=until,
+        )
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=RELATIONSHIP_SORTS, id_column=Relationship.id
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).relationships(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/relationships/changes", response_model=PageEnvelope[RelationshipChangeRead])
+async def relationship_changes(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    kind: RelationshipKind = None,
+    entity_id: Touching = None,
+    change: Literal["added", "changed", "removed"] | None = None,
+    since: Annotated[datetime | None, Query(description="Recorded from this date.")] = None,
+    until: Annotated[datetime | None, Query(description="Recorded before this date.")] = None,
+) -> PageEnvelope[RelationshipChangeRead]:
+    """The relationships' history, the latest first: each that appeared,
+    changed — its origin, rule, environments, its confidence by 0.05 — or
+    went, at each build, before and after."""
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.relationship_changes(
+        RelationshipFilters(
+            type=kind.value if kind else None,
+            entity_id=entity_id,
+            change=change,
+            since=since,
+            until=until,
+        )
+    )
+    result = await serve_page(
+        session,
+        statement,
+        request=page,
+        catalogue=CHANGE_SORTS,
+        id_column=RelationshipChange.id,
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).relationship_changes(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/relationships/issues", response_model=PageEnvelope[RelationshipIssueRead])
+async def relationship_issues(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    kind: RelationshipKind = None,
+    entity_id: Touching = None,
+    severity: Literal["error", "warning"] | None = None,
+    issue: Literal["wrong_end", "cycle_broken", "cycle", "several_targets"] | None = None,
+) -> PageEnvelope[RelationshipIssueRead]:
+    """What the last build found wrong: an end its contract does not take —
+    dropped, an error — an inferred link closing a loop where none may be —
+    dropped — a loop its sources state, a dependency loop, two of what a
+    thing has one of — kept, warnings."""
+    repository = EntityRepository(session, principal.workspace_id)
+    statement = repository.relationship_issues(
+        RelationshipFilters(
+            type=kind.value if kind else None, entity_id=entity_id, severity=severity, issue=issue
+        )
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=ISSUE_SORTS, id_column=RelationshipIssue.id
+    )
+    return PageEnvelope(
+        data=await KnowledgeService(repository).relationship_issues(list(result.items)),
+        next_cursor=result.next_cursor,
     )

@@ -26,7 +26,15 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from leka.knowledge.models import Entity, EntityType, Lifecycle, Relationship, RelationshipType
+from leka.knowledge.models import (
+    Entity,
+    EntityType,
+    Lifecycle,
+    Relationship,
+    RelationshipChange,
+    RelationshipIssue,
+    RelationshipType,
+)
 from leka.knowledge.repository import BUSINESS, DOCUMENTED, EntityRepository, Holding
 from leka.knowledge.schemas import (
     BusinessContext,
@@ -57,6 +65,7 @@ from leka.knowledge.schemas import (
     EntityBrief,
     EntityRead,
     Expertise,
+    GraphRelationshipRead,
     Holds,
     Impact,
     IncidentDetail,
@@ -71,6 +80,8 @@ from leka.knowledge.schemas import (
     PartRead,
     PersonDetail,
     PersonRead,
+    RelationshipChangeRead,
+    RelationshipIssueRead,
     RelationshipRead,
     ResourceEnvironment,
     Responsibility,
@@ -294,6 +305,7 @@ class KnowledgeService:
         depth: int,
         environment: str | None,
         lineage: bool = False,
+        through: Sequence[RelationshipType] = (RelationshipType.DEPENDS_ON,),
     ) -> Dependencies | None:
         """What an entity depends on, `depth` steps away at most — or what
         depends on it — in one environment or all. None when the workspace
@@ -301,7 +313,10 @@ class KnowledgeService:
 
         A data object's LINEAGE (LEKA-364) walks its foreign keys and what
         views read instead, in data's words: upstream, what it reads from
-        and references; downstream, what reads from or references it."""
+        and references; downstream, what reads from or references it.
+
+        `through`: the dependency relationships followed (LEKA-368) —
+        `depends_on` alone unless asked."""
         depth = min(max(depth, 1), MAX_DEPENDENCY_DEPTH)
         reached, edges = await self._entities.dependencies(
             entity_id,
@@ -309,7 +324,7 @@ class KnowledgeService:
             depth=depth,
             environment=environment,
             limit=MAX_DEPENDENCIES + 1,
-            types=LINEAGE if lineage else (RelationshipType.DEPENDS_ON,),
+            types=LINEAGE if lineage else tuple(through),
         )
         if entity_id not in reached:
             return None
@@ -1834,6 +1849,77 @@ class KnowledgeService:
             capabilities=sorted(capabilities.values(), key=lambda t: t.entity.name.lower()),
             processes=sorted(processes.values(), key=lambda t: t.entity.name.lower()),
         )
+
+    # ── relationships (LEKA-368) ─────────────────────────────────────────────
+
+    async def relationships(self, found: Sequence[Relationship]) -> list[GraphRelationshipRead]:
+        """A page of relationships, both ends named."""
+        ends = await self._entities.by_ids(
+            [i for e in found for i in (e.from_entity_id, e.to_entity_id)]
+        )
+        return [
+            GraphRelationshipRead(
+                **RelationshipRead.model_validate(edge).model_dump(),
+                from_entity=EntityBrief.model_validate(ends[edge.from_entity_id]),
+                to_entity=EntityBrief.model_validate(ends[edge.to_entity_id]),
+                provenance=list(edge.provenance),
+                first_seen_at=edge.first_seen_at,
+                changed_at=edge.changed_at,
+            )
+            for edge in found
+            if edge.from_entity_id in ends and edge.to_entity_id in ends
+        ]
+
+    async def relationship_changes(
+        self, found: Sequence[RelationshipChange]
+    ) -> list[RelationshipChangeRead]:
+        """A page of the relationships' history, both ends named — a removed
+        entity's too: it is kept."""
+        ends = await self._entities.by_ids(
+            [i for c in found for i in (c.from_entity_id, c.to_entity_id)]
+        )
+        return [
+            RelationshipChangeRead(
+                id=change.id,
+                type=change.type,
+                change=change.change,
+                from_entity=_brief(ends.get(change.from_entity_id)),
+                to_entity=_brief(ends.get(change.to_entity_id)),
+                before=change.before,
+                after=change.after,
+                recorded_at=change.recorded_at,
+                run_id=change.run_id,
+            )
+            for change in found
+        ]
+
+    async def relationship_issues(
+        self, found: Sequence[RelationshipIssue]
+    ) -> list[RelationshipIssueRead]:
+        """A page of what the last build found wrong, both ends named."""
+        ends = await self._entities.by_ids(
+            [i for f in found for i in (f.from_entity_id, f.to_entity_id)]
+        )
+        return [
+            RelationshipIssueRead(
+                id=issue.id,
+                type=issue.type,
+                issue=issue.issue,
+                severity=issue.severity,
+                from_entity=_brief(ends.get(issue.from_entity_id)),
+                to_entity=_brief(ends.get(issue.to_entity_id)),
+                origin=issue.origin,
+                rule=issue.rule,
+                confidence=issue.confidence,
+                detail=dict(issue.detail),
+                found_at=issue.created_at,
+            )
+            for issue in found
+        ]
+
+
+def _brief(entity: Entity | None) -> EntityBrief | None:
+    return EntityBrief.model_validate(entity) if entity is not None else None
 
 
 def _expertise(entity: Entity) -> list[Expertise]:
