@@ -10,12 +10,13 @@ LEKA-361).
 ```
  resolved_entities, resolved_keys        what the last resolution run made
  normalised_records                      what the sources stated between keys,
-        │                                and each entity's dates — the
-        │                                quarantined left out (validation.md)
+        │                                and each entity's dates, links and
+        │                                tools — the quarantined left out
+        │                                (validation.md)
         ▼
  enrich()                                leka/ingestion/enrichment
-        │  1 relationships  2 links  infrastructure (§ 7)  3 ownership  4 membership
-        │  5 activity  6 category  7 landscape
+        │  1 relationships  2 links  infrastructure, data, knowledge (§ 7)
+        │  3 ownership  4 membership  expertise  5 activity  6 category  7 landscape
         ▼
  enriched_relationships   every relationship between two entities: stated or inferred
  entity_enrichments       every attribute added to an entity
@@ -64,7 +65,8 @@ says which name, and in what.
 | `same_name` | repository `part_of` service | the repository's name and the service's have one core (`acme/billing-api` and `Billing`: [resolution.md § 2](resolution.md#2-semantic--what-names-mean)) — one service only, no environment word | 0.8 |
 | `component` | issue `part_of` service | a Jira component names the service | 0.85 |
 | `label` | issue, pull request `part_of` service | a label names it | 0.7 |
-| `named_in_title` | issue, pull request, incident, document `mentions` service | its title holds the service's name, as whole words — a name of five letters or more, held by one service | 0.6 |
+| `named_in_title` | issue, pull request, incident `mentions` service; a document **`describes`** it (LEKA-366) | its title holds the service's name, as whole words — a name of five letters or more, held by one service | 0.6 |
+| `named_in_title` | document `describes` application, business capability, business process (LEKA-366) | its title holds the name — an application's without `platform`, `system`, `app`… — held by one of that kind | 0.6 |
 
 Never made: where a source already places the item in a service; where two
 services share the name; for a name in more than 20 titles and a fifth of
@@ -98,8 +100,12 @@ repositories), with a share of the work of 20 % or more and two items or
 more. `maintained_by`, rule `most_active`, confidence 0.4 + 0.6 × the share,
 at most 0.9; its provenance, five of the items they worked on. Work is
 weighed: author, assignee, lead 1; committer, reviewer 0.5; creator,
-reporter 0.3 — the last 180 days in full, before that 0.3. Bots are never
-maintainers.
+reporter 0.3; who last edited a document 0.5 (LEKA-366) — the last 180
+days in full, before that 0.3. Bots are never maintainers.
+
+A **knowledge space** — a Confluence space, a Notion database, a drive —
+is a container too (LEKA-366): its maintainers are those who write and
+edit its documents most; its documents inherit its team.
 
 ## 4. Membership
 
@@ -118,10 +124,10 @@ not activity.
 
 | Attribute | Of | Rule | Confidence |
 |---|---|---|---|
-| `last_activity_at` | repository, project, service, person, team | `activity`: the latest date of it and what it holds (a person: what they work on; a team: what it owns) | 1.0 |
+| `last_activity_at` | repository, project, service, application, knowledge space, person, team | `activity`: the latest date of it and what it holds (a person: what they work on; a team: what it owns) | 1.0 |
 | `last_activity_at` | anything else with a date — a ticket, a pull request, an incident, a resource | `activity`: its own latest date — what the screens' events are made of | 1.0 |
 | `activity_90d` | the same | `activity`: how many of those changed in the last 90 days | 1.0 |
-| `lifecycle` | repository, project, service — not archived | `activity`: `active` within 30 days, `quiet` within 180, else `dormant` | 0.9 |
+| `lifecycle` | repository, project, service, application, knowledge space — not archived | `activity`: `active` within 30 days, `quiet` within 180, else `dormant` | 0.9 |
 | `cycle_time_hours` | issue, pull request, closed or merged | `dates`: from its creation to its merge, closing or resolution | 1.0 |
 | `stale` | issue, pull request, open | `inactivity`: unchanged for more than 30 days | 0.8 |
 | `duration_minutes` | incident | `dates`: from its creation to its resolution | 1.0 |
@@ -168,7 +174,7 @@ ownership and the landscape, which read what it adds.
 
 | Relationship or attribute | Of | Rule | Confidence |
 |---|---|---|---|
-| `contributes_to` → a repository, a project, a service | a person, not a bot | `work`: the items they work on — authored, assigned, led, committed, reviewed, created, reported — are part of it: a pull request of its repository and of that repository's service, an issue of its project, an incident of the services it affects. Two items at least; the ten areas with the most work; weighed as maintainers are (§ 3: role, the last 180 days in full) | 0.4 + 0.5 × its share of the person's work, 0.9 at most |
+| `contributes_to` → a repository, a project, a service, a knowledge space | a person, not a bot | `work`: the items they work on — authored, assigned, led, committed, reviewed, created, reported, edited — are part of it: a pull request of its repository and of that repository's service, an issue of its project, an incident of the services it affects, a document of its space and of what it describes (LEKA-366). Two items at least; the ten areas with the most work; weighed as maintainers are (§ 3: role, the last 180 days in full) | 0.4 + 0.5 × its share of the person's work, 0.9 at most |
 | `expertise` | the same | `work`: each of those areas with its **evidence** — how many items, how many in each role, the last one | 0.9 |
 | `languages` | the same | `work`: the languages of the repositories among them, the most worked first, three at most | 0.8 |
 | `bot` | a person | `name`: a bot's address, handle or name (`[bot]`, `dependabot`, `noreply`…) — and then no expertise | 0.9 |
@@ -196,6 +202,22 @@ once, there: every resource in it runs in production, said as enrichment's,
 with its rule. The nearest container decides: a node of a staging cluster in
 a production account runs in staging. Groups and clusters first, so what
 they hold reads what they inherited.
+
+### Knowledge — documentation and the business (LEKA-366)
+
+Run before ownership, which hands a space's team down to its documents.
+Resolution keeps no link and no tool on an entity (they are provenance):
+this reads them from the records.
+
+| Attribute or relationship | Of | Rule | Confidence |
+|---|---|---|---|
+| `url`, `tools` | a document, a knowledge space | `record`: where its record opens it — the first record's — and the kinds of the tools it is read from | 1.0 |
+| `freshness` | a document | `freshness`: from when it last changed — `fresh` within 90 days, `aging` within a year, else `stale`. A measure: no version of its own ([company-model.md § 5](company-model.md)) | 1.0 |
+| `verification_due_at` | a document | `dates`: when its tool wants it verified again (Guru) | 1.0 |
+| `owned_by` → a team | a knowledge space no source says the owner of | `same_name`: it is named for the team — `Payments`, `Payments team wiki` — the documentation words aside (`docs`, `wiki`, `space`, `kb`, `handbook`…); one team only | 0.7 |
+| `describes` → a service, an application | a knowledge space | `same_name`: it is named for it — `Billing API docs` — one only | 0.7 |
+| `describes` → a service, an application, a capability, a process | a document or a space | `linked`: its `docs_url` or `runbook_url` — a catalogue's — is the document's own address (no scheme, query nor fragment; the path decoded): what normalisation could not read from the address — a SharePoint file's — found here | 0.95 |
+| `uses` → a table, a schema, a database | a business capability or process | `named`: the data its business system names (`data_names`) — `billing.invoices`, or a table's name alone; never a name two tables share (`knowledge.data_ambiguous`), nor one no table has (`knowledge.data_unfound`) | 0.9 qualified, 0.75 a name alone |
 
 ## 8. What fails, fails alone
 
@@ -320,7 +342,7 @@ events around it (what is part of it or affects it — for a service, also
 what is part of its repositories); its dependencies — repositories,
 services, databases, resources, projects related to it, each way, with the
 relationship's origin, confidence and whether it joins two tools; the
-documents that name it; what needs attention.
+documents that name it or describe it (LEKA-366); what needs attention.
 
 In their place, and saying what they wait for: the users and the business
 domains (the company model, LEKA-361 on), the metrics — latency, errors,

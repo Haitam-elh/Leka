@@ -93,8 +93,8 @@ no clock — registered for the (source kind, capability) pairs it knows
 | PagerDuty, Grafana | services, incidents; dashboards, alert rules, annotations | `extraction/observability.py` |
 | Splunk, Kibana | alerts (saved searches that alert, alerting rules), fired alerts, cases — Kibana's incidents —, dashboards; tags as signals, the app or space kept | `extraction/observability.py` |
 | Linear, Asana, Trello, ClickUp, Monday | projects, and their issues — a task, a card, an item — with the tool's `key`, `status_category` when it has one (Linear's workflow type, ClickUp's status type), priority, labels, people, project, parent | `extraction/projects.py` |
-| Confluence, Notion, Slab, Guru | spaces, databases, topics, collections; pages, posts, cards — their **text** read out of Confluence's storage XHTML, Guru's HTML, Notion's blocks, Slab's Quill delta | `extraction/documents.py` |
-| Google Workspace, Microsoft 365 | drives; files, with the text the connector read | `extraction/documents.py` |
+| Confluence, Notion, Slab, Guru | spaces, databases, topics, collections; pages, posts, cards — their **text** read out of Confluence's storage XHTML, Guru's HTML, Notion's blocks, Slab's Quill delta; what they link to (`metadata.links`: anchors, runs, Notion's page links); their owner and last editor; a Notion page's database as its space; a Guru card's verification dates (LEKA-366) | `extraction/documents.py` |
+| Google Workspace, Microsoft 365 | drives — a SharePoint library's group, a OneDrive's person as its owner (LEKA-366); files, with the text the connector read | `extraction/documents.py` |
 | PostgreSQL, Supabase, MySQL, MariaDB, SQL Server, Oracle, MongoDB | schemas (a MySQL, MariaDB or MongoDB database, an Oracle user); tables, views, collections — the name as a query writes it, the columns one line each with their type, keys and comment, a view's definition; the tables a foreign key references and a view reads from as references ; where each was read — the server's engine, host, port and database — as signals and metadata (LEKA-364) | `extraction/data.py` |
 | GitHub, PagerDuty — teams | a team's name, description, parent team; its people as references, `lead` (maintainers, managers) and `member` — by login, by address (LEKA-365) | `extraction/people.py` |
 | Microsoft 365, Google Workspace — people | a person's name, address, title, department, office or organisational unit, `active`; themselves (`self`) and their manager (`manager`) as references | `extraction/people.py` |
@@ -106,7 +106,9 @@ without them has its records `unsupported`: counted, not blocking.
 
 Markup is **read, never run**: `fields.markup_text` takes the text out of
 HTML and XHTML by expressions — scripts and styles dropped, HTML's own
-entities unescaped, nothing else expanded, nothing fetched.
+entities unescaped, nothing else expanded, nothing fetched;
+`fields.markup_links` its anchors' absolute addresses, a hundred at most —
+never followed.
 
 A strategy reads the payload (`@strategy`), or the whole record when it
 needs what the connector put beside it (`@record_strategy`): an AWS

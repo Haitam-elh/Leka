@@ -19,6 +19,13 @@ should read, and nothing more. What that member cannot see, LEKA cannot
 see. The connection test warns when the token belongs to an admin
 (Linear, ClickUp, Monday).
 
+**What the documentation tools' records become** (LEKA-366): each space,
+Notion database, topic, collection and drive a **knowledge space**; each
+page, post, card and file a **document** in it — its author, owner and last
+editor, what it links to, how fresh it is, what it describes. Nothing more
+is asked of the tools: the same payloads, read further
+([company-model.md § 13](../company-model.md)).
+
 ---
 
 ## Atlassian Cloud

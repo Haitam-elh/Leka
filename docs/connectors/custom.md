@@ -151,7 +151,7 @@ know — is refused, so a typo is found when saved, not at the first sync.
 | Key | | |
 |---|---|---|
 | `name` | required | `tickets` — lower case, digits, `_`. What LEKA shows, what the scope keeps or leaves |
-| `entity` | | What its records are in LEKA's model: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object`, `person`, `team`. Without it, they are extracted and stay out of the model |
+| `entity` | | What its records are in LEKA's model: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object`, `person`, `team`, `business_capability`, `business_process`, `knowledge_space`. Without it, they are extracted and stay out of the model |
 | `path` | required | From `base_url`: `/tickets`. No scheme, no host, no query, no `..` |
 | `params` | | The query, as a map: `{"status": "open"}`. Not secret — the secret goes in the credentials |
 | `items` | | Where the records are in a page: `data`, `result.items`. Absent: the page is the list |
@@ -260,6 +260,27 @@ changes `fields` — and so, at the next pass, what is extracted.
   `team` / `teams` → their teams; `manager` / `reports_to` → who they report
   to, by address or id. A team is keyed by its name: `parent` → the team
   it is part of; `members`; `lead` / `leads` / `managers` → who leads it.
+- **Reads a business system's capabilities and processes** — an
+  enterprise-architecture repository, a process catalogue: a
+  `business_capability` or a `business_process` resource (LEKA-366). Each
+  is keyed by its **name**, so a CMDB's application naming a capability
+  meets the capability's own record; an activity by its path under its
+  process. From its `metadata`: `parent` → the capability it is under, or
+  the process an activity is part of — by name, or by its path,
+  `Order to cash/Invoicing`; `level` (`2`, `L2`); a process's `type` /
+  `process_type` and `step` / `order`; `capabilities` → what a process
+  realizes; `processes` → the processes realizing a capability;
+  `applications` / `systems`, `services` → what supports it; `data` /
+  `tables` → the data it uses, by name — `billing.invoices`, or a table's
+  name alone — found among the tables LEKA reads (a name two tables share
+  is not); `business_owner` / `owner` → its business owner, a person by
+  address or a team; `team`; `criticality`, `lifecycle`; `documentation` /
+  `docs` → its documents, by their link. A `service` or an `application`
+  resource's `capabilities` / `processes` → what it supports.
+- **Reads a wiki's documents** — a `document` resource: `services`,
+  `application`, `capabilities` → what it describes; `team` → whose it is.
+  A catalogue's `docs_url` / `runbook_url` / `documentation` → the
+  documents describing a service or an application, by their link.
 - **Keeps** its payloads 90 days, as the other structured sources'.
 
 ## GraphQL
