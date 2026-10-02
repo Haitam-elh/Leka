@@ -35,6 +35,9 @@ export const ENTITY_TYPES = [
   "resource_group",
   "schema",
   "data_object",
+  "knowledge_space",
+  "business_capability",
+  "business_process",
 ] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
@@ -64,6 +67,11 @@ export const RELATIONSHIP_TYPES = [
   "reads_from",
   "reports_to",
   "contributes_to",
+  "describes",
+  "edited_by",
+  "supported_by",
+  "uses",
+  "realizes",
 ] as const;
 export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
 

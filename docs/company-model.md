@@ -54,7 +54,9 @@ are checked against.
 | data | `database` | a cloud instance's, as a resource's (§ 10); a database a source reads: its engine, host, port, name; what it holds — § 11 |
 | | `schema` | its database's role that owns it; what it holds — § 11 |
 | | `data_object` | a table, a view, a collection: its kind, schema, columns, primary key, size; what each column holds, its classification — § 11 |
-| knowledge | `document` | — |
+| knowledge | `document` | its kind (`page`, `post`, `card`, `file`), where it opens, the tools it is read from; its freshness — enrichment's — whether its tool says it is verified and when it wants it verified again; its version, type, size, path — § 13 |
+| | `knowledge_space` | where documents are kept: its kind (`space`, `database`, `topic`, `collection`, `shared_drive`, `document_library`, `onedrive`), its tool's type, its key — § 13 |
+| business | `business_capability`, `business_process` | level, criticality, stage; a process's type and step; the data its source names — § 13 |
 
 Each **relationship kind** is built from enrichment's relationships
 ([enrichment.md § 1–4](enrichment.md)): `part_of`, `child_of`,
@@ -63,7 +65,8 @@ Each **relationship kind** is built from enrichment's relationships
 `reported_by` (and `created_by`), `led_by`, `affects`, `resolves`,
 `implements`, `merges`, `mentions`, `in_network`, `runs_in` (LEKA-362),
 `references` and `reads_from` (LEKA-364), `reports_to` and `contributes_to`
-(LEKA-365).
+(LEKA-365), `describes`, `edited_by`, `supported_by`, `uses` and `realizes`
+(LEKA-366).
 `owns`, `deployed_to` and `caused_by` are kept for what states them later;
 nothing does yet.
 
@@ -141,7 +144,8 @@ refused by the database.
 **A change of the thing, not of the clock.** Measures that move with time
 alone — last activity, activity over 90 days, incidents over 90 days, open
 incidents, MTTR, stale, enrichment's lifecycle word, a table's estimated
-rows and size — are kept current but make no version of their own. A thing
+rows and size, a person's expertise, a document's freshness — are kept
+current but make no version of their own. A thing
 whose only news is that a day passed is not a new version of itself.
 
 Relationships are the model's present: made again whole at each build.
@@ -203,6 +207,15 @@ Read by every member (`workspace:read`); another workspace's entity is 404.
 | `GET /knowledge/people/{id}` | one: their teams, their managers up to the top, their reports, what they maintain and own, everything their work shows they know with its evidence |
 | `GET /knowledge/entities/{id}/responsibility` | who owns a thing — its teams, said or inherited — who leads them, who maintains it, whose work shows they know it, its escalation policy |
 | `GET /knowledge/data-objects/{id}/lineage` | `direction=upstream` (what it reads from and references) or `downstream` (what reads from or references it — what a change of it reaches), `depth=1..5`: each reached and how far, the relationships walked |
+| `GET /knowledge/documents` | the documents (§ 13), by title, paged: `space_id`, `freshness`, `about_id` (a thing's documentation), `person_id` (written, edited or owned by), `team_id`, `verified`, `lifecycle`, `q` — each with its space, link and tools, freshness, authors, last editor, owners, what it describes |
+| `GET /knowledge/documents/{id}` | one: its pages above and below, what it describes, links to and mentions, who links to it, who wrote, edited and owns it — each said or inferred |
+| `GET /knowledge/knowledge-spaces` | where documents are kept, by name, paged: `space_kind`, `team_id`, `lifecycle`, `q` — each with how many documents and how fresh, its owners, what it documents, its maintainers |
+| `GET /knowledge/knowledge-spaces/{id}` | one: its ties, its ten latest documents and its ten stalest |
+| `GET /knowledge/documentation/coverage` | how many documents and spaces, by freshness, how many to verify — and for applications, services, repositories, databases, tables, capabilities, processes: how many, how many documented, how many by a document that is not stale |
+| `GET /knowledge/documentation/gaps` | `type` (one of those kinds), `stale` (only stale documents describe it), `criticality`, `team_id`, `lifecycle`, `q`: what is undocumented, paged — how critical, whose |
+| `GET /knowledge/business-capabilities`, `GET /knowledge/business-processes` | by name, paged: `parent_id`, `top`, `capability_id` (processes), `team_id`, `application_id` (supported by), `data_id` (using), `lifecycle`, `q` — each with its parent, parts, what supports it, its data, owners, documents |
+| `GET /knowledge/business-capabilities/{id}`, `GET /knowledge/business-processes/{id}` | one: its parents, its parts — activities by step, each with what supports it and its data — the processes realizing it, the applications and services supporting it and the services of those applications, its data, owners and documentation |
+| `GET /knowledge/entities/{id}/business` | what a technical thing means to the business: the capabilities and processes relying on it — directly, through what holds it (its service, its application) or through what depends on it — each with how, and who says so |
 
 ## 8. What reads it
 
@@ -458,6 +471,100 @@ who knows it" for anything. Every tie says `origin` (`stated`,
   else they are two.
 - **LEKA's own users** are not tied to the people of the model yet.
 
+## 13. Documentation and business knowledge (LEKA-366)
+
+Where the company writes down what it knows, how fresh that is, what it
+covers — and what the business does, how, and on what technology and data.
+**Every piece says where it came from**: a source stated it, or a rule
+inferred it, with its confidence — `provenance` on the entity, `origin`,
+`rule` and the records on each relationship.
+
+**What each source gives.**
+
+| Source | Knowledge spaces | Documents | People | Links, what it describes |
+|---|---|---|---|---|
+| Confluence | spaces: key, type, description | pages: version, parent page | author, page owner, last editor | its links: pages, spaces, repositories, issues |
+| Notion | databases | pages: in a database, or under a page | creator, last editor | its links and page mentions, the pages it links |
+| Slab | topics (the source's scope) | posts | — | its links |
+| Guru | collections | cards: verified or not, when to verify again | owner, last editor | its links |
+| Google Workspace | shared drives | files: type, size, text | owner, last editor | the links in its text |
+| Microsoft 365 | SharePoint libraries — a group's — and OneDrives — a person's | files: type, size, path | creator, last editor | the links in its text |
+| Datadog's catalog, a CMDB | — | — | — | a service's documentation and runbook links: `describes` |
+| a business system (custom source) | — | — | business owners | capabilities, processes, activities; their applications, services, data, documentation |
+| a wiki (custom source) | spaces | documents | author | the services, applications, capabilities it describes |
+
+**Documents and where they are kept.** A document is `part_of` its
+**knowledge space** — a Confluence space, a Notion database, a Slab topic,
+a Guru collection, a shared drive, a SharePoint library — and `child_of`
+its parent page. Its people: `authored_by`, `owned_by` (a person, or the
+space's team, inherited), `edited_by` (who last changed it). What it links
+to is what the link opens: `references` a document or a space, `mentions`
+a repository, an issue, a pull request.
+
+**What it describes.** `describes` → a service, an application, a
+repository, a table, a capability, a process — said by a catalogue's
+documentation link, a business system, the source's mapping of a space to a
+service; inferred from its title (`named_in_title`, 0.6), its space's name
+(`same_name`, 0.7), its address in a catalogue's link (`linked`, 0.95)
+([enrichment.md](enrichment.md)).
+
+**Freshness and ownership, where available.** A document's `freshness` —
+`fresh` (changed within 90 days), `aging` (within a year), `stale` — from
+when it last changed (`last_activity_at`), kept current without a version
+of its own (§ 5); `verified` and `verification_due_at` where its tool says
+(Guru). A space's team: its tool's (a SharePoint library's group), the
+source's mapping, else its name's (`same_name`); its maintainers, those
+who write and edit it most; its lifecycle, its documents' activity —
+`dormant` after 180 days without a change.
+
+**Coverage.** `/documentation/coverage` says, kind by kind, how much of the
+company is documented, and by documents that are not stale;
+`/documentation/gaps` lists what is not — the critical first to filter by
+— or what only stale documents describe.
+
+**Business capabilities and processes.** Keyed by name —
+`capability:invoicing`, `process:order-to-cash`, an activity by its path,
+`process:order-to-cash/send-invoice` — so a CMDB's application naming a
+capability meets the capability's own record.
+
+| Relationship | From → to | Said by | Inferred by |
+|---|---|---|---|
+| `child_of` | a capability → its parent | a business system | — |
+| `part_of` | an activity → its process | a business system | — |
+| `realizes` | a process → a capability | a business system | — |
+| `supported_by` | a capability, a process → an application, a service | a business system; a catalogue's application or service | — |
+| `uses` | a capability, a process → a table, a schema, a database | — | `named`: the data the business system names, found by name |
+| `owned_by` | a capability, a process → a team or a person | its business owner, its team | `inherited`: an activity its process's, a sub-capability its parent's |
+| `describes` | a document → a capability, a process | its documentation link | `named_in_title` |
+
+**Queried.** `/business-capabilities`, `/business-processes` and their
+details; `/entities/{id}/business` answers "what does this table, this
+service, this resource mean to the business": the capabilities and
+processes relying on it — directly, through its service or application, or
+through what depends on it — each with how (`path`, `via`) and who says so.
+
+**Limits, and coverage.**
+
+- **Only what is linked is read as linked**: Confluence's internal links
+  by title (`<ac:link>`, no address) are not read; a SharePoint link is
+  found by its address only when a catalogue gives it (`linked`).
+- **Text is not read for meaning**: what a document describes comes from
+  links, titles, names — never a summary of its text; no model reads it.
+- **Slab**: a post's topic is read only when the source's scope names the
+  topics; its authors are not read.
+- **Google Drive's own drive** (`My Drive`) is no space; its files are
+  documents in none.
+- **Business processes come from a business system**: none of the tools
+  LEKA connects to models them; without a custom source on an architecture
+  repository or a process catalogue, there are none. A name two
+  capabilities share is one capability.
+- **Data named by a business system** is found by name only: a table two
+  schemas share a name with is not said (`knowledge.data_ambiguous`).
+- **Freshness is time**: a page changed yesterday may still be wrong; only
+  Guru's verification says more.
+- **Where it opens**: documents and spaces keep their link; other kinds
+  do not yet — resolution keeps links as provenance.
+
 ## Not yet
 
 - **The environment screens** ([enrichment.md § 12](enrichment.md)) still
@@ -491,4 +598,4 @@ who knows it" for anything. Every tie says `origin` (`stated`,
 - **Datadog's traced dependencies** (APM service maps, per environment):
   the catalog's declared ones are read; the observed ones are not.
 - **The landscape on a screen**: the API is there; the views are
-  LEKA-369's.
+  LEKA-369's — the documentation's and the business's too (LEKA-366).

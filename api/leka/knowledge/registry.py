@@ -42,7 +42,10 @@ from leka.knowledge.models import EntityType, RelationshipType
 #    data classification (LEKA-364).
 # 5: people and teams — a directory's titles and departments, who reports
 #    to whom, teams' hierarchy, what people work on (LEKA-365).
-MODEL_VERSION = 5
+# 6: knowledge spaces, documents' freshness, what each describes, who last
+#    edited it; business capabilities and processes, the applications and
+#    data they rely on (LEKA-366).
+MODEL_VERSION = 6
 
 
 class Attributes(BaseModel):
@@ -242,6 +245,50 @@ class EnvironmentAttributes(Attributes):
     """Production, staging, development, test: where things run."""
 
 
+class DocumentAttributes(Attributes):
+    """A page, a post, a card, a file (LEKA-366): what kind; how fresh —
+    enrichment's, from when it last changed (`last_activity_at`); whether
+    its tool says it is verified, and when it wants it verified again; its
+    version, its type and size, where it is in its drive."""
+
+    document_kind: str | None = None
+    tools: list[str] | None = None
+    freshness: str | None = None
+    verified: bool | None = None
+    verification_due_at: str | None = None
+    version: int | None = None
+    mime_type: str | None = None
+    size: int | None = None
+    path: str | None = None
+
+
+class KnowledgeSpaceAttributes(Attributes):
+    """Where documents are kept (LEKA-366): a Confluence space, a Notion
+    database, a Slab topic, a Guru collection, a shared drive, a SharePoint
+    library or a OneDrive — its tool's word for it, its key."""
+
+    space_kind: str | None = None
+    space_type: str | None = None
+    space_key: str | None = None
+    tools: list[str] | None = None
+
+
+class BusinessAttributes(Attributes):
+    """A business capability — what the company does — or a business
+    process and its activities — how (LEKA-366): its level, how critical,
+    where in its life; a process's type and step; the data its source names,
+    as named (enrichment finds them)."""
+
+    level: int | None = None
+    criticality: str | None = None
+    criticality_raw: str | None = None
+    stage: str | None = None
+    stage_raw: str | None = None
+    process_type: str | None = None
+    step: int | None = None
+    data_names: list[str] | None = None
+
+
 # A kind's schema: named here, as `type` inside EntityKind is its field.
 Schema = type[Attributes]
 
@@ -251,7 +298,7 @@ class EntityKind:
     type: EntityType
     version: int
     # How the company is read: organisation, applications, delivery,
-    # operations, infrastructure, knowledge.
+    # operations, infrastructure, data, knowledge, business.
     category: str
     attributes: Schema
     # The ingestion types (docs/normalisation.md § 2) an entity of this kind
@@ -299,7 +346,24 @@ ENTITY_KINDS: dict[EntityType, EntityKind] = {
         EntityKind(
             EntityType.ENVIRONMENT, 1, "infrastructure", EnvironmentAttributes, ("environment",)
         ),
-        EntityKind(EntityType.DOCUMENT, 1, "knowledge", Attributes, ("document",)),
+        EntityKind(EntityType.DOCUMENT, 2, "knowledge", DocumentAttributes, ("document",)),
+        EntityKind(
+            EntityType.KNOWLEDGE_SPACE,
+            1,
+            "knowledge",
+            KnowledgeSpaceAttributes,
+            ("knowledge_space",),
+        ),
+        EntityKind(
+            EntityType.BUSINESS_CAPABILITY,
+            1,
+            "business",
+            BusinessAttributes,
+            ("business_capability",),
+        ),
+        EntityKind(
+            EntityType.BUSINESS_PROCESS, 1, "business", BusinessAttributes, ("business_process",)
+        ),
     )
 }
 
@@ -346,6 +410,11 @@ RELATIONSHIP_KINDS: dict[RelationshipType, RelationshipKind] = {
         RelationshipKind(RelationshipType.READS_FROM, 1, ("reads_from",)),
         RelationshipKind(RelationshipType.REPORTS_TO, 1, ("reports_to",)),
         RelationshipKind(RelationshipType.CONTRIBUTES_TO, 1, ("contributes_to",)),
+        RelationshipKind(RelationshipType.DESCRIBES, 1, ("describes",)),
+        RelationshipKind(RelationshipType.EDITED_BY, 1, ("edited_by",)),
+        RelationshipKind(RelationshipType.SUPPORTED_BY, 1, ("supported_by",)),
+        RelationshipKind(RelationshipType.USES, 1, ("uses",)),
+        RelationshipKind(RelationshipType.REALIZES, 1, ("realizes",)),
         RelationshipKind(RelationshipType.OWNS, 1, ()),
         RelationshipKind(RelationshipType.DEPLOYED_TO, 1, ()),
         RelationshipKind(RelationshipType.CAUSED_BY, 1, ()),

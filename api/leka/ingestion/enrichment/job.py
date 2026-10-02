@@ -54,6 +54,8 @@ ENRICH_JOB = "leka.ingestion.enrichment.job.run_enrichment"
 ENRICHED = "ingestion.enriched"
 CHUNK = 2_000
 ROUNDS = 3
+# Where an entity's records open it: the first few (LEKA-366).
+MAX_LINKS = 5
 
 
 def concurrency_key(workspace_id: uuid.UUID) -> str:
@@ -146,12 +148,20 @@ async def _snapshot(repository: EnrichmentRepository, now: datetime) -> Snapshot
         sources[entity_id].add(source_id)
     stated: list[Stated] = []
     dates: dict[uuid.UUID, dict[str, str]] = defaultdict(dict)
+    links: dict[uuid.UUID, dict[str, None]] = defaultdict(dict)
+    tools: dict[uuid.UUID, dict[str, None]] = defaultdict(dict)
     after: uuid.UUID | None = None
     while rows := await repository.records(after=after, limit=CHUNK):
         for row_id, source_id, own_key, attributes, found in rows:
             owner = holders.get(own_key or "", set())
             if len(owner) == 1 and isinstance(attributes, dict):
                 _dates(dates[next(iter(owner))], attributes)
+                entity_id = next(iter(owner))
+                url, tool = attributes.get("url"), attributes.get("source_kind")
+                if isinstance(url, str) and url and len(links[entity_id]) < MAX_LINKS:
+                    links[entity_id][url] = None
+                if isinstance(tool, str) and tool:
+                    tools[entity_id][tool] = None
             for relationship in found if isinstance(found, list) else []:
                 item = _stated(relationship, row_id, source_id)
                 if item is not None:
@@ -166,6 +176,8 @@ async def _snapshot(repository: EnrichmentRepository, now: datetime) -> Snapshot
             attributes=dict(attributes or {}),
             sources=frozenset(sources.get(entity_id, ())),
             dates=dates.get(entity_id, {}),
+            links=tuple(links.get(entity_id, {})),
+            tools=tuple(sorted(tools.get(entity_id, {}))),
         )
         for entity_id, kind, key, name, attributes in await repository.entities()
     }

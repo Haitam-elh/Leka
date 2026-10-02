@@ -3,6 +3,7 @@
 import {
   AppWindow,
   Boxes,
+  Briefcase,
   Building2,
   CircleDot,
   Cloud,
@@ -14,6 +15,7 @@ import {
   GitCommitHorizontal,
   GitPullRequest,
   Layers,
+  Library,
   type LucideIcon,
   Rocket,
   Server,
@@ -22,6 +24,7 @@ import {
   TriangleAlert,
   User,
   Users,
+  Workflow,
 } from "lucide-react";
 
 import { cn } from "cn";
@@ -54,6 +57,9 @@ export const ENTITY_ICONS: Record<EntityType, LucideIcon> = {
   resource_group: Boxes,
   schema: FolderTree,
   data_object: Table2,
+  knowledge_space: Library,
+  business_capability: Briefcase,
+  business_process: Workflow,
 };
 
 export function EntityIcon({

@@ -49,6 +49,8 @@ SHEET_LINKS = (
     "in_network",
     "affects",
     "mentions",
+    # A document is about it (LEKA-366): its documentation.
+    "describes",
     "maintained_by",
     "member_of",
 )
@@ -65,6 +67,11 @@ NOT_EVENTS = (
     "person",
     "database",
     "infra_resource",
+    # Where documents are kept, and the business: not something done
+    # (LEKA-366).
+    "knowledge_space",
+    "business_capability",
+    "business_process",
 )
 
 

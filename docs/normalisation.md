@@ -55,21 +55,20 @@ something no source has shown yet — a ticket in a tool not connected.
 | accounts (AWS, Azure, Google Cloud) | `cloud_account` — an AWS account, an Azure subscription, a Google Cloud project — or `resource_group`, an Azure resource group (LEKA-363) |
 | schemas, tables (PostgreSQL, Supabase, MySQL, MariaDB, SQL Server, Oracle, MongoDB) | `schema` — a MySQL or MongoDB database too — and `data_object`, with `attributes.object_kind`: `table`, `partitioned_table`, `view`, `materialized_view`, `foreign_table`, `collection`; the database they were read on, named: `database` (LEKA-364) |
 | projects, issues of Linear, Asana, Trello, ClickUp, Monday | `project`, `issue` — a task, a card, an item is an `issue` |
-| pages, files (Confluence, Notion, Slab, Guru, Google Workspace, Microsoft 365) | `document` |
+| pages, files (Confluence, Notion, Slab, Guru, Google Workspace, Microsoft 365) | `document` — `attributes.document_kind`: `page`, `post`, `card`, `file` |
+| spaces, databases, drives (Confluence, Notion, Slab, Guru, Google Workspace, Microsoft 365) | `knowledge_space` — where documents are kept; `attributes.space_kind`: `space`, `database` (Notion's), `topic`, `collection`, `shared_drive`, `document_library`, `onedrive` (LEKA-366) |
 | incidents (Datadog, PagerDuty; Kibana's cases) | `incident` |
 | services (PagerDuty, the Datadog service catalog) | `service` — a PagerDuty **business service** is an `application` (LEKA-362) |
-| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object`, `person`, `team` — keyed by the source, a service or an application by its name, a resource by its provider's id when the record gives it, a catalogue's table by where it is ([custom.md](connectors/custom.md)) |
+| records of a custom API (`custom_rest`, `custom_graphql`, `custom_webhook`) | the `entity` their resource declares: `issue`, `incident`, `service`, `application`, `project`, `document`, `infra_resource`, `database`, `data_object`, `person`, `team`, `business_capability`, `business_process`, `knowledge_space` — keyed by the source, a service, an application, a capability, a process by its name, a resource by its provider's id when the record gives it, a catalogue's table by where it is ([custom.md](connectors/custom.md)) |
 | teams (GitHub, PagerDuty) | `team` — `attributes.team_type`: `team` (LEKA-365) |
 | people (Microsoft 365, Google Workspace) | `person` — and their department, a `team` with `team_type: department` |
-| named by a record | `person`, `service`, `application`, `team`, `environment`; what a resource is in — `cloud_account`, `resource_group` — and a node's cluster |
+| named by a record | `person`, `service`, `application`, `team`, `environment`; what a resource is in — `cloud_account`, `resource_group` — and a node's cluster; a business system's `business_capability` and `business_process` |
 
 Alerts, events, metrics, logs and dashboards (Datadog, Grafana, Splunk, Kibana) are
 extracted and parsed, but are not entities: they are the evidence about
-incidents and services, not things of the company model. Nor are the
-containers of documents — spaces, Notion databases, topics, collections,
-drives: a document names what it is part of. Both stay `unsupported`.
-And so do a custom API's records whose
-resource declares no `entity`: extracted, not modelled.
+incidents and services, not things of the company model: they stay
+`unsupported`. And so do a custom API's records whose resource declares no
+`entity`: extracted, not modelled.
 
 A GitLab merge request is a `pull_request`; a Jira issue and a GitHub issue
 are both `issue`. The strings are ingestion's; leka.knowledge maps them onto
@@ -104,7 +103,9 @@ One thing, one key — built from what every mention of it carries
 | incident | `incident:pagerduty:Q1ABC…`, `incident:datadog:<uuid>`, `incident:kibana:<case id>` — the tool and its own id, not its per-account number |
 | Linear issue | `linear.app/acme/ENG-42` — its workspace and identifier; **alias `ticket:ENG-42`**, so `ENG-42` in a pull request finds it |
 | another tool's project, issue | `asana:project:1204…`, `trello:issue:5f1e…`, `clickup:issue:86…`, `monday:issue:123…` — the tool, what it is, its id |
-| document | `acme.atlassian.net/wiki/pages/1001` (Confluence's ids are its site's), `microsoft_365:document:<drive>/<item>`, `notion:document:<id>`, `slab:…`, `guru:…`, `google_workspace:…` |
+| document | `acme.atlassian.net/wiki/pages/1001` (Confluence's ids are its site's), `microsoft_365:document:<drive>/<item>`, `notion:document:<id>`, `slab:…`, `guru:…` — **alias** `guru:card:<slug>`, what its link says — `google_workspace:…` |
+| knowledge space | `acme.atlassian.net/wiki/spaces/ENG` — the space's key on its site, its pages' container — `notion:space:<id>` (**alias** `notion:document:<id>`: a link to a database reads as one to a page), `slab:space:<topic>`, `guru:space:<collection>`, `google_workspace:space:<drive>`, `microsoft_365:space:<drive>` (LEKA-366). Google's own drive (`user`) is no space |
+| business capability, process | `capability:invoicing`; `process:order-to-cash`, an activity by its path under its process: `process:order-to-cash/send-invoice` — two processes may each have an `Approve` (LEKA-366) |
 
 The host is the record's link's (a self-hosted GitLab keeps its own), else
 the vendor's public host. **Aliases** are what entity resolution joins on:
@@ -173,6 +174,16 @@ attribute: the raw word is in `*_raw`. A `name` has its spaces collapsed, at mos
 | `led_by` | a team → a person | a GitHub team's maintainers, a PagerDuty team's managers, an HR system's leads |
 | `child_of` | a team → its parent team | GitHub's and PagerDuty's parent team, an HR system's `parent` |
 | `reports_to` | a person → their manager | a directory's manager, an HR system's `manager` |
+| `part_of` | a document → its knowledge space (LEKA-366) | its container: a Confluence space's key, a Slab topic, a Guru collection, a drive; a Notion page's parent database |
+| `authored_by`, `owned_by`, `edited_by` | a document → a person; a space → a team or a person | its author — Notion's creator too — its owner (Confluence's page owner), who last changed it (Confluence's last version, Notion's, Guru's, a file's); a SharePoint library's group, a OneDrive's person |
+| `references` | a document → the document or space it links to | its links — its markup's anchors (Confluence, Guru), its runs' (Notion, Slab), its text's — at an address that says which: a Confluence page or space, a Notion page or database, a Google document or folder, a Slab post or topic, a Guru card |
+| `mentions` | a document → a repository, an issue, a pull request, a commit | a link to a repository on a code host, or to an item |
+| `describes` | a document → a service, an application, a capability, a process | a catalogue's or a business system's documentation link — `docs_url`, `runbook_url`, `documentation` — at an address that says which document; the source's mapping of a container to a service (a document, a space, is not *part of* its service: it describes it) |
+| `child_of` | a business capability → its parent | a business system's `parent` |
+| `part_of` | an activity → its process | its `parent`: the process's name, or its path |
+| `realizes` | a process → a capability | a process's `capabilities`, a capability's `processes` |
+| `supported_by` | a capability, a process → an application, a service | its `applications`, `services`; an application's or a service's `capabilities`, `processes` (a catalogue) |
+| `owned_by` | a capability, a process → a team or a person | its `business_owner` / `owner` — a person by address — and its `team` |
 
 Confidence is the fact's: 1.0 for what the vendor said, the parse's
 confidence for what was read in text or tags.
@@ -196,7 +207,9 @@ environments, dependencies, criticality and stage (LEKA-362). 5: what
 resources are in, their class, a node's cluster, a CMDB's servers and
 databases, a terminated resource (LEKA-363). 6: databases, schemas and data
 objects, foreign keys and what views read, what columns hold (LEKA-364). 7:
-teams, a directory's people, an HR system's (LEKA-365).
+teams, a directory's people, an HR system's (LEKA-365). 8: knowledge
+spaces, documents' owners, last editors and links, a catalogue's
+documentation, a business system's capabilities and processes (LEKA-366).
 
 ## 8. Where results are kept, and when they are made
 

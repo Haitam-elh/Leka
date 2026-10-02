@@ -596,3 +596,221 @@ class Responsibility(BaseModel):
     maintainers: list[Tie]
     experts: list[Tie] = Field(description="Whose work shows they know it, the surest first.")
     escalation_policy: str | None
+
+
+# ── documentation and business knowledge (LEKA-366) ──────────────────────────
+
+
+class DocumentRead(BaseModel):
+    """A document: where it is kept, who wrote it and last changed it, how
+    fresh it is, whose it is, what it describes."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    name: str
+    lifecycle: Lifecycle
+    url: str | None
+    tools: list[str] = Field(description="The sources' kinds it is read from: confluence, notion…")
+    document_kind: str | None = Field(description="page, post, card, file, document.")
+    space: EntityBrief | None
+    freshness: str | None = Field(
+        description="fresh (changed within 90 days), aging (within a year), stale — "
+        "enrichment's, from when it last changed. None: no date known."
+    )
+    last_changed_at: str | None
+    verified: bool | None = Field(description="Its tool says it is verified — Guru's — or not.")
+    authors: list[EntityBrief]
+    last_editor: EntityBrief | None
+    owners: list[EntityBrief] = Field(description="Its teams — or people.")
+    describes: list[EntityBrief] = Field(description="What it is about, the surest first.")
+
+
+class DocumentDetail(DocumentRead):
+    """One document: its pages above and below, everything it is tied to —
+    each said by a source or inferred by a rule, how surely."""
+
+    attributes: dict[str, object]
+    provenance: dict[str, object]
+    verification_due_at: str | None
+    ancestors: list[EntityBrief] = Field(description="Its parent page, then theirs.")
+    children: list[EntityBrief]
+    descriptions: list[Tie] = Field(description="What it describes, with origin and rule.")
+    ownership: list[Tie]
+    written_by: list[Tie]
+    edited_by: list[Tie]
+    links_to: list[Tie] = Field(description="The documents and spaces it links to.")
+    linked_from: list[Tie] = Field(description="The documents linking to it.")
+    mentions: list[Tie] = Field(description="The repositories, issues, pull requests it names.")
+
+
+class KnowledgeSpaceRead(BaseModel):
+    """Where documents are kept: how many, how fresh, whose, what it
+    documents."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    name: str
+    lifecycle: Lifecycle
+    url: str | None
+    tools: list[str]
+    space_kind: str | None = Field(
+        description="space, database, topic, collection, shared_drive, document_library, onedrive."
+    )
+    description: str | None
+    document_count: int = Field(description="Its documents, not removed.")
+    freshness: dict[str, int] = Field(
+        description="Its documents by freshness: fresh, aging, stale."
+    )
+    last_changed_at: str | None = Field(description="When its latest document changed.")
+    owners: list[EntityBrief]
+    describes: list[EntityBrief]
+    maintainers: list[EntityBrief] = Field(description="Those who write and edit it most.")
+
+
+class KnowledgeSpaceDetail(KnowledgeSpaceRead):
+    """One space: everything it is tied to, its latest documents and its
+    stalest."""
+
+    attributes: dict[str, object]
+    provenance: dict[str, object]
+    ownership: list[Tie]
+    descriptions: list[Tie]
+    maintained_by: list[Tie]
+    recent: list[EntityBrief] = Field(description="Its ten latest changed documents.")
+    stalest: list[EntityBrief] = Field(description="Its ten stale documents changed longest ago.")
+
+
+class CoverageRead(BaseModel):
+    """How much of one kind of thing is documented."""
+
+    model_config = ConfigDict(frozen=True)
+
+    type: EntityType
+    total: int = Field(description="Not removed.")
+    documented: int = Field(description="Described by a document or a space.")
+    fresh: int = Field(description="Described by a document that is not stale.")
+
+
+class DocumentationCoverage(BaseModel):
+    """The documentation of the workspace: how much, how fresh, what it
+    covers."""
+
+    model_config = ConfigDict(frozen=True)
+
+    documents: int
+    spaces: int
+    freshness: dict[str, int] = Field(
+        description="Documents by freshness: fresh, aging, stale — unknown without a date."
+    )
+    unverified: int = Field(description="Documents their tool says need verifying.")
+    coverage: list[CoverageRead]
+
+
+class DocumentationGap(BaseModel):
+    """A thing without documentation — or with only stale documentation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    criticality: str | None
+    owners: list[EntityBrief]
+    documents: int = Field(description="The documents describing it: none, or only stale ones.")
+    last_documented_at: str | None = Field(description="When its latest document changed.")
+
+
+class BusinessRead(BaseModel):
+    """A business capability — what the company does — or a business
+    process — how: where it sits, whose it is, what supports it, what it
+    uses."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    name: str
+    type: EntityType
+    lifecycle: Lifecycle
+    level: int | None
+    criticality: str | None
+    stage: str | None
+    process_type: str | None = Field(
+        description="A process's: process, activity… as its source says."
+    )
+    step: int | None = Field(description="An activity's place in its process.")
+    parent: EntityBrief | None = Field(
+        description="A capability's parent capability; an activity's process."
+    )
+    capabilities: list[EntityBrief] = Field(description="What a process realizes.")
+    part_count: int = Field(description="Its sub-capabilities, or its activities.")
+    process_count: int = Field(description="The processes realizing a capability.")
+    supported_by: list[EntityBrief] = Field(description="The applications and services.")
+    data_count: int = Field(description="The data it uses.")
+    owners: list[EntityBrief] = Field(description="Its business owners: teams or people.")
+    document_count: int = Field(description="The documents and spaces describing it.")
+
+
+class BusinessPart(BaseModel):
+    """A sub-capability, or an activity of a process: what supports it,
+    what it uses, whose it is."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    step: int | None
+    supported_by: list[EntityBrief]
+    data: list[EntityBrief]
+    owners: list[EntityBrief]
+
+
+class BusinessDetail(BusinessRead):
+    """One capability or process: its parents, its parts in order, the
+    processes realizing it, the technology supporting it — and, through its
+    applications, their services — the data it uses, its owners, its
+    documentation: each said by a source or inferred by a rule."""
+
+    description: str | None
+    attributes: dict[str, object]
+    provenance: dict[str, object]
+    ancestors: list[EntityBrief] = Field(description="Its parent, then theirs.")
+    parts: list[BusinessPart] = Field(description="Its activities by step, its sub-capabilities.")
+    processes: list[EntityBrief]
+    support: list[Tie] = Field(description="supported_by: its applications and services.")
+    services: list[EntityBrief] = Field(description="The services of its applications.")
+    data: list[Tie] = Field(description="uses: its tables, schemas, databases.")
+    ownership: list[Tie]
+    documentation: list[Tie] = Field(description="The documents and spaces describing it.")
+
+
+class BusinessTie(BaseModel):
+    """A capability or a process a thing matters to, and how: it supports
+    or holds what they rely on — itself, what holds it, or what depends on
+    it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    relation: RelationshipType = Field(description="supported_by, uses.")
+    via: EntityBrief | None = Field(
+        description="What they rely on, when not the thing itself: its service, its "
+        "application, what depends on it."
+    )
+    path: Literal["direct", "contained", "dependent"]
+    origin: str
+    rule: str
+    confidence: float
+
+
+class BusinessContext(BaseModel):
+    """What a technical thing — a service, an application, a table, a
+    resource — means to the business: the capabilities and processes that
+    rely on it, directly or through what holds it or depends on it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    capabilities: list[BusinessTie]
+    processes: list[BusinessTie]

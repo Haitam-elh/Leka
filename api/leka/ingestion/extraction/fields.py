@@ -9,6 +9,7 @@ from __future__ import annotations
 import html
 import json
 import re
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Literal
 
@@ -194,6 +195,10 @@ _MARKUP_BLOCKS = re.compile(
 )
 _MARKUP_DROPPED = re.compile(r"<(script|style)\b.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
 _MARKUP_TAG = re.compile(r"<[^>]+>")
+# An anchor's address, in either quotes (LEKA-366).
+_MARKUP_HREF = re.compile(r"<a\b[^>]*?\bhref\s*=\s*(?:\"([^\"]*)\"|'([^']*)')", re.IGNORECASE)
+# The links a document keeps: a page listing a thousand says little of each.
+MAX_LINKS = 100
 
 
 def markup_text(markup: object) -> str | None:
@@ -210,18 +215,26 @@ def markup_text(markup: object) -> str | None:
     return joined or None
 
 
+def markup_links(markup: object) -> list[str]:
+    """What HTML or Confluence's storage XHTML links to: its anchors'
+    addresses — absolute ones — each once, in order (LEKA-366)."""
+    if not isinstance(markup, str):
+        return []
+    return links(
+        html.unescape(m.group(1) or m.group(2) or "") for m in _MARKUP_HREF.finditer(markup)
+    )
+
+
 def delta_text(value: object) -> str | None:
     """A Quill delta — Slab's rich text, as JSON text or a list of
     operations — as plain text: what its operations insert."""
-    operations = value
     if isinstance(value, str):
         try:
-            operations = json.loads(value)
+            json.loads(value)
         except json.JSONDecodeError:
             return value.strip() or None
-    if isinstance(operations, dict):
-        operations = operations.get("ops")
-    if not isinstance(operations, list):
+    operations = _delta(value)
+    if operations is None:
         return None
     parts = [
         op["insert"]
@@ -229,6 +242,31 @@ def delta_text(value: object) -> str | None:
         if isinstance(op, dict) and isinstance(op.get("insert"), str)
     ]
     return "".join(parts).strip() or None
+
+
+def delta_links(value: object) -> list[str]:
+    """What a Quill delta links to: its operations' `link` attribute."""
+    return links(str(dig(op, "attributes", "link") or "") for op in _delta(value) or [])
+
+
+def _delta(value: object) -> list[object] | None:
+    """A delta's operations — None when it is not one."""
+    operations = value
+    if isinstance(value, str):
+        try:
+            operations = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+    if isinstance(operations, dict):
+        operations = operations.get("ops")
+    return operations if isinstance(operations, list) else None
+
+
+def links(found: Iterable[str]) -> list[str]:
+    """Web addresses, each once, in order: at most MAX_LINKS."""
+    kept = (u.strip() for u in found)
+    absolute = [u for u in kept if u.lower().startswith(("https://", "http://"))]
+    return list(dict.fromkeys(absolute))[:MAX_LINKS]
 
 
 def rich_text(value: object) -> str | None:

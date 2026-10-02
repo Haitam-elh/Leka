@@ -30,7 +30,13 @@ company model reads them, what those things are together:
    10. EXPERTISE: what each person's work shows they know — the
        repositories, projects and services they work on, how much, in which
        roles, how lately, and the languages of that code — each with its
-       evidence; and who is a bot (LEKA-365).
+       evidence; and who is a bot (LEKA-365). The spaces they write in, and
+       what their documents describe (LEKA-366).
+   11. KNOWLEDGE: where a document or a space opens, how fresh a document
+       is; whose a space is and what it documents, by its name; the
+       documents a catalogue links as a thing's documentation; the data a
+       business system names, found (LEKA-366). Run before ownership, which
+       hands a space's team down to its documents.
 
 ADDED, NEVER OVERWRITTEN. Nothing here changes a resolved entity: what is
 enriched is kept beside it — each attribute and each relationship with its
@@ -60,6 +66,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Literal
+from urllib.parse import unquote
 
 from leka.ingestion.resolution import signals as sig
 
@@ -71,7 +78,11 @@ from leka.ingestion.resolution import signals as sig
 # 4: a database's and a schema's environment, from what serves them; what
 #    data each holds, from its tables (LEKA-364).
 # 5: what each person's work shows they know; who is a bot (LEKA-365).
-ENRICHER_VERSION = 5
+# 6: documentation and business knowledge — a document describes what its
+#    title names; spaces are containers, named for their team or service;
+#    documents' links and freshness; a catalogue's documentation found by
+#    its address; a business system's data found by name (LEKA-366).
+ENRICHER_VERSION = 6
 
 Origin = Literal["stated", "inferred"]
 
@@ -91,9 +102,12 @@ WORK = {
     "reviewed_by": 0.5,
     "created_by": 0.3,
     "reported_by": 0.3,
+    # Who last changed a document (LEKA-366).
+    "edited_by": 0.5,
 }
 UP = frozenset({"part_of", "child_of"})
-CONTAINERS = frozenset({"repository", "project", "service", "application"})
+# What holds items; a space holds documents (LEKA-366).
+CONTAINERS = frozenset({"repository", "project", "service", "application", "knowledge_space"})
 # What names a service in its title.
 TITLED = frozenset({"issue", "pull_request", "incident", "document"})
 # What a title says the kind of work of.
@@ -236,7 +250,7 @@ DATA_LEVELS = ("restricted", "confidential", "internal", "public")
 DATA_HOLDERS = frozenset({"data_object", "schema", "database"})
 # Expertise (LEKA-365): what work shows someone knows — where it is done,
 # how much of it is enough to say so, how many areas a person shows.
-AREAS = frozenset({"repository", "project", "service"})
+AREAS = frozenset({"repository", "project", "service", "knowledge_space"})
 MIN_AREA_ITEMS = 2
 MAX_AREAS = 10
 MAX_LANGUAGES = 3
@@ -249,6 +263,7 @@ ROLE_WORDS = {
     "reviewed_by": "reviewed",
     "created_by": "created",
     "reported_by": "reported",
+    "edited_by": "edited",
 }
 # What a container says of what it holds — its environment — said a little
 # less surely; and the account a source reads a resource in.
@@ -257,6 +272,32 @@ SOURCE_ACCOUNT = 0.9
 # A team inherited through an account or a resource group: less sure than
 # through a service — billing groups resources, a service says whose they are.
 SCOPE_OWNERSHIP = 0.8
+# Knowledge (LEKA-366): a document changed within FRESH is fresh, within
+# AGING aging, else stale — the web's own three words.
+FRESH = timedelta(days=90)
+AGING = timedelta(days=365)
+KNOWLEDGE = frozenset({"document", "knowledge_space"})
+BUSINESS = frozenset({"business_capability", "business_process"})
+# What a title names, by its kind's words, and in what titles: a service in
+# any; an application, a capability, a process in a document's — which
+# describes it.
+TITLE_NAMED: tuple[tuple[str, frozenset[str], frozenset[str]], ...] = (
+    ("service", sig.SERVICE_WORDS, TITLED),
+    ("application", sig.APPLICATION_WORDS, frozenset({"document"})),
+    ("business_capability", frozenset(), frozenset({"document"})),
+    ("business_process", frozenset(), frozenset({"document"})),
+)
+# A space's name, its documentation words aside: "Billing API docs".
+DOC_WORDS = frozenset(
+    {"doc", "docs", "documentation", "wiki", "space", "knowledge", "kb", "handbook", "runbook"}
+)
+SPACE_NAMED = 0.7
+# A catalogue's documentation link, found at a document's address.
+LINKED = 0.95
+# The data a business system names: `schema.table`, or a table's name alone
+# when only one table has it.
+NAMED_QUALIFIED = 0.9
+NAMED_ALONE = 0.75
 
 
 # ── what it reads ────────────────────────────────────────────────────────────
@@ -277,6 +318,11 @@ class Node:
     # give them: resolution keeps none (they are provenance, not chosen
     # between). The earliest creation, the latest of every other.
     dates: dict[str, str] = field(default_factory=dict)
+    # Where its records open it — resolution keeps no link either: a few,
+    # the first found first — and the kinds of tools they come from
+    # (LEKA-366).
+    links: tuple[str, ...] = ()
+    tools: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -515,56 +561,68 @@ def links(graph: Graph) -> Made:
                 if named:
                     break
 
-    # A service named in a title: a word of the title, or a few in a row.
-    cores = {
-        tuple(sig.singular(w) for w in core.split("-")): next(iter(ids))
-        for core, ids in services.items()
-        if len(ids) == 1 and len(core.replace("-", "")) >= MIN_TITLE_CORE
-    }
+    # A service named in a title: a word of the title, or a few in a row —
+    # mentioned. In a document's title, an application, a business
+    # capability or process too: what the document describes (LEKA-366).
     titled = [node for node in graph.nodes.values() if node.type in TITLED]
-    hits: dict[tuple[str, ...], list[uuid.UUID]] = defaultdict(list)
-    for node in titled:
-        words = [sig.singular(w) for w in sig.words(node.name)]
-        seen = {
-            tuple(words[i : i + n])
-            for n in (1, 2, 3)
-            for i in range(len(words) - n + 1)
-            if tuple(words[i : i + n]) in cores
-        }
-        for phrase in seen:
-            hits[phrase].append(node.id)
     crowd = max(TITLE_CROWD, TITLE_SHARE * len(titled))
-    for phrase, named_in in hits.items():
-        if len(named_in) > crowd:
-            made.counts["too_common"] += 1
-            continue
-        service_id = cores[phrase]
-        for node_id in named_in:
-            if service_id in graph.targets(node_id) or (node_id, service_id) in linked:
+    for kind, kind_words, titles in TITLE_NAMED:
+        cores = {
+            tuple(sig.singular(w) for w in core.split("-")): next(iter(ids))
+            for core, ids in _cores(graph, kind, kind_words).items()
+            if len(ids) == 1 and len(core.replace("-", "")) >= MIN_TITLE_CORE
+        }
+        hits: dict[tuple[str, ...], list[uuid.UUID]] = defaultdict(list)
+        for node in titled:
+            if node.type not in titles:
                 continue
-            made.edges.append(
-                _inferred(
-                    node_id,
-                    service_id,
-                    "mentions",
-                    "named_in_title",
-                    0.6,
-                    f"its title names the service {'-'.join(phrase)}",
+            words = [sig.singular(w) for w in sig.words(node.name)]
+            seen = {
+                tuple(words[i : i + n])
+                for n in (1, 2, 3)
+                for i in range(len(words) - n + 1)
+                if tuple(words[i : i + n]) in cores
+            }
+            for phrase in seen:
+                hits[phrase].append(node.id)
+        for phrase, named_in in hits.items():
+            if len(named_in) > crowd:
+                made.counts["too_common"] += 1
+                continue
+            target = cores[phrase]
+            for node_id in named_in:
+                if target in graph.targets(node_id) or (node_id, target) in linked:
+                    continue
+                documented = graph.of_type(node_id) == "document"
+                made.edges.append(
+                    _inferred(
+                        node_id,
+                        target,
+                        "describes" if documented else "mentions",
+                        "named_in_title",
+                        0.6,
+                        f"its title names the {kind.replace('_', ' ')} {'-'.join(phrase)}",
+                    )
                 )
-            )
-            made.counts["named_in_title"] += 1
+                made.counts["named_in_title"] += 1
     return made
 
 
 def _service_cores(graph: Graph) -> dict[str, set[uuid.UUID]]:
     """Each service's name core — of its name and of its key — and the
     services that have it."""
+    return _cores(graph, "service", sig.SERVICE_WORDS)
+
+
+def _cores(graph: Graph, kind: str, kind_words: frozenset[str]) -> dict[str, set[uuid.UUID]]:
+    """Each name core of a kind — of a service's name and key, of anything
+    else's name — and the entities that have it."""
     cores: dict[str, set[uuid.UUID]] = defaultdict(set)
     for node in graph.nodes.values():
-        if node.type != "service":
+        if node.type != kind:
             continue
-        for name in (node.name, node.key):
-            core, environment = sig.core(name, sig.SERVICE_WORDS)
+        for name in (node.name, node.key) if kind == "service" else (node.name,):
+            core, environment = sig.core(name, kind_words)
             if not environment and len(core.replace("-", "")) >= MIN_CORE:
                 cores[core].add(node.id)
     return cores
@@ -823,11 +881,15 @@ def expertise(graph: Graph) -> Made:
 
 
 def _areas(graph: Graph, item_id: uuid.UUID) -> set[uuid.UUID]:
-    """Where an item's work is done: the repositories, projects and services
-    it is part of — and their services — or, for an incident, the services
-    it affects."""
+    """Where an item's work is done: the repositories, projects, services
+    and spaces it is part of — and their services — or, for an incident,
+    the services it affects; for a document, what it describes."""
     found: set[uuid.UUID] = set()
     for edge in graph.out(item_id, {"part_of", "affects"}):
+        if graph.of_type(edge.to_id) in AREAS:
+            found.add(edge.to_id)
+    # What a document describes is where its work is too (LEKA-366).
+    for edge in graph.out(item_id, {"describes"}):
         if graph.of_type(edge.to_id) in AREAS:
             found.add(edge.to_id)
     for area in list(found):
@@ -1396,11 +1458,183 @@ def _holds(node: Node) -> tuple[set[str], str | None, bool, None]:
     )
 
 
+# ── 11. knowledge (LEKA-366) ─────────────────────────────────────────────────
+
+
+def knowledge(graph: Graph) -> Made:
+    """Documentation and business knowledge: where a document or a space
+    opens, the tools it is read from, how fresh a document is — and when its tool wants it verified
+    again; the team a space is named for, owning it, and the service or
+    application, which it documents; the documents a catalogue links as a
+    thing's documentation, found at their address; the data a business
+    system names, found by name. Each said as enrichment's, with its rule."""
+    made = Made()
+    now = graph.now
+    for node in graph.nodes.values():
+        if node.type in KNOWLEDGE and node.links:
+            made.facts.append(_fact(node, "url", node.links[0], 1.0, "record", "its record's link"))
+        if node.type in KNOWLEDGE and node.tools:
+            made.facts.append(
+                _fact(node, "tools", list(node.tools), 1.0, "record", "the tools it is read from")
+            )
+        if node.type != "document":
+            continue
+        moment = _last(node, now)
+        if moment is not None:
+            age = now - moment
+            word = "fresh" if age <= FRESH else "aging" if age <= AGING else "stale"
+            made.facts.append(
+                _fact(node, "freshness", word, 1.0, "freshness", f"changed {age.days} days ago")
+            )
+            made.counts[word] += 1
+        due = _date(node.dates.get("next_verification_at"))
+        if due is not None:
+            made.facts.append(
+                _fact(
+                    node,
+                    "verification_due_at",
+                    _iso(due),
+                    1.0,
+                    "dates",
+                    "when its tool wants it verified again",
+                )
+            )
+    made.edges += _named_spaces(graph, made)
+    made.edges += _linked_documentation(graph, made)
+    made.edges += _named_data(graph, made)
+    return made
+
+
+def _named_spaces(graph: Graph, made: Made) -> list[Edge]:
+    """A space named for a team — `Payments`, `Payments team wiki` — is
+    the team's, where nothing says whose it is; one named for a service or
+    an application documents it. Only a name one team, one service, one
+    application has."""
+    found: list[Edge] = []
+    named = [
+        ("owned_by", _cores(graph, "team", sig.TEAM_WORDS | DOC_WORDS), sig.TEAM_WORDS),
+        ("describes", _cores(graph, "service", sig.SERVICE_WORDS), sig.SERVICE_WORDS),
+        ("describes", _cores(graph, "application", sig.APPLICATION_WORDS), sig.APPLICATION_WORDS),
+    ]
+    for node in graph.nodes.values():
+        if node.type != "knowledge_space":
+            continue
+        for relation, cores, kind_words in named:
+            if relation == "owned_by" and _owners(graph, node.id):
+                continue
+            core, environment = sig.core(node.name, kind_words | DOC_WORDS)
+            holders = cores.get(core, set())
+            if environment or len(core.replace("-", "")) < MIN_CORE or len(holders) != 1:
+                continue
+            target = next(iter(holders))
+            if target in graph.targets(node.id):
+                continue
+            kind = graph.of_type(target).replace("_", " ")
+            found.append(
+                _inferred(
+                    node.id,
+                    target,
+                    relation,
+                    "same_name",
+                    SPACE_NAMED,
+                    f"the space is named for the {kind} {core}",
+                )
+            )
+            made.counts[f"space_{relation}"] += 1
+    return found
+
+
+def _linked_documentation(graph: Graph, made: Made) -> list[Edge]:
+    """A service's — an application's, a capability's — documentation or
+    runbook link, at the address of a document or a space LEKA reads: it
+    describes the thing. Where normalisation could not read the address —
+    a SharePoint file's — this finds it."""
+    at: dict[str, uuid.UUID] = {}
+    for node in graph.nodes.values():
+        if node.type in KNOWLEDGE:
+            for link in node.links:
+                at.setdefault(_address(link), node.id)
+    found: list[Edge] = []
+    for node in graph.nodes.values():
+        for name in ("docs_url", "runbook_url"):
+            said = node.attributes.get(name)
+            target = at.get(_address(said)) if isinstance(said, str) and said else None
+            if target is None or target == node.id or node.id in graph.targets(target):
+                continue
+            found.append(
+                _inferred(
+                    target,
+                    node.id,
+                    "describes",
+                    "linked",
+                    LINKED,
+                    f"its {name.removesuffix('_url')} link is this document",
+                )
+            )
+            made.counts["linked"] += 1
+    return found
+
+
+def _address(link: str) -> str:
+    """A link, compared: no scheme, no query, no fragment, no trailing
+    slash, its host in lower case, its path decoded — `Shared%20Documents`
+    is `Shared Documents`."""
+    rest = link.strip().split("#", 1)[0].split("?", 1)[0].split("://", 1)[-1].rstrip("/")
+    host, _, path = rest.partition("/")
+    return f"{host.lower()}/{unquote(path)}"
+
+
+def _named_data(graph: Graph, made: Made) -> list[Edge]:
+    """The tables a business system says a capability or a process uses —
+    `billing.invoices`, or `invoices` when only one table has the name —
+    and the databases it names: each `uses` it. A name two tables share
+    says nothing."""
+    qualified: dict[str, set[uuid.UUID]] = defaultdict(set)
+    alone: dict[str, set[uuid.UUID]] = defaultdict(set)
+    for node in graph.nodes.values():
+        if node.type == "data_object":
+            table = node.key.rsplit("/", 1)[-1].lower()
+            schema = node.attributes.get("schema_name")
+            if isinstance(schema, str) and schema:
+                qualified[f"{schema.lower()}.{table}"].add(node.id)
+            alone[table].add(node.id)
+        elif node.type in ("database", "schema"):
+            alone[node.name.lower()].add(node.id)
+    found: list[Edge] = []
+    for node in graph.nodes.values():
+        names = node.attributes.get("data_names")
+        if node.type not in BUSINESS or not isinstance(names, list):
+            continue
+        for raw in names:
+            name = str(raw).strip().lower()
+            holders = qualified.get(name) or alone.get(name.rsplit(".", 1)[-1], set())
+            confidence = NAMED_QUALIFIED if name in qualified else NAMED_ALONE
+            if len(holders) != 1:
+                made.counts["data_unfound" if not holders else "data_ambiguous"] += 1
+                continue
+            target = next(iter(holders))
+            if target in graph.targets(node.id):
+                continue
+            found.append(
+                _inferred(
+                    node.id,
+                    target,
+                    "uses",
+                    "named",
+                    confidence,
+                    f"its source names the data {raw}",
+                )
+            )
+            made.counts["uses"] += 1
+    return found
+
+
 ENRICHERS: tuple[tuple[str, Enricher], ...] = (
     ("relationships", relationships),
     ("links", links),
     ("infrastructure", infrastructure),
     ("data", data),
+    ("knowledge", knowledge),
     ("ownership", ownership),
     ("membership", membership),
     ("expertise", expertise),
