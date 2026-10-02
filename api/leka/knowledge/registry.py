@@ -51,7 +51,8 @@ from leka.knowledge.models import EntityType, RelationshipType
 # 8: relationships checked against their kinds' contracts — what breaks one
 #    dropped, what contradicts itself said or broken — and their history:
 #    when each appeared, changed, went (LEKA-368).
-MODEL_VERSION = 8
+# 9: what search reads — each entity's names and words, folded (LEKA-369).
+MODEL_VERSION = 9
 
 
 class Attributes(BaseModel):

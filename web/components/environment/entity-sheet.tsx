@@ -69,12 +69,12 @@ import {
   type EntitySheet,
   type EnvironmentStatus,
   isEntityId,
-  typeSegment,
 } from "@/lib/environment";
 import { useEntitySheet } from "@/lib/environment-queries";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
+import { useNamePage } from "@/lib/navigation/page-name";
 import { matchRoute } from "@/lib/navigation/active";
 import { notify } from "@/lib/notify";
 
@@ -151,6 +151,7 @@ export function EntitySheetScreen() {
   const sheet = useEntitySheet(id);
   const model = useSheetModel(sheet.data);
   const crumbs = buildBreadcrumb(pathname, t, model ? () => model.name : undefined);
+  useNamePage(pathname, model?.name);
   const tab = matchRoute(pathname)?.tab ?? "overview";
   const missing =
     !isEntityId(id) || (sheet.error instanceof ApiError && sheet.error.status === 404);
@@ -662,9 +663,7 @@ function Overview({ model, events }: { model: SheetModel; events: EventRow[] }) 
         <Card
           title={fill(w.dependencies.title, { count: model.dependencies.length })}
           action={
-            <CardLink href={routes.entity(typeSegment(model.type), model.id, "dependencies")}>
-              {w.dependencies.seeGraph}
-            </CardLink>
+            <CardLink href={routes.environmentGraph(model.id)}>{w.dependencies.seeGraph}</CardLink>
           }
         >
           <Dependencies rows={model.dependencies} max={5} />

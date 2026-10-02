@@ -6,7 +6,7 @@ LEKA-357); enrichment says what those things are **together**
 the company's **canonical entities**: typed, checked against their kind's
 schema, versioned, with a lifecycle and where every piece of them came from.
 LEKA-361. It is the source of truth `leka.context` reads, and what the
-screens of the graph will read.
+screens of the graph read (§ 16).
 
 ```
  resolved_entities, resolved_keys     what the last resolution run made
@@ -234,6 +234,11 @@ Read by every member (`workspace:read`); another workspace's entity is 404.
 | `GET /knowledge/relationships/changes` | their history, the latest first: each relationship added, changed or removed at a build, before and after — `type`, `entity_id`, `change`, `since`, `until` |
 | `GET /knowledge/relationships/issues` | what the last build found wrong: `wrong_end` (dropped, an error), `cycle_broken` (an inferred link dropped), `cycle`, `several_targets` (kept, warnings) — `type`, `entity_id`, `severity`, `issue` |
 | `GET /knowledge/timeline` | what happened between `since` and `until` (a month by default, a year at most), the latest first — incidents opened and resolved, deployments, changes, releases, merges — around `entity_id` (itself, what is part of it two steps down, what affects it, each with `via`) or everywhere; `kinds`, `limit` (500 at most) |
+| `GET /knowledge/search` | what was typed (`q`), every word a prefix (§ 16): the entities whose names — then whose other words — match, the best first, each with where it is and the kinds of the sources that show it, and the relationships among them; `type`, `removed`, `limit` (50 at most) |
+| `GET /knowledge/graph` | a walk from `root` (up to ten): `depth=1..4`, `direction` (`outgoing`, `incoming`, `both`), `relationship`, `entity_type`, `min_confidence`, `environment`, `limit` (500 at most): each entity reached and how far, the relationships among them all, `truncated` past a bound |
+| `GET /knowledge/graph/paths` | the shortest ways `from` one entity `to` another, relationships read either way: `max_depth=1..4`, `relationship`, `min_confidence` — five at most, the surest first; `length` null when none |
+| `GET /knowledge/views/{view}` | a landscape — `company`, `domains`, `applications`, `services`, `data`, `infrastructure`, `organisation`, `dependencies`: its rows, boxes, lines, states, coverage and sources |
+| `GET /knowledge/coverage` | how well the model knows each kind — how many, with an owner, documented, corroborated, connected — and from which sources |
 
 ## 8. What reads it
 
@@ -244,7 +249,9 @@ The traversal is one recursive query, bounded by depth and size
 (LEKA-367): `KnowledgeService.timeline` — what happened around a thing
 between two dates — and `incident`, `change`, `deployment` — one event with
 its causes, what changed before it and what it reaches — for what explains
-a change and assesses its impact.
+a change and assesses its impact. And the graph explored (LEKA-369, § 16):
+`GraphService.search` — the things a question names, found by their names
+— `walk` and `paths` — what surrounds them, and how two of them are tied.
 
 ## 9. Applications and services (LEKA-362)
 
@@ -745,11 +752,152 @@ relationship's change of provenance alone — another record stating it — is
 not a change. A loop longer than the graph's hierarchy is found whatever
 its length; a loop through two kinds (A part of B, B child of A) is not.
 
+## 16. The knowledge graph: search, walks, paths, views (LEKA-369)
+
+The entities and the relationships **are** the graph, in PostgreSQL — no
+second store ([ADR 001](adr/001-postgresql.md)): an edge table with an
+index for each way (`ix_relationships_from`, `ix_relationships_to`:
+workspace, end, type), walked one step — one query a way — at a time,
+always bounded. `GraphRepository` reads (`leka/knowledge/repository.py`),
+`GraphService` answers (`leka/knowledge/graph.py`): people through the API,
+the modules above (`leka.context`) through `leka.knowledge`.
+
+**Search** (`leka/knowledge/search.py`). Each build writes on each entity
+what search reads:
+
+- `search_name` — its name, its display name, a repository's own name
+  (`payment-api` of `acme/payment-api`): each once, apart;
+- `search_text` — its key's words, its description (its first 1,500
+  characters), an email, a title, a department, a class, an engine, a
+  provider, a region, an environment, a language, its labels, topics, tags.
+
+Both **folded**: lower case, accents off, ligatures opened (`œ` → `oe`),
+words split at whatever is not a letter or a digit — of any script. A
+word's case changes do not break it — PostgreSQL is `postgresql`, GitHub
+`github` — but its pieces are words too, in the text: PaymentApi is found
+by `paymentapi`, `payment api` and `api`. PostgreSQL computes their words
+(`search_vector`, the `simple` dictionary: no stemming — names are not
+prose, and the company speaks French and English), the names weighted A,
+the rest B, under a GIN index (`ix_entities_search`).
+
+What is typed: every word a prefix, all of them needed — or, typed
+`PaymentApi`, its pieces; nothing typed is tsquery syntax. The best first:
+one of its names the very one typed, then a name it starts, then the
+words' rank (`ts_rank_cd`, a name's words weigh more), the active before
+the dormant and archived. The removed are left out unless asked. Each hit
+says where it is — what it is part of, a child or a member of, the surest
+— and the relationships among the hits come with them.
+
+Until a build writes them, an entity's texts are its name and its key in
+lower case (the migration); `MODEL_VERSION` 9 has the hourly sweep rebuild
+every model.
+
+**Walks** — what surrounds one entity or a few (ten at most): 1 to 4
+steps, `outgoing`, `incoming` or `both`, through the relationships asked
+(every kind when none), reaching only the kinds asked, `min_confidence`,
+in one `environment` (a relationship true in every environment counts).
+Each step is one query a way, the surest first, 5,000 rows a way at most;
+500 entities at most; then the relationships among all of them, whichever
+way they point — the direction says how far the walk goes, not which
+truths it shows — 2,000 at most. The removed are never walked through; a
+root may be one. Past a bound, `truncated`.
+
+**Paths** — the shortest ways between two entities, through relationships
+read either way (`relationship` to keep to some kinds), `max_depth` 4 at
+most. Two searches, one from each end, meet in the middle — the smaller
+frontier steps first — each step reading the relationships' ids and ends
+only. Every shortest way is found; five are returned, the surest first (by
+their least sure relationship). None within `max_depth`: `length` is null.
+5,000 entities visited at most, then `truncated`.
+
+**Views** — the company's landscapes (`leka/knowledge/views.py`):
+
+| View | Rows | Lines |
+|---|---|---|
+| `company` | users (no source describes them yet: the row says so) · applications (the repositories, where no catalogue names applications) · services · data (databases) · infrastructure (resources, boxed) | `part_of`, `depends_on`, `in_network` |
+| `domains` | capabilities · processes · the applications and services tied to them · the data tied to them | `child_of`, `part_of`, `realizes`, `supported_by`, `uses` |
+| `applications` | applications · services · code (the repositories tied to either) | `part_of`, `depends_on` |
+| `services` | services · data (the databases tied to services) · infrastructure (the resources tied to services or databases, boxed) | `depends_on`, `part_of`, `in_network` |
+| `data` | databases · schemas · tables and views | `part_of`, `references`, `reads_from` |
+| `infrastructure` | accounts and resource groups · resources, one by one · databases | `part_of`, `in_network`, `depends_on` |
+| `organisation` | teams · people | `child_of`, `member_of`, `led_by`, `reports_to` |
+| `dependencies` | business · applications · services · data · infrastructure — each only what a dependency ties to another of them | the registry's dependencies (§ 15) |
+
+Each row shows its 60 most connected things and says how many it holds
+(`shown`, `total`). A boxed row puts the cloud resources together per
+provider and region, counted, in their worst state. A line joins two boxes
+for a relationship of the view, once, coloured by the worse of its ends.
+Each box has its state — the environment screen's rules,
+[enrichment.md § 12](enrichment.md) — its environment and its team
+(`owned_by` a team, the surest).
+
+**Provenance and coverage.** Each search hit and each thing a walk reaches
+says the kinds of the sources that show it (`github`, `pagerduty`…). Each
+view — and `/knowledge/coverage`, for every kind — says how well LEKA
+knows its kinds, over all of them, not only those drawn: how many, with an
+owner, documented (a `describes`), corroborated (said by two sources or
+more), connected (tied to anything). A measure that does not apply is
+null: a person's owner and documentation, a team's owner. And the sources
+it comes from: each, its kind, how many of its entities it shows.
+
+**Access.** Read by every member (`workspace:read`), like the rest of the
+model; nothing here writes. Every query carries the workspace: a root, an
+end of a path — any entity — of another workspace is 404, and a search
+never crosses.
+
+**Performance.** `scripts/bench_knowledge_graph.py` builds a synthetic
+company — 20,000 entities, 60,000 relationships, in a build's proportions:
+people, repositories, tables, resources, the dependencies between services
+and data — and times `GraphService`: the median and the slowest of seven
+runs, caches warm; Apple M4, PostgreSQL 16 in Docker, 2026-10-03.
+
+| Question | Median | Slowest |
+|---|---:|---:|
+| search `pay` (thousands match) | 16 ms | 44 ms |
+| search `billing api` | 6 ms | 8 ms |
+| walk, a typical service, 1 · 2 · 4 steps | 5 · 10 · 43 ms | 6 · 12 · 67 ms |
+| walk, the most connected service, 2 · 4 steps | 31 · 144 ms | 54 · 174 ms |
+| walk, the same, 4 steps, dependencies only | 80 ms | 115 ms |
+| paths, a typical service → a team | 5 ms | 6 ms |
+| paths, the most connected service → a team | 26 ms | 49 ms |
+| views `company`, `applications`, `services`, `data` | 126–157 ms | 140–194 ms |
+| views `domains`, `infrastructure`, `organisation` | 74–104 ms | 102–119 ms |
+| view `dependencies` | 348 ms | 398 ms |
+| coverage, every kind | 78 ms | 80 ms |
+
+What to expect: a search, a walk of one or two steps, a path — tens of
+milliseconds; four steps from a hub, a view — under 200; the dependency
+view, every dependency of the company, about 350. The bench found two
+queries slow, rewritten since: a view's tied rows (one condition with an
+OR between the two ways: minutes; each way on its own column, once per
+view: milliseconds) and the shortest ways from a hub (500 ms; meeting in
+the middle: 26). The figures are an order, not a contract: they grow with
+the rows a step reads, which the bounds cap. Run the script again after
+changing a query, and say what moved.
+
+**On screen.** "Mon environnement" (`/environment`): seven tabs, each a
+view — Entreprise, Domaines, Applications, Services, Données,
+Infrastructure, Organisation — as a map or a list, its coverage and
+sources under it; the figures, events and points of attention still read
+enrichment ([enrichment.md § 12](enrichment.md)). "Voir la cartographie
+détaillée" (`/environment/graph`): the dependency view; with a thing chosen
+(`?entity=`), what surrounds it — 1 to 3 levels, a direction, a family of
+relationships — what is picked on the canvas, and the shortest way to
+anything searched. ⌘K searches the model; an entity's sheet leads to its
+graph and names the browser tab.
+
+**Limits.** Search finds entities; a relationship is found through its
+ends — those among the hits come with them — or listed by
+`/knowledge/relationships` (§ 7). A row shows 60 things, the list view
+too; the screens walk 3 steps, the API 4. The detailed map lays things out
+in rows — by distance on a walk, by row on a view — not by an auto-layout.
+No view is saved or shared yet.
+
 ## Not yet
 
-- **The environment screens** ([enrichment.md § 12](enrichment.md)) still
-  read enrichment's tables; they move to the model's entities and
-  lifecycles next.
+- **The environment screen's figures** ([enrichment.md § 12](enrichment.md))
+  — its counts, events and points of attention, and an entity's sheet —
+  still read enrichment's tables; its map reads the model's views (§ 16).
 - **A person's word**: correcting an entity or a relationship by hand, kept
   across builds.
 - **Kinds promised by connectors not built**: Kubernetes workloads — a
@@ -775,6 +923,6 @@ its length; a loop through two kinds (A part of B, B child of A) is not.
   code hosts is the next step.
 - **Datadog's traced dependencies** (APM service maps, per environment):
   the catalog's declared ones are read; the observed ones are not.
-- **The landscape on a screen**: the API is there; the views are
-  LEKA-369's — the documentation's and the business's too (LEKA-366), the
-  incidents', changes' and timelines' (LEKA-367).
+- **The documentation's, the incidents' and the timelines' screens**: their
+  API is there (LEKA-366, LEKA-367); the screens of the landscapes are
+  (§ 16), theirs are not yet.

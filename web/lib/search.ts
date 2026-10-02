@@ -1,9 +1,9 @@
 /**
- * Where the palette's results will come from.
+ * Where the palette's results come from.
  *
- * An interface and an empty implementation, on purpose. Searching a
- * customer's environment is the Context Engine's job (LEKA-371 and after);
- * what this ticket owes is the seam and the rule around it.
+ * The seam, and since LEKA-369 the company model's search behind it: the
+ * palette finds things and goes to them. Answering about them is the
+ * Context Engine's job (LEKA-371 and after).
  *
  * THE RULE. The palette finds and goes. It never answers. A question typed
  * into it — "pourquoi l'API de paiement est lente ?" — is not a search, it
@@ -22,8 +22,41 @@ export interface SearchResult {
 
 export type SearchProvider = (query: string) => Promise<readonly SearchResult[]>;
 
-/** TODO Context Engine: replace with the real provider. */
+/** Finds nothing: the palette before it is given the knowledge search. */
 export const emptySearchProvider: SearchProvider = async () => [];
+
+/**
+ * The company model's search (LEKA-369): the entities whose names — then
+ * whose other words — match what was typed, each to its page. Two letters
+ * at least; a failure finds nothing rather than breaking the palette. What
+ * a question is still goes to an intention, first in the palette.
+ */
+export function knowledgeSearchProvider(
+  label: (type: string) => string,
+  href: (entity: { id: string; type: string }) => string,
+  search: (q: string) => Promise<{ entities: readonly SearchHitLike[] }>,
+): SearchProvider {
+  return async (query) => {
+    const typed = query.trim();
+    if (typed.length < 2) return [];
+    try {
+      const found = await search(typed);
+      return found.entities.map(({ entity, holder }) => ({
+        id: entity.id,
+        label: holder ? `${entity.name} — ${holder.name}` : entity.name,
+        kind: label(entity.type),
+        href: href(entity),
+      }));
+    } catch {
+      return [];
+    }
+  };
+}
+
+interface SearchHitLike {
+  entity: { id: string; type: string; name: string };
+  holder?: { name: string } | null;
+}
 
 /**
  * Whether what was typed reads as a question rather than a lookup.

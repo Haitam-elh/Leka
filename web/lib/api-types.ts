@@ -2320,6 +2320,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search
+         * @description The entities whose names — then whose other words — match what was
+         *     typed, every word a prefix, the best first; and what they say of one
+         *     another.
+         */
+        get: operations["search_api_v1_knowledge_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Graph
+         * @description What is reached from the roots, `depth` steps away at most, and the
+         *     relationships among it all — the roots first, then the nearest.
+         */
+        get: operations["graph_api_v1_knowledge_graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/graph/paths": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paths
+         * @description How two entities are tied: the shortest ways between them, five at
+         *     most, the relationships read either way — none past `max_depth` steps.
+         */
+        get: operations["paths_api_v1_knowledge_graph_paths_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/views/{view}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * View
+         * @description A landscape of the company: its rows, the boxes of each — the most
+         *     connected first — the lines between them, each thing's state, how well
+         *     its kinds are known and which sources it comes from.
+         */
+        get: operations["view_api_v1_knowledge_views__view__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Coverage
+         * @description How well the model knows each kind: how many, with an owner,
+         *     documented, said by two sources or more, tied to anything — and the
+         *     sources it comes from.
+         */
+        get: operations["coverage_api_v1_knowledge_coverage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4371,6 +4479,48 @@ export interface components {
             /** Email */
             email: string;
         };
+        /** GraphNodeRead */
+        GraphNodeRead: {
+            entity: components["schemas"]["EntityBrief"];
+            /**
+             * Depth
+             * @description Steps from the nearest root; 0 for a root.
+             */
+            depth: number;
+            /**
+             * Sources
+             * @description The kinds of the sources that show it.
+             */
+            sources: string[];
+        };
+        /**
+         * GraphRead
+         * @description What a walk reached from its roots: the entities and the
+         *     relationships among them.
+         */
+        GraphRead: {
+            /** Roots */
+            roots: components["schemas"]["EntityBrief"][];
+            /** Depth */
+            depth: number;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "outgoing" | "incoming" | "both";
+            /**
+             * Nodes
+             * @description The roots first, then the nearest.
+             */
+            nodes: components["schemas"]["GraphNodeRead"][];
+            /** Relationships */
+            relationships: components["schemas"]["RelationshipRead"][];
+            /**
+             * Truncated
+             * @description More was reached than a response holds.
+             */
+            truncated: boolean;
+        };
         /**
          * GraphRelationshipRead
          * @description A relationship of the graph: both ends named, where it came from,
@@ -4965,6 +5115,47 @@ export interface components {
          */
         JobStatus: "queued" | "running" | "retrying" | "succeeded" | "failed";
         /**
+         * KindCoverageRead
+         * @description How well LEKA knows one kind of thing.
+         */
+        KindCoverageRead: {
+            type: components["schemas"]["EntityType"];
+            /** Total */
+            total: number;
+            /**
+             * Owned
+             * @description With an owner; none where it does not apply.
+             */
+            owned: number | null;
+            /**
+             * Documented
+             * @description Described by a document.
+             */
+            documented: number | null;
+            /**
+             * Corroborated
+             * @description Said by two sources or more.
+             */
+            corroborated: number;
+            /**
+             * Connected
+             * @description Tied to anything at all.
+             */
+            connected: number;
+        };
+        /**
+         * KnowledgeCoverageRead
+         * @description How well LEKA knows the company, kind by kind, and from which sources.
+         */
+        KnowledgeCoverageRead: {
+            /** Built At */
+            built_at: string | null;
+            /** Kinds */
+            kinds: components["schemas"]["KindCoverageRead"][];
+            /** Sources */
+            sources: components["schemas"]["ViewSourceRead"][];
+        };
+        /**
          * KnowledgeSpaceDetail
          * @description One space: everything it is tied to, its latest documents and its
          *     stalest.
@@ -5219,6 +5410,30 @@ export interface components {
             dependents: number;
             /** Last Seen At */
             last_seen_at: string | null;
+        };
+        /**
+         * LandscapeViewRead
+         * @description A landscape of the company: its layers, their boxes and the lines
+         *     between them, how well it is known, and where it comes from.
+         */
+        LandscapeViewRead: {
+            /** View */
+            view: string;
+            /**
+             * Built At
+             * @description When the model was last built.
+             */
+            built_at: string | null;
+            /** Layers */
+            layers: components["schemas"]["ViewLayerRead"][];
+            /** Nodes */
+            nodes: components["schemas"]["ViewNodeRead"][];
+            /** Edges */
+            edges: components["schemas"]["ViewEdgeRead"][];
+            /** Coverage */
+            coverage: components["schemas"]["KindCoverageRead"][];
+            /** Sources */
+            sources: components["schemas"]["ViewSourceRead"][];
         };
         /**
          * Lifecycle
@@ -5872,6 +6087,37 @@ export interface components {
             entity: components["schemas"]["EntityBrief"];
             /** Environments */
             environments: string[];
+        };
+        /**
+         * PathRead
+         * @description A way from one entity to another: the entities in order, and the
+         *     relationship between each and the next — read either way.
+         */
+        PathRead: {
+            /** Entities */
+            entities: components["schemas"]["EntityBrief"][];
+            /** Relationships */
+            relationships: components["schemas"]["RelationshipRead"][];
+        };
+        /**
+         * PathsRead
+         * @description The shortest ways between two entities.
+         */
+        PathsRead: {
+            start: components["schemas"]["EntityBrief"];
+            end: components["schemas"]["EntityBrief"];
+            /**
+             * Length
+             * @description Steps of the shortest; none when none was found within max_depth.
+             */
+            length: number | null;
+            /** Paths */
+            paths: components["schemas"]["PathRead"][];
+            /**
+             * Truncated
+             * @description The walk stopped before it was done: too much reached.
+             */
+            truncated: boolean;
         };
         /**
          * PersonDetail
@@ -6719,6 +6965,41 @@ export interface components {
              * @description Never these containers.
              */
             exclude?: string[];
+        };
+        /**
+         * SearchHit
+         * @description An entity search found.
+         */
+        SearchHit: {
+            entity: components["schemas"]["EntityBrief"];
+            /**
+             * Score
+             * @description How well it matches: the very name, then a name it starts, then the words.
+             */
+            score: number;
+            /** @description Where it is: what it is part of, a child or a member of — the surest. */
+            holder: components["schemas"]["EntityBrief"] | null;
+            /**
+             * Sources
+             * @description The kinds of the sources that show it.
+             */
+            sources: string[];
+        };
+        /**
+         * SearchResults
+         * @description What a search found: entities, the best first, and what they say of
+         *     one another.
+         */
+        SearchResults: {
+            /** Query */
+            query: string;
+            /** Entities */
+            entities: components["schemas"]["SearchHit"][];
+            /**
+             * Relationships
+             * @description The relationships among the entities found.
+             */
+            relationships: components["schemas"]["GraphRelationshipRead"][];
         };
         /** ServiceRule */
         ServiceRule: {
@@ -7597,6 +7878,88 @@ export interface components {
             records: number;
             /** Remediation */
             remediation: string;
+        };
+        /** ViewEdgeRead */
+        ViewEdgeRead: {
+            /** From Id */
+            from_id: string;
+            /** To Id */
+            to_id: string;
+            /** Type */
+            type: string;
+            /**
+             * Status
+             * @description The worse state of its two ends.
+             */
+            status: string | null;
+        };
+        /** ViewLayerRead */
+        ViewLayerRead: {
+            /** Name */
+            name: string;
+            /**
+             * Types
+             * @description What it holds; none for a row no source fills.
+             */
+            types: components["schemas"]["EntityType"][];
+            /** Total */
+            total: number;
+            /** Shown */
+            shown: number;
+        };
+        /**
+         * ViewNodeRead
+         * @description A box of a view: an entity, or a provider's cloud resources together.
+         */
+        ViewNodeRead: {
+            /** Id */
+            id: string;
+            /**
+             * Type
+             * @description The entity's type — or provider.
+             */
+            type: string;
+            /** Layer */
+            layer: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @description operational, attention, incident, unmonitored — none when it has no state.
+             */
+            status: string | null;
+            /** Entity Id */
+            entity_id: string | null;
+            /** Key */
+            key: string | null;
+            /**
+             * Detail
+             * @description A provider's region; an engine, a class, a title.
+             */
+            detail: string | null;
+            /**
+             * Count
+             * @description A provider's resources; 1 for an entity.
+             */
+            count: number;
+            /** Environment */
+            environment: string | null;
+            team: components["schemas"]["EntityBrief"] | null;
+        };
+        /**
+         * ViewSourceRead
+         * @description A source, and how many of the kinds asked it shows.
+         */
+        ViewSourceRead: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Kind */
+            kind: string;
+            /** Entities */
+            entities: number;
         };
         /**
          * WebhookDeliveryRead
@@ -19059,6 +19422,495 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PageEnvelope_RelationshipIssueRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    search_api_v1_knowledge_search_get: {
+        parameters: {
+            query: {
+                /** @description What was typed. */
+                q: string;
+                /** @description Only these kinds. */
+                type?: components["schemas"]["EntityType"][] | null;
+                /** @description The removed too. */
+                removed?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    graph_api_v1_knowledge_graph_get: {
+        parameters: {
+            query: {
+                /** @description Where from. */
+                root: string[];
+                depth?: number;
+                direction?: "outgoing" | "incoming" | "both";
+                /** @description Only through these; every kind when none. */
+                relationship?: components["schemas"]["RelationshipType"][] | null;
+                /** @description Only reaching these. */
+                entity_type?: components["schemas"]["EntityType"][] | null;
+                min_confidence?: number | null;
+                environment?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    paths_api_v1_knowledge_graph_paths_get: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                max_depth?: number;
+                /** @description Only through these; every kind when none. */
+                relationship?: components["schemas"]["RelationshipType"][] | null;
+                min_confidence?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PathsRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    view_api_v1_knowledge_views__view__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                view: "company" | "domains" | "applications" | "services" | "data" | "infrastructure" | "organisation" | "dependencies";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LandscapeViewRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    coverage_api_v1_knowledge_coverage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCoverageRead"];
                 };
             };
             /** @description The request could not be understood. */

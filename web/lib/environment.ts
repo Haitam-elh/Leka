@@ -45,6 +45,18 @@ export const TYPE_SEGMENTS: Record<string, string> = {
   release: "releases",
   branch: "branches",
   deployment: "deployments",
+  // The company model's kinds (LEKA-361 → LEKA-367), reached from its views
+  // and its search (LEKA-369).
+  application: "applications",
+  cloud_account: "cloud-accounts",
+  resource_group: "resource-groups",
+  schema: "schemas",
+  data_object: "data-objects",
+  knowledge_space: "knowledge-spaces",
+  business_capability: "capabilities",
+  business_process: "processes",
+  change: "changes",
+  environment: "environments",
 };
 
 export function typeSegment(type: string): string {

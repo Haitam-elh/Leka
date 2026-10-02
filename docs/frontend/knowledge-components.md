@@ -142,6 +142,12 @@ databases, infrastructure), wrapping every 10 nodes. That is a fallback,
 not a layout engine: a real auto-layout (dagre or elkjs) is a follow-up, to
 be added as a dependency when a page needs it.
 
+`rowPositions(groups)` places groups the caller already has, each its own
+rows, top to bottom, wrapping every 10 and centred (LEKA-369): the detailed
+map hands it a walk's entities by their distance from the root, or a
+view's by its rows. `layeredPositions` is `rowPositions` of the kinds'
+layers.
+
 ## Where they are used
 
 - **Vue d'ensemble**: the connected sources card uses `StatusBadge`
@@ -149,14 +155,26 @@ be added as a dependency when a page needs it.
   same helpers as the components' (`time.ts`), so no two screens can
   disagree about how long ago something was.
 - **Mon environnement** (LEKA-359, [../enrichment.md § 12](../enrichment.md)):
-  the screen and an entity's sheet, from what resolution and enrichment
-  make — `components/environment/` draws them with `StatusBadge`,
-  `KnowledgeTable` and the same time helpers. Its map is its own: mockup
-  10's rows with their names and counts, which `DependencyGraph`'s free
-  canvas does not draw. The Company Model's own views stay LEKA-369's
-  (Knowledge Graph & Company Views, sprint 3), on the API that serves the
-  company model (`/knowledge/*`, LEKA-361 — [company-model.md § 7](../company-model.md#7-the-api)).
-  `DependencyGraph` and `EntityDetailPanel` are there for them.
+  the screen and an entity's sheet — `components/environment/` draws them
+  with `StatusBadge`, `KnowledgeTable` and the same time helpers. Its map
+  (`Cartography`) is its own: mockup 10's rows with their names and counts,
+  which `DependencyGraph`'s free canvas does not draw. Since LEKA-369 each
+  tab is a view of the company model (`GET /knowledge/views/{view}`,
+  [company-model.md § 16](../company-model.md)): `Cartography` takes the
+  view's rows, boxes and lines, and `CoveragePanel` (`coverage.tsx`) says
+  under it how well its kinds are known — a `role="meter"` per measure, named
+  with its words, "Sans objet" where a measure does not apply — and which
+  sources it comes from.
+- **La cartographie détaillée** (`/environment/graph`, LEKA-369):
+  `GraphExplorer` (`graph-explorer.tsx`) draws the dependency view, or a
+  walk around one thing (`?entity=`), on `DependencyGraph` placed by
+  `rowPositions`; its words are the canvas's for screen readers. The thing
+  picked says what it is and can become the centre; `EntityPicker`
+  (`entity-picker.tsx`) — a combobox on the knowledge search, its active
+  option announced (`aria-activedescendant`) — chooses the centre and
+  where a shortest way goes. Its depth (1 to 3), direction and families of
+  relationships (`RELATION_FAMILIES`, `lib/knowledge-graph.ts`) are the
+  walk's.
 
 ## Adding a state
 

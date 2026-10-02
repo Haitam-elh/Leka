@@ -41,6 +41,7 @@ test.describe("the core screens", () => {
     "/sources",
     "/welcome",
     "/environment",
+    "/environment/graph",
     "/governance",
   ]) {
     test(`${path} has no violation a machine can see`, async ({ page }) => {

@@ -46,6 +46,9 @@ single environment — a production instance, a service seen in production
 only, the production environment itself — makes the edge that
 environment's (LEKA-362). An end that runs in several says nothing.
 
+WHAT SEARCH READS. Each entity's names, and what else says what it is,
+folded for search (search.py, LEKA-369) — written with it at each build.
+
 Pure: rows in, rows out; the job reads and writes (job.py).
 """
 
@@ -61,6 +64,7 @@ from datetime import UTC, datetime
 from leka.knowledge.contracts import Previous, check, history
 from leka.knowledge.models import Lifecycle
 from leka.knowledge.registry import BUILT_FROM, RELATIONSHIP_FROM, clean
+from leka.knowledge.search import fields
 
 # When an event happened, by kind: the first of these dates it has — the
 # earliest, for an incident (LEKA-367).
@@ -276,6 +280,11 @@ def _when(value: object) -> datetime | None:
     return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
+def _searched(key: str, name: str, attributes: dict[str, object]) -> dict[str, object]:
+    search_name, search_text = fields(key, name, attributes)
+    return {"search_name": search_name, "search_text": search_text}
+
+
 def lifecycle_of(attributes: dict[str, object]) -> Lifecycle:
     if attributes.get("state") in ARCHIVED_STATES or attributes.get("stage") == "retired":
         return Lifecycle.ARCHIVED
@@ -399,6 +408,7 @@ def build(
                 ),
                 "occurred_at": occurred(kind.type.value, attributes)
                 or (first_seen if kind.type.value in UNDATED else None),
+                **_searched(candidate.key, candidate.name, attributes),
             }
         )
         modelled.add(candidate.id)
@@ -445,6 +455,7 @@ def build(
                 "lifecycle_changed_at": now,
                 "occurred_at": occurred(gone.type, gone.attributes)
                 or (gone.first_seen_at if gone.type in UNDATED else None),
+                **_searched(gone.key, gone.name, gone.attributes),
             }
         )
         counts["removed"] += 1

@@ -4,10 +4,12 @@
  * What these protect: every figure on the screen is the API's — the
  * services up, the incidents and the services they hit, the changes, the
  * points of attention — and none is invented where the API has nothing;
- * the map puts each thing in its layer, with its state in words; the tabs
- * narrow the map, and the list says the same things as rows; an entity's
- * sheet names its owner, its team, its open incident and its dependencies;
- * an address that names no entity says so, and keeps the trail.
+ * the map puts each thing in its layer, with its state in words; each tab
+ * is a landscape of the company model (LEKA-369), and the list says the
+ * same things as rows; under the map, how well its kinds are known and
+ * which sources it comes from; an entity's sheet names its owner, its team,
+ * its open incident and its dependencies, and leads to its graph; an
+ * address that names no entity says so, and keeps the trail.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -18,17 +20,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api";
 import type { EntitySheet, Environment } from "@/lib/environment";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
+import type { LandscapeView, ViewName } from "@/lib/knowledge-graph";
 import { makeQueryClient } from "@/lib/query";
 import type { Source } from "@/lib/sources";
 
 const api = { get: vi.fn(), sheet: vi.fn() };
 const sourcesApi = { list: vi.fn() };
+const graphApi = { view: vi.fn() };
 const pathname = { value: "/environment" };
 const params: { value: Record<string, string> } = { value: {} };
 
 vi.mock("@/lib/environment", async (original) => ({
   ...(await original<typeof import("@/lib/environment")>()),
   environment: api,
+}));
+vi.mock("@/lib/knowledge-graph", async (original) => ({
+  ...(await original<typeof import("@/lib/knowledge-graph")>()),
+  knowledgeGraph: graphApi,
 }));
 vi.mock("@/lib/sources", async (original) => ({
   ...(await original<typeof import("@/lib/sources")>()),
@@ -128,6 +136,81 @@ const SOURCES = [
   { id: "s2", type: "datadog", display_name: "acme-eu", status: "draft" },
 ] as unknown as Source[];
 
+const layer = (name: string, types: string[], total = 0) => ({
+  name,
+  types: types as LandscapeView["layers"][number]["types"],
+  total,
+  shown: total,
+});
+
+/** The same things as boxes of a view: a team there is an entity's brief. */
+const BOXES: LandscapeView["nodes"] = ENVIRONMENT.nodes.map((node) => ({
+  ...node,
+  team: node.team ? { ...node.team, type: "team", lifecycle: "active" } : null,
+}));
+
+/** The company view: mockup 10's rows, the enrichment's things in them. */
+const COMPANY: LandscapeView = {
+  view: "company",
+  built_at: NOW,
+  layers: [
+    layer("users", []),
+    layer("applications", ["repository"], 1),
+    layer("services", ["service"], 1),
+    layer("data", ["database"]),
+    layer("infrastructure", ["infra_resource"], 4),
+  ],
+  nodes: BOXES,
+  edges: ENVIRONMENT.edges,
+  coverage: [
+    {
+      type: "service",
+      total: 1,
+      owned: 1,
+      documented: 0,
+      corroborated: 0,
+      connected: 1,
+    },
+    {
+      type: "repository",
+      total: 1,
+      owned: 0,
+      documented: 0,
+      corroborated: 0,
+      connected: 1,
+    },
+  ],
+  sources: [{ source_id: "s2", kind: "datadog", entities: 1 }],
+};
+
+const EMPTY = (view: ViewName, layers: LandscapeView["layers"]): LandscapeView => ({
+  view,
+  built_at: null,
+  layers,
+  nodes: [],
+  edges: [],
+  coverage: [],
+  sources: [],
+});
+
+const LANDSCAPES: Partial<Record<ViewName, LandscapeView>> = {
+  company: COMPANY,
+  infrastructure: {
+    ...EMPTY("infrastructure", [
+      layer("accounts", ["cloud_account", "resource_group"]),
+      layer("resources", ["infra_resource"], 4),
+      layer("databases", ["database"]),
+    ]),
+    nodes: [{ ...BOXES[2], layer: "resources" }],
+  },
+  domains: EMPTY("domains", [
+    layer("capabilities", ["business_capability"]),
+    layer("processes", ["business_process"]),
+    layer("applications", ["application", "service"]),
+    layer("data", ["database", "schema", "data_object"]),
+  ]),
+};
+
 function sheet(overrides: Partial<EntitySheet> = {}): EntitySheet {
   return {
     entity: {
@@ -205,6 +288,7 @@ beforeEach(() => {
   api.get.mockResolvedValue(ENVIRONMENT);
   api.sheet.mockResolvedValue(sheet());
   sourcesApi.list.mockResolvedValue({ data: SOURCES });
+  graphApi.view.mockImplementation(async (name: ViewName) => LANDSCAPES[name]);
 });
 
 describe("Mon environnement", () => {
@@ -239,23 +323,60 @@ describe("Mon environnement", () => {
     expect(layer("users").getByText(/ne décrit encore vos utilisateurs/)).toBeInTheDocument();
   });
 
-  it("narrows the map by tab, and lists the same things as rows", async () => {
+  it("reads each tab as a landscape of the company model, and lists the same things as rows", async () => {
     const user = userEvent.setup();
     mount(<EnvironmentScreen />);
     await screen.findByTestId("layer-services");
+    expect(graphApi.view).toHaveBeenCalledWith("company");
 
     await user.click(screen.getByTestId("env-tab-infrastructure"));
+    const resources = await screen.findByTestId("layer-resources");
+    expect(graphApi.view).toHaveBeenCalledWith("infrastructure");
     expect(screen.queryByTestId("layer-services")).not.toBeInTheDocument();
-    expect(screen.getByTestId("layer-infrastructure")).toBeInTheDocument();
+    expect(within(resources).getByText("4 ressource(s)")).toBeInTheDocument();
+    expect(within(resources).getByText("eu-west-1 · 4 ressource(s)")).toBeInTheDocument();
+    // An empty row names what would fill it.
+    expect(
+      within(screen.getByTestId("layer-accounts")).getByText(/vos comptes et abonnements/),
+    ).toBeInTheDocument();
 
+    // The business domains are rows of the model now, empty until declared.
     await user.click(screen.getByTestId("env-tab-domains"));
-    expect(screen.getByText(/domaines métier arrivent/)).toBeInTheDocument();
+    const capabilities = await screen.findByTestId("layer-capabilities");
+    expect(within(capabilities).getByText("0 capacité(s)")).toBeInTheDocument();
+    expect(within(capabilities).getByText(/Déclarez vos capacités métier/)).toBeInTheDocument();
+    expect(within(screen.getByTestId("layer-applications")).getByText("0 élément(s)")).toBeInTheDocument();
 
     await user.click(screen.getByTestId("env-tab-company"));
     await user.click(screen.getByRole("button", { name: "Liste" }));
-    const table = screen.getByRole("table");
+    const table = screen.getByRole("table", { name: "Les éléments de votre environnement" });
     expect(within(table).getByRole("link", { name: "Payment API" })).toBeInTheDocument();
     expect(within(table).getByText("Payments")).toBeInTheDocument();
+  });
+
+  it("says under the map how well its kinds are known, and which sources it comes from", async () => {
+    mount(<EnvironmentScreen />);
+
+    const coverage = await screen.findByTestId("coverage");
+    const service = within(within(coverage).getByTestId("coverage-service"));
+    expect(service.getByRole("rowheader")).toHaveTextContent("Service");
+    expect(service.getByRole("meter", { name: "Avec propriétaire : 1 sur 1" })).toHaveAttribute(
+      "aria-valuenow",
+      "100",
+    );
+    expect(service.getByRole("meter", { name: "Documentés : 0 sur 1" })).toHaveAttribute(
+      "aria-valuenow",
+      "0",
+    );
+    // The source by its own name, and how much of the view it shows.
+    const sources = within(coverage).getByRole("list", { name: "Sources de cette vue" });
+    expect(await within(sources).findByText("acme-eu")).toBeInTheDocument();
+    expect(within(sources).getByText("1 élément(s)")).toBeInTheDocument();
+    // The detailed map is a page of its own.
+    expect(screen.getByRole("link", { name: /Voir la cartographie détaillée/ })).toHaveAttribute(
+      "href",
+      "/environment/graph",
+    );
   });
 
   it("says what needs attention and what moved", async () => {
@@ -287,9 +408,19 @@ describe("Mon environnement", () => {
       events: [],
     });
     sourcesApi.list.mockResolvedValue({ data: [] });
+    graphApi.view.mockResolvedValue(
+      EMPTY("company", [
+        layer("users", []),
+        layer("applications", ["repository"]),
+        layer("services", ["service"]),
+        layer("data", ["database"]),
+        layer("infrastructure", ["infra_resource"]),
+      ]),
+    );
     mount(<EnvironmentScreen />);
 
     const services = await screen.findByTestId("layer-services");
+    expect(within(services).getByText("0 service(s)")).toBeInTheDocument();
     expect(within(services).getByText(/Connectez PagerDuty, Datadog ou Grafana/)).toBeInTheDocument();
     expect(within(services).getByRole("link", { name: "Connecter" })).toHaveAttribute(
       "href",
@@ -304,6 +435,8 @@ describe("Mon environnement", () => {
     expect(screen.getByText("Pas encore cartographié")).toBeInTheDocument();
     expect(screen.getByText("Rien ne demande votre attention.")).toBeInTheDocument();
     expect(screen.queryByText("Payment API")).not.toBeInTheDocument();
+    expect(screen.getByText("Rien à mesurer dans cette vue pour l'instant.")).toBeInTheDocument();
+    expect(screen.getByText("Aucune source ne nourrit encore cette vue.")).toBeInTheDocument();
   });
 });
 
@@ -326,6 +459,10 @@ describe("an entity's sheet", () => {
     );
     const [dependency] = screen.getAllByTestId("dependency-row");
     expect(dependency).toHaveTextContent("acme/payment-api");
+    expect(screen.getByRole("link", { name: "Voir le graphe" })).toHaveAttribute(
+      "href",
+      `/environment/graph?entity=${SERVICE_ID}`,
+    );
     expect(dependency).toHaveTextContent("En fait partie · déduit · 80 % · entre outils");
     // No metrics source: the four tiles say so, with no number.
     const latency = within(screen.getByTestId("metric-latency"));

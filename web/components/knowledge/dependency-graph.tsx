@@ -92,10 +92,19 @@ export function layeredPositions(
     const layer = LAYER[entity.type];
     layers.set(layer, [...(layers.get(layer) ?? []), entity]);
   }
+  return rowPositions([...layers.keys()].sort((a, b) => a - b).map((l) => layers.get(l) ?? []));
+}
 
-  const rows: KnowledgeEntity[][] = [];
-  for (const layer of [...layers.keys()].sort((a, b) => a - b)) {
-    const members = layers.get(layer) ?? [];
+/**
+ * Where each entity goes when the caller groups them: each group its own
+ * rows, top to bottom, at most MAX_COLUMNS wide and centred — a walk's
+ * distances from its root, a view's layers (LEKA-369).
+ */
+export function rowPositions(
+  groups: readonly (readonly { id: string }[])[],
+): Record<string, { x: number; y: number }> {
+  const rows: (readonly { id: string }[])[] = [];
+  for (const members of groups) {
     for (let start = 0; start < members.length; start += MAX_COLUMNS) {
       rows.push(members.slice(start, start + MAX_COLUMNS));
     }

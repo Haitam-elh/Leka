@@ -26,6 +26,7 @@ const SCREENS: readonly [path: string, primary: (page: Page) => ReturnType<Page[
   ["/settings", (page) => page.getByRole("button", { name: "Enregistrer" })],
   ["/sources", (page) => page.getByRole("heading", { level: 1 })],
   ["/environment", (page) => page.getByRole("button", { name: "Entreprise" })],
+  ["/environment/graph", (page) => page.getByRole("combobox", { name: "Centrer sur" })],
 ];
 
 for (const width of WIDTHS) {

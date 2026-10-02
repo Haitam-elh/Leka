@@ -26,6 +26,8 @@ interface PaletteItem {
   icon: typeof Search;
 }
 
+const SEARCH_DELAY_MS = 150;
+
 /**
  * ⌘K: find something, or go somewhere.
  *
@@ -33,8 +35,7 @@ interface PaletteItem {
  * first, because creating an intention is what the product is for and a
  * search box beside it would quietly become a competing way to ask
  * questions. Then navigation — the pages this person may open, no others.
- * Then results, from a provider that is empty until the Context Engine
- * fills it.
+ * Then results: the company model's search (LEKA-369), given by the shell.
  *
  * Everything is a link, so Enter, a click and a middle click all do what
  * they do everywhere else.
@@ -80,11 +81,15 @@ export function CommandPalette({
       setResults([]);
       return;
     }
-    void search(query).then((found) => {
-      if (!cancelled) setResults(found);
-    });
+    // Once the typing pauses: one search a word, not a letter.
+    const timer = setTimeout(() => {
+      void search(query).then((found) => {
+        if (!cancelled) setResults(found);
+      });
+    }, SEARCH_DELAY_MS);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [query, search]);
 
