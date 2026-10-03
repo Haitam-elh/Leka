@@ -96,6 +96,80 @@ export function layeredPositions(
 }
 
 /**
+ * Groups made readable (LEKA-369): each group split into rows by what
+ * points to what inside it — what nothing of the group points to on top,
+ * what it points to under it, so that an arrow goes down a row rather than
+ * along one, where it would loop over its neighbours — then each row
+ * ordered under what it is tied to above it, so the lines cross little. A
+ * loop is cut where it closes. Forty tables and their foreign keys: the
+ * tables everything references at the bottom, the arrows going down.
+ */
+export function layered<T extends { id: string }>(
+  groups: readonly (readonly T[])[],
+  links: readonly { from: string; to: string }[],
+): T[][] {
+  const rows: T[][] = [];
+  for (const group of groups) {
+    const inGroup = new Set(group.map((one) => one.id));
+    const pointedBy = new Map<string, string[]>();
+    for (const link of links) {
+      if (link.from === link.to || !inGroup.has(link.from) || !inGroup.has(link.to)) continue;
+      pointedBy.set(link.to, [...(pointedBy.get(link.to) ?? []), link.from]);
+    }
+    const rank = new Map<string, number>();
+    const visiting = new Set<string>();
+    const rankOf = (id: string): number => {
+      const known = rank.get(id);
+      if (known !== undefined) return known;
+      visiting.add(id);
+      let deepest = 0;
+      for (const from of pointedBy.get(id) ?? []) {
+        // A loop: cut where it closes.
+        if (!visiting.has(from)) deepest = Math.max(deepest, rankOf(from) + 1);
+      }
+      visiting.delete(id);
+      rank.set(id, deepest);
+      return deepest;
+    };
+    const levels = new Map<number, T[]>();
+    for (const one of group) {
+      const level = rankOf(one.id);
+      levels.set(level, [...(levels.get(level) ?? []), one]);
+    }
+    for (const level of [...levels.keys()].sort((a, b) => a - b)) {
+      rows.push(levels.get(level) ?? []);
+    }
+  }
+
+  // Each row under what it is tied to above it: by the mean place of those.
+  const neighbours = new Map<string, string[]>();
+  for (const link of links) {
+    neighbours.set(link.from, [...(neighbours.get(link.from) ?? []), link.to]);
+    neighbours.set(link.to, [...(neighbours.get(link.to) ?? []), link.from]);
+  }
+  const place = new Map<string, number>();
+  return rows.map((row, index) => {
+    const ordered =
+      index === 0
+        ? row
+        : row
+            .map((one, at) => {
+              const above = (neighbours.get(one.id) ?? [])
+                .map((id) => place.get(id))
+                .filter((x): x is number => x !== undefined);
+              const centre = above.length
+                ? above.reduce((a, b) => a + b, 0) / above.length
+                : Number.POSITIVE_INFINITY;
+              return { one, at, centre };
+            })
+            .sort((a, b) => a.centre - b.centre || a.at - b.at)
+            .map(({ one }) => one);
+    ordered.forEach((one, at) => place.set(one.id, (at + 0.5) / ordered.length));
+    return ordered;
+  });
+}
+
+/**
  * Where each entity goes when the caller groups them: each group its own
  * rows, top to bottom, at most MAX_COLUMNS wide and centred — a walk's
  * distances from its root, a view's layers (LEKA-369).

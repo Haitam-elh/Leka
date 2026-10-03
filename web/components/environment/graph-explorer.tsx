@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 
 import { EntityPicker } from "@/components/environment/entity-picker";
 import { Card, entityHref, IconTile, typeIcon, typeLabel } from "@/components/environment/parts";
-import { DependencyGraph, rowPositions } from "@/components/knowledge/dependency-graph";
+import { DependencyGraph, layered, rowPositions } from "@/components/knowledge/dependency-graph";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
 import { ErrorState } from "@/components/states/error-state";
 import { StatePanel } from "@/components/states/state-panel";
@@ -106,17 +106,22 @@ export function GraphExplorer() {
       for (const node of data.nodes) {
         byDepth.set(node.depth, [...(byDepth.get(node.depth) ?? []), entity(node.entity)]);
       }
-      const groups = [...byDepth.keys()].sort((a, b) => a - b).map((d) => byDepth.get(d) ?? []);
+      const relationships = data.relationships.map((link) => ({
+        id: link.id,
+        from: link.from_entity_id,
+        to: link.to_entity_id,
+        type: link.type as RelationshipType,
+        confidence: link.confidence,
+      }));
+      // Each distance its rows, what points to what going down.
+      const rows = layered(
+        [...byDepth.keys()].sort((a, b) => a - b).map((d) => byDepth.get(d) ?? []),
+        relationships,
+      );
       return {
-        entities: groups.flat(),
-        relationships: data.relationships.map((link) => ({
-          id: link.id,
-          from: link.from_entity_id,
-          to: link.to_entity_id,
-          type: link.type as RelationshipType,
-          confidence: link.confidence,
-        })),
-        positions: rowPositions(groups),
+        entities: rows.flat(),
+        relationships,
+        positions: rowPositions(rows),
         depth: new Map(data.nodes.map((node) => [node.entity.id, node.depth])),
         sources: new Map(data.nodes.map((node) => [node.entity.id, node.sources])),
         truncated: data.truncated,
@@ -124,24 +129,30 @@ export function GraphExplorer() {
     }
     const data = view.data;
     if (!data) return undefined;
-    const groups = data.layers.map((layer) =>
-      data.nodes
-        .filter((node) => node.layer === layer.name && node.entity_id)
-        .map((node) =>
-          entity({ id: node.entity_id as string, type: node.type, name: node.name }, node.status),
-        ),
+    const relationships = data.edges.map((edge) => ({
+      id: `${edge.from_id}:${edge.type}:${edge.to_id}`,
+      from: edge.from_id,
+      to: edge.to_id,
+      type: edge.type as RelationshipType,
+      status:
+        edge.status && STATUSES.has(edge.status) ? (edge.status as EntityStatus) : undefined,
+    }));
+    // Each layer its rows, what depends on what going down: the tables
+    // everything references at the bottom of the data, not beside the rest.
+    const rows = layered(
+      data.layers.map((layer) =>
+        data.nodes
+          .filter((node) => node.layer === layer.name && node.entity_id)
+          .map((node) =>
+            entity({ id: node.entity_id as string, type: node.type, name: node.name }, node.status),
+          ),
+      ),
+      relationships,
     );
     return {
-      entities: groups.flat(),
-      relationships: data.edges.map((edge) => ({
-        id: `${edge.from_id}:${edge.type}:${edge.to_id}`,
-        from: edge.from_id,
-        to: edge.to_id,
-        type: edge.type as RelationshipType,
-        status:
-          edge.status && STATUSES.has(edge.status) ? (edge.status as EntityStatus) : undefined,
-      })),
-      positions: rowPositions(groups),
+      entities: rows.flat(),
+      relationships,
+      positions: rowPositions(rows),
       depth: new Map(),
       sources: new Map(),
       truncated: data.layers.some((layer) => layer.total > layer.shown),

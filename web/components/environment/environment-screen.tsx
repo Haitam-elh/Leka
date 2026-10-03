@@ -504,6 +504,7 @@ function MapCard({
         nodes={nodes}
         edges={landscape.edges}
         rows={landscape.layers}
+        view={landscape.view}
         onMore={onMore}
       />
     );

@@ -611,11 +611,25 @@ const fr = {
         objects: "Connectez une base de données : ses tables et vues apparaîtront ici.",
         accounts: "Connectez AWS, Azure ou Google Cloud : vos comptes et abonnements apparaîtront ici.",
         resources: "Connectez AWS, Azure ou Google Cloud : vos ressources apparaîtront ici.",
-        teams: "Connectez GitHub, Microsoft 365 ou Google Workspace : vos équipes apparaîtront ici.",
+        teams:
+          "Connectez une organisation GitHub, Microsoft 365 ou Google Workspace : vos équipes apparaîtront ici.",
         people: "Connectez GitHub, Microsoft 365 ou Google Workspace : les personnes apparaîtront ici.",
         capabilities: "Déclarez vos capacités métier par une source personnalisée : elles apparaîtront ici.",
         processes: "Déclarez vos processus métier par une source personnalisée : ils apparaîtront ici.",
         business: "Ce que le métier attend du logiciel apparaîtra ici, avec vos capacités et processus.",
+      },
+      /** A row whose meaning is its view's: what is tied to something else there. */
+      hintsOf: {
+        domains: {
+          applications:
+            "Les applications et services sur lesquels s'appuient vos capacités et processus métier apparaîtront ici, une fois ceux-ci déclarés.",
+          data: "Les données qu'utilisent vos capacités et processus métier apparaîtront ici, une fois ceux-ci déclarés.",
+        },
+        services: {
+          data: "Les bases dont dépendent vos services apparaîtront ici, quand un catalogue de services ou vos outils diront qui utilise quoi.",
+          infrastructure:
+            "Les ressources cloud où tournent vos services et vos bases apparaîtront ici.",
+        },
       },
       connect: "Connecter",
       layerEmpty: "Rien de connu ici pour l'instant.",
@@ -701,6 +715,7 @@ const fr = {
     coverage: {
       title: "Couverture de la connaissance",
       caption: "Ce que LEKA sait de chaque type de cette vue",
+      scope: "Sur tous les éléments de ces types dans votre entreprise, pas seulement ceux affichés.",
       kind: "Type",
       total: "Éléments",
       owned: "Avec propriétaire",
@@ -2468,11 +2483,23 @@ const en: Dictionary = {
         objects: "Connect a database: its tables and views will appear here.",
         accounts: "Connect AWS, Azure or Google Cloud: your accounts and subscriptions will appear here.",
         resources: "Connect AWS, Azure or Google Cloud: your resources will appear here.",
-        teams: "Connect GitHub, Microsoft 365 or Google Workspace: your teams will appear here.",
+        teams:
+          "Connect a GitHub organisation, Microsoft 365 or Google Workspace: your teams will appear here.",
         people: "Connect GitHub, Microsoft 365 or Google Workspace: people will appear here.",
         capabilities: "Declare your business capabilities through a custom source: they will appear here.",
         processes: "Declare your business processes through a custom source: they will appear here.",
         business: "What the business needs of the software will appear here, with your capabilities and processes.",
+      },
+      hintsOf: {
+        domains: {
+          applications:
+            "The applications and services your business capabilities and processes rely on will appear here, once those are declared.",
+          data: "The data your business capabilities and processes use will appear here, once those are declared.",
+        },
+        services: {
+          data: "The databases your services depend on will appear here, once a service catalogue or your tools say what uses what.",
+          infrastructure: "The cloud resources your services and databases run on will appear here.",
+        },
       },
       connect: "Connect",
       layerEmpty: "Nothing known here yet.",
@@ -2558,6 +2585,7 @@ const en: Dictionary = {
     coverage: {
       title: "Knowledge coverage",
       caption: "What LEKA knows of each kind in this view",
+      scope: "Over every item of these kinds in your company, not only those shown.",
       kind: "Kind",
       total: "Items",
       owned: "With an owner",
