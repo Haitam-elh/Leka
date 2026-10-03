@@ -2579,6 +2579,52 @@ export interface components {
              * @description The kinds of the sources that show it.
              */
             sources: string[];
+            /**
+             * Facts
+             * @description What its sources say of it in detail: an instance's type, zone and addresses, a database's engine and storage, a service's image and deployment.
+             */
+            facts: {
+                [key: string]: unknown;
+            };
+            /**
+             * Parts
+             * @description A module's parts — Leka/api's connectors, ingestion — each with its path, files, own parts and their names.
+             */
+            parts: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Files
+             * @description A small module's files.
+             */
+            files: string[];
+            /**
+             * Maintainers
+             * @description Who maintains it, by their work.
+             */
+            maintainers: components["schemas"]["EntityBrief"][];
+        };
+        /**
+         * ArchitectureCheckRead
+         * @description What to confirm: what is wrong, deduced, inferred, unowned, unwatched
+         *     or tied to nothing.
+         */
+        ArchitectureCheckRead: {
+            /**
+             * Kind
+             * @description incident, attention, deduced, inferred, unmonitored, no_team, unlinked.
+             */
+            kind: string;
+            /** Card Id */
+            card_id: string;
+            /** Other Id */
+            other_id: string | null;
+            /** Role */
+            role: string | null;
+            /** Rule */
+            rule: string | null;
+            /** Confidence */
+            confidence: number | null;
         };
         /**
          * ArchitectureFiguresRead
@@ -2611,6 +2657,20 @@ export interface components {
             teams: number;
             /** Tables */
             tables: number;
+        };
+        /**
+         * ArchitectureFlowRead
+         * @description What one entry goes through, step by step — a request from the proxy
+         *     to the database, a job from the worker to its stores.
+         */
+        ArchitectureFlowRead: {
+            /**
+             * Entries
+             * @description The cards it starts from: alike ones together.
+             */
+            entries: string[];
+            /** Steps */
+            steps: components["schemas"]["ArchitectureLinkRead"][];
         };
         /** ArchitectureGroupRead */
         ArchitectureGroupRead: {
@@ -2646,6 +2706,11 @@ export interface components {
              * @description stated by a source, or inferred by enrichment.
              */
             origin: string;
+            /**
+             * Rule
+             * @description What inferred it: public_address, deployed_together, only_instance…
+             */
+            rule: string;
             /** Confidence */
             confidence: number;
             /** Evidence */
@@ -2708,6 +2773,48 @@ export interface components {
             };
             /** Top Dependencies */
             top_dependencies: components["schemas"]["ArchitectureRankRead"][];
+            /**
+             * Detailed
+             * @description Every card, and what follows.
+             */
+            detailed: boolean;
+            /**
+             * Flows
+             * @description Detailed: what each entry goes through.
+             */
+            flows: components["schemas"]["ArchitectureFlowRead"][];
+            /**
+             * Checks
+             * @description Detailed: what to confirm.
+             */
+            checks: components["schemas"]["ArchitectureCheckRead"][];
+            /**
+             * Sources
+             * @description Detailed: what it was read from.
+             */
+            sources: components["schemas"]["ArchitectureSourceRead"][];
+        };
+        /**
+         * ArchitectureSourceRead
+         * @description A source the architecture was read from: what it is, when it last
+         *     read, how much it shows.
+         */
+        ArchitectureSourceRead: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Status */
+            status: string;
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /** Entities */
+            entities: number;
         };
         /**
          * AttentionPointRead
@@ -20174,6 +20281,8 @@ export interface operations {
             query?: {
                 /** @description Only what runs in it — and what says none. */
                 environment?: string | null;
+                /** @description Every card — not a column's first 40 — the flows they make, what to confirm, the sources read: the detailed map's. */
+                detailed?: boolean;
             };
             header?: never;
             path?: never;

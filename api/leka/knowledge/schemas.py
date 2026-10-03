@@ -1263,6 +1263,56 @@ class ArchitectureCardRead(BaseModel):
     )
     evidence: list[str] = Field(description="The files and lines that say what it is.")
     sources: list[str] = Field(description="The kinds of the sources that show it.")
+    facts: dict[str, object] = Field(
+        description="What its sources say of it in detail: an instance's type, zone and "
+        "addresses, a database's engine and storage, a service's image and deployment.",
+    )
+    parts: list[dict[str, object]] = Field(
+        description="A module's parts — Leka/api's connectors, ingestion — each with its "
+        "path, files, own parts and their names.",
+    )
+    files: list[str] = Field(description="A small module's files.")
+    maintainers: list[EntityBrief] = Field(description="Who maintains it, by their work.")
+
+
+class ArchitectureFlowRead(BaseModel):
+    """What one entry goes through, step by step — a request from the proxy
+    to the database, a job from the worker to its stores."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entries: list[str] = Field(description="The cards it starts from: alike ones together.")
+    steps: list[ArchitectureLinkRead]
+
+
+class ArchitectureCheckRead(BaseModel):
+    """What to confirm: what is wrong, deduced, inferred, unowned, unwatched
+    or tied to nothing."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: str = Field(
+        description="incident, attention, deduced, inferred, unmonitored, no_team, unlinked."
+    )
+    card_id: str
+    other_id: str | None
+    role: str | None
+    rule: str | None
+    confidence: float | None
+
+
+class ArchitectureSourceRead(BaseModel):
+    """A source the architecture was read from: what it is, when it last
+    read, how much it shows."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_id: uuid.UUID
+    kind: str
+    name: str
+    status: str
+    last_synced_at: datetime | None
+    entities: int
 
 
 class ArchitectureLinkRead(BaseModel):
@@ -1275,6 +1325,9 @@ class ArchitectureLinkRead(BaseModel):
         "depends, deployed_on, hosted_on, monitored_by, part_of."
     )
     origin: str = Field(description="stated by a source, or inferred by enrichment.")
+    rule: str = Field(
+        description="What inferred it: public_address, deployed_together, only_instance…"
+    )
     confidence: float
     evidence: str | None
     status: str | None = Field(description="The worse of its ends' states.")
@@ -1351,6 +1404,10 @@ class ArchitectureRead(BaseModel):
     )
     services_by_status: dict[str, int]
     top_dependencies: list[ArchitectureRankRead]
+    detailed: bool = Field(description="Every card, and what follows.")
+    flows: list[ArchitectureFlowRead] = Field(description="Detailed: what each entry goes through.")
+    checks: list[ArchitectureCheckRead] = Field(description="Detailed: what to confirm.")
+    sources: list[ArchitectureSourceRead] = Field(description="Detailed: what it was read from.")
 
 
 class KnowledgeCoverageRead(BaseModel):
