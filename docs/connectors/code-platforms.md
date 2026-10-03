@@ -69,6 +69,45 @@ App passwords are retired by Atlassian and are not offered. An access token
 is not a user: the source is then named by its workspace. A token Bitbucket
 reports as able to write draws a warning.
 
+## What the code says it runs (`components`, LEKA-369)
+
+GitHub, for now. Each repository's default branch: its tree, **one read**
+(`GET /repos/{repo}/git/trees/{branch}?recursive=1`), then the files that
+say what it runs, **one read each**, `MAX_FILES` (40) at most, none above
+200 KB, none in a dependency, a build or a test (`node_modules`, `vendor`,
+`tests`, `fixtures`…): compose files, CI workflows, env examples, proxy
+configs (Caddy, nginx) first, then code manifests (`package.json`,
+`pyproject.toml`, `requirements*.txt`, `go.mod`), then Dockerfiles. The
+token's **Contents** permission — already asked for — reads them; the
+connection test probes it.
+
+What they declare (`leka/connectors/components.py`, pure, local — no model,
+no paid service) becomes one record per component, whole each pass:
+
+| Component | Read from |
+|---|---|
+| a **service** of the code — an API, a web app, a worker, a scheduler, a one-off job — and a proxy in front of them (Caddy, nginx, Traefik…) | a compose file's services: built from the repository (`build`, or an image a workflow builds from a directory) or a known proxy image; its language and framework from its code's manifests — a worker's queue framework (RQ, Celery), not its web one; where it is reached from the proxy's address for it |
+| a **database**, a cache, a queue | a compose service of a known image (PostgreSQL, Redis, RabbitMQ…); a connection URL in a service's settings — its value, or the example its comment gives |
+| an object **store** | `…OBJECT_STORE=s3`, its region |
+| a **service outside** | a configured value: an SMTP host (its provider: OVH, SendGrid…), a Sentry DSN, a Stripe or OpenAI key — an empty one is off |
+
+And the links between them, each named, with the file and the line:
+`routes` (a proxy to a service), `calls` (a front end told its API's URL),
+`queue`, `cache`, `stores`, `files`, `email`, `uses`, `depends` (a
+`depends_on` — waiting for a one-off job is not one). What a workflow
+deploys, to which environment and how (`appleboy/ssh-action`…), is said of
+the components of the compose file it ships.
+
+**Never guessed.** A library is not a database: an API carrying `pymongo`
+to read its customers' MongoDB keeps nothing in MongoDB. A store comes
+from configuration only, a service outside from a configured value. When
+a compose file is named for production, the others — a development
+compose's test databases — are not read.
+
+**Cost.** One read for the tree and one per file chosen, for each
+repository, at each pass: some forty an hour per repository. An existing
+source reads components after its next connection test.
+
 ## Scope
 
 `repositories` (GitHub, Bitbucket) and `projects` (GitLab) take full paths
