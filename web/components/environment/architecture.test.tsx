@@ -22,6 +22,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   API,
+  API_CODE,
   ARCHITECTURE,
   BOX,
   CADDY,
@@ -109,7 +110,12 @@ describe("the board", () => {
     expect(
       column("code").getByRole("button", { name: "Leka, Dépôt de code" }),
     ).toBeInTheDocument();
-    expect(column("code").getByText("Haitam-elh")).toBeInTheDocument();
+    expect(
+      column("code").getByText("Haitam-elh · 247 commit(s) · 12 pull request(s)"),
+    ).toBeInTheDocument();
+    // Its modules under it: the API's code, what it is in, how big.
+    const code = column("code").getByRole("button", { name: "Leka/api, Backend" });
+    expect(code).toHaveTextContent("Backend · Python · 470 fichier(s)");
     expect(
       column("services").getByRole("button", { name: "Leka Worker, Tâches de fond, Incident" }),
     ).toBeInTheDocument();
@@ -132,7 +138,12 @@ describe("the board", () => {
     expect(panel.getByText("Disponibilité : non mesurée")).toBeInTheDocument();
     expect(panel.getByText("Python · FastAPI")).toBeInTheDocument();
     expect(panel.getByRole("button", { name: "Haitam-elh/Leka" })).toBeInTheDocument();
-    expect(panel.getByRole("link", { name: "https://api.leka-core.com" })).toBeInTheDocument();
+    expect(panel.getByRole("link", { name: "api.leka-core.com" })).toHaveAttribute(
+      "href",
+      "https://api.leka-core.com",
+    );
+    // Its code, by its module.
+    expect(panel.getByRole("button", { name: "Leka/api" })).toBeInTheDocument();
     expect(panel.getByText("Aucune équipe connue")).toBeInTheDocument();
     expect(panel.getByText("deploy/docker-compose.production.yml:24 — api")).toBeInTheDocument();
     expect(panel.getByRole("link", { name: /Ouvrir la fiche/ })).toHaveAttribute(
@@ -156,12 +167,13 @@ describe("the board", () => {
     await user.click(panel.getByTestId("architecture-panel-relations"));
     const rows = within(panel.getByTestId("architecture-relations")).getAllByRole("listitem");
     expect(rows.map((row) => row.textContent)).toEqual([
+      // Inferred: by which rule, how surely.
+      expect.stringMatching(/^Hébergé surdéduit : seule base de ce moteur dans le cloud · 70 %leka/),
       expect.stringMatching(/^Stockage de.*Leka API/),
       expect.stringMatching(/^Stockage de.*Leka Worker/),
-      expect.stringMatching(/^Hébergé surdéduit par LEKA.*leka/),
     ]);
     // A relation is a way to the other card.
-    await user.click(within(rows[2]).getByRole("button"));
+    await user.click(within(rows[0]).getByRole("button"));
     const chosen = within(screen.getByTestId("architecture-panel"));
     expect(chosen.getByRole("heading")).toHaveTextContent("leka");
 
@@ -217,11 +229,21 @@ describe("the board", () => {
     expect(screen.queryByTestId("architecture")).not.toBeInTheDocument();
   });
 
-  it("draws the detailed map's cards without the widgets", () => {
-    mount(<ArchitectureBoard data={ARCHITECTURE} detailed />);
+  it("says a module's parts and a machine's details", async () => {
+    const user = userEvent.setup();
+    mount(<ArchitectureBoard data={ARCHITECTURE} events={[]} />);
 
-    expect(screen.getByTestId("architecture")).toBeInTheDocument();
-    expect(screen.queryByTestId("architecture-types")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Leka/api, Backend" }));
+    const parts = within(screen.getByTestId("architecture-parts"));
+    expect(parts.getByText("Parties du code (2)")).toBeInTheDocument();
+    expect(parts.getByText("90 fichier(s) · 31 sous-partie(s)")).toBeInTheDocument();
+    expect(parts.getByText("github")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^leka-prod, EC2/ }));
+    const facts = within(screen.getByTestId("architecture-facts"));
+    expect(facts.getByText("Type d'instance")).toBeInTheDocument();
+    expect(facts.getByText("3.78.172.119")).toBeInTheDocument();
+    expect(facts.getByText("Oui")).toBeInTheDocument();
   });
 });
 
@@ -241,7 +263,9 @@ describe("what the canvas draws", () => {
     expect(drawn).toContainEqual([API, "panel:data", "stores", false]);
     // One machine: to it.
     expect(drawn).toContainEqual([API, BOX, "deployed_on", false]);
-    expect(drawn).toContainEqual([REPO, API, "source_code", false]);
+    // The code's arrow from its module: the repository speaks through it.
+    expect(drawn).toContainEqual([API_CODE, API, "source_code", false]);
+    expect(drawn.filter(([from]) => from === REPO)).toEqual([]);
     expect(drawn).toContainEqual([POSTGRES, RDS, "hosted_on", false]);
     expect(drawn.filter(([, , , own]) => own)).toEqual([]);
   });
@@ -253,6 +277,10 @@ describe("what the canvas draws", () => {
     expect(drawn).toContainEqual([API, "panel:data", "stores", true]);
     expect(drawn).toContainEqual([API, BOX, "deployed_on", true]);
     expect(drawn).toContainEqual([WEB, API, "calls", true]);
+    // Its code is said by the code's own arrows, not across the services.
+    expect(drawn.filter(([from, , , own]) => own && (from === API_CODE || from === REPO))).toEqual(
+      [],
+    );
     const own = arrowsOf(ARCHITECTURE, byId, API, false).find(
       (arrow) => "panel" in arrow.to && arrow.own,
     );

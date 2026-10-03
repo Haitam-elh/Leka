@@ -97,10 +97,13 @@ export const knowledgeGraph = {
       })}`,
     ),
   view: (name: ViewName) => apiFetch<LandscapeView>(`/knowledge/views/${name}`),
-  architecture: (environment: string | null) =>
-    apiFetch<Architecture>(
-      `/knowledge/architecture${environment ? `?${query({ environment })}` : ""}`,
-    ),
+  architecture: (environment: string | null, detailed = false) => {
+    const asked = query({
+      environment: environment ?? undefined,
+      detailed: detailed ? "true" : undefined,
+    });
+    return apiFetch<Architecture>(`/knowledge/architecture${asked ? `?${asked}` : ""}`);
+  },
 };
 
 /**

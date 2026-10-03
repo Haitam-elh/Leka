@@ -19,7 +19,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ARCHITECTURE, NOTHING } from "@/components/environment/architecture.test-data";
+import { DETAILED, NOTHING } from "@/components/environment/architecture.test-data";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import type { EntityBrief, GraphRead, PathsRead, SearchResults } from "@/lib/knowledge-graph";
 import { makeQueryClient } from "@/lib/query";
@@ -156,24 +156,25 @@ const graphText = async () => within(await screen.findByTestId("graph-text"));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  graphApi.architecture.mockResolvedValue(ARCHITECTURE);
+  graphApi.architecture.mockResolvedValue(DETAILED);
   graphApi.walk.mockResolvedValue(WALK);
   graphApi.paths.mockResolvedValue(PATHS);
   graphApi.search.mockResolvedValue(FOUND);
 });
 
 describe("the whole architecture", () => {
-  it("draws every card and every link in words, a database's tables one choice away", async () => {
+  it("draws the dossier: every card, every link in words, a database's tables one choice away", async () => {
     const user = userEvent.setup();
     mount();
 
     const words = within(await screen.findByTestId("architecture-text"));
-    expect(graphApi.architecture).toHaveBeenCalledWith(null);
+    // The dossier's: every card, its flows, what to confirm, its sources.
+    expect(graphApi.architecture).toHaveBeenCalledWith(null, true);
     expect(graphApi.walk).not.toHaveBeenCalled();
     expect(graphApi.view).not.toHaveBeenCalled();
     expect(words.getByText("Leka Web appelle Leka API")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Toute l'architecture" })).toBeInTheDocument();
-    // The detailed map is the architecture's own: no widgets under it.
+    expect(screen.getByRole("heading", { name: "Architecture applicative" })).toBeInTheDocument();
+    // The detailed map is the architecture's dossier: no widgets under it.
     expect(screen.queryByTestId("architecture-types")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /^PostgreSQL, Base de données/ }));
@@ -320,6 +321,6 @@ describe("around one thing", () => {
 
     await screen.findByTestId("architecture-text");
     expect(graphApi.walk).not.toHaveBeenCalled();
-    expect(graphApi.architecture).toHaveBeenCalledWith(null);
+    expect(graphApi.architecture).toHaveBeenCalledWith(null, true);
   });
 });

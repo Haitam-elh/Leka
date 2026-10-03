@@ -304,7 +304,8 @@ describe("Mon environnement", () => {
     const services = within(screen.getByTestId("arch-figure-services"));
     expect(await services.findByText("4")).toBeInTheDocument();
     expect(await screen.findByTestId("arch-column-services")).toBeInTheDocument();
-    expect(graphApi.architecture).toHaveBeenCalledWith(null);
+    // The overview's: a column's first cards, no flows.
+    expect(graphApi.architecture).toHaveBeenCalledWith(null, false);
     expect(graphApi.view).not.toHaveBeenCalled();
     // What moved, under it: the environment's events.
     expect(await screen.findByText("Latence élevée sur Payment API")).toBeInTheDocument();

@@ -258,8 +258,8 @@ export function EnvironmentScreen() {
         onScope={setScope}
       />
 
-      <div className="mb-4 flex flex-col gap-3 rounded-xl border border-shell-line bg-white p-2 lg:flex-row lg:items-center">
-        <div role="group" aria-label={w.tabsLabel} className="flex flex-wrap gap-1.5">
+      <div className="mb-3 flex flex-col gap-2 rounded-xl border border-shell-line bg-white p-1.5 lg:flex-row lg:items-center">
+        <div role="group" aria-label={w.tabsLabel} className="flex flex-wrap gap-1">
           {TABS.map((key) => (
             <button
               key={key}
@@ -268,7 +268,7 @@ export function EnvironmentScreen() {
               onClick={() => setTab(key)}
               data-testid={`env-tab-${key}`}
               className={cn(
-                "rounded-lg border px-4 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-brand-violet/40",
+                "rounded-lg border px-3 py-1 text-[0.8125rem] font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-brand-violet/40",
                 tab === key
                   ? "border-brand-violet/30 bg-brand-violet-soft text-shell-nav-active"
                   : "border-shell-line text-brand-navy hover:bg-shell-canvas",
@@ -278,29 +278,31 @@ export function EnvironmentScreen() {
             </button>
           ))}
         </div>
-        <ul aria-label={w.legend} className="flex flex-wrap gap-x-5 gap-y-1 lg:ml-auto lg:pr-2">
-          {LEGEND.map((state) => (
-            <li key={state} className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
-              <span
-                aria-hidden="true"
-                className={cn("size-2.5 rounded-full", TONES[LEGEND_TONE[state]].dot)}
-              />
-              {t.knowledge.status.entity[state]}
-            </li>
-          ))}
-        </ul>
+        {tab === "architecture" ? (
+          // The architecture says its states under its canvas: here, the way to the detail.
+          <div className="lg:ml-auto">
+            <DetailedLink />
+          </div>
+        ) : (
+          <ul aria-label={w.legend} className="flex flex-wrap gap-x-5 gap-y-1 lg:ml-auto lg:pr-2">
+            {LEGEND.map((state) => (
+              <li key={state} className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
+                <span
+                  aria-hidden="true"
+                  className={cn("size-2.5 rounded-full", TONES[LEGEND_TONE[state]].dot)}
+                />
+                {t.knowledge.status.entity[state]}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {error ? (
         <ErrorState error={error} onRetry={retry} />
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           <ArchitectureFigures data={architecture.data} />
-          {tab === "architecture" ? (
-            <div className="flex justify-end">
-              <DetailedLink />
-            </div>
-          ) : null}
           {body}
         </div>
       )}
@@ -313,7 +315,7 @@ function DetailedLink() {
   return (
     <Link
       href={routes.environmentGraph()}
-      className="flex items-center gap-1.5 rounded-lg border border-shell-line bg-white px-3 py-1.5 text-[0.8125rem] font-medium text-shell-nav-active outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+      className="flex items-center gap-1.5 rounded-lg bg-brand-navy px-3 py-1 text-[0.8125rem] font-medium text-white outline-none hover:bg-brand-navy/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
     >
       {t.environment.map.detailed}
       <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -344,9 +346,9 @@ function Header({
     ...environments.map((name) => ({ value: name, label: name })),
   ];
   return (
-    <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-end">
+    <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-end">
       <div className="min-w-0 flex-1">
-        <nav aria-label={t.shell.breadcrumb} className="mb-2">
+        <nav aria-label={t.shell.breadcrumb} className="mb-1">
           <ol className="flex items-center gap-2 text-[0.8125rem] text-shell-muted">
             <li className="flex items-center gap-2">
               <Layers className="size-4 text-shell-nav-active" aria-hidden="true" />
@@ -354,10 +356,10 @@ function Header({
             </li>
           </ol>
         </nav>
-        <h1 className="text-[2rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">
+        <h1 className="text-[1.625rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">
           {w.title}
         </h1>
-        <p className="mt-1 text-[1.0625rem] text-shell-accent-muted">{w.subtitle}</p>
+        <p className="text-[0.9375rem] text-shell-accent-muted">{w.subtitle}</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <p className="flex items-center gap-2 text-xs text-shell-muted" aria-live="polite">
