@@ -170,6 +170,28 @@ ownership and the landscape, which read what it adds.
 | `part_of` → an account, and `account` | a resource whose record names no account — an S3 bucket's ARN names none | `source_account`: the one account of its provider its sources read — none where they read several | 0.9 |
 | `environment`, and `runs_in` → it | a resource, a resource group, a database, a schema, with no environment of its own | `container`: its nearest container's — a schema's database, a database's instance (LEKA-364), a node's cluster, a resource's group, else its account — that runs in one environment | the container's × the `part_of`'s × **0.9**; below 0.5, nothing |
 
+### Architecture — what the code runs, on what (LEKA-369)
+
+What a repository's code says it runs — its services, stores and services
+outside ([connectors/code-platforms.md](connectors/code-platforms.md)) —
+placed on what the cloud sources read. Run after infrastructure. Nothing is
+connected to: a service's public addresses are what its name resolved to
+when GitHub's connector read the repository; an instance's are what AWS
+said of it.
+
+| Relationship or fact | Of | Rule | Confidence |
+|---|---|---|---|
+| `depends_on` → an instance | a service the company runs (`hosting` self) | `public_address`: one of its public addresses is one cloud instance's `public_ip` — leka-core.com answers at the instance's Elastic IP; two instances with it, none | 0.9 |
+| `depends_on` → the same instance | a service or database deployed by the same workflow, from the same repository, to the same environment — the compose file's worker, queue, proxy | `deployed_together`: what that workflow deploys was placed on **one** instance only — on two, nowhere | 0.8 |
+| `part_of` → a cloud database | a database the code reaches by a URL it does not show (its `store_role`) | `only_instance`: the cloud's only database of its engine — RDS's `postgres`, `aurora-postgresql` are PostgreSQL; two, none | 0.7 |
+| `part_of` → a bucket | the code's storage (`code:…:storage:…`) | `named_for_repository`: the one bucket of its provider whose name holds the repository's — `leka-uploads-prod` for Leka; else `only_bucket`: the provider's only bucket | 0.8; 0.6 |
+| `deduced_health` (a fact) | each of them | `host`: what the instance running it — or the cloud database serving it — is doing: `running` operational, `starting`, `stopping`, `stopped`, `deleting` attention, `failed` incident; attention at best when the last deployment of its repository to its environment failed. Its evidence says both: `leka-prod is running; its last deployment succeeded` | 0.7 |
+
+A deduced health is **said deduced** (§ 12): a monitoring tool's word — a
+source that shows the service — wins over it, an open incident too, and a
+database's or resource's own state. A service outside (`hosting`
+external) runs on nothing of the company's: none is deduced.
+
 ### Expertise — what someone's work shows they know (LEKA-365)
 
 | Relationship or attribute | Of | Rule | Confidence |
@@ -279,7 +301,8 @@ A **workspace** stage, after resolution
 - **Queued by a resolution run that succeeded.** It reads what the latest
   successful resolution run made; that run's id is what it was made from.
 - **Queued by `advance`**, when nothing is left to resolve but enrichment
-  has something to do: a new `ENRICHER_VERSION` (8 since LEKA-369's bots,
+  has something to do: a new `ENRICHER_VERSION` (9 since LEKA-369's
+  architecture, 8 since its bots,
   7 since LEKA-367's operations, 6 since LEKA-366's knowledge, 5 since LEKA-365's expertise,
   4 since LEKA-364's data, 3 since LEKA-363's infrastructure, 2 since
   LEKA-362's landscape), a run that used up its
@@ -320,8 +343,10 @@ what no source says is said missing, never invented.**
 | service | incident | an open incident `affects` it |
 | | attention | an incident affecting it moved in the last 7 days |
 | | operational | a monitoring source — PagerDuty, Datadog, Grafana, Splunk, Kibana (connector category `observability`) — shows it, and nothing above |
-| | unmonitored | no monitoring source shows it |
+| | its deduced health, **said deduced** | no monitoring source shows it, but what runs it is known (§ 7, Architecture): the machine's state, its last deployment (LEKA-369) |
+| | unmonitored | no monitoring source shows it, nothing known runs it |
 | database, cloud resource | operational · attention · incident | `running` · `starting`, `stopping`, `stopped`, `deleting` · `failed` — a `terminated` one has none: it is gone |
+| | its deduced health, said deduced | no state of its own — a database the code names — and what serves it is known |
 | incident | incident · operational | open or in progress · closed |
 | repository, team | none | no state of its own |
 

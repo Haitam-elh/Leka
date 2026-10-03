@@ -104,8 +104,15 @@ from configuration only, a service outside from a configured value. When
 a compose file is named for production, the others — a development
 compose's test databases — are not read.
 
+**Where it answers.** A service reached at a public URL — `api.leka-core.com`
+— has its name resolved as the repository is read: the server's own
+resolver, 3 s at most, public addresses only (`public_addresses`). Nothing
+connects to it. Which cloud machine has that address, and so runs it, is
+enrichment's ([enrichment.md § 7, Architecture](../enrichment.md)).
+
 **Cost.** One read for the tree and one per file chosen, for each
-repository, at each pass: some forty an hour per repository. An existing
+repository, at each pass: some forty an hour per repository — and a DNS
+lookup per public name. An existing
 source reads components after its next connection test.
 
 ## Scope
