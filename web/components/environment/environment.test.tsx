@@ -1,13 +1,14 @@
 /**
  * "Mon environnement" and an entity's sheet (LEKA-359, mockups 10 and 11).
  *
- * What these protect: every figure on the screen is the API's — the
- * services up, the incidents and the services they hit, the changes, the
- * points of attention — and none is invented where the API has nothing;
- * the map puts each thing in its layer, with its state in words; each tab
- * is a landscape of the company model (LEKA-369), and the list says the
- * same things as rows; under the map, how well its kinds are known and
- * which sources it comes from; an entity's sheet names its owner, its team,
+ * What these protect: the screen opens on the architecture (LEKA-369,
+ * Haitam's mockup) — its figures above every tab, its columns, the recent
+ * activity under it — none invented where the API has nothing; each other
+ * tab is a landscape of the company model, its map putting each thing in
+ * its layer with its state in words, and the list says the same things as
+ * rows; under the map, how well its kinds are known and which sources it
+ * comes from; Événements, what moved and what needs attention; an entity's
+ * sheet names its owner, its team,
  * its open incident and its dependencies, and leads to its graph; an
  * address that names no entity says so, and keeps the trail.
  */
@@ -17,6 +18,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ARCHITECTURE, NOTHING } from "@/components/environment/architecture.test-data";
 import { ApiError } from "@/lib/api";
 import type { EntitySheet, Environment } from "@/lib/environment";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
@@ -26,7 +28,7 @@ import type { Source } from "@/lib/sources";
 
 const api = { get: vi.fn(), sheet: vi.fn() };
 const sourcesApi = { list: vi.fn() };
-const graphApi = { view: vi.fn() };
+const graphApi = { view: vi.fn(), architecture: vi.fn() };
 const pathname = { value: "/environment" };
 const params: { value: Record<string, string> } = { value: {} };
 
@@ -150,9 +152,9 @@ const BOXES: LandscapeView["nodes"] = ENVIRONMENT.nodes.map((node) => ({
   deduced: false,
 }));
 
-/** The company view: mockup 10's rows, the enrichment's things in them. */
-const COMPANY: LandscapeView = {
-  view: "company",
+/** The applications view: mockup 10's rows, the enrichment's things in them. */
+const APPLICATIONS: LandscapeView = {
+  view: "applications",
   built_at: NOW,
   layers: [
     layer("users", []),
@@ -195,7 +197,7 @@ const EMPTY = (view: ViewName, layers: LandscapeView["layers"]): LandscapeView =
 });
 
 const LANDSCAPES: Partial<Record<ViewName, LandscapeView>> = {
-  company: COMPANY,
+  applications: APPLICATIONS,
   infrastructure: {
     ...EMPTY("infrastructure", [
       layer("accounts", ["cloud_account", "resource_group"]),
@@ -290,29 +292,36 @@ beforeEach(() => {
   api.sheet.mockResolvedValue(sheet());
   sourcesApi.list.mockResolvedValue({ data: SOURCES });
   graphApi.view.mockImplementation(async (name: ViewName) => LANDSCAPES[name]);
+  graphApi.architecture.mockResolvedValue(ARCHITECTURE);
 });
 
 describe("Mon environnement", () => {
-  it("shows the API's figures, and only them", async () => {
+  it("opens on the architecture, its figures the API's", async () => {
     mount(<EnvironmentScreen />);
 
-    const services = screen.getByTestId("env-kpi-services");
-    expect(await within(services).findByText("3")).toBeInTheDocument();
-    expect(within(services).getByText("sur 5 services")).toBeInTheDocument();
-    const tile = (id: string) => within(screen.getByTestId(`env-kpi-${id}`));
-    expect(tile("incidents").getByText("impacte 1 service(s)")).toBeInTheDocument();
-    expect(tile("changes").getByText("7")).toBeInTheDocument();
-    expect(tile("attention").getByText("2")).toBeInTheDocument();
-    expect(await tile("sources").findByText("1 / 2")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Votre environnement technologique",
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Mon environnement");
+    expect(screen.getByTestId("env-tab-architecture")).toHaveAttribute("aria-pressed", "true");
+    const services = within(screen.getByTestId("arch-figure-services"));
+    expect(await services.findByText("4")).toBeInTheDocument();
+    expect(await screen.findByTestId("arch-column-services")).toBeInTheDocument();
+    expect(graphApi.architecture).toHaveBeenCalledWith(null);
+    expect(graphApi.view).not.toHaveBeenCalled();
+    // What moved, under it: the environment's events.
+    expect(await screen.findByText("Latence élevée sur Payment API")).toBeInTheDocument();
+    // The detailed map is a page of its own.
+    expect(screen.getByRole("link", { name: /Voir la cartographie détaillée/ })).toHaveAttribute(
+      "href",
+      "/environment/graph",
     );
   });
 
-  it("puts each thing in its layer, with its state in words", async () => {
+  it("puts each thing in its layer on the other tabs, with its state in words", async () => {
+    const user = userEvent.setup();
     mount(<EnvironmentScreen />);
 
+    await user.click(screen.getByTestId("env-tab-applications"));
     const services = await screen.findByTestId("layer-services");
+    expect(graphApi.view).toHaveBeenCalledWith("applications");
     const payment = within(services).getByRole("link", { name: /Payment API/ });
     expect(payment).toHaveAttribute("href", `/environment/services/${SERVICE_ID}`);
     expect(within(payment).getByText("Incident")).toBeInTheDocument();
@@ -322,13 +331,13 @@ describe("Mon environnement", () => {
     expect(layer("infrastructure").getByText("eu-west-1 · 4 ressource(s)")).toBeInTheDocument();
     // No source describes the users: the row says so rather than inventing them.
     expect(layer("users").getByText(/ne décrit encore vos utilisateurs/)).toBeInTheDocument();
+    // The architecture's figures stay above every tab.
+    expect(screen.getByTestId("arch-figure-services")).toBeInTheDocument();
   });
 
   it("reads each tab as a landscape of the company model, and lists the same things as rows", async () => {
     const user = userEvent.setup();
     mount(<EnvironmentScreen />);
-    await screen.findByTestId("layer-services");
-    expect(graphApi.view).toHaveBeenCalledWith("company");
 
     await user.click(screen.getByTestId("env-tab-infrastructure"));
     const resources = await screen.findByTestId("layer-resources");
@@ -341,7 +350,7 @@ describe("Mon environnement", () => {
       within(screen.getByTestId("layer-accounts")).getByText(/vos comptes et abonnements/),
     ).toBeInTheDocument();
 
-    // The business domains are rows of the model now, empty until declared.
+    // The business domains are rows of the model, empty until declared.
     await user.click(screen.getByTestId("env-tab-domains"));
     const capabilities = await screen.findByTestId("layer-capabilities");
     expect(within(capabilities).getByText("0 capacité(s)")).toBeInTheDocument();
@@ -353,23 +362,8 @@ describe("Mon environnement", () => {
     expect(applications.getByText(/sur lesquels s'appuient vos capacités/)).toBeInTheDocument();
     expect(applications.queryByText(/Connectez GitHub/)).not.toBeInTheDocument();
 
-    // The applications tab's own row holds what a catalogue declares, not
-    // the repositories: it says so, rather than "connect GitHub".
-    graphApi.view.mockResolvedValueOnce(
-      EMPTY("applications", [
-        layer("applications", ["application"]),
-        layer("services", ["service"]),
-        layer("code", ["repository"]),
-      ]),
-    );
     await user.click(screen.getByTestId("env-tab-applications"));
-    const declared = within(await screen.findByTestId("layer-code"));
-    expect(declared.getByText(/reliés à une application ou à un service/)).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId("layer-applications")).getByText(/que déclare un catalogue/),
-    ).toBeInTheDocument();
-
-    await user.click(screen.getByTestId("env-tab-company"));
+    await screen.findByTestId("layer-services");
     await user.click(screen.getByRole("button", { name: "Liste" }));
     const table = screen.getByRole("table", { name: "Les éléments de votre environnement" });
     expect(within(table).getByRole("link", { name: "Payment API" })).toBeInTheDocument();
@@ -377,7 +371,9 @@ describe("Mon environnement", () => {
   });
 
   it("says under the map how well its kinds are known, and which sources it comes from", async () => {
+    const user = userEvent.setup();
     mount(<EnvironmentScreen />);
+    await user.click(screen.getByTestId("env-tab-applications"));
 
     const coverage = await screen.findByTestId("coverage");
     // Over every one of its kinds, not only those drawn — and it says so.
@@ -396,15 +392,12 @@ describe("Mon environnement", () => {
     const sources = within(coverage).getByRole("list", { name: "Sources de cette vue" });
     expect(await within(sources).findByText("acme-eu")).toBeInTheDocument();
     expect(within(sources).getByText("1 élément(s)")).toBeInTheDocument();
-    // The detailed map is a page of its own.
-    expect(screen.getByRole("link", { name: /Voir la cartographie détaillée/ })).toHaveAttribute(
-      "href",
-      "/environment/graph",
-    );
   });
 
-  it("says what needs attention and what moved", async () => {
+  it("says on Événements what needs attention and what moved", async () => {
+    const user = userEvent.setup();
     mount(<EnvironmentScreen />);
+    await user.click(screen.getByTestId("env-tab-events"));
 
     const [incident, unmonitored] = await screen.findAllByTestId("attention-row");
     expect(incident).toHaveTextContent("Latence élevée sur Payment API");
@@ -412,11 +405,11 @@ describe("Mon environnement", () => {
     expect(incident).toHaveTextContent("Risque élevé");
     expect(unmonitored).toHaveTextContent("2 service(s) sans monitoring");
     const [event] = screen.getAllByTestId("event-row");
-    expect(event).toHaveTextContent("Payment API");
+    expect(event).toHaveTextContent("Latence élevée sur Payment API");
     expect(event).toHaveTextContent("Incident");
   });
 
-  it("keeps the map's structure when nothing is mapped, and says what to connect — no number invented", async () => {
+  it("says what to connect when nothing is known — no number invented", async () => {
     api.get.mockResolvedValue({
       ...ENVIRONMENT,
       updated_at: null,
@@ -432,35 +425,19 @@ describe("Mon environnement", () => {
       events: [],
     });
     sourcesApi.list.mockResolvedValue({ data: [] });
-    graphApi.view.mockResolvedValue(
-      EMPTY("company", [
-        layer("users", []),
-        layer("applications", ["repository"]),
-        layer("services", ["service"]),
-        layer("data", ["database"]),
-        layer("infrastructure", ["infra_resource"]),
-      ]),
-    );
+    graphApi.architecture.mockResolvedValue(NOTHING);
     mount(<EnvironmentScreen />);
 
-    const services = await screen.findByTestId("layer-services");
-    expect(within(services).getByText("0 service(s)")).toBeInTheDocument();
-    expect(within(services).getByText(/Connectez PagerDuty, Datadog ou Grafana/)).toBeInTheDocument();
-    expect(within(services).getByRole("link", { name: "Connecter" })).toHaveAttribute(
-      "href",
-      "/sources",
-    );
     expect(
-      within(screen.getByTestId("layer-applications")).getByText(/Connectez GitHub/),
+      await screen.findByText("Votre architecture n'est pas encore connue"),
     ).toBeInTheDocument();
-    const tile = (id: string) => within(screen.getByTestId(`env-kpi-${id}`));
-    expect(tile("services").getByText("sur 0 services")).toBeInTheDocument();
-    expect(tile("sources").getByText("0 / 0")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Connecter" })).toHaveAttribute("href", "/sources");
+    expect(within(screen.getByTestId("arch-figure-services")).getByText("0")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("arch-figure-health")).getByText("Aucun état connu"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Pas encore cartographié")).toBeInTheDocument();
-    expect(screen.getByText("Rien ne demande votre attention.")).toBeInTheDocument();
     expect(screen.queryByText("Payment API")).not.toBeInTheDocument();
-    expect(screen.getByText("Rien à mesurer dans cette vue pour l'instant.")).toBeInTheDocument();
-    expect(screen.getByText("Aucune source ne nourrit encore cette vue.")).toBeInTheDocument();
   });
 });
 

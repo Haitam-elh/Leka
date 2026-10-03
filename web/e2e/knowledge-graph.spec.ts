@@ -13,15 +13,19 @@ import { signIn } from "./sign-in";
  */
 
 test.describe("the detailed map", () => {
-  test("draws the dependencies, then walks around what is searched", async ({ page }) => {
+  test("draws the architecture, then walks around what is searched", async ({ page }) => {
     await signIn(page);
     await page.goto("/environment");
+    // The screen opens on the architecture: the seed's services in their column.
+    await expect(page.getByTestId("arch-column-services")).toContainText("payment-api");
     await page.getByRole("link", { name: /Voir la cartographie détaillée/ }).click();
 
     await expect(page).toHaveURL(/\/environment\/graph$/);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Cartographie détaillée");
+    await expect(page.getByTestId("architecture-text")).toContainText(
+      "payment-api dépend de postgres-prod",
+    );
     const words = page.getByTestId("graph-text");
-    await expect(words).toContainText("payment-api dépend de postgres-prod");
 
     // Centred on what is searched: what surrounds it, one step away. The
     // service first among the five things "paym" finds — its incident, its

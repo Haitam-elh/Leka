@@ -3,9 +3,7 @@
 import {
   ArrowRight,
   ChevronRight,
-  CircleCheck,
   CircleHelp,
-  FileClock,
   Layers,
   Lightbulb,
   List,
@@ -13,8 +11,6 @@ import {
   Map as MapIcon,
   Network,
   Plus,
-  TriangleAlert,
-  Waypoints,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -25,6 +21,7 @@ import { KnowledgeTable, type KnowledgeColumn } from "@/components/knowledge/kno
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { TONES } from "@/components/knowledge/status";
 import { timeAgo } from "@/components/knowledge/time";
+import { ArchitectureBoard, ArchitectureFigures } from "@/components/environment/architecture";
 import { Cartography } from "@/components/environment/cartography";
 import { CoveragePanel } from "@/components/environment/coverage";
 import {
@@ -59,38 +56,48 @@ import { routes } from "@/config/routes";
 import type { Environment, EnvironmentStatus } from "@/lib/environment";
 import { useEnvironment } from "@/lib/environment-queries";
 import type { LandscapeView, ViewName, ViewNode } from "@/lib/knowledge-graph";
-import { useLandscapeView } from "@/lib/knowledge-graph-queries";
-import { fill } from "@/lib/i18n/dictionaries";
+import { useArchitecture, useLandscapeView } from "@/lib/knowledge-graph-queries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
-import { isConnected, type Source } from "@/lib/sources";
+import type { Source } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
 
 /**
- * "Mon environnement", laid out as docs/product/mockups/10-mon-environnement-
- * cartographie.jpeg (LEKA-359).
+ * "Mon environnement" (LEKA-359, redrawn by LEKA-369 after Haitam's
+ * mockup): what the company runs and how it is doing.
  *
  * Every figure is the workspace's own — what entity resolution and
  * enrichment made of its sources. Nothing mapped yet, the screen keeps the
- * mockup's structure, and each part says what would fill it: the map's rows
- * name the tools to connect, the cards what they will show. No number is
+ * mockup's structure, and each part says what would fill it. No number is
  * ever invented.
  *
- * Each tab is a landscape of the company model (LEKA-369, GET
- * /knowledge/views/{view}): its rows, its boxes and lines, how well its
- * kinds are known and which sources it comes from. The detailed map
- * explores the graph behind them (graph-explorer.tsx).
+ * The figures above every tab, and the first tab, are the ARCHITECTURE
+ * (GET /knowledge/architecture, architecture.tsx): the code, the services,
+ * the data, the cloud, what is relied on outside, in columns, their links
+ * named. The other tabs are landscapes of the company model (GET
+ * /knowledge/views/{view}): their rows, boxes and lines, how well their
+ * kinds are known; Événements, what moved. The detailed map explores the
+ * graph behind them (graph-explorer.tsx).
  */
 
 const TABS = [
-  "company",
-  "domains",
+  "architecture",
   "applications",
-  "services",
-  "data",
   "infrastructure",
+  "data",
+  "dependencies",
   "organisation",
-] as const satisfies readonly ViewName[];
+  "events",
+  "domains",
+] as const;
 type Tab = (typeof TABS)[number];
+const VIEWS_OF: Partial<Record<Tab, ViewName>> = {
+  applications: "applications",
+  infrastructure: "infrastructure",
+  data: "data",
+  dependencies: "dependencies",
+  organisation: "organisation",
+  domains: "domains",
+};
 
 const LEGEND = ["operational", "attention", "incident", "unmonitored"] as const;
 const LEGEND_TONE = {
@@ -111,23 +118,10 @@ interface Insight {
   detail: string;
 }
 
-interface Figures {
-  connected: number;
-  total: number;
-  share: number;
-  servicesUp: number;
-  services: number;
-  attention: number;
-  incidents: number;
-  impacted: number;
-  changes: number;
-}
-
 /** Everything the screen shows but the map, which is its tab's. */
 interface Model {
   updatedAt: string | null;
   environments: string[];
-  kpi: Figures;
   insights: Insight[];
   sources: SourceLine[] | null;
   events: EventRow[];
@@ -157,22 +151,9 @@ function real(
   data: Environment,
   sources: Source[] | undefined,
 ): Model {
-  const list = sources ?? [];
-  const connected = list.filter(isConnected).length;
   return {
     updatedAt: data.updated_at,
     environments: data.environments,
-    kpi: {
-      connected,
-      total: list.length,
-      share: list.length ? Math.round((connected / list.length) * 100) : 0,
-      servicesUp: data.services_operational,
-      services: data.services,
-      attention: data.attention.length,
-      incidents: data.incidents_open,
-      impacted: data.services_impacted,
-      changes: data.changes_24h,
-    },
     insights: [],
     sources: sources ? sourceLines(sources) : null,
     events: eventRows(t, data.events),
@@ -184,10 +165,12 @@ export function EnvironmentScreen() {
   const t = useDictionary();
   const w = t.environment;
   const { model, error, retry } = useModel();
-  const [tab, setTab] = useState<Tab>("company");
+  const [tab, setTab] = useState<Tab>("architecture");
   const [view, setView] = useState<"map" | "list">("map");
   const [scope, setScope] = useState(GLOBAL);
-  const landscape = useLandscapeView(tab);
+  const viewName = VIEWS_OF[tab] ?? null;
+  const landscape = useLandscapeView(viewName);
+  const architecture = useArchitecture(scope === GLOBAL ? null : scope);
 
   const nodes = useMemo(() => {
     const all = landscape.data?.nodes ?? [];
@@ -195,10 +178,85 @@ export function EnvironmentScreen() {
       ? all
       : all.filter((node) => !node.environment || node.environment === scope);
   }, [landscape.data, scope]);
+  const environments = useMemo(
+    () => [
+      ...new Set([...(model?.environments ?? []), ...(architecture.data?.environments ?? [])]),
+    ],
+    [model?.environments, architecture.data?.environments],
+  );
+
+  let body: React.ReactNode;
+  if (tab === "architecture") {
+    body = architecture.isError ? (
+      <ErrorState error={architecture.error} onRetry={() => void architecture.refetch()} />
+    ) : architecture.data ? (
+      <ArchitectureBoard data={architecture.data} events={model?.events ?? []} />
+    ) : (
+      <div className="h-96 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />
+    );
+  } else if (tab === "events") {
+    body = (
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <Card
+          title={w.events.title}
+          action={<CardLink href={routes.activity()}>{w.kpi.seeAll}</CardLink>}
+        >
+          <EventList rows={model?.events ?? []} empty={w.events.empty} detailed />
+        </Card>
+        <Card
+          title={w.attention.title}
+          action={<CardLink href={routes.approvals()}>{w.kpi.seeAll}</CardLink>}
+        >
+          <AttentionList rows={model?.attention ?? []} empty={w.attention.empty} />
+        </Card>
+      </div>
+    );
+  } else {
+    body = (
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <MapCard
+            landscape={landscape.data}
+            error={landscape.isError ? landscape.error : null}
+            onRetry={() => void landscape.refetch()}
+            nodes={nodes}
+            view={view}
+            onMore={() => setView("list")}
+          />
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+            <Card
+              title={w.events.title}
+              action={<CardLink href={routes.activity()}>{w.kpi.seeAll}</CardLink>}
+            >
+              <EventList rows={model?.events ?? []} empty={w.events.empty} />
+            </Card>
+            <Card
+              title={w.attention.title}
+              action={<CardLink href={routes.approvals()}>{w.kpi.seeAll}</CardLink>}
+            >
+              <AttentionList rows={model?.attention ?? []} empty={w.attention.empty} />
+            </Card>
+          </div>
+        </div>
+        <div className="flex flex-col gap-4">
+          <Insights insights={model?.insights ?? []} />
+          <Sources lines={model?.sources ?? null} />
+          <Help />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <PageContainer>
-      <Header model={model} view={view} onView={setView} scope={scope} onScope={setScope} />
+      <Header
+        model={model}
+        environments={environments}
+        view={view}
+        onView={viewName ? setView : null}
+        scope={scope}
+        onScope={setScope}
+      />
 
       <div className="mb-4 flex flex-col gap-3 rounded-xl border border-shell-line bg-white p-2 lg:flex-row lg:items-center">
         <div role="group" aria-label={w.tabsLabel} className="flex flex-wrap gap-1.5">
@@ -236,55 +294,46 @@ export function EnvironmentScreen() {
       {error ? (
         <ErrorState error={error} onRetry={retry} />
       ) : (
-        <>
-          <FigureTiles figures={model?.kpi} />
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-            <div className="flex min-w-0 flex-col gap-4">
-              <MapCard
-                landscape={landscape.data}
-                error={landscape.isError ? landscape.error : null}
-                onRetry={() => void landscape.refetch()}
-                nodes={nodes}
-                view={view}
-                onMore={() => setView("list")}
-              />
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-                <Card
-                  title={w.events.title}
-                  action={<CardLink href={routes.activity()}>{w.kpi.seeAll}</CardLink>}
-                >
-                  <EventList rows={model?.events ?? []} empty={w.events.empty} />
-                </Card>
-                <Card
-                  title={w.attention.title}
-                  action={<CardLink href={routes.approvals()}>{w.kpi.seeAll}</CardLink>}
-                >
-                  <AttentionList rows={model?.attention ?? []} empty={w.attention.empty} />
-                </Card>
-              </div>
+        <div className="flex flex-col gap-4">
+          <ArchitectureFigures data={architecture.data} />
+          {tab === "architecture" ? (
+            <div className="flex justify-end">
+              <DetailedLink />
             </div>
-            <div className="flex flex-col gap-4">
-              <Insights insights={model?.insights ?? []} />
-              <Sources lines={model?.sources ?? null} />
-              <Help />
-            </div>
-          </div>
-        </>
+          ) : null}
+          {body}
+        </div>
       )}
     </PageContainer>
   );
 }
 
+function DetailedLink() {
+  const t = useDictionary();
+  return (
+    <Link
+      href={routes.environmentGraph()}
+      className="flex items-center gap-1.5 rounded-lg border border-shell-line bg-white px-3 py-1.5 text-[0.8125rem] font-medium text-shell-nav-active outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+    >
+      {t.environment.map.detailed}
+      <ArrowRight className="size-3.5" aria-hidden="true" />
+    </Link>
+  );
+}
+
 function Header({
   model,
+  environments,
   view,
   onView,
   scope,
   onScope,
 }: {
   model: Model | undefined;
+  environments: readonly string[];
   view: "map" | "list";
-  onView: (view: "map" | "list") => void;
+  /** None: the tab has no list to switch to. */
+  onView: ((view: "map" | "list") => void) | null;
   scope: string;
   onScope: (scope: string) => void;
 }) {
@@ -292,7 +341,7 @@ function Header({
   const w = t.environment;
   const scopes = [
     { value: GLOBAL, label: w.global },
-    ...(model?.environments ?? []).map((name) => ({ value: name, label: name })),
+    ...environments.map((name) => ({ value: name, label: name })),
   ];
   return (
     <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-end">
@@ -342,134 +391,39 @@ function Header({
             ))}
           </SelectContent>
         </Select>
-        <div
-          role="group"
-          aria-label={w.views}
-          className="flex overflow-hidden rounded-lg border border-shell-line"
-        >
-          {(
-            [
-              ["map", MapIcon, w.mapView],
-              ["list", List, w.listView],
-            ] as const
-          ).map(([key, Icon, label]) => (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={view === key}
-              aria-label={label}
-              title={label}
-              onClick={() => onView(key)}
-              className={cn(
-                "flex size-10 items-center justify-center outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
-                view === key
-                  ? "bg-brand-violet-soft text-shell-nav-active"
-                  : "bg-white text-brand-navy",
-              )}
-            >
-              <Icon className="size-5" aria-hidden="true" />
-            </button>
-          ))}
-        </div>
+        {onView ? (
+          <div
+            role="group"
+            aria-label={w.views}
+            className="flex overflow-hidden rounded-lg border border-shell-line"
+          >
+            {(
+              [
+                ["map", MapIcon, w.mapView],
+                ["list", List, w.listView],
+              ] as const
+            ).map(([key, Icon, label]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={view === key}
+                aria-label={label}
+                title={label}
+                onClick={() => onView(key)}
+                className={cn(
+                  "flex size-10 items-center justify-center outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
+                  view === key
+                    ? "bg-brand-violet-soft text-shell-nav-active"
+                    : "bg-white text-brand-navy",
+                )}
+              >
+                <Icon className="size-5" aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
-  );
-}
-
-function FigureTiles({ figures }: { figures: Figures | undefined }) {
-  const t = useDictionary();
-  const k = t.environment.kpi;
-  const value = (n: number | undefined) => (n === undefined ? "—" : String(n));
-
-  const tiles: {
-    icon: LucideIcon;
-    tone: TileTone;
-    value: string;
-    label: string;
-    sub: React.ReactNode;
-    id: string;
-    action?: React.ReactNode;
-  }[] = [
-    {
-      id: "sources",
-      icon: Waypoints,
-      tone: "violet",
-      value: figures ? `${figures.connected} / ${figures.total}` : "—",
-      label: k.sources,
-      sub: figures ? (
-        <span className="flex items-center gap-2">
-          <span
-            className="h-1.5 flex-1 overflow-hidden rounded-full bg-shell-canvas"
-            role="meter"
-            aria-label={k.sources}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={figures.share}
-          >
-            <span
-              className="block h-full rounded-full bg-state-success"
-              style={{ width: `${figures.share}%` }}
-            />
-          </span>
-          <span>{figures.share} %</span>
-        </span>
-      ) : null,
-    },
-    {
-      id: "services",
-      icon: CircleCheck,
-      tone: "success",
-      value: value(figures?.servicesUp),
-      label: k.servicesUp,
-      sub: figures ? fill(k.servicesOf, { count: figures.services }) : null,
-    },
-    {
-      id: "attention",
-      icon: TriangleAlert,
-      tone: "warning",
-      value: value(figures?.attention),
-      label: k.attention,
-      sub: k.toInvestigate,
-    },
-    {
-      id: "incidents",
-      icon: TriangleAlert,
-      tone: "danger",
-      value: value(figures?.incidents),
-      label: k.incidents,
-      sub: figures ? fill(k.impacting, { count: figures.impacted }) : null,
-    },
-    {
-      id: "changes",
-      icon: FileClock,
-      tone: "info",
-      value: value(figures?.changes),
-      label: k.changes,
-      sub: k.since24h,
-      action: <CardLink href={routes.activity()}>{k.seeAll}</CardLink>,
-    },
-  ];
-
-  return (
-    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-      {tiles.map((tile) => (
-        <li
-          key={tile.id}
-          className="rounded-xl border border-shell-line bg-white p-4"
-          data-testid={`env-kpi-${tile.id}`}
-        >
-          <div className="flex items-start gap-3">
-            <IconTile icon={tile.icon} tone={tile.tone} />
-            <div className="min-w-0 flex-1">
-              <p className="text-[1.5rem] leading-7 font-bold text-brand-navy">{tile.value}</p>
-              <p className="text-[0.8125rem] leading-4 text-brand-navy">{tile.label}</p>
-              {tile.sub ? <div className="mt-1 text-xs text-shell-muted">{tile.sub}</div> : null}
-            </div>
-            {tile.action}
-          </div>
-        </li>
-      ))}
-    </ul>
   );
 }
 

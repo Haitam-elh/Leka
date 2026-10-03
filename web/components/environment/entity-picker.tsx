@@ -129,7 +129,9 @@ export function EntityPicker({
                   event.preventDefault();
                   pick(hit);
                 }}
-                onMouseEnter={() => setActive(index)}
+                // Moved over, not merely appeared under a still pointer: a
+                // list opening beneath the mouse keeps the keyboard's choice.
+                onMouseMove={() => setActive(index)}
                 className={cn(
                   "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5",
                   index === active && "bg-brand-violet-soft/60",
