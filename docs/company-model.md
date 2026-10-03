@@ -824,7 +824,8 @@ their least sure relationship). None within `max_depth`: `length` is null.
 | `dependencies` | business · applications · services · data · infrastructure — each only what a dependency ties to another of them | the registry's dependencies (§ 15) |
 
 Each row shows its 60 most connected things and says how many it holds
-(`shown`, `total`). A boxed row puts the cloud resources together per
+(`shown`, `total`); a bot — what signs GitHub's merges — is none of the
+company's people, on a view nor in its coverage. A boxed row puts the cloud resources together per
 provider and region, counted, in their worst state. A line joins two boxes
 for a relationship of the view, once, coloured by the worse of its ends.
 Each box has its state — the environment screen's rules,
@@ -883,8 +884,13 @@ enrichment ([enrichment.md § 12](enrichment.md)). "Voir la cartographie
 détaillée" (`/environment/graph`): the dependency view; with a thing chosen
 (`?entity=`), what surrounds it — 1 to 3 levels, a direction, a family of
 relationships — what is picked on the canvas, and the shortest way to
-anything searched. ⌘K searches the model; an entity's sheet leads to its
-graph and names the browser tab.
+anything searched. Its canvas puts each row's things in rows of their
+own by what points to what — a table above the tables its foreign keys
+point to, an arrow going down rather than looping along a row — ordered
+under what they are tied to (`layered`, `dependency-graph.tsx`). An empty
+row of a view says what would fill it there: the domains' applications are
+those the business relies on, not "connect GitHub". ⌘K searches the model;
+an entity's sheet leads to its graph and names the browser tab.
 
 **Limits.** Search finds entities; a relationship is found through its
 ends — those among the hits come with them — or listed by

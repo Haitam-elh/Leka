@@ -146,7 +146,11 @@ be added as a dependency when a page needs it.
 rows, top to bottom, wrapping every 10 and centred (LEKA-369): the detailed
 map hands it a walk's entities by their distance from the root, or a
 view's by its rows. `layeredPositions` is `rowPositions` of the kinds'
-layers.
+layers. `layered(groups, links)` first splits each group by what points to
+what inside it — what nothing points to on top, what it points to under it,
+a loop cut where it closes — and orders each row under what it is tied to
+above it: forty tables and their foreign keys read top to bottom, instead
+of one row of arrows looping over each other.
 
 ## Where they are used
 

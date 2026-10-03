@@ -177,7 +177,7 @@ ownership and the landscape, which read what it adds.
 | `contributes_to` → a repository, a project, a service, a knowledge space | a person, not a bot | `work`: the items they work on — authored, assigned, led, committed, reviewed, created, reported, edited — are part of it: a pull request of its repository and of that repository's service, an issue of its project, an incident of the services it affects, a document of its space and of what it describes (LEKA-366). Two items at least; the ten areas with the most work; weighed as maintainers are (§ 3: role, the last 180 days in full) | 0.4 + 0.5 × its share of the person's work, 0.9 at most |
 | `expertise` | the same | `work`: each of those areas with its **evidence** — how many items, how many in each role, the last one | 0.9 |
 | `languages` | the same | `work`: the languages of the repositories among them, the most worked first, three at most | 0.8 |
-| `bot` | a person | `name`: a bot's address, handle or name (`[bot]`, `dependabot`, `noreply`…) — and then no expertise | 0.9 |
+| `bot` | a person | `name`: a bot's address, handle or name (`[bot]`, `dependabot`, a service's no-reply address — `noreply@github.com`, `noreply@anthropic.com` — GitHub's merge account `web-flow`; not a person's `12345+sara@users.noreply.github.com`) — and then no expertise, and no place among the people of a view (LEKA-369) | 0.9 |
 
 **Sourced, not invented.** Expertise is what a person did, where: never a
 skill they were said to have, never a guess from a title. Each area says
@@ -279,7 +279,8 @@ A **workspace** stage, after resolution
 - **Queued by a resolution run that succeeded.** It reads what the latest
   successful resolution run made; that run's id is what it was made from.
 - **Queued by `advance`**, when nothing is left to resolve but enrichment
-  has something to do: a new `ENRICHER_VERSION` (5 since LEKA-365's expertise,
+  has something to do: a new `ENRICHER_VERSION` (8 since LEKA-369's bots,
+  7 since LEKA-367's operations, 6 since LEKA-366's knowledge, 5 since LEKA-365's expertise,
   4 since LEKA-364's data, 3 since LEKA-363's infrastructure, 2 since
   LEKA-362's landscape), a run that used up its
   retries.
