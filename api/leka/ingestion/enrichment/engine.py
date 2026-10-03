@@ -92,7 +92,11 @@ from leka.ingestion.resolution import signals as sig
 #    title, component or label names a service affects it (LEKA-367).
 # 8: who is a bot — a service's no-reply address, GitHub's merge account —
 #    said of them, and no expertise (LEKA-369).
-ENRICHER_VERSION = 8
+# 9: what the code runs, on what: a service on the instance its address
+#    is, what is deployed with it, a database served by the cloud's only
+#    instance of its engine, a store by its bucket; their health, deduced
+#    (LEKA-369).
+ENRICHER_VERSION = 9
 
 Origin = Literal["stated", "inferred"]
 
@@ -1810,10 +1814,244 @@ def _holders(graph: Graph, things: set[uuid.UUID]) -> set[uuid.UUID]:
     return found
 
 
+# ── architecture: what the code runs, on what (LEKA-369) ─────────────────────
+
+# A host's state, as the environment screen reads a resource's (view.py).
+HOST_RUNNING = frozenset({"running"})
+HOST_PAUSED = frozenset({"starting", "stopping", "stopped", "deleting"})
+HOST_FAILED = frozenset({"failed"})
+CLOUD_PROVIDERS = frozenset({"aws", "azure", "gcp"})
+# An engine as the code names it and as a cloud does: RDS's `postgres`,
+# `aurora-postgresql` are PostgreSQL.
+ENGINE_WORDS = (
+    ("postgres", "postgresql"),
+    ("mariadb", "mariadb"),
+    ("mysql", "mysql"),
+    ("sqlserver", "sqlserver"),
+    ("oracle", "oracle"),
+    ("mongo", "mongodb"),
+    ("redis", "redis"),
+)
+
+
+def architecture(graph: Graph) -> Made:
+    """Where what the code runs runs (leka/connectors/components.py), and
+    how it is doing, when no monitoring tool says:
+
+    - a service whose public address is a cloud instance's — leka-core.com
+      answers at the instance's IP — runs on it (`public_address`, 0.9);
+    - what one workflow deploys with it — the same compose file's worker,
+      queue, proxy — runs with it (`deployed_together`, 0.8), when the
+      services it deploys are found on one instance only;
+    - a database the code reaches by a URL it does not show is served by
+      the cloud's only instance of its engine (`only_instance`, 0.7, a
+      `part_of` — what a database source says of an instance at its
+      endpoint); a store, by the bucket named for its repository — else the
+      account's only bucket (`named_for_repository` 0.8, `only_bucket` 0.6);
+    - each of them `deduced_health`: what its host — or the instance
+      serving it — is doing, worse when its last deployment to its
+      environment failed. Said deduced: a monitoring tool's word wins
+      (view.py)."""
+    made = Made()
+    hosts: dict[uuid.UUID, Node] = {}
+    by_address: dict[str, list[Node]] = defaultdict(list)
+    for node in graph.nodes.values():
+        address = node.attributes.get("public_ip")
+        if node.type == "infra_resource" and isinstance(address, str):
+            by_address[address].append(node)
+    for node in graph.nodes.values():
+        if node.type != "service" or node.attributes.get("hosting") != "self":
+            continue
+        for address in _texts(node.attributes.get("public_addresses")):
+            found = by_address.get(address, [])
+            if len(found) != 1:
+                continue
+            host = found[0]
+            said = node.attributes.get("public_url") or node.name
+            made.edges.append(
+                _inferred(
+                    node.id,
+                    host.id,
+                    "depends_on",
+                    "public_address",
+                    0.9,
+                    f"host: {said} answers at {address}, {host.name}'s public address",
+                    inputs=(host.id,),
+                )
+            )
+            hosts[node.id] = host
+            made.counts["hosted"] += 1
+            break
+    shipped: dict[tuple[str, str, str], list[Node]] = defaultdict(list)
+    for node in graph.nodes.values():
+        deployed, repository = (
+            node.attributes.get("deployed_by"),
+            node.attributes.get("repository_url"),
+        )
+        if node.type in ("service", "database") and isinstance(deployed, str) and repository:
+            environment = str(node.attributes.get("environment") or "")
+            shipped[(str(repository), deployed, environment)].append(node)
+    for members in shipped.values():
+        placed = {hosts[m.id].id: (m, hosts[m.id]) for m in members if m.id in hosts}
+        if len(placed) != 1:  # none found, or found on two machines: no one place
+            continue
+        anchor, host = next(iter(placed.values()))
+        for member in members:
+            if member.id in hosts:
+                continue
+            made.edges.append(
+                _inferred(
+                    member.id,
+                    host.id,
+                    "depends_on",
+                    "deployed_together",
+                    0.8,
+                    f"host: deployed with {anchor.name} by {member.attributes['deployed_by']}",
+                    inputs=(anchor.id,),
+                )
+            )
+            hosts[member.id] = host
+            made.counts["hosted"] += 1
+    _served(graph, made, hosts)
+    for node_id, host in hosts.items():
+        node = graph.nodes[node_id]
+        state = str(host.attributes.get("state") or "")
+        health = (
+            "operational"
+            if state in HOST_RUNNING
+            else "attention"
+            if state in HOST_PAUSED
+            else "incident"
+            if state in HOST_FAILED
+            else None
+        )
+        if health is None:
+            continue
+        evidence = f"{host.name} is {state}"
+        last = _last_deployment(graph, node)
+        if last is not None:
+            outcome = str(last.attributes.get("state") or "")
+            evidence += f"; its last deployment {outcome}"
+            if outcome == "failed" and health == "operational":
+                health = "attention"
+        made.facts.append(_fact(node, "deduced_health", health, 0.7, "host", evidence))
+        made.counts["health"] += 1
+    return made
+
+
+def _served(graph: Graph, made: Made, hosts: dict[uuid.UUID, Node]) -> None:
+    """What serves the code's databases and stores, in the cloud."""
+    clouds = [
+        n
+        for n in graph.nodes.values()
+        if n.type == "database"
+        and n.attributes.get("provider") in CLOUD_PROVIDERS
+        and "store_role" not in n.attributes
+    ]
+    buckets = [
+        n
+        for n in graph.nodes.values()
+        if n.type == "infra_resource"
+        and n.attributes.get("resource_kind") == "bucket"
+        and not n.key.startswith("code:")
+    ]
+    for node in graph.nodes.values():
+        if node.id in hosts:
+            continue
+        if node.type == "database" and "store_role" in node.attributes:
+            engine = _engine(node.attributes.get("engine"))
+            same = [c for c in clouds if engine and _engine(c.attributes.get("engine")) == engine]
+            if len(same) != 1:
+                continue
+            served = same[0]
+            made.edges.append(
+                _inferred(
+                    node.id,
+                    served.id,
+                    "part_of",
+                    "only_instance",
+                    0.7,
+                    f"served by {served.name}: the only {engine} instance in the cloud",
+                    inputs=(served.id,),
+                )
+            )
+            hosts[node.id] = served
+        elif node.key.startswith("code:") and node.attributes.get("resource_class") == "storage":
+            repository = str(node.attributes.get("repository_url") or "").rstrip("/")
+            short = repository.rsplit("/", 1)[-1].lower()
+            mine = [
+                b
+                for b in buckets
+                if b.attributes.get("provider") == node.attributes.get("provider")
+            ]
+            named = [b for b in mine if short and short in b.name.lower()]
+            chosen, rule, sure = (
+                (named[0], "named_for_repository", 0.8)
+                if len(named) == 1
+                else (mine[0], "only_bucket", 0.6)
+                if len(mine) == 1 and not named
+                else (None, "", 0.0)
+            )
+            if chosen is None:
+                continue
+            made.edges.append(
+                _inferred(
+                    node.id,
+                    chosen.id,
+                    "part_of",
+                    rule,
+                    sure,
+                    f"stored in {chosen.name}",
+                    inputs=(chosen.id,),
+                )
+            )
+
+
+def _last_deployment(graph: Graph, node: Node) -> Node | None:
+    """The latest deployment of a component's repository to its
+    environment: the repository part of the service, the deployment part
+    of the repository."""
+    environment = node.attributes.get("environment")
+    repositories = [
+        e.from_id
+        for e in graph.into(node.id, ("part_of",))
+        if graph.of_type(e.from_id) == "repository"
+    ]
+    if not repositories and isinstance(node.attributes.get("repository_url"), str):
+        url = str(node.attributes["repository_url"]).lower().rstrip("/")
+        repositories = [
+            n.id
+            for n in graph.nodes.values()
+            if n.type == "repository" and url.endswith("/" + n.key.split("/", 1)[-1])
+        ]
+    found: list[Node] = []
+    for repository in repositories:
+        for edge in graph.into(repository, ("part_of",)):
+            deployment = graph.nodes.get(edge.from_id)
+            if deployment is not None and deployment.type == "deployment":
+                if environment and deployment.attributes.get("environment") not in (
+                    None,
+                    environment,
+                ):
+                    continue
+                found.append(deployment)
+    return max(found, key=lambda d: str(d.dates.get("created_at") or ""), default=None)
+
+
+def _engine(value: object) -> str | None:
+    text = str(value or "").lower()
+    return next((engine for word, engine in ENGINE_WORDS if word in text), None)
+
+
+def _texts(value: object) -> list[str]:
+    return [str(v) for v in value] if isinstance(value, list) else []
+
+
 ENRICHERS: tuple[tuple[str, Enricher], ...] = (
     ("relationships", relationships),
     ("links", links),
     ("infrastructure", infrastructure),
+    ("architecture", architecture),
     ("data", data),
     ("knowledge", knowledge),
     ("operations", operations),

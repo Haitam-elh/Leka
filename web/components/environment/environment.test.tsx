@@ -147,6 +147,7 @@ const layer = (name: string, types: string[], total = 0) => ({
 const BOXES: LandscapeView["nodes"] = ENVIRONMENT.nodes.map((node) => ({
   ...node,
   team: node.team ? { ...node.team, type: "team", lifecycle: "active" } : null,
+  deduced: false,
 }));
 
 /** The company view: mockup 10's rows, the enrichment's things in them. */

@@ -214,6 +214,7 @@ def github_component(p: Payload) -> Extracted:
             "deploy_method": string(p, "deploy_method"),
             "technology": strings(p, "technology"),
             "ports": strings(p, "ports"),
+            "public_addresses": strings(p, "public_addresses"),
             "links": links,
             "evidence": evidence,
         },

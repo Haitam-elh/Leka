@@ -6,6 +6,8 @@ behind the guard: what reaches it is what would have reached the network.
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 import pytest
 from pydantic import HttpUrl, SecretStr, ValidationError
@@ -20,6 +22,7 @@ from leka.connectors.network import (
     Resolve,
     obviously_private,
     public_address,
+    public_addresses,
 )
 
 PUBLIC = "140.82.112.6"
@@ -172,6 +175,22 @@ async def test_a_name_that_does_not_resolve_is_a_network_failure_not_a_refusal()
         await public_address("nowhere.acme.example", 5432, resolve=_names({}))
 
     assert not isinstance(caught.value, PrivateAddressError)
+
+
+async def test_a_service_s_name_gives_its_public_addresses_and_only_those() -> None:
+    resolve = _names({"leka-core.com": [PUBLIC, "10.0.0.5", PUBLIC, "2606:4700::1"]})
+
+    assert await public_addresses("leka-core.com", resolve=resolve) == [PUBLIC, "2606:4700::1"]
+    # A name that does not resolve answers nowhere: no error, no address.
+    assert await public_addresses("nowhere.acme.example", resolve=resolve) == []
+
+
+async def test_a_name_that_takes_too_long_to_resolve_answers_nowhere() -> None:
+    async def slow(host: str, port: int) -> list[str]:
+        await asyncio.sleep(1)
+        return [PUBLIC]
+
+    assert await public_addresses("slow.acme.example", resolve=slow, wait=0.01) == []
 
 
 @pytest.mark.parametrize(

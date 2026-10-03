@@ -149,7 +149,9 @@ EC2 instance with an Azure VM:
 | `tags` | `Tags` / `TagList` / `tags` | `tags` | `labels` |
 
 Then what each kind has: `instance_type`, `engine`, `version`, `runtime`,
-`storage_class`, `scheme`, `multi_az`, `public`, `encrypted`, … `title` is
+`storage_class`, `scheme`, `multi_az`, `public`, `encrypted`, an EC2
+instance's `public_ip`, `public_dns`, `private_ip` — where it answers, what
+a service's public address is on (LEKA-369) —, … `title` is
 the name a person gave it — AWS's `Name` tag, the resource's name — else its
 id; `metadata.id` is always the provider's id; a VPC or network is a
 `network` reference.

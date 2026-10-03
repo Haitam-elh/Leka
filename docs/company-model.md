@@ -266,7 +266,7 @@ know it ([normalisation.md](normalisation.md)):
 | the Datadog service catalog | a service's team, application (v3: its system), tier, lifecycle, type, languages, links, dependencies |
 | cloud tags (AWS, Azure, Google Cloud) | a resource's service, application, environment, team, criticality |
 | a custom source — a CMDB, a Backstage catalogue | services and applications, declared, with the same fields |
-| the code itself — GitHub's `components` (LEKA-369) | the services a repository runs — its API, web app, workers — their technology, where they are reached, what deploys them; the databases, caches, stores and services outside they rely on, from their configuration; each link named, with its file and line ([connectors/code-platforms.md](connectors/code-platforms.md)) |
+| the code itself — GitHub's `components` (LEKA-369) | the services a repository runs — its API, web app, workers — their technology, where they are reached, what deploys them; the databases, caches, stores and services outside they rely on, from their configuration; each link named, with its file and line ([connectors/code-platforms.md](connectors/code-platforms.md)); where they run — the instance at their public address, what serves their stores — enrichment's `architecture` ([enrichment.md § 7](enrichment.md)) |
 | a code host | the repository of a service's name (enrichment's `same_name`) |
 
 **Canonical.** A service is `service:<name>`, an application
@@ -831,7 +831,9 @@ provider and region, counted, in their worst state. A line joins two boxes
 for a relationship of the view, once, coloured by the worse of its ends.
 Each box has its state — the environment screen's rules,
 [enrichment.md § 12](enrichment.md) — its environment and its team
-(`owned_by` a team, the surest).
+(`owned_by` a team, the surest). A state deduced from what runs it — the
+machine's, the last deployment's, for what no tool watches (LEKA-369) —
+says so: `deduced`.
 
 **Provenance and coverage.** Each search hit and each thing a walk reaches
 says the kinds of the sources that show it (`github`, `pagerduty`…). Each

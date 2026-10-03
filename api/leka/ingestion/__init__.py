@@ -9,6 +9,7 @@ from leka.ingestion.enrichment.screens import environment as environment_screen
 from leka.ingestion.enrichment.screens import monitoring_kinds
 from leka.ingestion.enrichment.screens import sheet as entity_sheet
 from leka.ingestion.enrichment.view import Thing as EnvironmentThing
+from leka.ingestion.enrichment.view import deduced as environment_status_deduced
 from leka.ingestion.enrichment.view import provider_of
 from leka.ingestion.enrichment.view import status as environment_status
 from leka.ingestion.models import (
@@ -187,6 +188,7 @@ __all__ = [
     "entity_sheet",
     "environment_screen",
     "environment_status",
+    "environment_status_deduced",
     "monitoring_kinds",
     "provider_of",
     "retention_days",
