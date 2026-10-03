@@ -86,6 +86,19 @@ class ServiceAttributes(Landscape):
     environment: str | None = None
     service_type: str | None = None
     languages: list[str] | None = None
+    # What a repository's code says of it (LEKA-369): what it is written
+    # with, where its code and image are, where it is reached, who runs it —
+    # the company, or a vendor outside — how it is deployed, and the files
+    # and lines that say so.
+    technology: list[str] | None = None
+    code_path: str | None = None
+    image: str | None = None
+    public_url: str | None = None
+    hosting: str | None = None
+    vendor: str | None = None
+    deployed_by: str | None = None
+    deploy_method: str | None = None
+    evidence: list[str] | None = None
     escalation_policy: str | None = None
     display_name: str | None = None
     runbook_url: str | None = None
@@ -264,8 +277,11 @@ class Classified(Attributes):
 
 class DatabaseAttributes(ResourceAttributes):
     """A database: a cloud instance, or the database a source reads on a
-    server — its host, port and name — and the data it holds."""
+    server — its host, port and name — and the data it holds; what a
+    repository's code keeps in it (LEKA-369): its data, a cache, a queue."""
 
+    store_role: str | None = None
+    evidence: list[str] | None = None
     host: str | None = None
     port: int | None = None
     database_name: str | None = None

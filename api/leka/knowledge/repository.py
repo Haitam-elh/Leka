@@ -1753,9 +1753,9 @@ class GraphRepository(EntityRepository):
         limit: int,
     ) -> tuple[list[Entity], int]:
         """A view's layer: its entities — only those `within`, when given;
-        never a bot, as the people's list (people) — the most connected
-        first, at most `limit`; and how many there are, counted by the same
-        query."""
+        never a bot, as the people's list (people), nor a service outside —
+        the most connected first, at most `limit`; and how many there are,
+        counted by the same query."""
         if within is not None and not within:
             return [], 0
 
@@ -1776,6 +1776,7 @@ class GraphRepository(EntityRepository):
                 Entity.type.in_(types),
                 Entity.lifecycle != Lifecycle.REMOVED,
                 _not_a_bot(),
+                _ours(),
             )
             .order_by(degree.desc(), Entity.name, Entity.id)
             .limit(limit)
@@ -1895,6 +1896,15 @@ class GraphRepository(EntityRepository):
 # What a bot is to the views and their coverage: a person enrichment said
 # is one (its `bot` attribute) — left out, as the people's list does.
 NOT_A_BOT = "NOT (e.type = 'person' AND coalesce(e.attributes ->> 'bot', '') = 'true')"
+
+
+def _ours() -> ColumnElement[bool]:
+    """A service the company runs, not one it calls outside — OVH's mail, a
+    payment provider (LEKA-369): those are what its services rely on."""
+    return or_(
+        Entity.type != EntityType.SERVICE,
+        func.coalesce(Entity.attributes["hosting"].astext, "") != "external",
+    )
 
 
 def _not_a_bot() -> ColumnElement[bool]:

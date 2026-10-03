@@ -25,6 +25,7 @@ ticket tool keeps, and what caused what (LEKA-367).
 
 from __future__ import annotations
 
+import json
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -100,7 +101,17 @@ ENTITY_TYPES = {
     # Who works there, and their teams (LEKA-365).
     C.PEOPLE: "person",
     C.TEAMS: "team",
+    # What a repository's code says it runs (LEKA-369): a service — or, as
+    # the record says, a database, a store, a service outside.
+    C.COMPONENTS: "service",
 }
+# A component's kind, as the company model types it.
+COMPONENT_TYPES = {"database": "database", "storage": "infra_resource", "external": "service"}
+# What a component's technology says of its language.
+COMPONENT_LANGUAGES = frozenset({"Python", "TypeScript", "JavaScript", "Go", "Java", "Ruby"})
+# How sure a link the code declares is: a route, a store, a queue are
+# configured; that a front end calls its API is read from what it is told.
+LINK_CONFIDENCE = {"calls": 0.8, "depends": 0.9}
 RESOURCE_KINDS = {
     C.INSTANCES: "instance",
     C.DB_INSTANCES: "database",
@@ -364,6 +375,10 @@ def entity(build: Build) -> NormalisedEntity:
     elif happened is not None:
         build.as_type = happened
         key, attributes = _event(build, happened)
+    elif capability is C.COMPONENTS:
+        if build.kind not in CODE_HOSTS:
+            raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
+        key, attributes = _component(build)
     elif capability is C.DEPLOYMENTS:
         if build.kind not in CODE_HOSTS:
             raise UnsupportedRecordError(f"no mapping for {build.kind} {capability.value} yet")
@@ -988,6 +1003,94 @@ def _deployed_to(
         build.relate("deployed_to", key, target, 1.0, "environment")
     elif said:
         attributes["environment"] = said.lower()
+
+
+def _component(build: Build) -> tuple[str, dict[str, object]]:
+    """What a repository's code says it runs (LEKA-369): a service of its
+    code — its repository part of it — a store, a service outside; where it
+    runs; and what it relies on, each link named by its role and the file
+    and line that say so (leka/connectors/components.py)."""
+    meta = build.record.metadata
+    kind = str(meta.get("component_kind") or "service")
+    repository = str(meta.get("repository") or build.record.provenance.container or "")
+    key = _component_key(build, kind, repository, dict(meta))
+    build.as_type = COMPONENT_TYPES.get(kind, "service")
+    attributes = _common(build)
+    for name in ("component", "component_kind", "links", "repository", "role"):
+        attributes.pop(name, None)
+    role = meta.get("role")
+    if kind in ("service", "external"):
+        attributes["service_type"] = role
+        attributes["display_name"] = build.record.title
+        attributes["hosting"] = "external" if kind == "external" else "self"
+        attributes["languages"] = [
+            t for t in _texts(meta.get("technology")) if t in COMPONENT_LANGUAGES
+        ] or None
+    elif kind == "database":
+        attributes["store_role"] = role
+    else:
+        attributes["resource_kind"] = "bucket"
+        attributes["resource_class"] = "storage"
+    if kind == "service" and meta.get("code_path") and repository:
+        code = _code_key(build, build.host, repository)
+        build.relate("part_of", code, key, 1.0, f"code: {meta['code_path']}")
+    environment = meta.get("environment")
+    if isinstance(environment, str) and environment in ENVIRONMENTS:
+        target = _named(build, "environment", ids.environment(environment), environment, 1.0)
+        build.relate("runs_in", key, target, 1.0, "compose")
+    for raw in _texts(meta.get("links")):
+        try:
+            link = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(link, dict) or not link.get("to"):
+            continue
+        target = _component_key(
+            build,
+            str(link.get("kind") or "service"),
+            repository,
+            {
+                "component": link.get("to"),
+                "engine": link.get("engine"),
+                "vendor": link.get("vendor"),
+            },
+            title=str(link.get("display_name") or link.get("to")),
+        )
+        build.relate(
+            "depends_on",
+            key,
+            target,
+            LINK_CONFIDENCE.get(str(link.get("role")), 0.9),
+            f"{link.get('role')}: {link.get('evidence')}",
+        )
+    return key, attributes
+
+
+def _texts(value: object) -> list[str]:
+    return [str(v) for v in value] if isinstance(value, list) else []
+
+
+def _component_key(
+    build: Build,
+    kind: str,
+    repository: str,
+    meta: dict[str, object],
+    *,
+    title: str | None = None,
+) -> str:
+    """A component's key: a service by its name, as every tool that names it
+    writes it — Leka API, `service:leka-api`; a service outside by its
+    vendor's, so that two repositories' OVH are one; a store by where it was
+    read, the repository and its name in it."""
+    name = title or str(build.record.title)
+    if kind in ("service", "external"):
+        return ids.service(name)
+    where = f"{build.host}/{repository}".lower()
+    component = str(meta.get("component") or name)
+    if kind == "database":
+        engine = str(meta.get("engine") or "unknown")
+        return ids.database(engine, where, None, component)
+    return ids.item(f"code:{where}", "storage", component)
 
 
 def _change_event(build: Build) -> tuple[str, dict[str, object]]:
