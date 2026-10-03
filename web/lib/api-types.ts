@@ -7945,6 +7945,12 @@ export interface components {
             /** Environment */
             environment: string | null;
             team: components["schemas"]["EntityBrief"] | null;
+            /**
+             * Deduced
+             * @description Its state is deduced — from what runs it — not a tool's word (LEKA-369).
+             * @default false
+             */
+            deduced: boolean;
         };
         /**
          * ViewSourceRead

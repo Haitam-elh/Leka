@@ -75,14 +75,18 @@ class Link:
 
 def status(thing: Thing, *, monitoring: frozenset[str], recently_hit: bool) -> str | None:
     """A thing's state, in mockup 10's words — none for what has no state
-    of its own (a repository, a team)."""
+    of its own (a repository, a team). What the code runs and no tool
+    watches, its health deduced from what runs it (LEKA-369, enrichment's
+    `architecture`): said deduced (`deduced`)."""
     state = thing.attributes.get("state")
     if thing.type == "service":
         if _int(thing.facts.get("open_incidents")) > 0:
             return "incident"
         if recently_hit:
             return "attention"
-        return "operational" if thing.kinds & monitoring else "unmonitored"
+        if thing.kinds & monitoring:
+            return "operational"
+        return _deduced(thing) or "unmonitored"
     if thing.type in ("database", "infra_resource"):
         if state in RUNNING:
             return "operational"
@@ -90,10 +94,28 @@ def status(thing: Thing, *, monitoring: frozenset[str], recently_hit: bool) -> s
             return "attention"
         if state in FAILED:
             return "incident"
-        return None
+        return _deduced(thing)
     if thing.type == "incident":
         return "incident" if state in OPEN else "operational"
     return None
+
+
+def deduced(thing: Thing, *, monitoring: frozenset[str], recently_hit: bool) -> bool:
+    """Whether a thing's state is its deduced health — not a tool's word,
+    nor its own state."""
+    found = _deduced(thing)
+    if found is None:
+        return False
+    if thing.type == "service":
+        return not (
+            _int(thing.facts.get("open_incidents")) > 0 or recently_hit or thing.kinds & monitoring
+        )
+    return thing.attributes.get("state") not in RUNNING | PAUSED | FAILED
+
+
+def _deduced(thing: Thing) -> str | None:
+    health = thing.facts.get("deduced_health")
+    return health if health in ("operational", "attention", "incident") else None
 
 
 def provider_of(thing: Thing) -> tuple[str, str | None] | None:

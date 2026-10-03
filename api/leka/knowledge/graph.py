@@ -52,7 +52,16 @@ from leka.knowledge.schemas import (
     ViewSourceRead,
 )
 from leka.knowledge.search import fold, query
-from leka.knowledge.views import MAX_PER_LAYER, VIEWS, Placed, Tie, coverage, layout, state
+from leka.knowledge.views import (
+    MAX_PER_LAYER,
+    VIEWS,
+    Placed,
+    Tie,
+    coverage,
+    deduced,
+    layout,
+    state,
+)
 
 # A search's entities, at most, and the relationships among them.
 MAX_HITS = 50
@@ -318,12 +327,17 @@ class GraphService:
             thing.id: state(thing, monitoring=monitoring, recently_hit=thing.id in hit)
             for thing in placed
         }
+        guessed = {
+            thing.id: deduced(thing, monitoring=monitoring, recently_hit=thing.id in hit)
+            for thing in placed
+        }
         boxes, lines = layout(
             view,
             placed,
             [Tie(e.from_entity_id, e.to_entity_id, e.type.value) for e in ties],
             statuses,
             teams,
+            guessed,
         )
         return LandscapeViewRead(
             view=view.name,
@@ -342,6 +356,7 @@ class GraphService:
                     count=box.count,
                     environment=box.environment,
                     team=_brief(owners.get(box.team_id)) if box.team_id else None,
+                    deduced=box.deduced,
                 )
                 for box in boxes
             ],

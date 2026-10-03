@@ -104,6 +104,7 @@ const box = (entity: EntityBrief, layer: string, status: string | null = null) =
   count: 1,
   environment: null,
   team: null,
+  deduced: false,
 });
 
 const DEPENDENCIES: LandscapeView = {

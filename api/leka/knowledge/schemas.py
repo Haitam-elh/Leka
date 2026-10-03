@@ -1174,6 +1174,10 @@ class ViewNodeRead(BaseModel):
     count: int = Field(description="A provider's resources; 1 for an entity.")
     environment: str | None
     team: EntityBrief | None
+    deduced: bool = Field(
+        default=False,
+        description="Its state is deduced — from what runs it — not a tool's word (LEKA-369).",
+    )
 
 
 class ViewEdgeRead(BaseModel):

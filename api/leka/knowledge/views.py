@@ -44,7 +44,12 @@ import uuid
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from leka.ingestion import EnvironmentThing, environment_status, provider_of
+from leka.ingestion import (
+    EnvironmentThing,
+    environment_status,
+    environment_status_deduced,
+    provider_of,
+)
 from leka.knowledge.models import EntityType, RelationshipType
 from leka.knowledge.registry import DEPENDENCIES
 
@@ -223,6 +228,7 @@ class Box:
     count: int = 1
     environment: str | None = None
     team_id: uuid.UUID | None = None
+    deduced: bool = False
 
 
 @dataclass(frozen=True)
@@ -252,19 +258,27 @@ WORST = {"incident": 3, "attention": 2, "operational": 1, "unmonitored": 0}
 def state(thing: Placed, *, monitoring: frozenset[str], recently_hit: bool) -> str | None:
     """A thing's state, by the environment screen's rules — none for what
     has no state of its own (a repository, a team)."""
-    return environment_status(
-        EnvironmentThing(
-            id=thing.id,
-            type=thing.type,
-            key=thing.key,
-            name=thing.name,
-            attributes=thing.attributes,
-            # The model keeps enrichment's measures in the attributes.
-            facts=thing.attributes,
-            kinds=thing.kinds,
-        ),
-        monitoring=monitoring,
-        recently_hit=recently_hit,
+    return environment_status(_seen(thing), monitoring=monitoring, recently_hit=recently_hit)
+
+
+def deduced(thing: Placed, *, monitoring: frozenset[str], recently_hit: bool) -> bool:
+    """Whether that state is deduced — what runs a thing no tool watches
+    (LEKA-369) — rather than a tool's word or its own."""
+    return environment_status_deduced(
+        _seen(thing), monitoring=monitoring, recently_hit=recently_hit
+    )
+
+
+def _seen(thing: Placed) -> EnvironmentThing:
+    return EnvironmentThing(
+        id=thing.id,
+        type=thing.type,
+        key=thing.key,
+        name=thing.name,
+        attributes=thing.attributes,
+        # The model keeps enrichment's measures in the attributes.
+        facts=thing.attributes,
+        kinds=thing.kinds,
     )
 
 
@@ -274,6 +288,7 @@ def layout(
     ties: Iterable[Tie],
     statuses: Mapping[uuid.UUID, str | None],
     teams: Mapping[uuid.UUID, uuid.UUID],
+    deduced: Mapping[uuid.UUID, bool] | None = None,
 ) -> tuple[list[Box], list[Line]]:
     """A view's boxes and the lines between them: a box per entity — the
     cloud resources of a boxed layer together per provider and region, in
@@ -316,6 +331,7 @@ def layout(
             detail=_detail(thing),
             environment=environment if isinstance(environment, str) else None,
             team_id=teams.get(thing.id),
+            deduced=bool((deduced or {}).get(thing.id)),
         )
         box_of[thing.id] = str(thing.id)
     wanted = {kind.value for kind in view.links}

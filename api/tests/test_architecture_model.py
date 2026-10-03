@@ -12,6 +12,12 @@ resource, OVH a service outside; each link the code declares is a
 its provenance — a front end calling its API less surely than a route; what
 runs in production runs in it; and every member reads it, no other
 workspace.
+
+With the AWS account beside it: the services at leka-core.com's address run
+on the instance that has it, what is deployed with them too; the code's
+PostgreSQL is the account's RDS, its S3 store the bucket named for the
+repository; and the landscape says each healthy as the machine running it
+is — deduced, and says so.
 """
 
 # ruff: noqa: F811 — the fixtures of test_sources_api are imported to be requested by name.
@@ -44,9 +50,15 @@ REDIS = "db:redis://github.com/haitam-elh/leka/redis"
 POSTGRES = "db:postgresql://github.com/haitam-elh/leka/postgresql"
 S3 = "code:github.com/haitam-elh/leka:storage:s3"
 REPOSITORY_KEY = "github.com/haitam-elh/leka"
+LEKA_WORKER = "service:leka-worker"
+ARN = "arn:aws:ec2:eu-central-1:123456789012"
+BOX = f"aws:{ARN}:instance/i-0leka"
+RDS = "aws:arn:aws:rds:eu-central-1:123456789012:db:leka"
+BUCKET = "aws:arn:aws:s3:::leka-uploads-prod"
+IP = "3.78.172.119"
 
 
-async def _leka(workspace: uuid.UUID) -> dict[str, uuid.UUID]:
+async def _leka(workspace: uuid.UUID, *, aws: bool = False) -> dict[str, uuid.UUID]:
     github = await _source(workspace, "GitHub")
     await _store(
         workspace,
@@ -72,12 +84,55 @@ async def _leka(workspace: uuid.UUID) -> dict[str, uuid.UUID]:
             _record(
                 SourceKind.GITHUB,
                 Capability.COMPONENTS,
-                {**component, "repository_url": REPO_URL, "default_branch": "main"},
+                {
+                    **component,
+                    "repository_url": REPO_URL,
+                    "default_branch": "main",
+                    # leka-core.com and api.leka-core.com, resolved.
+                    "public_addresses": [IP] if component.get("public_url") else [],
+                },
                 external_id=f"R_leka:{component['name']}",
                 container=REPOSITORY,
             ),
         )
+    if aws:
+        await _account(workspace)
     return await _build(workspace)
+
+
+async def _account(workspace: uuid.UUID) -> None:
+    """The AWS account LEKA runs in: its machine, its RDS, its buckets."""
+    source = await _source(workspace, "AWS")
+    for capability, payload, external_id in (
+        (
+            Capability.INSTANCES,
+            {
+                "InstanceId": "i-0leka",
+                "State": {"Name": "running"},
+                "PublicIpAddress": IP,
+                "Tags": [{"Key": "Name", "Value": "leka-prod"}],
+            },
+            f"{ARN}:instance/i-0leka",
+        ),
+        (
+            Capability.DB_INSTANCES,
+            {"DBInstanceIdentifier": "leka", "Engine": "postgres", "DBInstanceStatus": "available"},
+            RDS.removeprefix("aws:"),
+        ),
+        (Capability.BUCKETS, {"Name": "leka-uploads-prod"}, BUCKET.removeprefix("aws:")),
+        (Capability.BUCKETS, {"Name": "acme-logs"}, "arn:aws:s3:::acme-logs"),
+    ):
+        await _store(
+            workspace,
+            source,
+            _record(
+                SourceKind.AWS,
+                capability,
+                payload,
+                container=None if capability is Capability.BUCKETS else "eu-central-1",
+                external_id=external_id,
+            ),
+        )
 
 
 @pytest.fixture
@@ -151,6 +206,35 @@ async def test_each_link_is_a_dependency_with_its_role_and_its_evidence(
     # What a front end is told of its API is less sure than a route.
     assert calls["confidence"] == 0.8
     assert routes[(CADDY, "depends_on", LEKA_API)]["confidence"] == 0.9
+
+
+async def test_on_aws_each_runs_where_its_address_and_its_deployment_say(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    ids = await _leka(acme["acme"], aws=True)
+    _as(identity, acme, "member")
+
+    def rule(ties: dict[tuple[str, str, str], Any], tie: tuple[str, str, str]) -> Any:
+        return (ties[tie]["origin"], ties[tie]["rule"], ties[tie]["confidence"])
+
+    hosted = (LEKA_API, "depends_on", BOX)
+    assert rule(await _ties(client, ids[LEKA_API]), hosted) == ("inferred", "public_address", 0.9)
+    # The worker is deployed with it by the same workflow: on the same machine.
+    worker = (LEKA_WORKER, "depends_on", BOX)
+    assert rule(await _ties(client, ids[LEKA_WORKER]), worker)[1] == "deployed_together"
+    served = (POSTGRES, "part_of", RDS)
+    assert rule(await _ties(client, ids[POSTGRES]), served)[1] == "only_instance"
+    stored = await _ties(client, ids[S3])
+    assert rule(stored, (S3, "part_of", BUCKET))[1] == "named_for_repository"
+    assert not [tie for tie in stored if tie[2].endswith("acme-logs")]
+
+    services = await _get(client, "/views/services")
+    boxes = {node["key"]: node for node in services["nodes"]}
+    # No tool watches it: its machine runs, so it is operational — deduced.
+    assert (boxes[LEKA_API]["status"], boxes[LEKA_API]["deduced"]) == ("operational", True)
+    assert (boxes[LEKA_WORKER]["status"], boxes[LEKA_WORKER]["deduced"]) == ("operational", True)
+    # OVH's mail is outside, run by no one here: not a service of the company's.
+    assert OVH not in boxes
 
 
 async def test_another_workspace_sees_none_of_it(
