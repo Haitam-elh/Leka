@@ -157,6 +157,23 @@ describe("DependencyGraph", () => {
   });
 });
 
+describe("an edge's ends", () => {
+  it("goes down from the bottom, and up to what is above from the top", () => {
+    const [down, up] = graphEdges(
+      ENTITIES,
+      [
+        { id: "d", from: "api", to: "db", type: "depends_on" },
+        { id: "u", from: "db", to: "api", type: "depends_on" },
+      ],
+      (type) => type,
+      { api: { x: 0, y: 0 }, db: { x: 0, y: 128 } },
+    );
+
+    expect([down.sourceHandle, down.targetHandle]).toEqual(["down", "above"]);
+    expect([up.sourceHandle, up.targetHandle]).toEqual(["up", "below"]);
+  });
+});
+
 describe("layered", () => {
   const ids = (rows: { id: string }[][]) => rows.map((row) => row.map((one) => one.id));
   const node = (id: string) => ({ id });

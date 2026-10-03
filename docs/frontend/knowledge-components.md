@@ -150,7 +150,9 @@ layers. `layered(groups, links)` first splits each group by what points to
 what inside it — what nothing points to on top, what it points to under it,
 a loop cut where it closes — and orders each row under what it is tied to
 above it: forty tables and their foreign keys read top to bottom, instead
-of one row of arrows looping over each other.
+of one row of arrows looping over each other. A link to something above it — what a walk's
+things point to at its root — leaves by the top and comes in at the bottom
+(`graphEdges`, given the nodes' places), rather than round the boxes.
 
 ## Where they are used
 

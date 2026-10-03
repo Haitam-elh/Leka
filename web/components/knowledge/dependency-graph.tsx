@@ -216,16 +216,25 @@ export function graphEdges(
   entities: readonly KnowledgeEntity[],
   relationships: readonly KnowledgeRelationship[],
   relation: (type: KnowledgeRelationship["type"]) => string,
+  /** Where each node sits: a link to one above it leaves by the top. */
+  placed?: Record<string, { x: number; y: number }>,
 ): Edge[] {
   const names = new Map(entities.map((entity) => [entity.id, entity.name]));
   return relationships
     .filter((link) => names.has(link.from) && names.has(link.to))
     .map((link) => {
       const stroke = TONES[EDGE_TONE[link.status ?? "unknown"]].stroke;
+      // Up to what is above — the root a walk's things point to — straight
+      // up, top to bottom, rather than out of the bottom and round the boxes.
+      const from = placed?.[link.from];
+      const to = placed?.[link.to];
+      const upward = from !== undefined && to !== undefined && to.y < from.y;
       return {
         id: link.id,
         source: link.from,
         target: link.to,
+        sourceHandle: upward ? "up" : "down",
+        targetHandle: upward ? "below" : "above",
         ariaLabel: `${names.get(link.from)} ${relation(link.type)} ${names.get(link.to)}`,
         focusable: false,
         style: { stroke, strokeWidth: 1.5 },
@@ -242,9 +251,24 @@ type EntityNodeData = {
 };
 
 function EntityNode({ data }: NodeProps<Node<EntityNodeData, "entity">>) {
+  // A link comes in at the top and leaves at the bottom — or, to something
+  // above, leaves at the top and comes in at the bottom (graphEdges).
   return (
     <div style={{ width: NODE_WIDTH }}>
-      <Handle type="target" position={Position.Top} isConnectable={false} className="opacity-0" />
+      <Handle
+        type="target"
+        id="above"
+        position={Position.Top}
+        isConnectable={false}
+        className="opacity-0"
+      />
+      <Handle
+        type="source"
+        id="up"
+        position={Position.Top}
+        isConnectable={false}
+        className="opacity-0"
+      />
       <EntityCard
         {...data.entity}
         compact
@@ -254,6 +278,14 @@ function EntityNode({ data }: NodeProps<Node<EntityNodeData, "entity">>) {
       />
       <Handle
         type="source"
+        id="down"
+        position={Position.Bottom}
+        isConnectable={false}
+        className="opacity-0"
+      />
+      <Handle
+        type="target"
+        id="below"
         position={Position.Bottom}
         isConnectable={false}
         className="opacity-0"
@@ -341,8 +373,14 @@ function Graph({
   }, [entities, positions, selectedId, onNodeClick]);
 
   const edges = useMemo(
-    () => graphEdges(entities, relationships, (type) => t.knowledge.relationships[type]),
-    [entities, relationships, t],
+    () =>
+      graphEdges(
+        entities,
+        relationships,
+        (type) => t.knowledge.relationships[type],
+        Object.fromEntries(nodes.map((node) => [node.id, node.position])),
+      ),
+    [entities, relationships, t, nodes],
   );
 
   return (
