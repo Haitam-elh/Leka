@@ -24,6 +24,11 @@ that may not read the organisation's members leaves them out.
 DEPLOYMENT_HISTORY at the first pass, then those made since the last pass
 less DEPLOYMENT_MARGIN — each with its statuses, one read per deployment:
 how it went, and when.
+`components` (LEKA-369): what each repository's code says it runs — its
+default branch's tree (one read), then the files that say it (compose
+files, workflows, env examples, proxy configs, Dockerfiles, manifests:
+MAX_FILES at most, one read each), handed to leka.connectors.components —
+one record per service, store or service outside, whole each pass.
 
 LEKA READS. A classic token that carries write scopes is accepted — GitHub
 is where it is scoped, not here — but the test says so, in its warnings.
@@ -31,6 +36,7 @@ is where it is scoped, not here — but the test says so, in its warnings.
 
 from __future__ import annotations
 
+import base64
 import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
@@ -38,6 +44,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, model_validator
 
+from leka.connectors import components
 from leka.connectors.base import (
     Capability,
     ConnectionTestResult,
@@ -145,10 +152,12 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                 Capability.BRANCHES,
                 Capability.TEAMS,
                 Capability.DEPLOYMENTS,
+                Capability.COMPONENTS,
             }
         ),
-        # A team gone from the organisation is gone at the next pass.
-        listed_whole=frozenset({Capability.TEAMS}),
+        # A team gone from the organisation is gone at the next pass; so is
+        # a service gone from the code.
+        listed_whole=frozenset({Capability.TEAMS, Capability.COMPONENTS}),
     )
 
     # ── the contract ─────────────────────────────────────────────────────────
@@ -184,6 +193,8 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                         Capability.ISSUES: f"/repos/{sample}/issues",
                         Capability.BRANCHES: f"/repos/{sample}/branches",
                         Capability.DEPLOYMENTS: f"/repos/{sample}/deployments",
+                        # The Contents permission: what reads the code's files.
+                        Capability.COMPONENTS: f"/repos/{sample}/contents",
                     },
                     params={"per_page": 1},
                 )
@@ -242,6 +253,10 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                     yield team
                 return
             async for repository in self._repositories(client):
+                if capability is Capability.COMPONENTS:
+                    async for component in self._components(client, repository):
+                        yield component
+                    continue
                 if capability is Capability.REPOSITORIES:
                     yield record(
                         capability,
@@ -398,6 +413,47 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
             )
             statuses = response.json()
             yield {**deployment, "statuses": statuses if isinstance(statuses, list) else []}
+
+    async def _components(self, client: VendorHttp, repository: Item) -> AsyncIterator[RawRecord]:
+        """What one repository's code says it runs: its default branch's
+        tree, the files of it that say so, what they declare."""
+        name, branch = str(repository["full_name"]), str(repository.get("default_branch") or "")
+        if not branch:
+            return
+        tree = await client.get(
+            f"/repos/{name}/git/trees/{branch}", params={"recursive": "1"}, empty=EMPTY_REPOSITORY
+        )
+        if tree.status_code == EMPTY_REPOSITORY:
+            return
+        entries = tree.json().get("tree") if isinstance(tree.json(), dict) else None
+        paths = [
+            str(entry["path"])
+            for entry in entries or []
+            if entry.get("type") == "blob" and int(entry.get("size") or 0) <= components.MAX_BYTES
+        ]
+        files: dict[str, str] = {}
+        for path in components.wanted(paths):
+            answer = await client.get(
+                f"/repos/{name}/contents/{path}", params={"ref": branch}, missing="ce fichier"
+            )
+            found = answer.json()
+            if isinstance(found, dict) and found.get("encoding") == "base64":
+                try:
+                    files[path] = base64.b64decode(str(found.get("content") or "")).decode("utf-8")
+                except (ValueError, UnicodeDecodeError):
+                    continue
+        for component in components.discover(name, files):
+            yield record(
+                Capability.COMPONENTS,
+                {
+                    **component,
+                    "repository_url": repository.get("html_url"),
+                    "default_branch": branch,
+                },
+                external_id=f"{repository['node_id']}:{component['name']}",
+                container=name,
+                updated=repository.get("pushed_at"),
+            )
 
     @staticmethod
     def _scope_warnings(response: httpx.Response) -> list[str]:

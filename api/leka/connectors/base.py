@@ -62,6 +62,10 @@ class Capability(enum.StrEnum):
     # What was shipped where (LEKA-367): a code host's deployments — to an
     # environment, of a commit — and their statuses.
     DEPLOYMENTS = "deployments"
+    # What a repository's code says it runs (LEKA-369): its services, the
+    # stores and services outside they use, the links between them — read
+    # from its compose files, workflows, env examples and manifests.
+    COMPONENTS = "components"
     ISSUES = "issues"
     BRANCHES = "branches"
     # Project tools (LEKA-346). Their issues are ISSUES, as a code host's are.
