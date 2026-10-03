@@ -1751,13 +1751,15 @@ class GraphRepository(EntityRepository):
         *,
         within: set[uuid.UUID] | None,
         limit: int,
-    ) -> tuple[list[Entity], int]:
+        outside: bool = False,
+    ) -> tuple[list[Entity], int, dict[uuid.UUID, int]]:
         """A view's layer: its entities — only those `within`, when given;
-        never a bot, as the people's list (people), nor a service outside —
-        the most connected first, at most `limit`; and how many there are,
-        counted by the same query."""
+        never a bot, as the people's list (people), nor a service outside
+        unless asked (the architecture's last column) — the most connected
+        first, at most `limit`; how many there are, counted by the same
+        query; and how connected each is."""
         if within is not None and not within:
-            return [], 0
+            return [], 0, {}
 
         def ties(end: Any) -> Any:
             # One way's count, on its own index: ix_relationships_from or _to.
@@ -1768,25 +1770,123 @@ class GraphRepository(EntityRepository):
                 .scalar_subquery()
             )
 
-        degree = ties(Relationship.from_entity_id) + ties(Relationship.to_entity_id)
+        degree = (ties(Relationship.from_entity_id) + ties(Relationship.to_entity_id)).label(
+            "degree"
+        )
         statement = (
-            select(Entity, func.count().over())
+            select(Entity, func.count().over(), degree)
             .where(
                 Entity.workspace_id == self.workspace_id,
                 Entity.type.in_(types),
                 Entity.lifecycle != Lifecycle.REMOVED,
                 _not_a_bot(),
-                _ours(),
             )
             .order_by(degree.desc(), Entity.name, Entity.id)
             .limit(limit)
         )
+        if not outside:
+            statement = statement.where(_ours())
         if within is not None:
             statement = statement.where(
                 Entity.id == any_(literal(list(within), ARRAY(UUID(as_uuid=True))))
             )
         rows = (await self._session.execute(statement)).tuples().all()
-        return [entity for entity, _ in rows], int(rows[0][1]) if rows else 0
+        return (
+            [entity for entity, _, _ in rows],
+            int(rows[0][1]) if rows else 0,
+            {entity.id: int(n) for entity, _, n in rows},
+        )
+
+    async def census(
+        self, types: Sequence[EntityType]
+    ) -> list[tuple[str, str, dict[str, object], int]]:
+        """How many of these kinds there are, by what tells the
+        architecture's columns apart (architecture.py): each row a type, a
+        key's head — a code host, a provider — its attributes that matter,
+        and a count. The removed and the bots left out."""
+        rows = await self._session.execute(
+            text(
+                f"""
+                SELECT e.type,
+                  CASE WHEN e.type = 'repository' THEN split_part(e.key, '/', 1) || '/'
+                       ELSE split_part(e.key, ':', 1) || ':' END,
+                  coalesce(e.attributes ->> 'hosting', ''),
+                  coalesce(e.attributes ->> 'provider', ''),
+                  e.attributes ? 'store_role',
+                  count(*)
+                FROM entities e
+                WHERE e.workspace_id = :workspace AND e.lifecycle <> 'removed'
+                  AND e.type = ANY(CAST(:types AS text[])) AND {NOT_A_BOT}
+                GROUP BY 1, 2, 3, 4, 5
+                """  # noqa: S608 — NOT_A_BOT is this module's own text
+            ),
+            {"workspace": self.workspace_id, "types": [kind.value for kind in types]},
+        )
+        found: list[tuple[str, str, dict[str, object], int]] = []
+        for kind, head, hosting, provider, store, count in rows.tuples().all():
+            attributes: dict[str, object] = {"hosting": hosting, "provider": provider}
+            if store:
+                attributes["store_role"] = True
+            found.append((str(kind), str(head), attributes, int(count)))
+        return found
+
+    async def contents(
+        self, ids: Sequence[uuid.UUID], types: Sequence[EntityType]
+    ) -> dict[uuid.UUID, dict[str, int]]:
+        """What is part of each of these entities, counted by kind: a
+        repository's commits and pull requests."""
+        if not ids:
+            return {}
+        rows = await self._session.execute(
+            text(
+                """
+                SELECT r.to_entity_id, c.type, count(*)
+                FROM relationships r
+                JOIN entities c ON c.workspace_id = r.workspace_id AND c.id = r.from_entity_id
+                WHERE r.workspace_id = :workspace AND r.type = 'part_of'
+                  AND r.to_entity_id = ANY(CAST(:ids AS uuid[]))
+                  AND c.lifecycle <> 'removed' AND c.type = ANY(CAST(:types AS text[]))
+                GROUP BY 1, 2
+                """
+            ),
+            {
+                "workspace": self.workspace_id,
+                "ids": [str(one) for one in set(ids)],
+                "types": [kind.value for kind in types],
+            },
+        )
+        found: dict[uuid.UUID, dict[str, int]] = {}
+        for entity_id, kind, count in rows.tuples().all():
+            found.setdefault(entity_id, {})[str(kind)] = int(count)
+        return found
+
+    async def tables(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, tuple[int, int]]:
+        """Each database's tables, views and collections — in its schemas —
+        and how many bytes they hold, as its source last read them."""
+        if not ids:
+            return {}
+        rows = await self._session.execute(
+            text(
+                """
+                SELECT held.to_entity_id, count(DISTINCT o.id),
+                  coalesce(sum(CASE WHEN jsonb_typeof(o.attributes -> 'size_bytes') = 'number'
+                                    THEN (o.attributes ->> 'size_bytes')::numeric END), 0)
+                FROM relationships held
+                JOIN entities s ON s.workspace_id = held.workspace_id
+                 AND s.id = held.from_entity_id AND s.type = 'schema'
+                JOIN relationships inside ON inside.workspace_id = held.workspace_id
+                 AND inside.to_entity_id = s.id AND inside.type = 'part_of'
+                JOIN entities o ON o.workspace_id = held.workspace_id
+                 AND o.id = inside.from_entity_id AND o.type = 'data_object'
+                 AND o.lifecycle <> 'removed'
+                WHERE held.workspace_id = :workspace AND held.type = 'part_of'
+                  AND held.to_entity_id = ANY(CAST(:ids AS uuid[]))
+                GROUP BY 1
+                """
+            ),
+            {"workspace": self.workspace_id, "ids": [str(one) for one in set(ids)]},
+        )
+        return {entity_id: (int(n), int(size)) for entity_id, n, size in rows.tuples().all()}
 
     async def recently_hit(self, ids: Sequence[uuid.UUID], *, since: datetime) -> set[uuid.UUID]:
         """Those an incident affecting them opened, or was resolved, since

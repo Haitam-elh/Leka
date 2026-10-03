@@ -36,6 +36,7 @@ from leka.knowledge.repository import (
     RelationshipFilters,
 )
 from leka.knowledge.schemas import (
+    ArchitectureRead,
     BusinessContext,
     BusinessDetail,
     BusinessRead,
@@ -114,6 +115,7 @@ __all__ = [
     "MODEL_VERSION",
     "RELATIONSHIP_KINDS",
     "VIEWS",
+    "ArchitectureRead",
     "BusinessContext",
     "BusinessDetail",
     "BusinessFilters",

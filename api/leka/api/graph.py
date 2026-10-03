@@ -13,6 +13,10 @@
                                       infrastructure, organisation, dependencies:
                                       its rows, boxes, lines, states, coverage
                                       and sources
+    GET /knowledge/architecture       what the company runs, in columns — its
+                                      code, services, data, cloud and what it
+                                      relies on outside — each thing's state,
+                                      the links between them named, the figures
     GET /knowledge/coverage           how well the model knows each kind, and
                                       from which sources
 
@@ -34,6 +38,7 @@ from leka.api.errors import ApiError
 from leka.core.errors import ErrorCode
 from leka.governance import Permission, Principal, require_permission
 from leka.knowledge import (
+    ArchitectureRead,
     EntityType,
     GraphRead,
     GraphRepository,
@@ -151,6 +156,22 @@ async def view(view: View, service: Service) -> LandscapeViewRead:
     connected first — the lines between them, each thing's state, how well
     its kinds are known and which sources it comes from."""
     return await service.view(view, now=datetime.now(UTC))
+
+
+@router.get("/architecture", response_model=ArchitectureRead)
+async def architecture(
+    service: Service,
+    environment: Annotated[
+        str | None,
+        Query(max_length=100, description="Only what runs in it — and what says none."),
+    ] = None,
+) -> ArchitectureRead:
+    """What the company runs, in columns: its code, its applications and
+    services, its data and storage, its cloud, the services outside it
+    relies on. Each thing's state — deduced from what runs it where nothing
+    watches it, and said so — the links between them named by what they
+    are, and how many of each there are."""
+    return await service.architecture(now=datetime.now(UTC), environment=environment)
 
 
 @router.get("/coverage", response_model=KnowledgeCoverageRead)

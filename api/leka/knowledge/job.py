@@ -171,8 +171,8 @@ async def _inputs(inputs: EnrichmentRepository) -> tuple[list[Candidate], list[L
     for entity_id, key, source_id, kind, first, last in await inputs.seen_keys():
         keys[entity_id].append(SeenKey(key, source_id, kind, first, last))
     enriched: dict[uuid.UUID, dict[str, Enriched]] = defaultdict(dict)
-    for entity_id, attribute, value, rule, confidence in await inputs.enrichments():
-        enriched[entity_id][attribute] = Enriched(value, rule, confidence)
+    for entity_id, attribute, value, rule, confidence, evidence in await inputs.enrichments():
+        enriched[entity_id][attribute] = Enriched(value, rule, confidence, evidence)
     candidates = [
         Candidate(
             id=entity_id,

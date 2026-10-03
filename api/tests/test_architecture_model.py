@@ -195,8 +195,12 @@ async def test_each_link_is_a_dependency_with_its_role_and_its_evidence(
     queue = ties[(LEKA_API, "depends_on", REDIS)]
     evidence = [p.get("evidence") for p in queue["provenance"]]
     assert any(str(e).startswith("queue: ") and "LEKA_REDIS_URL" in str(e) for e in evidence)
-    # The repository is the code of the service.
-    assert (REPOSITORY_KEY, "part_of", LEKA_API) in ties
+    # The repository is the code of the service — said by the code, not
+    # guessed from a name — and of every other service it runs.
+    code = ties[(REPOSITORY_KEY, "part_of", LEKA_API)]
+    assert (code["origin"], code["confidence"]) == ("stated", 1.0)
+    web = await _ties(client, leka[LEKA_WEB])
+    assert web[(REPOSITORY_KEY, "part_of", LEKA_WEB)]["origin"] == "stated"
     assert (LEKA_API, "runs_in", "environment:production") in ties
 
     routes = await _ties(client, leka[CADDY])
@@ -248,3 +252,98 @@ async def test_another_workspace_sees_none_of_it(
     response = await client.get(f"{API}/entities/{leka[LEKA_API]}")
 
     assert response.status_code == 404
+
+
+async def test_the_architecture_in_columns_its_links_named(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    ids = await _leka(acme["acme"], aws=True)
+    _as(identity, acme, "member")
+
+    found = await _get(client, "/architecture")
+
+    cards = {card["key"]: card for card in found["cards"]}
+    columns = {key: card["column"] for key, card in cards.items()}
+    assert columns[REPOSITORY_KEY] == "code"
+    assert {columns[k] for k in (LEKA_API, LEKA_WEB, LEKA_WORKER, CADDY)} == {"services"}
+    assert {columns[k] for k in (POSTGRES, REDIS, S3)} == {"data"}
+    assert {columns[k] for k in (BOX, RDS, BUCKET)} == {"cloud"}
+    assert columns[OVH] == "external"
+    # What reaches it first reads first: the proxy, the front end, the API.
+    services = [c["kind"] for c in found["cards"] if c["column"] == "services"]
+    assert services[:3] == ["proxy", "web", "api"]
+
+    api = cards[LEKA_API]
+    assert (api["kind"], api["technology"], api["url"]) == (
+        "api",
+        ["Python", "FastAPI"],
+        "https://api.leka-core.com",
+    )
+    assert (api["status"], api["deduced"], api["why"]) == (
+        "operational",
+        True,
+        "leka-prod is running",
+    )
+    assert api["repository_id"] == str(ids[REPOSITORY_KEY])
+    # What runs it: the machine its address is.
+    assert api["host_id"] == str(ids[BOX])
+    assert cards[REPOSITORY_KEY]["url"] == "https://github.com/haitam-elh/leka"
+    assert cards[RDS]["technology"] == ["PostgreSQL"]
+
+    key_of = {card["id"]: card["key"] for card in found["cards"]}
+    links = {(key_of[li["from_id"]], li["role"], key_of[li["to_id"]]) for li in found["links"]}
+    assert {
+        (REPOSITORY_KEY, "source_code", LEKA_API),
+        (CADDY, "routes", LEKA_API),
+        (LEKA_WEB, "calls", LEKA_API),
+        (LEKA_API, "queue", REDIS),
+        (LEKA_API, "stores", POSTGRES),
+        (LEKA_API, "files", S3),
+        (LEKA_API, "email", OVH),
+        (LEKA_API, "deployed_on", BOX),
+        (POSTGRES, "hosted_on", RDS),
+        (S3, "hosted_on", BUCKET),
+    } <= links
+    # One arrow a column, until a card is chosen: the API's to the data says
+    # what most of its links there are, and reaches all three.
+    bundles = {(key_of[b["from_id"]], b["column"]): b for b in found["bundles"]}
+    data = bundles[(LEKA_API, "data")]
+    assert (data["role"], {key_of[t] for t in data["targets"]}) == (
+        "stores",
+        {POSTGRES, REDIS, S3},
+    )
+    assert bundles[(REPOSITORY_KEY, "services")]["role"] == "source_code"
+    assert len(bundles[(REPOSITORY_KEY, "services")]["targets"]) == 5
+
+    figures = found["figures"]
+    assert (figures["services"], figures["repositories"], figures["databases"]) == (6, 1, 2)
+    assert (figures["stores"], figures["cloud_resources"], figures["providers"]) == (
+        1,
+        4,
+        {"aws": 4},
+    )
+    assert (figures["external"], figures["teams"]) == (1, 0)
+    assert found["services_by_status"]["operational"] == 6
+    assert found["health"]["incident"] == 0
+    # The most relied on: the machine everything runs on.
+    top = found["top_dependencies"][0]
+    assert (key_of[top["card_id"]], top["count"]) == (BOX, 7)
+    groups = {group["id"]: group for group in found["groups"]}
+    assert groups["cloud:aws"]["regions"] == ["eu-central-1"]
+    assert found["environments"] == ["production"]
+
+
+async def test_the_architecture_of_one_environment(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    await _leka(acme["acme"], aws=True)
+    _as(identity, acme, "member")
+
+    staging = await _get(client, "/architecture", environment="staging")
+
+    # Nothing of the code runs in staging — the uploads bucket's name says
+    # production; what says no environment is shared: the logs bucket.
+    kept = {card["key"] for card in staging["cards"]}
+    assert LEKA_API not in kept and BUCKET not in kept
+    assert "aws:arn:aws:s3:::acme-logs" in kept
+    assert staging["environment"] == "staging"

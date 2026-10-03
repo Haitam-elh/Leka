@@ -1227,6 +1227,132 @@ class LandscapeViewRead(BaseModel):
     sources: list[ViewSourceRead]
 
 
+class ArchitectureCardRead(BaseModel):
+    """One thing of the architecture: an entity, or a monitoring tool."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    column: str = Field(description="code, services, data, cloud or external.")
+    group: str = Field(description="Where it is from in its column: github, aws…")
+    kind: str = Field(
+        description="What it is, in one word: api, web, worker, proxy, database, cache, "
+        "storage, instance, bucket, email, monitoring…"
+    )
+    type: str = Field(description="The entity's type; `tool` for a monitoring tool.")
+    name: str
+    entity_id: uuid.UUID | None
+    key: str | None
+    status: str | None = Field(description="operational, attention, incident, unmonitored.")
+    deduced: bool = Field(description="Its state is deduced from what runs it.")
+    why: str | None = Field(
+        description="What the deduced state was read from, as enrichment wrote it (English)."
+    )
+    technology: list[str]
+    description: str | None
+    environment: str | None
+    region: str | None
+    url: str | None = Field(description="Where it is reached, or where it is kept.")
+    team: EntityBrief | None
+    repository_id: str | None = Field(description="The card of its code.")
+    host_id: str | None = Field(description="The card of what runs it, when known.")
+    deployment: str | None = Field(description="How its last deployment went: succeeded, failed…")
+    stats: dict[str, int] = Field(
+        description="What the sources count of it: commits, pull_requests, tables, "
+        "size_bytes, buckets."
+    )
+    evidence: list[str] = Field(description="The files and lines that say what it is.")
+    sources: list[str] = Field(description="The kinds of the sources that show it.")
+
+
+class ArchitectureLinkRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    from_id: str
+    to_id: str
+    role: str = Field(
+        description="source_code, routes, calls, queue, cache, stores, files, email, uses, "
+        "depends, deployed_on, hosted_on, monitored_by, part_of."
+    )
+    origin: str = Field(description="stated by a source, or inferred by enrichment.")
+    confidence: float
+    evidence: str | None
+    status: str | None = Field(description="The worse of its ends' states.")
+
+
+class ArchitectureBundleRead(BaseModel):
+    """A card's links to one other column, together: one arrow, named by
+    what most of them are, until the card is chosen."""
+
+    model_config = ConfigDict(frozen=True)
+
+    from_id: str
+    column: str
+    role: str
+    roles: list[str]
+    targets: list[str] = Field(description="The cards it reaches there.")
+
+
+class ArchitectureGroupRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    column: str
+    name: str = Field(description="github, gitlab, aws, azure, gcp, other — or the column's.")
+    regions: list[str]
+    total: int
+    shown: int
+
+
+class ArchitectureFiguresRead(BaseModel):
+    """How many of each kind the company has — all of them, not only those
+    drawn."""
+
+    model_config = ConfigDict(frozen=True)
+
+    services: int
+    applications: int
+    repositories: int
+    databases: int
+    stores: int
+    cloud_resources: int
+    providers: dict[str, int] = Field(description="The cloud resources, by provider.")
+    external: int
+    teams: int
+    tables: int
+
+
+class ArchitectureRankRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    card_id: str
+    name: str
+    kind: str
+    count: int = Field(description="How many cards rely on it.")
+
+
+class ArchitectureRead(BaseModel):
+    """What the company runs, in columns — its code, its services, its data,
+    its cloud, what it relies on outside — each thing's state, the links
+    between them named, and the figures around them (LEKA-369)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    built_at: datetime | None
+    environment: str | None = Field(description="The environment shown; none: all.")
+    environments: list[str]
+    groups: list[ArchitectureGroupRead]
+    cards: list[ArchitectureCardRead]
+    links: list[ArchitectureLinkRead]
+    bundles: list[ArchitectureBundleRead]
+    figures: ArchitectureFiguresRead
+    health: dict[str, int] = Field(
+        description="The services', stores' and resources' states, counted."
+    )
+    services_by_status: dict[str, int]
+    top_dependencies: list[ArchitectureRankRead]
+
+
 class KnowledgeCoverageRead(BaseModel):
     """How well LEKA knows the company, kind by kind, and from which sources."""
 
