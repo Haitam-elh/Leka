@@ -78,10 +78,13 @@ async def _normalised(
     *named: dict[str, Any],
     relationships: tuple[dict[str, Any], ...] = (),
     at: datetime = NOW,
+    external_id: str | None = None,
 ) -> uuid.UUID:
     """A record as normalisation leaves it — its row, the rows it came from,
-    and what it states — and the row's id."""
-    checksum = hashlib.sha256(own["key"].encode() + source_id.bytes).hexdigest()
+    and what it states — and the row's id. Its source's id for it is its
+    entity's key, unless another record names the same entity."""
+    external_id = external_id or own["key"]
+    checksum = hashlib.sha256(external_id.encode() + source_id.bytes).hexdigest()
     result = json.dumps(
         {"entity": own, "related": list(named), "relationships": list(relationships)}
     )
@@ -94,7 +97,7 @@ async def _normalised(
                     "checksum, first_seen_at, last_seen_at) VALUES (:w, :s, 'records', :e, :c, "
                     ":at, :at) RETURNING id"
                 ),
-                {**values, "e": own["key"]},
+                {**values, "e": external_id},
             )
             extracted = await session.scalar(
                 text(

@@ -141,7 +141,9 @@ def _add(
 ) -> None:
     """One more saying of a key by a source. Its name, type and attributes
     are what speaks best for it: the thing's own record before a record
-    naming it, then the latest."""
+    naming it, then the latest. Two records of its own — GitHub's
+    repository, and what the repository is made of — say it together: the
+    latest's attributes over the other's, none lost."""
     key, kind = entity.get("key"), entity.get("type")
     if not isinstance(key, str) or not key or not isinstance(kind, str):
         return
@@ -165,11 +167,18 @@ def _add(
     if observed is not None:
         mention.first_seen = min(filter(None, (mention.first_seen, observed)))
         mention.last_seen = max(filter(None, (mention.last_seen, observed)))
-    if (key, source_id) not in ranks or rank >= ranks[(key, source_id)]:
+    said = dict(attributes) if isinstance(attributes, dict) else {}
+    before = ranks.get((key, source_id))
+    if before is None or rank >= before:
         ranks[(key, source_id)] = rank
         mention.type = kind
         mention.name = name if isinstance(name, str) and name else key
-        mention.attributes = dict(attributes) if isinstance(attributes, dict) else {}
+        # Another record of its own said it before: what it said stays,
+        # under what this one says.
+        kept = mention.attributes if before is not None and before[0] and own else {}
+        mention.attributes = {**kept, **said}
+    elif own and before[0]:
+        mention.attributes = {**said, **mention.attributes}
 
 
 def _moment(value: object) -> datetime | None:

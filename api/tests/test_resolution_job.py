@@ -81,9 +81,13 @@ async def _normalised(
     own: dict[str, Any],
     *named: dict[str, Any],
     at: datetime = NOW,
+    external_id: str | None = None,
 ) -> None:
-    """A record as normalisation leaves it: its row, and the rows it came from."""
-    checksum = hashlib.sha256(own["key"].encode() + source_id.bytes).hexdigest()
+    """A record as normalisation leaves it: its row, and the rows it came
+    from — its source's id for it its entity's key, unless another record
+    names the same entity."""
+    external_id = external_id or own["key"]
+    checksum = hashlib.sha256(external_id.encode() + source_id.bytes).hexdigest()
     result = json.dumps({"entity": own, "related": list(named), "relationships": []})
     with workspace_scope(workspace_id):
         async with session_factory() as session:
@@ -94,7 +98,7 @@ async def _normalised(
                     "checksum, first_seen_at, last_seen_at) VALUES (:w, :s, 'records', :e, :c, "
                     ":at, :at) RETURNING id"
                 ),
-                {**values, "e": own["key"]},
+                {**values, "e": external_id},
             )
             extracted = await session.scalar(
                 text(
@@ -227,6 +231,33 @@ async def test_a_workspace_s_candidates_are_resolved_across_its_sources(
     [run] = await _runs(workspace)
     assert (run.status, run.counts["mentions"]) == ("succeeded", 11)
     assert await _entities(acme["globex"]) == {}
+
+
+async def test_a_source_s_two_records_of_one_thing_say_it_together(
+    acme: dict[str, uuid.UUID],
+) -> None:
+    workspace = acme["acme"]
+    github = await _source(workspace, "GitHub")
+    key = "github.com/acme/api"
+    await _normalised(
+        workspace,
+        github,
+        entity(key, "acme/api", type="repository", visibility="private", language="python"),
+    )
+    # What the repository is made of, read after it, from its tree.
+    laid = entity(key, "acme/api", type="repository", modules=[{"path": "api"}], language="Python")
+    laid["observed_at"] = (NOW + timedelta(minutes=1)).isoformat()
+    await _normalised(workspace, github, laid, external_id="R_api:_layout")
+
+    await resolve_workspace(workspace)
+
+    repository = (await _entities(workspace))[key]
+    # Nothing either said is lost; where both speak, the latest.
+    assert repository.attributes == {
+        "visibility": "private",
+        "modules": [{"path": "api"}],
+        "language": "Python",
+    }
 
 
 async def test_what_it_made_keeps_its_ids_from_one_run_to_the_next(

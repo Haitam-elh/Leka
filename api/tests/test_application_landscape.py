@@ -95,7 +95,13 @@ def _record(
     return result
 
 
-async def _store(workspace: uuid.UUID, source: uuid.UUID, record: NormalisedRecord) -> None:
+async def _store(
+    workspace: uuid.UUID,
+    source: uuid.UUID,
+    record: NormalisedRecord,
+    *,
+    external_id: str | None = None,
+) -> None:
     """A record as normalisation leaves it in `normalised_records`, from the
     workspace's own source."""
 
@@ -110,6 +116,7 @@ async def _store(workspace: uuid.UUID, source: uuid.UUID, record: NormalisedReco
         ours(record.entity),
         *[ours(e) for e in record.related],
         relationships=tuple(ours(r) for r in record.relationships),
+        external_id=external_id,
     )
 
 
