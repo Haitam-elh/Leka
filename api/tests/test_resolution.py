@@ -26,6 +26,7 @@ from typing import Any
 import pytest
 
 from leka.ingestion.resolution import Identity, Mention, Resolution, resolve
+from leka.ingestion.resolution import signals as sig
 
 GITHUB = uuid.UUID("00000000-0000-0000-0000-00000000000a")
 JIRA = uuid.UUID("00000000-0000-0000-0000-00000000000b")
@@ -370,6 +371,36 @@ def test_a_bot_is_never_matched_by_its_name() -> None:
     )
 
     assert len(result.identities) == 4
+    assert result.links == []
+
+
+@pytest.mark.parametrize(
+    ("key", "name", "bot"),
+    [
+        # What signs GitHub's merges, and an assistant's co-authored commits.
+        ("person:email:noreply@github.com", "GitHub", True),
+        ("person:github.com:web-flow", "GitHub", True),
+        ("person:email:noreply@anthropic.com", "Claude", True),
+        ("person:email:no-reply@acme.io", "Acme", True),
+        # A person's private address on GitHub is a person's.
+        ("person:email:12345+sara@users.noreply.github.com", "Sara Martin", False),
+        ("person:github.com:sara", "Sara Martin", False),
+        ("person:email:noreplyanna@acme.io", "Anna Noreply", False),
+    ],
+)
+def test_a_services_no_reply_address_is_a_bot(key: str, name: str, bot: bool) -> None:
+    assert sig.is_bot(key, name) is bot
+
+
+def test_a_no_reply_address_is_never_matched_by_its_name() -> None:
+    result = resolve(
+        [
+            seen("person:email:noreply@github.com", GITHUB, "GitHub"),
+            seen("person:email:noreply@acme.io", JIRA, "GitHub"),
+        ]
+    )
+
+    assert len(result.identities) == 2
     assert result.links == []
 
 
