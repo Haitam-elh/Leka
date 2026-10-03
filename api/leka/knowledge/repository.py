@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy import (
+    ColumnElement,
     CursorResult,
     Select,
     and_,
@@ -1751,9 +1752,10 @@ class GraphRepository(EntityRepository):
         within: set[uuid.UUID] | None,
         limit: int,
     ) -> tuple[list[Entity], int]:
-        """A view's layer: its entities — only those `within`, when given —
-        the most connected first, at most `limit`; and how many there are,
-        counted by the same query."""
+        """A view's layer: its entities — only those `within`, when given;
+        never a bot, as the people's list (people) — the most connected
+        first, at most `limit`; and how many there are, counted by the same
+        query."""
         if within is not None and not within:
             return [], 0
 
@@ -1773,6 +1775,7 @@ class GraphRepository(EntityRepository):
                 Entity.workspace_id == self.workspace_id,
                 Entity.type.in_(types),
                 Entity.lifecycle != Lifecycle.REMOVED,
+                _not_a_bot(),
             )
             .order_by(degree.desc(), Entity.name, Entity.id)
             .limit(limit)
@@ -1813,8 +1816,8 @@ class GraphRepository(EntityRepository):
         return set(rows.scalars().all())
 
     async def known(self, types: Sequence[EntityType]) -> list[tuple[str, int, int, int, int, int]]:
-        """Each kind's entities — the removed left out — and how many of
-        them have an owner, are described by a document, are said by two
+        """Each kind's entities — the removed and the bots left out — and
+        how many of them have an owner, are described by a document, are said by two
         sources or more, are tied to anything."""
         rows = await self._session.execute(
             text(
@@ -1836,7 +1839,7 @@ class GraphRepository(EntityRepository):
                        AND r.to_entity_id = e.id))
                 FROM entities e
                 WHERE e.workspace_id = :workspace AND e.lifecycle <> 'removed'
-                  AND e.type = ANY(CAST(:types AS text[]))
+                  AND e.type = ANY(CAST(:types AS text[])) AND {NOT_A_BOT}
                 GROUP BY e.type
                 ORDER BY e.type
                 """  # noqa: S608 — SOURCES is this module's own text
@@ -1859,7 +1862,7 @@ class GraphRepository(EntityRepository):
                 JOIN sources src
                   ON src.workspace_id = :workspace AND src.id::text = s ->> 'source_id'
                 WHERE e.workspace_id = :workspace AND e.lifecycle <> 'removed'
-                  AND e.type = ANY(CAST(:types AS text[]))
+                  AND e.type = ANY(CAST(:types AS text[])) AND {NOT_A_BOT}
                 GROUP BY 1, 2
                 ORDER BY 3 DESC, 2
                 """  # noqa: S608 — SOURCES is this module's own text
@@ -1887,6 +1890,18 @@ class GraphRepository(EntityRepository):
             )
         )
         return found if isinstance(found, datetime) else None
+
+
+# What a bot is to the views and their coverage: a person enrichment said
+# is one (its `bot` attribute) — left out, as the people's list does.
+NOT_A_BOT = "NOT (e.type = 'person' AND coalesce(e.attributes ->> 'bot', '') = 'true')"
+
+
+def _not_a_bot() -> ColumnElement[bool]:
+    return or_(
+        Entity.type != EntityType.PERSON,
+        func.coalesce(Entity.attributes["bot"].astext, "") != "true",
+    )
 
 
 def _edges(

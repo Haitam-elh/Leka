@@ -8,7 +8,8 @@ resolution, enrichment, the model's build:
                    API; Billing API, of the application Billing platform;
                    both owned by the team Payments
     an HR system   the team Équipe Données under Engineering; Nora — in
-                   Payments, reporting to Sara
+                   Payments, reporting to Sara; and GitHub, the bot that
+                   signs merges
     a business system  the capability Invoicing, supported by the Billing
                    platform
 
@@ -106,6 +107,8 @@ async def _acme(workspace: uuid.UUID) -> dict[str, uuid.UUID]:
                 {"email": "nora@acme.io", "manager": "sara@acme.io", "team": "Payments"},
             ),
         ),
+        # What signs GitHub's merges: a bot, not one of the company's people.
+        (hr, _declared("person", "p-2", "GitHub", {"email": "noreply@github.com"})),
         (
             business,
             _declared(
@@ -269,6 +272,10 @@ async def test_the_landscapes_rows_states_lines_coverage_and_sources(
     assert known["person"]["owned"] is None and known["person"]["documented"] is None
     names = {node["name"] for node in organisation["nodes"]}
     assert {"Payments", "Équipe Données", "Engineering", "Nora Diallo"} <= names
+    # A bot is no one: not a person on the view, nor in its coverage.
+    assert "GitHub" not in names
+    people = [node for node in organisation["nodes"] if node["type"] == "person"]
+    assert known["person"]["total"] == len(people)
 
     domains = await _get(client, "/views/domains")
     rows = {layer["name"]: layer["total"] for layer in domains["layers"]}
