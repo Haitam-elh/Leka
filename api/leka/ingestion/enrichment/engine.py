@@ -90,7 +90,9 @@ from leka.ingestion.resolution import signals as sig
 # 7: incidents, changes, deployments — their dates carried, how long they
 #    took, what changed before an incident; an incident or a change whose
 #    title, component or label names a service affects it (LEKA-367).
-ENRICHER_VERSION = 7
+# 8: who is a bot — a service's no-reply address, GitHub's merge account —
+#    said of them, and no expertise (LEKA-369).
+ENRICHER_VERSION = 8
 
 Origin = Literal["stated", "inferred"]
 

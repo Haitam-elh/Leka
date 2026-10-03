@@ -96,6 +96,80 @@ export function layeredPositions(
 }
 
 /**
+ * Groups made readable (LEKA-369): each group split into rows by what
+ * points to what inside it — what nothing of the group points to on top,
+ * what it points to under it, so that an arrow goes down a row rather than
+ * along one, where it would loop over its neighbours — then each row
+ * ordered under what it is tied to above it, so the lines cross little. A
+ * loop is cut where it closes. Forty tables and their foreign keys: the
+ * tables everything references at the bottom, the arrows going down.
+ */
+export function layered<T extends { id: string }>(
+  groups: readonly (readonly T[])[],
+  links: readonly { from: string; to: string }[],
+): T[][] {
+  const rows: T[][] = [];
+  for (const group of groups) {
+    const inGroup = new Set(group.map((one) => one.id));
+    const pointedBy = new Map<string, string[]>();
+    for (const link of links) {
+      if (link.from === link.to || !inGroup.has(link.from) || !inGroup.has(link.to)) continue;
+      pointedBy.set(link.to, [...(pointedBy.get(link.to) ?? []), link.from]);
+    }
+    const rank = new Map<string, number>();
+    const visiting = new Set<string>();
+    const rankOf = (id: string): number => {
+      const known = rank.get(id);
+      if (known !== undefined) return known;
+      visiting.add(id);
+      let deepest = 0;
+      for (const from of pointedBy.get(id) ?? []) {
+        // A loop: cut where it closes.
+        if (!visiting.has(from)) deepest = Math.max(deepest, rankOf(from) + 1);
+      }
+      visiting.delete(id);
+      rank.set(id, deepest);
+      return deepest;
+    };
+    const levels = new Map<number, T[]>();
+    for (const one of group) {
+      const level = rankOf(one.id);
+      levels.set(level, [...(levels.get(level) ?? []), one]);
+    }
+    for (const level of [...levels.keys()].sort((a, b) => a - b)) {
+      rows.push(levels.get(level) ?? []);
+    }
+  }
+
+  // Each row under what it is tied to above it: by the mean place of those.
+  const neighbours = new Map<string, string[]>();
+  for (const link of links) {
+    neighbours.set(link.from, [...(neighbours.get(link.from) ?? []), link.to]);
+    neighbours.set(link.to, [...(neighbours.get(link.to) ?? []), link.from]);
+  }
+  const place = new Map<string, number>();
+  return rows.map((row, index) => {
+    const ordered =
+      index === 0
+        ? row
+        : row
+            .map((one, at) => {
+              const above = (neighbours.get(one.id) ?? [])
+                .map((id) => place.get(id))
+                .filter((x): x is number => x !== undefined);
+              const centre = above.length
+                ? above.reduce((a, b) => a + b, 0) / above.length
+                : Number.POSITIVE_INFINITY;
+              return { one, at, centre };
+            })
+            .sort((a, b) => a.centre - b.centre || a.at - b.at)
+            .map(({ one }) => one);
+    ordered.forEach((one, at) => place.set(one.id, (at + 0.5) / ordered.length));
+    return ordered;
+  });
+}
+
+/**
  * Where each entity goes when the caller groups them: each group its own
  * rows, top to bottom, at most MAX_COLUMNS wide and centred — a walk's
  * distances from its root, a view's layers (LEKA-369).
@@ -142,16 +216,25 @@ export function graphEdges(
   entities: readonly KnowledgeEntity[],
   relationships: readonly KnowledgeRelationship[],
   relation: (type: KnowledgeRelationship["type"]) => string,
+  /** Where each node sits: a link to one above it leaves by the top. */
+  placed?: Record<string, { x: number; y: number }>,
 ): Edge[] {
   const names = new Map(entities.map((entity) => [entity.id, entity.name]));
   return relationships
     .filter((link) => names.has(link.from) && names.has(link.to))
     .map((link) => {
       const stroke = TONES[EDGE_TONE[link.status ?? "unknown"]].stroke;
+      // Up to what is above — the root a walk's things point to — straight
+      // up, top to bottom, rather than out of the bottom and round the boxes.
+      const from = placed?.[link.from];
+      const to = placed?.[link.to];
+      const upward = from !== undefined && to !== undefined && to.y < from.y;
       return {
         id: link.id,
         source: link.from,
         target: link.to,
+        sourceHandle: upward ? "up" : "down",
+        targetHandle: upward ? "below" : "above",
         ariaLabel: `${names.get(link.from)} ${relation(link.type)} ${names.get(link.to)}`,
         focusable: false,
         style: { stroke, strokeWidth: 1.5 },
@@ -168,9 +251,24 @@ type EntityNodeData = {
 };
 
 function EntityNode({ data }: NodeProps<Node<EntityNodeData, "entity">>) {
+  // A link comes in at the top and leaves at the bottom — or, to something
+  // above, leaves at the top and comes in at the bottom (graphEdges).
   return (
     <div style={{ width: NODE_WIDTH }}>
-      <Handle type="target" position={Position.Top} isConnectable={false} className="opacity-0" />
+      <Handle
+        type="target"
+        id="above"
+        position={Position.Top}
+        isConnectable={false}
+        className="opacity-0"
+      />
+      <Handle
+        type="source"
+        id="up"
+        position={Position.Top}
+        isConnectable={false}
+        className="opacity-0"
+      />
       <EntityCard
         {...data.entity}
         compact
@@ -180,6 +278,14 @@ function EntityNode({ data }: NodeProps<Node<EntityNodeData, "entity">>) {
       />
       <Handle
         type="source"
+        id="down"
+        position={Position.Bottom}
+        isConnectable={false}
+        className="opacity-0"
+      />
+      <Handle
+        type="target"
+        id="below"
         position={Position.Bottom}
         isConnectable={false}
         className="opacity-0"
@@ -267,8 +373,14 @@ function Graph({
   }, [entities, positions, selectedId, onNodeClick]);
 
   const edges = useMemo(
-    () => graphEdges(entities, relationships, (type) => t.knowledge.relationships[type]),
-    [entities, relationships, t],
+    () =>
+      graphEdges(
+        entities,
+        relationships,
+        (type) => t.knowledge.relationships[type],
+        Object.fromEntries(nodes.map((node) => [node.id, node.position])),
+      ),
+    [entities, relationships, t, nodes],
   );
 
   return (

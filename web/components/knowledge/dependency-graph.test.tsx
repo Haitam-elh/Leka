@@ -13,6 +13,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   DependencyGraph,
   graphEdges,
+  layered,
   layeredPositions,
 } from "@/components/knowledge/dependency-graph";
 import { DICTIONARIES } from "@/lib/i18n/dictionaries";
@@ -153,5 +154,84 @@ describe("DependencyGraph", () => {
     mount(<DependencyGraph entities={many} relationships={links} />);
     const text = within(screen.getByTestId("graph-text"));
     expect(text.getAllByRole("listitem")).toHaveLength(150 + 149);
+  });
+});
+
+describe("an edge's ends", () => {
+  it("goes down from the bottom, and up to what is above from the top", () => {
+    const [down, up] = graphEdges(
+      ENTITIES,
+      [
+        { id: "d", from: "api", to: "db", type: "depends_on" },
+        { id: "u", from: "db", to: "api", type: "depends_on" },
+      ],
+      (type) => type,
+      { api: { x: 0, y: 0 }, db: { x: 0, y: 128 } },
+    );
+
+    expect([down.sourceHandle, down.targetHandle]).toEqual(["down", "above"]);
+    expect([up.sourceHandle, up.targetHandle]).toEqual(["up", "below"]);
+  });
+});
+
+describe("layered", () => {
+  const ids = (rows: { id: string }[][]) => rows.map((row) => row.map((one) => one.id));
+  const node = (id: string) => ({ id });
+
+  it("puts what a thing points to under it, so arrows go down, not along a row", () => {
+    // sessions → users → workspaces, invitations → workspaces: foreign keys.
+    const tables = ["workspaces", "sessions", "invitations", "users"].map(node);
+    const keys = [
+      { from: "sessions", to: "users" },
+      { from: "users", to: "workspaces" },
+      { from: "invitations", to: "workspaces" },
+    ];
+
+    expect(ids(layered([tables], keys))).toEqual([
+      ["sessions", "invitations"],
+      ["users"],
+      ["workspaces"],
+    ]);
+  });
+
+  it("keeps each group its own rows, in the groups' order", () => {
+    const rows = layered(
+      [[node("billing")], [node("orders"), node("invoices")]],
+      [
+        { from: "billing", to: "orders" },
+        { from: "invoices", to: "orders" },
+      ],
+    );
+
+    expect(ids(rows)).toEqual([["billing"], ["invoices"], ["orders"]]);
+  });
+
+  it("cuts a loop where it closes, and places everything once", () => {
+    const rows = layered(
+      [["a", "b", "c"].map(node)],
+      [
+        { from: "a", to: "b" },
+        { from: "b", to: "c" },
+        { from: "c", to: "a" },
+        { from: "a", to: "a" },
+      ],
+    );
+
+    expect(rows.flat().map((one) => one.id).sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("orders a row under what it is tied to above it, so lines cross little", () => {
+    const rows = layered(
+      [[node("left"), node("right")], [node("under-right"), node("under-left")]],
+      [
+        { from: "left", to: "under-left" },
+        { from: "right", to: "under-right" },
+      ],
+    );
+
+    expect(ids(rows)).toEqual([
+      ["left", "right"],
+      ["under-left", "under-right"],
+    ]);
   });
 });

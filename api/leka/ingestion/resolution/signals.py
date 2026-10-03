@@ -38,7 +38,12 @@ NOREPLY = re.compile(r"(?i)(^|[._-])no-?reply([._-]|@)|@users\.noreply\.")
 # Accounts no person is: they commit, comment and deploy for everyone.
 BOT = re.compile(
     r"(?i)(\[bot\]|(^|[-_.])bot($|[-_.@])|dependabot|renovate|github-actions|gitlab-ci|"
-    r"jenkins|circleci|snyk|sonar|travis|buildkite|argocd|terraform)"
+    r"jenkins|circleci|snyk|sonar|travis|buildkite|argocd|terraform|"
+    # A service's own address — noreply@github.com signs GitHub's merges,
+    # noreply@anthropic.com an assistant's co-authored commits — and the
+    # account GitHub merges as. Not a person's private address,
+    # 12345+sara@users.noreply.github.com: that one is Sara's (above).
+    r"(^|[:<\s])no-?reply@|(^|[:/])web-flow$)"
 )
 # Handles too common to say who someone is: an "admin" in two tools is no one.
 GENERIC_HANDLES = frozenset(

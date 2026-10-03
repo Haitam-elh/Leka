@@ -119,12 +119,17 @@ export function Cartography({
   nodes,
   edges,
   rows,
+  view,
   all = false,
   onMore,
 }: {
   nodes: readonly MapNode[];
   edges: readonly MapEdge[];
   rows: readonly MapRow[];
+  /** The landscape drawn: a row of it may mean what is tied to another
+   * (the domains' applications are those the business relies on), and its
+   * empty row then says so rather than "connect a tool". */
+  view?: string;
   /** Every box, rather than the first five of each row. */
   all?: boolean;
   onMore?: () => void;
@@ -132,6 +137,8 @@ export function Cartography({
   const t = useDictionary();
   const w = t.environment.map;
   const frame = useRef<HTMLDivElement>(null);
+  const tiedHint = (row: string): string | undefined =>
+    view ? (w.hintsOf as Record<string, Record<string, string>>)[view]?.[row] : undefined;
   const [paths, setPaths] = useState<Path[]>([]);
 
   // The anchor row — the services where there are, else the first that
@@ -261,12 +268,14 @@ export function Cartography({
               ) : visible.length === 0 ? (
                 <li className="relative z-10 flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-shell-line bg-white px-3 py-2 text-xs text-shell-muted">
                   <span className="flex gap-1.5">
-                    {(HINT_LOGOS[row.name] ?? []).map((kind) => (
+                    {(tiedHint(row.name) ? [] : (HINT_LOGOS[row.name] ?? [])).map((kind) => (
                       <SourceLogo key={kind} kind={kind} className="size-4" />
                     ))}
                   </span>
                   <span className="max-w-md">
-                    {(w.hints as Record<string, string>)[row.name] ?? w.layerEmpty}
+                    {tiedHint(row.name) ??
+                      (w.hints as Record<string, string>)[row.name] ??
+                      w.layerEmpty}
                   </span>
                   <Link
                     href={routes.sources()}

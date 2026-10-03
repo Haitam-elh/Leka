@@ -14,7 +14,8 @@ const MEASURES = ["owned", "documented", "corroborated", "connected"] as const;
  * How well LEKA knows what a view shows, and where it comes from
  * (LEKA-369): for each kind, how many there are, and the share with an
  * owner, documented, confirmed by two sources, related to anything — over
- * all of them, not only those drawn. Then the sources the view is made of.
+ * all of them, not only those drawn, and it says so. Then the sources the
+ * view is made of.
  * A measure that does not apply to a kind says so; nothing is estimated.
  */
 export function CoveragePanel({
@@ -31,7 +32,8 @@ export function CoveragePanel({
 
   return (
     <div className="mt-4 border-t border-shell-line/60 pt-4" data-testid="coverage">
-      <h3 className="mb-2 text-[0.875rem] font-semibold text-brand-navy">{w.title}</h3>
+      <h3 className="text-[0.875rem] font-semibold text-brand-navy">{w.title}</h3>
+      <p className="mb-2 text-xs text-shell-muted">{w.scope}</p>
       {coverage.length === 0 ? (
         <p className="text-[0.8125rem] text-shell-muted">{w.empty}</p>
       ) : (

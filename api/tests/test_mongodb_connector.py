@@ -203,6 +203,13 @@ async def catalogue(server: None, local: Commands) -> AsyncIterator[Catalogue]:
         await billing.customers.insert_one({"_id": 1, "email": "ada@acme.example"})
         await billing.invoices.insert_one({"_id": 1, "customer_id": 1, "paid": False})
         await client[made.secret].salaries.insert_one({"amount": 1})
+        # The collections' sizes, settled: WiredTiger writes them at its
+        # checkpoints — the server's own, every minute — and one landing
+        # between two passes changed them, so that a pass rightly wrote the
+        # table again (seen once, in a full run on 2026-10-03). A checkpoint
+        # forced here: nothing moves them while a test reads. As the
+        # PostgreSQL fixture's VACUUM (ANALYZE).
+        await admin.command("fsync")
         await admin.command(
             {
                 "createRole": made.role,

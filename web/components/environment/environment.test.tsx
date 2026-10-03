@@ -345,7 +345,28 @@ describe("Mon environnement", () => {
     const capabilities = await screen.findByTestId("layer-capabilities");
     expect(within(capabilities).getByText("0 capacité(s)")).toBeInTheDocument();
     expect(within(capabilities).getByText(/Déclarez vos capacités métier/)).toBeInTheDocument();
-    expect(within(screen.getByTestId("layer-applications")).getByText("0 élément(s)")).toBeInTheDocument();
+    // Its applications are those the business relies on: the row says so,
+    // not "connect GitHub" to someone whose GitHub is connected.
+    const applications = within(screen.getByTestId("layer-applications"));
+    expect(applications.getByText("0 élément(s)")).toBeInTheDocument();
+    expect(applications.getByText(/sur lesquels s'appuient vos capacités/)).toBeInTheDocument();
+    expect(applications.queryByText(/Connectez GitHub/)).not.toBeInTheDocument();
+
+    // The applications tab's own row holds what a catalogue declares, not
+    // the repositories: it says so, rather than "connect GitHub".
+    graphApi.view.mockResolvedValueOnce(
+      EMPTY("applications", [
+        layer("applications", ["application"]),
+        layer("services", ["service"]),
+        layer("code", ["repository"]),
+      ]),
+    );
+    await user.click(screen.getByTestId("env-tab-applications"));
+    const declared = within(await screen.findByTestId("layer-code"));
+    expect(declared.getByText(/reliés à une application ou à un service/)).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("layer-applications")).getByText(/que déclare un catalogue/),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByTestId("env-tab-company"));
     await user.click(screen.getByRole("button", { name: "Liste" }));
@@ -358,6 +379,8 @@ describe("Mon environnement", () => {
     mount(<EnvironmentScreen />);
 
     const coverage = await screen.findByTestId("coverage");
+    // Over every one of its kinds, not only those drawn — and it says so.
+    expect(within(coverage).getByText(/pas seulement ceux affichés/)).toBeInTheDocument();
     const service = within(within(coverage).getByTestId("coverage-service"));
     expect(service.getByRole("rowheader")).toHaveTextContent("Service");
     expect(service.getByRole("meter", { name: "Avec propriétaire : 1 sur 1" })).toHaveAttribute(

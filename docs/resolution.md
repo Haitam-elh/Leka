@@ -96,8 +96,11 @@ What is **never** merged — the false positives this is built against:
   (0.89).
 - **A tie**: a candidate matching two others that are not one another is
   merged with neither (`tied_match`, ambiguous).
-- **Bots** (`dependabot[bot]`, `github-actions`, `renovate`…) are never
-  matched by their names; **generic or short handles** (`admin`, `dev`,
+- **Bots** (`dependabot[bot]`, `github-actions`, `renovate`…, a service's
+  no-reply address — `noreply@github.com`, which signs GitHub's merges —
+  and GitHub's merge account `web-flow`, LEKA-369) are never matched by
+  their names. A person's private address on GitHub,
+  `12345+sara@users.noreply.github.com`, is a person's, not a bot's; **generic or short handles** (`admin`, `dev`,
   anything under four letters) say nothing.
 - **A crowd**: a name or a handle more than 5 people hold says nothing.
 - **Things of different types** — a service, a team, a repository called
