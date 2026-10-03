@@ -131,6 +131,8 @@ class Enriched:
     value: object
     rule: str
     confidence: float
+    # What it was read from: "leka-prod is running; its last deployment succeeded".
+    evidence: str = ""
 
 
 @dataclass(frozen=True)
@@ -328,6 +330,7 @@ def build(
                     "origin": "enrichment",
                     "rule": value.rule,
                     "confidence": value.confidence,
+                    **({"evidence": value.evidence} if value.evidence else {}),
                 }
             )
         attributes, dropped = clean(kind, merged)

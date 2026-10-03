@@ -12,6 +12,9 @@ table, an index for each way, walked one step — one query — at a time
     paths()     the shortest ways between two entities, MAX_PATHS at most
     view()      a landscape of the company, its coverage and its sources
                 (views.py)
+    architecture()
+                what the company runs, in columns, the links between them
+                named, and the figures around them (architecture.py)
     coverage()  how well the model knows each kind, and from where
 
 Every walk is bounded — by depth, by the entities it may reach, by the
@@ -31,9 +34,17 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 from leka.ingestion import monitoring_kinds
+from leka.knowledge import architecture as arch
 from leka.knowledge.models import Entity, EntityType, Relationship, RelationshipType
 from leka.knowledge.repository import GraphRepository
 from leka.knowledge.schemas import (
+    ArchitectureBundleRead,
+    ArchitectureCardRead,
+    ArchitectureFiguresRead,
+    ArchitectureGroupRead,
+    ArchitectureLinkRead,
+    ArchitectureRankRead,
+    ArchitectureRead,
     EntityBrief,
     GraphNodeRead,
     GraphRead,
@@ -289,7 +300,7 @@ class GraphService:
                     if layer.tied
                     else None
                 )
-                found, total = await self._graph.layer(
+                found, total, _ = await self._graph.layer(
                     candidate, within=within, limit=MAX_PER_LAYER
                 )
                 if total:
@@ -369,6 +380,221 @@ class GraphService:
             coverage=await self._coverage(among),
             sources=await self._sources(among),
         )
+
+    async def architecture(self, *, now: datetime, environment: str | None) -> ArchitectureRead:
+        """What the company runs, in columns (architecture.py): its code,
+        services, data, cloud and what it relies on outside — each thing's
+        state, deduced where nothing watches it — the links between them
+        named, and how many of each there are."""
+        drawn: list[Entity] = []
+        degrees: dict[uuid.UUID, int] = {}
+        for types, limit in (
+            ((EntityType.REPOSITORY,), arch.MAX_CARDS),
+            ((EntityType.SERVICE, EntityType.APPLICATION), 3 * arch.MAX_CARDS),
+            ((EntityType.DATABASE,), 3 * arch.MAX_CARDS),
+            ((EntityType.INFRA_RESOURCE,), 5 * arch.MAX_CARDS),
+        ):
+            found, _, degree = await self._graph.layer(
+                types, within=None, limit=limit, outside=True
+            )
+            drawn += found
+            degrees |= degree
+        shown_by = await self._kinds(drawn)
+        placed = [
+            Placed(
+                id=entity.id,
+                type=entity.type.value,
+                key=entity.key,
+                name=entity.name,
+                layer="",
+                attributes=dict(entity.attributes),
+                kinds=frozenset(_sources(entity, shown_by)),
+            )
+            for entity in drawn
+        ]
+        ids = [thing.id for thing in placed]
+        services = [thing.id for thing in placed if thing.type == EntityType.SERVICE]
+        hit = await self._graph.recently_hit(services, since=now - RECENT_INCIDENT)
+        monitoring = monitoring_kinds()
+        things = [
+            arch.Thing(
+                id=thing.id,
+                type=thing.type,
+                key=thing.key,
+                name=thing.name,
+                attributes=thing.attributes,
+                status=state(thing, monitoring=monitoring, recently_hit=thing.id in hit),
+                deduced=deduced(thing, monitoring=monitoring, recently_hit=thing.id in hit),
+                why=_why(entity),
+                kinds=thing.kinds,
+                degree=degrees.get(thing.id, 0),
+            )
+            for thing, entity in zip(placed, drawn, strict=True)
+        ]
+        ties = await self._graph.between(ids, types=arch.LINKS, limit=MAX_RELATIONSHIPS)
+        edges = [
+            arch.Edge(
+                from_id=edge.from_entity_id,
+                to_id=edge.to_entity_id,
+                type=edge.type.value,
+                origin=edge.origin,
+                rule=edge.rule,
+                confidence=edge.confidence,
+                evidence=_evidence(edge),
+            )
+            for edge in ties
+        ]
+        owned = await self._graph.around(ids, (RelationshipType.OWNED_BY,))
+        owners = await self._graph.by_ids([e.to_entity_id for e in owned])
+        teams: dict[uuid.UUID, uuid.UUID] = {}
+        for edge in sorted(owned, key=lambda e: -e.confidence):
+            owner = owners.get(edge.to_entity_id)
+            if owner is not None and owner.type is EntityType.TEAM:
+                teams.setdefault(edge.from_entity_id, owner.id)
+        stats = await self._stats(things)
+        totals, providers = await self._census()
+        built = arch.build(
+            things,
+            edges,
+            stats=stats,
+            teams=teams,
+            totals=totals,
+            providers=providers,
+            monitoring=monitoring,
+            environment=environment,
+        )
+        return ArchitectureRead(
+            built_at=await self._graph.built_at(),
+            environment=environment,
+            environments=built.environments,
+            groups=[
+                ArchitectureGroupRead(
+                    id=g.id,
+                    column=g.column,
+                    name=g.name,
+                    regions=g.regions,
+                    total=g.total,
+                    shown=g.shown,
+                )
+                for g in built.groups
+            ],
+            cards=[
+                ArchitectureCardRead(
+                    id=card.id,
+                    column=card.column,
+                    group=card.group,
+                    kind=card.kind,
+                    type=card.type,
+                    name=card.name,
+                    entity_id=card.entity_id,
+                    key=card.key,
+                    status=card.status,
+                    deduced=card.deduced,
+                    why=card.why,
+                    technology=card.technology,
+                    description=card.description,
+                    environment=card.environment,
+                    region=card.region,
+                    url=card.url,
+                    team=_brief(owners.get(card.team_id)) if card.team_id else None,
+                    repository_id=card.repository_id,
+                    host_id=card.host_id,
+                    deployment=card.deployment,
+                    stats=card.stats,
+                    evidence=card.evidence,
+                    sources=card.sources,
+                )
+                for card in built.cards
+            ],
+            links=[
+                ArchitectureLinkRead(
+                    from_id=link.from_id,
+                    to_id=link.to_id,
+                    role=link.role,
+                    origin=link.origin,
+                    confidence=link.confidence,
+                    evidence=link.evidence,
+                    status=link.status,
+                )
+                for link in built.links
+            ],
+            bundles=[
+                ArchitectureBundleRead(
+                    from_id=b.from_id,
+                    column=b.column,
+                    role=b.role,
+                    roles=b.roles,
+                    targets=b.targets,
+                )
+                for b in built.bundles
+            ],
+            figures=ArchitectureFiguresRead(
+                services=totals.get("services", 0),
+                applications=totals.get("applications", 0),
+                repositories=totals.get("repositories", 0),
+                databases=totals.get("databases", 0),
+                stores=totals.get("stores", 0),
+                cloud_resources=totals.get("cloud", 0),
+                providers=providers,
+                external=totals.get("external", 0),
+                teams=totals.get("teams", 0),
+                tables=totals.get("tables", 0),
+            ),
+            health=built.health,
+            services_by_status=built.services,
+            top_dependencies=[
+                ArchitectureRankRead(card_id=card.id, name=card.name, kind=card.kind, count=n)
+                for card, n in built.ranked
+            ],
+        )
+
+    async def _stats(self, things: Sequence[arch.Thing]) -> dict[uuid.UUID, dict[str, int]]:
+        """What the sources count of each card: a repository's commits and
+        pull requests, a database's tables and their bytes, a store's
+        buckets."""
+        repositories = [t.id for t in things if t.type == EntityType.REPOSITORY]
+        databases = [t.id for t in things if t.type == EntityType.DATABASE]
+        found: dict[uuid.UUID, dict[str, int]] = {}
+        work = await self._graph.contents(
+            repositories, (EntityType.COMMIT, EntityType.PULL_REQUEST)
+        )
+        for repository, counts in work.items():
+            found[repository] = {
+                "commits": counts.get(EntityType.COMMIT.value, 0),
+                "pull_requests": counts.get(EntityType.PULL_REQUEST.value, 0),
+            }
+        for database, (tables, size) in (await self._graph.tables(databases)).items():
+            found[database] = {"tables": tables} | ({"size_bytes": size} if size else {})
+        return found
+
+    async def _census(self) -> tuple[dict[str, int], dict[str, int]]:
+        """How many of each column's kinds there are, and the cloud's by
+        provider."""
+        totals: dict[str, int] = {}
+        providers: dict[str, int] = {}
+        for kind, head, attributes, count in await self._graph.census(
+            (*arch.TYPES, EntityType.TEAM, EntityType.DATA_OBJECT)
+        ):
+            if kind == EntityType.TEAM:
+                totals["teams"] = totals.get("teams", 0) + count
+                continue
+            if kind == EntityType.DATA_OBJECT:
+                totals["tables"] = totals.get("tables", 0) + count
+                continue
+            where = arch.column(kind, head, attributes)
+            name = {
+                ("code", EntityType.REPOSITORY.value): "repositories",
+                ("services", EntityType.SERVICE.value): "services",
+                ("services", EntityType.APPLICATION.value): "applications",
+                ("external", EntityType.SERVICE.value): "external",
+                ("data", EntityType.DATABASE.value): "databases",
+                ("data", EntityType.INFRA_RESOURCE.value): "stores",
+            }.get((where or "", kind), where or "")
+            totals[name] = totals.get(name, 0) + count
+            if where == "cloud":
+                provider = arch.group("cloud", head, attributes)
+                providers[provider] = providers.get(provider, 0) + count
+        return totals, providers
 
     async def coverage(self) -> KnowledgeCoverageRead:
         """How well the model knows each kind it holds, and from which
@@ -492,6 +718,24 @@ def _named(edge: Relationship, named: dict[uuid.UUID, Entity]) -> GraphRelations
         first_seen_at=edge.first_seen_at,
         changed_at=edge.changed_at,
     )
+
+
+def _why(entity: Entity) -> str | None:
+    """What a deduced state was read from: its rule's evidence, as the
+    model keeps it."""
+    origins = (entity.provenance or {}).get("attributes")
+    origin = origins.get("deduced_health") if isinstance(origins, dict) else None
+    said = origin.get("evidence") if isinstance(origin, dict) else None
+    return said if isinstance(said, str) and said else None
+
+
+def _evidence(edge: Relationship) -> str | None:
+    """The first evidence the records stating a relationship give."""
+    for record in edge.provenance or []:
+        said = record.get("evidence") if isinstance(record, dict) else None
+        if isinstance(said, str) and said:
+            return said
+    return None
 
 
 def _brief(entity: Entity | None) -> EntityBrief | None:

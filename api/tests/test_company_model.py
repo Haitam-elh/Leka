@@ -121,7 +121,7 @@ def test_an_entity_is_its_resolved_entity_with_where_it_came_from() -> None:
         **{
             **repo().__dict__,
             "enriched": {
-                "lifecycle": Enriched("active", "last_activity", 0.9),
+                "lifecycle": Enriched("active", "last_activity", 0.9, "pushed 3 days ago"),
                 # A source's word is never replaced by a rule's.
                 "language": Enriched("go", "guess", 0.5),
             },
@@ -146,7 +146,13 @@ def test_an_entity_is_its_resolved_entity_with_where_it_came_from() -> None:
         "sources": [{"source_id": str(GITHUB), "key": "github.com/acme/billing-api", "kind": "id"}],
         "attributes": {
             "language": {"origin": "source"},
-            "lifecycle": {"origin": "enrichment", "rule": "last_activity", "confidence": 0.9},
+            # What the rule read it from, kept: why it says so (LEKA-369).
+            "lifecycle": {
+                "origin": "enrichment",
+                "rule": "last_activity",
+                "confidence": 0.9,
+                "evidence": "pushed 3 days ago",
+            },
         },
         "dropped": [],
         "conflicts": [],

@@ -197,6 +197,13 @@ def test_a_stopped_machine_or_a_failed_deployment_is_attention() -> None:
     )
     assert "leka-prod is running" in fact.evidence
     assert "last deployment failed" in fact.evidence
+    # How it went, said on its own: the screen's words for it.
+    last = next(
+        f
+        for f in result.facts
+        if f.attribute == "last_deployment" and f.entity_id == failed.id(API)
+    )
+    assert last.value == "failed"
 
 
 def test_the_screen_says_a_deduced_state_and_a_tool_s_word_wins() -> None:

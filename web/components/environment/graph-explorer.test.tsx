@@ -1,9 +1,10 @@
 /**
  * The detailed map (LEKA-369): the company's graph, explored.
  *
- * What these protect: with nothing chosen, the dependency view is drawn —
- * its things and its lines, in words too — and says when it holds more than
- * it draws; with a thing chosen (?entity=), what surrounds it is walked
+ * What these protect: with nothing chosen, the whole architecture is drawn
+ * — every card, every link in words, a database's tables one choice away —
+ * and says what to connect when nothing is known; with a thing chosen
+ * (?entity=), what surrounds it is walked
  * with the depth, direction and relationships asked, the thing picked on
  * the canvas says what it is and can become the centre, and the shortest
  * way from it to anything searched is written out step by step. Nothing
@@ -18,23 +19,28 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ARCHITECTURE, NOTHING } from "@/components/environment/architecture.test-data";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
-import type {
-  EntityBrief,
-  GraphRead,
-  LandscapeView,
-  PathsRead,
-  SearchResults,
-} from "@/lib/knowledge-graph";
+import type { EntityBrief, GraphRead, PathsRead, SearchResults } from "@/lib/knowledge-graph";
 import { makeQueryClient } from "@/lib/query";
 
-const graphApi = { view: vi.fn(), walk: vi.fn(), paths: vi.fn(), search: vi.fn() };
+const graphApi = {
+  architecture: vi.fn(),
+  view: vi.fn(),
+  walk: vi.fn(),
+  paths: vi.fn(),
+  search: vi.fn(),
+};
 const replace = vi.fn();
 const searchParams = { value: new URLSearchParams() };
 
 vi.mock("@/lib/knowledge-graph", async (original) => ({
   ...(await original<typeof import("@/lib/knowledge-graph")>()),
   knowledgeGraph: graphApi,
+}));
+vi.mock("@/lib/environment", async (original) => ({
+  ...(await original<typeof import("@/lib/environment")>()),
+  environment: { get: vi.fn(), sheet: vi.fn().mockResolvedValue({ events: [] }) },
 }));
 vi.mock("@/lib/sources", async (original) => ({
   ...(await original<typeof import("@/lib/sources")>()),
@@ -65,7 +71,6 @@ const BILLING = "0c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 const CHECKOUT = "1c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 const PLATFORM = "2c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 const PAYMENTS = "3c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
-const INVOICING = "4c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 
 const brief = (id: string, type: EntityBrief["type"], name: string): EntityBrief => ({
   id,
@@ -78,7 +83,6 @@ const billing = brief(BILLING, "service", "Billing API");
 const checkout = brief(CHECKOUT, "service", "Checkout");
 const platform = brief(PLATFORM, "application", "Billing platform");
 const payments = brief(PAYMENTS, "team", "Payments");
-const invoicing = brief(INVOICING, "business_capability", "Invoicing");
 
 const link = (id: string, from: string, to: string, type: string, confidence = 0.9) => ({
   id,
@@ -91,43 +95,6 @@ const link = (id: string, from: string, to: string, type: string, confidence = 0
   cross_source: false,
   attributes: {},
 });
-
-const box = (entity: EntityBrief, layer: string, status: string | null = null) => ({
-  id: entity.id,
-  type: entity.type,
-  layer,
-  name: entity.name,
-  status,
-  entity_id: entity.id,
-  key: entity.key,
-  detail: null,
-  count: 1,
-  environment: null,
-  team: null,
-  deduced: false,
-});
-
-const DEPENDENCIES: LandscapeView = {
-  view: "dependencies",
-  built_at: null,
-  layers: [
-    { name: "business", types: ["business_capability", "business_process"], total: 1, shown: 1 },
-    { name: "applications", types: ["application"], total: 1, shown: 1 },
-    { name: "services", types: ["service"], total: 2, shown: 2 },
-  ],
-  nodes: [
-    box(invoicing, "business"),
-    box(platform, "applications"),
-    box(billing, "services", "incident"),
-    box(checkout, "services", "operational"),
-  ],
-  edges: [
-    { from_id: INVOICING, to_id: PLATFORM, type: "supported_by", status: null },
-    { from_id: CHECKOUT, to_id: BILLING, type: "depends_on", status: "incident" },
-  ],
-  coverage: [],
-  sources: [],
-};
 
 const WALK: GraphRead = {
   roots: [billing],
@@ -189,46 +156,41 @@ const graphText = async () => within(await screen.findByTestId("graph-text"));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  graphApi.view.mockResolvedValue(DEPENDENCIES);
+  graphApi.architecture.mockResolvedValue(ARCHITECTURE);
   graphApi.walk.mockResolvedValue(WALK);
   graphApi.paths.mockResolvedValue(PATHS);
   graphApi.search.mockResolvedValue(FOUND);
 });
 
-describe("the dependency view", () => {
-  it("draws what the business and the software need, in words too", async () => {
+describe("the whole architecture", () => {
+  it("draws every card and every link in words, a database's tables one choice away", async () => {
+    const user = userEvent.setup();
     mount();
 
-    const words = await graphText();
-    expect(graphApi.view).toHaveBeenCalledWith("dependencies");
+    const words = within(await screen.findByTestId("architecture-text"));
+    expect(graphApi.architecture).toHaveBeenCalledWith(null);
     expect(graphApi.walk).not.toHaveBeenCalled();
-    expect(words.getByText("Billing API, Service, Incident")).toBeInTheDocument();
-    expect(words.getByText("Checkout dépend de Billing API (Incident)")).toBeInTheDocument();
-    expect(words.getByText("Invoicing s'appuie sur Billing platform")).toBeInTheDocument();
-    expect(screen.getByTestId("explorer-counts")).toHaveTextContent(
-      "4 élément(s), 2 relation(s)",
+    expect(graphApi.view).not.toHaveBeenCalled();
+    expect(words.getByText("Leka Web appelle Leka API")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Toute l'architecture" })).toBeInTheDocument();
+    // The detailed map is the architecture's own: no widgets under it.
+    expect(screen.queryByTestId("architecture-types")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^PostgreSQL, Base de données/ }));
+    expect(screen.getByRole("link", { name: /Voir ses tables/ })).toHaveAttribute(
+      "href",
+      "/environment/graph?entity=10000000-0000-4000-8000-000000000006",
     );
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it("says when a row holds more than it draws", async () => {
-    graphApi.view.mockResolvedValue({
-      ...DEPENDENCIES,
-      layers: [{ ...DEPENDENCIES.layers[2], total: 80 }],
-    });
-    mount();
-
-    expect(await screen.findByRole("status")).toHaveTextContent(/Trop d'éléments/);
-  });
-
-  it("says nothing is known yet, rather than drawing an empty canvas", async () => {
-    graphApi.view.mockResolvedValue({ ...DEPENDENCIES, nodes: [], edges: [] });
+  it("says what to connect, rather than drawing an empty canvas", async () => {
+    graphApi.architecture.mockResolvedValue(NOTHING);
     mount();
 
     expect(
-      await screen.findByText("Aucune dépendance connue pour l'instant"),
+      await screen.findByText("Votre architecture n'est pas encore connue"),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId("graph-text")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("architecture")).not.toBeInTheDocument();
   });
 });
 
@@ -243,7 +205,7 @@ describe("around one thing", () => {
       direction: "both",
       relationships: [],
     });
-    expect(graphApi.view).not.toHaveBeenCalled();
+    expect(graphApi.architecture).not.toHaveBeenCalled();
     expect(words.getByText("Checkout dépend de Billing API")).toBeInTheDocument();
     expect(words.getByText("Billing API fait partie de Billing platform")).toBeInTheDocument();
     const trail = screen.getByRole("navigation", { name: "Fil d'Ariane" });
@@ -353,11 +315,11 @@ describe("around one thing", () => {
     expect(await screen.findByText("Rien n'est relié à cet élément ici")).toBeInTheDocument();
   });
 
-  it("asks nothing for an address that names no entity, and shows the dependency view", async () => {
+  it("asks nothing for an address that names no entity, and shows the architecture", async () => {
     mount("billing-api");
 
-    await graphText();
+    await screen.findByTestId("architecture-text");
     expect(graphApi.walk).not.toHaveBeenCalled();
-    expect(graphApi.view).toHaveBeenCalledWith("dependencies");
+    expect(graphApi.architecture).toHaveBeenCalledWith(null);
   });
 });

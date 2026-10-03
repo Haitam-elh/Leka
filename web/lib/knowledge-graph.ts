@@ -21,6 +21,15 @@ export type ViewEdge = components["schemas"]["ViewEdgeRead"];
 export type KindCoverage = components["schemas"]["KindCoverageRead"];
 export type ViewSource = components["schemas"]["ViewSourceRead"];
 export type EntityBrief = components["schemas"]["EntityBrief"];
+export type Architecture = components["schemas"]["ArchitectureRead"];
+export type ArchitectureCard = components["schemas"]["ArchitectureCardRead"];
+export type ArchitectureLink = components["schemas"]["ArchitectureLinkRead"];
+export type ArchitectureBundle = components["schemas"]["ArchitectureBundleRead"];
+export type ArchitectureGroup = components["schemas"]["ArchitectureGroupRead"];
+
+/** The architecture's columns, left to right (api/leka/knowledge/architecture.py). */
+export const ARCHITECTURE_COLUMNS = ["code", "services", "data", "cloud", "external"] as const;
+export type ArchitectureColumn = (typeof ARCHITECTURE_COLUMNS)[number];
 
 /** The landscapes, as the API names them — the tabs of "Mon environnement",
  * and the dependency view of the detailed map. */
@@ -88,6 +97,10 @@ export const knowledgeGraph = {
       })}`,
     ),
   view: (name: ViewName) => apiFetch<LandscapeView>(`/knowledge/views/${name}`),
+  architecture: (environment: string | null) =>
+    apiFetch<Architecture>(
+      `/knowledge/architecture${environment ? `?${query({ environment })}` : ""}`,
+    ),
 };
 
 /**

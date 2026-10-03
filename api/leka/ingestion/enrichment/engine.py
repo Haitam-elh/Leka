@@ -96,7 +96,8 @@ from leka.ingestion.resolution import signals as sig
 #    is, what is deployed with it, a database served by the cloud's only
 #    instance of its engine, a store by its bucket; their health, deduced
 #    (LEKA-369).
-ENRICHER_VERSION = 9
+# 10: what the code runs says how its last deployment went (LEKA-369).
+ENRICHER_VERSION = 10
 
 Origin = Literal["stated", "inferred"]
 
@@ -1850,7 +1851,8 @@ def architecture(graph: Graph) -> Made:
       account's only bucket (`named_for_repository` 0.8, `only_bucket` 0.6);
     - each of them `deduced_health`: what its host — or the instance
       serving it — is doing, worse when its last deployment to its
-      environment failed. Said deduced: a monitoring tool's word wins
+      environment failed; and that deployment's outcome
+      (`last_deployment`). Said deduced: a monitoring tool's word wins
       (view.py)."""
     made = Made()
     hosts: dict[uuid.UUID, Node] = {}
@@ -1934,6 +1936,10 @@ def architecture(graph: Graph) -> Made:
             evidence += f"; its last deployment {outcome}"
             if outcome == "failed" and health == "operational":
                 health = "attention"
+            if outcome:
+                made.facts.append(
+                    _fact(node, "last_deployment", outcome, 0.9, "host", f"{last.name}: {outcome}")
+                )
         made.facts.append(_fact(node, "deduced_health", health, 0.7, "host", evidence))
         made.counts["health"] += 1
     return made

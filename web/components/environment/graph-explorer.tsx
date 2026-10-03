@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { ArchitectureBoard } from "@/components/environment/architecture";
 import { EntityPicker } from "@/components/environment/entity-picker";
 import { Card, entityHref, IconTile, typeIcon, typeLabel } from "@/components/environment/parts";
 import { DependencyGraph, layered, rowPositions } from "@/components/knowledge/dependency-graph";
@@ -35,7 +36,7 @@ import {
   RELATION_FAMILIES,
   type RelationFamily,
 } from "@/lib/knowledge-graph";
-import { useGraphPaths, useGraphWalk, useLandscapeView } from "@/lib/knowledge-graph-queries";
+import { useArchitecture, useGraphPaths, useGraphWalk } from "@/lib/knowledge-graph-queries";
 
 const DEPTHS = ["1", "2", "3"] as const;
 const DIRECTIONS: readonly Direction[] = ["both", "outgoing", "incoming"];
@@ -64,8 +65,9 @@ function entity(brief: { id: string; type: string; name: string }, status?: stri
 
 /**
  * "Voir la cartographie détaillée" (LEKA-369): the company's graph,
- * explored. With nothing chosen, the dependency view — what the business
- * and the software need to work, row by row. With a thing chosen (?entity=),
+ * explored. With nothing chosen, the whole architecture — every card's own
+ * arrows, each named (architecture.tsx); a database's tables only once it
+ * is chosen. With a thing chosen (?entity=),
  * what surrounds it, 1 to 3 steps away, one way or both, through the
  * relationships asked — the canvas re-centred on whatever is picked — and
  * the shortest ways from it to anything else.
@@ -95,8 +97,8 @@ export function GraphExplorer() {
         }
       : null,
   );
-  const view = useLandscapeView(root ? null : "dependencies");
-  const query = root ? walk : view;
+  const architecture = useArchitecture(null, root === null);
+  const query = root ? walk : architecture;
 
   const drawn = useMemo((): Drawn | undefined => {
     if (root) {
@@ -127,37 +129,8 @@ export function GraphExplorer() {
         truncated: data.truncated,
       };
     }
-    const data = view.data;
-    if (!data) return undefined;
-    const relationships = data.edges.map((edge) => ({
-      id: `${edge.from_id}:${edge.type}:${edge.to_id}`,
-      from: edge.from_id,
-      to: edge.to_id,
-      type: edge.type as RelationshipType,
-      status:
-        edge.status && STATUSES.has(edge.status) ? (edge.status as EntityStatus) : undefined,
-    }));
-    // Each layer its rows, what depends on what going down: the tables
-    // everything references at the bottom of the data, not beside the rest.
-    const rows = layered(
-      data.layers.map((layer) =>
-        data.nodes
-          .filter((node) => node.layer === layer.name && node.entity_id)
-          .map((node) =>
-            entity({ id: node.entity_id as string, type: node.type, name: node.name }, node.status),
-          ),
-      ),
-      relationships,
-    );
-    return {
-      entities: rows.flat(),
-      relationships,
-      positions: rowPositions(rows),
-      depth: new Map(),
-      sources: new Map(),
-      truncated: data.layers.some((layer) => layer.total > layer.shown),
-    };
-  }, [root, walk.data, view.data]);
+    return undefined;
+  }, [root, walk.data]);
 
   function centre(id: string) {
     setSelected(null);
@@ -224,15 +197,24 @@ export function GraphExplorer() {
 
       {query.isError ? (
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
+      ) : !root ? (
+        <Card
+          title={w.overview}
+          icon={<IconTile icon={Network} tone="violet" className="size-9" />}
+        >
+          <p className="mb-3 text-[0.8125rem] text-shell-muted">{w.overviewBody}</p>
+          {architecture.data ? (
+            <ArchitectureBoard data={architecture.data} detailed />
+          ) : (
+            <div className="h-[560px] animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />
+          )}
+        </Card>
       ) : (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <Card
-            title={root ? (rootBrief?.name ?? w.title) : w.overview}
+            title={rootBrief?.name ?? w.title}
             icon={<IconTile icon={Network} tone="violet" className="size-9" />}
           >
-            {!root ? (
-              <p className="mb-3 text-[0.8125rem] text-shell-muted">{w.overviewBody}</p>
-            ) : null}
             {drawn === undefined ? (
               <div className="h-[560px] animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />
             ) : drawn.entities.length === 0 ? (
@@ -266,7 +248,7 @@ export function GraphExplorer() {
                 ) : null}
                 <DependencyGraph
                   // A new question, a new canvas: fitted to what it answers.
-                  key={root ?? "dependencies"}
+                  key={root}
                   entities={drawn.entities}
                   relationships={drawn.relationships}
                   positions={drawn.positions}

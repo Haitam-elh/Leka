@@ -2406,6 +2406,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/architecture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Architecture
+         * @description What the company runs, in columns: its code, its applications and
+         *     services, its data and storage, its cloud, the services outside it
+         *     relies on. Each thing's state — deduced from what runs it where nothing
+         *     watches it, and said so — the links between them named by what they
+         *     are, and how many of each there are.
+         */
+        get: operations["architecture_api_v1_knowledge_architecture_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/coverage": {
         parameters: {
             query?: never;
@@ -2440,6 +2464,250 @@ export interface components {
         AccountDeletion: {
             /** Password */
             password: string;
+        };
+        /**
+         * ArchitectureBundleRead
+         * @description A card's links to one other column, together: one arrow, named by
+         *     what most of them are, until the card is chosen.
+         */
+        ArchitectureBundleRead: {
+            /** From Id */
+            from_id: string;
+            /** Column */
+            column: string;
+            /** Role */
+            role: string;
+            /** Roles */
+            roles: string[];
+            /**
+             * Targets
+             * @description The cards it reaches there.
+             */
+            targets: string[];
+        };
+        /**
+         * ArchitectureCardRead
+         * @description One thing of the architecture: an entity, or a monitoring tool.
+         */
+        ArchitectureCardRead: {
+            /** Id */
+            id: string;
+            /**
+             * Column
+             * @description code, services, data, cloud or external.
+             */
+            column: string;
+            /**
+             * Group
+             * @description Where it is from in its column: github, aws…
+             */
+            group: string;
+            /**
+             * Kind
+             * @description What it is, in one word: api, web, worker, proxy, database, cache, storage, instance, bucket, email, monitoring…
+             */
+            kind: string;
+            /**
+             * Type
+             * @description The entity's type; `tool` for a monitoring tool.
+             */
+            type: string;
+            /** Name */
+            name: string;
+            /** Entity Id */
+            entity_id: string | null;
+            /** Key */
+            key: string | null;
+            /**
+             * Status
+             * @description operational, attention, incident, unmonitored.
+             */
+            status: string | null;
+            /**
+             * Deduced
+             * @description Its state is deduced from what runs it.
+             */
+            deduced: boolean;
+            /**
+             * Why
+             * @description What the deduced state was read from, as enrichment wrote it (English).
+             */
+            why: string | null;
+            /** Technology */
+            technology: string[];
+            /** Description */
+            description: string | null;
+            /** Environment */
+            environment: string | null;
+            /** Region */
+            region: string | null;
+            /**
+             * Url
+             * @description Where it is reached, or where it is kept.
+             */
+            url: string | null;
+            team: components["schemas"]["EntityBrief"] | null;
+            /**
+             * Repository Id
+             * @description The card of its code.
+             */
+            repository_id: string | null;
+            /**
+             * Host Id
+             * @description The card of what runs it, when known.
+             */
+            host_id: string | null;
+            /**
+             * Deployment
+             * @description How its last deployment went: succeeded, failed…
+             */
+            deployment: string | null;
+            /**
+             * Stats
+             * @description What the sources count of it: commits, pull_requests, tables, size_bytes, buckets.
+             */
+            stats: {
+                [key: string]: number;
+            };
+            /**
+             * Evidence
+             * @description The files and lines that say what it is.
+             */
+            evidence: string[];
+            /**
+             * Sources
+             * @description The kinds of the sources that show it.
+             */
+            sources: string[];
+        };
+        /**
+         * ArchitectureFiguresRead
+         * @description How many of each kind the company has — all of them, not only those
+         *     drawn.
+         */
+        ArchitectureFiguresRead: {
+            /** Services */
+            services: number;
+            /** Applications */
+            applications: number;
+            /** Repositories */
+            repositories: number;
+            /** Databases */
+            databases: number;
+            /** Stores */
+            stores: number;
+            /** Cloud Resources */
+            cloud_resources: number;
+            /**
+             * Providers
+             * @description The cloud resources, by provider.
+             */
+            providers: {
+                [key: string]: number;
+            };
+            /** External */
+            external: number;
+            /** Teams */
+            teams: number;
+            /** Tables */
+            tables: number;
+        };
+        /** ArchitectureGroupRead */
+        ArchitectureGroupRead: {
+            /** Id */
+            id: string;
+            /** Column */
+            column: string;
+            /**
+             * Name
+             * @description github, gitlab, aws, azure, gcp, other — or the column's.
+             */
+            name: string;
+            /** Regions */
+            regions: string[];
+            /** Total */
+            total: number;
+            /** Shown */
+            shown: number;
+        };
+        /** ArchitectureLinkRead */
+        ArchitectureLinkRead: {
+            /** From Id */
+            from_id: string;
+            /** To Id */
+            to_id: string;
+            /**
+             * Role
+             * @description source_code, routes, calls, queue, cache, stores, files, email, uses, depends, deployed_on, hosted_on, monitored_by, part_of.
+             */
+            role: string;
+            /**
+             * Origin
+             * @description stated by a source, or inferred by enrichment.
+             */
+            origin: string;
+            /** Confidence */
+            confidence: number;
+            /** Evidence */
+            evidence: string | null;
+            /**
+             * Status
+             * @description The worse of its ends' states.
+             */
+            status: string | null;
+        };
+        /** ArchitectureRankRead */
+        ArchitectureRankRead: {
+            /** Card Id */
+            card_id: string;
+            /** Name */
+            name: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Count
+             * @description How many cards rely on it.
+             */
+            count: number;
+        };
+        /**
+         * ArchitectureRead
+         * @description What the company runs, in columns — its code, its services, its data,
+         *     its cloud, what it relies on outside — each thing's state, the links
+         *     between them named, and the figures around them (LEKA-369).
+         */
+        ArchitectureRead: {
+            /** Built At */
+            built_at: string | null;
+            /**
+             * Environment
+             * @description The environment shown; none: all.
+             */
+            environment: string | null;
+            /** Environments */
+            environments: string[];
+            /** Groups */
+            groups: components["schemas"]["ArchitectureGroupRead"][];
+            /** Cards */
+            cards: components["schemas"]["ArchitectureCardRead"][];
+            /** Links */
+            links: components["schemas"]["ArchitectureLinkRead"][];
+            /** Bundles */
+            bundles: components["schemas"]["ArchitectureBundleRead"][];
+            figures: components["schemas"]["ArchitectureFiguresRead"];
+            /**
+             * Health
+             * @description The services', stores' and resources' states, counted.
+             */
+            health: {
+                [key: string]: number;
+            };
+            /** Services By Status */
+            services_by_status: {
+                [key: string]: number;
+            };
+            /** Top Dependencies */
+            top_dependencies: components["schemas"]["ArchitectureRankRead"][];
         };
         /**
          * AttentionPointRead
@@ -19825,6 +20093,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LandscapeViewRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    architecture_api_v1_knowledge_architecture_get: {
+        parameters: {
+            query?: {
+                /** @description Only what runs in it — and what says none. */
+                environment?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchitectureRead"];
                 };
             };
             /** @description The request could not be understood. */

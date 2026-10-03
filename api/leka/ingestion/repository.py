@@ -2113,9 +2113,9 @@ class EnrichmentRepository(WorkspaceScopedRepository):
         )
         return [tuple(row) for row in rows.all()]
 
-    async def enrichments(self) -> Sequence[tuple[uuid.UUID, str, object, str, float]]:
+    async def enrichments(self) -> Sequence[tuple[uuid.UUID, str, object, str, float, str]]:
         """Every enriched attribute: (entity, attribute, value, rule,
-        confidence)."""
+        confidence, evidence)."""
         rows = await self._session.execute(
             select(
                 EntityEnrichment.entity_id,
@@ -2123,6 +2123,7 @@ class EnrichmentRepository(WorkspaceScopedRepository):
                 EntityEnrichment.value,
                 EntityEnrichment.rule,
                 EntityEnrichment.confidence,
+                EntityEnrichment.evidence,
             ).where(EntityEnrichment.workspace_id == self.workspace_id)
         )
         return [tuple(row) for row in rows.all()]

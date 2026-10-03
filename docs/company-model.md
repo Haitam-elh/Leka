@@ -238,6 +238,7 @@ Read by every member (`workspace:read`); another workspace's entity is 404.
 | `GET /knowledge/graph` | a walk from `root` (up to ten): `depth=1..4`, `direction` (`outgoing`, `incoming`, `both`), `relationship`, `entity_type`, `min_confidence`, `environment`, `limit` (500 at most): each entity reached and how far, the relationships among them all, `truncated` past a bound |
 | `GET /knowledge/graph/paths` | the shortest ways `from` one entity `to` another, relationships read either way: `max_depth=1..4`, `relationship`, `min_confidence` — five at most, the surest first; `length` null when none |
 | `GET /knowledge/views/{view}` | a landscape — `company`, `domains`, `applications`, `services`, `data`, `infrastructure`, `organisation`, `dependencies`: its rows, boxes, lines, states, coverage and sources |
+| `GET /knowledge/architecture` | what the company runs, in columns (§ 16, LEKA-369) — code, services, data, cloud, outside — each thing a card with its kind, state (deduced, and from what), technology, figures; the links between them named; each card's links to a column together; how many of each kind there are, their states, the most relied on; `environment` to keep one |
 | `GET /knowledge/coverage` | how well the model knows each kind — how many, with an owner, documented, corroborated, connected — and from which sources |
 
 ## 8. What reads it
@@ -834,6 +835,51 @@ Each box has its state — the environment screen's rules,
 (`owned_by` a team, the surest). A state deduced from what runs it — the
 machine's, the last deployment's, for what no tool watches (LEKA-369) —
 says so: `deduced`.
+
+**The architecture** (`GET /knowledge/architecture`,
+`leka/knowledge/architecture.py`, LEKA-369) — what the company runs, as
+Haitam's mockup draws it, in five columns:
+
+| Column | What it holds | Grouped by |
+|---|---|---|
+| `code` | repositories | code host — `github`, `gitlab`, `bitbucket` |
+| `services` | the services the company runs and its applications | — |
+| `data` | the databases its code names or a database source reads; its code's object stores | — |
+| `cloud` | the cloud's resources and its databases (RDS…) | provider, with its regions |
+| `external` | the services outside it relies on (`hosting` external), the monitoring tools that show a service | — |
+
+A **card** a thing: its `kind` in one word — a service's type (`api`,
+`web`, `worker`, `scheduler`, `job`, `proxy`, `email`…), a store's role
+(`database`, `cache`, `queue`, `storage`), a resource's (`instance`,
+`database`, `bucket`, `network`…); its technology — a service's languages
+and frameworks, an engine by its name (RDS's `postgres` is PostgreSQL), a
+machine's type; its state by the environment screen's rules — `deduced`
+where it is the enrichment's (§ 7 of [enrichment.md](enrichment.md)), with
+`host_id` the card of what runs it and `deployment` how its last
+deployment went; where it is reached (`url`; a repository's address), its
+team, its code (`repository_id`), the files that say what it is
+(`evidence`), and what the sources count of it — a repository's commits
+and pull requests, a database's tables and their bytes. A column shows 40
+cards at most, the most connected first, in the order things are reached
+(proxy, web, API, worker…); a provider 8, those tied to the rest first.
+The counts (`figures`) are of all of them.
+
+A **link** a relationship between two cards, named (`role`) by what it is:
+`source_code` (a repository part of its service), `routes`, `calls`,
+`queue`, `cache`, `stores`, `files`, `email`, `uses`, `depends` (the role
+its evidence begins with — "queue: deploy/….yml:10 — LEKA_REDIS_URL" —
+else `depends`), `deployed_on` (enrichment's `public_address` and
+`deployed_together`, a resource its tags give a service, a `deployed_to`),
+`hosted_on` (`only_instance`, `named_for_repository`, `only_bucket`),
+`monitored_by`, `part_of`. A **bundle** is a card's links to one other
+column together — what the screen draws until a card is chosen: one arrow,
+named by what most of them are, not one per store.
+
+Around them: `health` (the services', stores' and resources' states,
+counted), `services_by_status`, `top_dependencies` (the five cards most
+relied on — what `calls`, stores in, is deployed on…), the environments
+things say they run in. `environment=production` keeps what runs there and
+what says no environment — a bucket shared by all.
 
 **Provenance and coverage.** Each search hit and each thing a walk reaches
 says the kinds of the sources that show it (`github`, `pagerduty`…). Each

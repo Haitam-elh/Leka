@@ -25,7 +25,7 @@ const SCREENS: readonly [path: string, primary: (page: Page) => ReturnType<Page[
   ["/intentions/new?step=decision", (page) => page.getByRole("checkbox").first()],
   ["/settings", (page) => page.getByRole("button", { name: "Enregistrer" })],
   ["/sources", (page) => page.getByRole("heading", { level: 1 })],
-  ["/environment", (page) => page.getByRole("button", { name: "Entreprise" })],
+  ["/environment", (page) => page.getByTestId("env-tab-architecture")],
   ["/environment/graph", (page) => page.getByRole("combobox", { name: "Centrer sur" })],
 ];
 
