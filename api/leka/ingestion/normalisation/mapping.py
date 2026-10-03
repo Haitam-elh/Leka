@@ -1032,7 +1032,8 @@ def _component(build: Build) -> tuple[str, dict[str, object]]:
         attributes["resource_kind"] = "bucket"
         attributes["resource_class"] = "storage"
     if kind == "service" and meta.get("code_path") and repository:
-        code = _code_key(build, build.host, repository)
+        # The repository itself: its code is this service's.
+        code = ids.repository(build.host, repository)
         build.relate("part_of", code, key, 1.0, f"code: {meta['code_path']}")
     environment = meta.get("environment")
     if isinstance(environment, str) and environment in ENVIRONMENTS:

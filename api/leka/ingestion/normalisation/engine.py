@@ -51,7 +51,9 @@ from leka.ingestion.parsing import ParsedRecord
 #    tool's deploy and change events, Jira Service Management's incidents
 #    and changes and what caused what, a CI/CD tool's and a change
 #    management tool's records (LEKA-367).
-NORMALISER_VERSION = 9
+# 10: a repository's components — its code part of each service it runs,
+#    not of a branch named for it (LEKA-369).
+NORMALISER_VERSION = 10
 
 
 def normalise(
