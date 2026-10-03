@@ -11,7 +11,10 @@ outside it relies on, from configuration only — the drivers it carries for
 its customers' databases are not its databases, an empty setting is off,
 the development compose's databases are not what runs; each link named,
 with the file and line that say so; the files read, a few, none in a
-dependency or a test.
+dependency or a test. And what the repository is made of, from its tree:
+each top-level folder a module — the code of a service, its docs, its
+infrastructure, its CI, its agents — its files and languages, the parts of
+a service's code; nothing installed or built.
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ from typing import Any
 
 import pytest
 
-from leka.connectors.components import MAX_FILES, discover, wanted
+from leka.connectors.components import MAX_FILES, discover, layout, wanted
 
 REPOSITORY = "Haitam-elh/Leka"
 
@@ -366,3 +369,67 @@ def test_a_tree_read_for_the_few_files_that_say_what_runs() -> None:
 
 def test_a_file_that_is_not_yaml_is_read_as_nothing() -> None:
     assert discover("acme/broken", {"docker-compose.yml": "services: [unclosed"}) == []
+
+
+TREE = [
+    *FILES,
+    "README.md",
+    "api/leka/__init__.py",
+    "api/leka/connectors/__init__.py",
+    "api/leka/connectors/aws/connector.py",
+    "api/leka/connectors/github/connector.py",
+    "api/leka/connectors/github/__init__.py",
+    "api/leka/ingestion/engine.py",
+    "api/tests/__init__.py",
+    "api/tests/test_api.py",
+    "api/alembic/env.py",
+    "web/app/page.tsx",
+    "web/components/shell/sidebar.tsx",
+    "web/node_modules/next/package.json",
+    "docs/setup.md",
+    "docs/adr/001-postgresql.md",
+    "agents/registry.yaml",
+    "agents/incident/correlate/SKILL.md",
+    "agents/_template/SKILL.md",
+    "node_modules/left-pad/index.js",
+    ".vscode/settings.json",
+]
+
+
+def test_a_repository_is_its_modules_each_with_its_role_files_and_languages() -> None:
+    laid = layout(TREE, discover(REPOSITORY, FILES))
+
+    found = laid["modules"]
+    assert isinstance(found, list)
+    modules = {str(m["path"]): m for m in found}
+    roles = {path: m["role"] for path, m in modules.items()}
+    assert roles == {
+        "api": "service",
+        "web": "service",
+        "docs": "docs",
+        "deploy": "infrastructure",
+        ".github": "ci",
+        "agents": "agents",
+    }
+    api = modules["api"]
+    assert api["languages"] == ["Python", "Docker"]
+    assert [s["name"] for s in api["services"]] == ["api", "migrate", "scheduler", "worker"]
+    # Its code is its package: not its tests, not its migrations.
+    assert api["root"] == "api/leka"
+    connectors = next(p for p in api["parts"] if p["name"] == "connectors")
+    assert (connectors["files"], connectors["parts"], connectors["names"]) == (
+        4,
+        2,
+        ["aws", "github"],
+    )
+    # What is installed or an editor's is no module; a template no agent.
+    assert "node_modules" not in modules and ".vscode" not in modules
+    assert not [p for p in modules["web"]["parts"] if p["name"] == "node_modules"]
+    assert [p["name"] for p in modules["agents"]["parts"]] == ["incident"]
+    assert modules["deploy"]["languages"] == ["Caddy", "Docker Compose"]
+    assert modules["deploy"]["names"] == [
+        "Caddyfile",
+        "docker-compose.production.yml",
+        "production.env.example",
+    ]
+    assert laid["files"] == len(set(TREE))

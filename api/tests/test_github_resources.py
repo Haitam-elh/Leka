@@ -333,10 +333,18 @@ async def test_components_are_read_from_the_few_files_that_say_what_runs() -> No
     records = await _stream(github, Capability.COMPONENTS)
 
     assert [(r.external_id, r.container) for r in records] == [
+        ("R_api:_layout", "acme/api"),
         ("R_api:app", "acme/api"),
         ("R_api:cache", "acme/api"),
     ]
-    app = records[0].payload
+    # What the repository is made of, from the tree: every file counted, the
+    # big one too — it is not read, only listed.
+    laid = records[0].payload
+    assert (laid["kind"], laid["files"]) == ("layout", 4)
+    modules = laid["modules"]
+    assert isinstance(modules, list)
+    assert [(m["path"], m["role"], m["files"]) for m in modules] == [("app", "code", 1)]
+    app = records[1].payload
     assert (app["display_name"], app["technology"]) == ("Api App", ["Python", "FastAPI"])
     links = app["links"]
     assert isinstance(links, list) and links[0]["to"] == "cache"

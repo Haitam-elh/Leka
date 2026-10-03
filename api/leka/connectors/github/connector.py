@@ -78,6 +78,8 @@ LOW_QUOTA_RATIO = 0.1
 PAGE_SIZE = 100  # GitHub's maximum
 # GitHub answers 409 for the commits of a repository with none yet.
 EMPTY_REPOSITORY = 409
+# The record of what a repository is made of: its modules (components.layout).
+LAYOUT = "_layout"
 # What list_scope offers at most: ten pages. An organisation with more is
 # scoped by typing names, until the Sources screen searches (LEKA-351).
 MAX_SCOPE_OPTIONS = 1000
@@ -426,11 +428,13 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
         )
         if tree.status_code == EMPTY_REPOSITORY:
             return
-        entries = tree.json().get("tree") if isinstance(tree.json(), dict) else None
+        listing = tree.json() if isinstance(tree.json(), dict) else {}
+        entries = listing.get("tree")
+        blobs = [entry for entry in entries or [] if entry.get("type") == "blob"]
         paths = [
             str(entry["path"])
-            for entry in entries or []
-            if entry.get("type") == "blob" and int(entry.get("size") or 0) <= components.MAX_BYTES
+            for entry in blobs
+            if int(entry.get("size") or 0) <= components.MAX_BYTES
         ]
         files: dict[str, str] = {}
         for path in components.wanted(paths):
@@ -443,7 +447,27 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                     files[path] = base64.b64decode(str(found.get("content") or "")).decode("utf-8")
                 except (ValueError, UnicodeDecodeError):
                     continue
-        for component in components.discover(name, files):
+        found = components.discover(name, files)
+        # What the repository is made of, from the tree already read: its
+        # modules — the code of each service, the docs, the infrastructure.
+        laid = components.layout((str(entry["path"]) for entry in blobs), found)
+        yield record(
+            Capability.COMPONENTS,
+            {
+                "name": LAYOUT,
+                "kind": "layout",
+                "display_name": name,
+                "repository": name,
+                "repository_url": repository.get("html_url"),
+                "default_branch": branch,
+                "truncated": bool(listing.get("truncated")),
+                **laid,
+            },
+            external_id=f"{repository['node_id']}:{LAYOUT}",
+            container=name,
+            updated=repository.get("pushed_at"),
+        )
+        for component in found:
             # Where its public address is — leka-core.com is on the instance
             # with that IP: what runs it (enrichment's `architecture`).
             url = component.get("public_url")
