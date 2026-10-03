@@ -40,11 +40,12 @@ import base64
 import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlsplit
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, model_validator
 
-from leka.connectors import components
+from leka.connectors import components, network
 from leka.connectors.base import (
     Capability,
     ConnectionTestResult,
@@ -443,17 +444,26 @@ class GitHubConnector(Connector[GitHubConfig, GitHubCredentials]):
                 except (ValueError, UnicodeDecodeError):
                     continue
         for component in components.discover(name, files):
+            # Where its public address is — leka-core.com is on the instance
+            # with that IP: what runs it (enrichment's `architecture`).
+            url = component.get("public_url")
+            host = urlsplit(url).hostname if isinstance(url, str) else None
             yield record(
                 Capability.COMPONENTS,
                 {
                     **component,
                     "repository_url": repository.get("html_url"),
                     "default_branch": branch,
+                    "public_addresses": await self._resolve(host) if host else [],
                 },
                 external_id=f"{repository['node_id']}:{component['name']}",
                 container=name,
                 updated=repository.get("pushed_at"),
             )
+
+    async def _resolve(self, host: str) -> list[str]:
+        """A name's public addresses: replaced in the tests."""
+        return await network.public_addresses(host)
 
     @staticmethod
     def _scope_warnings(response: httpx.Response) -> list[str]:

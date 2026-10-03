@@ -203,6 +203,25 @@ def test_an_aws_resource_is_in_its_account_with_its_class() -> None:
     assert (instance.entity.key, "part_of", AWS_ACCOUNT) in _edges(instance)
 
 
+def test_an_instance_says_where_it_answers() -> None:
+    instance = _normalised(
+        SourceKind.AWS,
+        C.INSTANCES,
+        {
+            "InstanceId": "i-1",
+            "PublicIpAddress": "3.78.172.119",
+            "PublicDnsName": "ec2-3-78-172-119.eu-west-3.compute.amazonaws.com",
+            "PrivateIpAddress": "172.31.5.20",
+        },
+        container="eu-west-3",
+        external_id=f"{ARN}:instance/i-1",
+    )
+
+    a = instance.entity.attributes
+    assert (a["public_ip"], a["private_ip"]) == ("3.78.172.119", "172.31.5.20")
+    assert str(a["public_dns"]).startswith("ec2-3-78-172-119.")
+
+
 def test_a_bucket_s_arn_names_no_account() -> None:
     bucket = _normalised(
         SourceKind.AWS,

@@ -38,6 +38,27 @@ async def _resolve(host: str, port: int) -> list[str]:
     return [str(info[4][0]) for info in infos]
 
 
+async def public_addresses(
+    host: str, *, resolve: Resolve = _resolve, wait: float = 3.0
+) -> list[str]:
+    """The public addresses a name answers at — none when it does not
+    resolve in time, or only privately. What a service's public address is
+    on (LEKA-369): read, never connected to."""
+    try:
+        found = await asyncio.wait_for(resolve(host, 443), timeout=wait)
+    except (OSError, TimeoutError, UnicodeError):
+        return []
+    public: list[str] = []
+    for raw in found:
+        try:
+            address = ipaddress.ip_address(raw.split("%", 1)[0])
+        except ValueError:
+            continue
+        if is_public(address) and str(address) not in public:
+            public.append(str(address))
+    return sorted(public)
+
+
 def is_public(address: Address) -> bool:
     """Globally routable. An IPv4 address written as IPv6 is judged as IPv4."""
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:

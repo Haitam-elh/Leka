@@ -53,7 +53,7 @@ CLOUD = (
 # ── AWS: one shape per service ───────────────────────────────────────────────
 
 
-@record_strategy("aws.instances", 1, (AWS, C.INSTANCES))
+@record_strategy("aws.instances", 2, (AWS, C.INSTANCES))
 def aws_instance(r: RawRecord) -> Extracted:
     p = r.payload
     return _aws(
@@ -68,6 +68,11 @@ def aws_instance(r: RawRecord) -> Extracted:
             "platform": string(p, "PlatformDetails"),
             "architecture": string(p, "Architecture"),
             "zone": string(p, "Placement", "AvailabilityZone"),
+            # Where it answers (LEKA-369): what a service's public address
+            # is on — an Elastic IP's, when it has one.
+            "public_ip": string(p, "PublicIpAddress"),
+            "public_dns": string(p, "PublicDnsName"),
+            "private_ip": string(p, "PrivateIpAddress"),
         },
     )
 

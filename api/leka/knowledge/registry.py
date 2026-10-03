@@ -94,6 +94,7 @@ class ServiceAttributes(Landscape):
     code_path: str | None = None
     image: str | None = None
     public_url: str | None = None
+    public_addresses: list[str] | None = None
     hosting: str | None = None
     vendor: str | None = None
     deployed_by: str | None = None
@@ -261,6 +262,11 @@ class ResourceAttributes(Placed):
     runtime: str | None = None
     endpoint: str | None = None
     created_at: str | None = None
+    # Where an instance answers (LEKA-369): what runs a service whose
+    # public address is this one.
+    public_ip: str | None = None
+    public_dns: str | None = None
+    private_ip: str | None = None
 
 
 class Classified(Attributes):

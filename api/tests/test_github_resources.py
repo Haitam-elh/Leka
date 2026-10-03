@@ -349,6 +349,45 @@ async def test_components_are_read_from_the_few_files_that_say_what_runs() -> No
     assert not github.params("/repos/acme/api/contents/huge.env.example")
 
 
+async def test_a_component_reached_by_its_name_says_the_addresses_it_answers_at(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked: list[str] = []
+
+    async def resolve(self: GitHubConnector, host: str) -> list[str]:
+        asked.append(host)
+        return ["3.78.172.119"]
+
+    monkeypatch.setattr(GitHubConnector, "_resolve", resolve)
+    github = GitHub(
+        {
+            "/orgs/acme/repos": [{**API, "default_branch": "main"}],
+            "/repos/acme/api/git/trees/main": {
+                "tree": [
+                    {"path": "compose.yml", "type": "blob", "size": 80},
+                    {"path": "Caddyfile", "type": "blob", "size": 50},
+                    {"path": ".env.example", "type": "blob", "size": 30},
+                ]
+            },
+            "/repos/acme/api/contents/compose.yml": _file(
+                "services:\n  app:\n    build: .\n  caddy:\n    image: caddy:2\n"
+            ),
+            "/repos/acme/api/contents/Caddyfile": _file(
+                "{$APP_DOMAIN} {\n\treverse_proxy app:8000\n}\n"
+            ),
+            "/repos/acme/api/contents/.env.example": _file("APP_DOMAIN=shop.acme.io\n"),
+        }
+    )
+
+    found = {r.external_id: r.payload for r in await _stream(github, Capability.COMPONENTS)}
+
+    assert found["R_api:app"]["public_url"] == "https://shop.acme.io"
+    assert found["R_api:app"]["public_addresses"] == ["3.78.172.119"]
+    # What answers at no name of its own is not looked up.
+    assert found["R_api:caddy"]["public_addresses"] == []
+    assert asked == ["shop.acme.io"]
+
+
 async def test_an_empty_repository_runs_nothing() -> None:
     repository = {**API, "default_branch": "main"}
     github = GitHub(
