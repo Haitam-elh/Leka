@@ -166,7 +166,12 @@ things point to at its root — leaves by the top and comes in at the bottom
   on the **Architecture** (LEKA-369, Haitam's mockup; `architecture.tsx`,
   `GET /knowledge/architecture`, [company-model.md § 16](../company-model.md)):
   `ArchitectureFigures` — how many of each kind, their states in shares —
-  above every tab; `ArchitectureBoard` — the five columns as panels, each
+  above every tab; `ArchitectureBoard` — **scaled to the screen it is on**
+  (`useFit`: laid out wider, scaled down to the height left, 0.72 at least,
+  so a 13-inch screen shows it whole; the zoom buttons there to come
+  closer) — the five columns as panels, a repository's modules under it,
+  each card two lines (its name; what it is and is made of) and coloured
+  when something is wrong, each
   card a button (its name, kind and state its accessible name), the arrows
   an SVG measured from the cards' places once laid out, named on a pill:
   at rest a card's links to a column as one arrow (`bundles`), many
@@ -174,7 +179,9 @@ things point to at its root — leaves by the top and comes in at the bottom
   alike ones to a column together, the rest faded. Beside it the chosen
   card's panel — Vue d'ensemble (why its state is deduced, in the screen's
   words: what runs it, its last deployment), Relations (each named from its
-  side, a way to the other card), Événements (its sheet's). Under it the
+  side, a way to the other card, an inferred one with its rule and how
+  sure), Événements (its sheet's); a module's parts, a machine's technical
+  details. Under it the
   widgets: services by state, kinds, recent activity, the most relied on.
   Below a large screen the columns stack and the arrows go; every link is
   also said in words (`architecture-text`). The other tabs' map
@@ -187,9 +194,14 @@ things point to at its root — leaves by the top and comes in at the bottom
   with its words, "Sans objet" where a measure does not apply — and which
   sources it comes from.
 - **La cartographie détaillée** (`/environment/graph`, LEKA-369):
-  `GraphExplorer` (`graph-explorer.tsx`) draws the whole architecture —
-  every card's own arrows, a database's tables one choice away — or a
-  walk around one thing (`?entity=`), on `DependencyGraph` placed by
+  `GraphExplorer` (`graph-explorer.tsx`) draws the architecture's
+  **dossier** (`architecture-dossier.tsx`, after the DSI's architecture
+  prompt): the architecture in layers — code, applications, data,
+  technology, outside — every card and every link; the flows as sequence
+  diagrams, each step numbered and named; contacts and responsibilities,
+  "À confirmer" where no source names a team; the control points in
+  orange; the sources read and the limits. A database's tables one choice
+  away. Or a walk around one thing (`?entity=`), on `DependencyGraph` placed by
   `rowPositions`; its words are the canvas's for screen readers. The thing
   picked says what it is and can become the centre; `EntityPicker`
   (`entity-picker.tsx`) — a combobox on the knowledge search, its active

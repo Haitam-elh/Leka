@@ -238,7 +238,7 @@ Read by every member (`workspace:read`); another workspace's entity is 404.
 | `GET /knowledge/graph` | a walk from `root` (up to ten): `depth=1..4`, `direction` (`outgoing`, `incoming`, `both`), `relationship`, `entity_type`, `min_confidence`, `environment`, `limit` (500 at most): each entity reached and how far, the relationships among them all, `truncated` past a bound |
 | `GET /knowledge/graph/paths` | the shortest ways `from` one entity `to` another, relationships read either way: `max_depth=1..4`, `relationship`, `min_confidence` — five at most, the surest first; `length` null when none |
 | `GET /knowledge/views/{view}` | a landscape — `company`, `domains`, `applications`, `services`, `data`, `infrastructure`, `organisation`, `dependencies`: its rows, boxes, lines, states, coverage and sources |
-| `GET /knowledge/architecture` | what the company runs, in columns (§ 16, LEKA-369) — code, services, data, cloud, outside — each thing a card with its kind, state (deduced, and from what), technology, figures; the links between them named; each card's links to a column together; how many of each kind there are, their states, the most relied on; `environment` to keep one |
+| `GET /knowledge/architecture` | what the company runs, in columns (§ 16, LEKA-369) — code and its modules, services, data, cloud, outside — each thing a card with its kind, state (deduced, and from what), technology, figures, technical facts; the links between them named; each card's links to a column together; how many of each kind there are, their states, the most relied on; `environment` to keep one; `detailed=true` for every card, the flows they make, what to confirm and the sources read |
 | `GET /knowledge/coverage` | how well the model knows each kind — how many, with an owner, documented, corroborated, connected — and from which sources |
 
 ## 8. What reads it
@@ -864,8 +864,21 @@ cards at most, the most connected first, in the order things are reached
 (proxy, web, API, worker…); a provider 8, those tied to the rest first.
 The counts (`figures`) are of all of them.
 
+A repository whose tree was read (`modules`, [connectors/code-platforms.md](connectors/code-platforms.md))
+has a **module** card for each of its folders, under it — `Leka/api`
+(backend), `Leka/web` (frontend), `Leka/deploy` (infrastructure),
+`Leka/.github` (CI), `Leka/docs` — with its languages, its files, its
+parts (the API's connectors, ingestion…); and the repository speaks
+through them: no arrow of its own. Each card also says in detail what its
+sources say of it (`facts`): an instance's type, zone and addresses, a
+database's engine, storage and encryption, a service's image and how it is
+deployed.
+
 A **link** a relationship between two cards, named (`role`) by what it is:
-`source_code` (a repository part of its service), `routes`, `calls`,
+`source_code` (a repository part of its service; a module the code of
+the services built from its folder), `configures` (an infrastructure
+module — the compose file, the proxy's config — what has no code of its
+own), `deploys` (the CI module's workflow, what it deploys), `routes`, `calls`,
 `queue`, `cache`, `stores`, `files`, `email`, `uses`, `depends` (the role
 its evidence begins with — "queue: deploy/….yml:10 — LEKA_REDIS_URL" —
 else `depends`), `deployed_on` (enrichment's `public_address` and
@@ -875,11 +888,27 @@ else `depends`), `deployed_on` (enrichment's `public_address` and
 column together — what the screen draws until a card is chosen: one arrow,
 named by what most of them are, not one per store.
 
+An inferred link says by which `rule` — the same public address, the same
+workflow, the only database of its engine — and how sure.
+
 Around them: `health` (the services', stores' and resources' states,
 counted), `services_by_status`, `top_dependencies` (the five cards most
 relied on — what `calls`, stores in, is deployed on…), the environments
 things say they run in. `environment=production` keeps what runs there and
 what says no environment — a bucket shared by all.
+
+**Detailed** (`detailed=true`, the detailed map's): every card — 200 a
+column, 120 a provider — and, as the DSI's architecture dossier asks:
+the **flows** — from each entry nothing routes to or calls (a proxy, a
+job), every step a request or a job takes (routes, calls, queue, stores,
+files, e-mail…) four steps away at most, in the order things are reached;
+entries doing alike together (the worker, the scheduler, the migration);
+the **checks** — what to confirm, the worst first: in incident, in
+attention, a state deduced, a link inferred, a service no tool watches, a
+thing with no team, a thing tied to nothing; the **sources** read — each,
+its status, when it last read, how many of the architecture's things it
+shows; and each card's **maintainers** (enrichment's `maintained_by`, never
+a bot).
 
 **Provenance and coverage.** Each search hit and each thing a walk reaches
 says the kinds of the sources that show it (`github`, `pagerduty`…). Each
