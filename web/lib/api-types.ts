@@ -2710,7 +2710,7 @@ export interface components {
          *     discovered for each source: a token may see repositories and not issues.
          * @enum {string}
          */
-        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "deployments" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "accounts" | "spaces" | "pages" | "databases" | "drives" | "files" | "alerts" | "events" | "incidents" | "changes" | "metrics" | "logs" | "services" | "dashboards" | "schemas" | "tables" | "people" | "teams" | "records";
+        Capability: "repositories" | "commits" | "pull_requests" | "releases" | "deployments" | "components" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "accounts" | "spaces" | "pages" | "databases" | "drives" | "files" | "alerts" | "events" | "incidents" | "changes" | "metrics" | "logs" | "services" | "dashboards" | "schemas" | "tables" | "people" | "teams" | "records";
         /** CatalogEntry */
         CatalogEntry: {
             key: components["schemas"]["SourceKind"];

@@ -21,6 +21,7 @@ const ORDER = [
   "issues",
   "releases",
   "deployments",
+  "components",
   "accounts",
   "networks",
   "instances",
