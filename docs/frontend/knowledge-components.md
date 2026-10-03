@@ -162,22 +162,39 @@ things point to at its root — leaves by the top and comes in at the bottom
   disagree about how long ago something was.
 - **Mon environnement** (LEKA-359, [../enrichment.md § 12](../enrichment.md)):
   the screen and an entity's sheet — `components/environment/` draws them
-  with `StatusBadge`, `KnowledgeTable` and the same time helpers. Its map
+  with `StatusBadge`, `KnowledgeTable` and the same time helpers. It opens
+  on the **Architecture** (LEKA-369, Haitam's mockup; `architecture.tsx`,
+  `GET /knowledge/architecture`, [company-model.md § 16](../company-model.md)):
+  `ArchitectureFigures` — how many of each kind, their states in shares —
+  above every tab; `ArchitectureBoard` — the five columns as panels, each
+  card a button (its name, kind and state its accessible name), the arrows
+  an SVG measured from the cards' places once laid out, named on a pill:
+  at rest a card's links to a column as one arrow (`bundles`), many
+  cards' alike from their column; the chosen card's own links over them,
+  alike ones to a column together, the rest faded. Beside it the chosen
+  card's panel — Vue d'ensemble (why its state is deduced, in the screen's
+  words: what runs it, its last deployment), Relations (each named from its
+  side, a way to the other card), Événements (its sheet's). Under it the
+  widgets: services by state, kinds, recent activity, the most relied on.
+  Below a large screen the columns stack and the arrows go; every link is
+  also said in words (`architecture-text`). The other tabs' map
   (`Cartography`) is its own: mockup 10's rows with their names and counts,
-  which `DependencyGraph`'s free canvas does not draw. Since LEKA-369 each
-  tab is a view of the company model (`GET /knowledge/views/{view}`,
+  which `DependencyGraph`'s free canvas does not draw. Each of those tabs
+  is a view of the company model (`GET /knowledge/views/{view}`,
   [company-model.md § 16](../company-model.md)): `Cartography` takes the
   view's rows, boxes and lines, and `CoveragePanel` (`coverage.tsx`) says
   under it how well its kinds are known — a `role="meter"` per measure, named
   with its words, "Sans objet" where a measure does not apply — and which
   sources it comes from.
 - **La cartographie détaillée** (`/environment/graph`, LEKA-369):
-  `GraphExplorer` (`graph-explorer.tsx`) draws the dependency view, or a
+  `GraphExplorer` (`graph-explorer.tsx`) draws the whole architecture —
+  every card's own arrows, a database's tables one choice away — or a
   walk around one thing (`?entity=`), on `DependencyGraph` placed by
   `rowPositions`; its words are the canvas's for screen readers. The thing
   picked says what it is and can become the centre; `EntityPicker`
   (`entity-picker.tsx`) — a combobox on the knowledge search, its active
-  option announced (`aria-activedescendant`) — chooses the centre and
+  option announced (`aria-activedescendant`), moved by a pointer that moves
+  only — chooses the centre and
   where a shortest way goes. Its depth (1 to 3), direction and families of
   relationships (`RELATION_FAMILIES`, `lib/knowledge-graph.ts`) are the
   walk's.

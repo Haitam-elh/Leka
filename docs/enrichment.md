@@ -186,6 +186,7 @@ said of it.
 | `part_of` → a cloud database | a database the code reaches by a URL it does not show (its `store_role`) | `only_instance`: the cloud's only database of its engine — RDS's `postgres`, `aurora-postgresql` are PostgreSQL; two, none | 0.7 |
 | `part_of` → a bucket | the code's storage (`code:…:storage:…`) | `named_for_repository`: the one bucket of its provider whose name holds the repository's — `leka-uploads-prod` for Leka; else `only_bucket`: the provider's only bucket | 0.8; 0.6 |
 | `deduced_health` (a fact) | each of them | `host`: what the instance running it — or the cloud database serving it — is doing: `running` operational, `starting`, `stopping`, `stopped`, `deleting` attention, `failed` incident; attention at best when the last deployment of its repository to its environment failed. Its evidence says both: `leka-prod is running; its last deployment succeeded` | 0.7 |
+| `last_deployment` (a fact) | each of them, when its repository was deployed to its environment | `host`: that deployment's outcome — `succeeded`, `failed`… — what the screen says beside the deduced state | 0.9 |
 
 A deduced health is **said deduced** (§ 12): a monitoring tool's word — a
 source that shows the service — wins over it, an open incident too, and a
@@ -301,8 +302,8 @@ A **workspace** stage, after resolution
 - **Queued by a resolution run that succeeded.** It reads what the latest
   successful resolution run made; that run's id is what it was made from.
 - **Queued by `advance`**, when nothing is left to resolve but enrichment
-  has something to do: a new `ENRICHER_VERSION` (9 since LEKA-369's
-  architecture, 8 since its bots,
+  has something to do: a new `ENRICHER_VERSION` (10 since LEKA-369's last
+  deployments, 9 since its architecture, 8 since its bots,
   7 since LEKA-367's operations, 6 since LEKA-366's knowledge, 5 since LEKA-365's expertise,
   4 since LEKA-364's data, 3 since LEKA-363's infrastructure, 2 since
   LEKA-362's landscape), a run that used up its
@@ -358,13 +359,17 @@ what no source says is said missing, never invented.**
   their worst state); a line per `part_of`, `depends_on`, `owned_by` or
   `in_network` between two boxes, coloured by the worse of their states;
   each row the surest-troubled first, the others ordered under their
-  services. Since LEKA-369 the screen draws its map from the company
-  model's views instead, a tab each, by these same states
-  ([company-model.md § 16](company-model.md)); this route still serves it;
+  services. Since LEKA-369 the screen opens on the architecture — what
+  the company runs, in columns, its links named — and draws its other
+  tabs from the company model's views, by these same states
+  ([company-model.md § 16](company-model.md)); this route still serves
+  its events and points of attention;
 - **the figures**: services, and how many are operational; open incidents,
   and how many services they affect; changes (pull requests, commits,
   releases, deployments) in the last 24 hours; the environments things say
-  they are in — the "Vue globale" filter;
+  they are in — the "Vue globale" filter. Since LEKA-369 the screen's tiles
+  are the architecture's instead: how many services, repositories,
+  databases, cloud resources and teams, and their states in shares;
 - **points of attention**, the most urgent first: each open incident and
   what it affects; resources failed; resources stopped; work waiting
   (`stale`); services nothing watches; dormant repositories;
