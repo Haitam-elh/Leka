@@ -12,6 +12,8 @@ statuses, oldest first — when it started and finished.
 
 from __future__ import annotations
 
+import json
+
 from leka.connectors import Capability, SourceKind
 from leka.ingestion.extraction.contract import Extracted
 from leka.ingestion.extraction.engine import Payload, strategy
@@ -163,6 +165,74 @@ def github_branch(p: Payload) -> Extracted:
         references=ref("head", "commit", external_id=dig(p, "commit", "sha")),
         metadata={"protected": flag(p, "protected")},
     )
+
+
+@strategy("github.components", 1, (GITHUB, C.COMPONENTS))
+def github_component(p: Payload) -> Extracted:
+    """What a repository's code says it runs (LEKA-369): a service, a store
+    or a service outside — leka.connectors.components read it — its links
+    to the others as JSON lines, where each thing was read as text."""
+    said = [e for e in _listed(p, "evidence") if isinstance(e, dict)]
+    evidence = [
+        f"{e.get('path')}:{e.get('line')} — {e.get('says')}"
+        if e.get("line")
+        else f"{e.get('path')} — {e.get('says')}"
+        for e in said
+    ]
+    links = [
+        json.dumps(link, sort_keys=True, ensure_ascii=False)
+        for link in _listed(p, "links")
+        if isinstance(link, dict)
+    ]
+    first = said[0] if said else None
+    repository_url = string(p, "repository_url")
+    url = (
+        f"{repository_url}/blob/{string(p, 'default_branch')}/{first['path']}"
+        + (f"#L{first['line']}" if first.get("line") else "")
+        if repository_url and first and string(p, "default_branch")
+        else repository_url
+    )
+    return Extracted(
+        title=required(p, "display_name"),
+        url=url,
+        content=content("description", _component_said(p)),
+        metadata={
+            "component": required(p, "name"),
+            "component_kind": string(p, "kind"),
+            "role": string(p, "role"),
+            "repository": string(p, "repository"),
+            "repository_url": repository_url,
+            "environment": string(p, "environment"),
+            "engine": string(p, "engine"),
+            "provider": string(p, "provider"),
+            "region": string(p, "region"),
+            "vendor": string(p, "vendor"),
+            "image": string(p, "image"),
+            "code_path": string(p, "code_path"),
+            "public_url": string(p, "public_url"),
+            "deployed_by": string(p, "deployed_by"),
+            "deploy_method": string(p, "deploy_method"),
+            "technology": strings(p, "technology"),
+            "ports": strings(p, "ports"),
+            "links": links,
+            "evidence": evidence,
+        },
+    )
+
+
+def _listed(p: Payload, key: str) -> list[object]:
+    found = dig(p, key)
+    return found if isinstance(found, list) else []
+
+
+def _component_said(p: Payload) -> str:
+    """A component in a sentence: what it is, in what, where it is reached."""
+    said = [f"{string(p, 'display_name')}: {string(p, 'role') or string(p, 'kind')}"]
+    if strings(p, "technology"):
+        said.append("in " + ", ".join(strings(p, "technology")))
+    if string(p, "public_url"):
+        said.append(f"reached at {string(p, 'public_url')}")
+    return " — ".join(said)
 
 
 @strategy("github.deployments", 1, (GITHUB, C.DEPLOYMENTS))

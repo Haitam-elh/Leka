@@ -7,6 +7,7 @@ requests were made — so a test can say what was fetched, and what was not.
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Callable
 from datetime import UTC, datetime
 
@@ -299,3 +300,71 @@ async def test_deployments_come_with_their_statuses_since_a_day_before_the_last_
     assert records[0].payload["statuses"] == [status]
     # Statuses are read for what is kept only.
     assert not github.params("/repos/acme/api/deployments/1/statuses")
+
+
+def _file(text: str) -> dict[str, object]:
+    return {"encoding": "base64", "content": base64.b64encode(text.encode()).decode()}
+
+
+async def test_components_are_read_from_the_few_files_that_say_what_runs() -> None:
+    repository = {**API, "default_branch": "main", "html_url": "https://github.com/acme/api"}
+    compose = (
+        "services:\n"
+        "  app:\n    build: .\n    environment:\n      REDIS_URL: redis://cache:6379\n"
+        "  cache:\n    image: redis:7\n"
+    )
+    github = GitHub(
+        {
+            "/orgs/acme/repos": [repository],
+            "/repos/acme/api/git/trees/main": {
+                "tree": [
+                    {"path": "docker-compose.yml", "type": "blob", "size": 120},
+                    {"path": "requirements.txt", "type": "blob", "size": 20},
+                    {"path": "app/main.py", "type": "blob", "size": 900},
+                    {"path": "huge.env.example", "type": "blob", "size": 10_000_000},
+                    {"path": "app", "type": "tree"},
+                ]
+            },
+            "/repos/acme/api/contents/docker-compose.yml": _file(compose),
+            "/repos/acme/api/contents/requirements.txt": _file("fastapi\nrq\n"),
+        }
+    )
+
+    records = await _stream(github, Capability.COMPONENTS)
+
+    assert [(r.external_id, r.container) for r in records] == [
+        ("R_api:app", "acme/api"),
+        ("R_api:cache", "acme/api"),
+    ]
+    app = records[0].payload
+    assert (app["display_name"], app["technology"]) == ("Api App", ["Python", "FastAPI"])
+    links = app["links"]
+    assert isinstance(links, list) and links[0]["to"] == "cache"
+    assert app["repository_url"] == "https://github.com/acme/api"
+    # The tree once, on its default branch; the files that say what runs —
+    # not the code, not a file too big to read.
+    assert github.params("/repos/acme/api/git/trees/main")[0]["recursive"] == "1"
+    assert github.params("/repos/acme/api/contents/requirements.txt")[0]["ref"] == "main"
+    assert not github.params("/repos/acme/api/contents/app/main.py")
+    assert not github.params("/repos/acme/api/contents/huge.env.example")
+
+
+async def test_an_empty_repository_runs_nothing() -> None:
+    repository = {**API, "default_branch": "main"}
+    github = GitHub(
+        {
+            "/orgs/acme/repos": [repository],
+            "/repos/acme/api/git/trees/main": httpx.Response(409, json={"message": "empty"}),
+        }
+    )
+
+    assert await _stream(github, Capability.COMPONENTS) == []
+
+
+async def test_the_connection_test_asks_for_the_code_s_files() -> None:
+    github = GitHub({"/user": {"login": "nora"}, "/orgs/acme": {"login": "acme"}})
+
+    result = await _connector(github, repositories=["acme/web"]).test_connection()
+
+    assert Capability.COMPONENTS in result.capabilities
+    assert github.params("/repos/acme/web/contents")
