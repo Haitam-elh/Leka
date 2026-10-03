@@ -352,6 +352,22 @@ describe("Mon environnement", () => {
     expect(applications.getByText(/sur lesquels s'appuient vos capacités/)).toBeInTheDocument();
     expect(applications.queryByText(/Connectez GitHub/)).not.toBeInTheDocument();
 
+    // The applications tab's own row holds what a catalogue declares, not
+    // the repositories: it says so, rather than "connect GitHub".
+    graphApi.view.mockResolvedValueOnce(
+      EMPTY("applications", [
+        layer("applications", ["application"]),
+        layer("services", ["service"]),
+        layer("code", ["repository"]),
+      ]),
+    );
+    await user.click(screen.getByTestId("env-tab-applications"));
+    const declared = within(await screen.findByTestId("layer-code"));
+    expect(declared.getByText(/reliés à une application ou à un service/)).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("layer-applications")).getByText(/que déclare un catalogue/),
+    ).toBeInTheDocument();
+
     await user.click(screen.getByTestId("env-tab-company"));
     await user.click(screen.getByRole("button", { name: "Liste" }));
     const table = screen.getByRole("table", { name: "Les éléments de votre environnement" });

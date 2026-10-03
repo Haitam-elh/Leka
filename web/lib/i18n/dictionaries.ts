@@ -620,6 +620,10 @@ const fr = {
       },
       /** A row whose meaning is its view's: what is tied to something else there. */
       hintsOf: {
+        applications: {
+          applications:
+            "Les applications que déclare un catalogue — Backstage, Datadog, une source personnalisée — apparaîtront ici. Vos dépôts sont dans la rangée Code.",
+        },
         domains: {
           applications:
             "Les applications et services sur lesquels s'appuient vos capacités et processus métier apparaîtront ici, une fois ceux-ci déclarés.",
@@ -2491,6 +2495,10 @@ const en: Dictionary = {
         business: "What the business needs of the software will appear here, with your capabilities and processes.",
       },
       hintsOf: {
+        applications: {
+          applications:
+            "The applications a catalogue declares — Backstage, Datadog, a custom source — will appear here. Your repositories are in the Code row.",
+        },
         domains: {
           applications:
             "The applications and services your business capabilities and processes rely on will appear here, once those are declared.",
