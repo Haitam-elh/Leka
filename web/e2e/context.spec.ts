@@ -39,5 +39,11 @@ test.describe("the context engine", () => {
     await page.getByRole("button", { name: "Réassembler" }).click();
     await expect(page.getByText("Rien n'a changé : la version 1 tient toujours.")).toBeVisible();
     await expect(page.getByTestId("context-versions").getByRole("listitem")).toHaveCount(1);
+
+    // Archived: said, still read, never reassembled.
+    await page.getByRole("button", { name: "Archiver" }).click();
+    await expect(page.getByTestId("context-archived")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Réassembler" })).toHaveCount(0);
+    await expect(page.getByTestId("context-elements")).toContainText("payment-api");
   });
 });
