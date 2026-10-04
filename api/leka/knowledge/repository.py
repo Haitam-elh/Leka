@@ -1985,6 +1985,17 @@ class GraphRepository(EntityRepository):
             for source, kind, name, status, synced in rows.tuples().all()
         ]
 
+    async def sources_named(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, tuple[str, str]]:
+        """The kind and name of each of these sources: github, "GitHub Leka"."""
+        if not ids:
+            return {}
+        rows = await self._session.execute(
+            select(Source.id, Source.kind, Source.name).where(
+                Source.workspace_id == self.workspace_id, Source.id.in_(set(ids))
+            )
+        )
+        return {source: (kind.value, name) for source, kind, name in rows.tuples().all()}
+
     async def source_kinds(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, str]:
         """The kind of each of these sources: github, pagerduty…"""
         if not ids:

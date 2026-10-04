@@ -107,6 +107,58 @@ class Neighbourhood(BaseModel):
     relationships: list[RelationshipRead] = Field(default_factory=list)
 
 
+class MaterialSource(BaseModel):
+    """A source what the material says came from: its id, kind and name."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_id: uuid.UUID
+    kind: str
+    name: str
+
+
+class MaterialEntity(BaseModel):
+    """An entity as context reads it: what it is, how far from the roots,
+    and where every piece of it came from — the sources and keys it goes
+    by, each attribute's origin (a source, or an enrichment rule and its
+    confidence and evidence)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityRead
+    depth: int = Field(description="Steps from the nearest root; 0 for a root.")
+    provenance: dict[str, object]
+
+
+class MaterialRelationship(BaseModel):
+    """A relationship as context reads it: what stated it — its records and
+    their evidence — or what it was inferred from, and its life."""
+
+    model_config = ConfigDict(frozen=True)
+
+    relationship: RelationshipRead
+    provenance: list[dict[str, object]]
+    first_seen_at: datetime | None
+    changed_at: datetime | None
+
+
+class ContextMaterial(BaseModel):
+    """What leka.context assembles from (LEKA-370): the entities around some
+    roots, the relationships among them, each with its provenance, the
+    sources they came from, and which build of the model they were read
+    from — so that a context says what it was made of, and when."""
+
+    model_config = ConfigDict(frozen=True)
+
+    roots: list[uuid.UUID]
+    entities: list[MaterialEntity] = Field(description="The roots first, then the nearest.")
+    relationships: list[MaterialRelationship]
+    sources: list[MaterialSource]
+    truncated: bool = Field(description="More was reached than a walk holds.")
+    built_at: datetime | None = Field(description="When the model read was built.")
+    model_version: int
+
+
 class ModelRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

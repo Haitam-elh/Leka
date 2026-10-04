@@ -16,6 +16,9 @@ table, an index for each way, walked one step — one query — at a time
                 what the company runs, in columns, the links between them
                 named, and the figures around them (architecture.py)
     coverage()  how well the model knows each kind, and from where
+    material()  what leka.context assembles from: a walk's entities and
+                relationships with their provenance and the sources named
+                (LEKA-370)
 
 Every walk is bounded — by depth, by the entities it may reach, by the
 rows a step may read — and says when it stopped short (`truncated`). The
@@ -36,6 +39,7 @@ from typing import Literal
 from leka.ingestion import monitoring_kinds
 from leka.knowledge import architecture as arch
 from leka.knowledge.models import Entity, EntityType, Relationship, RelationshipType
+from leka.knowledge.registry import MODEL_VERSION
 from leka.knowledge.repository import GraphRepository
 from leka.knowledge.schemas import (
     ArchitectureBundleRead,
@@ -48,13 +52,18 @@ from leka.knowledge.schemas import (
     ArchitectureRankRead,
     ArchitectureRead,
     ArchitectureSourceRead,
+    ContextMaterial,
     EntityBrief,
+    EntityRead,
     GraphNodeRead,
     GraphRead,
     GraphRelationshipRead,
     KindCoverageRead,
     KnowledgeCoverageRead,
     LandscapeViewRead,
+    MaterialEntity,
+    MaterialRelationship,
+    MaterialSource,
     PathRead,
     PathsRead,
     RelationshipRead,
@@ -648,6 +657,66 @@ class GraphService:
                 providers[provider] = providers.get(provider, 0) + count
         return totals, providers
 
+    async def material(
+        self,
+        roots: Sequence[uuid.UUID],
+        *,
+        depth: int = 1,
+        types: Sequence[RelationshipType] = (),
+        environment: str | None = None,
+        limit: int = MAX_NODES,
+    ) -> ContextMaterial | None:
+        """What leka.context assembles from (LEKA-370): what a walk from
+        `roots` reaches, each entity with its provenance and its distance,
+        the relationships among them with theirs, the sources named — None
+        when none of the roots is the workspace's."""
+        walked = await self.walk(
+            roots, depth=depth, types=types, environment=environment, limit=limit
+        )
+        if walked is None:
+            return None
+        far = {node.entity.id: node.depth for node in walked.nodes}
+        entities = await self._graph.by_ids(list(far))
+        edges = await self._graph.edges_by_ids([edge.id for edge in walked.relationships])
+        ids: set[uuid.UUID] = set()
+        for entity in entities.values():
+            ids |= _source_ids(entity)
+        for edge in edges.values():
+            for record in edge.provenance or []:
+                found = _uuid(record.get("source_id")) if isinstance(record, dict) else None
+                if found:
+                    ids.add(found)
+        named = await self._graph.sources_named(list(ids))
+        return ContextMaterial(
+            roots=[root.id for root in walked.roots],
+            entities=[
+                MaterialEntity(
+                    entity=EntityRead.model_validate(entities[node.entity.id]),
+                    depth=node.depth,
+                    provenance=dict(entities[node.entity.id].provenance or {}),
+                )
+                for node in walked.nodes
+                if node.entity.id in entities
+            ],
+            relationships=[
+                MaterialRelationship(
+                    relationship=RelationshipRead.model_validate(edge),
+                    provenance=list(edge.provenance or []),
+                    first_seen_at=edge.first_seen_at,
+                    changed_at=edge.changed_at,
+                )
+                for edge in (edges.get(e.id) for e in walked.relationships)
+                if edge is not None
+            ],
+            sources=[
+                MaterialSource(source_id=source, kind=kind, name=name)
+                for source, (kind, name) in sorted(named.items(), key=lambda i: i[1][1])
+            ],
+            truncated=walked.truncated,
+            built_at=await self._graph.built_at(),
+            model_version=MODEL_VERSION,
+        )
+
     async def coverage(self) -> KnowledgeCoverageRead:
         """How well the model knows each kind it holds, and from which
         sources."""
@@ -805,6 +874,13 @@ def _evidence(edge: Relationship) -> str | None:
 
 def _brief(entity: Entity | None) -> EntityBrief | None:
     return EntityBrief.model_validate(entity) if entity is not None else None
+
+
+def _uuid(value: object) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(value))
+    except ValueError:
+        return None
 
 
 def _source_ids(entity: Entity) -> set[uuid.UUID]:
