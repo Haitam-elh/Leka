@@ -286,6 +286,10 @@ const fr = {
     period: "Période",
     services: "Services",
     edit: "Modifier",
+    allEnvironments: "Tous les environnements",
+    allServices: "Tous les services",
+    noSources: "Aucune source connectée : LEKA n'a encore rien à lire pour vous répondre.",
+    connectSource: "Connecter une source",
   },
   /**
    * The overview, laid out exactly as mockup 01 — and filled with what LEKA
@@ -2925,6 +2929,10 @@ const en: Dictionary = {
     period: "Period",
     services: "Services",
     edit: "Edit",
+    allEnvironments: "All environments",
+    allServices: "All services",
+    noSources: "No source connected: LEKA has nothing to read to answer you yet.",
+    connectSource: "Connect a source",
   },
   overview: {
     greeting: "Hello {name},",

@@ -27,6 +27,8 @@ test.describe("the intention journey", () => {
     // the screen that does, through the same ?q= the palette uses.
     await expect(page).toHaveURL(/\/intentions\/new\?q=/);
     await expect(page.getByTestId("intention-input")).toHaveValue(question);
+    // The workspace's own sources, ticked once they arrive (scripts/seed.py).
+    await expect(page.getByRole("checkbox", { name: "acme/backend" })).toBeChecked();
 
     await page.getByTestId("intention-submit").click();
 
