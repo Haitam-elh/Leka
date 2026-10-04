@@ -10,7 +10,11 @@ import { openContextTab } from "./context-tab";
  * What a unit test cannot answer: that a context is assembled from what the
  * database holds — payment-api first, what it depends on after it — that
  * each element opens on where it came from, and that reassembling the same
- * model makes no new version.
+ * model makes no new version. Ranked (LEKA-372): what the demo's sources
+ * disagree on — payment-api's SLA, GitHub's or Datadog's — is said with who
+ * says what; the two accounts entity resolution found probably one person
+ * are folded into one, their disagreement said; each element says why its
+ * rank.
  */
 
 test.describe("the context engine", () => {
@@ -50,4 +54,41 @@ test.describe("the context engine", () => {
     await expect(page.getByRole("button", { name: "Réassembler" })).toHaveCount(0);
     await expect(page.getByTestId("context-elements")).toContainText("payment-api");
   });
+
+  test("ranks what it gathered, folds the probable duplicates, says the conflicts", async ({
+    page,
+  }) => {
+    await openContextTab(page);
+    await page.getByLabel("Pourquoi ?").fill("Pourquoi payment-api est lent ?");
+    await page.getByRole("button", { name: "Assembler le contexte" }).click();
+
+    const elements = page.getByTestId("context-elements");
+    const first = elements.getByTestId("context-element").first();
+    await expect(first).toContainText("payment-api");
+    await expect(first.getByTestId("element-disputed")).toBeVisible();
+
+    const conflicts = page.getByTestId("context-conflicts");
+    await expect(conflicts).toContainText("payment-api · sla");
+    await expect(conflicts).toContainText("99.95 (retenu) · selon acme/backend");
+    await expect(conflicts).toContainText("99.9 · selon acme-eu");
+    await expect(conflicts).toContainText("Nadia Kowalski · email");
+
+    // Jira's "Nadia K." is folded into Nadia Kowalski, said where it went.
+    await expect(elements).toContainText("+1 doublon(s)");
+    await expect(elements).not.toContainText("Nadia K.");
+    const left = page.getByTestId("context-left-out");
+    await left.getByRole("button", { name: "Voir la liste" }).click();
+    await expect(left.getByTestId("left-out-list")).toContainText("Nadia K. · Doublon");
+    await expect(left.getByTestId("left-out-list")).toContainText("doublon de Nadia Kowalski");
+
+    // Opened: why that rank, signal by signal.
+    await elements
+      .getByRole("button", { name: "Provenance de payment-api", exact: true })
+      .click();
+    const why = page.getByTestId("element-ranking");
+    await expect(why).toContainText("N° 1");
+    await expect(why).toContainText("Demandé");
+    await expect(why).toContainText("Cohérence");
+  });
 });
+

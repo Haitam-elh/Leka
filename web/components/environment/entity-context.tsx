@@ -7,6 +7,12 @@ import { useMemo, useState } from "react";
 import { cn } from "cn";
 
 import { exactDate, timeAgo } from "@/components/knowledge/time";
+import {
+  ConflictsPanel,
+  LeftOutPanel,
+  RankWhy,
+  RowMarks,
+} from "@/components/environment/context-ranking";
 import { Card, entityHref, Logo, typeIcon, typeLabel } from "@/components/environment/parts";
 import {
   ConfidenceBadge,
@@ -35,6 +41,7 @@ import {
   contexts,
   type ContextVersion,
   DEPTHS,
+  MIN_RELEVANCE,
   type RetrievalMatch,
   WINDOWS,
 } from "@/lib/context";
@@ -54,8 +61,10 @@ import { notify } from "@/lib/notify";
  * around this entity to understand a request, read back from the API as it
  * was made. Each element says where it came from — its sources, the key or
  * the record, stated or inferred by which rule, how sure — and why it is
- * there; each version is kept, and two can be compared. Nothing is drawn
- * that the API did not say.
+ * there; each version is kept, and two can be compared. How each was
+ * ranked, what its sources disagree on and what was left out, and why
+ * (LEKA-372), are context-ranking.tsx's. Nothing is drawn that the API did
+ * not say.
  */
 
 type Dictionary = ReturnType<typeof useDictionary>;
@@ -152,6 +161,7 @@ function Assemble({
         limit: BUDGET,
         window_days: Number(window),
         strategy: "hybrid",
+        min_relevance: MIN_RELEVANCE,
       },
       {
         onSuccess: (made) => {
@@ -362,6 +372,8 @@ function Shown({
               onCompare={setPair}
             />
             {pair && diff.data ? <Diff diff={diff.data} /> : null}
+            <ConflictsPanel assembled={assembled.data} />
+            <LeftOutPanel assembled={assembled.data} />
           </div>
         </div>
       ) : (
@@ -452,14 +464,7 @@ function ElementRow({
         <span className="hidden shrink-0 text-xs text-shell-muted sm:inline">
           {reasonText(t, element, names)}
         </span>
-        {element.relevance !== null && element.kind === "entity" ? (
-          <span
-            className="shrink-0 rounded bg-brand-violet-soft px-1.5 text-xs font-medium text-shell-nav-active tabular-nums"
-            title={w.relevance}
-          >
-            {Math.round(element.relevance * 100)} %
-          </span>
-        ) : null}
+        <RowMarks element={element} />
         <span className="flex shrink-0 gap-1">
           {kinds.map((kind) => (
             <Logo key={kind} kind={kind as string} className="size-4" />
@@ -569,7 +574,9 @@ function Provenance({
           </dd>
         </>
       ) : null}
-      {element.relevance !== null && element.kind === "entity" ? (
+      {element.ranking ? (
+        <RankWhy ranking={element.ranking} />
+      ) : element.relevance !== null && element.kind === "entity" ? (
         <>
           <dt className="text-shell-muted">{w.relevance}</dt>
           <dd className="tabular-nums">{Math.round(element.relevance * 100)} %</dd>

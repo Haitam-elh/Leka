@@ -3026,6 +3026,13 @@ export interface components {
              * @description How many found were left out.
              */
             dropped: number;
+            /** @description How it was ranked, and what was left out why (LEKA-372). */
+            ranking?: components["schemas"]["RankingReport"] | null;
+            /**
+             * Conflicts
+             * @description What its sources disagree on (LEKA-372).
+             */
+            conflicts?: components["schemas"]["ContextConflictRead"][];
             /**
              * Model Built At
              * @description The build of the model it was read from.
@@ -3610,6 +3617,24 @@ export interface components {
          */
         CompanySize: "1-10" | "11-50" | "51-200" | "201-1000" | "1000+";
         /**
+         * ConflictValue
+         * @description One side of a conflict: a value, or a thing, and who says so.
+         */
+        ConflictValue: {
+            /** Value */
+            value: unknown;
+            /**
+             * Ref Id
+             * @description The thing, when it is one.
+             */
+            ref_id?: string | null;
+            /**
+             * By
+             * @description The sources that say so, or the rule.
+             */
+            by: string[];
+        };
+        /**
          * ConnectionTestResult
          * @description What a successful test found.
          */
@@ -3641,6 +3666,48 @@ export interface components {
          * @enum {string}
          */
         ConnectorCategory: "code" | "project" | "docs" | "cloud" | "observability" | "data" | "chat" | "custom";
+        /**
+         * ContextConflictRead
+         * @description Something the context's sources disagree on (LEKA-372): said, every
+         *     side with who says so — never silently merged.
+         */
+        ContextConflictRead: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @description attribute — its sources give different values; duplicates — two things probably the same disagree; competing — two of a kind that admits one: owners, managers, leads, parents; gone — a tie still stated to a thing gone from every source.
+             * @enum {string}
+             */
+            kind: "attribute" | "duplicates" | "competing" | "gone";
+            /**
+             * Subject
+             * Format: uuid
+             * @description The entity it is about.
+             */
+            subject: string;
+            /** Label */
+            label: string;
+            /**
+             * About
+             * @description The attribute, or the kind of tie: owner, manager…
+             */
+            about: string;
+            /**
+             * Chosen
+             * @description What the company model shows, when it chose.
+             */
+            chosen?: unknown | null;
+            /** Values */
+            values: components["schemas"]["ConflictValue"][];
+            /**
+             * Refs
+             * @description The elements it involves.
+             */
+            refs: string[];
+            /** Said */
+            said: string;
+        };
         /**
          * ContextCreate
          * @description A context to assemble. Its roots must be the workspace's.
@@ -3709,6 +3776,12 @@ export interface components {
              * @enum {string}
              */
             strategy: "neighbourhood" | "hybrid";
+            /**
+             * Min Relevance
+             * @description Under this score a thing found is left out — never a root (LEKA-372); 0 keeps everything the budget holds.
+             * @default 0.05
+             */
+            min_relevance: number;
         };
         /**
          * ContextDetail
@@ -3815,6 +3888,8 @@ export interface components {
              * @description How relevant, 0 to 1: how high and by how many retrievers it was found (LEKA-371); 1 for a root; none for a tie, and before LEKA-371.
              */
             relevance: number | null;
+            /** @description How it was ranked (LEKA-372); none before. */
+            ranking?: components["schemas"]["ElementRanking"] | null;
             /**
              * Text
              * @description It, in one line, for a model to read.
@@ -3901,6 +3976,11 @@ export interface components {
             retrievers: string[];
             /** Strategy */
             strategy: string;
+            /**
+             * Min Relevance
+             * @default 0.05
+             */
+            min_relevance: number;
         };
         /**
          * ContextSourceRead
@@ -4018,6 +4098,19 @@ export interface components {
             summary: components["schemas"]["ContextSummary"];
             /** Retrieval */
             retrieval: components["schemas"]["RetrieverRunRead"][];
+            /**
+             * Left Out
+             * @description What was left out, by why: duplicate, low_relevance, budget, ties (LEKA-372).
+             */
+            left_out?: {
+                [key: string]: number;
+            };
+            /**
+             * Conflicts
+             * @description How many conflicts it says (LEKA-372).
+             * @default 0
+             */
+            conflicts: number;
             /**
              * Fingerprint
              * @description What it holds, hashed: equal when nothing changed.
@@ -4923,6 +5016,45 @@ export interface components {
             changed_at: string | null;
         };
         /**
+         * ElementRanking
+         * @description How an element was ranked (LEKA-372): its score, its place, and every
+         *     signal it was read from.
+         */
+        ElementRanking: {
+            /**
+             * Score
+             * @description What the order follows, 0 to 1: topic * (0.6 + 0.4 * trust) — for a relationship, its weaker end's score * the same factor of its own trust.
+             */
+            score: number;
+            /**
+             * Rank
+             * @description Its place among the entities kept, from 1.
+             */
+            rank: number | null;
+            /**
+             * Topic
+             * @description How much it is about the request, 0 to 1.
+             */
+            topic: number;
+            /**
+             * Trust
+             * @description How far it can be relied on, 0 to 1.
+             */
+            trust: number | null;
+            /** Signals */
+            signals: components["schemas"]["RankingSignal"][];
+            /**
+             * Conflicts
+             * @description The ids of the conflicts it is part of.
+             */
+            conflicts?: string[];
+            /**
+             * Duplicates
+             * @description What was folded into it, probably the same thing.
+             */
+            duplicates?: components["schemas"]["FoldedRead"][];
+        };
+        /**
          * ElementReason
          * @description Why an element is in the context.
          */
@@ -5663,6 +5795,27 @@ export interface components {
             path: string;
             /** Message */
             message: string;
+        };
+        /**
+         * FoldedRead
+         * @description A thing folded into another: entity resolution linked them as
+         *     probably the same (docs/resolution.md).
+         */
+        FoldedRead: {
+            /**
+             * Ref Id
+             * Format: uuid
+             */
+            ref_id: string;
+            /** Label */
+            label: string;
+            /**
+             * Rule
+             * @description The rule that linked them.
+             */
+            rule: string;
+            /** Confidence */
+            confidence: number;
         };
         /** ForgotPasswordRequest */
         ForgotPasswordRequest: {
@@ -6624,6 +6777,35 @@ export interface components {
             coverage: components["schemas"]["KindCoverageRead"][];
             /** Sources */
             sources: components["schemas"]["ViewSourceRead"][];
+        };
+        /**
+         * LeftOutRead
+         * @description A thing found and left out (LEKA-372), and why.
+         */
+        LeftOutRead: {
+            /**
+             * Ref Id
+             * Format: uuid
+             */
+            ref_id: string;
+            /** Ref Type */
+            ref_type: string;
+            /** Label */
+            label: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "duplicate" | "low_relevance" | "budget";
+            /** Score */
+            score: number;
+            /**
+             * Duplicate Of
+             * @description What it was folded into, when a duplicate.
+             */
+            duplicate_of?: string | null;
+            /** Said */
+            said: string;
         };
         /**
          * Lifecycle
@@ -7600,6 +7782,82 @@ export interface components {
              * Format: date-time
              */
             validated_at: string;
+        };
+        /**
+         * RankingReport
+         * @description How a version was ranked (LEKA-372): the policy, and what was left
+         *     out — counted by why, and the best of it listed.
+         */
+        RankingReport: {
+            /**
+             * Version
+             * @description Raised each time the ranking ranks differently.
+             */
+            version: number;
+            /** Min Relevance */
+            min_relevance: number;
+            /**
+             * Trust Share
+             * @description How much trust can move a score: 0.4 is 40 %.
+             */
+            trust_share: number;
+            /**
+             * Weights
+             * @description Each signal's weight on its axis.
+             */
+            weights: {
+                [key: string]: number;
+            };
+            /**
+             * Left Out
+             * @description duplicate, low_relevance, budget — entities; ties — relationships left out with an end.
+             */
+            left_out: {
+                [key: string]: number;
+            };
+            /**
+             * Left
+             * @description What was left out, the best first, at most 100.
+             */
+            left: components["schemas"]["LeftOutRead"][];
+        };
+        /**
+         * RankingSignal
+         * @description One thing a rank was read from (LEKA-372).
+         */
+        RankingSignal: {
+            /**
+             * Name
+             * @description asked, retrieval, proximity, ends — how much it is about the request; confidence, quality, freshness, sources, corroboration, lifecycle, consistency, origin — how far it can be relied on.
+             */
+            name: string;
+            /**
+             * Axis
+             * @enum {string}
+             */
+            axis: "topic" | "trust";
+            /**
+             * Value
+             * @description 0 to 1; none when nothing measures it — left out of its axis, never guessed.
+             */
+            value: number | null;
+            /**
+             * Weight
+             * @description What it counts for on its axis.
+             */
+            weight: number;
+            /**
+             * Detail
+             * @description What it was read from: the retrievers and ranks, the steps, the days since a source showed it, the best source and its state, how many sources…
+             */
+            detail?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Said
+             * @description It, in words.
+             */
+            said: string;
         };
         /**
          * RecoveryAccepted
