@@ -15,8 +15,9 @@ they find is combined.
 Each says what it found, best first, and on what — the words a thing
 holds, how many steps away, the event and when. fuse() combines their
 rankings, each weighed: a thing found high by several is surer than a
-thing found high by one (reciprocal rank fusion). Its relevance is that
-sum, scaled from 0 to 1 by the most any thing could have had.
+thing found high by one (reciprocal rank fusion) — and things a walk found
+equally near share a rank. Its relevance is that sum, scaled from 0 to 1
+by the most any thing could have had.
 
 A RETRIEVER FAILS ALONE. Each runs in a savepoint with a statement
 timeout (run()): one that errs or takes too long is undone, logged, and
@@ -38,8 +39,8 @@ from typing import Protocol
 
 import structlog
 
-from leka.context.assembly import Relevance
 from leka.context.language import content, expanded
+from leka.context.ranking import Relevance
 from leka.context.schemas import ContextRequest, RetrievalMatch, RetrieverRunRead
 from leka.ingestion import ContentRepository
 from leka.knowledge import GraphService, RelationshipType
@@ -222,7 +223,11 @@ def fuse(found: Sequence[tuple[Retriever, Found]]) -> dict[uuid.UUID, Relevance]
     scores: dict[uuid.UUID, float] = {}
     matches: dict[uuid.UUID, list[RetrievalMatch]] = {}
     for retriever, result in found:
-        for rank, hit in enumerate(result.hits, start=1):
+        near = [hit.depth for hit in result.hits if hit.depth is not None]
+        for position, hit in enumerate(result.hits, start=1):
+            # Equally near is equally ranked (LEKA-372): a walk's things one
+            # step away are all first, not first to tenth by name.
+            rank = position if hit.depth is None else 1 + sum(1 for d in near if d < hit.depth)
             added = retriever.weight / (RRF_K + rank)
             scores[hit.entity_id] = scores.get(hit.entity_id, 0.0) + added
             matches.setdefault(hit.entity_id, []).append(

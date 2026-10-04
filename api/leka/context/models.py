@@ -126,6 +126,9 @@ class ContextVersion(Base, WorkspaceScopedMixin):
     retrieval: Mapped[list[dict[str, object]]] = mapped_column(
         JSONB, nullable=False, server_default="[]"
     )
+    # How it was ranked (LEKA-372): the policy, what was left out and why,
+    # what its sources disagree on. None before.
+    ranking: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     # What it holds, hashed: an assembly that changes nothing is no version.
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, server_default="")
     error: Mapped[str | None] = mapped_column(String(300), nullable=True)
@@ -168,5 +171,8 @@ class ContextElement(Base, WorkspaceScopedMixin):
     provenance: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     # Why it is there: which strategy put it, from which root, how far.
     reason: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
-    # How relevant to the purpose (LEKA-372): none until ranked.
+    # How relevant it was found (LEKA-371): none for a tie, or before.
     relevance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # How it was ranked (LEKA-372): its score, its place, every signal it
+    # was read from, the conflicts it is part of. None before.
+    ranking: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)

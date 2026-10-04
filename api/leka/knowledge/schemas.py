@@ -108,13 +108,18 @@ class Neighbourhood(BaseModel):
 
 
 class MaterialSource(BaseModel):
-    """A source what the material says came from: its id, kind and name."""
+    """A source what the material says came from: its id, kind and name —
+    and how it is doing, which the context's ranking reads (LEKA-372)."""
 
     model_config = ConfigDict(frozen=True)
 
     source_id: uuid.UUID
     kind: str
     name: str
+    status: str | None = Field(
+        default=None, description="active, degraded, error, disabled… (leka.connectors)."
+    )
+    health: str | None = Field(default=None, description="healthy, degraded, unhealthy, unknown.")
 
 
 class MaterialEntity(BaseModel):

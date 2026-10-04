@@ -14,12 +14,16 @@ number, or as it stood at a date — with what changed between them; a root
 gone fails a version that says why, the last good one still read; an
 archived context is read, never reassembled; a budget cuts and says so;
 what is refused is refused before anything is kept; another workspace's
-context is not found.
+context is not found. Ranked (LEKA-372): what entity resolution linked as
+probably the same is folded and said, what its sources disagree on is
+said, every element says how it was ranked — and a version kept before
+says nothing of it, rather than something made up.
 """
 
 # ruff: noqa: F811 — the fixtures of test_sources_api are imported to be requested by name.
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -29,8 +33,9 @@ from httpx import AsyncClient
 from sqlalchemy import text
 
 from leka.db import session_factory, workspace_scope
+from leka.ingestion import ResolutionDecision
 from tests.conftest import FakeIdentity, error_code
-from tests.test_knowledge_graph import BILLING, CHECKOUT, PAYMENTS, _acme
+from tests.test_knowledge_graph import BILLING, CHECKOUT, PAYMENTS, SHOP, _acme
 from tests.test_relationships_engine import _build
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401 — fixtures
 
@@ -107,6 +112,7 @@ async def test_a_context_is_created_whole_with_its_provenance_and_inspected(
         "until": None,
         "retrievers": [],
         "strategy": "hybrid",
+        "min_relevance": 0.05,
     }
     assert made["strategy"] == {"name": "hybrid", "version": 1}
     assert made["model_built_at"] is not None
@@ -315,3 +321,94 @@ async def test_another_workspace_s_context_is_not_found(
     # Nor can Acme's entities be the roots of Globex's context.
     borrowed = await client.post(API, json={"title": "Theirs", "roots": [str(model[BILLING])]})
     assert borrowed.status_code == 404
+
+
+async def test_a_context_is_ranked_its_duplicates_folded_its_conflicts_said(
+    client: AsyncClient, model: dict[str, uuid.UUID], acme: dict[str, uuid.UUID]
+) -> None:
+    workspace = acme["acme"]
+    # Entity resolution found Checkout and the Shop application probably the
+    # same thing, and kept them apart; the sources of Billing API disagree
+    # on its tier.
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            session.add(
+                ResolutionDecision(
+                    workspace_id=workspace,
+                    entity_id=model[SHOP],
+                    other_entity_id=model[CHECKOUT],
+                    kind="link",
+                    rule="same_name",
+                    confidence=0.8,
+                    keys=[],
+                    evidence="Shop ~ Checkout",
+                )
+            )
+            await session.commit()
+    conflict = [
+        {
+            "attribute": "tier",
+            "chosen": 1,
+            "values": [
+                {"value": 1, "source_id": str(uuid.uuid4())},
+                {"value": 2, "source_id": str(uuid.uuid4())},
+            ],
+        }
+    ]
+    await _sql(
+        workspace,
+        "UPDATE entities SET provenance = jsonb_set(provenance, '{conflicts}', "
+        "CAST(:said AS jsonb)) WHERE id = :id",
+        said=json.dumps(conflict),
+        id=model[BILLING],
+    )
+
+    made = await _create(client, model, depth=2)
+    ranking = made["ranking"]
+    assert (ranking["version"], ranking["min_relevance"], ranking["trust_share"]) == (1, 0.05, 0.4)
+    assert ranking["left_out"]["duplicate"] == 1
+    (folded,) = [item for item in ranking["left"] if item["reason"] == "duplicate"]
+    assert (folded["ref_id"], folded["duplicate_of"]) == (str(model[SHOP]), str(model[CHECKOUT]))
+    elements = {e["label"]: e for e in made["elements"]}
+    assert "Shop" not in elements
+    assert [d["ref_id"] for d in elements["Checkout"]["ranking"]["duplicates"]] == [
+        str(model[SHOP])
+    ]
+
+    # The disagreement said, on the context and on the thing.
+    (said,) = made["conflicts"]
+    assert (said["kind"], said["subject"], said["about"], said["chosen"]) == (
+        "attribute",
+        str(model[BILLING]),
+        "tier",
+        1,
+    )
+    assert [v["by"] for v in said["values"]] == [["a deleted source"], ["a deleted source"]]
+    root = made["elements"][0]
+    assert root["ranking"]["conflicts"] == [said["id"]]
+    assert root["text"].endswith(" — disputed: tier: 1 by a source, 2 by a source")
+
+    # Every element says how it was ranked: the entities in order, from 1.
+    entities = [e for e in made["elements"] if e["kind"] == "entity"]
+    assert [e["ranking"]["rank"] for e in entities] == list(range(1, len(entities) + 1))
+    for element in made["elements"]:
+        signals = {s["name"]: s for s in element["ranking"]["signals"]}
+        assert {s["axis"] for s in signals.values()} == {"topic", "trust"}
+        assert all(s["said"] for s in signals.values())
+    assert {"confidence", "freshness", "sources", "corroboration"} <= {
+        s["name"] for s in root["ranking"]["signals"]
+    }
+
+    # The versions say it in short.
+    versions = await _get(client, f"/{made['context_id']}/versions")
+    assert versions["data"][0]["left_out"]["duplicate"] == 1
+    assert versions["data"][0]["conflicts"] == 1
+
+    # A version kept before LEKA-372 says nothing of a ranking it never had.
+    await _sql(workspace, "UPDATE context_versions SET ranking = NULL")
+    await _sql(workspace, "UPDATE context_elements SET ranking = NULL")
+    before = await _get(client, f"/{made['context_id']}/assembled")
+    assert (before["ranking"], before["conflicts"]) == (None, [])
+    assert {e["ranking"] for e in before["elements"]} == {None}
+    versions = await _get(client, f"/{made['context_id']}/versions")
+    assert (versions["data"][0]["left_out"], versions["data"][0]["conflicts"]) == ({}, 0)
