@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 
 import { openContextTab } from "./context-tab";
+import { openIncident } from "./incident";
 import { signIn } from "./sign-in";
 
 /**
@@ -64,6 +65,14 @@ test.describe("what a screen opens", () => {
       .getByRole("button", { name: "Provenance de payment-api", exact: true })
       .click();
     await expect(page.getByTestId("context-provenance")).toBeVisible();
+
+    await expectNoViolations(page);
+  });
+
+  test("an incident's analysis, a probable cause's evidence open", async ({ page }) => {
+    await openIncident(page);
+    await page.getByTestId("probable-cause").getByRole("button", { name: /preuve/ }).click();
+    await expect(page.getByTestId("evidence")).toBeVisible();
 
     await expectNoViolations(page);
   });
