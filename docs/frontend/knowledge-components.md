@@ -211,7 +211,8 @@ things point to at its root — leaves by the top and comes in at the bottom
   relationships (`RELATION_FAMILIES`, `lib/knowledge-graph.ts`) are the
   walk's.
 - **An incident's analysis** (its sheet's *Analyse de LEKA*, LEKA-341):
-  drawn with the intelligence components —
+  mockup 11's band — what it comes to, and *Voir l'analyse complète*
+  unfolding it in place — drawn with the intelligence components:
   [intelligence-components.md](intelligence-components.md).
 - **An entity's context** (tab Contexte of its sheet, LEKA-370,
   `entity-context.tsx`, [../context.md § 8](../context.md)): what LEKA

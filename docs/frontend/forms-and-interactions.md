@@ -275,6 +275,24 @@ triggers on demand.
    loading. That page is how the next change to the wrapper gets judged.
 4. Write the keyboard test. The mouse path is the one that never breaks.
 
+## What the new intention offers
+
+Step 1 (mockup 02) offers the workspace's own, never a list written in the
+code (LEKA-341):
+
+- **Sources** — the ones it has connected and can read (`useSources`,
+  active or degraded), each with its logo, its tool and what kind of thing
+  it holds, all ticked once they arrive. None connected: the panel says so
+  and links to `/sources`.
+- **Environments** — *Tous les environnements*, then those the company
+  model knows (`useEnvironment().environments`, LEKA-359); production is
+  chosen when there is one, as long as nobody chose otherwise.
+- **Services** — the services of the environment's map; none chosen means
+  all of them.
+
+What arrives fills only what nobody has touched, and is not counted as a
+change: leaving the page untouched does not ask.
+
 ## What is deliberately not here
 
 - No real network call. `submitIntention` waits and invents an id
@@ -282,7 +300,5 @@ triggers on demand.
 - No upload. Attachments stay in memory behind a `TODO`.
 - No dictation. Hidden where the browser could not do it, disabled behind a
   flag where it could.
-- Sources, environments and services are mocked in the screens that use them
-  (LEKA-341).
 - Visual polish and tokens are LEKA-339's — see
   [`design-system.md`](design-system.md).
