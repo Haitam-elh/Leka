@@ -53,7 +53,8 @@ from leka.ingestion.parsing import ParsedRecord
 #    management tool's records (LEKA-367).
 # 10: a repository's components — its code part of each service it runs,
 #    not of a branch named for it (LEKA-369).
-NORMALISER_VERSION = 10
+# 11: what a repository is made of — its modules, from its tree (LEKA-369).
+NORMALISER_VERSION = 11
 
 
 def normalise(

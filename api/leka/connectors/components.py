@@ -38,6 +38,13 @@ store comes from configuration only — a compose service, a connection URL
 — and an external service from a configured value; a library says a
 language or a framework, no more.
 
+THE LAYOUT — what the repository is made of, from its tree alone (no file
+read): its top-level folders as MODULES — the code of a service, the
+documentation, the infrastructure, the CI, the agents, the scripts — each
+with how many files and in what languages, and the parts of a service's
+code (Leka's API: connectors — 31 of them — ingestion, knowledge…). The
+role of a folder is what a service's code says of it, else its name.
+
 Pure: files in, components out. Vendor-neutral: GitHub's, GitLab's,
 Bitbucket's connectors hand it the same thing.
 """
@@ -340,6 +347,214 @@ def discover(repository: str, files: Mapping[str, str]) -> list[dict[str, object
 
 
 # ── how ─────────────────────────────────────────────────────────────────────
+
+
+# The layout's bounds: modules, the parts of one, the names of a part's own.
+MAX_MODULES = 20
+MAX_PARTS = 30
+MAX_NAMES = 40
+# What is never a module: what is installed, built or cached.
+NOT_MODULES = frozenset(
+    {
+        "node_modules",
+        "vendor",
+        ".venv",
+        "venv",
+        "dist",
+        "build",
+        ".next",
+        "__pycache__",
+        "coverage",
+        ".git",
+        ".idea",
+        ".vscode",
+    }
+)
+# Beside a service's code, not its code: its migrations.
+NOT_CODE = frozenset({"alembic", "migrations", "migration"})
+# A folder's role, by its name: what most repositories call these.
+FOLDER_ROLES: tuple[tuple[frozenset[str], str], ...] = (
+    (frozenset({"docs", "doc", "documentation", "wiki"}), "docs"),
+    (
+        frozenset(
+            {
+                "deploy",
+                "deployment",
+                "deployments",
+                "infra",
+                "infrastructure",
+                "terraform",
+                "k8s",
+                "kubernetes",
+                "helm",
+                "charts",
+                "ops",
+                "ansible",
+            }
+        ),
+        "infrastructure",
+    ),
+    (frozenset({".github", ".gitlab", ".circleci", ".buildkite"}), "ci"),
+    (frozenset({"agents", "agent", "prompts", "skills"}), "agents"),
+    (frozenset({"scripts", "bin", "tools"}), "scripts"),
+    (frozenset({"tests", "test", "e2e", "spec"}), "tests"),
+)
+# A language, by a file's extension or name.
+LANGUAGES = {
+    ".py": "Python",
+    ".ts": "TypeScript",
+    ".tsx": "TypeScript",
+    ".js": "JavaScript",
+    ".jsx": "JavaScript",
+    ".mjs": "JavaScript",
+    ".cjs": "JavaScript",
+    ".go": "Go",
+    ".java": "Java",
+    ".kt": "Kotlin",
+    ".rb": "Ruby",
+    ".php": "PHP",
+    ".rs": "Rust",
+    ".cs": "C#",
+    ".swift": "Swift",
+    ".md": "Markdown",
+    ".mdx": "Markdown",
+    ".sql": "SQL",
+    ".sh": "Shell",
+    ".tf": "Terraform",
+    ".css": "CSS",
+    ".html": "HTML",
+    ".yml": "YAML",
+    ".yaml": "YAML",
+}
+NAMED_LANGUAGES = {"Dockerfile": "Docker", "Caddyfile": "Caddy", "Makefile": "Make"}
+# What says a little of a module, not its language: shown only when alone.
+MINOR_LANGUAGES = frozenset({"YAML", "Markdown", "CSS", "HTML", "Shell"})
+
+
+def layout(
+    paths: Iterable[str], components: Iterable[Mapping[str, object]] = ()
+) -> dict[str, object]:
+    """What a repository is made of, from its tree's paths: its modules —
+    its top-level folders, each with its role, its files, its languages,
+    the services whose code it is, and its parts."""
+    files = sorted({p for p in paths if p and not p.endswith("/")})
+    code_paths: dict[str, list[tuple[str, str]]] = {}
+    for component in components:
+        where = component.get("code_path")
+        if isinstance(where, str) and where and component.get("kind") == "service":
+            code_paths.setdefault(where.strip("/"), []).append(
+                (str(component.get("name")), str(component.get("role") or ""))
+            )
+    tops: dict[str, list[str]] = {}
+    for path in files:
+        top, _, rest = path.partition("/")
+        if not rest or top in NOT_MODULES or (top.startswith(".") and _folder_role(top) is None):
+            continue
+        tops.setdefault(top, []).append(path)
+    modules = [
+        _module(top, inside, code_paths)
+        for top, inside in sorted(tops.items(), key=lambda item: (-len(item[1]), item[0]))
+    ][:MAX_MODULES]
+    return {"modules": modules, "files": len(files)}
+
+
+def _module(
+    top: str, inside: list[str], code_paths: Mapping[str, list[tuple[str, str]]]
+) -> dict[str, object]:
+    served = [
+        served
+        for path, found in code_paths.items()
+        for served in found
+        if path == top or path.startswith(f"{top}/")
+    ]
+    role = "service" if served else (_folder_role(top) or "code")
+    root = _source_root(top, inside)
+    parts: list[dict[str, object]] = []
+    below: dict[str, list[str]] = {}
+    for path in inside:
+        rest = path[len(root) + 1 :] if path.startswith(f"{root}/") else None
+        if rest and "/" in rest:
+            below.setdefault(rest.split("/", 1)[0], []).append(path)
+    for name, held in sorted(below.items(), key=lambda item: (-len(item[1]), item[0])):
+        if name in NOT_MODULES or name.startswith((".", "_")):
+            continue
+        children = sorted(
+            {
+                p[len(root) + len(name) + 2 :].split("/", 1)[0]
+                for p in held
+                if "/" in p[len(root) + len(name) + 2 :]
+            }
+            - NOT_MODULES
+        )
+        children = [c for c in children if not c.startswith(("_", "."))]
+        parts.append(
+            {
+                "name": name,
+                "path": f"{root}/{name}",
+                "files": len(held),
+                "parts": len(children),
+                "names": children[:MAX_NAMES],
+            }
+        )
+    # A small module says its files: deploy's compose, Caddyfile, script.
+    named = sorted(p[len(top) + 1 :] for p in inside) if len(inside) <= 8 else []
+    return {
+        "path": top,
+        "role": role,
+        "files": len(inside),
+        "languages": _languages(inside),
+        "services": [{"name": name, "role": what} for name, what in served],
+        "root": root,
+        "parts": parts[:MAX_PARTS],
+        "names": named,
+    }
+
+
+def _folder_role(name: str) -> str | None:
+    folded = name.lower()
+    return next((role for names, role in FOLDER_ROLES if folded in names), None)
+
+
+def _source_root(top: str, inside: list[str]) -> str:
+    """Where a module's own code starts: Python's package — api/leka —
+    else its src, else the module."""
+    packages = sorted(
+        {posixpath.dirname(p) for p in inside if posixpath.basename(p) == "__init__.py"},
+        key=lambda d: (d.count("/"), d),
+    )
+    # Its tests and its migrations are beside its code, not its code.
+    tops = [
+        d
+        for d in packages
+        if posixpath.dirname(d) not in packages
+        and d != top
+        and _folder_role(posixpath.basename(d)) != "tests"
+        and posixpath.basename(d) not in NOT_CODE
+    ]
+    shallow = [d for d in tops if d.count("/") == (tops[0].count("/") if tops else 0)]
+    if len(shallow) == 1:
+        return shallow[0]
+    if any(p.startswith(f"{top}/src/") for p in inside):
+        return f"{top}/src"
+    return top
+
+
+def _languages(paths: Iterable[str]) -> list[str]:
+    counted: dict[str, int] = {}
+    for path in paths:
+        base = posixpath.basename(path)
+        language = (
+            "Docker Compose"
+            if COMPOSE.search(path)
+            else "GitHub Actions"
+            if WORKFLOW.search(path)
+            else NAMED_LANGUAGES.get(base) or LANGUAGES.get(posixpath.splitext(base)[1].lower())
+        )
+        if language:
+            counted[language] = counted.get(language, 0) + 1
+    ranked = sorted(counted, key=lambda language: (-counted[language], language))
+    major = [language for language in ranked if language not in MINOR_LANGUAGES]
+    return (major or ranked)[:3]
 
 
 @dataclass

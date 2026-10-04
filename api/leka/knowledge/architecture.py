@@ -30,6 +30,12 @@ named by what it is, the words its evidence gives:
     monitored_by  a service → the monitoring tool that shows it
     part_of       anything else part of a card
 
+A repository that says what it is made of (its `modules`, read from its
+tree) has a card for each — Leka/api, Leka/web, Leka/docs, Leka/deploy,
+Leka/.github — linked to what the code says: the code of a service
+(`source_code`), the configuration of a proxy or a store without code of
+its own (`configures`), the workflow that deploys them (`deploys`).
+
 Pure: things and relationships in, cards and links out; the service reads
 (graph.py). docs/company-model.md § 16 says what each column holds.
 """
@@ -62,6 +68,8 @@ SERVING_RULES = frozenset({"only_instance", "named_for_repository", "only_bucket
 # The order links are named in when a card's to one column say several things.
 ROLE_ORDER = (
     "source_code",
+    "configures",
+    "deploys",
     "routes",
     "calls",
     "deployed_on",
@@ -82,9 +90,19 @@ RELIED_ON = frozenset(
 )
 
 # A column's cards, at most — the most connected first; a cloud provider's.
+# The detailed map draws them all, up to its own bounds.
 MAX_CARDS = 40
 MAX_PER_PROVIDER = 8
+MAX_CARDS_DETAILED = 200
+MAX_PER_PROVIDER_DETAILED = 120
 MAX_RANKED = 5
+# A flow's steps, at most, and how far from where it starts.
+MAX_STEPS = 24
+MAX_HOPS = 4
+# What a request or a job goes through: not what builds, hosts or holds it.
+FLOWING = frozenset(
+    {"routes", "calls", "queue", "cache", "stores", "files", "email", "uses", "depends"}
+)
 
 # The order a column reads in, top to bottom: what is reached first.
 SERVICE_ORDER = ("proxy", "web", "api", "worker", "scheduler", "job")
@@ -98,6 +116,68 @@ RESOURCE_ORDER = (
     "load_balancer",
     "network",
 )
+
+# A module's place among its repository's: the code first, then what
+# serves it.
+MODULE_ORDER = (
+    "backend",
+    "frontend",
+    "code",
+    "agents",
+    "infrastructure",
+    "ci",
+    "docs",
+    "scripts",
+    "tests",
+)
+# What a card says of itself in detail, by type: the facts its sources give.
+FACTS: dict[str, tuple[str, ...]] = {
+    E.INFRA_RESOURCE: (
+        "instance_type",
+        "platform",
+        "architecture",
+        "zone",
+        "public_ip",
+        "public_dns",
+        "private_ip",
+        "runtime",
+        "memory_mb",
+        "timeout_s",
+        "cidr",
+        "default",
+        "type",
+        "scheme",
+        "dns",
+        "version",
+        "account",
+        "created_at",
+    ),
+    E.DATABASE: (
+        "engine",
+        "version",
+        "instance_type",
+        "storage_gb",
+        "multi_az",
+        "encrypted",
+        "public",
+        "endpoint",
+        "host",
+        "port",
+        "database",
+        "zone",
+        "account",
+    ),
+    E.SERVICE: (
+        "code_path",
+        "image",
+        "deployed_by",
+        "deploy_method",
+        "public_addresses",
+        "ports",
+        "vendor",
+    ),
+    E.REPOSITORY: ("default_branch", "visibility", "language", "code_files"),
+}
 
 WORST = {"incident": 3, "attention": 2, "operational": 1, "unmonitored": 0}
 # An engine as people name it: RDS's `postgres`, the code's `postgresql`.
@@ -177,6 +257,15 @@ class Card:
     stats: dict[str, int] = field(default_factory=dict)
     evidence: list[str] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
+    # What its sources say of it in detail: an instance's type and zone, a
+    # database's engine and storage — the facts FACTS names.
+    facts: dict[str, object] = field(default_factory=dict)
+    # A module's parts — Leka/api's connectors, ingestion, knowledge — and
+    # a small one's files.
+    parts: list[dict[str, object]] = field(default_factory=list)
+    files: list[str] = field(default_factory=list)
+    # Who maintains it, by their work (enrichment's `maintained_by`).
+    maintainer_ids: list[uuid.UUID] = field(default_factory=list)
     order: tuple[int, int, str] = (0, 0, "")
 
 
@@ -189,6 +278,8 @@ class Link:
     confidence: float
     evidence: str | None
     status: str | None
+    # What inferred it: enrichment's rule — public_address, only_instance…
+    rule: str = "stated"
 
 
 @dataclass(frozen=True)
@@ -215,6 +306,29 @@ class Group:
     shown: int = 0
 
 
+@dataclass(frozen=True)
+class Flow:
+    """What one entry — a proxy, a job — goes through, step by step: a
+    request reaching a web app, its API, its queue and its database. The
+    entries whose steps are the same go together."""
+
+    entries: list[str]
+    steps: list[Link]
+
+
+@dataclass(frozen=True)
+class Check:
+    """What to confirm, as the detailed map lists it in orange: a state
+    deduced, a link inferred, a thing with no team, no monitoring, no tie."""
+
+    kind: str
+    card_id: str
+    other_id: str | None = None
+    role: str | None = None
+    rule: str | None = None
+    confidence: float | None = None
+
+
 @dataclass
 class Architecture:
     cards: list[Card]
@@ -227,6 +341,8 @@ class Architecture:
     # The most relied on: each, and how many rely on it.
     ranked: list[tuple[Card, int]]
     environments: list[str]
+    flows: list[Flow] = field(default_factory=list)
+    checks: list[Check] = field(default_factory=list)
 
 
 def column(type_: str, key: str, attributes: Mapping[str, object]) -> str | None:
@@ -330,6 +446,8 @@ def build(
     providers: Mapping[str, int],
     monitoring: frozenset[str],
     environment: str | None = None,
+    maintainers: Mapping[uuid.UUID, list[uuid.UUID]] | None = None,
+    detailed: bool = False,
 ) -> Architecture:
     """The cards, the links between them, the figures: from the things —
     the most connected first — what relates them, and how many of each
@@ -348,6 +466,7 @@ def build(
     cards: dict[str, Card] = {}
     for thing in shown:
         card = _card(thing, stats.get(thing.id, {}), teams.get(thing.id))
+        card.maintainer_ids = list((maintainers or {}).get(thing.id, []))
         cards[card.id] = card
 
     links: dict[tuple[str, str, str], Link] = {}
@@ -361,12 +480,25 @@ def build(
         worse = max(
             (cards[str(a)].status, cards[str(b)].status), key=lambda s: WORST.get(s or "", -1)
         )
-        links[key] = Link(str(a), str(b), named, edge.origin, edge.confidence, edge.evidence, worse)
+        links[key] = Link(
+            str(a), str(b), named, edge.origin, edge.confidence, edge.evidence, worse, edge.rule
+        )
     for link in links.values():
         if link.role == "source_code":
             cards[link.to_id].repository_id = cards[link.to_id].repository_id or link.from_id
         elif link.role in ("deployed_on", "hosted_on"):
             cards[link.from_id].host_id = cards[link.from_id].host_id or link.to_id
+
+    # What each repository is made of: a card a module, linked as its code says.
+    laid_out: set[str] = set()
+    for thing in shown:
+        if thing.type != E.REPOSITORY or not isinstance(thing.attributes.get("modules"), list):
+            continue
+        for module in _modules(thing, cards[str(thing.id)]):
+            cards[module.id] = module
+            laid_out.add(str(thing.id))
+            for link in _module_links(module, thing, by_id, cards):
+                links.setdefault((link.from_id, link.to_id, link.role), link)
 
     # The monitoring tools that show a service: a card each, outside.
     for thing in shown:
@@ -391,9 +523,16 @@ def build(
                 link_key, Link(str(thing.id), tool_id, "monitored_by", "stated", 1.0, None, None)
             )
 
-    kept, groups = _kept(cards.values(), links.values(), providers)
+    kept, groups = _kept(
+        cards.values(),
+        links.values(),
+        providers,
+        most=MAX_CARDS_DETAILED if detailed else MAX_CARDS,
+        per_provider=MAX_PER_PROVIDER_DETAILED if detailed else MAX_PER_PROVIDER,
+    )
     drawn = [link for link in links.values() if link.from_id in kept and link.to_id in kept]
-    bundles = _bundles(drawn, kept)
+    # A repository laid out speaks through its modules: no arrow of its own.
+    bundles = _bundles([link for link in drawn if link.from_id not in laid_out], kept)
     services = Counter(
         card.status or "unmonitored"
         for card in cards.values()
@@ -418,6 +557,96 @@ def build(
         services={s: services.get(s, 0) for s in WORST},
         ranked=ranked,
         environments=environments,
+        flows=flows(kept, drawn) if detailed else [],
+        checks=checks(kept, drawn) if detailed else [],
+    )
+
+
+def flows(cards: Mapping[str, Card], links: Iterable[Link]) -> list[Flow]:
+    """What each entry goes through: from a service nothing routes to or
+    calls — a proxy, a worker, a job — every step a request or a job takes,
+    MAX_HOPS away at most, in the order they are reached."""
+    out: dict[str, list[Link]] = {}
+    reached: set[str] = set()
+    for link in links:
+        if link.role in FLOWING:
+            out.setdefault(link.from_id, []).append(link)
+            if link.role in ("routes", "calls"):
+                reached.add(link.to_id)
+    entries = [
+        card
+        for card in cards.values()
+        if card.column == "services" and card.id in out and card.id not in reached
+    ]
+    found: list[Flow] = []
+    alike: dict[tuple[tuple[str, str], ...], int] = {}
+    for entry in sorted(entries, key=lambda c: c.order):
+        steps: list[Link] = []
+        seen = {entry.id}
+        frontier = [entry.id]
+        for _ in range(MAX_HOPS):
+            following: list[str] = []
+            for at in frontier:
+                for link in sorted(out.get(at, []), key=lambda li: _step_order(li, cards)):
+                    if len(steps) >= MAX_STEPS:
+                        break
+                    steps.append(link)
+                    if link.to_id not in seen:
+                        seen.add(link.to_id)
+                        following.append(link.to_id)
+            frontier = following
+        signature = tuple(sorted((li.role, li.to_id) for li in steps if li.from_id == entry.id))
+        if len(steps) == len([li for li in steps if li.from_id == entry.id]) and signature in alike:
+            # A worker and a scheduler doing the same: one flow, both entries.
+            index = alike[signature]
+            found[index] = Flow([*found[index].entries, entry.id], found[index].steps)
+            continue
+        alike[signature] = len(found)
+        found.append(Flow([entry.id], steps))
+    return found
+
+
+def _step_order(link: Link, cards: Mapping[str, Card]) -> tuple[int, tuple[int, int, str]]:
+    """Steps in the order things are reached: by what the step is, then
+    where its target reads in its column."""
+    target = cards.get(link.to_id)
+    return _rank(link.role), target.order if target else (0, 0, link.to_id)
+
+
+# How much each check weighs: what is wrong first, what is unsure next.
+CHECK_ORDER = ("incident", "attention", "deduced", "inferred", "unmonitored", "no_team", "unlinked")
+
+
+def checks(cards: Mapping[str, Card], links: Iterable[Link]) -> list[Check]:
+    """What to confirm: what is wrong, what LEKA deduced or inferred rather
+    than read, what has no team, no monitoring, no tie to anything."""
+    found: list[Check] = []
+    tied: set[str] = set()
+    for link in links:
+        tied |= {link.from_id, link.to_id}
+        if link.origin == "inferred":
+            found.append(
+                Check("inferred", link.from_id, link.to_id, link.role, link.rule, link.confidence)
+            )
+    for card in cards.values():
+        if card.type in ("module", "tool"):
+            continue
+        if card.status in ("incident", "attention"):
+            found.append(Check(card.status, card.id))
+        if card.deduced:
+            found.append(Check("deduced", card.id, card.host_id))
+        elif card.status == "unmonitored" and card.column == "services":
+            found.append(Check("unmonitored", card.id))
+        if card.column in ("services", "data") and card.team_id is None:
+            found.append(Check("no_team", card.id))
+        if card.id not in tied:
+            found.append(Check("unlinked", card.id))
+    return sorted(
+        found,
+        key=lambda c: (
+            CHECK_ORDER.index(c.kind),
+            cards[c.card_id].order if c.card_id in cards else (0, 0, ""),
+        ),
     )
 
 
@@ -455,6 +684,7 @@ def _card(thing: Thing, stats: dict[str, int], team: uuid.UUID | None) -> Card:
         team_id=team,
         stats=stats,
         deployment=_text(attributes.get("last_deployment")),
+        facts=_facts(thing.type, attributes),
         # Each file and line once, though several records say it.
         evidence=list(dict.fromkeys(_texts(attributes.get("evidence")))),
         sources=sorted(thing.kinds),
@@ -462,6 +692,112 @@ def _card(thing: Thing, stats: dict[str, int], team: uuid.UUID | None) -> Card:
         # then the most connected; the code's first among the services.
         order=(rank, -thing.degree, thing.name.lower()),
     )
+
+
+def _modules(repository: Thing, card: Card) -> list[Card]:
+    """A repository's modules, as cards of its column, under it."""
+    short = repository.name.rsplit("/", 1)[-1]
+    branch = _text(repository.attributes.get("default_branch"))
+    found: list[Card] = []
+    for module in _dicts(repository.attributes.get("modules")):
+        if not isinstance(module, dict) or not _text(module.get("path")):
+            continue
+        path = str(module["path"])
+        what = _module_kind(module)
+        rank = MODULE_ORDER.index(what) if what in MODULE_ORDER else len(MODULE_ORDER)
+        parts = _dicts(module.get("parts"))
+        files = module.get("files")
+        found.append(
+            Card(
+                id=f"module:{repository.id}:{path}",
+                column="code",
+                group=card.group,
+                kind=what,
+                type="module",
+                name=f"{short}/{path}",
+                key=f"{repository.key}/{path}",
+                technology=_texts(module.get("languages")),
+                url=f"{card.url}/tree/{branch}/{path}" if card.url and branch else card.url,
+                repository_id=card.id,
+                stats={"files": files} if isinstance(files, int) else {},
+                sources=card.sources,
+                parts=parts,
+                files=_texts(module.get("names")),
+                order=(card.order[0], card.order[1], f"{card.order[2]}\x01{rank:02d}{path}"),
+            )
+        )
+    return found
+
+
+def _module_kind(module: Mapping[str, object]) -> str:
+    """What a module is: the code of a back end or of a front end, else
+    what its folder is — docs, infrastructure, CI, agents, scripts."""
+    role = _text(module.get("role")) or "code"
+    if role != "service":
+        return role
+    serves = {_text(s.get("role")) for s in _dicts(module.get("services"))}
+    return "frontend" if serves and serves <= {"web"} else "backend"
+
+
+def _module_links(
+    module: Card, repository: Thing, things: Mapping[uuid.UUID, Thing], cards: Mapping[str, Card]
+) -> list[Link]:
+    """What a module is to the rest, as the code says: the code of the
+    services built from it, the configuration of what has no code of its
+    own, the workflow that deploys them."""
+    path = module.name.split("/", 1)[1]
+    inside = f"{path}/"
+    found: list[Link] = []
+    for thing in things.values():
+        card = cards.get(str(thing.id))
+        if card is None or card.column not in ("services", "data"):
+            continue
+        attributes = thing.attributes
+        if _text(attributes.get("repository_url")) and not _same_repository(attributes, repository):
+            continue
+        code = _text(attributes.get("code_path"))
+        role = None
+        evidence = None
+        if (
+            module.kind in ("backend", "frontend")
+            and code
+            and (code == path or code.startswith(inside))
+        ):
+            role, evidence = "source_code", f"code: {code}"
+        elif module.kind == "infrastructure" and not code:
+            said = next(
+                (e for e in _texts(attributes.get("evidence")) if e.startswith(inside)), None
+            )
+            if said:
+                role, evidence = "configures", said
+        elif module.kind == "ci":
+            deployed = _text(attributes.get("deployed_by"))
+            if deployed and deployed.startswith(inside):
+                role, evidence = "deploys", deployed
+        if role:
+            found.append(Link(module.id, card.id, role, "stated", 1.0, evidence, card.status))
+    return found
+
+
+def _dicts(value: object) -> list[dict[str, object]]:
+    return [v for v in value if isinstance(v, dict)] if isinstance(value, list) else []
+
+
+def _same_repository(attributes: Mapping[str, object], repository: Thing) -> bool:
+    url = str(attributes.get("repository_url") or "").lower().rstrip("/")
+    return url.endswith("/" + repository.key.split("/", 1)[-1])
+
+
+def _facts(type_: str, attributes: Mapping[str, object]) -> dict[str, object]:
+    """What a card's sources say of it in detail, by FACTS."""
+    found: dict[str, object] = {}
+    for name in FACTS.get(type_, ()):
+        value = attributes.get(name)
+        if isinstance(value, list):
+            value = ", ".join(str(v) for v in value if v) or None
+        if isinstance(value, (str, int, float, bool)) and value != "":
+            found[name] = value
+    return found
 
 
 def _site(thing: Thing) -> str | None:
@@ -472,7 +808,12 @@ def _site(thing: Thing) -> str | None:
 
 
 def _kept(
-    cards: Iterable[Card], links: Iterable[Link], providers: Mapping[str, int]
+    cards: Iterable[Card],
+    links: Iterable[Link],
+    providers: Mapping[str, int],
+    *,
+    most: int = MAX_CARDS,
+    per_provider: int = MAX_PER_PROVIDER,
 ) -> tuple[dict[str, Card], list[Group]]:
     """The cards each column shows, and its groups: MAX_CARDS a column, a
     cloud provider's MAX_PER_PROVIDER — what a link ties to the rest first."""
@@ -491,23 +832,25 @@ def _kept(
     ):
         if where == "cloud":
             members.sort(key=lambda c: (not tied[c.id], c.order))
-            room = MAX_PER_PROVIDER
+            room = per_provider
         else:
             members.sort(key=lambda c: c.order)
-            room = MAX_CARDS
-        room = min(room, MAX_CARDS - per_column[where])
+            room = most
+        room = min(room, most - per_column[where])
         chosen = members[: max(room, 0)]
         per_column[where] += len(chosen)
         kept |= {card.id: card for card in chosen}
         regions = sorted({c.region for c in members if c.region})
+        # A code host counts its repositories: their modules are theirs.
+        own = [c for c in members if c.type != "module"]
         groups.append(
             Group(
                 column=where,
                 id=f"{where}:{name}",
                 name=name,
                 regions=regions,
-                total=providers.get(name, len(members)) if where == "cloud" else len(members),
-                shown=len(chosen),
+                total=providers.get(name, len(members)) if where == "cloud" else len(own),
+                shown=len([c for c in chosen if c.type != "module"]),
             )
         )
     return kept, groups

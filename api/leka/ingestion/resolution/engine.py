@@ -59,7 +59,10 @@ from leka.ingestion.resolution import signals as sig
 # 3: applications named alike are one, as services and teams (LEKA-362).
 # 4: a service's no-reply address and GitHub's merge account are bots,
 #    never matched by their names (LEKA-369).
-RESOLVER_VERSION = 4
+# 5: a source's records of one thing say it together — GitHub's repository
+#    and what it is made of — the latest first, attribute by attribute
+#    (LEKA-369).
+RESOLVER_VERSION = 5
 MERGE = 0.9
 LINK = 0.6
 # The kinds one by name — "Billing API" and "billing" — and the words that

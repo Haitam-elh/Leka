@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { ArchitectureBoard } from "@/components/environment/architecture";
+import { ArchitectureDossier } from "@/components/environment/architecture-dossier";
 import { EntityPicker } from "@/components/environment/entity-picker";
 import { Card, entityHref, IconTile, typeIcon, typeLabel } from "@/components/environment/parts";
 import { DependencyGraph, layered, rowPositions } from "@/components/knowledge/dependency-graph";
@@ -97,7 +97,7 @@ export function GraphExplorer() {
         }
       : null,
   );
-  const architecture = useArchitecture(null, root === null);
+  const architecture = useArchitecture(null, root === null, true);
   const query = root ? walk : architecture;
 
   const drawn = useMemo((): Drawn | undefined => {
@@ -198,17 +198,11 @@ export function GraphExplorer() {
       {query.isError ? (
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
       ) : !root ? (
-        <Card
-          title={w.overview}
-          icon={<IconTile icon={Network} tone="violet" className="size-9" />}
-        >
-          <p className="mb-3 text-[0.8125rem] text-shell-muted">{w.overviewBody}</p>
-          {architecture.data ? (
-            <ArchitectureBoard data={architecture.data} detailed />
-          ) : (
-            <div className="h-[560px] animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />
-          )}
-        </Card>
+        architecture.data ? (
+          <ArchitectureDossier data={architecture.data} />
+        ) : (
+          <div className="h-[560px] animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />
+        )
       ) : (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <Card

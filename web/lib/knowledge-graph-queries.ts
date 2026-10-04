@@ -17,8 +17,8 @@ export const graphKeys = {
   walk: (params: WalkParams) => [...graphKeys.all, "walk", params] as const,
   paths: (params: PathParams) => [...graphKeys.all, "paths", params] as const,
   view: (name: ViewName) => [...graphKeys.all, "view", name] as const,
-  architecture: (environment: string | null) =>
-    [...graphKeys.all, "architecture", environment ?? ""] as const,
+  architecture: (environment: string | null, detailed = false) =>
+    [...graphKeys.all, "architecture", environment ?? "", detailed] as const,
 };
 
 /** Searching starts at two letters: one matches half the company. */
@@ -60,11 +60,12 @@ export function useLandscapeView(name: ViewName | null) {
   });
 }
 
-/** What the company runs, in columns — one environment's, or all of it. */
-export function useArchitecture(environment: string | null, enabled = true) {
+/** What the company runs, in columns — one environment's, or all of it;
+ * detailed: every card, its flows, what to confirm, its sources. */
+export function useArchitecture(environment: string | null, enabled = true, detailed = false) {
   return useQuery({
-    queryKey: graphKeys.architecture(environment),
-    queryFn: () => knowledgeGraph.architecture(environment),
+    queryKey: graphKeys.architecture(environment, detailed),
+    queryFn: () => knowledgeGraph.architecture(environment, detailed),
     enabled,
     placeholderData: keepPreviousData,
   });

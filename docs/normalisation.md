@@ -225,7 +225,9 @@ documentation, a business system's capabilities and processes (LEKA-366).
 9: deployments, changes, deploy and change events, Jira Service Management's
 incidents and changes and what caused what, a CI/CD tool's and a change
 management tool's records (LEKA-367). 10: a repository's components — its
-code part of each service it runs (LEKA-369).
+code part of each service it runs (LEKA-369). 11: what a repository is made
+of — its modules, read from its tree — said of the repository itself
+(LEKA-369).
 
 ## 8. Where results are kept, and when they are made
 

@@ -116,3 +116,105 @@ def test_the_states_counted() -> None:
 
     assert found.services == {"incident": 1, "attention": 0, "operational": 1, "unmonitored": 1}
     assert found.health == {"operational": 1, "attention": 1, "incident": 1, "unmonitored": 1}
+
+
+def test_a_repository_s_modules_tied_as_its_code_says() -> None:
+    repository = thing(
+        "github.com/acme/shop",
+        "repository",
+        "acme/shop",
+        default_branch="main",
+        modules=[
+            {"path": "api", "role": "service", "services": [{"role": "api"}], "files": 40},
+            {"path": "deploy", "role": "infrastructure", "files": 3},
+            {"path": ".github", "role": "ci", "files": 2},
+        ],
+    )
+    shipped = {
+        "repository_url": "https://github.com/acme/shop",
+        "deployed_by": ".github/workflows/cd.yml",
+    }
+    api = thing("service:api", "service", "Shop API", code_path="api", **shipped)
+    proxy = thing(
+        "service:proxy",
+        "service",
+        "Shop Proxy",
+        evidence=["deploy/Caddyfile:3 — api"],
+        **shipped,
+    )
+
+    found = laid([repository, api, proxy], [])
+
+    modules = {c.name: c for c in found.cards if c.type == "module"}
+    assert [(name, c.kind) for name, c in modules.items()] == [
+        ("shop/api", "backend"),
+        ("shop/deploy", "infrastructure"),
+        ("shop/.github", "ci"),
+    ]
+    assert modules["shop/api"].url == "https://github.com/acme/shop/tree/main/api"
+    names = {c.id: c.name for c in found.cards}
+    assert {(names[li.from_id], li.role, names[li.to_id]) for li in found.links} == {
+        ("shop/api", "source_code", "Shop API"),
+        ("shop/deploy", "configures", "Shop Proxy"),
+        ("shop/.github", "deploys", "Shop API"),
+        ("shop/.github", "deploys", "Shop Proxy"),
+    }
+
+
+def test_the_flows_a_request_and_alike_jobs_make() -> None:
+    proxy = thing("service:proxy", "service", "Proxy", service_type="proxy")
+    api = thing("service:api", "service", "API", service_type="api")
+    worker = thing("service:worker", "service", "Worker", service_type="worker")
+    cron = thing("service:cron", "service", "Cron", service_type="scheduler")
+    db = thing("db:pg", "database", "PostgreSQL", store_role="database")
+
+    def said(a: arch.Thing, role: str, b: arch.Thing) -> arch.Edge:
+        return arch.Edge(a.id, b.id, "depends_on", "stated", "stated", 1.0, f"{role}: compose:1")
+
+    found = arch.build(
+        [proxy, api, worker, cron, db],
+        [
+            said(proxy, "routes", api),
+            said(api, "stores", db),
+            said(worker, "stores", db),
+            said(cron, "stores", db),
+        ],
+        stats={},
+        teams={},
+        totals={},
+        providers={},
+        monitoring=frozenset(),
+        detailed=True,
+    )
+
+    names = {c.id: c.name for c in found.cards}
+    request, jobs = found.flows
+    assert [(names[s.from_id], s.role, names[s.to_id]) for s in request.steps] == [
+        ("Proxy", "routes", "API"),
+        ("API", "stores", "PostgreSQL"),
+    ]
+    assert [names[e] for e in jobs.entries] == ["Worker", "Cron"]
+    # What to confirm: no team for any of them, the worst first.
+    assert {c.kind for c in found.checks} == {"no_team"}
+
+
+def test_what_to_confirm_what_is_wrong_first() -> None:
+    down = thing("service:down", "service", "Down", status="incident")
+    alone = thing("aws:arn:aws:s3:::logs", "infra_resource", "logs", provider="aws")
+
+    found = arch.build(
+        [down, alone],
+        [],
+        stats={},
+        teams={},
+        totals={},
+        providers={},
+        monitoring=frozenset(),
+        detailed=True,
+    )
+
+    assert [(c.kind, c.card_id) for c in found.checks][:2] == [
+        ("incident", str(down.id)),
+        ("no_team", str(down.id)),
+    ]
+    assert ("unlinked", str(alone.id)) in {(c.kind, c.card_id) for c in found.checks}

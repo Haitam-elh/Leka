@@ -115,7 +115,7 @@ What is **never** merged — the false positives this is built against:
 |---|---|
 | `key` | the one that says it best: the key the thing's own records give; a person's working address before a login or a no-reply address; a ticket on its site before `ticket:…`; then the most said, the shortest |
 | `name` | a real name before a handle; what the thing's own records say before what others call it; the surest, then the latest. `names` keeps every other |
-| `attributes` | from the thing's own records (else from what names it): where they agree, their value; where they disagree, the most recent, then the surest |
+| `attributes` | from the thing's own records (else from what names it): where they agree, their value; where they disagree, the most recent, then the surest. Two records of its own from one source — GitHub's repository and what its tree says it is made of (LEKA-369) — say it together: the latest's attributes over the other's, none lost (`RESOLVER_VERSION` 5) |
 | `conflicts` | **every disagreement, every value kept**: `{attribute, chosen, values: [{value, source_id, key, observed_at}]}`. A name is in conflict when two are not the same name — "Sara Martin" and "Sarah Johnson" under one address; not "Sara Martin" and "Sara Martin-Dupont", nor a handle beside a name |
 | `confidence` | the lowest of the merges that made it — 1.0 for one key or keys that say they are one another |
 | `quality` | the best quality validation gave the records that are it ([validation.md](validation.md)); none for an entity only named by others |

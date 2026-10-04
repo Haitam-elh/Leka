@@ -167,11 +167,14 @@ def github_branch(p: Payload) -> Extracted:
     )
 
 
-@strategy("github.components", 1, (GITHUB, C.COMPONENTS))
+@strategy("github.components", 2, (GITHUB, C.COMPONENTS))
 def github_component(p: Payload) -> Extracted:
     """What a repository's code says it runs (LEKA-369): a service, a store
     or a service outside — leka.connectors.components read it — its links
-    to the others as JSON lines, where each thing was read as text."""
+    to the others as JSON lines, where each thing was read as text. And
+    what the repository is made of (v2): its modules, as JSON lines."""
+    if string(p, "kind") == "layout":
+        return _layout(p)
     said = [e for e in _listed(p, "evidence") if isinstance(e, dict)]
     evidence = [
         f"{e.get('path')}:{e.get('line')} — {e.get('says')}"
@@ -217,6 +220,38 @@ def github_component(p: Payload) -> Extracted:
             "public_addresses": strings(p, "public_addresses"),
             "links": links,
             "evidence": evidence,
+        },
+    )
+
+
+def _layout(p: Payload) -> Extracted:
+    """A repository's modules — its top-level folders, their roles, files,
+    languages and parts — read from its tree."""
+    modules = [
+        json.dumps(module, sort_keys=True, ensure_ascii=False)
+        for module in _listed(p, "modules")
+        if isinstance(module, dict)
+    ]
+    return Extracted(
+        title=required(p, "display_name"),
+        url=string(p, "repository_url"),
+        content=content(
+            "description",
+            ", ".join(
+                f"{m.get('path')} ({m.get('role')}, {m.get('files')})"
+                for m in _listed(p, "modules")
+                if isinstance(m, dict)
+            ),
+        ),
+        metadata={
+            "component": required(p, "name"),
+            "component_kind": "layout",
+            "repository": string(p, "repository"),
+            "repository_url": string(p, "repository_url"),
+            "default_branch": string(p, "default_branch"),
+            "modules": modules,
+            "files": number(p, "files"),
+            "truncated": flag(p, "truncated"),
         },
     )
 

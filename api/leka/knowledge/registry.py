@@ -121,6 +121,12 @@ class RepositoryAttributes(Attributes):
     language: str | None = None
     topics: list[str] | None = None
     fork: bool | None = None
+    # What it is made of, from its tree (LEKA-369): its top-level folders —
+    # the code of a service, the docs, the infrastructure — each with its
+    # role, files, languages and parts; how many files in all.
+    modules: list[dict[str, object]] | None = None
+    code_files: int | None = None
+    layout_truncated: bool | None = None
 
 
 class WorkAttributes(Attributes):

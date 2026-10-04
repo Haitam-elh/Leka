@@ -30,7 +30,7 @@ import pytest
 from httpx import AsyncClient
 
 from leka.connectors import Capability, SourceKind
-from leka.connectors.components import discover
+from leka.connectors.components import discover, layout
 from tests.conftest import FakeIdentity
 from tests.test_application_landscape import _record, _store
 from tests.test_components import FILES, REPOSITORY
@@ -50,6 +50,18 @@ REDIS = "db:redis://github.com/haitam-elh/leka/redis"
 POSTGRES = "db:postgresql://github.com/haitam-elh/leka/postgresql"
 S3 = "code:github.com/haitam-elh/leka:storage:s3"
 REPOSITORY_KEY = "github.com/haitam-elh/leka"
+# Its tree: the files components.py reads, and the code around them.
+TREE = [
+    *FILES,
+    "api/leka/__init__.py",
+    "api/leka/connectors/__init__.py",
+    "api/leka/connectors/aws/connector.py",
+    "api/leka/connectors/github/connector.py",
+    "api/leka/knowledge/graph.py",
+    "api/tests/__init__.py",
+    "web/app/page.tsx",
+    "docs/setup.md",
+]
 LEKA_WORKER = "service:leka-worker"
 ARN = "arn:aws:ec2:eu-central-1:123456789012"
 BOX = f"aws:{ARN}:instance/i-0leka"
@@ -77,7 +89,30 @@ async def _leka(workspace: uuid.UUID, *, aws: bool = False) -> dict[str, uuid.UU
             container=REPOSITORY,
         ),
     )
-    for component in discover(REPOSITORY, FILES):
+    found = discover(REPOSITORY, FILES)
+    # What the repository is made of, from its tree, as GitHub reads it.
+    await _store(
+        workspace,
+        github,
+        _record(
+            SourceKind.GITHUB,
+            Capability.COMPONENTS,
+            {
+                "name": "_layout",
+                "kind": "layout",
+                "display_name": REPOSITORY,
+                "repository": REPOSITORY,
+                "repository_url": REPO_URL,
+                "default_branch": "main",
+                **layout(TREE, found),
+            },
+            external_id="R_leka:_layout",
+            container=REPOSITORY,
+        ),
+        # The repository's own record names the same entity.
+        external_id="R_leka:_layout",
+    )
+    for component in found:
         await _store(
             workspace,
             github,
@@ -312,8 +347,9 @@ async def test_the_architecture_in_columns_its_links_named(
         "stores",
         {POSTGRES, REDIS, S3},
     )
-    assert bundles[(REPOSITORY_KEY, "services")]["role"] == "source_code"
-    assert len(bundles[(REPOSITORY_KEY, "services")]["targets"]) == 5
+    # The code's arrow: from its module, to the four services built from it.
+    code = bundles[(f"{REPOSITORY_KEY}/api", "services")]
+    assert (code["role"], len(code["targets"])) == ("source_code", 4)
 
     figures = found["figures"]
     assert (figures["services"], figures["repositories"], figures["databases"]) == (6, 1, 2)
@@ -347,3 +383,71 @@ async def test_the_architecture_of_one_environment(
     assert LEKA_API not in kept and BUCKET not in kept
     assert "aws:arn:aws:s3:::acme-logs" in kept
     assert staging["environment"] == "staging"
+
+
+async def test_the_repository_in_its_modules_each_tied_as_the_code_says(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    await _leka(acme["acme"], aws=True)
+    _as(identity, acme, "member")
+
+    found = await _get(client, "/architecture")
+
+    modules = {c["name"]: c for c in found["cards"] if c["type"] == "module"}
+    assert list(modules) == ["Leka/api", "Leka/web", "Leka/deploy", "Leka/.github", "Leka/docs"]
+    api = modules["Leka/api"]
+    assert (api["kind"], api["technology"][0], api["column"]) == ("backend", "Python", "code")
+    assert api["url"] == "https://github.com/haitam-elh/leka/tree/main/api"
+    # Its code's parts: the connectors, two of them here — LEKA's has 31.
+    connectors = next(p for p in api["parts"] if p["name"] == "connectors")
+    assert (connectors["path"], connectors["names"]) == ("api/leka/connectors", ["aws", "github"])
+    assert modules["Leka/deploy"]["files"] == [
+        "Caddyfile",
+        "docker-compose.production.yml",
+        "production.env.example",
+    ]
+    names = {c["id"]: c["name"] for c in found["cards"]}
+    links = {(names[li["from_id"]], li["role"], names[li["to_id"]]) for li in found["links"]}
+    assert {
+        ("Leka/api", "source_code", "Leka API"),
+        ("Leka/api", "source_code", "Leka Worker"),
+        ("Leka/web", "source_code", "Leka Web"),
+        ("Leka/deploy", "configures", "Leka Caddy"),
+        ("Leka/deploy", "configures", "Redis"),
+        ("Leka/.github", "deploys", "Leka API"),
+    } <= links
+    # The repository speaks through its modules: no arrow of its own.
+    assert not [b for b in found["bundles"] if names[b["from_id"]] == "Haitam-elh/Leka"]
+    # And each thing says what its sources say of it, in detail.
+    cards = {c["name"]: c for c in found["cards"]}
+    assert cards["Leka API"]["facts"]["image"] == "api"
+    assert cards["leka-prod"]["facts"]["public_ip"] == IP
+
+
+async def test_the_detailed_map_its_flows_what_to_confirm_and_its_sources(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    await _leka(acme["acme"], aws=True)
+    _as(identity, acme, "member")
+
+    found = await _get(client, "/architecture", detailed="true")
+
+    assert found["detailed"] is True
+    names = {c["id"]: c["name"] for c in found["cards"]}
+    first, jobs = found["flows"]
+    # A request: the proxy, its front end and API, what the API keeps and sends.
+    assert [names[e] for e in first["entries"]] == ["Leka Caddy"]
+    assert [(names[s["from_id"]], s["role"], names[s["to_id"]]) for s in first["steps"]][:3] == [
+        ("Leka Caddy", "routes", "Leka Web"),
+        ("Leka Caddy", "routes", "Leka API"),
+        ("Leka Web", "calls", "Leka API"),
+    ]
+    # The jobs doing alike, together.
+    assert [names[e] for e in jobs["entries"]] == ["Leka Worker", "Leka Scheduler", "Leka Migrate"]
+    kinds = [c["kind"] for c in found["checks"]]
+    assert kinds.index("deduced") < kinds.index("inferred") < kinds.index("no_team")
+    assert ("unlinked", "acme-logs") in {(c["kind"], names[c["card_id"]]) for c in found["checks"]}
+    assert {s["name"] for s in found["sources"]} == {"GitHub", "AWS"}
+    # The overview asks none of it.
+    plain = await _get(client, "/architecture")
+    assert (plain["flows"], plain["checks"], plain["sources"]) == ([], [], [])

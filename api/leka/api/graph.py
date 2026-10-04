@@ -165,13 +165,22 @@ async def architecture(
         str | None,
         Query(max_length=100, description="Only what runs in it — and what says none."),
     ] = None,
+    detailed: Annotated[
+        bool,
+        Query(
+            description="Every card — not a column's first 40 — the flows they make, what "
+            "to confirm, the sources read: the detailed map's."
+        ),
+    ] = False,
 ) -> ArchitectureRead:
     """What the company runs, in columns: its code, its applications and
     services, its data and storage, its cloud, the services outside it
     relies on. Each thing's state — deduced from what runs it where nothing
     watches it, and said so — the links between them named by what they
     are, and how many of each there are."""
-    return await service.architecture(now=datetime.now(UTC), environment=environment)
+    return await service.architecture(
+        now=datetime.now(UTC), environment=environment, detailed=detailed
+    )
 
 
 @router.get("/coverage", response_model=KnowledgeCoverageRead)

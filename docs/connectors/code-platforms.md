@@ -110,6 +110,21 @@ resolver, 3 s at most, public addresses only (`public_addresses`). Nothing
 connects to it. Which cloud machine has that address, and so runs it, is
 enrichment's ([enrichment.md § 7, Architecture](../enrichment.md)).
 
+**What the repository is made of** (`components.layout`, LEKA-369) — from
+the tree already read, no file opened: each top-level folder a **module**,
+with how many files and in what languages — Leka's `api` (Python, 470
+files), `web` (TypeScript), `docs`, `deploy` (Caddy, Docker Compose),
+`.github` (GitHub Actions), `agents`, `scripts`. Its role is what the code
+says of it — the code of the services built from it (`code_path`) — else
+its name: `docs`, `deploy`/`infra`/`terraform`… infrastructure, `.github`
+CI, `agents`, `scripts`, `tests`. A service's code is listed by its parts:
+the immediate folders of its package — `api/leka`: `connectors` (90 files,
+31 connectors by name), `ingestion`, `knowledge`… — not its tests nor its
+migrations; a small module by its files. Nothing installed, built or an
+editor's (`node_modules`, `dist`, `.venv`, `.vscode`…) is a module. One
+record per repository (`<node_id>:_layout`), said of the repository itself
+(`modules`, `code_files`).
+
 **Cost.** One read for the tree and one per file chosen, for each
 repository, at each pass: some forty an hour per repository — and a DNS
 lookup per public name. An existing

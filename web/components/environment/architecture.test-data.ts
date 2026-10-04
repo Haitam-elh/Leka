@@ -24,6 +24,7 @@ export const REDIS = "10000000-0000-4000-8000-000000000007";
 export const BOX = "10000000-0000-4000-8000-000000000008";
 export const RDS = "10000000-0000-4000-8000-000000000009";
 export const OVH = "10000000-0000-4000-8000-00000000000a";
+export const API_CODE = `module:${REPO}:api`;
 
 export function card(
   id: string,
@@ -66,6 +67,10 @@ export function card(
     stats: {},
     evidence: [],
     sources: column === "cloud" ? ["aws"] : ["github"],
+    facts: {},
+    parts: [],
+    files: [],
+    maintainers: [],
     ...more,
   };
 }
@@ -81,6 +86,7 @@ function link(
     to_id: to,
     role,
     origin: "stated",
+    rule: "stated",
     confidence: 0.9,
     evidence: null,
     status: "operational",
@@ -105,6 +111,10 @@ export const ARCHITECTURE: Architecture = {
   built_at: new Date().toISOString(),
   environment: null,
   environments: ["production"],
+  detailed: false,
+  flows: [],
+  checks: [],
+  sources: [],
   groups: [
     group("code", "github", 1),
     group("services", "services", 4),
@@ -116,6 +126,26 @@ export const ARCHITECTURE: Architecture = {
     card(REPO, "code", "repository", "Haitam-elh/Leka", {
       url: "https://github.com/haitam-elh/leka",
       stats: { commits: 247, pull_requests: 12 },
+    }),
+    card(API_CODE, "code", "backend", "Leka/api", {
+      type: "module",
+      entity_id: null,
+      status: null,
+      environment: null,
+      repository_id: REPO,
+      url: "https://github.com/haitam-elh/leka/tree/main/api",
+      technology: ["Python", "Docker"],
+      stats: { files: 470 },
+      parts: [
+        {
+          name: "connectors",
+          path: "api/leka/connectors",
+          files: 90,
+          parts: 31,
+          names: ["asana", "aws", "github"],
+        },
+        { name: "ingestion", path: "api/leka/ingestion", files: 52, parts: 6, names: [] },
+      ],
     }),
     card(CADDY, "services", "proxy", "Leka Caddy", { technology: ["Caddy"] }),
     card(WEB, "services", "web", "Leka Web", {
@@ -143,24 +173,31 @@ export const ARCHITECTURE: Architecture = {
       stats: { tables: 36, size_bytes: 2_400_000 },
     }),
     card(REDIS, "data", "cache", "Redis", { technology: ["Redis"] }),
-    card(BOX, "cloud", "instance", "leka-prod"),
+    card(BOX, "cloud", "instance", "leka-prod", {
+      facts: { instance_type: "t3.small", public_ip: "3.78.172.119", encrypted: true },
+    }),
     card(RDS, "cloud", "database", "leka", { technology: ["PostgreSQL"] }),
     card(OVH, "external", "email", "OVH (e-mail)", { status: "unmonitored", environment: null }),
   ],
   links: [
     link(REPO, "source_code", API),
+    link(API_CODE, "source_code", API),
     link(CADDY, "routes", API),
     link(WEB, "calls", API, { confidence: 0.8 }),
     link(API, "stores", POSTGRES),
     link(API, "queue", REDIS),
     link(WORKER, "stores", POSTGRES),
-    link(API, "deployed_on", BOX, { origin: "inferred" }),
+    link(API, "deployed_on", BOX, { origin: "inferred", rule: "public_address" }),
     link(WORKER, "deployed_on", BOX, { origin: "inferred" }),
-    link(POSTGRES, "hosted_on", RDS, { origin: "inferred" }),
+    link(POSTGRES, "hosted_on", RDS, {
+      origin: "inferred",
+      rule: "only_instance",
+      confidence: 0.7,
+    }),
     link(API, "email", OVH),
   ],
   bundles: [
-    bundle(REPO, "services", ["source_code"], [API]),
+    bundle(API_CODE, "services", ["source_code"], [API]),
     bundle(API, "data", ["stores", "queue"], [POSTGRES, REDIS]),
     bundle(API, "cloud", ["deployed_on"], [BOX]),
     bundle(API, "external", ["email"], [OVH]),
@@ -211,4 +248,50 @@ export const NOTHING: Architecture = {
   health: { operational: 0, attention: 0, incident: 0, unmonitored: 0 },
   services_by_status: { incident: 0, attention: 0, operational: 0, unmonitored: 0 },
   top_dependencies: [],
+};
+
+/** The detailed map's: what each entry goes through, what to confirm, the
+ * sources read. */
+export const DETAILED: Architecture = {
+  ...ARCHITECTURE,
+  detailed: true,
+  flows: [
+    {
+      entries: [CADDY],
+      // The web app calling the API, the API storing and queueing.
+      steps: [ARCHITECTURE.links[3], ARCHITECTURE.links[4], ARCHITECTURE.links[5]],
+    },
+  ],
+  checks: [
+    { kind: "incident", card_id: WORKER, other_id: null, role: null, rule: null, confidence: null },
+    { kind: "deduced", card_id: API, other_id: BOX, role: null, rule: null, confidence: null },
+    {
+      kind: "inferred",
+      card_id: API,
+      other_id: BOX,
+      role: "deployed_on",
+      rule: "public_address",
+      confidence: 0.9,
+    },
+    { kind: "no_team", card_id: API, other_id: null, role: null, rule: null, confidence: null },
+    { kind: "no_team", card_id: WEB, other_id: null, role: null, rule: null, confidence: null },
+  ],
+  sources: [
+    {
+      source_id: "20000000-0000-4000-8000-000000000001",
+      kind: "github",
+      name: "GitHub Leka",
+      status: "active",
+      last_synced_at: new Date().toISOString(),
+      entities: 11,
+    },
+    {
+      source_id: "20000000-0000-4000-8000-000000000002",
+      kind: "aws",
+      name: "AWS prod",
+      status: "active",
+      last_synced_at: null,
+      entities: 7,
+    },
+  ],
 };

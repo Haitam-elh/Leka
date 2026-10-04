@@ -40,11 +40,14 @@ from leka.knowledge.repository import GraphRepository
 from leka.knowledge.schemas import (
     ArchitectureBundleRead,
     ArchitectureCardRead,
+    ArchitectureCheckRead,
     ArchitectureFiguresRead,
+    ArchitectureFlowRead,
     ArchitectureGroupRead,
     ArchitectureLinkRead,
     ArchitectureRankRead,
     ArchitectureRead,
+    ArchitectureSourceRead,
     EntityBrief,
     GraphNodeRead,
     GraphRead,
@@ -381,18 +384,22 @@ class GraphService:
             sources=await self._sources(among),
         )
 
-    async def architecture(self, *, now: datetime, environment: str | None) -> ArchitectureRead:
+    async def architecture(
+        self, *, now: datetime, environment: str | None, detailed: bool = False
+    ) -> ArchitectureRead:
         """What the company runs, in columns (architecture.py): its code,
         services, data, cloud and what it relies on outside — each thing's
         state, deduced where nothing watches it — the links between them
-        named, and how many of each there are."""
+        named, and how many of each there are. Detailed: every card, the
+        flows they make, what to confirm, the sources read."""
+        most = arch.MAX_CARDS_DETAILED if detailed else arch.MAX_CARDS
         drawn: list[Entity] = []
         degrees: dict[uuid.UUID, int] = {}
         for types, limit in (
-            ((EntityType.REPOSITORY,), arch.MAX_CARDS),
-            ((EntityType.SERVICE, EntityType.APPLICATION), 3 * arch.MAX_CARDS),
-            ((EntityType.DATABASE,), 3 * arch.MAX_CARDS),
-            ((EntityType.INFRA_RESOURCE,), 5 * arch.MAX_CARDS),
+            ((EntityType.REPOSITORY,), most),
+            ((EntityType.SERVICE, EntityType.APPLICATION), 3 * most),
+            ((EntityType.DATABASE,), 3 * most),
+            ((EntityType.INFRA_RESOURCE,), 5 * most),
         ):
             found, _, degree = await self._graph.layer(
                 types, within=None, limit=limit, outside=True
@@ -451,6 +458,15 @@ class GraphService:
             owner = owners.get(edge.to_entity_id)
             if owner is not None and owner.type is EntityType.TEAM:
                 teams.setdefault(edge.from_entity_id, owner.id)
+        # Who maintains each, by their work — never a bot.
+        maintained = await self._graph.around(ids, (RelationshipType.MAINTAINED_BY,))
+        people = await self._graph.by_ids([e.to_entity_id for e in maintained])
+        owners |= people
+        maintainers: dict[uuid.UUID, list[uuid.UUID]] = {}
+        for edge in sorted(maintained, key=lambda e: -e.confidence):
+            person = people.get(edge.to_entity_id)
+            if person is not None and person.attributes.get("bot") is not True:
+                maintainers.setdefault(edge.from_entity_id, []).append(person.id)
         stats = await self._stats(things)
         totals, providers = await self._census()
         built = arch.build(
@@ -462,7 +478,10 @@ class GraphService:
             providers=providers,
             monitoring=monitoring,
             environment=environment,
+            maintainers=maintainers,
+            detailed=detailed,
         )
+        read = await self._sources_read(arch.TYPES) if detailed else []
         return ArchitectureRead(
             built_at=await self._graph.built_at(),
             environment=environment,
@@ -503,21 +522,18 @@ class GraphService:
                     stats=card.stats,
                     evidence=card.evidence,
                     sources=card.sources,
+                    facts=card.facts,
+                    parts=card.parts,
+                    files=card.files,
+                    maintainers=[
+                        brief
+                        for brief in (_brief(owners.get(m)) for m in card.maintainer_ids[:5])
+                        if brief is not None
+                    ],
                 )
                 for card in built.cards
             ],
-            links=[
-                ArchitectureLinkRead(
-                    from_id=link.from_id,
-                    to_id=link.to_id,
-                    role=link.role,
-                    origin=link.origin,
-                    confidence=link.confidence,
-                    evidence=link.evidence,
-                    status=link.status,
-                )
-                for link in built.links
-            ],
+            links=[_link_read(link) for link in built.links],
             bundles=[
                 ArchitectureBundleRead(
                     from_id=b.from_id,
@@ -546,7 +562,43 @@ class GraphService:
                 ArchitectureRankRead(card_id=card.id, name=card.name, kind=card.kind, count=n)
                 for card, n in built.ranked
             ],
+            detailed=detailed,
+            flows=[
+                ArchitectureFlowRead(
+                    entries=flow.entries,
+                    steps=[_link_read(link) for link in flow.steps],
+                )
+                for flow in built.flows
+            ],
+            checks=[
+                ArchitectureCheckRead(
+                    kind=check.kind,
+                    card_id=check.card_id,
+                    other_id=check.other_id,
+                    role=check.role,
+                    rule=check.rule,
+                    confidence=check.confidence,
+                )
+                for check in built.checks
+            ],
+            sources=read,
         )
+
+    async def _sources_read(self, kinds: Sequence[EntityType]) -> list[ArchitectureSourceRead]:
+        """The sources the architecture was read from: each, when it last
+        read, how many of the architecture's things it shows."""
+        shown = {source: count for source, _, count in await self._graph.sources_of(kinds)}
+        return [
+            ArchitectureSourceRead(
+                source_id=source,
+                kind=kind,
+                name=name,
+                status=status,
+                last_synced_at=synced,
+                entities=shown.get(source, 0),
+            )
+            for source, kind, name, status, synced in await self._graph.sources_read()
+        ]
 
     async def _stats(self, things: Sequence[arch.Thing]) -> dict[uuid.UUID, dict[str, int]]:
         """What the sources count of each card: a repository's commits and
@@ -717,6 +769,19 @@ def _named(edge: Relationship, named: dict[uuid.UUID, Entity]) -> GraphRelations
         provenance=list(edge.provenance),
         first_seen_at=edge.first_seen_at,
         changed_at=edge.changed_at,
+    )
+
+
+def _link_read(link: arch.Link) -> ArchitectureLinkRead:
+    return ArchitectureLinkRead(
+        from_id=link.from_id,
+        to_id=link.to_id,
+        role=link.role,
+        origin=link.origin,
+        rule=link.rule,
+        confidence=link.confidence,
+        evidence=link.evidence,
+        status=link.status,
     )
 
 

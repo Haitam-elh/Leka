@@ -1013,6 +1013,8 @@ def _component(build: Build) -> tuple[str, dict[str, object]]:
     meta = build.record.metadata
     kind = str(meta.get("component_kind") or "service")
     repository = str(meta.get("repository") or build.record.provenance.container or "")
+    if kind == "layout":
+        return _layout(build, repository)
     key = _component_key(build, kind, repository, dict(meta))
     build.as_type = COMPONENT_TYPES.get(kind, "service")
     attributes = _common(build)
@@ -1069,6 +1071,29 @@ def _component(build: Build) -> tuple[str, dict[str, object]]:
 
 def _texts(value: object) -> list[str]:
     return [str(v) for v in value] if isinstance(value, list) else []
+
+
+def _layout(build: Build, repository: str) -> tuple[str, dict[str, object]]:
+    """What a repository is made of (LEKA-369): its modules, said of the
+    repository itself — one entity with the record that names it."""
+    meta = build.record.metadata
+    build.as_type = "repository"
+    modules: list[object] = []
+    for line in _texts(meta.get("modules")):
+        try:
+            found = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(found, dict):
+            modules.append(found)
+    attributes: dict[str, object] = {"modules": modules}
+    if isinstance(meta.get("default_branch"), str) and meta["default_branch"]:
+        attributes["default_branch"] = meta["default_branch"]
+    if isinstance(meta.get("files"), int):
+        attributes["code_files"] = meta["files"]
+    if meta.get("truncated"):
+        attributes["layout_truncated"] = True
+    return ids.repository(build.host, repository), attributes
 
 
 def _component_key(
