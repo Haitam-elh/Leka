@@ -14,16 +14,21 @@ order, is decided in one place a test can read whole.
     diff()         what changed from one version's elements to another's
     text()         an element in one line, for a model to read
 
-THE ORDER IS THE BUDGET'S. The roots first, as asked; then the nearest,
-the surest, by name. Each entity taken brings the relationships between it
-and those already taken — the surest first, a source's word before a
-rule's — so a context cut short holds what is nearest and how it is tied,
-never a relationship whose end it lacks. What does not fit is dropped
-deliberately, counted, and said (`truncated`), not lost by accident.
+THE ORDER IS THE BUDGET'S. The roots first, as asked — or, none asked,
+what the request's words found best (its anchors); then the most relevant
+(LEKA-371: how high, and by how many retrievers, a thing was found), the
+nearest, the surest, by name. Each entity taken brings the relationships
+between it and those already taken — the surest first, a source's word
+before a rule's — so a context cut short holds what matters most and how
+it is tied, never a relationship whose end it lacks. What does not fit is
+dropped deliberately, counted, and said (`truncated`), not lost by
+accident.
 
-WHY EACH IS THERE. A root was asked for; anything else was reached from a
-root, through a relationship, so many steps away — found by walking the
-gathered relationships from the roots, the surest way first. A
+WHY EACH IS THERE. A root was asked for; a thing tied to a root or an
+anchor was reached from it, through a relationship, so many steps away —
+found by walking the gathered relationships from them, the surest way
+first; a thing tied to none was found — by its words, its time, on a way.
+Each says every retriever that found it, at what rank (LEKA-371). A
 relationship is there because it ties two of them.
 
 PROVENANCE IS COPIED, NOT POINTED AT. The model moves on; a version says
@@ -50,12 +55,15 @@ from leka.context.schemas import (
     ElementReason,
     ElementRelationship,
     ElementSource,
+    RetrievalMatch,
 )
 from leka.knowledge import ContextMaterial, MaterialEntity, MaterialRelationship, MaterialSource
 
 # What a refresh must not count as a change: being seen again is not news,
 # nor a source renamed.
 VOLATILE = frozenset({"last_seen_at", "changed_at", "name"})
+# Where a thing tied to no root goes, among the rest: after the tied.
+MAX_DEPTH_UNKNOWN = 99
 # The attributes a line of text shows, at most, and how long each.
 TEXT_ATTRIBUTES = 8
 TEXT_VALUE = 80
@@ -73,11 +81,21 @@ class Element:
     relationship: ElementRelationship | None
     provenance: ElementProvenance
     reason: ElementReason
+    relevance: float | None = None
 
     def content(self) -> dict[str, object]:
         said = self.entity or self.relationship
         assert said is not None
         return said.model_dump(mode="json")
+
+
+@dataclass(frozen=True)
+class Relevance:
+    """How relevant a thing was found (LEKA-371), 0 to 1, and every way it
+    was found, the surest first."""
+
+    score: float
+    matches: list[RetrievalMatch]
 
 
 @dataclass(frozen=True)
@@ -89,19 +107,38 @@ class Assembly:
     fingerprint: str
 
 
-def assemble(material: ContextMaterial, *, limit: int, strategy: str) -> Assembly:
-    """The elements of a context from `material`, `limit` at most."""
+def assemble(
+    material: ContextMaterial,
+    *,
+    limit: int,
+    strategy: str,
+    relevance: Mapping[uuid.UUID, Relevance] | None = None,
+    anchors: Sequence[uuid.UUID] = (),
+) -> Assembly:
+    """The elements of a context from `material`, `limit` at most — the
+    most relevant first when retrievers said how relevant (LEKA-371)."""
     entities = {item.entity.id: item for item in material.entities}
     named = {source.source_id: source for source in material.sources}
     edges = sorted(
         (e for e in material.relationships if _ends(e) <= entities.keys()), key=_edge_order
     )
     roots = [root for root in material.roots if root in entities]
-    reached = _reached(roots, edges)
-    order = roots + sorted(
-        (i for i in entities if i not in set(roots)),
+    starts = roots + [a for a in dict.fromkeys(anchors) if a in entities and a not in roots]
+    reached = _reached(starts, edges)
+    depths = {
+        i: item.depth if item.depth is not None else reached.get(i, (None, None, None))[2]
+        for i, item in entities.items()
+    }
+    found = relevance or {}
+
+    def score(i: uuid.UUID) -> float:
+        return found[i].score if i in found else 0.0
+
+    order = starts + sorted(
+        (i for i in entities if i not in set(starts)),
         key=lambda i: (
-            entities[i].depth,
+            -score(i),
+            depths[i] if depths[i] is not None else MAX_DEPTH_UNKNOWN,
             -entities[i].entity.confidence,
             entities[i].entity.name.casefold(),
             str(i),
@@ -119,7 +156,18 @@ def assemble(material: ContextMaterial, *, limit: int, strategy: str) -> Assembl
         if len(out) >= limit:
             break
         item = entities[entity_id]
-        out.append(_entity(item, named, strategy, reached.get(entity_id)))
+        out.append(
+            _entity(
+                item,
+                named,
+                strategy,
+                root=entity_id in roots,
+                depth=depths[entity_id],
+                reached=reached.get(entity_id),
+                found=found.get(entity_id),
+                scored=relevance is not None,
+            )
+        )
         taken.add(entity_id)
         for edge in touching.get(entity_id, []):
             if len(out) >= limit:
@@ -127,7 +175,7 @@ def assemble(material: ContextMaterial, *, limit: int, strategy: str) -> Assembl
             edge_id = edge.relationship.id
             if edge_id in tied or not _ends(edge) <= taken:
                 continue
-            out.append(_relationship(edge, entities, named, strategy))
+            out.append(_relationship(edge, entities, named, strategy, depths))
             tied.add(edge_id)
 
     dropped = len(entities) + len(edges) - len(out)
@@ -148,6 +196,7 @@ def restore(
     content: dict[str, object],
     provenance: dict[str, object],
     reason: dict[str, object],
+    relevance: float | None = None,
 ) -> Element:
     """An element as a version stored it, read back."""
     return Element(
@@ -161,14 +210,17 @@ def restore(
         ),
         provenance=ElementProvenance.model_validate(provenance),
         reason=ElementReason.model_validate(reason),
+        relevance=relevance,
     )
 
 
 def summary(elements: Sequence[Element]) -> ContextSummary:
     origins = Counter(e.provenance.origin for e in elements if e.kind == "relationship")
     kinds: Counter[str] = Counter()
+    retrievers: Counter[str] = Counter()
     for element in elements:
         kinds.update({s.kind or "unknown" for s in element.provenance.sources})
+        retrievers.update({m.retriever for m in element.reason.retrievers})
     return ContextSummary(
         entities=sum(1 for e in elements if e.kind == "entity"),
         relationships=sum(1 for e in elements if e.kind == "relationship"),
@@ -176,6 +228,7 @@ def summary(elements: Sequence[Element]) -> ContextSummary:
         inferred=origins["inferred"],
         by_type=dict(sorted(Counter(e.ref_type for e in elements).items())),
         by_source_kind=dict(sorted(kinds.items())),
+        by_retriever=dict(sorted(retrievers.items())),
     )
 
 
@@ -232,6 +285,12 @@ def _said(element: Element, ties: Mapping[str, str]) -> dict[str, dict[str, obje
     via = reason.get("via")
     if isinstance(via, str):
         reason["via"] = ties.get(via, via)
+    # Who found it, on what — not how high: a rank moves when something
+    # else is found, and that is the other thing's change.
+    reason["retrievers"] = [
+        {"retriever": m.get("retriever"), "detail": m.get("detail")}
+        for m in _dicts(reason.get("retrievers"))
+    ]
     return {
         "content": element.content(),
         "provenance": _steady(element.provenance.model_dump(mode="json")),
@@ -298,24 +357,27 @@ def text(element: Element) -> str:
 
 
 def _reached(
-    roots: Sequence[uuid.UUID], edges: Sequence[MaterialRelationship]
-) -> dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID | None]]:
-    """For each entity the gathered relationships reach from the roots: the
-    root it is nearest, and the relationship it was reached through — the
-    surest way first, as `edges` are ordered."""
+    starts: Sequence[uuid.UUID], edges: Sequence[MaterialRelationship]
+) -> dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID | None, int]]:
+    """For each entity the gathered relationships reach from the starts —
+    the roots, or the anchors: the one it is nearest, the relationship it
+    was reached through — the surest way first, as `edges` are ordered —
+    and how many steps."""
     ways: dict[uuid.UUID, list[tuple[uuid.UUID, uuid.UUID]]] = {}
     for edge in edges:
         start, end = edge.relationship.from_entity_id, edge.relationship.to_entity_id
         ways.setdefault(start, []).append((end, edge.relationship.id))
         ways.setdefault(end, []).append((start, edge.relationship.id))
-    found: dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID | None]] = {r: (r, None) for r in roots}
-    queue = deque(roots)
+    found: dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID | None, int]] = {
+        s: (s, None, 0) for s in starts
+    }
+    queue = deque(starts)
     while queue:
         here = queue.popleft()
-        root = found[here][0]
+        root, _, far = found[here]
         for there, through in ways.get(here, []):
             if there not in found:
-                found[there] = (root, through)
+                found[there] = (root, through, far + 1)
                 queue.append(there)
     return found
 
@@ -324,7 +386,12 @@ def _entity(
     item: MaterialEntity,
     named: dict[uuid.UUID, MaterialSource],
     strategy: str,
-    reached: tuple[uuid.UUID, uuid.UUID | None] | None,
+    *,
+    root: bool,
+    depth: int | None,
+    reached: tuple[uuid.UUID, uuid.UUID | None, int] | None,
+    found: Relevance | None,
+    scored: bool,
 ) -> Element:
     entity, provenance = item.entity, item.provenance
     sources: dict[tuple[uuid.UUID, str | None], ElementSource] = {}
@@ -345,7 +412,8 @@ def _entity(
             ),
         )
     origins = provenance.get("attributes")
-    root, via = reached if reached else (None, None)
+    start, via = (reached[0], reached[1]) if reached else (None, None)
+    role = "root" if root else "reached" if depth is not None and depth > 0 else "found"
     return Element(
         kind="entity",
         ref_id=entity.id,
@@ -381,11 +449,13 @@ def _entity(
         ),
         reason=ElementReason(
             strategy=strategy,
-            role="root" if item.depth == 0 else "reached",
-            depth=item.depth,
-            root=root,
+            role=role,
+            depth=depth,
+            root=start,
             via=via,
+            retrievers=found.matches if found else [],
         ),
+        relevance=(1.0 if root else found.score if found else 0.0) if scored else None,
     )
 
 
@@ -394,6 +464,7 @@ def _relationship(
     entities: dict[uuid.UUID, MaterialEntity],
     named: dict[uuid.UUID, MaterialSource],
     strategy: str,
+    depths: Mapping[uuid.UUID, int | None],
 ) -> Element:
     tie = edge.relationship
     start, end = entities[tie.from_entity_id], entities[tie.to_entity_id]
@@ -454,9 +525,17 @@ def _relationship(
         reason=ElementReason(
             strategy=strategy,
             role="tie",
-            depth=max(start.depth, end.depth),
+            depth=max(
+                (
+                    d
+                    for d in (depths[tie.from_entity_id], depths[tie.to_entity_id])
+                    if d is not None
+                ),
+                default=None,
+            ),
             root=None,
             via=None,
+            retrievers=[],
         ),
     )
 

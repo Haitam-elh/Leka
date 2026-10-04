@@ -28,8 +28,9 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from leka.context.language import words
 from leka.knowledge import RelationshipType
 
 # What AssembledContext promises. Raised when a field changes meaning or
@@ -44,10 +45,18 @@ DEFAULT_BUDGET = 100
 MAX_BUDGET = 500
 MAX_DEPTH = 3
 MAX_ROOTS = 10
+# How far back the timeline reads (LEKA-371), in days, ending now or `until`.
+DEFAULT_WINDOW_DAYS = 14
+MAX_WINDOW_DAYS = 365
 
 SubjectType = Literal["entity", "intention", "request"]
 ContextStatus = Literal["assembling", "assembled", "failed", "archived"]
-StrategyName = Literal["neighbourhood"]
+StrategyName = Literal["neighbourhood", "hybrid"]
+# How things are found (LEKA-371): around the roots, by the request's words
+# in the model and in the records' own text, by their time, on the ways
+# between two roots.
+RetrieverName = Literal["graph", "search", "content", "timeline", "paths"]
+RETRIEVERS: tuple[RetrieverName, ...] = ("graph", "search", "content", "timeline", "paths")
 
 
 class ContextSubject(BaseModel):
@@ -71,7 +80,12 @@ class ContextCreate(BaseModel):
     )
     subject: ContextSubject = Field(default_factory=lambda: ContextSubject(type="request"))
     roots: list[uuid.UUID] = Field(
-        min_length=1, max_length=MAX_ROOTS, description="The entities it starts from."
+        default_factory=list,
+        max_length=MAX_ROOTS,
+        description="The entities it starts from. None: what its words find (hybrid).",
+    )
+    query: str | None = Field(
+        default=None, max_length=500, description="What to search for; the purpose when none."
     )
     depth: int = Field(default=1, ge=1, le=MAX_DEPTH, description="How many steps away.")
     relationships: list[RelationshipType] = Field(
@@ -84,9 +98,31 @@ class ContextCreate(BaseModel):
         default=DEFAULT_BUDGET,
         ge=1,
         le=MAX_BUDGET,
-        description="At most this many elements, the nearest first.",
+        description="At most this many elements, the most relevant first.",
     )
-    strategy: StrategyName = "neighbourhood"
+    window_days: int = Field(
+        default=DEFAULT_WINDOW_DAYS,
+        ge=1,
+        le=MAX_WINDOW_DAYS,
+        description="How far back what happened is read, in days.",
+    )
+    until: datetime | None = Field(
+        default=None, description="When what happened is read up to; now when none."
+    )
+    retrievers: list[RetrieverName] = Field(
+        default_factory=list, description="Which to combine (hybrid); every one when none."
+    )
+    strategy: StrategyName = "hybrid"
+
+    @model_validator(mode="after")
+    def _starts_somewhere(self) -> ContextCreate:
+        if self.strategy == "neighbourhood" and not self.roots:
+            raise ValueError("A neighbourhood starts from roots.")
+        if self.retrievers and self.strategy != "hybrid":
+            raise ValueError("Retrievers are combined by the hybrid strategy only.")
+        if not self.roots and not words(self.query or self.purpose):
+            raise ValueError("Nothing to start from: give roots, or words that say something.")
+        return self
 
 
 class ContextRequest(BaseModel):
@@ -96,11 +132,29 @@ class ContextRequest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     roots: list[uuid.UUID]
+    query: str | None
     depth: int
     relationships: list[str]
     environment: str | None
     limit: int
+    window_days: int
+    until: datetime | None
+    retrievers: list[str]
     strategy: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _older(cls, data: object) -> object:
+        """A request kept before LEKA-371 had none of these: they read empty."""
+        if isinstance(data, dict):
+            return {
+                "query": None,
+                "window_days": DEFAULT_WINDOW_DAYS,
+                "until": None,
+                "retrievers": [],
+                **data,
+            }
+        return data
 
 
 class ContextStrategyRead(BaseModel):
@@ -148,18 +202,49 @@ class ElementProvenance(BaseModel):
     changed_at: datetime | None = Field(description="When it last changed (a relationship).")
 
 
+class RetrievalMatch(BaseModel):
+    """One way an element was found (LEKA-371): by what, how high it ranked
+    there, what that added to its relevance, and on what."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    retriever: str = Field(description="graph, search, content, timeline or paths.")
+    rank: int = Field(description="Its place among what that retriever found, from 1.")
+    score: float = Field(description="What it added to the relevance, before it is scaled.")
+    detail: str | None = Field(
+        description="On what: the words it holds, the steps, the event and when."
+    )
+
+
 class ElementReason(BaseModel):
     """Why an element is in the context."""
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     strategy: str
-    role: Literal["root", "reached", "tie"] = Field(
-        description="root: asked for; reached: found from a root; tie: a relationship between two."
+    role: Literal["root", "reached", "found", "tie"] = Field(
+        description="root: asked for; reached: tied to a root or to what was found; found: by "
+        "its words, its time, on a way — tied to nothing else; tie: a relationship between two."
     )
-    depth: int = Field(description="Steps from the nearest root; a tie, its farther end's.")
-    root: uuid.UUID | None = Field(description="The root it was reached from.")
+    depth: int | None = Field(
+        description="Steps from the nearest root or anchor; a tie, its farther end's; none when "
+        "tied to none."
+    )
+    root: uuid.UUID | None = Field(
+        description="The root it was reached from — or, none asked, the best thing found."
+    )
     via: uuid.UUID | None = Field(description="The relationship it was reached through.")
+    retrievers: list[RetrievalMatch] = Field(
+        description="Every way it was found, the surest first (LEKA-371)."
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _older(cls, data: object) -> object:
+        """A reason kept before LEKA-371 says no retriever."""
+        if isinstance(data, dict):
+            return {"retrievers": [], **data}
+        return data
 
 
 class ElementEnd(BaseModel):
@@ -216,7 +301,10 @@ class ContextElementRead(BaseModel):
     relationship: ElementRelationship | None
     provenance: ElementProvenance
     reason: ElementReason
-    relevance: float | None = Field(description="How relevant to the purpose: none until ranked.")
+    relevance: float | None = Field(
+        description="How relevant, 0 to 1: how high and by how many retrievers it was found "
+        "(LEKA-371); 1 for a root; none for a tie, and before LEKA-371."
+    )
     text: str = Field(description="It, in one line, for a model to read.")
 
 
@@ -242,6 +330,30 @@ class ContextSummary(BaseModel):
     inferred: int = Field(description="Relationships an enrichment rule inferred.")
     by_type: dict[str, int]
     by_source_kind: dict[str, int]
+    by_retriever: dict[str, int] = Field(description="Elements each retriever found (LEKA-371).")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _older(cls, data: object) -> object:
+        if isinstance(data, dict):
+            return {"by_retriever": {}, **data}
+        return data
+
+
+class RetrieverRunRead(BaseModel):
+    """What one retriever did for a version (LEKA-371): found how much, in
+    how long — or failed, timed out, or had nothing to start from, the
+    others going on without it."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    retriever: str
+    version: int
+    status: Literal["ok", "failed", "timeout", "skipped"]
+    found: int
+    ms: int = Field(description="How long it took, in milliseconds.")
+    detail: str | None = Field(description="What it was asked: the words, the window, the ways.")
+    error: str | None = Field(description="Why it failed, or why it was skipped.")
 
 
 class AssembledContext(BaseModel):
@@ -270,6 +382,9 @@ class AssembledContext(BaseModel):
     elements: list[ContextElementRead]
     sources: list[ContextSourceRead]
     summary: ContextSummary
+    retrieval: list[RetrieverRunRead] = Field(
+        description="What each retriever did: found, failed, timed out, skipped (LEKA-371)."
+    )
     truncated: bool = Field(description="More was found than the budget holds.")
     dropped: int = Field(description="How many found were left out.")
     model_built_at: datetime | None = Field(description="The build of the model it was read from.")
@@ -317,6 +432,7 @@ class ContextVersionRead(BaseModel):
     truncated: bool
     dropped: int
     summary: ContextSummary
+    retrieval: list[RetrieverRunRead]
     fingerprint: str = Field(description="What it holds, hashed: equal when nothing changed.")
     error: str | None
     assembled_at: datetime

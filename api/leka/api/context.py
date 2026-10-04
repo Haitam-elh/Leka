@@ -59,6 +59,7 @@ from leka.context import (
 from leka.core.errors import ErrorCode
 from leka.db import SortableField
 from leka.governance import Permission, Principal, require_permission
+from leka.ingestion import ContentRepository
 from leka.knowledge import GraphRepository, GraphService
 
 router = APIRouter(prefix="/context", tags=["context"])
@@ -83,6 +84,7 @@ def _service(session: SessionDep, principal: Principal) -> ContextService:
     return ContextService(
         ContextRepository(session, principal.workspace_id),
         GraphService(GraphRepository(session, principal.workspace_id)),
+        content=ContentRepository(session, principal.workspace_id),
     )
 
 
@@ -106,9 +108,12 @@ def _missing(message: str = NOT_FOUND) -> ApiError:
 async def create_context(
     body: ContextCreate, service: Making, principal: Maker
 ) -> AssembledContext:
-    """A context, assembled from the company model as it was last built: the
-    roots, what surrounds them, the relationships among them — each with its
-    sources and why it is there. 404 when a root is not the workspace's."""
+    """A context, assembled from the company model as it was last built:
+    what its words find — in the model and in the records' own text — what
+    surrounds its roots, what happened around them, the relationships among
+    them; each with its sources, why it is there and how relevant, and what
+    each retriever did (LEKA-371). 404 when a root is not the workspace's;
+    422 when there is nothing to start from."""
     made = await service.create(body, by=principal.user_id)
     if made is None:
         raise _missing("A root of this context is not in the company model.")

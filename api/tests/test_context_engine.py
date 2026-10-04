@@ -98,13 +98,17 @@ async def test_a_context_is_created_whole_with_its_provenance_and_inspected(
     assert made["subject"] == {"type": "entity", "id": str(model[BILLING])}
     assert made["request"] == {
         "roots": [str(model[BILLING])],
+        "query": None,
         "depth": 1,
         "relationships": [],
         "environment": None,
         "limit": 100,
-        "strategy": "neighbourhood",
+        "window_days": 14,
+        "until": None,
+        "retrievers": [],
+        "strategy": "hybrid",
     }
-    assert made["strategy"] == {"name": "neighbourhood", "version": 1}
+    assert made["strategy"] == {"name": "hybrid", "version": 1}
     assert made["model_built_at"] is not None
     assert (made["truncated"], made["dropped"]) == (False, 0)
 
@@ -112,13 +116,16 @@ async def test_a_context_is_created_whole_with_its_provenance_and_inspected(
     root = made["elements"][0]
     assert (root["position"], root["kind"], root["ref_id"]) == (0, "entity", str(model[BILLING]))
     assert root["entity"]["key"] == BILLING
-    assert root["reason"] == {
-        "strategy": "neighbourhood",
+    assert {k: root["reason"][k] for k in ("strategy", "role", "depth", "root", "via")} == {
+        "strategy": "hybrid",
         "role": "root",
         "depth": 0,
         "root": str(model[BILLING]),
         "via": None,
     }
+    # Its words found it too: "Billing API" is in the purpose.
+    assert [m["retriever"] for m in root["reason"]["retrievers"]] == ["search"]
+    assert root["relevance"] == 1.0
     assert {s["name"] for s in root["provenance"]["sources"]} >= {"PagerDuty", "Catalogue"}
     assert root["provenance"]["attributes"]
     assert root["text"].startswith('service "Billing API" (service:billing-api)')

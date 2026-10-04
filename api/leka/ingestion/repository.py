@@ -27,6 +27,7 @@ from sqlalchemy import (
     literal_column,
     or_,
     select,
+    text,
     true,
     update,
 )
@@ -37,6 +38,7 @@ from leka.background import ACTIVE_JOB_STATUSES, JobRun, JobStatus
 from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
 from leka.ingestion.models import (
+    CONTENT_WORDS,
     DeliveryStatus,
     EnrichedRelationship,
     EnrichmentRun,
@@ -2151,3 +2153,44 @@ class EnrichedWorkspaces:
             .order_by(EnrichmentRun.workspace_id, EnrichmentRun.started_at.desc())
         )
         return dict(rows.tuples().all())
+
+
+class ContentRepository(WorkspaceScopedRepository):
+    """The records' own text, searched (LEKA-371): what a page, a ticket, a
+    pull request says — not only what it is called — read back to the
+    company model's things it is about."""
+
+    async def matching(self, tsquery: str, *, limit: int) -> list[tuple[uuid.UUID, float]]:
+        """The entities whose records' text holds the words of `tsquery` — the
+        best first, by how well the words match (ts_rank_cd) — each once,
+        with its best record's rank. A record gone at its source is left out.
+
+        A record is read back to its entity by the key normalisation gave it
+        and the entity resolution made of that key, from that source: the
+        resolved entity's id is the company model's (a build keeps it)."""
+        words = CONTENT_WORDS.replace("result", "x.result")
+        rows = await self._session.execute(
+            text(
+                f"""
+                SELECT k.entity_id, max(ts_rank_cd({words}, q)) AS rank
+                FROM extracted_records x
+                JOIN source_records s ON s.id = x.source_record_id AND s.deleted_at IS NULL
+                JOIN parsed_records p ON p.extracted_record_id = x.id
+                JOIN normalised_records n
+                  ON n.parsed_record_id = p.id AND n.entity_key IS NOT NULL
+                JOIN resolved_keys k
+                  ON k.workspace_id = x.workspace_id
+                 AND k.source_id = n.source_id
+                 AND k.key = n.entity_key,
+                     to_tsquery('simple'::regconfig, :tsquery) AS q
+                WHERE x.workspace_id = :workspace
+                  AND x.status = 'extracted'
+                  AND {words} @@ q
+                GROUP BY k.entity_id
+                ORDER BY rank DESC, k.entity_id
+                LIMIT :limit
+                """  # noqa: S608 — CONTENT_WORDS is this module's constant, the rest bound
+            ),
+            {"tsquery": tsquery, "workspace": self.workspace_id, "limit": limit},
+        )
+        return [(entity_id, float(rank)) for entity_id, rank in rows.tuples().all()]

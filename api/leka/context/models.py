@@ -119,8 +119,13 @@ class ContextVersion(Base, WorkspaceScopedMixin):
     # More was found than its budget holds: how many were left out.
     truncated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     dropped: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    # Counted: elements by kind, by type, by source kind.
+    # Counted: elements by kind, by type, by source kind, by retriever.
     summary: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # What each retriever did (LEKA-371): found how much, in how long — or
+    # failed, timed out, was skipped, and why. The others went on.
+    retrieval: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
     # What it holds, hashed: an assembly that changes nothing is no version.
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False, server_default="")
     error: Mapped[str | None] = mapped_column(String(300), nullable=True)
