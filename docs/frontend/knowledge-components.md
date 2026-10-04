@@ -219,9 +219,14 @@ things point to at its root — leaves by the top and comes in at the bottom
   sources and keys or records, stated or inferred by which rule and how
   sure, the attributes' origins grouped by source and by rule, what LEKA
   reads of it. The versions beside it, each one shown again, two compared.
-  The list takes the height the screen has left (`100dvh` less the header)
+  The list takes the height the screen has left (`100dvh` less the header and the report)
   so that a 13-inch screen holds the tab without the page scrolling; a role
-  without `intention:create` is offered no action.
+  without `intention:create` is offered no action. Since LEKA-371: the form
+  asks the period the timeline reads; each row its relevance; under the
+  figures, how it was searched — each retriever and what it found, a failed
+  one in orange with why in its title; a provenance opened says every way
+  the element was found, its rank there and on what (the words, the steps,
+  the event and when).
 
 ## Adding a state
 
