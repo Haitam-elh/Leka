@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 
+import { openContextTab } from "./context-tab";
 import { signIn } from "./sign-in";
 
 /**
@@ -52,6 +53,20 @@ test.describe("the core screens", () => {
       await expectNoViolations(page);
     });
   }
+});
+
+test.describe("what a screen opens", () => {
+  test("an entity's context, assembled, an element's provenance open", async ({ page }) => {
+    await openContextTab(page);
+    await page.getByRole("button", { name: "Assembler le contexte" }).click();
+    await page
+      .getByTestId("context-elements")
+      .getByRole("button", { name: "Provenance de payment-api", exact: true })
+      .click();
+    await expect(page.getByTestId("context-provenance")).toBeVisible();
+
+    await expectNoViolations(page);
+  });
 });
 
 test.describe("the states that replace them", () => {

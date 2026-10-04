@@ -2452,6 +2452,155 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contexts
+         * @description The contexts, the latest changed first.
+         */
+        get: operations["contexts_api_v1_context_get"];
+        put?: never;
+        /**
+         * Create Context
+         * @description A context, assembled from the company model as it was last built: the
+         *     roots, what surrounds them, the relationships among them — each with its
+         *     sources and why it is there. 404 when a root is not the workspace's.
+         */
+        post: operations["create_context_api_v1_context_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Context */
+        get: operations["context_api_v1_context__context_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Context
+         * @description Assembled again from the model as it is now. A new version when what
+         *     it holds changed — or failed, when a root is gone; none when nothing did.
+         *     409 when the context is archived.
+         */
+        post: operations["refresh_context_api_v1_context__context_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Context
+         * @description No longer reassembled. Its versions stay readable.
+         */
+        post: operations["archive_context_api_v1_context__context_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Context Versions
+         * @description Its versions, the latest first: when, from which build of the model,
+         *     by what, what each holds — or why it failed.
+         */
+        get: operations["context_versions_api_v1_context__context_id__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/assembled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Assembled Context
+         * @description One version whole, as it was made: by default the latest that holds
+         *     something. Its elements in order, each with its provenance — its
+         *     sources, its origin, its confidence — and why it is there.
+         */
+        get: operations["assembled_context_api_v1_context__context_id__assembled_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Context Diff
+         * @description What changed from one version to another: the elements added, those
+         *     gone, those said differently — and what of them.
+         */
+        get: operations["context_diff_api_v1_context__context_id__diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2815,6 +2964,72 @@ export interface components {
             last_synced_at: string | null;
             /** Entities */
             entities: number;
+        };
+        /**
+         * AssembledContext
+         * @description One version of a context: the contract downstream services read.
+         *
+         *     Assembled from the company model as it was built when the version was
+         *     made — `model_built_at` — never from a customer's API. Its elements are
+         *     in order, the roots first, then the nearest; what its budget could not
+         *     hold was left out deliberately, and said (`truncated`, `dropped`). A
+         *     version that failed — its roots gone from the model — holds nothing,
+         *     and says why.
+         */
+        AssembledContext: {
+            /** Contract Version */
+            contract_version: number;
+            /**
+             * Context Id
+             * Format: uuid
+             */
+            context_id: string;
+            /** Version */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "assembled" | "failed";
+            /**
+             * Error
+             * @description Why it holds nothing, when it failed.
+             */
+            error: string | null;
+            /** Title */
+            title: string;
+            /** Purpose */
+            purpose: string;
+            subject: components["schemas"]["ContextSubject"];
+            request: components["schemas"]["ContextRequest"];
+            strategy: components["schemas"]["ContextStrategyRead"];
+            /** Elements */
+            elements: components["schemas"]["ContextElementRead"][];
+            /** Sources */
+            sources: components["schemas"]["ContextSourceRead"][];
+            summary: components["schemas"]["ContextSummary"];
+            /**
+             * Truncated
+             * @description More was found than the budget holds.
+             */
+            truncated: boolean;
+            /**
+             * Dropped
+             * @description How many found were left out.
+             */
+            dropped: number;
+            /**
+             * Model Built At
+             * @description The build of the model it was read from.
+             */
+            model_built_at: string | null;
+            /** Model Version */
+            model_version: number;
+            /**
+             * Assembled At
+             * Format: date-time
+             */
+            assembled_at: string;
         };
         /**
          * AttentionPointRead
@@ -3418,6 +3633,360 @@ export interface components {
          * @enum {string}
          */
         ConnectorCategory: "code" | "project" | "docs" | "cloud" | "observability" | "data" | "chat" | "custom";
+        /**
+         * ContextCreate
+         * @description A context to assemble. Its roots must be the workspace's.
+         */
+        ContextCreate: {
+            /** Title */
+            title: string;
+            /**
+             * Purpose
+             * @description Why, in the asker's words: what is to be known.
+             * @default
+             */
+            purpose: string;
+            subject?: components["schemas"]["ContextSubject"];
+            /**
+             * Roots
+             * @description The entities it starts from.
+             */
+            roots: string[];
+            /**
+             * Depth
+             * @description How many steps away.
+             * @default 1
+             */
+            depth: number;
+            /**
+             * Relationships
+             * @description Only through these kinds; every kind when none.
+             */
+            relationships?: components["schemas"]["RelationshipType"][];
+            /**
+             * Environment
+             * @description Only what is true in this environment.
+             */
+            environment?: string | null;
+            /**
+             * Limit
+             * @description At most this many elements, the nearest first.
+             * @default 100
+             */
+            limit: number;
+            /**
+             * Strategy
+             * @default neighbourhood
+             * @constant
+             */
+            strategy: "neighbourhood";
+        };
+        /**
+         * ContextDetail
+         * @description A context and its latest version.
+         */
+        ContextDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Purpose */
+            purpose: string;
+            subject: components["schemas"]["ContextSubject"];
+            request: components["schemas"]["ContextRequest"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "assembling" | "assembled" | "failed" | "archived";
+            /**
+             * Current Version
+             * @description Its latest version; 0 until one is made.
+             */
+            current_version: number;
+            /** Created By */
+            created_by: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Refreshed At
+             * @description When it was last checked against the model, changed or not.
+             */
+            refreshed_at: string | null;
+            /** Archived At */
+            archived_at: string | null;
+            latest: components["schemas"]["ContextVersionRead"] | null;
+        };
+        /**
+         * ContextDiff
+         * @description What changed from one version of a context to another.
+         */
+        ContextDiff: {
+            /**
+             * Context Id
+             * Format: uuid
+             */
+            context_id: string;
+            /** From Version */
+            from_version: number;
+            /** To Version */
+            to_version: number;
+            /** Added */
+            added: components["schemas"]["ContextElementRead"][];
+            /** Removed */
+            removed: components["schemas"]["ContextElementRead"][];
+            /** Changed */
+            changed: components["schemas"]["ElementChange"][];
+            /** Unchanged */
+            unchanged: number;
+        };
+        /**
+         * ContextElementRead
+         * @description One thing a context holds — an entity or a relationship — what it
+         *     said, where it came from, why it is there.
+         */
+        ContextElementRead: {
+            /**
+             * Position
+             * @description Its place: the roots first, then the nearest.
+             */
+            position: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "entity" | "relationship";
+            /**
+             * Ref Id
+             * Format: uuid
+             * @description Its id in the company model.
+             */
+            ref_id: string;
+            /** Ref Type */
+            ref_type: string;
+            /** Label */
+            label: string;
+            entity: components["schemas"]["ElementEntity"] | null;
+            relationship: components["schemas"]["ElementRelationship"] | null;
+            provenance: components["schemas"]["ElementProvenance"];
+            reason: components["schemas"]["ElementReason"];
+            /**
+             * Relevance
+             * @description How relevant to the purpose: none until ranked.
+             */
+            relevance: number | null;
+            /**
+             * Text
+             * @description It, in one line, for a model to read.
+             */
+            text: string;
+        };
+        /**
+         * ContextRead
+         * @description A context: what it is for, what it asks, where it stands.
+         */
+        ContextRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Purpose */
+            purpose: string;
+            subject: components["schemas"]["ContextSubject"];
+            request: components["schemas"]["ContextRequest"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "assembling" | "assembled" | "failed" | "archived";
+            /**
+             * Current Version
+             * @description Its latest version; 0 until one is made.
+             */
+            current_version: number;
+            /** Created By */
+            created_by: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Refreshed At
+             * @description When it was last checked against the model, changed or not.
+             */
+            refreshed_at: string | null;
+            /** Archived At */
+            archived_at: string | null;
+        };
+        /** ContextRefresh */
+        ContextRefresh: {
+            /**
+             * Reason
+             * @description Why it is reassembled.
+             */
+            reason?: string | null;
+        };
+        /**
+         * ContextRequest
+         * @description What a context asks the model for, settled — kept with the context
+         *     and with each version, so a version says what it answered.
+         */
+        ContextRequest: {
+            /** Roots */
+            roots: string[];
+            /** Depth */
+            depth: number;
+            /** Relationships */
+            relationships: string[];
+            /** Environment */
+            environment: string | null;
+            /** Limit */
+            limit: number;
+            /** Strategy */
+            strategy: string;
+        };
+        /**
+         * ContextSourceRead
+         * @description A source a context's elements came from, and how many.
+         */
+        ContextSourceRead: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Kind */
+            kind: string | null;
+            /** Name */
+            name: string | null;
+            /** Elements */
+            elements: number;
+        };
+        /** ContextStrategyRead */
+        ContextStrategyRead: {
+            /**
+             * Name
+             * @description How the elements were gathered: neighbourhood.
+             */
+            name: string;
+            /**
+             * Version
+             * @description Raised each time the strategy gathers differently.
+             */
+            version: number;
+        };
+        /**
+         * ContextSubject
+         * @description What a context is the context of: an entity, an intention
+         *     (LEKA-384), or a request made of nothing else.
+         */
+        ContextSubject: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "entity" | "intention" | "request";
+            /** Id */
+            id?: string | null;
+        };
+        /**
+         * ContextSummary
+         * @description What a version holds, counted.
+         */
+        ContextSummary: {
+            /** Entities */
+            entities: number;
+            /** Relationships */
+            relationships: number;
+            /**
+             * Stated
+             * @description Relationships its sources stated.
+             */
+            stated: number;
+            /**
+             * Inferred
+             * @description Relationships an enrichment rule inferred.
+             */
+            inferred: number;
+            /** By Type */
+            by_type: {
+                [key: string]: number;
+            };
+            /** By Source Kind */
+            by_source_kind: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * ContextVersionRead
+         * @description One assembly of a context: when, from which build, by what, what it
+         *     holds — or why it failed.
+         */
+        ContextVersionRead: {
+            /** Version */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "assembled" | "failed";
+            /**
+             * Trigger
+             * @enum {string}
+             */
+            trigger: "created" | "refreshed";
+            /** Reason */
+            reason: string | null;
+            strategy: components["schemas"]["ContextStrategyRead"];
+            /** Contract Version */
+            contract_version: number;
+            request: components["schemas"]["ContextRequest"];
+            /** Model Built At */
+            model_built_at: string | null;
+            /** Model Version */
+            model_version: number;
+            /** Element Count */
+            element_count: number;
+            /** Truncated */
+            truncated: boolean;
+            /** Dropped */
+            dropped: number;
+            summary: components["schemas"]["ContextSummary"];
+            /**
+             * Fingerprint
+             * @description What it holds, hashed: equal when nothing changed.
+             */
+            fingerprint: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Assembled At
+             * Format: date-time
+             */
+            assembled_at: string;
+            /** Assembled By */
+            assembled_by: string | null;
+        };
         /**
          * CoverageRead
          * @description How much of one kind of thing is documented.
@@ -4193,6 +4762,201 @@ export interface components {
              * @description When its latest document changed.
              */
             last_documented_at: string | null;
+        };
+        /**
+         * ElementChange
+         * @description An element in both versions, said differently.
+         */
+        ElementChange: {
+            before: components["schemas"]["ContextElementRead"];
+            after: components["schemas"]["ContextElementRead"];
+            /**
+             * Fields
+             * @description What changed: name, lifecycle, attributes.<name>, confidence, provenance…
+             */
+            fields: string[];
+        };
+        /** ElementEnd */
+        ElementEnd: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ElementEntity
+         * @description An entity, as the model said it then.
+         */
+        ElementEntity: {
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Lifecycle */
+            lifecycle: string;
+            /**
+             * Version
+             * @description Its version in the model then.
+             */
+            version: number;
+            /** Confidence */
+            confidence: number;
+            /** Quality */
+            quality: number | null;
+        };
+        /**
+         * ElementProvenance
+         * @description Where an element came from, as the model said it when the version
+         *     was made.
+         */
+        ElementProvenance: {
+            /**
+             * Origin
+             * @description stated: its sources show it; inferred: an enrichment rule made it.
+             */
+            origin: string;
+            /**
+             * Rule
+             * @description The rule that inferred it — or stated.
+             */
+            rule: string | null;
+            /** Confidence */
+            confidence: number;
+            /** Sources */
+            sources: components["schemas"]["ElementSource"][];
+            /**
+             * Evidence
+             * @description What the records said, or why it was inferred.
+             */
+            evidence: string[];
+            /**
+             * Inferred From
+             * @description The entities an inference read.
+             */
+            inferred_from: string[];
+            /**
+             * Attributes
+             * @description Each attribute's origin: a source, or an enrichment rule and its confidence.
+             */
+            attributes: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /**
+             * Conflicts
+             * @description What its sources disagree on, every value with who said it.
+             */
+            conflicts: {
+                [key: string]: unknown;
+            }[];
+            /** First Seen At */
+            first_seen_at: string | null;
+            /**
+             * Last Seen At
+             * @description When a source last showed it (an entity).
+             */
+            last_seen_at: string | null;
+            /**
+             * Changed At
+             * @description When it last changed (a relationship).
+             */
+            changed_at: string | null;
+        };
+        /**
+         * ElementReason
+         * @description Why an element is in the context.
+         */
+        ElementReason: {
+            /** Strategy */
+            strategy: string;
+            /**
+             * Role
+             * @description root: asked for; reached: found from a root; tie: a relationship between two.
+             * @enum {string}
+             */
+            role: "root" | "reached" | "tie";
+            /**
+             * Depth
+             * @description Steps from the nearest root; a tie, its farther end's.
+             */
+            depth: number;
+            /**
+             * Root
+             * @description The root it was reached from.
+             */
+            root: string | null;
+            /**
+             * Via
+             * @description The relationship it was reached through.
+             */
+            via: string | null;
+        };
+        /**
+         * ElementRelationship
+         * @description A relationship, as the model said it then, both ends named.
+         */
+        ElementRelationship: {
+            /** Type */
+            type: string;
+            /** @description Where it goes from. */
+            start: components["schemas"]["ElementEnd"];
+            /** @description Where it goes to. */
+            end: components["schemas"]["ElementEnd"];
+            /** Confidence */
+            confidence: number;
+            /** Origin */
+            origin: string;
+            /** Rule */
+            rule: string;
+            /** Cross Source */
+            cross_source: boolean;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * ElementSource
+         * @description A source an element came from: which, how it knows it — its key, or
+         *     the record that said it — and its name when it still exists.
+         */
+        ElementSource: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Kind */
+            kind: string | null;
+            /**
+             * Name
+             * @description None when the source has been deleted since.
+             */
+            name: string | null;
+            /**
+             * Key
+             * @description The key it goes by there (an entity).
+             */
+            key: string | null;
+            /**
+             * Record Id
+             * @description The record that stated it (a relationship).
+             */
+            record_id: string | null;
         };
         /**
          * EnrichedAttributeRead
@@ -6083,6 +6847,32 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[ContextRead] */
+        PageEnvelope_ContextRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["ContextRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[ContextVersionRead] */
+        PageEnvelope_ContextVersionRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["ContextVersionRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[DataObjectRead] */
         PageEnvelope_DataObjectRead_: {
             /**
@@ -6770,6 +7560,17 @@ export interface components {
              * @default If an account exists for that address, a reset link is on its way.
              */
             detail: string;
+        };
+        /**
+         * RefreshOutcome
+         * @description What a refresh did: a new version when what the model says changed;
+         *     none when it did not — the latest still holds.
+         */
+        RefreshOutcome: {
+            /** Changed */
+            changed: boolean;
+            /** @description The version it made, or the one that holds. */
+            version: components["schemas"]["ContextVersionRead"];
         };
         /** RegisterRequest */
         RegisterRequest: {
@@ -20389,6 +21190,793 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeCoverageRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    contexts_api_v1_context_get: {
+        parameters: {
+            query?: {
+                status?: ("assembling" | "assembled" | "failed" | "archived") | null;
+                subject_type?: ("entity" | "intention" | "request") | null;
+                subject_id?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_ContextRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_context_api_v1_context_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContextCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssembledContext"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    context_api_v1_context__context_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContextDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    refresh_context_api_v1_context__context_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ContextRefresh"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshOutcome"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    archive_context_api_v1_context__context_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContextRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    context_versions_api_v1_context__context_id__versions_get: {
+        parameters: {
+            query?: {
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_ContextVersionRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    assembled_context_api_v1_context__context_id__assembled_get: {
+        parameters: {
+            query?: {
+                /** @description This version. */
+                version?: number | null;
+                /** @description The version that stood then. */
+                at?: string | null;
+            };
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssembledContext"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    context_diff_api_v1_context__context_id__diff_get: {
+        parameters: {
+            query: {
+                /** @description The earlier version. */
+                from: number;
+                /** @description The later version. */
+                to: number;
+            };
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContextDiff"];
                 };
             };
             /** @description The request could not be understood. */

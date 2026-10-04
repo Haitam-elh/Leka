@@ -764,6 +764,13 @@ always bounded. `GraphRepository` reads (`leka/knowledge/repository.py`),
 `GraphService` answers (`leka/knowledge/graph.py`): people through the API,
 the modules above (`leka.context`) through `leka.knowledge`.
 
+**What the context engine reads** (`GraphService.material()`, LEKA-370):
+a walk's entities, each with its distance from the roots and its whole
+provenance, the relationships among them with the records that stated
+them or what they were inferred from, the sources named, and the build of
+the model read (`built_at`, `MODEL_VERSION`). One walk and four reads
+(entities, relationships, sources, the last build) — [context.md](context.md).
+
 **Search** (`leka/knowledge/search.py`). Each build writes on each entity
 what search reads:
 

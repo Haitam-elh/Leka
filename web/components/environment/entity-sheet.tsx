@@ -27,6 +27,7 @@ import { useMemo, useState } from "react";
 
 import { cn } from "cn";
 
+import { EntityContext } from "@/components/environment/entity-context";
 import { Sparkline } from "@/components/knowledge/entity-detail-panel";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { timeAgo } from "@/components/knowledge/time";
@@ -364,6 +365,8 @@ function Sheet({ model, tab }: { model: SheetModel; tab: string }) {
         <Documents rows={model.documents} />
       </Card>
     );
+  } else if (tab === "context") {
+    body = <EntityContext entityId={model.id} entityName={model.name} />;
   } else {
     body = (
       <StatePanel
