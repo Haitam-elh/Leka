@@ -83,7 +83,7 @@ def _entity(
         ),
         depth=depth,
         provenance=provenance
-        or {"sources": [{"source_id": str(CATALOGUE), "key": name.lower(), "kind": "backstage"}]},
+        or {"sources": [{"source_id": str(CATALOGUE), "key": name.lower(), "kind": "key"}]},
     )
 
 
@@ -124,8 +124,8 @@ CHECKOUT = _entity(
     attributes={"language": "python", "tier": 1},
     provenance={
         "sources": [
-            {"source_id": str(CATALOGUE), "key": "checkout", "kind": "backstage"},
-            {"source_id": str(GONE), "key": "PCHK01", "kind": "pagerduty"},
+            {"source_id": str(CATALOGUE), "key": "checkout", "kind": "key"},
+            {"source_id": str(GONE), "key": "PCHK01", "kind": "key"},
         ],
         "attributes": {
             "language": {"origin": "source"},
@@ -147,7 +147,7 @@ NORA = _entity(
     "Nora Diallo",
     EntityType.PERSON,
     2,
-    provenance={"sources": [{"source_id": str(HR), "key": "nora@acme.io", "kind": "bamboohr"}]},
+    provenance={"sources": [{"source_id": str(HR), "key": "nora@acme.io", "kind": "key"}]},
 )
 DEPENDS = _tie(CHECKOUT, BILLING, RelationshipType.DEPENDS_ON)
 OWNS = _tie(PAYMENTS, CHECKOUT, RelationshipType.OWNS, confidence=0.95)
@@ -219,7 +219,7 @@ def test_the_roots_first_then_the_nearest_each_tie_after_its_second_end() -> Non
         "service": 2,
         "team": 1,
     }
-    assert made.summary.by_source_kind == {"backstage": 6, "bamboohr": 2, "pagerduty": 1}
+    assert made.summary.by_source_kind == {"backstage": 6, "bamboohr": 2, "unknown": 1}
 
 
 def test_why_each_is_there() -> None:
@@ -271,8 +271,9 @@ def test_an_entity_keeps_its_sources_each_attribute_s_origin_and_its_conflicts()
     assert said.confidence == 0.9
     assert [(s.source_id, s.kind, s.name, s.key) for s in said.sources] == [
         (CATALOGUE, "backstage", "Catalogue", "checkout"),
-        # Deleted since: still said, its kind from the provenance, no name.
-        (GONE, "pagerduty", None, "PCHK01"),
+        # Deleted since: still said — its key there — but no kind, no name:
+        # a provenance's kind is its key's, not its tool's.
+        (GONE, None, None, "PCHK01"),
     ]
     assert said.attributes["tier"] == {
         "origin": "enrichment",
@@ -349,7 +350,7 @@ def test_what_changed_between_two_versions() -> None:
         confidence=0.95,
         attributes={"tier": 2},
         provenance={
-            "sources": [{"source_id": str(HR), "key": "billing", "kind": "bamboohr"}],
+            "sources": [{"source_id": str(HR), "key": "billing", "kind": "key"}],
         },
     )
     after = assemble(
@@ -394,7 +395,7 @@ def test_a_line_for_a_model_to_read() -> None:
 
     assert text(made["Checkout"]) == (
         'service "Checkout" (service:checkout) — language: python; tier: 1 '
-        "[from Catalogue, pagerduty]"
+        "[from Catalogue, a deleted source]"
     )
     assert text(made["Checkout → Billing API"]) == (
         '"Checkout" depends_on "Billing API" — stated by Catalogue, confidence 0.90'
