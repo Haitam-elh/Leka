@@ -2467,9 +2467,12 @@ export interface paths {
         put?: never;
         /**
          * Create Context
-         * @description A context, assembled from the company model as it was last built: the
-         *     roots, what surrounds them, the relationships among them — each with its
-         *     sources and why it is there. 404 when a root is not the workspace's.
+         * @description A context, assembled from the company model as it was last built:
+         *     what its words find — in the model and in the records' own text — what
+         *     surrounds its roots, what happened around them, the relationships among
+         *     them; each with its sources, why it is there and how relevant, and what
+         *     each retriever did (LEKA-371). 404 when a root is not the workspace's;
+         *     422 when there is nothing to start from.
          */
         post: operations["create_context_api_v1_context_post"];
         delete?: never;
@@ -3008,6 +3011,11 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["ContextSourceRead"][];
             summary: components["schemas"]["ContextSummary"];
+            /**
+             * Retrieval
+             * @description What each retriever did: found, failed, timed out, skipped (LEKA-371).
+             */
+            retrieval: components["schemas"]["RetrieverRunRead"][];
             /**
              * Truncated
              * @description More was found than the budget holds.
@@ -3649,9 +3657,14 @@ export interface components {
             subject?: components["schemas"]["ContextSubject"];
             /**
              * Roots
-             * @description The entities it starts from.
+             * @description The entities it starts from. None: what its words find (hybrid).
              */
-            roots: string[];
+            roots?: string[];
+            /**
+             * Query
+             * @description What to search for; the purpose when none.
+             */
+            query?: string | null;
             /**
              * Depth
              * @description How many steps away.
@@ -3670,16 +3683,32 @@ export interface components {
             environment?: string | null;
             /**
              * Limit
-             * @description At most this many elements, the nearest first.
+             * @description At most this many elements, the most relevant first.
              * @default 100
              */
             limit: number;
             /**
-             * Strategy
-             * @default neighbourhood
-             * @constant
+             * Window Days
+             * @description How far back what happened is read, in days.
+             * @default 14
              */
-            strategy: "neighbourhood";
+            window_days: number;
+            /**
+             * Until
+             * @description When what happened is read up to; now when none.
+             */
+            until?: string | null;
+            /**
+             * Retrievers
+             * @description Which to combine (hybrid); every one when none.
+             */
+            retrievers?: ("graph" | "search" | "content" | "timeline" | "paths")[];
+            /**
+             * Strategy
+             * @default hybrid
+             * @enum {string}
+             */
+            strategy: "neighbourhood" | "hybrid";
         };
         /**
          * ContextDetail
@@ -3783,7 +3812,7 @@ export interface components {
             reason: components["schemas"]["ElementReason"];
             /**
              * Relevance
-             * @description How relevant to the purpose: none until ranked.
+             * @description How relevant, 0 to 1: how high and by how many retrievers it was found (LEKA-371); 1 for a root; none for a tie, and before LEKA-371.
              */
             relevance: number | null;
             /**
@@ -3854,6 +3883,8 @@ export interface components {
         ContextRequest: {
             /** Roots */
             roots: string[];
+            /** Query */
+            query: string | null;
             /** Depth */
             depth: number;
             /** Relationships */
@@ -3862,6 +3893,12 @@ export interface components {
             environment: string | null;
             /** Limit */
             limit: number;
+            /** Window Days */
+            window_days: number;
+            /** Until */
+            until: string | null;
+            /** Retrievers */
+            retrievers: string[];
             /** Strategy */
             strategy: string;
         };
@@ -3936,6 +3973,13 @@ export interface components {
             by_source_kind: {
                 [key: string]: number;
             };
+            /**
+             * By Retriever
+             * @description Elements each retriever found (LEKA-371).
+             */
+            by_retriever: {
+                [key: string]: number;
+            };
         };
         /**
          * ContextVersionRead
@@ -3972,6 +4016,8 @@ export interface components {
             /** Dropped */
             dropped: number;
             summary: components["schemas"]["ContextSummary"];
+            /** Retrieval */
+            retrieval: components["schemas"]["RetrieverRunRead"][];
             /**
              * Fingerprint
              * @description What it holds, hashed: equal when nothing changed.
@@ -4885,18 +4931,18 @@ export interface components {
             strategy: string;
             /**
              * Role
-             * @description root: asked for; reached: found from a root; tie: a relationship between two.
+             * @description root: asked for; reached: tied to a root or to what was found; found: by its words, its time, on a way — tied to nothing else; tie: a relationship between two.
              * @enum {string}
              */
-            role: "root" | "reached" | "tie";
+            role: "root" | "reached" | "found" | "tie";
             /**
              * Depth
-             * @description Steps from the nearest root; a tie, its farther end's.
+             * @description Steps from the nearest root or anchor; a tie, its farther end's; none when tied to none.
              */
-            depth: number;
+            depth: number | null;
             /**
              * Root
-             * @description The root it was reached from.
+             * @description The root it was reached from — or, none asked, the best thing found.
              */
             root: string | null;
             /**
@@ -4904,6 +4950,11 @@ export interface components {
              * @description The relationship it was reached through.
              */
             via: string | null;
+            /**
+             * Retrievers
+             * @description Every way it was found, the surest first (LEKA-371).
+             */
+            retrievers: components["schemas"]["RetrievalMatch"][];
         };
         /**
          * ElementRelationship
@@ -8044,6 +8095,67 @@ export interface components {
              * @description How long the raw payloads are kept, in days — at most LEKA's policy for this kind of source. Empty: the policy.
              */
             days?: number | null;
+        };
+        /**
+         * RetrievalMatch
+         * @description One way an element was found (LEKA-371): by what, how high it ranked
+         *     there, what that added to its relevance, and on what.
+         */
+        RetrievalMatch: {
+            /**
+             * Retriever
+             * @description graph, search, content, timeline or paths.
+             */
+            retriever: string;
+            /**
+             * Rank
+             * @description Its place among what that retriever found, from 1.
+             */
+            rank: number;
+            /**
+             * Score
+             * @description What it added to the relevance, before it is scaled.
+             */
+            score: number;
+            /**
+             * Detail
+             * @description On what: the words it holds, the steps, the event and when.
+             */
+            detail: string | null;
+        };
+        /**
+         * RetrieverRunRead
+         * @description What one retriever did for a version (LEKA-371): found how much, in
+         *     how long — or failed, timed out, or had nothing to start from, the
+         *     others going on without it.
+         */
+        RetrieverRunRead: {
+            /** Retriever */
+            retriever: string;
+            /** Version */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "failed" | "timeout" | "skipped";
+            /** Found */
+            found: number;
+            /**
+             * Ms
+             * @description How long it took, in milliseconds.
+             */
+            ms: number;
+            /**
+             * Detail
+             * @description What it was asked: the words, the window, the ways.
+             */
+            detail: string | null;
+            /**
+             * Error
+             * @description Why it failed, or why it was skipped.
+             */
+            error: string | null;
         };
         /**
          * Role

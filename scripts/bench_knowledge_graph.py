@@ -42,6 +42,7 @@ import leka.identity  # noqa: F401
 from leka.connectors import Source, SourceKind, SourceStatus
 from leka.context import ContextCreate, ContextRepository, ContextService
 from leka.db import session_factory, system_scope, workspace_scope
+from leka.ingestion import ContentRepository
 from leka.knowledge import (
     VIEWS,
     Entity,
@@ -260,14 +261,27 @@ async def bench(workspace_id: uuid.UUID, runs: int) -> None:
             hub, typical, team = picked
             # Contexts are assembled and kept in this session, never
             # committed: the workspace goes at the end anyway.
-            contexts = ContextService(ContextRepository(session, workspace_id), graph)
+            contexts = ContextService(
+                ContextRepository(session, workspace_id),
+                graph,
+                content=ContentRepository(session, workspace_id),
+            )
 
             def around(root: uuid.UUID, depth: int, limit: int) -> Awaitable[object]:
-                asked = ContextCreate(title="bench", roots=[root], depth=depth, limit=limit)
+                asked = ContextCreate(
+                    title="bench", roots=[root], depth=depth, limit=limit, strategy="neighbourhood"
+                )
+                return contexts.create(asked, by=None)
+
+            def hybrid(roots: list[uuid.UUID], purpose: str) -> Awaitable[object]:
+                asked = ContextCreate(title="bench", roots=roots, purpose=purpose, depth=1)
                 return contexts.create(asked, by=None)
 
             kept = await contexts.create(
-                ContextCreate(title="bench", roots=[hub], depth=2, limit=500), by=None
+                ContextCreate(
+                    title="bench", roots=[hub], depth=2, limit=500, strategy="neighbourhood"
+                ),
+                by=None,
             )
             assert kept is not None
             questions: list[tuple[str, Callable[[], Awaitable[object]]]] = [
@@ -294,6 +308,14 @@ async def bench(workspace_id: uuid.UUID, runs: int) -> None:
                 ("context, typical service, 1 step", lambda: around(typical, 1, 100)),
                 ("context, busiest service, 2 steps, 500 elements", lambda: around(hub, 2, 500)),
                 ("context of 500 elements, read back", lambda: contexts.assembled(kept.context_id)),
+                (
+                    "context, hybrid, from words only",
+                    lambda: hybrid([], "pourquoi payment api est lent ?"),
+                ),
+                (
+                    "context, hybrid, busiest service and its words",
+                    lambda: hybrid([hub], "what changed around it?"),
+                ),
                 (
                     "context of 500 elements, refreshed, nothing changed",
                     lambda: contexts.refresh(kept.context_id, reason=None, by=None),

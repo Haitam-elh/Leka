@@ -26,6 +26,10 @@ test.describe("the context engine", () => {
     );
     await expect(elements).toContainText("payment-api dépend de auth-service");
     await expect(page.getByTestId("context-version-line")).toContainText("Version 1");
+    // How it was searched: the graph from payment-api, the question's words.
+    const searched = page.getByTestId("context-retrieval");
+    await expect(searched).toContainText("Graphe");
+    await expect(searched).toContainText("Recherche");
 
     // Opened: why it is there, where it came from, what LEKA reads of it.
     await elements

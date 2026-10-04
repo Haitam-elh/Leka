@@ -20,7 +20,8 @@ second store): the 'simple' dictionary — no stemming, names are not prose
 and the company speaks French and English — the name weighted A, the rest
 B. Every word typed is a prefix: "pay" finds Payment API as it is typed.
 
-Pure: the build calls fields(), the repository query().
+Pure: the build calls fields(), the repository query() — and any_of(),
+for a sentence searched by any of its words (leka.context, LEKA-371).
 """
 
 from __future__ import annotations
@@ -31,6 +32,9 @@ from collections.abc import Iterable, Mapping
 
 # What a query keeps: past this many words, the rest says nothing more.
 MAX_WORDS = 8
+# What a sentence is searched by, at most: its words and their synonyms
+# (leka.context, LEKA-371).
+MAX_ANY = 24
 # A search text's length, at most: a description is read for its words, not
 # kept whole.
 MAX_TEXT = 4000
@@ -115,6 +119,14 @@ def fields(key: str, name: str, attributes: Mapping[str, object]) -> tuple[str, 
     # The pieces last: a text cut short loses them before its own words.
     words = [fold(text), *pieces(" ".join(names), " ".join(folded).split()), *pieces(text)]
     return named[:MAX_TEXT], " ".join(w for w in words if w)[:MAX_TEXT]
+
+
+def any_of(words: Iterable[str]) -> str | None:
+    """Words, any of them, each a prefix, as a tsquery: what a sentence is
+    searched by — "why is billing slow" — the more of them a thing holds,
+    the higher it ranks. None when none is searchable."""
+    kept = list(dict.fromkeys(w for word in words for w in fold(word).split()))[:MAX_ANY]
+    return " | ".join(f"{word}:*" for word in kept) or None
 
 
 def query(typed: str) -> str | None:

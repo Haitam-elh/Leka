@@ -39,11 +39,14 @@ import uuid
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 
+import structlog
+
 from leka.context import assembly
 from leka.context.models import Context, ContextElement, ContextVersion
 from leka.context.repository import ContextRepository
 from leka.context.schemas import (
     CONTRACT_VERSION,
+    RETRIEVERS,
     AssembledContext,
     ContextCreate,
     ContextDetail,
@@ -58,9 +61,13 @@ from leka.context.schemas import (
     ContextVersionRead,
     ElementChange,
     RefreshOutcome,
+    RetrieverRunRead,
 )
-from leka.context.strategies import STRATEGIES, Strategy
-from leka.knowledge import MODEL_VERSION, ContextMaterial, GraphService, RelationshipType
+from leka.context.strategies import STRATEGIES, Gathered, Strategy, Tools
+from leka.ingestion import ContentRepository
+from leka.knowledge import MODEL_VERSION, GraphService, RelationshipType
+
+logger = structlog.get_logger(__name__)
 
 GONE = "A root of this context is no longer in the company model."
 UNKNOWN = "What this context asks for is no longer something LEKA knows: {}."
@@ -78,10 +85,12 @@ class ContextService:
         repository: ContextRepository,
         graph: GraphService,
         *,
+        content: ContentRepository | None = None,
         strategies: Mapping[str, Strategy] = STRATEGIES,
     ) -> None:
         self._repository = repository
         self._graph = graph
+        self._content = content
         self._strategies = strategies
 
     async def create(self, body: ContextCreate, *, by: uuid.UUID | None) -> AssembledContext | None:
@@ -89,15 +98,19 @@ class ContextService:
         workspace's — nothing is kept."""
         request = ContextRequest(
             roots=list(dict.fromkeys(body.roots)),
+            query=body.query,
             depth=body.depth,
             relationships=sorted({kind.value for kind in body.relationships}),
             environment=body.environment,
             limit=body.limit,
+            window_days=body.window_days,
+            until=body.until,
+            retrievers=list(dict.fromkeys(body.retrievers)),
             strategy=body.strategy,
         )
         strategy = self._strategies[request.strategy]
-        material = await strategy.gather(self._graph, request)
-        if material is None:
+        gathered = await strategy.gather(self._tools(), request, body.purpose)
+        if gathered is None:
             return None
         context = Context(
             title=body.title,
@@ -111,9 +124,17 @@ class ContextService:
         )
         self._repository.keep(context)
         await self._repository.flush()
-        built = assembly.assemble(material, limit=request.limit, strategy=strategy.name)
+        built = _assemble(gathered, request, strategy.name)
         version, rows = await self._record(
-            context, request, strategy, material, built, trigger="created", reason=None, by=by
+            context,
+            request,
+            strategy,
+            gathered,
+            built,
+            trigger="created",
+            reason=None,
+            by=by,
+            error=gathered.error or GONE,
         )
         await self._repository.reload(context)
         return _assembled(context, version, rows)
@@ -131,14 +152,10 @@ class ContextService:
         request = ContextRequest.model_validate(context.request)
         strategy = self._strategies.get(request.strategy)
         unknown = _unknown(request, strategy)
-        material = None
+        gathered = None
         if strategy is not None and not unknown:
-            material = await strategy.gather(self._graph, request)
-        built = (
-            assembly.assemble(material, limit=request.limit, strategy=request.strategy)
-            if material is not None
-            else None
-        )
+            gathered = await strategy.gather(self._tools(), request, context.purpose)
+        built = _assemble(gathered, request, request.strategy) if gathered else None
         latest = await self._repository.latest(context.id)
         status = "assembled" if built is not None else "failed"
         if (
@@ -153,12 +170,16 @@ class ContextService:
             context,
             request,
             strategy,
-            material,
+            gathered,
             built,
             trigger="refreshed",
             reason=reason,
             by=by,
-            error=UNKNOWN.format(", ".join(unknown)) if unknown else GONE,
+            error=(
+                UNKNOWN.format(", ".join(unknown))
+                if unknown
+                else (gathered.error if gathered and gathered.error else GONE)
+            ),
         )
         await self._repository.reload(context)
         return RefreshOutcome(changed=True, version=_version(version))
@@ -247,12 +268,20 @@ class ContextService:
         """Versions, as the API serves them."""
         return [_version(row) for row in rows]
 
+    def _tools(self) -> Tools:
+        return Tools(
+            graph=self._graph,
+            content=self._content,
+            isolated=self._repository.isolated,
+            now=datetime.now(UTC),
+        )
+
     async def _record(
         self,
         context: Context,
         request: ContextRequest,
         strategy: Strategy | None,
-        material: ContextMaterial | None,
+        gathered: Gathered | None,
         built: assembly.Assembly | None,
         *,
         trigger: str,
@@ -262,6 +291,8 @@ class ContextService:
     ) -> tuple[ContextVersion, list[ContextElement]]:
         """The next version, as made — or as failed."""
         now = datetime.now(UTC)
+        material = gathered.material if gathered is not None else None
+        retrieval = gathered.retrieval if gathered is not None else []
         version = ContextVersion(
             context_id=context.id,
             version=context.current_version + 1,
@@ -278,6 +309,7 @@ class ContextService:
             truncated=built.truncated if built else False,
             dropped=built.dropped if built else 0,
             summary=(built.summary if built else assembly.summary([])).model_dump(mode="json"),
+            retrieval=[run.model_dump(mode="json") for run in retrieval],
             fingerprint=built.fingerprint if built else "",
             error=None if built is not None else error[:300],
             assembled_at=now,
@@ -293,7 +325,7 @@ class ContextService:
                 content=element.content(),
                 provenance=element.provenance.model_dump(mode="json"),
                 reason=element.reason.model_dump(mode="json"),
-                relevance=None,
+                relevance=element.relevance,
             )
             for position, element in enumerate(built.elements if built else [])
         ]
@@ -301,6 +333,15 @@ class ContextService:
         context.current_version = version.version
         context.status = version.status
         context.refreshed_at = now
+        logger.info(
+            "context_assembled",
+            context_id=str(context.id),
+            version=version.version,
+            status=version.status,
+            strategy=version.strategy,
+            elements=version.element_count,
+            retrievers={run.retriever: run.status for run in retrieval},
+        )
         return version, rows
 
 
@@ -339,6 +380,7 @@ def _version(row: ContextVersion) -> ContextVersionRead:
             "truncated": row.truncated,
             "dropped": row.dropped,
             "summary": row.summary,
+            "retrieval": row.retrieval,
             "fingerprint": row.fingerprint,
             "error": row.error,
             "assembled_at": row.assembled_at,
@@ -379,6 +421,7 @@ def _assembled(
             counted.values(), key=lambda s: (-s.elements, (s.name or s.kind or "").casefold())
         ),
         summary=ContextSummary.model_validate(version.summary),
+        retrieval=[RetrieverRunRead.model_validate(run) for run in version.retrieval],
         truncated=version.truncated,
         dropped=version.dropped,
         model_built_at=version.model_built_at,
@@ -389,7 +432,14 @@ def _assembled(
 
 def _restore(row: ContextElement) -> tuple[int, assembly.Element]:
     return row.position, assembly.restore(
-        row.kind, row.ref_id, row.ref_type, row.label, row.content, row.provenance, row.reason
+        row.kind,
+        row.ref_id,
+        row.ref_type,
+        row.label,
+        row.content,
+        row.provenance,
+        row.reason,
+        row.relevance,
     )
 
 
@@ -404,7 +454,7 @@ def _read(position: int, element: assembly.Element) -> ContextElementRead:
         relationship=element.relationship,
         provenance=element.provenance,
         reason=element.reason,
-        relevance=None,
+        relevance=element.relevance,
         text=assembly.text(element),
     )
 
@@ -414,4 +464,21 @@ def _unknown(request: ContextRequest, strategy: Strategy | None) -> list[str]:
     of relationship — renamed since it was made."""
     known = {kind.value for kind in RelationshipType}
     unknown = [f"the strategy {request.strategy}"] if strategy is None else []
+    unknown += [f"the retriever {name}" for name in request.retrievers if name not in RETRIEVERS]
     return unknown + [f"the relationship {k}" for k in request.relationships if k not in known]
+
+
+def _assemble(
+    gathered: Gathered, request: ContextRequest, strategy: str
+) -> assembly.Assembly | None:
+    """What the strategy gathered, assembled — none when every retriever
+    failed."""
+    if gathered.material is None:
+        return None
+    return assembly.assemble(
+        gathered.material,
+        limit=request.limit,
+        strategy=strategy,
+        relevance=gathered.relevance,
+        anchors=gathered.anchors,
+    )

@@ -770,6 +770,11 @@ provenance, the relationships among them with the records that stated
 them or what they were inferred from, the sources named, and the build of
 the model read (`built_at`, `MODEL_VERSION`). One walk and four reads
 (entities, relationships, sources, the last build) — [context.md](context.md).
+And for its retrieval (LEKA-371): `gathered()`, the same for entities found
+any other way; `matching()`, the entities a sentence's words find — any of
+them, each a prefix (`search.any_of()`), the very name first, then the most
+words — each with the words it holds; `events()`, what happened between two
+dates around some entities and what is part of them.
 
 **Search** (`leka/knowledge/search.py`). Each build writes on each entity
 what search reads:

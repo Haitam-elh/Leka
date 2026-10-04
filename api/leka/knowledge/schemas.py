@@ -126,7 +126,10 @@ class MaterialEntity(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     entity: EntityRead
-    depth: int = Field(description="Steps from the nearest root; 0 for a root.")
+    depth: int | None = Field(
+        description="Steps from the nearest root; 0 for a root; none when it was found by "
+        "something else than a walk — a search, its time."
+    )
     provenance: dict[str, object]
 
 

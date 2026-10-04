@@ -86,6 +86,7 @@ function entity(
   position: number,
   reason: ContextElement["reason"],
   said: Partial<Provenance> = {},
+  relevance: number | null = null,
 ): ContextElement {
   return {
     position,
@@ -106,7 +107,7 @@ function entity(
     relationship: null,
     provenance: provenance(said),
     reason,
-    relevance: null,
+    relevance,
     text: `${type} "${name}"`,
   };
 }
@@ -136,7 +137,14 @@ function tie(
       attributes: {},
     },
     provenance: provenance(said),
-    reason: { strategy: "neighbourhood", role: "tie", depth: 1, root: null, via: null },
+    reason: {
+      strategy: "hybrid",
+      role: "tie",
+      depth: 1,
+      root: null,
+      via: null,
+      retrievers: [],
+    },
     relevance: null,
     text: `"${from[1]}" depends_on "${to[1]}"`,
   };
@@ -148,7 +156,14 @@ const ELEMENTS: ContextElement[] = [
     "Billing API",
     "service",
     0,
-    { strategy: "neighbourhood", role: "root", depth: 0, root: BILLING, via: null },
+    {
+      strategy: "hybrid",
+      role: "root",
+      depth: 0,
+      root: BILLING,
+      via: null,
+      retrievers: [{ retriever: "search", rank: 1, score: 0.0909, detail: "billing, api" }],
+    },
     {
       sources: [
         {
@@ -162,27 +177,56 @@ const ELEMENTS: ContextElement[] = [
       ],
       attributes: { tier: { origin: "enrichment", rule: "criticality", confidence: 0.7 } },
     },
+    1,
   ),
-  entity(CHECKOUT, "Checkout", "service", 1, {
-    strategy: "neighbourhood",
-    role: "reached",
-    depth: 1,
-    root: BILLING,
-    via: DEPENDS,
-  }),
+  entity(
+    CHECKOUT,
+    "Checkout",
+    "service",
+    1,
+    {
+      strategy: "hybrid",
+      role: "reached",
+      depth: 1,
+      root: BILLING,
+      via: DEPENDS,
+      retrievers: [
+        { retriever: "graph", rank: 1, score: 0.0909, detail: "1" },
+        { retriever: "search", rank: 3, score: 0.0769, detail: "billing" },
+      ],
+    },
+    {},
+    0.62,
+  ),
   tie(DEPENDS, [CHECKOUT, "Checkout"], [BILLING, "Billing API"], 2, {
     sources: [
       { source_id: CATALOGUE, kind: "backstage", name: "Catalogue", key: null, record_id: "s-1" },
     ],
     evidence: ["dependsOn"],
   }),
-  entity(LEDGER, "Ledger DB", "database", 3, {
-    strategy: "neighbourhood",
-    role: "reached",
-    depth: 1,
-    root: BILLING,
-    via: DEPLOYED,
-  }),
+  entity(
+    LEDGER,
+    "Ledger DB",
+    "database",
+    3,
+    {
+      strategy: "hybrid",
+      role: "found",
+      depth: null,
+      root: null,
+      via: null,
+      retrievers: [
+        {
+          retriever: "timeline",
+          rank: 1,
+          score: 0.0727,
+          detail: "deployment 2026-10-03T11:30:00+00:00",
+        },
+      ],
+    },
+    {},
+    0.18,
+  ),
   tie(DEPLOYED, [BILLING, "Billing API"], [LEDGER, "Ledger DB"], 4, {
     origin: "inferred",
     rule: "deployed_together",
@@ -198,11 +242,15 @@ const READ: ContextRead = {
   subject: { type: "entity", id: BILLING },
   request: {
     roots: [BILLING],
+    query: null,
     depth: 1,
     relationships: [],
     environment: null,
     limit: 100,
-    strategy: "neighbourhood",
+    window_days: 14,
+    until: null,
+    retrievers: [],
+    strategy: "hybrid",
   },
   status: "assembled",
   current_version: 2,
@@ -212,6 +260,15 @@ const READ: ContextRead = {
   refreshed_at: NOW,
   archived_at: null,
 };
+
+function run(
+  retriever: string,
+  status: "ok" | "failed" | "timeout" | "skipped",
+  found: number,
+  error: string | null = null,
+): AssembledContext["retrieval"][number] {
+  return { retriever, version: 1, status, found, ms: 12, detail: null, error };
+}
 
 function assembled(version: number, over: Partial<AssembledContext> = {}): AssembledContext {
   return {
@@ -234,7 +291,15 @@ function assembled(version: number, over: Partial<AssembledContext> = {}): Assem
       inferred: 1,
       by_type: {},
       by_source_kind: {},
+      by_retriever: { graph: 1, search: 2, timeline: 1 },
     },
+    retrieval: [
+      run("search", "ok", 2),
+      run("content", "failed", 0, "ProgrammingError: the retriever failed."),
+      run("graph", "ok", 1),
+      run("timeline", "ok", 1),
+      run("paths", "skipped", 0, "Fewer than two roots: no way between them to follow."),
+    ],
     truncated: false,
     dropped: 0,
     model_built_at: NOW,
@@ -259,6 +324,7 @@ function version(n: number, over: Partial<ContextVersion> = {}): ContextVersion 
     truncated: false,
     dropped: 0,
     summary: assembled(n).summary,
+    retrieval: [],
     fingerprint: `f${n}`,
     error: null,
     assembled_at: NOW,
@@ -318,7 +384,8 @@ describe("the context tab", () => {
       roots: [BILLING],
       depth: 1,
       limit: 100,
-      strategy: "neighbourhood",
+      window_days: 14,
+      strategy: "hybrid",
     }, expect.anything());
     expect(notify.success).toHaveBeenCalledWith({ title: "Contexte assemblé : 5 élément(s)." });
     expect(await screen.findByTestId("entity-context")).toBeInTheDocument();
@@ -370,6 +437,35 @@ describe("the context tab", () => {
     await user.click(within(rows[2]).getByRole("button", { name: /Provenance de Checkout/ }));
     expect(within(rows[2]).getByTestId("context-provenance")).toHaveTextContent(
       "Catalogue (backstage) · enregistrement s-1",
+    );
+  });
+
+  it("says how each was found, how relevant, and what each retriever did", async () => {
+    const user = userEvent.setup();
+    show();
+
+    const rows = await screen.findAllByTestId("context-element");
+    expect(rows[0]).toHaveTextContent("100 %");
+    expect(rows[1]).toHaveTextContent("62 %");
+    expect(rows[3]).toHaveTextContent("Trouvé par Chronologie");
+    const report = screen.getByTestId("context-retrieval");
+    expect(report).toHaveTextContent("Recherche · 2 trouvé(s)");
+    expect(report).toHaveTextContent("Contenu · en échec");
+    expect(report).toHaveTextContent("Chemins · sans objet");
+    expect(within(report).getByText(/Contenu/)).toHaveAttribute(
+      "title",
+      "ProgrammingError: the retriever failed.",
+    );
+
+    await user.click(within(rows[1]).getByRole("button", { name: "Provenance de Checkout" }));
+    const checkout = within(rows[1]).getByTestId("context-provenance");
+    expect(checkout).toHaveTextContent("Graphe · rang 1 · à 1 pas");
+    expect(checkout).toHaveTextContent("Recherche · rang 3 · mots : billing");
+    expect(checkout).toHaveTextContent("Pertinence62 %");
+
+    await user.click(within(rows[3]).getByRole("button", { name: "Provenance de Ledger DB" }));
+    expect(within(rows[3]).getByTestId("context-provenance")).toHaveTextContent(
+      /Chronologie · rang 1 · déploiement le 3 oct\. 2026/,
     );
   });
 

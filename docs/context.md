@@ -1,36 +1,41 @@
 # The context engine — what LEKA assembles to understand a request
 
-A question about the company — "why is Billing API slow?" — is not
-answered from one source's records. It is answered from what the company
-model says of Billing API and what surrounds it: what it depends on, what
-depends on it, where it runs, who owns it, each piece with where it came
-from. The context engine (`leka/context`, LEKA-370) assembles that, keeps
-it version by version, and hands it to whatever analyses the request.
+A question about the company — "why is billing slow?" — is not answered
+from one source's records. It is answered from what the company knows of
+billing and what surrounds it: the services it is, what they depend on,
+what happened to them this week, the page that says how to recover them —
+each piece with where it came from. The context engine (`leka/context`)
+finds that (LEKA-371), assembles it, keeps it version by version
+(LEKA-370), and hands it to whatever analyses the request.
 
 ```
- sources ─▶ … ─▶ company model (leka.knowledge: entities, relationships, provenance)
-                        │  GraphService.material(): a bounded walk, its provenance
+ sources ─▶ … ─▶ company model (leka.knowledge)      records' own text (leka.ingestion)
+                   entities, relationships,             extracted titles and bodies,
+                   provenance, events                   indexed by their words
+                        │                                        │
+                        ▼                                        ▼
+ a request ─▶ retrievers: graph · search · content · timeline · paths ─▶ fused (relevance)
+                        │
                         ▼
- a request ─▶ context engine (leka.context) ─▶ a context, version 1, 2, …
-               strategy → assembly → kept          each element: what it said,
-                                                   where it came from, why it is there
+              assembly (order, budget, provenance, why) ─▶ a version, kept
                         │
                         ▼
               AssembledContext (contract v1) ─▶ intentions, capabilities (LEKA-384…)
 ```
 
 It calls no customer API and no language model: by the time a request
-arrives, the background loop has built the model ([architecture.md](architecture.md)).
-It reads the model through `leka.knowledge` only (the dependency rule:
-`intentions → context → knowledge`).
+arrives, the background loop has built the model and indexed the records
+([architecture.md](architecture.md)). It reads the model through
+`leka.knowledge` and the records' text through `leka.ingestion` (the
+dependency rule: `intentions → context → knowledge → ingestion`).
 
 ## 1. A context, its versions, its elements
 
 | | Table | What it holds |
 |---|---|---|
-| **Context** | `contexts` | what it is for — a title, a `purpose` in the asker's words, a `subject` (an entity today, an intention with LEKA-384, or a bare request) — what it asks the model for (its **request**), where it stands (`status`), its latest version (`current_version`), who made it, when it was last checked (`refreshed_at`), archived when |
-| **Version** | `context_versions` | one assembly, **never changed**: when, why (`trigger`: created or refreshed, and a `reason`), by which strategy and its version, under which contract, the request it answered, **which build of the model** it read (`model_built_at`, `model_version`), how many elements, whether the budget cut (`truncated`, `dropped`), counts (`summary`), a `fingerprint` of what it holds — or why it failed (`error`) |
-| **Element** | `context_elements` | one thing a version holds — an entity or a relationship — at its `position`: its id and type in the model, a label, **what it said then** (`content`), **where it came from** (`provenance`), **why it is there** (`reason`), how relevant (`relevance`, empty until LEKA-372 ranks) |
+| **Context** | `contexts` | what it is for — a title, a `purpose` in the asker's words, a `subject` (an entity today, an intention with LEKA-384, or a bare request) — what it asks for (its **request**), where it stands (`status`), its latest version (`current_version`), who made it, when it was last checked (`refreshed_at`), archived when |
+| **Version** | `context_versions` | one assembly, **never changed**: when, why (`trigger`: created or refreshed, and a `reason`), by which strategy and its version, under which contract, the request it answered, **which build of the model** it read (`model_built_at`, `model_version`), how many elements, whether the budget cut (`truncated`, `dropped`), counts (`summary`), **what each retriever did** (`retrieval`), a `fingerprint` of what it holds — or why it failed (`error`) |
+| **Element** | `context_elements` | one thing a version holds — an entity or a relationship — at its `position`: its id and type in the model, a label, **what it said then** (`content`), **where it came from** (`provenance`), **why it is there** (`reason`: every retriever that found it), **how relevant** (`relevance`, 0 to 1) |
 
 **Kept whole, not as ids.** The model moves on: an attribute changes, a
 relationship goes, an entity is removed. A version must say, months later,
@@ -41,12 +46,18 @@ The request a context answers:
 
 | Field | | |
 |---|---|---|
-| `roots` | 1 to 10 entities | where it starts — the workspace's, or the context is refused (404) |
-| `depth` | 1 to 3, default 1 | how many steps away |
+| `roots` | 0 to 10 entities | where it starts — the workspace's, or the context is refused (404). None: what its words find |
+| `query` | default the purpose | the words searched |
+| `depth` | 1 to 3, default 1 | how many steps the graph walks |
 | `relationships` | kinds, default all | only through these |
 | `environment` | default all | only what is true in this one |
 | `limit` | 1 to 500, default 100 | the budget: at most this many elements |
-| `strategy` | `neighbourhood` | how the elements are gathered (§ 3) |
+| `window_days`, `until` | 1 to 365, default 14; default now | the window what happened is read in |
+| `retrievers` | default all | which to combine |
+| `strategy` | `hybrid` (default) or `neighbourhood` | how the elements are gathered (§ 3) |
+
+A request must start somewhere: roots, or words that say something —
+"pourquoi ?" alone is refused (422).
 
 ## 2. Its life
 
@@ -54,8 +65,9 @@ The request a context answers:
 stateDiagram-v2
     [*] --> assembling: created
     assembling --> assembled: version 1
+    assembling --> failed: every retriever failed
     assembled --> assembled: refreshed — a new version if what it holds changed
-    assembled --> failed: refreshed — a root is gone from the model
+    assembled --> failed: refreshed — a root is gone, or every retriever failed
     failed --> assembled: refreshed — it is back
     assembled --> archived
     failed --> archived
@@ -70,54 +82,120 @@ stateDiagram-v2
   version is made: `refreshed_at` says it looked, and the latest version
   holds. Otherwise version N+1. Two refreshes at once wait for each other
   (the context row is locked), so they cannot both make N+1.
-- **Failed**: a refresh that finds a root gone (or a strategy or kind of
-  relationship LEKA no longer knows) makes a version that holds nothing and
-  says why. The last version that held something is still what is read by
-  default. Failing again the same way is no news: no new version.
+- **Failed**: a version that holds nothing and says why — a root gone, a
+  strategy, kind of relationship or retriever LEKA no longer knows, or every
+  retriever that ran failed (§ 4). The last version that held something is
+  still what is read by default. Failing again the same way is no news.
 - **Archived**: still read — every version — never reassembled (409).
 
-## 3. How it is gathered: strategies
+## 3. How it is gathered: retrievers, combined
 
-A strategy reads the model through `leka.knowledge` and hands back
-**material**: entities, the relationships among them, each with its
-provenance, the sources named, and which build of the model they came from
-(`GraphService.material()`, [company-model.md § 16](company-model.md#16-the-knowledge-graph-search-walks-paths-views-leka-369)).
-Each strategy has a name and a version, kept with every version it made.
+`leka/context/retrieval.py`, `strategies.py`.
 
-| Strategy | Version | Gathers |
+| Retriever | Finds | On what (`detail`) | Weight |
+|---|---|---|---:|
+| `graph` | what surrounds the roots — or, none asked, what the words found best — `depth` steps, through the kinds asked, removed things never walked through | its steps: `1` | 1.0 |
+| `search` | the request's words, and what they also mean, in the **company model's own words** — names, descriptions, labels, keys, folded, each a prefix (`GraphService.matching()`) | the words it holds | 1.0 |
+| `content` | the same words in **what the records themselves say** — a page's body, a ticket's description, a pull request's — read back to the things they are about (`ContentRepository.matching()`) | — (the run says the words) | 0.8 |
+| `timeline` | what happened in the window around them and what is one step from them — incidents opened and resolved, deployments, changes, releases, merges (`GraphService.events()`) | the event and when: `deployment 2026-09-28T11:30:00+00:00` | 0.8 |
+| `paths` | what is on the shortest ways between two roots (up to 6 pairs, 4 steps) | the way's length | 1.2 |
+
+**The order they run in.** The search and the content first. When no root
+was asked, the three things they found best are the **anchors**: where the
+graph walks from and the timeline reads around. The timeline also reads
+around what the graph found one step from them: an incident has no
+deployment of its own, the service it affects has. A retriever with
+nothing to start from is skipped, and the version says so.
+
+**The words** (`leka/context/language.py`, pure). A request comes as a
+sentence, in French or English, about systems named in English. Its words
+are folded (accents and case off), the words that say nothing — French and
+English stopwords — left out, and each is given what it also means: a
+small vocabulary of what an IT question is made of (`facturation` →
+billing, invoice; `lent` → slow, latency; `panne` → outage, incident;
+`déploiement` → deploy, release; `reprise` → recovery, retry…), a plural or
+feminine read as its word. The records' text keeps its accents — the
+`simple` dictionary, no stemming — so it is searched by the words as
+written and folded both. This is what retrieval reads without paying a
+model; an embedding of the sentence would come beside it (§ Not yet).
+
+**The records' text, indexed.** `ix_extracted_records_words`: a GIN index
+on each extracted record's title and texts as PostgreSQL's full-text search
+reads them — `'simple'`, the first 100 000 characters — the extracted ones
+only (migration `20261004_2300_context_retrieval`). A record is read back
+to its entity by the key normalisation gave it and the entity resolution
+made of that key from that source; a record gone at its source is left
+out. No excerpt of a record is kept in a context: what was found is the
+entity, and the words.
+
+**Combined** (`fuse()`): reciprocal rank fusion. A thing at rank r of a
+retriever adds weight / (10 + r); its **relevance** is the sum over the
+retrievers that found it, scaled from 0 to 1 by the most any thing could
+have had — found first by every retriever that ran, it is 1. A thing found
+high by several is surer than a thing found high by one. Each element keeps
+**every way it was found** (`reason.retrievers`: the retriever, its rank,
+what it added, on what), the surest first. A root's relevance is 1.
+
+| Strategy | Version | |
 |---|---|---|
-| `neighbourhood` | 1 | what surrounds the roots: a bounded walk, both ways, `depth` steps, through the kinds asked, in one environment or all — removed things never walked through, a removed root kept |
+| `hybrid` | 1 | the retrievers combined — the default |
+| `neighbourhood` | 1 | the graph from the roots, alone (LEKA-370); its versions say no relevance |
 
-The baseline. LEKA-371 adds strategies beside it (by search, around an
-incident's time, along the paths between two things), LEKA-373 chooses one
-per kind of intention. A new strategy is a class with `name`, `version` and
-`gather()` in `leka/context/strategies.py`, and one entry in `STRATEGIES`.
+A new retriever is a class with `name`, `version`, `weight` and
+`retrieve()`, given to `Hybrid.retrievers()`; LEKA-373 chooses the
+retrievers and their weights per kind of intention.
 
-## 4. How it is assembled: order and budget
+## 4. When a retriever fails
+
+**It fails alone.** Each retriever runs in a savepoint with a statement
+timeout (`ContextRepository.isolated()`, 5 s): an error in the database or
+a query that takes too long is undone — the transaction goes on — and the
+others' findings make the context. Each run is reported in the version's
+`retrieval`:
+
+| `status` | | `error` |
+|---|---|---|
+| `ok` | found `found` things in `ms` | — |
+| `failed` | it raised | `ProgrammingError: the retriever failed.` — the kind, never a query or a value |
+| `timeout` | stopped by the statement timeout | `Took longer than 5000 ms.` |
+| `skipped` | nothing to start from | `No words to search.`, `Fewer than two roots…`, `Nothing to start from…` |
+
+**Observable.** A failure is logged (`context_retriever_failed`:
+retriever, status, error kind, ms) and every assembly is
+(`context_assembled`: context, version, status, strategy, elements, each
+retriever's status); the screen shows the report under the figures, a
+failed retriever in orange with why. When **every** retriever that ran
+failed, the version is `failed` with "Every retriever failed" — the next
+refresh, the database back, makes a version that holds something.
+
+## 5. How it is assembled: order and budget
 
 `leka/context/assembly.py`, pure — no database, no clock.
 
-**The order is the budget's.** The roots first, as asked; then the
-nearest, the surest, by name. Each entity taken brings, right after it,
-the relationships between it and those already taken — a source's word
-before a rule's, the surest first. So a context cut short holds what is
-nearest and how it is tied, and **never a relationship whose end it
-lacks**. What does not fit is dropped deliberately, counted (`dropped`)
-and said (`truncated`) — also when the walk itself stopped short.
+**The order is the budget's.** The roots first, as asked — or, none asked,
+the anchors; then the **most relevant**, the nearest, the surest, by name.
+Each entity taken brings, right after it, the relationships between it and
+those already taken — a source's word before a rule's, the surest first.
+So a context cut short holds what matters most and how it is tied, and
+**never a relationship whose end it lacks**. What does not fit is dropped
+deliberately, counted (`dropped`) and said (`truncated`) — also when a
+retriever itself stopped short.
 
 **Why each is there** (`reason`):
 
 | `role` | Means | Also |
 |---|---|---|
 | `root` | asked for | `depth` 0 |
-| `reached` | found from a root | `depth`, the `root`, and `via` — the relationship it was reached through, the surest way first |
+| `reached` | tied to a root or an anchor | `depth`, the `root` (or anchor), and `via` — the relationship it was reached through, the surest way first |
+| `found` | found — by its words, its time, on a way — and tied to none of the rest | `depth` none, or 0 for an anchor |
 | `tie` | a relationship between two elements | `depth`: its farther end's |
 
-And every element carries `text`: itself in one line, for a model to read
-— `service "Billing API" (service:billing-api) — tier: 1 [from Catalogue]`,
+And every one says `retrievers`: each way it was found. Every element also
+carries `text`: itself in one line, for a model to read —
+`service "Billing API" (service:billing-api) — tier: 1 [from Catalogue]`,
 `"Checkout" depends_on "Billing API" — stated by Catalogue, confidence 0.90`.
 
-## 5. Provenance: where each element came from
+## 6. Provenance: where each element came from
 
 Copied from the model when the version is made:
 
@@ -138,10 +216,11 @@ relationships, their ids with them. So a relationship **is** its ends and
 its kind (`assembly.identity()`): the fingerprint, the comparison of two
 versions and `reason.via` are read through that, never through an id of
 the day. And what changes with nothing said differently — being seen
-again (`last_seen_at`, `changed_at`), a source renamed — is left out of
-the fingerprint: the hourly model sweep does not make a version.
+again (`last_seen_at`, `changed_at`), a source renamed, **a rank or a
+score** — is left out of the fingerprint: the hourly model sweep does not
+make a version, nor something else being found.
 
-## 6. History: every version, as made
+## 7. History: every version, as made
 
 - **By number**: `GET /context/{id}/assembled?version=2`.
 - **As it stood at a date**: `?at=2026-10-04T09:00:00Z` — the latest
@@ -155,7 +234,7 @@ the fingerprint: the hourly model sweep does not make a version.
 A version is never updated — refreshing writes a new one — so reading an
 old one reads what it was, whatever the model became.
 
-## 7. The contract downstream services read
+## 8. The contract downstream services read
 
 `AssembledContext`, **contract version 1** (`CONTRACT_VERSION` in
 `leka/context/schemas.py`): one version whole.
@@ -166,7 +245,8 @@ old one reads what it was, whatever the model became.
 | `title`, `purpose`, `subject`, `request`, `strategy` | what it is for, what it asked, how it was gathered |
 | `elements` | in order — each `{position, kind, ref_id, ref_type, label, entity \| relationship, provenance, reason, relevance, text}` |
 | `sources` | the sources its elements came from, and how many each |
-| `summary` | entities, relationships, stated and inferred, by type, by source kind |
+| `summary` | entities, relationships, stated and inferred, by type, by source kind, by retriever |
+| `retrieval` | what each retriever did: `{retriever, version, status, found, ms, detail, error}` |
 | `truncated`, `dropped` | what the budget left out |
 | `model_built_at`, `model_version`, `assembled_at` | from which build of the model, when |
 
@@ -174,30 +254,34 @@ In Python (intentions, capabilities):
 
 ```python
 service = ContextService(ContextRepository(session, workspace_id),
-                         GraphService(GraphRepository(session, workspace_id)))
-made = await service.create(ContextCreate(title=..., purpose=..., roots=[...],
+                         GraphService(GraphRepository(session, workspace_id)),
+                         content=ContentRepository(session, workspace_id))
+made = await service.create(ContextCreate(title=..., purpose="why is billing slow?",
                                           subject=ContextSubject(type="intention", id=...)),
                             by=user_id)              # None: a root is not the workspace's
 again = await service.assembled(made.context_id)     # the latest that holds something
 then = await service.assembled(made.context_id, at=incident_started)
 ```
 
-**The contract's rules.** A field added is no new contract; a field that
-changes meaning or goes raises `CONTRACT_VERSION`, and each version keeps
-the one it was made under. What a version stored is read back leniently —
-strings, not the registry's enums; fields a later contract adds ignored —
-so a snapshot stays readable after a kind is renamed.
+**The contract's rules.** A field added is no new contract — LEKA-371 added
+`retrieval`, `relevance`, `reason.retrievers`, `summary.by_retriever` and the
+request's `query`, `window_days`, `until`, `retrievers` under version 1; a
+field that changes meaning or goes raises `CONTRACT_VERSION`, and each
+version keeps the one it was made under. What a version stored is read back
+leniently — strings, not the registry's enums; fields a later contract adds
+ignored; fields an older one lacked read empty — so a snapshot stays
+readable after a kind is renamed.
 
-## 8. The API and the screen
+## 9. The API and the screen
 
 | Route | Permission | |
 |---|---|---|
-| `POST /context` | `intention:create` | a context assembled: version 1, whole (201); a root not the workspace's: 404 |
+| `POST /context` | `intention:create` | a context assembled: version 1, whole (201); a root not the workspace's: 404; nothing to start from: 422 |
 | `GET /context` | `intention:read` | the contexts, the latest changed first, paged — `status`, `subject_type`, `subject_id` |
 | `GET /context/{id}` | `intention:read` | one, and its latest version |
 | `POST /context/{id}/refresh` | `intention:create` | `{changed, version}`; archived: 409 |
 | `POST /context/{id}/archive` | `intention:create` | archived; twice changes nothing |
-| `GET /context/{id}/versions` | `intention:read` | its versions, the latest first, paged |
+| `GET /context/{id}/versions` | `intention:read` | its versions, the latest first, paged — each with its retrieval report |
 | `GET /context/{id}/assembled` | `intention:read` | one version whole: `?version=`, or `?at=`, or the latest that holds something; both: 400 |
 | `GET /context/{id}/diff?from=&to=` | `intention:read` | what changed |
 
@@ -208,23 +292,60 @@ access to contexts is LEKA-376.
 
 **The screen**: an entity's sheet, tab **Contexte**
 (`web/components/environment/entity-context.tsx`). With none yet, it
-assembles one around the entity — why, how far. Then: what it is for, its
-state and version, the figures (entities, relationships stated and
-inferred, sources, left out), the elements in order — each with why it is
-there and, opened, its provenance and what LEKA reads of it — the
-versions, any one shown again, two compared; reassemble, archive, a new
-context. Sized for a 13-inch screen: the list scrolls, the page does not.
+assembles one around the entity — why (its words guide the search), how
+far, over what period. Then: what it is for, its state and version, the
+figures, how it was searched — each retriever and what it found, a failed
+one in orange — the elements in order, each with its relevance and why it
+is there and, opened, its provenance, every way it was found and what LEKA
+reads of it; the versions, any one shown again, two compared; reassemble,
+archive, a new context. Sized for a 13-inch screen: the list scrolls, the
+page does not.
 
-## 9. Storage, size, speed
+## 10. How well it retrieves
+
+`tests/test_context_retrieval.py`, on Acme's operations through the whole
+pipeline (GitHub, PagerDuty, Jira, a catalogue, a business system, a
+Confluence page whose body only says what it is about). Five
+representative requests, each with the evidence it must find:
+
+| Request | Must find |
+|---|---|
+| « Pourquoi la facturation est lente ? » — no root, the week before 29 Sep | Billing API, its incident Q1, its production deployment, the change before it |
+| « Qu'est-ce qui a changé avant l'incident « Invoices fail to send » ? » | the incident, the change and the deployment before it, Billing API |
+| « Où est la procédure de reprise des paiements ? » | the Confluence page, named nowhere but in its body |
+| « Comment Checkout est-il relié à la facturation ? » — roots Checkout and Invoicing | Billing API and the Billing platform, on the way between them |
+| « Qui a déployé Billing API ? » — 2 steps | the deployment, and Sara |
+
+Each configuration on each request: the share of the evidence found within
+the budget (recall), and how high the first of it comes among what is not a
+root (mean reciprocal rank). The test fails if the hybrid finds less than
+all of it, ranks it lower than 0.5, or does not beat every retriever alone.
+
+| Retrievers | Recall | MRR |
+|---|---:|---:|
+| **hybrid** | **1.00** | **0.74** |
+| search alone | 0.85 | 0.63 |
+| content alone | 0.20 | 0.20 |
+| graph alone | 0.20 | 0.20 |
+| paths alone | 0.20 | 0.20 |
+| timeline alone | 0.00 | 0.00 |
+
+The graph and the timeline alone have nothing to start from when no root
+is asked — that is why they run after the words. The table is printed by
+`pytest tests/test_context_retrieval.py -k quality -s`.
+
+## 11. Storage, size, speed
 
 - Indexes: contexts by `(workspace, updated_at)` for the list and by
   `(workspace, subject_type, subject_id)` for a subject's; versions unique
   by `(context, version)`; elements by `(version, position)` to read a
   version in order, and by `(workspace, ref_id)` — which contexts used a
-  thing, what LEKA-374 will refresh when it changes.
+  thing, what LEKA-374 will refresh when it changes; the records' words
+  (`ix_extracted_records_words`, GIN, § 3).
 - **Tenancy is structural**: versions are tied to their context, elements
   to their version, by composite foreign keys on `(workspace_id, id)` — a
-  row can never point into another workspace.
+  row can never point into another workspace. The content search reads its
+  workspace's records only.
 - Size: an element is its content and provenance as JSON — on LEKA's own
   model, a context of 31 elements weighs ~40 KB, of 74 ~90 KB. A version is
   written only when something changed.
@@ -233,10 +354,12 @@ context. Sized for a 13-inch screen: the list scrolls, the page does not.
 
 | | ms |
 |---|---:|
-| context of a typical service, 1 step — assembled and kept | 27 |
-| context of the busiest service, 2 steps, 500 elements — assembled and kept | 222 |
+| neighbourhood of a typical service, 1 step — assembled and kept | 21 |
+| neighbourhood of the busiest service, 2 steps, 500 elements | 225 |
 | a version of 500 elements, read back | 13 |
-| refreshed, nothing changed | 83 |
+| hybrid, from words only — search, content, graph and timeline from what they found | 69 |
+| hybrid, the busiest service and its words | 70 |
+| refreshed, nothing changed (500 elements) | 96 |
 
 - Kept as long as the workspace, like the model's own history
   ([data-lifecycle.md](data-lifecycle.md)); deleting the workspace deletes
@@ -244,10 +367,17 @@ context. Sized for a 13-inch screen: the list scrolls, the page does not.
 
 ## Not yet
 
-- **Relevance** — `relevance` is empty: ranking against the purpose is
-  LEKA-372; the order today is distance and confidence.
-- **Other strategies** (LEKA-371) and a strategy per kind of intention
-  (LEKA-373, LEKA-387).
+- **Meaning, not only words.** The search reads words and a vocabulary of
+  what they also mean. An embedding of the request and of each thing —
+  pgvector, in the same database ([ADR 001](adr/001-postgresql.md)) — would
+  find "the payments are failing" in a page that says "transactions are
+  rejected". It needs a model to embed: a local one is a new dependency of
+  the API, a hosted one a paid service — a decision to take. It would be a
+  sixth retriever beside the others, never instead of them: they say why a
+  thing was found, in words.
+- **Relevance tuned** against the purpose and what was useful (LEKA-372);
+  today it is how high and by how many a thing was found.
+- **The retrievers per kind of intention** (LEKA-373, LEKA-387).
 - **Refreshing on its own** when the model changes (LEKA-374) — today a
   refresh is asked; `refreshed_at` and the elements' `ref_id` index are
   there for it.

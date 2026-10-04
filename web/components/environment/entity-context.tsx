@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 
 import { cn } from "cn";
 
-import { timeAgo } from "@/components/knowledge/time";
+import { exactDate, timeAgo } from "@/components/knowledge/time";
 import { Card, entityHref, Logo, typeIcon, typeLabel } from "@/components/environment/parts";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { ErrorState } from "@/components/states/error-state";
@@ -25,10 +25,12 @@ import {
   type ContextDiff,
   type ContextElement,
   type ContextRead,
-  type ContextVersion,
   BUDGET,
   contexts,
+  type ContextVersion,
   DEPTHS,
+  type RetrievalMatch,
+  WINDOWS,
 } from "@/lib/context";
 import {
   useAssembledContext,
@@ -38,7 +40,7 @@ import {
   useEntityContexts,
 } from "@/lib/context-queries";
 import { fill } from "@/lib/i18n/dictionaries";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
 
 /**
@@ -121,10 +123,15 @@ function Assemble({
   const w = t.environment.sheet.context;
   const [purpose, setPurpose] = useState("");
   const [depth, setDepth] = useState<string>("1");
+  const [window, setWindow] = useState<string>("14");
   const create = useContextMutation(contexts.create);
   const depths = DEPTHS.map((value) => ({
     value: String(value),
     label: (w.depths as Record<string, string>)[String(value)],
+  }));
+  const windows = WINDOWS.map((value) => ({
+    value: String(value),
+    label: fill(w.windowDays, { days: value }),
   }));
 
   function submit(event: React.FormEvent) {
@@ -137,7 +144,8 @@ function Assemble({
         roots: [entityId],
         depth: Number(depth),
         limit: BUDGET,
-        strategy: "neighbourhood",
+        window_days: Number(window),
+        strategy: "hybrid",
       },
       {
         onSuccess: (made) => {
@@ -182,6 +190,22 @@ function Assemble({
             </SelectTrigger>
             <SelectContent>
               {depths.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={window}
+            onValueChange={(value) => setWindow((value as string | null) ?? "14")}
+            items={windows}
+          >
+            <SelectTrigger className="min-w-44" aria-label={w.window}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {windows.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
                 </SelectItem>
@@ -319,6 +343,7 @@ function Shown({
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0 space-y-3">
             <Figures assembled={assembled.data} />
+            <Retrieval runs={assembled.data.retrieval} />
             <Elements assembled={assembled.data} />
           </div>
           <div className="space-y-3">
@@ -452,7 +477,7 @@ function Elements({ assembled }: { assembled: AssembledContext }) {
         {fill(w.elements, { count: assembled.elements.length })}
       </h3>
       <ul
-        className="max-h-[max(14rem,calc(100dvh-35rem))] divide-y divide-shell-line/60 overflow-y-auto rounded-lg border border-shell-line"
+        className="max-h-[max(14rem,calc(100dvh-37rem))] divide-y divide-shell-line/60 overflow-y-auto rounded-lg border border-shell-line"
         data-testid="context-elements"
       >
         {assembled.elements.map((element) => {
@@ -497,6 +522,14 @@ function ElementRow({
         <span className="hidden shrink-0 text-xs text-shell-muted sm:inline">
           {reasonText(t, element, names)}
         </span>
+        {element.relevance !== null && element.kind === "entity" ? (
+          <span
+            className="shrink-0 rounded bg-brand-violet-soft px-1.5 text-xs font-medium text-shell-nav-active tabular-nums"
+            title={w.relevance}
+          >
+            {Math.round(element.relevance * 100)} %
+          </span>
+        ) : null}
         <span className="flex shrink-0 gap-1">
           {kinds.map((kind) => (
             <Logo key={kind} kind={kind as string} className="size-4" />
@@ -553,6 +586,10 @@ function reasonText(
   const { reason } = element;
   if (reason.role === "root") return w.reason.root;
   if (reason.role === "tie") return w.reason.tie;
+  if (reason.role === "found" || reason.depth === null) {
+    const by = [...new Set(reason.retrievers.map((m) => retrieverName(t, m.retriever)))];
+    return by.length ? fill(w.reason.foundBy, { by: by.join(", ") }) : w.reason.found;
+  }
   const via = reason.via ? names.get(reason.via)?.relationship : null;
   const step = fill(w.reason.reached, { depth: reason.depth });
   if (!via) return step;
@@ -568,9 +605,11 @@ function Provenance({
   names: ReadonlyMap<string, ContextElement>;
 }) {
   const t = useDictionary();
+  const { locale } = useLocale();
   const w = t.environment.sheet.context;
   const said = element.provenance;
   const attributes = Object.entries(said.attributes);
+  const found = element.reason.retrievers;
   const seen = [
     said.first_seen_at ? fill(w.firstSeen, { ago: ago(t, said.first_seen_at) }) : null,
     said.last_seen_at ? fill(w.lastSeen, { ago: ago(t, said.last_seen_at) }) : null,
@@ -583,6 +622,29 @@ function Provenance({
     >
       <dt className="text-shell-muted">{w.why}</dt>
       <dd>{reasonText(t, element, names)}</dd>
+      {found.length > 0 ? (
+        <>
+          <dt className="text-shell-muted">{w.foundBy}</dt>
+          <dd>
+            <ul>
+              {found.map((match) => (
+                <li key={`${match.retriever}-${match.rank}`}>
+                  <span className="font-medium">{retrieverName(t, match.retriever)}</span>
+                  {" · "}
+                  {fill(w.rank, { rank: match.rank })}
+                  {matchDetail(t, locale, match) ? ` · ${matchDetail(t, locale, match)}` : ""}
+                </li>
+              ))}
+            </ul>
+          </dd>
+        </>
+      ) : null}
+      {element.relevance !== null && element.kind === "entity" ? (
+        <>
+          <dt className="text-shell-muted">{w.relevance}</dt>
+          <dd className="tabular-nums">{Math.round(element.relevance * 100)} %</dd>
+        </>
+      ) : null}
       <dt className="text-shell-muted">{w.originLabel}</dt>
       <dd>
         {said.origin === "inferred"
@@ -653,6 +715,57 @@ function Provenance({
       <dd className="font-mono break-words">{element.text}</dd>
     </dl>
   );
+}
+
+/** What each retriever did for this version: found how much — or failed,
+ * timed out, had nothing to start from, the others going on. */
+function Retrieval({ runs }: { runs: ContextVersion["retrieval"] }) {
+  const t = useDictionary();
+  const w = t.environment.sheet.context;
+  if (runs.length === 0) return null;
+  return (
+    <ul className="flex flex-wrap gap-1.5 text-xs" aria-label={w.retrieval} data-testid="context-retrieval">
+      {runs.map((run) => (
+        <li
+          key={run.retriever}
+          title={run.error ?? run.detail ?? undefined}
+          className={cn(
+            "rounded-full px-2 py-0.5",
+            run.status === "ok" && "bg-shell-canvas text-brand-navy",
+            run.status === "skipped" && "bg-shell-canvas text-shell-muted",
+            (run.status === "failed" || run.status === "timeout") &&
+              "bg-state-warning-soft text-state-warning",
+          )}
+        >
+          {retrieverName(t, run.retriever)}
+          {" · "}
+          {run.status === "ok" ? fill(w.runFound, { count: run.found }) : w.runStatus[run.status]}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function retrieverName(t: Dictionary, name: string): string {
+  return (t.environment.sheet.context.retrievers as Record<string, string>)[name] ?? name;
+}
+
+/** On what a retriever found it, in words: the steps, the words, the
+ * event and when. */
+function matchDetail(t: Dictionary, locale: string, match: RetrievalMatch): string | null {
+  const w = t.environment.sheet.context;
+  const detail = match.detail;
+  if (match.retriever === "content") return w.found.content;
+  if (!detail) return null;
+  if (match.retriever === "graph") return fill(w.found.graph, { depth: detail });
+  if (match.retriever === "search") return fill(w.found.words, { words: detail });
+  if (match.retriever === "paths") return fill(w.found.path, { steps: detail.split(" ")[0] });
+  if (match.retriever === "timeline") {
+    const [kind, at] = detail.split(" ");
+    const event = (w.events as Record<string, string>)[kind] ?? kind;
+    return at ? fill(w.found.event, { event, at: exactDate(locale, at) }) : event;
+  }
+  return detail;
 }
 
 /** Attributes by where each came from: the sources first, then each

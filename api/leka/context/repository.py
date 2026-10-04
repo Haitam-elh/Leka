@@ -10,11 +10,12 @@ service.py.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select
+from sqlalchemy import Select, text
 
 from leka.context.models import Context, ContextElement, ContextVersion
 from leka.db import WorkspaceScopedRepository
@@ -92,6 +93,23 @@ class ContextRepository(WorkspaceScopedRepository):
         """Write, then read back what PostgreSQL computed (updated_at)."""
         await self.flush()
         await self._session.refresh(context)
+
+    @asynccontextmanager
+    async def isolated(self, timeout_ms: int) -> AsyncIterator[None]:
+        """A savepoint, and a statement timeout inside it (LEKA-371): what a
+        retriever reads, it reads alone — an error or a query that takes too
+        long undoes it, and only it; the rest of the assembly goes on."""
+        savepoint = await self._session.begin_nested()
+        try:
+            await self._session.execute(
+                text(f"SET LOCAL statement_timeout = {max(int(timeout_ms), 1)}")
+            )
+            yield
+        except BaseException:
+            await savepoint.rollback()
+            raise
+        await self._session.execute(text("SET LOCAL statement_timeout TO DEFAULT"))
+        await savepoint.commit()
 
     async def record(self, version: ContextVersion, elements: Sequence[ContextElement]) -> None:
         """A new version and what it holds, written once."""

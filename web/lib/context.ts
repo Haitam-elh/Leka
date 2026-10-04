@@ -17,6 +17,7 @@ export type ContextElement = components["schemas"]["ContextElementRead"];
 export type ContextDiff = components["schemas"]["ContextDiff"];
 export type ContextCreate = components["schemas"]["ContextCreate"];
 export type RefreshOutcome = components["schemas"]["RefreshOutcome"];
+export type RetrievalMatch = components["schemas"]["RetrievalMatch"];
 
 interface Page<T> {
   data: T[];
@@ -28,6 +29,9 @@ export const DEPTHS = [1, 2, 3] as const;
 
 /** How many elements a context holds at most: the API's default. */
 export const BUDGET = 100;
+
+/** How far back what happened is read, in days (LEKA-371). */
+export const WINDOWS = [7, 14, 30, 90] as const;
 
 const post = <T>(path: string, body?: unknown) =>
   apiFetch<T>(path, {

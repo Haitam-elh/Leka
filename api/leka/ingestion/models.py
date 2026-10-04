@@ -403,6 +403,20 @@ class ExtractionStatus(enum.StrEnum):
 # rather than imported: this module is below the extraction package.
 EXTRACTION_FAILURES = ("unsupported", "malformed")
 
+# The words of a record's own text — its title and what its people wrote:
+# a description, a body, comments — as PostgreSQL's full-text search reads
+# them (LEKA-371). The 'simple' dictionary, no stemming: the company writes
+# French and English, and names are not prose. At most 100 000 characters,
+# extraction's cap: a tsvector has a size limit, and a page's first hundred
+# thousand say what it is about. The same expression in the index and in
+# ContentRepository.matching(), or the index is not used — written as
+# PostgreSQL writes it back, or alembic sees another index.
+CONTENT_WORDS = (
+    "to_tsvector('simple'::regconfig, \"left\"((COALESCE(result ->> 'title'::text, ''::text) "
+    "|| ' '::text) || COALESCE(jsonb_path_query_array(result, "
+    "'$.\"content\"[*].\"text\"'::jsonpath) #>> '{}'::text[], ''::text), 100000))"
+)
+
 
 class ExtractedRecordRow(Base, WorkspaceScopedMixin):
     """What extraction made of one indexed record (LEKA-354): its
@@ -449,6 +463,13 @@ class ExtractedRecordRow(Base, WorkspaceScopedMixin):
         CheckConstraint("length(checksum) = 64", name="checksum_is_sha256"),
         # A source's extraction at a glance, and its failures.
         Index("ix_extracted_records_source_status", "source_id", "status"),
+        # Its words, for context retrieval (LEKA-371): the extracted only.
+        Index(
+            "ix_extracted_records_words",
+            text(CONTENT_WORDS),
+            postgresql_using="gin",
+            postgresql_where=text("status = 'extracted'"),
+        ),
     )
 
     source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
