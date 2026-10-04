@@ -10,10 +10,12 @@ accounts and their resources, the business's capabilities and processes,
 documents; and relationships among them in the proportions a real build
 makes. Then asks GraphService (leka/knowledge/graph.py) what the screens
 and the API ask — search, walks of 1 to 4 steps, the shortest ways, every
-view, the coverage — and prints each question's median and slowest time.
+view, the coverage — and the context engine (leka/context, LEKA-370) what
+an assembly costs, its reading back and a refresh that finds nothing new;
+and prints each question's median and slowest time.
 
-The figures in docs/company-model.md § 16 come from this script: run it
-again after changing a query, and say what moved.
+The figures in docs/company-model.md § 16 and docs/context.md § 9 come from
+this script: run it again after changing a query, and say what moved.
 
 Like seed.py, developer tooling: it writes through the ORM's tables
 directly, in bulk, and never runs in production.
@@ -38,6 +40,7 @@ from sqlalchemy import delete, insert, text
 # the users'.
 import leka.identity  # noqa: F401
 from leka.connectors import Source, SourceKind, SourceStatus
+from leka.context import ContextCreate, ContextRepository, ContextService
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.knowledge import (
     VIEWS,
@@ -255,6 +258,18 @@ async def bench(workspace_id: uuid.UUID, runs: int) -> None:
                 )
                 picked.append(found.scalar_one())
             hub, typical, team = picked
+            # Contexts are assembled and kept in this session, never
+            # committed: the workspace goes at the end anyway.
+            contexts = ContextService(ContextRepository(session, workspace_id), graph)
+
+            def around(root: uuid.UUID, depth: int, limit: int) -> Awaitable[object]:
+                asked = ContextCreate(title="bench", roots=[root], depth=depth, limit=limit)
+                return contexts.create(asked, by=None)
+
+            kept = await contexts.create(
+                ContextCreate(title="bench", roots=[hub], depth=2, limit=500), by=None
+            )
+            assert kept is not None
             questions: list[tuple[str, Callable[[], Awaitable[object]]]] = [
                 ("search « pay »", lambda: graph.search("pay", limit=20)),
                 ("search « billing api »", lambda: graph.search("billing api", limit=20)),
@@ -276,6 +291,13 @@ async def bench(workspace_id: uuid.UUID, runs: int) -> None:
                 ("paths, busiest service → team", lambda: graph.paths(hub, team)),
                 *((f"view {name}", lambda name=name: graph.view(name, now=NOW)) for name in VIEWS),
                 ("coverage", graph.coverage),
+                ("context, typical service, 1 step", lambda: around(typical, 1, 100)),
+                ("context, busiest service, 2 steps, 500 elements", lambda: around(hub, 2, 500)),
+                ("context of 500 elements, read back", lambda: contexts.assembled(kept.context_id)),
+                (
+                    "context of 500 elements, refreshed, nothing changed",
+                    lambda: contexts.refresh(kept.context_id, reason=None, by=None),
+                ),
             ]
             print("\n| question | median (ms) | slowest (ms) |\n|---|---:|---:|", flush=True)
             for label, ask in questions:

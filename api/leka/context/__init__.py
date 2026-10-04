@@ -1,16 +1,54 @@
-"""Context: retrieval, ranking, and assembly of what an answer needs.
+"""Context: what LEKA assembles to understand a request in its company
+context (LEKA-370) — made from the company model, kept version by version,
+each piece with where it came from.
 
 Reads state the background loop prepared. Calls no customer API — by the
 time a question arrives, the work is done.
 """
 
-from leka.context.repository import ContextRepository
-from leka.context.schemas import AssembledContext, Evidence
-from leka.context.service import ContextService
+from leka.context.models import Context, ContextElement, ContextVersion
+from leka.context.repository import ContextFilters, ContextRepository
+from leka.context.schemas import (
+    CONTRACT_VERSION,
+    AssembledContext,
+    ContextCreate,
+    ContextDetail,
+    ContextDiff,
+    ContextElementRead,
+    ContextRead,
+    ContextRefresh,
+    ContextRequest,
+    ContextStatus,
+    ContextSubject,
+    ContextVersionRead,
+    RefreshOutcome,
+    SubjectType,
+)
+from leka.context.service import ContextArchivedError, ContextService
+from leka.context.strategies import STRATEGIES, Strategy
 
 __all__ = [
+    "CONTRACT_VERSION",
+    "STRATEGIES",
     "AssembledContext",
+    "Context",
+    "ContextArchivedError",
+    "ContextCreate",
+    "ContextDetail",
+    "ContextDiff",
+    "ContextElement",
+    "ContextElementRead",
+    "ContextFilters",
+    "ContextRead",
+    "ContextRefresh",
     "ContextRepository",
+    "ContextRequest",
     "ContextService",
-    "Evidence",
+    "ContextStatus",
+    "ContextSubject",
+    "ContextVersion",
+    "ContextVersionRead",
+    "RefreshOutcome",
+    "Strategy",
+    "SubjectType",
 ]
