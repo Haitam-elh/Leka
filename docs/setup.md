@@ -215,13 +215,16 @@ api/.venv/bin/python scripts/seed.py
 ```
 
 This recreates the **Acme Corp** workspace — three services, a production
-database, twelve connected sources, three people, and a latency incident that
-followed a deployment. It is what lets the frontend be built before a single
+database, twelve connected sources, three people (and Jira's own account for
+one of them, which entity resolution linked to her as probably the same
+person), and a latency incident that followed a deployment. It is what lets the frontend be built before a single
 real connector exists. It writes the company model directly, and each of its
 things as resolution would have made it, under the same id — so that an
 entity's sheet opens. Its incident has its dates, what it affects and what
 caused it, as normalisation writes them, so that its sheet's analysis has
-something to say (LEKA-341).
+something to say (LEKA-341). Its sources disagree on payment-api's SLA —
+GitHub's 99.95, Datadog's 99.9 — so that a context says a conflict and folds
+a duplicate (LEKA-372).
 
 It also creates an account you can sign in with, already verified:
 

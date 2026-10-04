@@ -230,7 +230,14 @@ things point to at its root — leaves by the top and comes in at the bottom
   figures, how it was searched — each retriever and what it found, a failed
   one in orange with why in its title; a provenance opened says every way
   the element was found, its rank there and on what (the words, the steps,
-  the event and when).
+  the event and when). Since LEKA-372 (`context-ranking.tsx`): each row its
+  score, a *Conflit* pill when what it holds is disputed, *+N doublon(s)*
+  when things were folded into it; opened, *Pourquoi ce rang* — its place,
+  both axes and each signal with its value and, in words, what it was read
+  from; beside the versions, *Conflits* (every side with who says so) and
+  *Laissés de côté* (counted by why, listed on asking); the figures say why
+  things were left out, the uncertainties that sources contradict each
+  other. A version made before shows its relevance as it was.
 
 ## Adding a state
 
