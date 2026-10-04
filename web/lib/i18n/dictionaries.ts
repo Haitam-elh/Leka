@@ -1299,7 +1299,10 @@ const fr = {
         pick: "Contexte affiché",
         refresh: "Réassembler",
         archive: "Archiver",
-        archivedNote: "Archivé : il reste lisible, mais n'est plus jamais réassemblé.",
+        archivedNote:
+          "Contexte archivé : toutes ses versions restent lisibles, mais il n'est plus réassemblé. Pour repartir du modèle d'aujourd'hui, créez un nouveau contexte.",
+        archived: "Contexte archivé : il reste lisible, mais n'est plus réassemblé.",
+        archiveFailed: "LEKA n'a pas pu archiver ce contexte. Réessayez.",
         outcome: {
           changed: "Version {version} assemblée : le modèle a changé.",
           unchanged: "Rien n'a changé : la version {version} tient toujours.",
@@ -3622,7 +3625,10 @@ const en: Dictionary = {
         pick: "Context shown",
         refresh: "Reassemble",
         archive: "Archive",
-        archivedNote: "Archived: still readable, never reassembled.",
+        archivedNote:
+          "Context archived: every version stays readable, but it is no longer reassembled. To start again from today's model, create a new context.",
+        archived: "Context archived: still readable, no longer reassembled.",
+        archiveFailed: "LEKA could not archive this context. Try again.",
         outcome: {
           changed: "Version {version} assembled: the model changed.",
           unchanged: "Nothing changed: version {version} still holds.",

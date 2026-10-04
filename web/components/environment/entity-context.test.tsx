@@ -405,6 +405,37 @@ describe("the context tab", () => {
     });
   });
 
+  it("archives, says so, and offers nothing more than reading", async () => {
+    api.ofEntity
+      .mockResolvedValueOnce([READ])
+      .mockResolvedValue([{ ...READ, status: "archived", archived_at: NOW }]);
+    api.archive.mockResolvedValue({ ...READ, status: "archived", archived_at: NOW });
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: "Archiver" }));
+    expect(api.archive).toHaveBeenCalledWith(CONTEXT, expect.anything());
+    expect(notify.success).toHaveBeenCalledWith({
+      title: "Contexte archivé : il reste lisible, mais n'est plus réassemblé.",
+    });
+    expect(await screen.findByTestId("context-archived")).toHaveTextContent(
+      "toutes ses versions restent lisibles",
+    );
+    expect(screen.queryByRole("button", { name: "Réassembler" })).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("context-element")).toHaveLength(5);
+  });
+
+  it("says when archiving failed", async () => {
+    api.archive.mockRejectedValue(new ApiError(500, "/context", "Down."));
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: "Archiver" }));
+    expect(notify.error).toHaveBeenCalledWith({
+      title: "LEKA n'a pas pu archiver ce contexte. Réessayez.",
+    });
+  });
+
   it("says why a version failed", async () => {
     api.assembled.mockResolvedValue(
       assembled(3, { status: "failed", error: "A root is gone.", elements: [] }),

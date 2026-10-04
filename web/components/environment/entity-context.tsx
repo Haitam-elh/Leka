@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ChevronDown, Layers, RefreshCw } from "lucide-react";
+import { Archive, ArrowRight, ChevronDown, Layers, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -292,14 +292,27 @@ function Shown({
               size="sm"
               variant="outline"
               disabled={archive.isPending}
-              onClick={() => archive.mutate(context.id)}
+              onClick={() =>
+                archive.mutate(context.id, {
+                  onSuccess: () => notify.success({ title: w.archived }),
+                  onError: () => notify.error({ title: w.archiveFailed }),
+                })
+              }
             >
               {w.archive}
             </Button>
           </>
         ) : null}
       </div>
-      {archived ? <p className="text-[0.8125rem] text-shell-muted">{w.archivedNote}</p> : null}
+      {archived ? (
+        <p
+          className="flex items-center gap-2 rounded-lg bg-state-info-soft px-3 py-2 text-[0.8125rem] text-brand-navy"
+          data-testid="context-archived"
+        >
+          <Archive className="size-4 shrink-0 text-state-info" aria-hidden="true" />
+          {w.archivedNote}
+        </p>
+      ) : null}
       {assembled.isError ? (
         <ErrorState error={assembled.error} onRetry={() => void assembled.refetch()} />
       ) : assembled.data ? (
