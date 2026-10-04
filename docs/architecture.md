@@ -103,7 +103,7 @@ written.
 | `connectors` | talking to customer systems; one subpackage per system | `core`, `db`, `platform` | `sources` built, no connector yet |
 | `ingestion` | collect → extract → parse → normalise | ← `connectors` | skeleton |
 | `knowledge` | the company model: canonical entities and relationships, their registry, versions, lifecycle and provenance; traversal | ← `ingestion` | **LEKA-361** — built from enrichment; see [company-model.md](company-model.md) |
-| `context` | retrieval, ranking, assembly of what an answer needs | ← `knowledge` | skeleton |
+| `context` | retrieval, ranking, assembly of what an answer needs: contexts, their versions, each element's provenance | ← `knowledge` | **LEKA-370** — the context engine; see [context.md](context.md) |
 | `intentions` | intention → decision → action, with approval | ← `context` | skeleton |
 | `capabilities` | **the only module that calls a language model**; loads and runs agents | `knowledge`, `context` | agent loader built, model gateway skeleton |
 | `governance` | permissions, the request principal, audit | `platform`, `identity` | permissions built, audit skeleton |

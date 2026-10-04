@@ -217,7 +217,9 @@ api/.venv/bin/python scripts/seed.py
 This recreates the **Acme Corp** workspace — three services, a production
 database, twelve connected sources, three people, and a latency incident that
 followed a deployment. It is what lets the frontend be built before a single
-real connector exists.
+real connector exists. It writes the company model directly, and each of its
+things as resolution would have made it, under the same id — so that an
+entity's sheet opens.
 
 It also creates an account you can sign in with, already verified:
 

@@ -210,6 +210,18 @@ things point to at its root — leaves by the top and comes in at the bottom
   where a shortest way goes. Its depth (1 to 3), direction and families of
   relationships (`RELATION_FAMILIES`, `lib/knowledge-graph.ts`) are the
   walk's.
+- **An entity's context** (tab Contexte of its sheet, LEKA-370,
+  `entity-context.tsx`, [../context.md § 8](../context.md)): what LEKA
+  assembles around it. Its figures as one row of `Figure`s; the elements in
+  order, each a row — the entity linked to its sheet, a relationship as the
+  sentence it says (`t.knowledge.relationships`), why it is there, the
+  logos of its sources — that opens (`aria-expanded`) on its provenance:
+  sources and keys or records, stated or inferred by which rule and how
+  sure, the attributes' origins grouped by source and by rule, what LEKA
+  reads of it. The versions beside it, each one shown again, two compared.
+  The list takes the height the screen has left (`100dvh` less the header)
+  so that a 13-inch screen holds the tab without the page scrolling; a role
+  without `intention:create` is offered no action.
 
 ## Adding a state
 
