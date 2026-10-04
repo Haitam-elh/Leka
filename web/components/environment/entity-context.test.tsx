@@ -429,7 +429,7 @@ describe("the context tab", () => {
     );
     const inferred = within(rows[4]).getByTestId("context-provenance");
     expect(inferred).toHaveTextContent(
-      "Déduit par la règle deployed_together · 80 % de confiance",
+      "Déduit par la règle deployed_together · Confiance moyenne · 80 %",
     );
     expect(inferred).toHaveTextContent("Aucune : déduit par LEKA");
     expect(inferred).toHaveTextContent("Déduit à partir deBilling API, Ledger DB");

@@ -8,6 +8,12 @@ import { cn } from "cn";
 
 import { exactDate, timeAgo } from "@/components/knowledge/time";
 import { Card, entityHref, Logo, typeIcon, typeLabel } from "@/components/environment/parts";
+import {
+  ConfidenceBadge,
+  ContextUsedPanel,
+  ContextVersionLine,
+  retrieverName,
+} from "@/components/intelligence";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { ErrorState } from "@/components/states/error-state";
 import { Button } from "@/components/ui/button";
@@ -304,7 +310,7 @@ function Shown({
           <p className="font-medium text-brand-navy">{context.purpose || context.title}</p>
         )}
         <Status status={context.status} />
-        {assembled.data ? <VersionLine assembled={assembled.data} /> : null}
+        {assembled.data ? <ContextVersionLine assembled={assembled.data} /> : null}
         <span className="flex-1" />
         {canMake && !archived ? (
           <>
@@ -342,8 +348,7 @@ function Shown({
       ) : assembled.data ? (
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0 space-y-3">
-            <Figures assembled={assembled.data} />
-            <Retrieval runs={assembled.data.retrieval} />
+            <ContextUsedPanel assembled={assembled.data} />
             <Elements assembled={assembled.data} />
           </div>
           <div className="space-y-3">
@@ -378,81 +383,6 @@ function Status({ status }: { status: ContextRead["status"] }) {
     <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", tones[status])}>
       {t.environment.sheet.context.status[status]}
     </span>
-  );
-}
-
-function Figures({ assembled }: { assembled: AssembledContext }) {
-  const t = useDictionary();
-  const w = t.environment.sheet.context;
-  const { summary } = assembled;
-  return (
-    <div>
-      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Figure label={w.figures.entities} value={summary.entities} />
-        <Figure
-          label={w.figures.relationships}
-          value={summary.relationships}
-          note={fill(w.figures.stated, { count: summary.stated, inferred: summary.inferred })}
-        />
-        <Figure
-          label={w.figures.sources}
-          value={assembled.sources.length}
-          note={assembled.sources.map((s) => s.name ?? s.kind ?? w.deletedSource).join(", ")}
-        />
-        <Figure
-          label={w.figures.dropped}
-          value={assembled.dropped}
-          note={
-            assembled.truncated
-              ? fill(w.figures.droppedNote, { limit: assembled.request.limit })
-              : undefined
-          }
-          warn={assembled.truncated}
-        />
-      </dl>
-    </div>
-  );
-}
-
-function VersionLine({ assembled }: { assembled: AssembledContext }) {
-  const t = useDictionary();
-  const w = t.environment.sheet.context;
-  return (
-    <span className="text-[0.8125rem] text-shell-muted" data-testid="context-version-line">
-      {fill(w.versionLine, { version: assembled.version, ago: ago(t, assembled.assembled_at) })}
-      {" · "}
-      {assembled.model_built_at
-        ? fill(w.modelLine, { ago: ago(t, assembled.model_built_at) })
-        : w.noModel}
-    </span>
-  );
-}
-
-function Figure({
-  label,
-  value,
-  note,
-  warn,
-}: {
-  label: string;
-  value: number;
-  note?: string;
-  warn?: boolean;
-}) {
-  return (
-    // dt and dd straight in the tile — a <dl> takes a <div> per group, no
-    // deeper — the grid putting the figure beside its label.
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2 rounded-lg bg-shell-canvas px-3 py-1.5">
-      <dt className="text-xs text-shell-muted">{label}</dt>
-      <dd className={cn("font-semibold text-brand-navy", warn && "text-state-warning")}>
-        {value}
-      </dd>
-      {note ? (
-        <dd className="col-span-2 truncate text-xs text-shell-muted" title={note}>
-          {note}
-        </dd>
-      ) : null}
-    </div>
   );
 }
 
@@ -651,7 +581,7 @@ function Provenance({
           ? fill(w.origin.inferred, { rule: said.rule ?? "" })
           : w.origin.stated}
         {" · "}
-        {fill(w.confidence, { score: Math.round(said.confidence * 100) })}
+        <ConfidenceBadge score={said.confidence} />
       </dd>
       <dt className="text-shell-muted">{w.sources}</dt>
       <dd>
@@ -715,39 +645,6 @@ function Provenance({
       <dd className="font-mono break-words">{element.text}</dd>
     </dl>
   );
-}
-
-/** What each retriever did for this version: found how much — or failed,
- * timed out, had nothing to start from, the others going on. */
-function Retrieval({ runs }: { runs: ContextVersion["retrieval"] }) {
-  const t = useDictionary();
-  const w = t.environment.sheet.context;
-  if (runs.length === 0) return null;
-  return (
-    <ul className="flex flex-wrap gap-1.5 text-xs" aria-label={w.retrieval} data-testid="context-retrieval">
-      {runs.map((run) => (
-        <li
-          key={run.retriever}
-          title={run.error ?? run.detail ?? undefined}
-          className={cn(
-            "rounded-full px-2 py-0.5",
-            run.status === "ok" && "bg-shell-canvas text-brand-navy",
-            run.status === "skipped" && "bg-shell-canvas text-shell-muted",
-            (run.status === "failed" || run.status === "timeout") &&
-              "bg-state-warning-soft text-state-warning",
-          )}
-        >
-          {retrieverName(t, run.retriever)}
-          {" · "}
-          {run.status === "ok" ? fill(w.runFound, { count: run.found }) : w.runStatus[run.status]}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function retrieverName(t: Dictionary, name: string): string {
-  return (t.environment.sheet.context.retrievers as Record<string, string>)[name] ?? name;
 }
 
 /** On what a retriever found it, in words: the steps, the words, the
