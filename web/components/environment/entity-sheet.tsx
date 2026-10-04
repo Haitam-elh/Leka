@@ -28,6 +28,7 @@ import { useMemo, useState } from "react";
 import { cn } from "cn";
 
 import { EntityContext } from "@/components/environment/entity-context";
+import { IncidentAnalysis } from "@/components/environment/incident-analysis";
 import { Sparkline } from "@/components/knowledge/entity-detail-panel";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { timeAgo } from "@/components/knowledge/time";
@@ -683,20 +684,24 @@ function Overview({ model, events }: { model: SheetModel; events: EventRow[] }) 
         </Card>
       </div>
 
-      <section className="flex flex-col gap-4 rounded-xl bg-shell-highlight px-6 py-5 lg:flex-row lg:items-center">
-        <IconTile icon={ShieldCheck} tone="violet" className="size-11" />
-        <div className="flex-1">
-          <h2 className="text-[1.0625rem] font-semibold text-brand-navy">{w.analysis.title}</h2>
-          <p className="text-[0.8125rem] text-shell-muted">{w.analysis.body}</p>
-        </div>
-        <Link
-          href={routes.intentionNew()}
-          className="flex items-center gap-2 rounded-lg border border-brand-navy/20 bg-white px-4 py-2 text-sm font-medium text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-        >
-          {w.analysis.action}
-          <ArrowRight className="size-4" aria-hidden="true" />
-        </Link>
-      </section>
+      {model.type === "incident" ? (
+        <IncidentAnalysis id={model.id} />
+      ) : (
+        <section className="flex flex-col gap-4 rounded-xl bg-shell-highlight px-6 py-5 lg:flex-row lg:items-center">
+          <IconTile icon={ShieldCheck} tone="violet" className="size-11" />
+          <div className="flex-1">
+            <h2 className="text-[1.0625rem] font-semibold text-brand-navy">{w.analysis.title}</h2>
+            <p className="text-[0.8125rem] text-shell-muted">{w.analysis.body}</p>
+          </div>
+          <Link
+            href={routes.intentionNew()}
+            className="flex items-center gap-2 rounded-lg border border-brand-navy/20 bg-white px-4 py-2 text-sm font-medium text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+          >
+            {w.analysis.action}
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
+        </section>
+      )}
     </div>
   );
 }

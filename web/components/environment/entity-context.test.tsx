@@ -428,9 +428,8 @@ describe("the context tab", () => {
       within(rows[4]).getByRole("button", { name: "Provenance de Billing API → Ledger DB" }),
     );
     const inferred = within(rows[4]).getByTestId("context-provenance");
-    expect(inferred).toHaveTextContent(
-      "Déduit par la règle deployed_together · 80 % de confiance",
-    );
+    expect(inferred).toHaveTextContent("Déduit par la règle deployed_together · Confiance moyenne");
+    expect(within(inferred).getByTestId("confidence")).toHaveTextContent("80 %");
     expect(inferred).toHaveTextContent("Aucune : déduit par LEKA");
     expect(inferred).toHaveTextContent("Déduit à partir deBilling API, Ledger DB");
 

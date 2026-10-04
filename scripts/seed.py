@@ -141,6 +141,7 @@ async def _build_demo_workspace() -> None:
             attributes: dict[str, object],
             confidence: float = 1.0,
             last_seen: datetime | None = None,
+            occurred_at: datetime | None = None,
         ) -> Entity:
             # The company model (LEKA-361) is built from what resolution
             # made; the demo writes it directly, saying where each thing
@@ -161,6 +162,7 @@ async def _build_demo_workspace() -> None:
                 },
                 first_seen_at=last_seen or NOW,
                 last_seen_at=last_seen or NOW,
+                occurred_at=occurred_at,
                 search_name=search_name,
                 search_text=search_text,
             )
@@ -264,8 +266,11 @@ async def _build_demo_workspace() -> None:
                 "released_at": (NOW - timedelta(hours=26)).isoformat(),
                 "released_by": "mei-tanaka",
                 "changes": "connection pool tuning",
+                "state": "succeeded",
+                "environment": "production",
             },
             last_seen=NOW - timedelta(hours=26),
+            occurred_at=NOW - timedelta(hours=26),
         )
         incident = entity(
             jira,
@@ -273,14 +278,18 @@ async def _build_demo_workspace() -> None:
             "OPS-1841",
             "payment-api p99 latency above 2s",
             {
+                # As normalisation writes an incident (LEKA-367): its state,
+                # its dates — what an incident's analysis reads (LEKA-341).
                 "severity": "sev2",
-                "status": "resolved",
-                "opened_at": (NOW - timedelta(hours=25)).isoformat(),
+                "state": "closed",
+                "created_at": (NOW - timedelta(hours=25)).isoformat(),
                 "resolved_at": (NOW - timedelta(hours=21)).isoformat(),
+                "duration_minutes": 240,
                 "p99_before_ms": 180,
                 "p99_peak_ms": 2140,
             },
             last_seen=NOW - timedelta(hours=21),
+            occurred_at=NOW - timedelta(hours=25),
         )
         monitor = entity(
             datadog,
@@ -347,6 +356,8 @@ async def _build_demo_workspace() -> None:
         edge(github, mei, repository, RelationshipType.MEMBER_OF)
 
         edge(jira, incident, deployment, RelationshipType.CAUSED_BY, confidence=0.83)
+        edge(jira, incident, payment, RelationshipType.AFFECTS)
+        edge(github, deployment, payment, RelationshipType.PART_OF)
         edge(datadog, incident, monitor, RelationshipType.MENTIONS)
         edge(jira, incident, payment, RelationshipType.MENTIONS)
         edge(sources["confluence:Runbooks space"], runbook, payment, RelationshipType.MENTIONS)

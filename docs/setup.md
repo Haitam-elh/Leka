@@ -219,7 +219,9 @@ database, twelve connected sources, three people, and a latency incident that
 followed a deployment. It is what lets the frontend be built before a single
 real connector exists. It writes the company model directly, and each of its
 things as resolution would have made it, under the same id — so that an
-entity's sheet opens.
+entity's sheet opens. Its incident has its dates, what it affects and what
+caused it, as normalisation writes them, so that its sheet's analysis has
+something to say (LEKA-341).
 
 It also creates an account you can sign in with, already verified:
 

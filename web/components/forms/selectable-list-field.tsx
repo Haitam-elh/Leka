@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import type { FieldValues, Path } from "react-hook-form";
 
 import { cn } from "cn";
@@ -17,6 +17,11 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
  * step. What makes it its own component rather than a stack of checkboxes
  * is that each row carries an icon, a title and a subtitle, and that the
  * rows have to be navigable as a group.
+ *
+ * EACH BOX IS NAMED BY ITS ROW. The field's label names the group; a box
+ * named by it too — as Base UI's Field does for any control inside — makes
+ * twelve boxes all called "Contexte qui sera analysé", and a screen reader
+ * cannot tell GitHub from Jira. Each box points at its own title.
  *
  * ARROWS MOVE, TAB LEAVES. A list of twelve sources costs twelve tab stops
  * on the way to the button below it. The arrows walk the list and the whole
@@ -47,6 +52,7 @@ export function SelectableListField<
 }) {
   const t = useDictionary();
   const list = useRef<HTMLDivElement | null>(null);
+  const rows = useId();
 
   function onKeyDown(event: React.KeyboardEvent) {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -94,8 +100,9 @@ export function SelectableListField<
               onKeyDown={onKeyDown}
               className="divide-y divide-shell-line overflow-hidden rounded-lg border border-shell-line"
             >
-              {items.map((item) => {
+              {items.map((item, index) => {
                 const checked = selected.includes(item.value);
+                const title = `${rows}-${index}`;
                 return (
                   <label
                     key={item.value}
@@ -110,6 +117,7 @@ export function SelectableListField<
                       disabled={item.disabled ?? disabled}
                       onCheckedChange={(next) => toggle(item.value, Boolean(next))}
                       onBlur={field.onBlur}
+                      aria-labelledby={title}
                       className="mt-0.5"
                     />
                     {item.icon ? (
@@ -118,7 +126,10 @@ export function SelectableListField<
                       </span>
                     ) : null}
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-shell-nav">
+                      <span
+                        id={title}
+                        className="block truncate text-sm font-medium text-shell-nav"
+                      >
                         {item.title}
                       </span>
                       {item.subtitle ? (

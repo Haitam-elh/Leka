@@ -403,9 +403,11 @@ def _entity(
         known = named.get(source_id)
         sources.setdefault(
             (source_id, key),
+            # A provenance's `kind` is its key's — key, alias, derived — not
+            # its tool's: a source deleted since is said, not guessed.
             ElementSource(
                 source_id=source_id,
-                kind=known.kind if known else _text(said.get("kind")),
+                kind=known.kind if known else None,
                 name=known.name if known else None,
                 key=key,
                 record_id=None,
