@@ -1,4 +1,4 @@
-import type { Analysis, EvidenceRef, Recommendation } from "@/lib/intelligence";
+import type { Analysis, EvidenceRef, Recommendation, Support } from "@/lib/intelligence";
 
 /**
  * What the intelligence gallery draws (LEKA-341): the demo's incident —
@@ -45,6 +45,9 @@ export const RECOMMENDATIONS: Recommendation[] = [
     title: "Revenir à payment-api v2.8.3",
     rationale: "La latence a commencé avec la version 2.8.4 ; la précédente tenait la charge.",
     effect: "3 services concernés",
+    effort: "≈ 15 min",
+    action: "rollback",
+    priority: "high",
     risk: "medium",
     reversible: true,
     confidence: 0.82,
@@ -55,6 +58,9 @@ export const RECOMMENDATIONS: Recommendation[] = [
     title: "Purger la table des sessions",
     rationale: "Elle a triplé en une semaine.",
     effect: "Toutes les sessions fermées",
+    effort: "≈ 5 min",
+    action: "change",
+    priority: "low",
     risk: "high",
     reversible: false,
     confidence: 0.41,
@@ -62,17 +68,33 @@ export const RECOMMENDATIONS: Recommendation[] = [
   },
 ];
 
+export const SUPPORT: Support[] = [
+  { id: "sources", label: "1 source(s) lue(s)", established: true },
+  { id: "steps", label: "3 étape(s) dans sa chronologie", established: true },
+  { id: "before", label: "1 changement(s) juste avant lui", established: true },
+];
+
 export const COMPLETE: Analysis = {
   status: "complete",
+  summary:
+    "payment-api p99 latency above 2s : clos, sev2. Il a duré 4 h. Il touche payment-api. " +
+    "Cause déclarée par sa source : payment-api v2.8.4. 2 élément(s) en dépendent.",
+  support: SUPPORT,
   missing: [],
   findings: [
     {
       id: "state",
+      title: "État et gravité",
       statement: "payment-api p99 latency above 2s : clos, sev2.",
       evidence: [RECORD],
     },
-    { id: "lasted", statement: "Il a duré 4 h.", evidence: [RECORD] },
-    { id: "affects", statement: "Il touche payment-api.", evidence: [RECORD] },
+    { id: "lasted", title: "Durée", statement: "Il a duré 4 h.", evidence: [RECORD] },
+    {
+      id: "affects",
+      title: "Ce qu'il touche",
+      statement: "Il touche payment-api.",
+      evidence: [RECORD],
+    },
   ],
   causes: [
     {
@@ -97,16 +119,31 @@ export const COMPLETE: Analysis = {
   ],
   impact: {
     areas: [
-      { id: "affected", label: "Touché", items: [{ id: "p", label: "payment-api" }] },
+      {
+        id: "affected",
+        label: "Touché",
+        items: [{ id: "p", label: "payment-api", type: "service", detail: "Service" }],
+      },
       {
         id: "dependents",
         label: "Qui en dépend",
         items: [
-          { id: "c", label: "checkout" },
-          { id: "o", label: "orders" },
+          { id: "c", label: "checkout", type: "service", detail: "Service" },
+          { id: "o", label: "orders", type: "service", detail: "Service" },
         ],
       },
-      { id: "capabilities", label: "Capacités métier", items: [{ id: "i", label: "Invoicing" }] },
+      {
+        id: "capabilities",
+        label: "Capacités métier",
+        items: [
+          {
+            id: "i",
+            label: "Invoicing",
+            type: "business_capability",
+            detail: "Capacité métier",
+          },
+        ],
+      },
     ],
     risk: "medium",
     riskBasis: "d'après la gravité déclarée (sev2)",
@@ -116,9 +153,25 @@ export const COMPLETE: Analysis = {
   confidence: 0.83,
 };
 
+export const RUNNING: Analysis = {
+  ...COMPLETE,
+  status: "running",
+  summary: "payment-api p99 latency above 2s : clos, sev2. LEKA lit encore ses sources.",
+  support: [
+    ...SUPPORT.slice(0, 1),
+    { id: "more", label: "D'autres sources sont encore lues", established: false },
+  ],
+  recommendations: [],
+};
+
 export const PARTIAL: Analysis = {
   ...COMPLETE,
   status: "partial",
+  summary: "payment-api p99 latency above 2s : clos, sev2. On ne sait pas ce qu'il touche.",
+  support: [
+    ...SUPPORT,
+    { id: "missing", label: "Manque : ce qu'il touche", established: false },
+  ],
   missing: ["ce qu'il touche"],
   impact: { areas: [], risk: "unknown", riskBasis: "aucune gravité n'est déclarée" },
   recommendations: [],
@@ -130,9 +183,19 @@ export const PARTIAL: Analysis = {
 
 export const INCONCLUSIVE: Analysis = {
   status: "inconclusive",
+  summary: "OPS-2001 : ni son état ni sa gravité ne sont dits. Sa cause n'est pas connue.",
+  support: [
+    { id: "cause", label: "Manque : ce qui l'a causé", established: false },
+    { id: "affected", label: "Manque : ce qu'il touche", established: false },
+  ],
   missing: ["ce qui l'a causé", "ce qu'il touche"],
   findings: [
-    { id: "state", statement: "OPS-2001 : ni son état ni sa gravité ne sont dits.", evidence: [] },
+    {
+      id: "state",
+      title: "État et gravité",
+      statement: "OPS-2001 : ni son état ni sa gravité ne sont dits.",
+      evidence: [],
+    },
   ],
   causes: [],
   impact: null,

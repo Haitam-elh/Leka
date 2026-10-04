@@ -3,57 +3,52 @@
 import {
   CircleHelp,
   FileSearch,
+  Gauge,
+  Info,
   Layers,
   type LucideIcon,
-  ScrollText,
+  Radar,
   Sparkles,
 } from "lucide-react";
+import { useId } from "react";
 
 import { cn } from "cn";
 
-import { useDictionary } from "@/lib/i18n/locale-provider";
-
 /**
- * A part of an intelligence output, and what kind of statement it holds
- * (LEKA-341). The kind is drawn, not only named: a fact sits in a plain
- * card, a hypothesis in an amber one, a proposal in a dashed violet one —
- * so that what LEKA proposes can never be read as what a source says.
- * docs/frontend/intelligence-components.md.
+ * A part of an intelligence output (LEKA-341), drawn as mockups 03 to 05
+ * draw theirs — "Premiers constats", "Preuves et sources clés",
+ * "Recommandations de LEKA": a card, its icon, its title, how many, and
+ * what it holds in data-kind. What kind of statement each line is, the
+ * line says: a fact is tagged "Constat", a hypothesis "Cause probable" or
+ * "À confirmer" with how sure, a proposal is a card with its priority and
+ * a box to tick — so what LEKA proposes is never read as what a source
+ * says. docs/frontend/intelligence-components.md.
  */
 
-export type SectionKind = "fact" | "hypothesis" | "proposal" | "evidence" | "context";
+export type SectionKind =
+  | "fact"
+  | "hypothesis"
+  | "proposal"
+  | "evidence"
+  | "impact"
+  | "confidence"
+  | "context";
 
-const LOOK: Record<SectionKind, { icon: LucideIcon; box: string; tag: string }> = {
-  fact: {
-    icon: ScrollText,
-    box: "border border-shell-line bg-white",
-    tag: "bg-shell-canvas text-brand-navy",
-  },
-  hypothesis: {
-    icon: CircleHelp,
-    box: "border border-state-warning/40 bg-white",
-    tag: "bg-state-warning-soft text-state-warning",
-  },
-  proposal: {
-    icon: Sparkles,
-    box: "border-2 border-dashed border-brand-violet/50 bg-brand-violet-soft/30",
-    tag: "bg-brand-violet-soft text-shell-nav-active",
-  },
-  evidence: {
-    icon: FileSearch,
-    box: "border border-shell-line bg-white",
-    tag: "bg-shell-canvas text-shell-muted",
-  },
-  context: {
-    icon: Layers,
-    box: "border border-shell-line bg-white",
-    tag: "bg-shell-canvas text-shell-muted",
-  },
+const ICONS: Record<SectionKind, { icon: LucideIcon; tone: string }> = {
+  fact: { icon: Info, tone: "text-shell-nav-active" },
+  hypothesis: { icon: CircleHelp, tone: "text-state-warning" },
+  proposal: { icon: Sparkles, tone: "text-shell-nav-active" },
+  evidence: { icon: FileSearch, tone: "text-shell-nav-active" },
+  impact: { icon: Radar, tone: "text-state-danger" },
+  confidence: { icon: Gauge, tone: "text-shell-nav-active" },
+  context: { icon: Layers, tone: "text-shell-nav-active" },
 };
 
 export function IntelligenceSection({
   kind,
   title,
+  subtitle,
+  count,
   action,
   level = 3,
   className,
@@ -61,39 +56,40 @@ export function IntelligenceSection({
 }: {
   kind: SectionKind;
   title: string;
+  /** What to do with it, under the title: "Sélectionnez les actions…". */
+  subtitle?: string;
+  /** How many, beside the title: "3 recommandations". */
+  count?: string;
   /** Its heading's level: the screen's next one — 2 under the page's title. */
   level?: 2 | 3;
   action?: React.ReactNode;
   className?: string;
   children: React.ReactNode;
 }) {
-  const t = useDictionary();
-  const look = LOOK[kind];
-  const Icon = look.icon;
+  const { icon: Icon, tone } = ICONS[kind];
   const Heading = level === 2 ? "h2" : "h3";
-  const id = `intelligence-${kind}-${title.replace(/\W+/g, "-").toLowerCase()}`;
+  const id = useId();
   return (
     <section
       aria-labelledby={id}
       data-kind={kind}
       data-testid={`intelligence-${kind}`}
-      className={cn("rounded-xl p-4", look.box, className)}
+      className={cn("min-w-0 rounded-xl border border-shell-line bg-white p-4", className)}
     >
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span
-          className={cn(
-            "flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-            look.tag,
-          )}
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Icon className={cn("size-5 shrink-0", tone)} aria-hidden="true" />
+        <Heading
+          id={id}
+          className="min-w-0 flex-1 text-[1.0625rem] font-semibold tracking-[-0.01em] text-brand-navy"
         >
-          <Icon className="size-3.5" aria-hidden="true" />
-          {t.intelligence.kinds[kind]}
-        </span>
-        <Heading id={id} className="flex-1 text-[0.9375rem] font-semibold text-brand-navy">
           {title}
         </Heading>
+        {count ? (
+          <span className="text-[0.8125rem] font-medium text-shell-nav-active">{count}</span>
+        ) : null}
         {action}
       </div>
+      {subtitle ? <p className="-mt-1.5 mb-3 text-[0.8125rem] text-shell-muted">{subtitle}</p> : null}
       {children}
     </section>
   );

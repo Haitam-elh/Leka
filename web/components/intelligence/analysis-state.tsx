@@ -1,6 +1,13 @@
 "use client";
 
-import { CircleAlert, CircleDashed, CircleHelp, CircleX, type LucideIcon } from "lucide-react";
+import {
+  CircleAlert,
+  CircleDashed,
+  CircleHelp,
+  CircleX,
+  LoaderCircle,
+  type LucideIcon,
+} from "lucide-react";
 
 import { cn } from "cn";
 
@@ -9,13 +16,15 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
 import type { AnalysisStatus } from "@/lib/intelligence";
 
 /**
- * How an analysis went, said before what it found (LEKA-341): partial —
- * and what is missing; inconclusive — LEKA looked and cannot say; failed —
- * it could not run, and a way to try again; pending — none yet. A complete
- * analysis needs no banner: its sections speak.
+ * How an analysis went, said before what it found (LEKA-341): running —
+ * mockup 03's "Analyse en cours…", what it found so far shown under it;
+ * partial — and what is missing; inconclusive — LEKA looked and cannot
+ * say; failed — it could not run, and a way to try again; pending — none
+ * yet. A complete analysis needs no banner: its sections speak.
  */
 
 const LOOK: Record<Exclude<AnalysisStatus, "complete">, { icon: LucideIcon; tone: string }> = {
+  running: { icon: LoaderCircle, tone: "bg-brand-violet-soft/60 text-shell-nav-active" },
   partial: { icon: CircleAlert, tone: "bg-state-warning-soft text-state-warning" },
   inconclusive: { icon: CircleHelp, tone: "bg-state-info-soft text-state-info" },
   failed: { icon: CircleX, tone: "bg-state-danger-soft text-state-danger" },
@@ -38,11 +47,14 @@ export function AnalysisState({
   return (
     <div
       role={status === "failed" ? "alert" : "status"}
-      className={cn("flex flex-wrap items-start gap-3 rounded-lg px-4 py-3 text-[0.8125rem]", tone)}
+      className={cn("flex flex-wrap items-start gap-3 rounded-xl px-4 py-3 text-[0.8125rem]", tone)}
       data-testid="analysis-state"
       data-status={status}
     >
-      <Icon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <Icon
+        className={cn("mt-0.5 size-4 shrink-0", status === "running" && "motion-safe:animate-spin")}
+        aria-hidden="true"
+      />
       <div className="min-w-0 flex-1 text-brand-navy">
         <p className="font-semibold">{w.title}</p>
         <p className="text-shell-muted">{w.body}</p>

@@ -1261,6 +1261,8 @@ const fr = {
         action: "Lancer une intention",
         incident:
           "Ce que le modèle de l'entreprise sait de cet incident : ce qui l'a causé, ce qu'il touche et jusqu'où — chaque affirmation avec ses preuves.",
+        full: "Voir l'analyse complète",
+        hide: "Masquer l'analyse",
       },
       tabs: {
         metrics:
@@ -2339,27 +2341,38 @@ const fr = {
    * fact, a hypothesis and a proposal are named apart, and drawn apart.
    */
   intelligence: {
-    kinds: {
+    /** What kind of statement a line is (mockup 03's tags). */
+    tags: {
       fact: "Constat",
-      hypothesis: "Hypothèse",
-      proposal: "Proposition de LEKA",
-      evidence: "Preuves",
-      context: "Contexte utilisé",
+      stated: "Cause déclarée",
+      probable: "Cause probable",
+      toConfirm: "À confirmer",
     },
-    overall: "Confiance de l'analyse :",
+    summary: {
+      title: "Synthèse de l'analyse",
+      none: "LEKA n'a encore rien à en dire.",
+    },
     confidence: {
+      title: "Confiance de l'analyse",
       high: "Confiance élevée",
       medium: "Confiance moyenne",
       low: "Confiance faible",
       unknown: "Confiance inconnue",
+      levels: { high: "Élevée", medium: "Moyenne", low: "Faible", unknown: "Inconnue" },
       stated: "déclaré par la source",
       inferred: "déduit par LEKA",
+      noSupport: "Rien ne dit encore sur quoi elle repose.",
+      score: "Score de confiance : {score} %",
     },
     uncertainty: { title: "Ce que LEKA ne sait pas ({count})" },
     evidence: {
+      title: "Preuves et sources clés",
       none: "Aucune preuve.",
       count: "{count} preuve(s)",
-      inspect: "Voir la preuve {label}",
+      see: "Voir les éléments ({count})",
+      all: "Voir toutes les preuves ({count})",
+      fewer: "Voir moins",
+      inspect: "Détails de la preuve {label}",
       kind: "Nature",
       kinds: {
         record: "Enregistrement d'une source",
@@ -2370,16 +2383,23 @@ const fr = {
       source: "Source",
       unknownSource: "source inconnue",
       when: "Quand",
-      open: "Ouvrir",
+      open: "Voir",
     },
-    findings: { title: "Ce que disent les sources", none: "Aucun constat." },
+    findings: { title: "Constats", count: "{count} constat(s)", none: "Aucun constat." },
     causes: {
       title: "Causes probables",
+      count: "{count} hypothèse(s)",
       none: "Aucune cause n'est déclarée ni soupçonnée.",
-      rank: "Hypothèse {rank}",
       why: "Pourquoi :",
     },
-    impact: { title: "Impact", none: "Aucun impact connu." },
+    impact: {
+      title: "Impact",
+      global: "Impact global",
+      levels: { high: "Élevé", medium: "Moyen", low: "Faible", unknown: "Inconnu" },
+      concerned: "{count} élément(s) concerné(s)",
+      count: "{count}",
+      none: "Aucun impact connu.",
+    },
     risk: {
       high: "Risque élevé",
       medium: "Risque moyen",
@@ -2387,13 +2407,28 @@ const fr = {
       unknown: "Risque inconnu",
     },
     recommendations: {
-      title: "Recommandations",
+      title: "Recommandations de LEKA",
+      count: "{count} recommandation(s)",
+      select:
+        "Sélectionnez les actions que vous souhaitez approuver. Chaque recommandation repose sur des éléments vérifiables.",
       none: "LEKA ne propose pas encore de recommandation : elles viendront avec son moteur d'analyse.",
-      effect: "Effet",
+      chips: "Ce qu'elle implique",
+      effectChip: "Impact : {effect}",
       reversible: "Réversible",
       irreversible: "Irréversible",
+      priority: { high: "Priorité haute", medium: "Priorité moyenne", low: "Priorité basse" },
+      why: "Voir ce qui justifie « {title} »",
+      justified: "Éléments qui justifient cette recommandation",
+    },
+    control: {
+      title: "Vous gardez le contrôle",
+      body: "Aucune action n'est exécutée sans votre validation explicite. LEKA propose des recommandations, avec leurs preuves et leur impact.",
     },
     status: {
+      running: {
+        title: "Analyse en cours…",
+        body: "LEKA lit vos sources : ce qu'elle a trouvé jusqu'ici est affiché, et s'affinera.",
+      },
       partial: {
         title: "Analyse partielle",
         body: "Une partie de ce que LEKA cherchait manque :",
@@ -2461,11 +2496,28 @@ const fr = {
       on: "sur {name}",
       states: { open: "ouvert", in_progress: "en cours", closed: "clos" },
       findings: {
+        stateTitle: "État et gravité",
         state: "{name} : {state}.",
         unknownState: "{name} : ni son état ni sa gravité ne sont dits.",
+        durationTitle: "Durée",
         duration: "Il a duré {duration}.",
+        timelineTitle: "Chronologie",
         timeline: "Sa chronologie, telle que ses sources la donnent.",
+        affectsTitle: "Ce qu'il touche",
         affects: "Il touche {names}.",
+      },
+      summary: {
+        stated: "Cause déclarée par sa source : {cause}.",
+        probable: "Cause probable : {cause} ({confidence}).",
+        toConfirm: "Cause à confirmer : {cause} ({confidence}).",
+        noCause: "Sa cause n'est pas connue.",
+        reach: "{count} élément(s) en dépendent.",
+      },
+      support: {
+        sources: "{count} source(s) lue(s)",
+        steps: "{count} étape(s) dans sa chronologie",
+        before: "{count} changement(s) juste avant lui",
+        missing: "Manque : {what}",
       },
       relation: "Lien",
       stated: "Une source le déclare.",
@@ -2501,7 +2553,17 @@ const fr = {
     },
   },
   decision: {
-    title: "Recommandations",
+    title: "Recommandations de LEKA",
+    example:
+      "Cette étape est un exemple : ses recommandations, leur impact et leur confiance ne viennent pas de votre environnement. LEKA proposera les siennes quand son moteur d'analyse sera branché.",
+    aside: "Ce qui fonde ces recommandations",
+    next: {
+      title: "Prochaines étapes",
+      validate: "Valider les actions sélectionnées",
+      plan: "Planifier la mise en œuvre",
+      follow: "Suivre l'exécution",
+      now: "Maintenant",
+    },
     approve: "Valider et passer à l'action",
     approveTitle: "Appliquer les actions sélectionnées ?",
     approveBody: "LEKA appliquera ces changements sur votre infrastructure.",
@@ -3772,6 +3834,8 @@ const en: Dictionary = {
         action: "Start an intention",
         incident:
           "What the company model knows of this incident: what caused it, what it affects and how far — each statement with its evidence.",
+        full: "See the full analysis",
+        hide: "Hide the analysis",
       },
       tabs: {
         metrics:
@@ -4830,27 +4894,37 @@ const en: Dictionary = {
     simulateError: "Simulate a server error",
   },
   intelligence: {
-    kinds: {
+    tags: {
       fact: "Finding",
-      hypothesis: "Hypothesis",
-      proposal: "LEKA's proposal",
-      evidence: "Evidence",
-      context: "Context used",
+      stated: "Stated cause",
+      probable: "Probable cause",
+      toConfirm: "To confirm",
     },
-    overall: "Confidence of the analysis:",
+    summary: {
+      title: "Summary of the analysis",
+      none: "LEKA has nothing to say about it yet.",
+    },
     confidence: {
+      title: "Confidence of the analysis",
       high: "High confidence",
       medium: "Medium confidence",
       low: "Low confidence",
       unknown: "Unknown confidence",
+      levels: { high: "High", medium: "Medium", low: "Low", unknown: "Unknown" },
       stated: "stated by the source",
       inferred: "inferred by LEKA",
+      noSupport: "Nothing says yet what it rests on.",
+      score: "Confidence score: {score} %",
     },
     uncertainty: { title: "What LEKA does not know ({count})" },
     evidence: {
+      title: "Key evidence and sources",
       none: "No evidence.",
       count: "{count} piece(s) of evidence",
-      inspect: "See the evidence {label}",
+      see: "See the elements ({count})",
+      all: "See all the evidence ({count})",
+      fewer: "See less",
+      inspect: "Details of the evidence {label}",
       kind: "Kind",
       kinds: {
         record: "A source's record",
@@ -4861,16 +4935,23 @@ const en: Dictionary = {
       source: "Source",
       unknownSource: "unknown source",
       when: "When",
-      open: "Open",
+      open: "See",
     },
-    findings: { title: "What the sources say", none: "No finding." },
+    findings: { title: "Findings", count: "{count} finding(s)", none: "No finding." },
     causes: {
       title: "Probable causes",
+      count: "{count} hypothesis(es)",
       none: "No cause is stated or suspected.",
-      rank: "Hypothesis {rank}",
       why: "Why:",
     },
-    impact: { title: "Impact", none: "No known impact." },
+    impact: {
+      title: "Impact",
+      global: "Overall impact",
+      levels: { high: "High", medium: "Medium", low: "Low", unknown: "Unknown" },
+      concerned: "{count} element(s) concerned",
+      count: "{count}",
+      none: "No known impact.",
+    },
     risk: {
       high: "High risk",
       medium: "Medium risk",
@@ -4878,13 +4959,28 @@ const en: Dictionary = {
       unknown: "Unknown risk",
     },
     recommendations: {
-      title: "Recommendations",
+      title: "LEKA's recommendations",
+      count: "{count} recommendation(s)",
+      select:
+        "Select the actions you want to approve. Each recommendation rests on verifiable elements.",
       none: "LEKA does not propose recommendations yet: they will come with its analysis engine.",
-      effect: "Effect",
+      chips: "What it involves",
+      effectChip: "Impact: {effect}",
       reversible: "Reversible",
       irreversible: "Irreversible",
+      priority: { high: "High priority", medium: "Medium priority", low: "Low priority" },
+      why: "See what justifies “{title}”",
+      justified: "Elements that justify this recommendation",
+    },
+    control: {
+      title: "You stay in control",
+      body: "No action runs without your explicit approval. LEKA proposes recommendations, with their evidence and their impact.",
     },
     status: {
+      running: {
+        title: "Analysis in progress…",
+        body: "LEKA is reading your sources: what it has found so far is shown, and will sharpen.",
+      },
       partial: { title: "Partial analysis", body: "Part of what LEKA looked for is missing:" },
       inconclusive: {
         title: "Inconclusive analysis",
@@ -4939,11 +5035,28 @@ const en: Dictionary = {
       on: "on {name}",
       states: { open: "open", in_progress: "in progress", closed: "closed" },
       findings: {
+        stateTitle: "State and severity",
         state: "{name}: {state}.",
         unknownState: "{name}: neither its state nor its severity is said.",
+        durationTitle: "Duration",
         duration: "It lasted {duration}.",
+        timelineTitle: "Timeline",
         timeline: "Its timeline, as its sources give it.",
+        affectsTitle: "What it affects",
         affects: "It affects {names}.",
+      },
+      summary: {
+        stated: "Cause stated by its source: {cause}.",
+        probable: "Probable cause: {cause} ({confidence}).",
+        toConfirm: "Cause to confirm: {cause} ({confidence}).",
+        noCause: "Its cause is not known.",
+        reach: "{count} element(s) depend on it.",
+      },
+      support: {
+        sources: "{count} source(s) read",
+        steps: "{count} step(s) in its timeline",
+        before: "{count} change(s) just before it",
+        missing: "Missing: {what}",
       },
       relation: "Tie",
       stated: "A source states it.",
@@ -4978,7 +5091,17 @@ const en: Dictionary = {
     },
   },
   decision: {
-    title: "Recommendations",
+    title: "LEKA's recommendations",
+    example:
+      "This step is an example: its recommendations, their impact and their confidence do not come from your environment. LEKA will propose its own once its analysis engine is connected.",
+    aside: "What these recommendations rest on",
+    next: {
+      title: "Next steps",
+      validate: "Approve the selected actions",
+      plan: "Plan the work",
+      follow: "Follow the execution",
+      now: "Now",
+    },
     approve: "Approve and act",
     approveTitle: "Apply the selected actions?",
     approveBody: "LEKA will apply these changes to your infrastructure.",

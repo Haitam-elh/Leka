@@ -14,6 +14,9 @@
  *                   applications and the business — the risk read from the
  *                   severity its tool gave, or unknown
  *     uncertainties what is only suspected, or not known at all
+ *     summary       what it comes to, in a few sentences of the above
+ *     support       what the confidence rests on: the sources read, its
+ *                   timeline, what changed before it — and what is missing
  *
  * No recommendation: the model proposes none; the analysis engine will
  * (LEKA-384). Complete when it knows a cause and what is touched; partial
@@ -24,8 +27,8 @@
 import { fill } from "@/lib/i18n/dictionaries";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { IncidentDetail } from "@/lib/incidents";
-import type { Analysis, EvidenceRef, Finding, ProbableCause } from "@/lib/intelligence";
-import { riskOf } from "@/lib/intelligence";
+import type { Analysis, EvidenceRef, Finding, ProbableCause, Support } from "@/lib/intelligence";
+import { causeTag, confidenceLevel, riskOf } from "@/lib/intelligence";
 
 type Brief = IncidentDetail["affects"][number];
 
@@ -69,6 +72,7 @@ export function incidentAnalysis(detail: IncidentDetail, t: Dictionary, links: L
   ].filter(Boolean);
   findings.push({
     id: "state",
+    title: w.findings.stateTitle,
     statement: how.length
       ? fill(w.findings.state, { name: detail.name, state: how.join(", ") })
       : fill(w.findings.unknownState, { name: detail.name }),
@@ -77,15 +81,22 @@ export function incidentAnalysis(detail: IncidentDetail, t: Dictionary, links: L
   if (detail.duration_minutes !== null && detail.duration_minutes !== undefined) {
     findings.push({
       id: "duration",
+      title: w.findings.durationTitle,
       statement: fill(w.findings.duration, { duration: duration(detail.duration_minutes, t) }),
       evidence: timeline,
     });
   } else if (timeline.length > 0) {
-    findings.push({ id: "timeline", statement: w.findings.timeline, evidence: timeline });
+    findings.push({
+      id: "timeline",
+      title: w.findings.timelineTitle,
+      statement: w.findings.timeline,
+      evidence: timeline,
+    });
   }
   if (detail.affected.length > 0) {
     findings.push({
       id: "affects",
+      title: w.findings.affectsTitle,
       statement: fill(w.findings.affects, {
         names: detail.affected.map((tie) => tie.entity.name).join(", "),
       }),
@@ -127,7 +138,13 @@ export function incidentAnalysis(detail: IncidentDetail, t: Dictionary, links: L
   const area = (id: keyof typeof w.areas, items: readonly Brief[]) => ({
     id,
     label: w.areas[id],
-    items: items.map((entity) => ({ id: entity.id, label: entity.name, href: links.href(entity) })),
+    items: items.map((entity) => ({
+      id: entity.id,
+      label: entity.name,
+      href: links.href(entity),
+      type: entity.type,
+      detail: links.typeName(entity.type),
+    })),
   });
 
   const uncertainties: string[] = [];
@@ -148,6 +165,37 @@ export function incidentAnalysis(detail: IncidentDetail, t: Dictionary, links: L
     ...(causes.length === 0 ? [w.missing.cause] : []),
     ...(detail.affected.length === 0 ? [w.missing.affected] : []),
   ];
+  const top = causes[0];
+  // What it comes to: what its sources say, its cause, how far it reaches.
+  const reach = new Set(
+    [...impact.dependents, ...impact.applications].map((entity) => entity.id),
+  ).size;
+  const summary = [
+    ...findings.filter((finding) => finding.id !== "timeline").map((finding) => finding.statement),
+    top
+      ? fill(w.summary[causeTag(top)], {
+          cause: top.label,
+          confidence: t.intelligence.confidence[confidenceLevel(top.confidence)].toLowerCase(),
+        })
+      : w.summary.noCause,
+    ...(reach > 0 ? [fill(w.summary.reach, { count: reach })] : []),
+  ].join(" ");
+
+  // What the confidence rests on: what was read, and what is missing.
+  const read = new Set(records.map((record) => record.source?.name ?? record.id)).size;
+  const held = (id: string, said: string, count: number): Support[] =>
+    count > 0 ? [{ id, label: fill(said, { count }), established: true }] : [];
+  const support: Support[] = [
+    ...held("sources", w.support.sources, read),
+    ...held("steps", w.support.steps, timeline.length),
+    ...held("before", w.support.before, before.length),
+    ...missing.map((what) => ({
+      id: `missing-${what}`,
+      label: fill(w.support.missing, { what }),
+      established: false,
+    })),
+  ];
+
   const status =
     missing.length === 0
       ? "complete"
@@ -157,6 +205,8 @@ export function incidentAnalysis(detail: IncidentDetail, t: Dictionary, links: L
 
   return {
     status,
+    summary,
+    support,
     missing,
     findings,
     causes,

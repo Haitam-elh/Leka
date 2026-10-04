@@ -1,11 +1,13 @@
 /**
  * An incident's "Analyse de LEKA" (LEKA-341): the incident as the company
- * model knows it, drawn with the intelligence components.
+ * model knows it — mockup 11's band, opening on mockup 04's layout.
  *
- * What these protect: the probable cause, how sure and why, its evidence
- * one click away; what the sources say; what it reaches and the risk read
- * from its severity; no recommendation made up — the slot says why it is
- * empty; a failed read says so, shows nothing else, and retries.
+ * What these protect: the band says what it comes to, and opens on the
+ * rest only when asked; then the probable cause, how sure and why, its
+ * evidence one click away; what the sources say; how sure the analysis is
+ * and on what; what it reaches and its level read from its severity; no
+ * recommendation made up — the slot says why it is empty; a failed read
+ * says so at once, shows nothing else, and retries.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -112,16 +114,30 @@ beforeEach(() => {
 });
 
 describe("an incident's analysis", () => {
-  it("says the probable cause, how sure and why, what is known, what it reaches", async () => {
+  it("says what it comes to, and opens on the cause, how sure and why, what is known, what it reaches", async () => {
     api.detail.mockResolvedValue(DETAIL);
     const user = userEvent.setup();
     show();
 
-    const cause = await screen.findByTestId("probable-cause");
-    expect(cause).toHaveTextContent("Hypothèse 1");
+    expect(await screen.findByTestId("incident-summary")).toHaveTextContent(
+      "payment-api p99 latency above 2s : clos, sev2. Il a duré 4 h. Il touche payment-api. " +
+        "Cause déclarée par sa source : payment-api v2.8.4.",
+    );
+    // Closed until asked, and nothing to say about how it went: complete.
+    expect(screen.queryByTestId("analysis")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("analysis-state")).not.toBeInTheDocument();
+    const full = screen.getByRole("button", { name: "Voir l'analyse complète" });
+    await user.click(full);
+    expect(full).toHaveAttribute("aria-expanded", "true");
+    expect(full).toHaveAccessibleName("Masquer l'analyse");
+
+    const cause = screen.getByTestId("probable-cause");
     expect(cause).toHaveTextContent("payment-api v2.8.4");
-    expect(cause).toHaveTextContent("Confiance moyenne · 83 % · déclaré par la source");
-    await user.click(within(cause).getByRole("button", { name: /2 preuve/ }));
+    expect(cause).toHaveTextContent("Cause déclarée");
+    expect(within(cause).getByTestId("confidence")).toHaveTextContent(
+      "Confiance moyenne83 % · déclaré par la source",
+    );
+    await user.click(within(cause).getByRole("button", { name: /Voir les éléments \(2\)/ }));
     expect(within(cause).getByTestId("evidence")).toHaveTextContent(
       "Déploiement · payment-api v2.8.4",
     );
@@ -129,12 +145,28 @@ describe("an incident's analysis", () => {
     expect(screen.getByTestId("findings")).toHaveTextContent(
       "payment-api p99 latency above 2s : clos, sev2.",
     );
-    expect(screen.getByTestId("impact")).toHaveTextContent("Risque moyen");
+    const sure = screen.getByRole("region", { name: "Confiance de l'analyse" });
+    expect(sure).toHaveTextContent("Moyenne");
+    expect(sure).toHaveTextContent("1 source(s) lue(s)");
+    expect(sure).toHaveTextContent("1 changement(s) juste avant lui");
+    expect(screen.getByTestId("impact-level")).toHaveTextContent("Moyen");
+    expect(screen.getByTestId("impact")).toHaveTextContent("d'après la gravité déclarée (sev2)");
     expect(screen.getByTestId("intelligence-proposal")).toHaveTextContent(
       "LEKA ne propose pas encore de recommandation",
     );
-    expect(screen.queryByTestId("analysis-state")).not.toBeInTheDocument();
     expect(api.detail).toHaveBeenCalledWith(DETAIL.id);
+  });
+
+  it("says at once what is missing, without being opened", async () => {
+    api.detail.mockResolvedValue({ ...DETAIL, suspected_causes: [] });
+    show();
+
+    const state = await screen.findByTestId("analysis-state");
+    expect(state).toHaveAttribute("data-status", "partial");
+    expect(state).toHaveTextContent("ce qui l'a causé");
+    expect(screen.getByTestId("incident-summary")).toHaveTextContent(
+      "Sa cause n'est pas connue.",
+    );
   });
 
   it("says when it could not read, shows nothing else, and retries", async () => {
@@ -146,8 +178,10 @@ describe("an incident's analysis", () => {
 
     const failed = await screen.findByRole("alert");
     expect(failed).toHaveTextContent("L'analyse a échoué");
-    expect(screen.queryByTestId("probable-cause")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Voir l'analyse complète" })).toBeNull();
+    expect(screen.queryByTestId("incident-summary")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Réessayer" }));
-    expect(await screen.findByTestId("probable-cause")).toBeInTheDocument();
+    expect(await screen.findByTestId("incident-summary")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
