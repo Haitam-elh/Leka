@@ -31,6 +31,7 @@ from leka.connectors import Source, SourceKind, SourceStatus
 from leka.core.security import hash_password
 from leka.db import session_factory, system_scope
 from leka.identity import User as Account
+from leka.ingestion import RESOLVER_VERSION, ResolvedEntity
 from leka.knowledge import Entity, EntityType, Relationship, RelationshipType, search_fields
 from leka.platform import Membership, Role, Workspace
 
@@ -349,6 +350,28 @@ async def _build_demo_workspace() -> None:
         edge(datadog, incident, monitor, RelationshipType.MENTIONS)
         edge(jira, incident, payment, RelationshipType.MENTIONS)
         edge(sources["confluence:Runbooks space"], runbook, payment, RelationshipType.MENTIONS)
+
+        # What the model is built from: the same things as resolution made
+        # them, under the same ids — a build keeps resolution's. An entity's
+        # sheet reads them (LEKA-359): without them, every sheet of the demo
+        # says it found nothing.
+        built = await session.execute(select(Entity).where(Entity.workspace_id == workspace.id))
+        for thing in built.scalars():
+            session.add(
+                ResolvedEntity(
+                    id=thing.id,
+                    workspace_id=workspace.id,
+                    type=thing.type.value,
+                    key=thing.key,
+                    name=thing.name,
+                    names=[thing.name],
+                    attributes=dict(thing.attributes),
+                    confidence=thing.confidence,
+                    sources=1,
+                    resolver_version=RESOLVER_VERSION,
+                    resolved_at=NOW,
+                )
+            )
 
         await session.commit()
 
