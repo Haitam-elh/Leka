@@ -225,5 +225,8 @@ and live in its files. They are close to, not equal to, `--brand-navy` and
   states, and the `--state-*` tokens' full story.
 - [`knowledge-components.md`](knowledge-components.md) — entities, relationships, provenance,
   quality and freshness (LEKA-340).
+- [`intelligence-components.md`](intelligence-components.md) — LEKA's reasoning
+  results: context used, findings, probable causes, evidence, impact and risk,
+  recommendations, confidence and uncertainty, and how an analysis went (LEKA-341).
 - `web/app/design-tokens.test.ts` — the contrast test every colour pair
   above is measured against.
