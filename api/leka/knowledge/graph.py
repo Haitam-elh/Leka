@@ -18,7 +18,10 @@ table, an index for each way, walked one step — one query — at a time
     coverage()  how well the model knows each kind, and from where
     material()  what leka.context assembles from: a walk's entities and
                 relationships with their provenance and the sources named
-                (LEKA-370)
+                (LEKA-370) — gathered(), the same for entities found any
+                other way (LEKA-371)
+    matching()  the entities a sentence's words find, any of them
+    events()    what happened between two dates around some entities
 
 Every walk is bounded — by depth, by the entities it may reach, by the
 rows a step may read — and says when it stopped short (`truncated`). The
@@ -31,9 +34,9 @@ what they need of the graph.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from leka.ingestion import monitoring_kinds
@@ -74,7 +77,7 @@ from leka.knowledge.schemas import (
     ViewNodeRead,
     ViewSourceRead,
 )
-from leka.knowledge.search import fold, query
+from leka.knowledge.search import NAMES_APART, any_of, fold, query
 from leka.knowledge.views import (
     MAX_PER_LAYER,
     VIEWS,
@@ -103,6 +106,23 @@ MAX_PATHS = 5
 MAX_VISITED = 5_000
 # What the services' state reads: an incident in the last week.
 RECENT_INCIDENT = timedelta(days=7)
+# What happened around a thing (LEKA-371): its events, of these kinds, to it
+# and to what is part of it, two steps down.
+EVENT_KINDS = (
+    EntityType.INCIDENT,
+    EntityType.DEPLOYMENT,
+    EntityType.CHANGE,
+    EntityType.RELEASE,
+    EntityType.PULL_REQUEST,
+)
+EVENT_NAMES = {
+    EntityType.DEPLOYMENT: "deployment",
+    EntityType.CHANGE: "change",
+    EntityType.RELEASE: "release",
+    EntityType.PULL_REQUEST: "merge",
+}
+EVENT_SCOPE = 2
+MAX_EVENTS = 50
 
 Direction = Literal["outgoing", "incoming", "both"]
 WAYS: dict[Direction, bool | None] = {"outgoing": True, "incoming": False, "both": None}
@@ -675,28 +695,52 @@ class GraphService:
         )
         if walked is None:
             return None
-        far = {node.entity.id: node.depth for node in walked.nodes}
-        entities = await self._graph.by_ids(list(far))
-        edges = await self._graph.edges_by_ids([edge.id for edge in walked.relationships])
+        return await self.gathered(
+            {node.entity.id: node.depth for node in walked.nodes},
+            roots=[root.id for root in walked.roots],
+            types=types,
+            environment=environment,
+            truncated=walked.truncated,
+        )
+
+    async def gathered(
+        self,
+        found: Mapping[uuid.UUID, int | None],
+        *,
+        roots: Sequence[uuid.UUID],
+        types: Sequence[RelationshipType] = (),
+        environment: str | None = None,
+        truncated: bool = False,
+    ) -> ContextMaterial:
+        """Some entities, however they were found — a walk, a search, their
+        time (LEKA-371) — as leka.context assembles them: each with its
+        provenance and its distance when a walk knows it, the relationships
+        among them with theirs, the sources named, and which build of the
+        model they were read from. The order of `found` is kept; an id that
+        is not the workspace's is left out."""
+        entities = await self._graph.by_ids(list(found))
+        edges = await self._graph.between(
+            list(entities), types=types, environment=environment, limit=MAX_RELATIONSHIPS + 1
+        )
         ids: set[uuid.UUID] = set()
         for entity in entities.values():
             ids |= _source_ids(entity)
-        for edge in edges.values():
+        for edge in edges:
             for record in edge.provenance or []:
-                found = _uuid(record.get("source_id")) if isinstance(record, dict) else None
-                if found:
-                    ids.add(found)
+                said = _uuid(record.get("source_id")) if isinstance(record, dict) else None
+                if said:
+                    ids.add(said)
         named = await self._graph.sources_named(list(ids))
         return ContextMaterial(
-            roots=[root.id for root in walked.roots],
+            roots=[root for root in roots if root in entities],
             entities=[
                 MaterialEntity(
-                    entity=EntityRead.model_validate(entities[node.entity.id]),
-                    depth=node.depth,
-                    provenance=dict(entities[node.entity.id].provenance or {}),
+                    entity=EntityRead.model_validate(entities[entity_id]),
+                    depth=far,
+                    provenance=dict(entities[entity_id].provenance or {}),
                 )
-                for node in walked.nodes
-                if node.entity.id in entities
+                for entity_id, far in found.items()
+                if entity_id in entities
             ],
             relationships=[
                 MaterialRelationship(
@@ -705,17 +749,73 @@ class GraphService:
                     first_seen_at=edge.first_seen_at,
                     changed_at=edge.changed_at,
                 )
-                for edge in (edges.get(e.id) for e in walked.relationships)
-                if edge is not None
+                for edge in edges[:MAX_RELATIONSHIPS]
             ],
             sources=[
                 MaterialSource(source_id=source, kind=kind, name=name)
                 for source, (kind, name) in sorted(named.items(), key=lambda i: i[1][1])
             ],
-            truncated=walked.truncated,
+            truncated=truncated or len(edges) > MAX_RELATIONSHIPS,
             built_at=await self._graph.built_at(),
             model_version=MODEL_VERSION,
         )
+
+    async def known(self, ids: Sequence[uuid.UUID]) -> set[uuid.UUID]:
+        """Which of these are the workspace's entities."""
+        return set(await self._graph.by_ids(list(ids)))
+
+    async def matching(
+        self, words: Sequence[str], *, limit: int = MAX_HITS
+    ) -> list[tuple[uuid.UUID, float, list[str]]]:
+        """The entities whose words hold any of `words` — a sentence's, not
+        a name typed (LEKA-371) — the best first: the very name, then the
+        most words, a name's weighing most; each with the words it holds.
+        The removed left out."""
+        tsquery = any_of(words)
+        if tsquery is None:
+            return []
+        folded = [w for word in words for w in fold(word).split()]
+        found = await self._graph.search(
+            tsquery, " ".join(folded), types=(), removed=False, limit=min(limit, MAX_HITS)
+        )
+        matches: list[tuple[uuid.UUID, float, list[str]]] = []
+        for entity, score in found:
+            said = f"{entity.search_name} {entity.search_text}".replace(NAMES_APART, " ").split()
+            held = [w for w in dict.fromkeys(folded) if any(t.startswith(w) for t in said)]
+            matches.append((entity.id, score, held))
+        return matches
+
+    async def events(
+        self,
+        around: Sequence[uuid.UUID],
+        *,
+        since: datetime,
+        until: datetime,
+        limit: int = MAX_EVENTS,
+    ) -> list[tuple[uuid.UUID, datetime, str, uuid.UUID | None]]:
+        """What happened between two dates around some entities (LEKA-371) —
+        to each of them or what is part of them, two steps down: an incident
+        opened or resolved, a deployment, a change, a release, a merge —
+        the latest first, each with when, what, and what it happened to."""
+        scope: set[uuid.UUID] = set()
+        for entity_id in dict.fromkeys(around):
+            scope |= await self._graph.scope(entity_id, depth=EVENT_SCOPE)
+        if not scope:
+            return []
+        found, _ = await self._graph.happened(
+            scope=scope, kinds=EVENT_KINDS, since=since, until=until, limit=limit
+        )
+        happened: list[tuple[uuid.UUID, datetime, str, uuid.UUID | None]] = []
+        for entity, via in found:
+            resolved = _moment(entity.attributes.get("resolved_at"))
+            moments = [(entity.occurred_at, EVENT_NAMES.get(entity.type, entity.type.value))]
+            if entity.type is EntityType.INCIDENT:
+                moments = [(entity.occurred_at, "incident_opened"), (resolved, "incident_resolved")]
+            for at, kind in moments:
+                if at is not None and since <= at < until:
+                    happened.append((entity.id, at, kind, via))
+        happened.sort(key=lambda event: (event[1], str(event[0])), reverse=True)
+        return happened[:limit]
 
     async def coverage(self) -> KnowledgeCoverageRead:
         """How well the model knows each kind it holds, and from which
@@ -874,6 +974,17 @@ def _evidence(edge: Relationship) -> str | None:
 
 def _brief(entity: Entity | None) -> EntityBrief | None:
     return EntityBrief.model_validate(entity) if entity is not None else None
+
+
+def _moment(value: object) -> datetime | None:
+    """A date an attribute holds — none for what does not read as one."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        found = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return found if found.tzinfo else found.replace(tzinfo=UTC)
 
 
 def _uuid(value: object) -> uuid.UUID | None:

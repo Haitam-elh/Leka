@@ -110,6 +110,7 @@ from leka.knowledge.schemas import (
     ViewSourceRead,
 )
 from leka.knowledge.search import fields as search_fields
+from leka.knowledge.search import fold
 from leka.knowledge.service import KnowledgeService
 from leka.knowledge.views import VIEWS
 
@@ -212,5 +213,6 @@ __all__ = [
     "ViewLayerRead",
     "ViewNodeRead",
     "ViewSourceRead",
+    "fold",
     "search_fields",
 ]
