@@ -88,7 +88,8 @@ export interface RouteEntry {
 /** The tabs of an intention, straight from the mockups. */
 export const INTENTION_TABS = ["overview", "analysis", "evidence", "actions", "history"] as const;
 
-/** And of an entity sheet — eight, as on the Payment API screen. */
+/** And of an entity sheet — the eight of the Payment API screen, then what
+ * LEKA assembles around it (LEKA-370). */
 export const ENTITY_TABS = [
   "overview",
   "metrics",
@@ -98,6 +99,7 @@ export const ENTITY_TABS = [
   "logs",
   "configuration",
   "documentation",
+  "context",
 ] as const;
 
 export const ROUTES: readonly RouteEntry[] = [
