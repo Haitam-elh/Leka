@@ -89,6 +89,22 @@ test.describe("what a screen opens", () => {
   });
 });
 
+test.describe("a new intention, read", () => {
+  test("its step 2: what LEKA understood, what is missing, what it gathered", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/intentions/new");
+    await expect(page.getByRole("checkbox", { name: "acme/backend" })).toBeChecked();
+    await page
+      .getByTestId("intention-input")
+      .fill("Qu'est-ce qui a changé sur payment-api cette semaine ?");
+    await page.getByTestId("intention-submit").click();
+    await expect(page.getByTestId("intent-scope")).toBeVisible();
+    await page.getByRole("button", { name: "Voir tous les éléments" }).click();
+
+    await expectNoViolations(page);
+  });
+});
+
 test.describe("the states that replace them", () => {
   test("an unknown address", async ({ page }) => {
     await signIn(page);

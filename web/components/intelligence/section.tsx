@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CircleAlert,
   CircleHelp,
   FileSearch,
   Gauge,
@@ -32,7 +33,8 @@ export type SectionKind =
   | "evidence"
   | "impact"
   | "confidence"
-  | "context";
+  | "context"
+  | "missing";
 
 const ICONS: Record<SectionKind, { icon: LucideIcon; tone: string }> = {
   fact: { icon: Info, tone: "text-shell-nav-active" },
@@ -42,6 +44,7 @@ const ICONS: Record<SectionKind, { icon: LucideIcon; tone: string }> = {
   impact: { icon: Radar, tone: "text-state-danger" },
   confidence: { icon: Gauge, tone: "text-shell-nav-active" },
   context: { icon: Layers, tone: "text-shell-nav-active" },
+  missing: { icon: CircleAlert, tone: "text-state-warning" },
 };
 
 export function IntelligenceSection({

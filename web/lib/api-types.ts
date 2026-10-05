@@ -2452,6 +2452,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/context/intents/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plan Intent
+         * @description What an intention asks the company model for, read from its words
+         *     and the scope it was given (LEKA-373): its kind; what it is about —
+         *     chosen, named, or what that belongs to on the business side; when;
+         *     where; under what constraints; the structured context request that
+         *     makes; and what is missing. Nothing is kept.
+         */
+        post: operations["plan_intent_api_v1_context_intents_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assemble Intent
+         * @description The context an intention asks for, assembled and kept with how it was
+         *     read — its `intent`, and what is missing for this version (LEKA-373).
+         *     422 when nothing can start it: it names nothing in the company model
+         *     and says no word to search.
+         */
+        post: operations["assemble_intent_api_v1_context_intents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/context": {
         parameters: {
             query?: never;
@@ -3033,6 +3080,8 @@ export interface components {
              * @description What its sources disagree on (LEKA-372).
              */
             conflicts?: components["schemas"]["ContextConflictRead"][];
+            /** @description The intention it was assembled for, as LEKA read it, and what is missing — this version's too (LEKA-373). */
+            intent?: components["schemas"]["IntentPlan"] | null;
             /**
              * Model Built At
              * @description The build of the model it was read from.
@@ -3782,6 +3831,18 @@ export interface components {
              * @default 0.05
              */
             min_relevance: number;
+            /**
+             * Weights
+             * @description Each retriever's findings weighed this many times its own weight (LEKA-373); 1 when not said.
+             */
+            weights?: {
+                [key: string]: number;
+            };
+            /**
+             * Sources
+             * @description Only what these sources say — never a root (LEKA-373); every source when none.
+             */
+            sources?: string[];
         };
         /**
          * ContextDetail
@@ -3828,6 +3889,8 @@ export interface components {
             refreshed_at: string | null;
             /** Archived At */
             archived_at: string | null;
+            /** @description The intention it was assembled for (LEKA-373). */
+            intent?: components["schemas"]["IntentPlan"] | null;
             latest: components["schemas"]["ContextVersionRead"] | null;
         };
         /**
@@ -3941,6 +4004,8 @@ export interface components {
             refreshed_at: string | null;
             /** Archived At */
             archived_at: string | null;
+            /** @description The intention it was assembled for (LEKA-373). */
+            intent?: components["schemas"]["IntentPlan"] | null;
         };
         /** ContextRefresh */
         ContextRefresh: {
@@ -3981,6 +4046,12 @@ export interface components {
              * @default 0.05
              */
             min_relevance: number;
+            /** Weights */
+            weights?: {
+                [key: string]: number;
+            };
+            /** Sources */
+            sources?: string[];
         };
         /**
          * ContextSourceRead
@@ -6314,6 +6385,196 @@ export interface components {
             last_seen_at: string | null;
         };
         /**
+         * IntentAsk
+         * @description An intention, as asked (LEKA-373): its words, and the scope its asker
+         *     gave — none of which is required beyond the words.
+         */
+        IntentAsk: {
+            /**
+             * Text
+             * @description The intention, in its words.
+             */
+            text: string;
+            /**
+             * Intention Id
+             * @description The intention it is for, when there is one (LEKA-384): the context's subject.
+             */
+            intention_id?: string | null;
+            /** Title */
+            title?: string | null;
+            /**
+             * Environment
+             * @description Where to look; read from the words when none.
+             */
+            environment?: string | null;
+            /**
+             * Since
+             * @description The period asked; read from the words when none.
+             */
+            since?: string | null;
+            /** Until */
+            until?: string | null;
+            /**
+             * Services
+             * @description What the asker narrowed it to: the context's roots, first.
+             */
+            services?: string[];
+            /**
+             * Sources
+             * @description What to read; every source when none.
+             */
+            sources?: string[];
+            /**
+             * Limit
+             * @default 100
+             */
+            limit: number;
+        };
+        /**
+         * IntentConstraint
+         * @description What an assembly is held to, and where it comes from.
+         */
+        IntentConstraint: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "environment" | "period" | "services" | "sources" | "relationships" | "retrievers";
+            /** Value */
+            value: unknown;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "asked" | "text" | "kind" | "model";
+            /** Said */
+            said: string;
+        };
+        /**
+         * IntentGap
+         * @description What an intention needs that is missing — said, never ignored.
+         */
+        IntentGap: {
+            /**
+             * Kind
+             * @description no_subject, ambiguous_subject, unknown_service, unknown_environment, no_source_for, no_event_anchor, model_not_built, model_stale, nothing_happened, retriever_failed, no_business, disputed_subject.
+             */
+            kind: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "critical" | "warning";
+            /** Said */
+            said: string;
+            /** Detail */
+            detail?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * IntentPeriod
+         * @description When an intention looks: asked, read from its words, or its kind's.
+         */
+        IntentPeriod: {
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             */
+            until: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "asked" | "text" | "kind" | "model";
+            /**
+             * Said
+             * @description The words that said it: « depuis hier ».
+             */
+            said?: string | null;
+        };
+        /**
+         * IntentPlan
+         * @description What LEKA reads of an intention (LEKA-373): its kind, what it is
+         *     about, when, where and under what constraints — the structured context
+         *     request it makes — and what is missing. Kept with the context it made.
+         */
+        IntentPlan: {
+            /**
+             * Version
+             * @description Raised each time intentions are read differently.
+             */
+            version: number;
+            /** Text */
+            text: string;
+            /** Intention Id */
+            intention_id: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "diagnose" | "change" | "ownership" | "dependency" | "compliance" | "migration" | "knowledge" | "general";
+            /**
+             * Kind Said
+             * @description The words that said its kind.
+             */
+            kind_said: string[];
+            /** Facets */
+            facets: ("technical" | "business" | "organizational" | "temporal")[];
+            /** Subjects */
+            subjects: components["schemas"]["IntentSubject"][];
+            period: components["schemas"]["IntentPeriod"];
+            /** Environment */
+            environment: string | null;
+            /** Constraints */
+            constraints: components["schemas"]["IntentConstraint"][];
+            /** @description The structured context request it makes. */
+            request: components["schemas"]["ContextRequest"];
+            /** Gaps */
+            gaps: components["schemas"]["IntentGap"][];
+        };
+        /**
+         * IntentSubject
+         * @description A thing an intention is about, and how LEKA knows.
+         */
+        IntentSubject: {
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /**
+             * Facet
+             * @enum {string}
+             */
+            facet: "technical" | "business" | "organizational" | "temporal";
+            /**
+             * How
+             * @description asked — the asker chose it; named — the words name it; business — what a thing named belongs to, for its business side.
+             * @enum {string}
+             */
+            how: "asked" | "named" | "business";
+            /**
+             * Said
+             * @description The words that named it.
+             */
+            said?: string | null;
+            /**
+             * Confidence
+             * @description How surely the words name it, 0 to 1.
+             */
+            confidence: number;
+        };
+        /**
          * InvitationCreate
          * @description An invitation request.
          *
@@ -6796,7 +7057,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "duplicate" | "low_relevance" | "budget";
+            reason: "duplicate" | "low_relevance" | "out_of_scope" | "budget";
             /** Score */
             score: number;
             /**
@@ -7810,7 +8071,7 @@ export interface components {
             };
             /**
              * Left Out
-             * @description duplicate, low_relevance, budget — entities; ties — relationships left out with an end.
+             * @description duplicate, low_relevance, out_of_scope (none of the sources asked says it, LEKA-373), budget — entities; ties — relationships left out with an end.
              */
             left_out: {
                 [key: string]: number;
@@ -8414,6 +8675,11 @@ export interface components {
              * @description Why it failed, or why it was skipped.
              */
             error: string | null;
+            /**
+             * Weight
+             * @description What its findings counted for — its own weight, times the request's (LEKA-373); none before.
+             */
+            weight?: number | null;
         };
         /**
          * Role
@@ -21560,6 +21826,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeCoverageRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    plan_intent_api_v1_context_intents_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntentAsk"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentPlan"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    assemble_intent_api_v1_context_intents_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntentAsk"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssembledContext"];
                 };
             };
             /** @description The request could not be understood. */

@@ -18,6 +18,7 @@ import {
   IntentionComposer,
 } from "@/components/intentions/intention-composer";
 import { DecisionStep } from "@/components/intentions/decision-step";
+import { IntentContext } from "@/components/intentions/intent-context";
 import { useCurrentWorkspace } from "@/components/shell/shell-provider";
 import { SourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,9 @@ import { useEnvironment } from "@/lib/environment-queries";
 import { useLekaForm } from "@/lib/forms/use-leka-form";
 import { useUnsavedChangesGuard } from "@/lib/forms/use-unsaved-changes-guard";
 import { useDictionary } from "@/lib/i18n/locale-provider";
-import { submitIntention } from "@/lib/intentions/api";
+import { ApiError } from "@/lib/api";
+import type { AssembledContext } from "@/lib/context";
+import { intentAsk, submitIntention } from "@/lib/intentions/api";
 import { notify } from "@/lib/notify";
 import { KIND_CATEGORY, type Source } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
@@ -49,7 +52,9 @@ import { type IntentionRequest, intentionRequestSchema } from "@/lib/validation/
  * environnements" first, production chosen when there is one. Nothing is
  * offered that the workspace does not have.
  *
- * TODO LEKA-384: submitIntention resolves after a delay and invents an id.
+ * SUBMITTED, IT IS READ. Until LEKA-384 keeps intentions, submitting one
+ * assembles the context it asks for (LEKA-373) and step 2 shows it: what
+ * LEKA understood, what is missing, what it gathered (intent-context.tsx).
  */
 
 /** Every environment: the scope's default when the model names none. */
@@ -80,7 +85,7 @@ export function IntentionForm() {
   // (LEKA-390).
   const onDecision = params.get("step") === "decision";
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const [assembled, setAssembled] = useState<AssembledContext | null>(null);
 
   const form = useLekaForm<IntentionRequest>({
     schema: intentionRequestSchema,
@@ -94,14 +99,27 @@ export function IntentionForm() {
       attachments: [],
     },
     onSubmit: async (values) => {
-      const created = await submitIntention({ ...values, attachments: attachments.map((a) => a.name) });
-      clearDraft(workspace?.id);
-      setSubmittedId(created.id);
-      notify.success({ title: t.composer.submit, description: t.states.unavailableTitle });
+      const ask = intentAsk(values, {
+        everySource: values.sources.length === sourceItems.length,
+        periodChosen: form.getFieldState("period").isDirty,
+      });
+      try {
+        const made = await submitIntention(ask);
+        clearDraft(workspace?.id);
+        setAssembled(made);
+        notify.success({ title: t.composer.submit });
+      } catch (caught) {
+        // Nothing to start from: said in the words of the form, not the API's.
+        if (caught instanceof ApiError && caught.status === 422) {
+          form.setError("root", { type: "server", message: t.intent.nothing });
+          return;
+        }
+        throw caught;
+      }
     },
   });
 
-  useUnsavedChangesGuard(form.formState.isDirty && submittedId === null);
+  useUnsavedChangesGuard(form.formState.isDirty && assembled === null);
 
   const sources = useSources();
   const environment = useEnvironment();
@@ -171,16 +189,8 @@ export function IntentionForm() {
 
   if (onDecision) return <DecisionStep />;
 
-  if (submittedId !== null) {
-    return (
-      <div
-        data-testid="intention-step-2"
-        className="rounded-xl border border-shell-line bg-white p-8 text-center"
-      >
-        <h2 className="text-lg font-semibold text-brand-navy">{t.tabs.analysis}</h2>
-        <p className="mt-2 text-sm text-shell-muted">{t.states.unavailableBody}</p>
-      </div>
-    );
+  if (assembled !== null) {
+    return <IntentContext assembled={assembled} onEdit={() => setAssembled(null)} />;
   }
 
   return (
