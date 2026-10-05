@@ -33,6 +33,21 @@
                                           — or what is missing
     GET  /context/feedback                what people said, counted by the
                                           retrievers that found it
+    GET  /context/contract                the contract, published (LEKA-376):
+                                          its version, what each part is judged
+                                          by, its JSON schema
+    GET  /context/{id}/elements/{ref}     one element of a version, inspected:
+                                          its history, what quality says of it
+    GET  /context/{id}/elements/{ref}/evidence
+                                          the source records it was read from
+                                          (and source:read)
+    GET  /context/{id}/events             what happens to it, as it happens:
+                                          server-sent events
+
+Every response says its contract (`Leka-Context-Contract: 1`); a client
+asking for one this API does not serve is refused (406). Archiving a
+context, or changing how it follows the model, is its maker's — or an
+admin's (`context:manage`).
     POST /context/{id}/archive            no longer reassembled; still read
     GET  /context/{id}/versions           its versions, the latest first
     GET  /context/{id}/assembled          one version whole — the latest that
@@ -54,22 +69,27 @@ or the payload (rule 3): another workspace's context is 404.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
-from typing import Annotated
+from datetime import UTC, datetime
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Header, Query, Response, status
+from fastapi.responses import StreamingResponse
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.connectors import SourceRepository
 from leka.context import (
+    CONTRACT_HEADER,
+    CONTRACT_VERSION,
+    SUPPORTED_CONTRACTS,
     AssembledContext,
     Context,
     ContextArchivedError,
     ContextCheck,
     ContextCheckRead,
     ContextCompress,
+    ContextContract,
     ContextCreate,
     ContextDetail,
     ContextDiff,
@@ -87,6 +107,8 @@ from leka.context import (
     ContextUpdate,
     ContextVersion,
     ContextVersionRead,
+    ElementEvidence,
+    ElementInspection,
     IntentAsk,
     IntentPlan,
     NotAnIntentionError,
@@ -94,6 +116,7 @@ from leka.context import (
     RefreshOutcome,
     RetrievalFeedback,
     SubjectType,
+    stream,
 )
 from leka.core.errors import ErrorCode
 from leka.db import SortableField
@@ -101,10 +124,34 @@ from leka.governance import Permission, Principal, require_permission
 from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.knowledge import GraphRepository, GraphService
 
-router = APIRouter(prefix="/context", tags=["context"])
+
+async def _contract(
+    response: Response,
+    asked: Annotated[
+        str | None,
+        Header(
+            alias=CONTRACT_HEADER,
+            description="The contract version a client reads; refused when not served.",
+        ),
+    ] = None,
+) -> None:
+    """Every response says its contract; a client asking for one this API
+    does not serve is refused, before anything is read or made."""
+    if asked is not None and asked.strip() not in {str(v) for v in SUPPORTED_CONTRACTS}:
+        raise ApiError(
+            status.HTTP_406_NOT_ACCEPTABLE,
+            ErrorCode.CONTRACT_UNSUPPORTED,
+            f"This API serves context contract {CONTRACT_VERSION}, not {asked.strip()[:20]}.",
+        )
+    response.headers[CONTRACT_HEADER] = str(CONTRACT_VERSION)
+
+
+router = APIRouter(prefix="/context", tags=["context"], dependencies=[Depends(_contract)])
 
 Reader = Annotated[Principal, Depends(require_permission(Permission.INTENTION_READ))]
 Maker = Annotated[Principal, Depends(require_permission(Permission.INTENTION_CREATE))]
+# What the records behind an element say is the sources' (LEKA-376).
+SourceReader = Annotated[Principal, Depends(require_permission(Permission.SOURCE_READ))]
 
 CONTEXT_SORTS = SortCatalogue(
     fields=(SortableField("updated_at", Context.updated_at, "ix_contexts_workspace_updated_at"),),
@@ -150,6 +197,27 @@ Making = Annotated[ContextService, Depends(_making)]
 
 def _missing(message: str = NOT_FOUND) -> ApiError:
     return ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, message)
+
+
+async def _steward(context_id: uuid.UUID, session: SessionDep, principal: Maker) -> Principal:
+    """Who may archive a context, or change how it follows the model: who
+    made it — or an admin (`context:manage`). What everyone reads of it is
+    not one member's to end. 404 before 403: another workspace's context is
+    not there."""
+    found = await ContextRepository(session, principal.workspace_id).context(context_id)
+    if found is None:
+        raise _missing()
+    if found.created_by != principal.user_id and not principal.has(Permission.CONTEXT_MANAGE):
+        raise ApiError(
+            status.HTTP_403_FORBIDDEN,
+            ErrorCode.PERMISSION_DENIED,
+            "Only who made this context, or an admin, archives it or changes how it follows "
+            "the model.",
+        )
+    return principal
+
+
+Steward = Annotated[Principal, Depends(_steward)]
 
 
 def _archived() -> ApiError:
@@ -214,11 +282,34 @@ async def contexts(
     stale: Annotated[
         bool | None, Query(description="Behind the company model — or up to date (LEKA-374).")
     ] = None,
+    holds: Annotated[
+        uuid.UUID | None,
+        Query(description="Holding this entity in its latest version (LEKA-376)."),
+    ] = None,
+    q: Annotated[
+        str | None,
+        Query(min_length=2, max_length=200, description="These words in its title or purpose."),
+    ] = None,
+    level: Annotated[
+        Literal["high", "medium", "low"] | None,
+        Query(description="Its latest version judged so (LEKA-375)."),
+    ] = None,
+    mine: Annotated[bool, Query(description="Made by who asks.")] = False,
 ) -> PageEnvelope[ContextRead]:
-    """The contexts, the latest changed first."""
+    """The contexts, the latest changed first — by state, by subject,
+    behind the model or not, holding a thing, by words, by quality, mine."""
     repository = ContextRepository(session, principal.workspace_id)
     statement = repository.contexts(
-        ContextFilters(status=state, subject_type=subject_type, subject_id=subject_id, stale=stale)
+        ContextFilters(
+            status=state,
+            subject_type=subject_type,
+            subject_id=subject_id,
+            stale=stale,
+            holds=holds,
+            words=q,
+            level=level,
+            created_by=principal.user_id if mine else None,
+        )
     )
     result = await serve_page(
         session, statement, request=page, catalogue=CONTEXT_SORTS, id_column=Context.id
@@ -238,6 +329,17 @@ async def retrieval_feedback(
     return await service.retrieval_feedback(days=days)
 
 
+@router.get("/contract", response_model=ContextContract)
+async def context_contract(_: Reader) -> ContextContract:
+    """The contract downstream services read, published (LEKA-376): its
+    version and the header it is said in, the versions a client may ask
+    for, what each part is judged by — ranking, quality, an intention's
+    reading, each strategy — the JSON schema of an assembled context, and
+    what each ticket added under this version. The OpenAPI schema is not
+    served in production; this is."""
+    return ContextService.contract()
+
+
 @router.get("/{context_id}", response_model=ContextDetail)
 async def context(context_id: uuid.UUID, service: Reading) -> ContextDetail:
     found = await service.detail(context_id)
@@ -248,7 +350,7 @@ async def context(context_id: uuid.UUID, service: Reading) -> ContextDetail:
 
 @router.patch("/{context_id}", response_model=ContextRead)
 async def update_context(
-    context_id: uuid.UUID, body: ContextUpdate, service: Making
+    context_id: uuid.UUID, body: ContextUpdate, service: Making, _: Steward
 ) -> ContextRead:
     """Whether it is made again on its own when the company model changes
     what it holds — or only when asked (LEKA-374). Behind or not, it says
@@ -370,8 +472,9 @@ async def context_checks(
 
 
 @router.post("/{context_id}/archive", response_model=ContextRead)
-async def archive_context(context_id: uuid.UUID, service: Making) -> ContextRead:
-    """No longer reassembled. Its versions stay readable."""
+async def archive_context(context_id: uuid.UUID, service: Making, _: Steward) -> ContextRead:
+    """No longer reassembled. Its versions stay readable. Its maker's, or an
+    admin's (LEKA-376): 403 for another member."""
     archived = await service.archive(context_id)
     if archived is None:
         raise _missing()
@@ -469,3 +572,83 @@ async def give_feedback(
     if given is None:
         raise _missing("No such context, version of it, or element in that version.")
     return given
+
+
+@router.get("/{context_id}/elements/{ref_id}", response_model=ElementInspection)
+async def inspect_element(
+    context_id: uuid.UUID,
+    ref_id: uuid.UUID,
+    service: Reading,
+    version: Annotated[int | None, Query(ge=1, description="This version.")] = None,
+) -> ElementInspection:
+    """One element of a version, inspected (LEKA-376) — by default the
+    latest that holds something: what it is, where it came from, how it
+    was ranked; what the version's quality says of it — the gaps, the
+    factors, the conflicts naming it; its history across the context's
+    versions, what changed of it in each; what people said of it."""
+    found = await service.inspect_element(context_id, ref_id, version=version)
+    if found is None:
+        raise _missing("No such context, version of it, or element in that version.")
+    return found
+
+
+@router.get("/{context_id}/elements/{ref_id}/evidence", response_model=ElementEvidence)
+async def element_evidence(
+    context_id: uuid.UUID,
+    ref_id: uuid.UUID,
+    service: Reading,
+    _: SourceReader,
+    version: Annotated[int | None, Query(ge=1, description="This version.")] = None,
+) -> ElementEvidence:
+    """The source records an element was read from (LEKA-376): their source,
+    their id there, their title and link, their state and dates, the start
+    of their text — still shown first, then those gone from the source.
+    What the records say is the sources': it takes `source:read` too."""
+    found = await service.evidence(context_id, ref_id, version=version)
+    if found is None:
+        raise _missing("No such context, version of it, or element in that version.")
+    return found
+
+
+@router.get(
+    "/{context_id}/events",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"text/event-stream": {}}}},
+)
+async def context_events(
+    context_id: uuid.UUID,
+    session: SessionDep,
+    principal: Reader,
+    after: Annotated[
+        datetime | None, Query(description="Tell what happened after this; now when none.")
+    ] = None,
+    lasting: Annotated[
+        int,
+        Query(
+            alias="timeout",
+            ge=1,
+            le=300,
+            description="How long the stream stays open, in seconds.",
+        ),
+    ] = 60,
+    last_event_id: Annotated[
+        str | None, Header(alias="Last-Event-ID", description="Resume after this event.")
+    ] = None,
+) -> StreamingResponse:
+    """What happens to a context, as it happens (LEKA-376): server-sent
+    events — whether it is up to date, each time it is made again, its end.
+    A client reconnects when the stream's time is up, its Last-Event-ID
+    resuming where it was. 404 when it is not the workspace's."""
+    if await ContextRepository(session, principal.workspace_id).context(context_id) is None:
+        raise _missing()
+    return StreamingResponse(
+        stream.events(
+            workspace_id=principal.workspace_id,
+            user_id=principal.user_id,
+            context_id=context_id,
+            after=stream.cursor_of(last_event_id) or after or datetime.now(UTC),
+            lasting=lasting,
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

@@ -2508,7 +2508,8 @@ export interface paths {
         };
         /**
          * Contexts
-         * @description The contexts, the latest changed first.
+         * @description The contexts, the latest changed first — by state, by subject,
+         *     behind the model or not, holding a thing, by words, by quality, mine.
          */
         get: operations["contexts_api_v1_context_get"];
         put?: never;
@@ -2543,6 +2544,31 @@ export interface paths {
          *     learn from.
          */
         get: operations["retrieval_feedback_api_v1_context_feedback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/contract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Context Contract
+         * @description The contract downstream services read, published (LEKA-376): its
+         *     version and the header it is said in, the versions a client may ask
+         *     for, what each part is judged by — ranking, quality, an intention's
+         *     reading, each strategy — the JSON schema of an assembled context, and
+         *     what each ticket added under this version. The OpenAPI schema is not
+         *     served in production; this is.
+         */
+        get: operations["context_contract_api_v1_context_contract_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2701,7 +2727,8 @@ export interface paths {
         put?: never;
         /**
          * Archive Context
-         * @description No longer reassembled. Its versions stay readable.
+         * @description No longer reassembled. Its versions stay readable. Its maker's, or an
+         *     admin's (LEKA-376): 403 for another member.
          */
         post: operations["archive_context_api_v1_context__context_id__archive_post"];
         delete?: never;
@@ -2815,6 +2842,76 @@ export interface paths {
          *     the context, the version or the element is not there.
          */
         post: operations["give_feedback_api_v1_context__context_id__feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/elements/{ref_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inspect Element
+         * @description One element of a version, inspected (LEKA-376) — by default the
+         *     latest that holds something: what it is, where it came from, how it
+         *     was ranked; what the version's quality says of it — the gaps, the
+         *     factors, the conflicts naming it; its history across the context's
+         *     versions, what changed of it in each; what people said of it.
+         */
+        get: operations["inspect_element_api_v1_context__context_id__elements__ref_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/elements/{ref_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Element Evidence
+         * @description The source records an element was read from (LEKA-376): their source,
+         *     their id there, their title and link, their state and dates, the start
+         *     of their text — still shown first, then those gone from the source.
+         *     What the records say is the sources': it takes `source:read` too.
+         */
+        get: operations["element_evidence_api_v1_context__context_id__elements__ref_id__evidence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Context Events
+         * @description What happens to a context, as it happens (LEKA-376): server-sent
+         *     events — whether it is up to date, each time it is made again, its end.
+         *     A client reconnects when the stream's time is up, its Last-Event-ID
+         *     resuming where it was. 404 when it is not the workspace's.
+         */
+        get: operations["context_events_api_v1_context__context_id__events_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4069,6 +4166,43 @@ export interface components {
             said: string;
         };
         /**
+         * ContextContract
+         * @description The contract downstream services read (LEKA-376), published: its
+         *     version and the header it is said in, what each part of it is judged
+         *     by — ranking, quality, an intention's reading, each strategy — its JSON
+         *     schema, and what each ticket added under this version.
+         */
+        ContextContract: {
+            /** Version */
+            version: number;
+            /**
+             * Supported
+             * @description The versions a client may ask for.
+             */
+            supported: number[];
+            /**
+             * Header
+             * @description The header a response says it in, a client asks by.
+             */
+            header: string;
+            /**
+             * Versions
+             * @description ranking, quality, intent, strategy.<name>: raised when that part judges differently — each version keeps the ones it was made under.
+             */
+            versions: {
+                [key: string]: number;
+            };
+            /**
+             * Json Schema
+             * @description AssembledContext, as JSON Schema.
+             */
+            json_schema: {
+                [key: string]: unknown;
+            };
+            /** Changes */
+            changes: components["schemas"]["ContractChange"][];
+        };
+        /**
          * ContextCreate
          * @description A context to assemble. Its roots must be the workspace's.
          */
@@ -4759,6 +4893,16 @@ export interface components {
             assembled_at: string;
             /** Assembled By */
             assembled_by: string | null;
+        };
+        /**
+         * ContractChange
+         * @description What a ticket added to a contract version: fields added only.
+         */
+        ContractChange: {
+            /** Ticket */
+            ticket: string;
+            /** Added */
+            added: string[];
         };
         /**
          * CoverageRead
@@ -5591,6 +5735,84 @@ export interface components {
             quality: number | null;
         };
         /**
+         * ElementEvidence
+         * @description The source records an element was read from (LEKA-376): an entity's,
+         *     every record whose key entity resolution made it; a relationship's, the
+         *     records that stated it.
+         */
+        ElementEvidence: {
+            /**
+             * Context Id
+             * Format: uuid
+             */
+            context_id: string;
+            /** Version */
+            version: number;
+            /**
+             * Ref Id
+             * Format: uuid
+             */
+            ref_id: string;
+            /** Label */
+            label: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "entity" | "relationship";
+            /**
+             * Records
+             * @description Still shown first, the latest seen first.
+             */
+            records: components["schemas"]["EvidenceRecord"][];
+            /**
+             * Truncated
+             * @description More records than a response holds.
+             */
+            truncated: boolean;
+        };
+        /**
+         * ElementFactor
+         * @description A factor of a version's quality read from the element.
+         */
+        ElementFactor: {
+            /**
+             * Measure
+             * @enum {string}
+             */
+            measure: "completeness" | "freshness" | "confidence";
+            /** Name */
+            name: string;
+            /** Value */
+            value: number | null;
+            /** Said */
+            said: string;
+        };
+        /**
+         * ElementInspection
+         * @description One element of a version, inspected (LEKA-376): what it is and where
+         *     it came from, how it was ranked; what the version's quality says of it;
+         *     its history across the context's versions; what people said of it.
+         */
+        ElementInspection: {
+            /**
+             * Context Id
+             * Format: uuid
+             */
+            context_id: string;
+            /** Version */
+            version: number;
+            element: components["schemas"]["ContextElementRead"];
+            quality: components["schemas"]["ElementQuality"];
+            /**
+             * History
+             * @description The context's versions, the latest first.
+             */
+            history: components["schemas"]["ElementStep"][];
+            /** @description What people said of it, in every version. */
+            feedback: components["schemas"]["FeedbackCounts"];
+        };
+        /**
          * ElementProvenance
          * @description Where an element came from, as the model said it when the version
          *     was made.
@@ -5648,6 +5870,18 @@ export interface components {
              * @description When it last changed (a relationship).
              */
             changed_at: string | null;
+        };
+        /**
+         * ElementQuality
+         * @description What a version's quality says of one element (LEKA-375).
+         */
+        ElementQuality: {
+            /** Gaps */
+            gaps: components["schemas"]["QualityGap"][];
+            /** Factors */
+            factors: components["schemas"]["ElementFactor"][];
+            /** Conflicts */
+            conflicts: components["schemas"]["QualityConflict"][];
         };
         /**
          * ElementRanking
@@ -5774,6 +6008,40 @@ export interface components {
              * @description The record that stated it (a relationship).
              */
             record_id: string | null;
+        };
+        /**
+         * ElementStep
+         * @description One version of a context, as it held an element — or did not.
+         */
+        ElementStep: {
+            /** Version */
+            version: number;
+            /**
+             * Trigger
+             * @enum {string}
+             */
+            trigger: "created" | "refreshed" | "changed" | "expanded" | "compressed" | "reasked";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "assembled" | "failed";
+            /**
+             * Assembled At
+             * Format: date-time
+             */
+            assembled_at: string;
+            /** Held */
+            held: boolean;
+            /** Rank */
+            rank?: number | null;
+            /** Score */
+            score?: number | null;
+            /**
+             * Changed
+             * @description What of it was said differently from the version before that held it.
+             */
+            changed?: string[];
         };
         /**
          * EnrichedAttributeRead
@@ -6320,13 +6588,67 @@ export interface components {
          *     them and a rename would be a breaking change for nothing.
          * @enum {string}
          */
-        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed";
+        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed";
         /**
          * ErrorEnvelope
          * @description Every error response the API returns, whatever the status.
          */
         ErrorEnvelope: {
             error: components["schemas"]["ErrorBody"];
+        };
+        /**
+         * EvidenceRecord
+         * @description A record an element was read from: which source, its id there, what
+         *     extraction said of it, when the source last showed it — or that it is
+         *     gone from the source.
+         */
+        EvidenceRecord: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /**
+             * Source Name
+             * @description None when the source has been deleted since.
+             */
+            source_name: string | null;
+            /**
+             * Kind
+             * @description The kind of record: issues, pages, deployments…
+             */
+            kind: string;
+            /**
+             * External Id
+             * @description Its id at the source.
+             */
+            external_id: string;
+            /** Title */
+            title: string | null;
+            /** Url */
+            url: string | null;
+            /** State */
+            state: string | null;
+            /** Created At */
+            created_at: string | null;
+            /** Updated At */
+            updated_at: string | null;
+            /**
+             * Excerpt
+             * @description The start of its text, MAX_EXCERPT at most.
+             */
+            excerpt: string | null;
+            /**
+             * Seen At
+             * Format: date-time
+             * @description When the source last showed it.
+             */
+            seen_at: string;
+            /**
+             * Gone
+             * @description The source no longer shows it.
+             */
+            gone: boolean;
         };
         /**
          * Expertise
@@ -22742,7 +23064,10 @@ export interface operations {
     plan_intent_api_v1_context_intents_plan_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -22838,7 +23163,10 @@ export interface operations {
     assemble_intent_api_v1_context_intents_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -22939,6 +23267,14 @@ export interface operations {
                 subject_id?: string | null;
                 /** @description Behind the company model — or up to date (LEKA-374). */
                 stale?: boolean | null;
+                /** @description Holding this entity in its latest version (LEKA-376). */
+                holds?: string | null;
+                /** @description These words in its title or purpose. */
+                q?: string | null;
+                /** @description Its latest version judged so (LEKA-375). */
+                level?: ("high" | "medium" | "low") | null;
+                /** @description Made by who asks. */
+                mine?: boolean;
                 /** @description From a previous response's next_cursor. Opaque. */
                 cursor?: string | null;
                 /** @description Rows per page. */
@@ -22948,7 +23284,10 @@ export interface operations {
                 /** @description Ascending or descending. */
                 order?: "asc" | "desc";
             };
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -23040,7 +23379,10 @@ export interface operations {
     create_context_api_v1_context_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -23139,7 +23481,10 @@ export interface operations {
                 /** @description How far back. */
                 days?: number;
             };
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -23228,10 +23573,108 @@ export interface operations {
             };
         };
     };
+    context_contract_api_v1_context_contract_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContextContract"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     context_api_v1_context__context_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -23325,7 +23768,10 @@ export interface operations {
     update_context_api_v1_context__context_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -23423,7 +23869,10 @@ export interface operations {
     refresh_context_api_v1_context__context_id__refresh_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -23521,7 +23970,10 @@ export interface operations {
     expand_context_api_v1_context__context_id__expand_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -23619,7 +24071,10 @@ export interface operations {
     compress_context_api_v1_context__context_id__compress_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -23717,7 +24172,10 @@ export interface operations {
     reask_context_api_v1_context__context_id__intent_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -23824,7 +24282,10 @@ export interface operations {
                 /** @description Ascending or descending. */
                 order?: "asc" | "desc";
             };
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -23918,7 +24379,10 @@ export interface operations {
     archive_context_api_v1_context__context_id__archive_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -24021,7 +24485,10 @@ export interface operations {
                 /** @description Ascending or descending. */
                 order?: "asc" | "desc";
             };
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -24120,7 +24587,10 @@ export interface operations {
                 /** @description The version that stood then. */
                 at?: string | null;
             };
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -24219,7 +24689,10 @@ export interface operations {
                 /** @description The later version. */
                 to: number;
             };
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -24316,7 +24789,10 @@ export interface operations {
                 /** @description This version. */
                 version?: number | null;
             };
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -24410,7 +24886,10 @@ export interface operations {
     give_feedback_api_v1_context__context_id__feedback_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
             path: {
                 context_id: string;
             };
@@ -24429,6 +24908,312 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContextFeedbackRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    inspect_element_api_v1_context__context_id__elements__ref_id__get: {
+        parameters: {
+            query?: {
+                /** @description This version. */
+                version?: number | null;
+            };
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
+            path: {
+                context_id: string;
+                ref_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ElementInspection"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    element_evidence_api_v1_context__context_id__elements__ref_id__evidence_get: {
+        parameters: {
+            query?: {
+                /** @description This version. */
+                version?: number | null;
+            };
+            header?: {
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
+            path: {
+                context_id: string;
+                ref_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ElementEvidence"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    context_events_api_v1_context__context_id__events_get: {
+        parameters: {
+            query?: {
+                /** @description Tell what happened after this; now when none. */
+                after?: string | null;
+                /** @description How long the stream stays open, in seconds. */
+                timeout?: number;
+            };
+            header?: {
+                /** @description Resume after this event. */
+                "Last-Event-ID"?: string | null;
+                /** @description The contract version a client reads; refused when not served. */
+                "Leka-Context-Contract"?: string | null;
+            };
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
                 };
             };
             /** @description The request could not be understood. */

@@ -195,6 +195,12 @@ Step 5 is why removing someone's membership takes effect immediately. The
 role is never cached in the session: that would be the obvious optimisation
 and it would turn a revocation into a delay.
 
+**A request that lasts** — the stream of what happens to a context
+(LEKA-376, [context-api.md](context-api.md) § 5) — does step 5 again at
+every look, every 2 seconds: removing someone ends their stream there, as
+it ends their next request. A stream lasts five minutes at most; a
+reconnection is a new request, authenticated from step 1.
+
 ---
 
 ## What would change this document

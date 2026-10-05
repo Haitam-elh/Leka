@@ -23,12 +23,15 @@ from leka.context.models import (
 )
 from leka.context.repository import ContextFilters, ContextRepository
 from leka.context.schemas import (
+    CONTRACT_HEADER,
     CONTRACT_VERSION,
     RETRIEVERS,
+    SUPPORTED_CONTRACTS,
     AssembledContext,
     ContextChange,
     ContextCheckRead,
     ContextCompress,
+    ContextContract,
     ContextCreate,
     ContextDetail,
     ContextDiff,
@@ -45,6 +48,8 @@ from leka.context.schemas import (
     ContextSubject,
     ContextUpdate,
     ContextVersionRead,
+    ElementEvidence,
+    ElementInspection,
     IntentAsk,
     IntentGap,
     IntentPlan,
@@ -65,9 +70,11 @@ from leka.context.service import (
 from leka.context.strategies import STRATEGIES, Strategy
 
 __all__ = [
+    "CONTRACT_HEADER",
     "CONTRACT_VERSION",
     "RETRIEVERS",
     "STRATEGIES",
+    "SUPPORTED_CONTRACTS",
     "AssembledContext",
     "Context",
     "ContextArchivedError",
@@ -75,6 +82,7 @@ __all__ = [
     "ContextCheck",
     "ContextCheckRead",
     "ContextCompress",
+    "ContextContract",
     "ContextCreate",
     "ContextDetail",
     "ContextDiff",
@@ -99,6 +107,8 @@ __all__ = [
     "ContextUpdate",
     "ContextVersion",
     "ContextVersionRead",
+    "ElementEvidence",
+    "ElementInspection",
     "IntentAsk",
     "IntentGap",
     "IntentPlan",

@@ -10,7 +10,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { cn } from "cn";
 
@@ -21,6 +21,7 @@ import {
   FreshnessPanel,
   VersionWhy,
 } from "@/components/environment/context-freshness";
+import { ElementInspect } from "@/components/environment/context-inspect";
 import { ElementFeedback, QualityPanel } from "@/components/environment/context-quality";
 import {
   ConflictsPanel,
@@ -35,7 +36,7 @@ import {
   ContextVersionLine,
   retrieverName,
 } from "@/components/intelligence";
-import { usePermissions } from "@/components/shell/shell-provider";
+import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
 import { ErrorState } from "@/components/states/error-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +64,7 @@ import {
 import {
   useAssembledContext,
   useContextDiff,
+  useContextEvents,
   useContextMutation,
   useContextVersions,
   useEntityContexts,
@@ -82,8 +84,11 @@ import { notify } from "@/lib/notify";
  * model, why each version was made and every time it was made again
  * (LEKA-374), context-freshness.tsx's — widened or narrowed here; how good
  * it is, and what people say of an element or of what is missing
- * (LEKA-375), context-quality.tsx's. Nothing is drawn that the API did not
- * say.
+ * (LEKA-375), context-quality.tsx's; an element inspected — its history,
+ * the records it was read from — context-inspect.tsx's (LEKA-376). What
+ * happens to the context is heard as it happens: LEKA making it again says
+ * so. Archiving it, or changing how it follows the model, is its maker's
+ * or an admin's. Nothing is drawn that the API did not say.
  */
 
 type Dictionary = ReturnType<typeof useDictionary>;
@@ -286,6 +291,19 @@ function Shown({
   const archive = useContextMutation(contexts.archive);
   const expand = useContextMutation(contexts.expand);
   const compress = useContextMutation(contexts.compress);
+  const me = useCurrentUser();
+  const permissions = usePermissions();
+  // Archiving, or stopping it following the model: its maker's, or an
+  // admin's (LEKA-376).
+  const canManage =
+    canMake &&
+    (context.created_by === me?.id || (permissions?.includes("context:manage") ?? false));
+  const updated = useCallback(
+    (check: { version: number }) =>
+      notify.info({ title: fill(w.live.updated, { version: check.version }) }),
+    [w],
+  );
+  useContextEvents(context.id, updated);
   const archived = context.status === "archived";
   const picks = all.map((one) => ({
     value: one.id,
@@ -401,19 +419,21 @@ function Shown({
               <Minimize2 className="size-3.5" aria-hidden="true" />
               {w.compress}
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={archive.isPending}
-              onClick={() =>
-                archive.mutate(context.id, {
-                  onSuccess: () => notify.success({ title: w.archived }),
-                  onError: () => notify.error({ title: w.archiveFailed }),
-                })
-              }
-            >
-              {w.archive}
-            </Button>
+            {canManage ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={archive.isPending}
+                onClick={() =>
+                  archive.mutate(context.id, {
+                    onSuccess: () => notify.success({ title: w.archived }),
+                    onError: () => notify.error({ title: w.archiveFailed }),
+                  })
+                }
+              >
+                {w.archive}
+              </Button>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -429,6 +449,7 @@ function Shown({
         <FreshnessPanel
           context={context}
           canMake={canMake}
+          canFollow={canManage}
           onUpdate={reassemble}
           updating={refresh.isPending}
         />
@@ -513,9 +534,8 @@ function Elements({ assembled, canMake }: { assembled: AssembledContext; canMake
               names={names}
               open={open === key}
               onToggle={() => setOpen(open === key ? null : key)}
-              feedback={
-                canMake ? { contextId: assembled.context_id, version: assembled.version } : null
-              }
+              at={{ contextId: assembled.context_id, version: assembled.version }}
+              canFeedback={canMake}
             />
           );
         })}
@@ -529,14 +549,17 @@ function ElementRow({
   names,
   open,
   onToggle,
-  feedback,
+  at,
+  canFeedback,
 }: {
   element: ContextElement;
   names: ReadonlyMap<string, ContextElement>;
   open: boolean;
   onToggle: () => void;
-  /** Where what is said of it goes (LEKA-375); none for who may only read. */
-  feedback: { contextId: string; version: number } | null;
+  /** The version it is shown from: inspected there (LEKA-376). */
+  at: { contextId: string; version: number };
+  /** Whether what is said of it may be said (LEKA-375). */
+  canFeedback: boolean;
 }) {
   const t = useDictionary();
   const w = t.environment.sheet.context;
@@ -569,13 +592,12 @@ function ElementRow({
         </button>
       </div>
       {open ? <Provenance element={element} names={names} /> : null}
-      {open && feedback ? (
+      {open ? (
+        <ElementInspect contextId={at.contextId} version={at.version} refId={element.ref_id} />
+      ) : null}
+      {open && canFeedback ? (
         <div className="mt-2 ml-6">
-          <ElementFeedback
-            contextId={feedback.contextId}
-            version={feedback.version}
-            refId={element.ref_id}
-          />
+          <ElementFeedback contextId={at.contextId} version={at.version} refId={element.ref_id} />
         </div>
       ) : null}
     </li>

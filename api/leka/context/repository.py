@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import Select, func, select, text, update
+from sqlalchemy import Select, and_, exists, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.context.models import (
@@ -37,6 +37,12 @@ class ContextFilters:
     subject_id: str | None = None
     # Behind the model, or up to date (LEKA-374).
     stale: bool | None = None
+    # LEKA-376: holding this entity in its latest version; these words in
+    # its title or purpose; its latest version judged so; made by this user.
+    holds: uuid.UUID | None = None
+    words: str | None = None
+    level: str | None = None
+    created_by: uuid.UUID | None = None
 
 
 class ContextRepository(WorkspaceScopedRepository):
@@ -68,6 +74,40 @@ class ContextRepository(WorkspaceScopedRepository):
             )
         elif filters.stale is False:
             statement = statement.where(Context.stale_since.is_(None), Context.status != "failed")
+        if filters.holds is not None:
+            statement = statement.where(
+                exists(
+                    select(ContextElement.id)
+                    .join(ContextVersion, ContextVersion.id == ContextElement.version_id)
+                    .where(
+                        ContextElement.workspace_id == self.workspace_id,
+                        ContextElement.ref_id == filters.holds,
+                        ContextVersion.context_id == Context.id,
+                        ContextVersion.version == Context.current_version,
+                    )
+                )
+            )
+        if filters.words:
+            said = "%" + _escaped(filters.words) + "%"
+            statement = statement.where(
+                or_(
+                    Context.title.ilike(said, escape="\\"),
+                    Context.purpose.ilike(said, escape="\\"),
+                )
+            )
+        if filters.level is not None:
+            statement = statement.where(
+                exists(
+                    select(ContextVersion.id).where(
+                        ContextVersion.workspace_id == self.workspace_id,
+                        ContextVersion.context_id == Context.id,
+                        ContextVersion.version == Context.current_version,
+                        ContextVersion.quality["level"].astext == filters.level,
+                    )
+                )
+            )
+        if filters.created_by is not None:
+            statement = statement.where(Context.created_by == filters.created_by)
         return statement
 
     def versions(self, context_id: uuid.UUID) -> Select[tuple[ContextVersion]]:
@@ -330,6 +370,52 @@ class ContextRepository(WorkspaceScopedRepository):
         )
         return {verdict: int(count) for verdict, count in rows.tuples()}
 
+    async def element_feedback(self, context_id: uuid.UUID, ref_id: uuid.UUID) -> dict[str, int]:
+        """What was said of one element, in every version, by verdict."""
+        rows = await self._session.execute(
+            select(ContextFeedback.verdict, func.count())
+            .where(
+                ContextFeedback.workspace_id == self.workspace_id,
+                ContextFeedback.context_id == context_id,
+                ContextFeedback.ref_id == ref_id,
+            )
+            .group_by(ContextFeedback.verdict)
+        )
+        return {verdict: int(count) for verdict, count in rows.tuples()}
+
+    async def history(
+        self, context_id: uuid.UUID, ref_id: uuid.UUID, *, limit: int
+    ) -> list[tuple[ContextVersion, ContextElement | None]]:
+        """A context's versions, the latest first, each with the element it
+        held as `ref_id` — or none (LEKA-376)."""
+        rows = await self._session.execute(
+            self.select(ContextVersion)
+            .add_columns(ContextElement)
+            .outerjoin(
+                ContextElement,
+                and_(
+                    ContextElement.version_id == ContextVersion.id,
+                    ContextElement.ref_id == ref_id,
+                ),
+            )
+            .where(ContextVersion.context_id == context_id)
+            .order_by(ContextVersion.version.desc())
+            .limit(limit)
+        )
+        return [(version, element) for version, element in rows.tuples()]
+
+    async def checks_after(
+        self, context_id: uuid.UUID, after: datetime | None, *, limit: int
+    ) -> Sequence[ContextCheck]:
+        """Each time a context was made again after `after`, the oldest
+        first (LEKA-376: what a stream tells)."""
+        statement = self.checks(context_id)
+        if after is not None:
+            statement = statement.where(ContextCheck.checked_at > after)
+        return await self.list(
+            statement.order_by(ContextCheck.checked_at, ContextCheck.id).limit(limit)
+        )
+
     async def feedback_since(self, since: datetime, *, limit: int) -> Sequence[ContextFeedback]:
         """What was said of the workspace's contexts since `since`, the
         latest first."""
@@ -369,3 +455,8 @@ class ContextSweeper:
             text("DELETE FROM context_checks WHERE checked_at < :before"), {"before": before}
         )
         return int(getattr(result, "rowcount", 0) or 0)
+
+
+def _escaped(words: str) -> str:
+    """Words as a LIKE pattern takes them: its wildcards said literally."""
+    return words.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

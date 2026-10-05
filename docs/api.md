@@ -193,6 +193,13 @@ generic failure of its status class rather than crashing.
 field's type. Changing what an existing value means. Removing a route, or
 changing what it does. Making an optional parameter required.
 
+**A resource's own contract.** What a context is — the shape services build
+on — carries a contract version of its own, said on every context response
+(`Leka-Context-Contract: 1`) and asked for by a client sending the same
+header: one the API does not serve is refused, 406 `contract_unsupported`.
+It is published at `GET /api/v1/context/contract`, its JSON Schema with it
+— see [context-api.md](context-api.md).
+
 **Deprecation.** A route on the way out answers with a `Deprecation` header
 carrying the date the decision was taken, and a `Sunset` header carrying the
 date it stops working. Nothing uses them yet. They are written down now so

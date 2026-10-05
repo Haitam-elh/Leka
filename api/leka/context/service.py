@@ -50,6 +50,11 @@ it; one made before is judged when read.
                         what people said, counted by the retrievers that
                         found it: what weighing them next time can learn
 
+INSPECTED (LEKA-376): one element of a version — its history across the
+context's versions, what quality says of it, what people said — and the
+source records it was read from (`evidence()`); the contract published
+(`contract()`). A stream of what happens to a context is stream.py's.
+
 Every time a context is made again is a CHECK, kept whatever came of it —
 a version, nothing new, a failure — with what triggered it; a version
 says what made it (`changes`) and how it differs from the one before
@@ -107,19 +112,22 @@ from leka.context.models import (
     ContextFeedback,
     ContextVersion,
 )
-from leka.context.ranking import Link
+from leka.context.ranking import RANKING_VERSION, Link
 from leka.context.repository import ContextRepository
 from leka.context.schemas import (
+    CONTRACT_HEADER,
     CONTRACT_VERSION,
     MAX_ROOTS,
     MAX_WINDOW_DAYS,
     MIN_RELEVANCE,
     RETRIEVERS,
+    SUPPORTED_CONTRACTS,
     AssembledContext,
     ContextChange,
     ContextCheckRead,
     ContextCompress,
     ContextConflictRead,
+    ContextContract,
     ContextCreate,
     ContextDelta,
     ContextDetail,
@@ -136,7 +144,14 @@ from leka.context.schemas import (
     ContextSubject,
     ContextSummary,
     ContextVersionRead,
+    ContractChange,
     ElementChange,
+    ElementEvidence,
+    ElementFactor,
+    ElementInspection,
+    ElementQuality,
+    ElementStep,
+    EvidenceRecord,
     FeedbackCounts,
     IntentAsk,
     IntentConstraint,
@@ -204,6 +219,25 @@ WRITTEN = (RelationshipType.DESCRIBES, RelationshipType.MENTIONS)
 # What feedback is said, counted, at most; how far back.
 MAX_FEEDBACK = 50
 MAX_FEEDBACK_COUNTED = 5000
+# Inspecting an element (LEKA-376): the versions read, the records its
+# evidence lists, how much of a record's text.
+MAX_HISTORY = 50
+MAX_EVIDENCE = 20
+MAX_EXCERPT = 500
+
+# What each ticket added to contract version 1: fields added only.
+CHANGES = (
+    ContractChange(
+        ticket="LEKA-371",
+        added=["retrieval", "elements[].relevance", "elements[].reason.retrievers"],
+    ),
+    ContractChange(ticket="LEKA-372", added=["ranking", "conflicts", "elements[].ranking"]),
+    ContractChange(ticket="LEKA-373", added=["intent"]),
+    ContractChange(
+        ticket="LEKA-374", added=["trigger", "reason", "changes", "change_count", "delta"]
+    ),
+    ContractChange(ticket="LEKA-375", added=["quality"]),
+)
 
 
 class ContextService:
@@ -652,6 +686,133 @@ class ContextService:
                 for old, new, fields in changed
             ],
             unchanged=same,
+        )
+
+    async def inspect_element(
+        self, context_id: uuid.UUID, ref_id: uuid.UUID, *, version: int | None = None
+    ) -> ElementInspection | None:
+        """One element of a version — the latest that holds something when
+        none is asked — inspected (LEKA-376): what it is, what the
+        version's quality says of it, its history across the context's
+        versions, what people said of it. None when it is not there."""
+        made = await self.assembled(context_id, version=version)
+        if made is None:
+            return None
+        element = next((e for e in made.elements if e.ref_id == ref_id), None)
+        if element is None:
+            return None
+        judged = made.quality
+        history = await self._repository.history(made.context_id, ref_id, limit=MAX_HISTORY)
+        steps: list[ElementStep] = []
+        later: tuple[int, assembly.Element] | None = None
+        for row, held in reversed(history):
+            now = _restore(held)[1] if held is not None else None
+            changed: list[str] = []
+            if now is not None and later is not None:
+                _, _, moved, _ = assembly.diff([later[1]], [now])
+                changed = moved[0][2] if moved else []
+            ranked = now.ranking if now is not None else None
+            steps.append(
+                ElementStep(
+                    version=row.version,
+                    trigger=row.trigger,
+                    status=row.status,
+                    assembled_at=row.assembled_at,
+                    held=now is not None,
+                    rank=ranked.rank if ranked else None,
+                    score=ranked.score if ranked else None,
+                    changed=changed,
+                )
+            )
+            if now is not None:
+                later = (row.version, now)
+        counts = await self._repository.element_feedback(made.context_id, ref_id)
+        return ElementInspection(
+            context_id=made.context_id,
+            version=made.version,
+            element=element,
+            quality=ElementQuality(
+                gaps=[g for g in judged.gaps if ref_id in (g.refs or [])] if judged else [],
+                factors=[
+                    ElementFactor(measure=m.name, name=f.name, value=f.value, said=f.said)
+                    for m in (judged.measures if judged else [])
+                    for f in m.factors
+                    if ref_id in (f.refs or [])
+                ],
+                conflicts=[c for c in judged.conflicts if ref_id in c.refs] if judged else [],
+            ),
+            history=list(reversed(steps)),
+            feedback=FeedbackCounts.model_validate(counts),
+        )
+
+    async def evidence(
+        self, context_id: uuid.UUID, ref_id: uuid.UUID, *, version: int | None = None
+    ) -> ElementEvidence | None:
+        """The source records an element of a version was read from
+        (LEKA-376): an entity's, every record whose key entity resolution
+        made it; a relationship's, the records that stated it. None when the
+        element is not there."""
+        made = await self.assembled(context_id, version=version)
+        if made is None or self._content is None:
+            return None
+        element = next((e for e in made.elements if e.ref_id == ref_id), None)
+        if element is None:
+            return None
+        if element.kind == "entity":
+            rows = await self._content.evidence_of(
+                ref_id, limit=MAX_EVIDENCE + 1, chars=MAX_EXCERPT
+            )
+        else:
+            records = [
+                uuid.UUID(source.record_id)
+                for source in element.provenance.sources
+                if source.record_id and _is_uuid(source.record_id)
+            ]
+            rows = await self._content.evidence_in(
+                records, limit=MAX_EVIDENCE + 1, chars=MAX_EXCERPT
+            )
+        names = {s.source_id: s.name for s in element.provenance.sources}
+        return ElementEvidence(
+            context_id=made.context_id,
+            version=made.version,
+            ref_id=ref_id,
+            label=element.label,
+            kind="entity" if element.kind == "entity" else "relationship",
+            records=[
+                EvidenceRecord(
+                    source_id=row.source_id,
+                    source_name=names.get(row.source_id),
+                    kind=row.kind,
+                    external_id=row.external_id,
+                    title=row.title,
+                    url=row.url,
+                    state=row.state,
+                    created_at=row.created_at,
+                    updated_at=row.updated_at,
+                    excerpt=row.excerpt or None,
+                    seen_at=row.seen_at,
+                    gone=row.deleted_at is not None,
+                )
+                for row in rows[:MAX_EVIDENCE]
+            ],
+            truncated=len(rows) > MAX_EVIDENCE,
+        )
+
+    @staticmethod
+    def contract() -> ContextContract:
+        """The contract downstream services read, published (LEKA-376)."""
+        return ContextContract(
+            version=CONTRACT_VERSION,
+            supported=sorted(SUPPORTED_CONTRACTS),
+            header=CONTRACT_HEADER,
+            versions={
+                "ranking": RANKING_VERSION,
+                "quality": quality.QUALITY_VERSION,
+                "intent": INTENT_VERSION,
+                **{f"strategy.{name}": s.version for name, s in STRATEGIES.items()},
+            },
+            json_schema=AssembledContext.model_json_schema(),
+            changes=list(CHANGES),
         )
 
     async def inspect_quality(
@@ -1305,6 +1466,14 @@ def _check(row: ContextCheck) -> ContextCheckRead:
             "model_built_at": row.model_built_at,
         }
     )
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
 
 
 def _feedback(row: ContextFeedback) -> ContextFeedbackRead:

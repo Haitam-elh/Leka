@@ -2187,10 +2187,100 @@ class EnrichedWorkspaces:
         return dict(rows.tuples().all())
 
 
+@dataclass(frozen=True)
+class EvidenceRow:
+    """A record a thing of the company model was read from (LEKA-376): which
+    source, its id there, what extraction said of it — its title, link,
+    state, dates, the start of its text — when the source last showed it,
+    and whether it is gone."""
+
+    source_id: uuid.UUID
+    kind: str
+    external_id: str
+    title: str | None
+    url: str | None
+    state: str | None
+    created_at: str | None
+    updated_at: str | None
+    excerpt: str | None
+    seen_at: datetime
+    deleted_at: datetime | None
+
+
+# The records' fields evidence reads, from source_records s and the
+# extracted record x made of it.
+_EVIDENCE = """
+    SELECT DISTINCT ON (s.id)
+           s.source_id, s.kind, s.external_id,
+           x.result ->> 'title', x.result ->> 'url', x.result ->> 'state',
+           x.result ->> 'created_at', x.result ->> 'updated_at',
+           left(jsonb_path_query_first(x.result, '$.content[0].text') #>> '{}', :chars),
+           s.last_seen_at, s.deleted_at
+"""
+_EVIDENCE_FROM = """
+      JOIN parsed_records p ON p.id = n.parsed_record_id
+      JOIN extracted_records x ON x.id = p.extracted_record_id AND x.status = 'extracted'
+      JOIN source_records s ON s.id = x.source_record_id
+"""
+
+
 class ContentRepository(WorkspaceScopedRepository):
     """The records' own text, searched (LEKA-371): what a page, a ticket, a
     pull request says — not only what it is called — read back to the
-    company model's things it is about."""
+    company model's things it is about. And the records behind a thing:
+    its evidence (LEKA-376)."""
+
+    async def evidence_of(
+        self, entity_id: uuid.UUID, *, limit: int, chars: int
+    ) -> list[EvidenceRow]:
+        """The records an entity of the model was read from: every record
+        whose key, from its source, entity resolution made this entity —
+        the ones its sources still show first, the latest seen first."""
+        return await self._evidence(
+            """
+            FROM resolved_keys k
+            JOIN normalised_records n
+              ON n.workspace_id = k.workspace_id
+             AND n.source_id = k.source_id
+             AND n.entity_key = k.key
+            """
+            + _EVIDENCE_FROM
+            + "WHERE k.workspace_id = :workspace AND k.entity_id = :entity",
+            {"entity": entity_id},
+            limit=limit,
+            chars=chars,
+        )
+
+    async def evidence_in(
+        self, records: Sequence[uuid.UUID], *, limit: int, chars: int
+    ) -> list[EvidenceRow]:
+        """The records behind these normalised records — what stated a
+        relationship (its provenance's `record_id`)."""
+        if not records:
+            return []
+        return await self._evidence(
+            "FROM normalised_records n"
+            + _EVIDENCE_FROM
+            + "WHERE n.workspace_id = :workspace AND n.id = ANY(CAST(:records AS uuid[]))",
+            {"records": list(dict.fromkeys(records))},
+            limit=limit,
+            chars=chars,
+        )
+
+    async def _evidence(
+        self, source: str, params: dict[str, object], *, limit: int, chars: int
+    ) -> list[EvidenceRow]:
+        rows = await self._session.execute(
+            text(
+                f"""
+                SELECT * FROM ({_EVIDENCE} {source} ORDER BY s.id) AS found
+                ORDER BY found.deleted_at IS NOT NULL, found.last_seen_at DESC, found.external_id
+                LIMIT :limit
+                """  # noqa: S608 — the fragments are this module's constants, the rest bound
+            ),
+            {**params, "workspace": self.workspace_id, "limit": limit, "chars": chars},
+        )
+        return [EvidenceRow(*row) for row in rows.tuples().all()]
 
     async def matching(self, tsquery: str, *, limit: int) -> list[tuple[uuid.UUID, float]]:
         """The entities whose records' text holds the words of `tsquery` — the

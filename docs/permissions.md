@@ -60,12 +60,18 @@ evidence.
 | `intention:read` | yes | yes | yes |
 | `intention:create` | yes | yes | yes |
 | `intention:approve` | no | yes | yes |
+| `context:manage` | no | yes | yes |
 | `job:read` | no | yes | yes |
 
 **`job:read` is admin and above.** It reads the history of the background jobs run for the
 workspace: which job, how many attempts, when. That is how the system talks to itself, and a
 member has no use for it. It shows no error text — an exception message names hosts, paths and
 queries — and it never shows the system's own runs, which belong to no workspace.
+
+**`context:manage` is admin and above.** A member makes contexts, makes them again,
+widens and narrows them, and archives or stops following the ones they made. Archiving
+or stopping someone else's — which changes what everyone reads of it — takes an admin
+([context-api.md](context-api.md)). It is a write: a suspended workspace refuses it.
 
 **An admin cannot delete the workspace or hand it over.** Running a workspace
 day to day and ending the company's account are different responsibilities,

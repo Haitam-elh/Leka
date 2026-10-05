@@ -35,6 +35,12 @@ grammar.
                        from — what it lacks, what it disagrees on and how
                        badly, what each retriever brought
     ContextFeedback*   what people said of an element, or of what is missing
+    ContextContract    the contract, published: its version, what each part
+                       is judged by, its JSON schema, what each ticket added
+                       (LEKA-376)
+    ElementInspection  one element of a version, inspected: what it is, its
+                       history in the context, what quality says of it
+    ElementEvidence    the source records it was read from
 
 What a version holds was written once and is read back as it was, whatever
 the model has become since: the types that read it take strings, not the
@@ -52,6 +58,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from leka.context.language import words
 from leka.knowledge import RelationshipType
+
+# The header a response says its contract in, and a client may ask one by
+# (LEKA-376); the versions this API serves.
+CONTRACT_HEADER = "Leka-Context-Contract"
+SUPPORTED_CONTRACTS = frozenset({1})
 
 # What AssembledContext promises. Raised when a field changes meaning or
 # goes; a field added is no new contract. Each version keeps the one it
@@ -1172,6 +1183,125 @@ class RetrievalFeedback(BaseModel):
     by_retriever: dict[str, FeedbackCounts]
     by_role: dict[str, FeedbackCounts]
     by_type: dict[str, FeedbackCounts]
+
+
+class ContractChange(BaseModel):
+    """What a ticket added to a contract version: fields added only."""
+
+    model_config = ConfigDict(frozen=True)
+
+    ticket: str
+    added: list[str]
+
+
+class ContextContract(BaseModel):
+    """The contract downstream services read (LEKA-376), published: its
+    version and the header it is said in, what each part of it is judged
+    by — ranking, quality, an intention's reading, each strategy — its JSON
+    schema, and what each ticket added under this version."""
+
+    model_config = ConfigDict(frozen=True)
+
+    version: int
+    supported: list[int] = Field(description="The versions a client may ask for.")
+    header: str = Field(description="The header a response says it in, a client asks by.")
+    versions: dict[str, int] = Field(
+        description="ranking, quality, intent, strategy.<name>: raised when that part judges "
+        "differently — each version keeps the ones it was made under."
+    )
+    json_schema: dict[str, object] = Field(description="AssembledContext, as JSON Schema.")
+    changes: list[ContractChange]
+
+
+class ElementStep(BaseModel):
+    """One version of a context, as it held an element — or did not."""
+
+    model_config = ConfigDict(frozen=True)
+
+    version: int
+    trigger: Trigger
+    status: Literal["assembled", "failed"]
+    assembled_at: datetime
+    held: bool
+    rank: int | None = None
+    score: float | None = None
+    changed: list[str] = Field(
+        default_factory=list,
+        description="What of it was said differently from the version before that held it.",
+    )
+
+
+class ElementFactor(BaseModel):
+    """A factor of a version's quality read from the element."""
+
+    model_config = ConfigDict(frozen=True)
+
+    measure: MeasureName
+    name: str
+    value: float | None
+    said: str
+
+
+class ElementQuality(BaseModel):
+    """What a version's quality says of one element (LEKA-375)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    gaps: list[QualityGap]
+    factors: list[ElementFactor]
+    conflicts: list[QualityConflict]
+
+
+class ElementInspection(BaseModel):
+    """One element of a version, inspected (LEKA-376): what it is and where
+    it came from, how it was ranked; what the version's quality says of it;
+    its history across the context's versions; what people said of it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    context_id: uuid.UUID
+    version: int
+    element: ContextElementRead
+    quality: ElementQuality
+    history: list[ElementStep] = Field(description="The context's versions, the latest first.")
+    feedback: FeedbackCounts = Field(description="What people said of it, in every version.")
+
+
+class EvidenceRecord(BaseModel):
+    """A record an element was read from: which source, its id there, what
+    extraction said of it, when the source last showed it — or that it is
+    gone from the source."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_id: uuid.UUID
+    source_name: str | None = Field(description="None when the source has been deleted since.")
+    kind: str = Field(description="The kind of record: issues, pages, deployments…")
+    external_id: str = Field(description="Its id at the source.")
+    title: str | None
+    url: str | None
+    state: str | None
+    created_at: str | None
+    updated_at: str | None
+    excerpt: str | None = Field(description="The start of its text, MAX_EXCERPT at most.")
+    seen_at: datetime = Field(description="When the source last showed it.")
+    gone: bool = Field(description="The source no longer shows it.")
+
+
+class ElementEvidence(BaseModel):
+    """The source records an element was read from (LEKA-376): an entity's,
+    every record whose key entity resolution made it; a relationship's, the
+    records that stated it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    context_id: uuid.UUID
+    version: int
+    ref_id: uuid.UUID
+    label: str
+    kind: Literal["entity", "relationship"]
+    records: list[EvidenceRecord] = Field(description="Still shown first, the latest seen first.")
+    truncated: bool = Field(description="More records than a response holds.")
 
 
 class ElementChange(BaseModel):

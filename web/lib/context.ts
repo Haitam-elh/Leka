@@ -6,12 +6,14 @@
  * versions, and the actions that make a version — and the context an
  * intention asks for, as LEKA reads it (LEKA-373) — and how a context keeps
  * up with the company: behind the model or not, widened, narrowed, asked
- * again, every recalculation kept (LEKA-374) — and how good it is, and what
- * people say of it (LEKA-375). The shapes are the generated ones;
+ * again, every recalculation kept (LEKA-374) — how good it is, and what
+ * people say of it (LEKA-375) — one element inspected, the records it was
+ * read from, what happens to it as it happens (LEKA-376). The shapes are
+ * the generated ones;
  * api/leka/api/context.py says what each route answers.
  */
 
-import { apiFetch } from "@/lib/api";
+import { apiAddress, apiFetch } from "@/lib/api";
 import type { components } from "@/lib/api-types";
 
 export type ContextRead = components["schemas"]["ContextRead"];
@@ -43,6 +45,11 @@ export type QualityMeasure = ContextQuality["measures"][number];
 export type QualityInspection = components["schemas"]["QualityInspection"];
 export type ContextFeedbackCreate = components["schemas"]["ContextFeedbackCreate"];
 export type ContextFeedback = components["schemas"]["ContextFeedbackRead"];
+/** One element inspected, the records it was read from (LEKA-376). */
+export type ElementInspection = components["schemas"]["ElementInspection"];
+export type ElementStep = ElementInspection["history"][number];
+export type ElementEvidence = components["schemas"]["ElementEvidence"];
+export type EvidenceRecord = ElementEvidence["records"][number];
 
 interface Page<T> {
   data: T[];
@@ -111,6 +118,18 @@ export const contexts = {
   /** How good a version is, whether it is up to date, what people said. */
   quality: (id: string, version?: number) =>
     apiFetch<QualityInspection>(`/context/${id}/quality${version ? `?version=${version}` : ""}`),
+  /** One element of a version, inspected: its history, what quality says. */
+  inspect: (id: string, refId: string, version?: number) =>
+    apiFetch<ElementInspection>(
+      `/context/${id}/elements/${refId}${version ? `?version=${version}` : ""}`,
+    ),
+  /** The source records an element was read from. */
+  evidence: (id: string, refId: string, version?: number) =>
+    apiFetch<ElementEvidence>(
+      `/context/${id}/elements/${refId}/evidence${version ? `?version=${version}` : ""}`,
+    ),
+  /** Where what happens to a context streams from: server-sent events. */
+  events: (id: string) => apiAddress(`/context/${id}/events?timeout=300`),
   /** An element useful, not useful, wrong — or what is missing. */
   feedback: ({ id, body }: { id: string; body: ContextFeedbackCreate }) =>
     post<ContextFeedback>(`/context/${id}/feedback`, body),
