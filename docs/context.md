@@ -8,8 +8,10 @@ each piece with where it came from. The context engine (`leka/context`)
 reads what an intention asks for — its kind, what it is about, when,
 where, and what is missing (LEKA-373) — finds that (LEKA-371), ranks it —
 what matters most first, duplicates folded, disagreements said (LEKA-372)
-— assembles it, keeps it version by version (LEKA-370), and hands it to
-whatever analyses the request.
+— assembles it, keeps it version by version (LEKA-370), keeps it up with
+the company — behind the model said, made again where it is used,
+widened, narrowed, asked again (LEKA-374) — and hands it to whatever
+analyses the request.
 
 ```
  sources ─▶ … ─▶ company model (leka.knowledge)      records' own text (leka.ingestion)
@@ -30,6 +32,9 @@ whatever analyses the request.
                         │
                         ▼
               AssembledContext (contract v1) ─▶ intentions, capabilities (LEKA-384…)
+
+ a build that changed something ─▶ knowledge.model_built ─▶ what it changed of what each
+              context holds: behind, and made again where it is used (§ 14)
 ```
 
 It calls no customer API and no language model: by the time a request
@@ -42,8 +47,10 @@ dependency rule: `intentions → context → knowledge → ingestion`).
 
 | | Table | What it holds |
 |---|---|---|
-| **Context** | `contexts` | what it is for — a title, a `purpose` in the asker's words, a `subject` (an entity today, an intention with LEKA-384, or a bare request) — what it asks for (its **request**), where it stands (`status`), its latest version (`current_version`), who made it, when it was last checked (`refreshed_at`), archived when |
-| **Version** | `context_versions` | one assembly, **never changed**: when, why (`trigger`: created or refreshed, and a `reason`), by which strategy and its version, under which contract, the request it answered, **which build of the model** it read (`model_built_at`, `model_version`), how many elements, whether the budget cut (`truncated`, `dropped`), counts (`summary`), **what each retriever did** (`retrieval`), **how it was ranked** (`ranking`: the policy, what was left out and why, what its sources disagree on), a `fingerprint` of what it holds — or why it failed (`error`) |
+| **Context** | `contexts` | what it is for — a title, a `purpose` in the asker's words, a `subject` (an entity today, an intention with LEKA-384, or a bare request) — what it asks for (its **request**), where it stands (`status`), its latest version (`current_version`), who made it, when it was last checked (`refreshed_at`), archived when; keeping up (§ 14): whether it follows the model (`follow`), when it was last used (`used_at`), the build its last check read (`checked_model_at`), and, behind, since when and on what (`stale_since`, `pending`, `pending_count`) |
+| **Version** | `context_versions` | one assembly, **never changed**: when, why (`trigger`: created, refreshed, changed, expanded, compressed, reasked — § 14 — and a `reason`; what made it, `changes`; how it differs from the one before, `delta`), by which strategy and its version, under which contract, the request it answered, **which build of the model** it read (`model_built_at`, `model_version`), how many elements, whether the budget cut (`truncated`, `dropped`), counts (`summary`), **what each retriever did** (`retrieval`), **how it was ranked** (`ranking`: the policy, what was left out and why, what its sources disagree on), a `fingerprint` of what it holds — or why it failed (`error`) |
+| **Check** | `context_checks` | each time it was made again (§ 14): why, by whom — none: LEKA followed the model — after which changes, what came of it (a version, nothing new, a failure), from which build |
+| **Follow** | `context_follows` | one per workspace: up to which build of the model its contexts were followed |
 | **Element** | `context_elements` | one thing a version holds — an entity or a relationship — at its `position`: its id and type in the model, a label, **what it said then** (`content`), **where it came from** (`provenance`), **why it is there** (`reason`: every retriever that found it), **how relevant** it was found (`relevance`, 0 to 1), **how it was ranked** (`ranking`: its score, its place, every signal it was read from) |
 
 **Kept whole, not as ids.** The model moves on: an attribute changes, a
@@ -78,7 +85,8 @@ stateDiagram-v2
     [*] --> assembling: created
     assembling --> assembled: version 1
     assembling --> failed: every retriever failed
-    assembled --> assembled: refreshed — a new version if what it holds changed
+    assembled --> assembled: refreshed, or the model changed what it holds — a new version if what it holds changed
+    assembled --> assembled: expanded, compressed, its intention asked again — a new version
     assembled --> failed: refreshed — a root is gone, or every retriever failed
     failed --> assembled: refreshed — it is back
     assembled --> archived
@@ -99,6 +107,9 @@ stateDiagram-v2
   retriever that ran failed (§ 4). The last version that held something is
   still what is read by default. Failing again the same way is no news.
 - **Archived**: still read — every version — never reassembled (409).
+- **Behind** (§ 14): whatever its state, a context the model has changed
+  since its last check says so — `freshness` — and, when it follows the
+  model and is in use, is made again on its own.
 
 ## 3. How it is gathered: retrievers, combined
 
@@ -324,7 +335,9 @@ make a version, nor something else being found.
   `reason`…
 
 A version is never updated — refreshing writes a new one — so reading an
-old one reads what it was, whatever the model became.
+old one reads what it was, whatever the model became. Each says why it
+was made and how it differs from the one before; each time a context was
+made again — a version or not — is a check (§ 14).
 
 ## 9. The contract downstream services read
 
@@ -344,6 +357,7 @@ old one reads what it was, whatever the model became.
 | `conflicts` | what its sources disagree on: `{id, kind, subject, label, about, chosen, values: [{value, ref_id, by}], refs, said}` |
 | `intent` | the intention it was assembled for, as read (§ 13): `IntentPlan`, its `gaps` with this version's — none for a context asked for directly |
 | `model_built_at`, `model_version`, `assembled_at` | from which build of the model, when |
+| `trigger`, `reason`, `changes`, `change_count`, `delta` | why this version was made — created, refreshed, the model changed, expanded, compressed, asked again — what made it, and how it differs from the last one that held something (§ 14) |
 
 In Python (intentions, capabilities):
 
@@ -363,7 +377,8 @@ then = await service.assembled(made.context_id, at=incident_started)
 request's `query`, `window_days`, `until`, `retrievers` under version 1;
 LEKA-372 added `ranking` and `conflicts`, each element's `ranking` and the
 request's `min_relevance` — `relevance` keeps its meaning, how it was
-found; the order follows `ranking.score`; a
+found; the order follows `ranking.score`; LEKA-373 added `intent`, LEKA-374
+`trigger`, `reason`, `changes`, `change_count`, `delta`; a
 field that changes meaning or goes raises `CONTRACT_VERSION`, and each
 version keeps the one it was made under. What a version stored is read back
 leniently — strings, not the registry's enums; fields a later contract adds
@@ -377,9 +392,14 @@ readable after a kind is renamed.
 | `POST /context` | `intention:create` | a context assembled: version 1, whole (201); a root not the workspace's: 404; nothing to start from: 422 |
 | `POST /context/intents/plan` | `intention:read` | what an intention asks for, read from its words and scope (§ 13): `IntentPlan` — nothing kept |
 | `POST /context/intents` | `intention:create` | that context, assembled and kept with its plan (201); nothing named and no word to search: 422 |
-| `GET /context` | `intention:read` | the contexts, the latest changed first, paged — `status`, `subject_type`, `subject_id` |
+| `GET /context` | `intention:read` | the contexts, the latest changed first, paged — `status`, `subject_type`, `subject_id`, `stale` (§ 14); each with its `freshness` |
 | `GET /context/{id}` | `intention:read` | one, and its latest version |
-| `POST /context/{id}/refresh` | `intention:create` | `{changed, version}`; archived: 409 |
+| `PATCH /context/{id}` | `intention:create` | `{follow}`: made again on its own, or only when asked (§ 14) |
+| `POST /context/{id}/refresh` | `intention:create` | `{changed, version, check}`; archived: 409 |
+| `POST /context/{id}/expand` | `intention:create` | widened — one step, or as asked — made again: `{changed, version, check}`; narrower: 422; a root not the workspace's: 404; archived: 409 |
+| `POST /context/{id}/compress` | `intention:create` | narrowed — half its budget, or as asked; wider: 422; archived: 409 |
+| `POST /context/{id}/intent` | `intention:create` | its intention asked again: the same context, version N+1 whole; not an intention's: 409; nothing to start from: 422 |
+| `GET /context/{id}/checks` | `intention:read` | each time it was made again, the latest first, paged |
 | `POST /context/{id}/archive` | `intention:create` | archived; twice changes nothing |
 | `GET /context/{id}/versions` | `intention:read` | its versions, the latest first, paged — each with its retrieval report |
 | `GET /context/{id}/assembled` | `intention:read` | one version whole: `?version=`, or `?at=`, or the latest that holds something; both: 400 |
@@ -401,7 +421,9 @@ is there — its score, a conflict, what was folded into it — and, opened,
 words), its provenance, every way it was found and what LEKA reads of it;
 beside them the versions, any one shown again, two compared; **the
 conflicts**, every side with who says so; **what was left out**, counted
-by why and listed on asking; reassemble, archive, a new context. The
+by why and listed on asking; reassemble, widen, narrow, archive, a new
+context; whether it is up to date with the model, why each version was
+made and each time it was made again (§ 14). The
 figures say why things were left out, and a disagreement is said among
 what is uncertain. Sized for a 13-inch screen: the list scrolls, the page
 does not.
@@ -493,7 +515,9 @@ API:
 
 - Kept as long as the workspace, like the model's own history
   ([data-lifecycle.md](data-lifecycle.md)); deleting the workspace deletes
-  them.
+  them. Checks (§ 14) are kept 90 days — the versions keep what made them;
+  a context behind keeps the latest 50 changes it is behind on (a few KB),
+  and `ix_contexts_workspace_stale_since` finds what is behind and due.
 
 ## 13. What an intention asks for (LEKA-373)
 
@@ -602,6 +626,119 @@ the context gathered, by kind of thing, every element on asking; the
 sources it came from. The findings and recommendations come with the
 analysis engine (LEKA-388).
 
+## 14. Keeping up with the company (LEKA-374)
+
+`leka/context/dynamic.py`, pure; `ContextService.follow_model()`, `due()`,
+`follow_one()`, `expand()`, `compress()`, `reask()`; `leka/context/job.py`.
+
+The model is built again whenever the sources say something new
+([company-model.md](company-model.md) § 6), and each build records what
+it changed: each entity added, changed — which of its fields — or removed
+(`entity_versions`), each relationship that appeared, changed or went,
+between its two ends (`relationship_changes`, LEKA-368). A context holds a
+copy of some of that (§ 1). When the model says something else of what it
+holds, the context is **behind** — and says so.
+
+```
+ a build that changed something ─▶ event knowledge.model_built ─▶ a pass, context:<workspace>
+    follow_model()  the builds since the last pass (context_follows), what they changed
+                    ─▶ news to each context it touches: pending, stale_since
+    due()           behind, following the model, used in the last 14 days
+                    ─▶ follow_one(): made again — `changed`, by nobody — a check kept
+ hourly context-sweep (:52): a pass for each workspace that follows — what an event
+ lost, what a pass left; the checks past 90 days forgotten
+```
+
+**What is news to whom.** A change is news to a context when
+
+| | |
+|---|---|
+| an entity it holds changed | held by its latest version that holds something — `ix_context_elements_workspace_ref` finds the contexts |
+| a relationship touches an end it holds | appeared, changed or went: a new incident on a service it holds, a dependency gone |
+| its words name a new thing | an entity added, every word of whose name its words say — as an intention names what it is about (§ 13): « why is the ledger slow? » and a new Ledger service |
+
+— and only what was recorded after the build it last read
+(`checked_model_at`): a context made from a build already holds it. Each
+change is said once however often a build is followed (dispatch is
+at-least-once); the latest 50 are kept (`pending`), all counted
+(`pending_count`), since the first (`stale_since`). A build that changed
+more than 5 000 things tells every context the model changed (`kind:
+model`) rather than one by one. What the model does not version is not
+news: an entity's confidence or quality, its sources renamed, being seen
+again — a refresh reads them (§ 7).
+
+**Made again where it is used.**
+
+| `following` | When | What happens when it is behind |
+|---|---|---|
+| `active` | follows the model, used in the last 14 days — made, refreshed, widened, narrowed, asked again, read (once an hour at most) | made again on the next pass, the latest used first, 50 a pass — the rest on the next |
+| `dormant` | not used for 14 days | marked — behind, on what — and made again when someone asks |
+| `off` | `follow: false` (`PATCH /context/{id}`): a context kept as it was, a post-mortem's | marked, never made again on its own |
+| `archived` | | neither |
+
+A context in use costs a recalculation when what it holds changes; one
+nobody reads costs a row. Each is made again in its own transaction: one
+that fails is logged and stays behind; the others go on.
+
+**Up to date, or behind**: `ContextRead.freshness` — `state` (`fresh`,
+`stale`), `reasons` (`changes`: the model changed what it holds since its
+last check; `failed`: its last recalculation failed), `since`, `changes`
+(how many), `pending` (the latest: `{kind, change, ref_id | from_id,
+to_id, type, name, fields, at, touches}`), `checked_at`,
+`checked_model_at`, `following`. `GET /context?stale=true` lists what is
+behind.
+
+**Made again** — every way reads the model as it is now and leaves the
+context up to date:
+
+| `trigger` | How | A new version |
+|---|---|---|
+| `refreshed` | asked: `POST …/refresh` | when what it holds changed |
+| `changed` | the model changed what it holds; LEKA followed | when what it holds changed |
+| `expanded` | `POST …/expand`: one step — a step further, twice the budget and the window, as far as each goes — or as asked: deeper, more, further back, less relevant kept, more roots, more kinds of relationship. Never narrower (422), never a root not the workspace's (404) | always: it asks something else |
+| `compressed` | `POST …/compress`: half its budget — the most relevant kept, its roots always — or as asked: nearer, fewer, a shorter window, only the more relevant. Never wider (422) | always |
+| `reasked` | `POST …/intent`: its intention asked again (§ 13) — read again, the same context, its plan replaced. Not an intention's: 409; nothing to start from: 422 | always |
+
+Its request is what it now asks: refreshed after `compress`, it stays
+narrowed. An intention's period is kept as read — « hier » stays the day
+it was asked about; asking again reads it anew.
+
+**Distinguishable, traceable.** A version says what made it (`changes`:
+the model's changes it followed and what it was behind on; what of its
+request — `{kind: request, field, before, after}` — or of its intention —
+`kind: intent`: its words, kind, subjects, period, environment — changed;
+`change_count`) and how it differs from the last version that held
+something (`delta`: added, removed, changed, unchanged — § 8's diff says
+which). Each time a context is made again is a **check**
+(`context_checks`, `GET /context/{id}/checks`), whatever came of it — a
+version, nothing new, a failure — with its trigger, who asked (none: LEKA
+followed the model), the changes that triggered it and the build it read:
+a recalculation that changed nothing is traceable too.
+
+**Tested** — the decisions in `tests/test_context_dynamic.py`; on Acme's
+model through the whole pipeline, `tests/test_context_follow.py`:
+
+| What happens | What it does |
+|---|---|
+| Checkout is retired; the model is built again | the Billing API context, in use: version 2 `changed` — Checkout removed, `Checkout → Billing API` gone, said and counted, `delta` −2 at least; the check by LEKA; followed again, nothing twice |
+| the same, for a context unused for 30 days and one that follows nothing | marked — behind since the build, on Checkout — listed by `?stale=true`, `dormant`, `off`; refreshed by hand: version 2 after those changes, up to date |
+| a Ledger service and a Payroll one appear | the context made from « why is the ledger slow? » made again with Ledger, named by its words; Billing API's untouched |
+| a build too big to say | every context told the model changed |
+| widened, then narrowed to 3 | versions 2 and 3: depth 1 → 2, budget 100 → 200 → 3, the root first; narrower when widening: 422; an unknown root: 404; archived: 409 |
+| an intention asked again | the same context, version 2 `reasked`: diagnose → ownership, what it holds changed; « Pourquoi ? »: 422; an entity's context: 409 |
+| a refresh that finds nothing | a check, `unchanged` |
+| the build's event, the sweep | a pass queued under `context:<workspace>`; the sweep queues each workspace that follows, forgets the checks past 90 days |
+
+**The screens.** Tab **Contexte**: a band — up to date with the model,
+checked when; or behind since when, how many changes, each in words on
+asking (« Service Checkout — retiré (cycle de vie) », « Checkout dépend de
+Billing API — lien retiré »), and **Mettre à jour**; whether it follows
+the model, and a switch. **Élargir** and **Resserrer** beside Réassembler;
+each version says why it was made and +added −removed ~changed; **Mises à
+jour**: each time it was made again, by LEKA or asked, and what came of
+it. Step 2 of a new intention: **Modifier**, then launch, asks the same
+context again — its version 2 says what LEKA reads differently.
+
 ## Not yet
 
 - **Meaning, not only words.** The search reads words and a vocabulary of
@@ -621,12 +758,16 @@ analysis engine (LEKA-388).
   a context is assembled for an intention's words and scope today; the
   intention itself is kept with LEKA-384, and its quality signals come
   with LEKA-375.
-- **Refreshing on its own** when the model changes (LEKA-374) — today a
-  refresh is asked; `refreshed_at` and the elements' `ref_id` index are
-  there for it.
+- **A budget in words, not elements.** `compress` keeps the most relevant
+  N elements; when the analysis engine (LEKA-388) says how much text its
+  model reads, a budget in characters is the same cut, measured otherwise.
+- **News that is not a version of the model.** An entity's confidence or
+  quality, a source turning unhealthy, records' text re-indexed: read by
+  the next recalculation, not followed (§ 14).
 - **A context's quality and confidence** as a whole (LEKA-375).
 - **Fine-grained access and the full inspection API** (LEKA-376).
 - **Intentions** as subjects (LEKA-384): a context takes an
   `intention_id` as its subject today; nothing keeps the intention yet.
-- A retention for contexts nobody reads: decided with LEKA-374, when
-  contexts are made without being asked.
+- **A retention for contexts nobody reads.** LEKA-374 makes none without
+  being asked: a context nobody uses is no longer made again (`dormant`),
+  and is kept like the rest; its checks go after 90 days.

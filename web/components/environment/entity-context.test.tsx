@@ -11,7 +11,12 @@
  * assemble reads, and is offered nothing it cannot do. Ranked (LEKA-372):
  * each element's score and, opened, why that rank — signal by signal, in
  * words; what was folded into it; what its sources disagree on, every side
- * with who says so; what was left out, counted by why and listed.
+ * with who says so; what was left out, counted by why and listed. Keeping
+ * up (LEKA-374): up to date, or behind since when and on what — each change
+ * in words — and updated on asking; whether it follows the model, switched;
+ * widened and narrowed, saying what of its request changed, or why not;
+ * why each version was made and how it differs; every time it was made
+ * again, by LEKA or on asking, and what came of it.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -38,6 +43,10 @@ const api = {
   create: vi.fn(),
   refresh: vi.fn(),
   archive: vi.fn(),
+  expand: vi.fn(),
+  compress: vi.fn(),
+  follow: vi.fn(),
+  checks: vi.fn(),
 };
 const permissions: { value: string[] } = { value: [] };
 const notify = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
@@ -263,6 +272,18 @@ const READ: ContextRead = {
   updated_at: NOW,
   refreshed_at: NOW,
   archived_at: null,
+  follow: true,
+  used_at: NOW,
+  freshness: {
+    state: "fresh",
+    reasons: [],
+    since: null,
+    changes: 0,
+    pending: [],
+    checked_at: NOW,
+    checked_model_at: NOW,
+    following: "active",
+  },
 };
 
 function run(
@@ -309,6 +330,8 @@ function assembled(version: number, over: Partial<AssembledContext> = {}): Assem
     model_built_at: NOW,
     model_version: 9,
     assembled_at: NOW,
+    trigger: version === 1 ? "created" : "refreshed",
+    change_count: 0,
     ...over,
   };
 }
@@ -335,6 +358,7 @@ function version(n: number, over: Partial<ContextVersion> = {}): ContextVersion 
     assembled_by: null,
     left_out: {},
     conflicts: 0,
+    change_count: 0,
     ...over,
   };
 }
@@ -370,6 +394,7 @@ beforeEach(() => {
     Promise.resolve(assembled(n ?? 2)),
   );
   api.diff.mockResolvedValue(DIFF);
+  api.checks.mockResolvedValue([]);
 });
 
 describe("the context tab", () => {
@@ -703,5 +728,168 @@ describe("the context tab", () => {
     expect(screen.getByTestId("uncertainties")).toHaveTextContent(
       "Ses sources se contredisent sur 1 point(s) : voir les conflits.",
     );
+  });
+
+  it("says it is behind the model, since when and on what, and updates it", async () => {
+    api.ofEntity.mockResolvedValue([
+      {
+        ...READ,
+        freshness: {
+          ...READ.freshness,
+          state: "stale",
+          reasons: ["changes"],
+          since: NOW,
+          changes: 2,
+          pending: [
+            {
+              kind: "entity",
+              change: "removed",
+              ref_id: CHECKOUT,
+              type: "service",
+              name: "Checkout",
+              fields: ["lifecycle"],
+              touches: "held",
+            },
+            {
+              kind: "relationship",
+              change: "removed",
+              from_id: CHECKOUT,
+              to_id: BILLING,
+              type: "depends_on",
+              name: "Checkout → Billing API",
+              touches: "held",
+            },
+          ],
+        },
+      },
+    ]);
+    api.refresh.mockResolvedValue({ changed: true, version: version(3) });
+    const user = userEvent.setup();
+    show();
+
+    const panel = await screen.findByTestId("context-freshness");
+    expect(panel).toHaveAttribute("data-state", "stale");
+    expect(panel).toHaveTextContent("Plus à jour : le modèle a changé");
+    expect(panel).toHaveTextContent("2 changement(s) du modèle touchent ce qu'il contient.");
+    await user.click(within(panel).getByRole("button", { name: "Voir les changements (2)" }));
+    const pending = within(screen.getByTestId("context-pending")).getAllByRole("listitem");
+    expect(pending.map((item) => item.textContent)).toEqual([
+      "Checkout dépend de Billing API — lien retiré",
+      "Service Checkout — retiré (cycle de vie)",
+    ]);
+
+    await user.click(within(panel).getByRole("button", { name: "Mettre à jour" }));
+    expect(api.refresh).toHaveBeenCalledWith(CONTEXT, expect.anything());
+  });
+
+  it("says whether it follows the model, and switches it", async () => {
+    api.follow.mockResolvedValue({ ...READ, follow: false });
+    const user = userEvent.setup();
+    show();
+
+    const panel = await screen.findByTestId("context-freshness");
+    expect(panel).toHaveAttribute("data-state", "fresh");
+    expect(panel).toHaveTextContent("À jour avec le modèle de l'entreprise");
+    expect(screen.getByTestId("context-following")).toHaveTextContent(
+      "Suit le modèle : LEKA le met à jour dès que ce qu'il contient change.",
+    );
+    await user.click(within(panel).getByRole("switch", { name: "Suivre le modèle" }));
+    expect(api.follow).toHaveBeenCalledWith({ id: CONTEXT, follow: false }, expect.anything());
+  });
+
+  it("says when nobody used it for a while", async () => {
+    api.ofEntity.mockResolvedValue([
+      { ...READ, freshness: { ...READ.freshness, following: "dormant" } },
+    ]);
+    show();
+
+    expect(await screen.findByTestId("context-following")).toHaveTextContent(
+      "En veille : personne ne l'a utilisé depuis 14 jours.",
+    );
+  });
+
+  it("widens and narrows, saying what of its request changed, or why not", async () => {
+    api.expand.mockResolvedValue({
+      changed: true,
+      version: version(3, {
+        trigger: "expanded",
+        changes: [
+          { kind: "request", change: "changed", field: "depth", before: 1, after: 2 },
+          { kind: "request", change: "changed", field: "limit", before: 100, after: 200 },
+        ],
+        change_count: 2,
+      }),
+    });
+    api.compress.mockRejectedValue(new ApiError(422, "/context", "As narrow as it goes."));
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: "Élargir" }));
+    expect(api.expand).toHaveBeenCalledWith({ id: CONTEXT }, expect.anything());
+    expect(notify.success).toHaveBeenCalledWith({
+      title: "Version 3 : contexte élargi (portée (pas) : 1 → 2, budget : 100 → 200).",
+    });
+
+    await user.click(screen.getByRole("button", { name: "Resserrer" }));
+    expect(notify.error).toHaveBeenCalledWith({
+      title: "Ce contexte est déjà aussi resserré que possible : il garde ses points de départ.",
+    });
+  });
+
+  it("says why each version was made, and every time it was made again", async () => {
+    api.versions.mockResolvedValue([
+      version(2, {
+        trigger: "changed",
+        changes: [
+          {
+            kind: "entity",
+            change: "removed",
+            ref_id: CHECKOUT,
+            type: "service",
+            name: "Checkout",
+          },
+        ],
+        change_count: 3,
+        delta: { added: 1, removed: 2, changed: 0, unchanged: 3 },
+      }),
+      version(1),
+    ]);
+    api.checks.mockResolvedValue([
+      {
+        checked_at: NOW,
+        trigger: "changed",
+        checked_by: null,
+        changes: [],
+        change_count: 3,
+        outcome: "version",
+        version: 2,
+        model_built_at: NOW,
+      },
+      {
+        checked_at: NOW,
+        trigger: "refreshed",
+        checked_by: BILLING,
+        changes: [],
+        change_count: 0,
+        outcome: "unchanged",
+        version: 1,
+        model_built_at: NOW,
+      },
+    ]);
+    show();
+
+    const [latest] = within(await screen.findByTestId("context-versions")).getAllByRole(
+      "listitem",
+    );
+    expect(latest).toHaveTextContent(/v2 · mise à jour par LEKA/);
+    expect(within(latest).getByTestId("context-version-why")).toHaveTextContent(
+      "après 3 changement(s) du modèle · +1 −2 ~0",
+    );
+    const checks = within(await screen.findByTestId("context-checks")).findAllByRole("listitem");
+    const [followed, asked] = await checks;
+    expect(followed).toHaveTextContent(/Le modèle a changé .* · par LEKA/);
+    expect(followed).toHaveTextContent("version 2 créée · après 3 changement(s)");
+    expect(asked).toHaveTextContent("rien de changé : la version 1 tient");
+    expect(asked).not.toHaveTextContent("par LEKA");
   });
 });

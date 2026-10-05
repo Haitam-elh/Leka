@@ -174,6 +174,11 @@ A **workspace** stage, after enrichment: `model:<workspace>`,
   enrichment succeed again while it reads is closed `abandoned` and reads
   again (up to three times); a run left `running` by a dead worker is closed
   by the next.
+- **A build that changed something says so** (LEKA-374): it publishes
+  `knowledge.model_built` `{run_id}` in its own transaction, routed to
+  `leka.context.job.run_follow_for_event` — the contexts that hold what
+  changed follow ([context.md](context.md) § 14). A build that changed
+  nothing publishes nothing.
 - **The hourly sweep** (`model-sweep`, :48 — [background.md](background.md))
   queues what no event will: a workspace enriched before the model existed,
   a build that failed, a new `MODEL_VERSION`. It closes the runs a dead

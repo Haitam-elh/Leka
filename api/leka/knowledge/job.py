@@ -18,6 +18,10 @@ what it was made from, and a new one is something new to build. A failed
 build changes nothing — the model is written in one transaction — and is
 recorded `failed` with the error's type.
 
+A build that changed something says so: the event "knowledge.model_built",
+written in the build's own transaction — the contexts that hold what
+changed follow it (leka.context, LEKA-374).
+
 THE SWEEP, hourly (leka/background/schedule.py), queues what no event
 will: a workspace enriched before this module existed, a build that
 failed, a new MODEL_VERSION. It closes the runs a dead worker left and
@@ -33,7 +37,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 
-from leka.background import Event, enqueue_job
+from leka.background import Event, enqueue_job, publish_event
 from leka.background.runner import RQ_JOB_TIMEOUT
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion import EnrichedWorkspaces, EnrichmentRepository
@@ -44,6 +48,8 @@ from leka.knowledge.repository import ModelRepository, ModelSweeper
 logger = structlog.get_logger(__name__)
 
 MODEL_JOB = "leka.knowledge.job.run_model_build"
+# What a build that changed something publishes (LEKA-374).
+MODEL_BUILT = "knowledge.model_built"
 ROUNDS = 3
 HISTORY_DAYS = 90
 RELATIONSHIP_HISTORY_DAYS = 365
@@ -153,6 +159,14 @@ async def build_workspace(workspace_id: uuid.UUID) -> dict[str, object]:
                     run.status = "succeeded"
                     run.counts = counts
                     run.finished_at = datetime.now(UTC)
+                    if built.versions or built.changes:
+                        await publish_event(
+                            session,
+                            workspace_id,
+                            MODEL_BUILT,
+                            {"run_id": str(run.id)},
+                            dedupe_key=f"{MODEL_BUILT}:{run.id}",
+                        )
                     await session.commit()
                 except BaseException as error:
                     await session.rollback()

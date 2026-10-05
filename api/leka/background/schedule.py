@@ -91,6 +91,9 @@ SCHEDULE: tuple[Scheduled, ...] = (
     # The company model (LEKA-361) of every workspace behind its enrichment:
     # what no event queues — a failed build, a new model version.
     Scheduled("model-sweep", "leka.knowledge.job.run_model_sweep", cron="48 * * * *"),
+    # The contexts that follow the model (LEKA-374): what an event lost,
+    # what a pass left; the checks past 90 days forgotten.
+    Scheduled("context-sweep", "leka.context.job.run_context_sweep", cron="52 * * * *"),
 )
 
 

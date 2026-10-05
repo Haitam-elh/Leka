@@ -1,12 +1,26 @@
 "use client";
 
-import { Archive, ArrowRight, ChevronDown, Layers, RefreshCw } from "lucide-react";
+import {
+  Archive,
+  ArrowRight,
+  ChevronDown,
+  Layers,
+  Maximize2,
+  Minimize2,
+  RefreshCw,
+} from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { cn } from "cn";
 
 import { exactDate, timeAgo } from "@/components/knowledge/time";
+import {
+  ChecksPanel,
+  changeSaid,
+  FreshnessPanel,
+  VersionWhy,
+} from "@/components/environment/context-freshness";
 import {
   ConflictsPanel,
   LeftOutPanel,
@@ -63,8 +77,10 @@ import { notify } from "@/lib/notify";
  * the record, stated or inferred by which rule, how sure — and why it is
  * there; each version is kept, and two can be compared. How each was
  * ranked, what its sources disagree on and what was left out, and why
- * (LEKA-372), are context-ranking.tsx's. Nothing is drawn that the API did
- * not say.
+ * (LEKA-372), are context-ranking.tsx's; whether it is up to date with the
+ * model, why each version was made and every time it was made again
+ * (LEKA-374), context-freshness.tsx's — widened or narrowed here. Nothing
+ * is drawn that the API did not say.
  */
 
 type Dictionary = ReturnType<typeof useDictionary>;
@@ -256,6 +272,7 @@ function Shown({
   onPick: (id: string) => void;
 }) {
   const t = useDictionary();
+  const { locale } = useLocale();
   const w = t.environment.sheet.context;
   const [version, setVersion] = useState<number | null>(null);
   const [pair, setPair] = useState<readonly [number, number] | null>(null);
@@ -264,6 +281,8 @@ function Shown({
   const diff = useContextDiff(context.id, pair);
   const refresh = useContextMutation(contexts.refresh);
   const archive = useContextMutation(contexts.archive);
+  const expand = useContextMutation(contexts.expand);
+  const compress = useContextMutation(contexts.compress);
   const archived = context.status === "archived";
   const picks = all.map((one) => ({
     value: one.id,
@@ -290,6 +309,39 @@ function Shown({
       },
       onError: () => notify.error({ title: w.failedAction }),
     });
+  }
+
+  /** Widened one step, or narrowed to half its budget (LEKA-374). */
+  function reshape(way: "expand" | "compress") {
+    const run = way === "expand" ? expand : compress;
+    run.mutate(
+      { id: context.id },
+      {
+        onSuccess: (outcome) => {
+          setVersion(null);
+          setPair(null);
+          const what = (outcome.version.changes ?? [])
+            .filter((change) => change.kind === "request")
+            .map((change) => changeSaid(t, locale, change))
+            .join(", ");
+          notify.success({
+            title: fill(way === "expand" ? w.reshaped.expanded : w.reshaped.compressed, {
+              version: outcome.version.version,
+              what,
+            }),
+          });
+        },
+        onError: (error) =>
+          notify.error({
+            title:
+              error instanceof ApiError && error.status === 422
+                ? way === "expand"
+                  ? w.reshaped.refusedExpand
+                  : w.reshaped.refusedCompress
+                : w.failedAction,
+          }),
+      },
+    );
   }
 
   return (
@@ -331,6 +383,24 @@ function Shown({
             <Button
               size="sm"
               variant="outline"
+              onClick={() => reshape("expand")}
+              disabled={expand.isPending}
+            >
+              <Maximize2 className="size-3.5" aria-hidden="true" />
+              {w.expand}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => reshape("compress")}
+              disabled={compress.isPending}
+            >
+              <Minimize2 className="size-3.5" aria-hidden="true" />
+              {w.compress}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               disabled={archive.isPending}
               onClick={() =>
                 archive.mutate(context.id, {
@@ -352,7 +422,14 @@ function Shown({
           <Archive className="size-4 shrink-0 text-state-info" aria-hidden="true" />
           {w.archivedNote}
         </p>
-      ) : null}
+      ) : (
+        <FreshnessPanel
+          context={context}
+          canMake={canMake}
+          onUpdate={reassemble}
+          updating={refresh.isPending}
+        />
+      )}
       {assembled.isError ? (
         <ErrorState error={assembled.error} onRetry={() => void assembled.refetch()} />
       ) : assembled.data ? (
@@ -372,6 +449,7 @@ function Shown({
               onCompare={setPair}
             />
             {pair && diff.data ? <Diff diff={diff.data} /> : null}
+            <ChecksPanel contextId={context.id} />
             <ConflictsPanel assembled={assembled.data} />
             <LeftOutPanel assembled={assembled.data} />
           </div>
@@ -737,6 +815,7 @@ function Versions({
                   : fill(w.versionCount, { count: row.element_count })}
                 {row.reason ? ` · ${row.reason}` : ""}
               </span>
+              <VersionWhy version={row} />
             </button>
             {row.version > 1 ? (
               <button

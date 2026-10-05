@@ -10,11 +10,21 @@
     POST /context/intents                 that context, assembled, kept with
                                           how the intention was read
     GET  /context                         the contexts, the latest changed first
-                                          — by state, by subject
+                                          — by state, by subject, behind the
+                                          model or not
     GET  /context/{id}                    one: what it is for, what it asks,
                                           where it stands, its latest version
+    PATCH /context/{id}                   follows the model, or not (LEKA-374)
     POST /context/{id}/refresh            assembled again: a new version when
                                           what the model says of it changed
+    POST /context/{id}/expand             its request widened — as asked, or
+                                          one step — and made again (LEKA-374)
+    POST /context/{id}/compress           narrowed — as asked, or half its
+                                          budget — and made again
+    POST /context/{id}/intent             its intention asked again: read
+                                          again, the same context made again
+    GET  /context/{id}/checks             every time it was made again: why,
+                                          after which changes, what came of it
     POST /context/{id}/archive            no longer reassembled; still read
     GET  /context/{id}/versions           its versions, the latest first
     GET  /context/{id}/assembled          one version whole — the latest that
@@ -49,19 +59,27 @@ from leka.context import (
     AssembledContext,
     Context,
     ContextArchivedError,
+    ContextCheck,
+    ContextCheckRead,
+    ContextCompress,
     ContextCreate,
     ContextDetail,
     ContextDiff,
+    ContextExpand,
     ContextFilters,
     ContextRead,
     ContextRefresh,
+    ContextRefusedError,
     ContextRepository,
+    ContextRootError,
     ContextService,
     ContextStatus,
+    ContextUpdate,
     ContextVersion,
     ContextVersionRead,
     IntentAsk,
     IntentPlan,
+    NotAnIntentionError,
     RefreshOutcome,
     SubjectType,
 )
@@ -86,7 +104,14 @@ VERSION_SORTS = SortCatalogue(
     ),
     default="version",
 )
+CHECK_SORTS = SortCatalogue(
+    fields=(
+        SortableField("checked_at", ContextCheck.checked_at, "ix_context_checks_workspace_context"),
+    ),
+    default="checked_at",
+)
 NOT_FOUND = "No such context."
+ARCHIVED = "This context is archived: it is read, never reassembled."
 
 
 def _service(session: SessionDep, principal: Principal) -> ContextService:
@@ -113,6 +138,14 @@ Making = Annotated[ContextService, Depends(_making)]
 
 def _missing(message: str = NOT_FOUND) -> ApiError:
     return ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, message)
+
+
+def _archived() -> ApiError:
+    return ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, ARCHIVED)
+
+
+def _refused(message: str) -> ApiError:
+    return ApiError(status.HTTP_422_UNPROCESSABLE_CONTENT, ErrorCode.VALIDATION_FAILED, message)
 
 
 @router.post("/intents/plan", response_model=IntentPlan)
@@ -166,11 +199,14 @@ async def contexts(
     state: Annotated[ContextStatus | None, Query(alias="status")] = None,
     subject_type: SubjectType | None = None,
     subject_id: Annotated[str | None, Query(max_length=100)] = None,
+    stale: Annotated[
+        bool | None, Query(description="Behind the company model — or up to date (LEKA-374).")
+    ] = None,
 ) -> PageEnvelope[ContextRead]:
     """The contexts, the latest changed first."""
     repository = ContextRepository(session, principal.workspace_id)
     statement = repository.contexts(
-        ContextFilters(status=state, subject_type=subject_type, subject_id=subject_id)
+        ContextFilters(status=state, subject_type=subject_type, subject_id=subject_id, stale=stale)
     )
     result = await serve_page(
         session, statement, request=page, catalogue=CONTEXT_SORTS, id_column=Context.id
@@ -186,26 +222,127 @@ async def context(context_id: uuid.UUID, service: Reading) -> ContextDetail:
     return found
 
 
+@router.patch("/{context_id}", response_model=ContextRead)
+async def update_context(
+    context_id: uuid.UUID, body: ContextUpdate, service: Making
+) -> ContextRead:
+    """Whether it is made again on its own when the company model changes
+    what it holds — or only when asked (LEKA-374). Behind or not, it says
+    so either way."""
+    updated = await service.set_follow(context_id, follow=body.follow)
+    if updated is None:
+        raise _missing()
+    return updated
+
+
 @router.post("/{context_id}/refresh", response_model=RefreshOutcome)
 async def refresh_context(
     context_id: uuid.UUID, service: Making, principal: Maker, body: ContextRefresh | None = None
 ) -> RefreshOutcome:
-    """Assembled again from the model as it is now. A new version when what
-    it holds changed — or failed, when a root is gone; none when nothing did.
-    409 when the context is archived."""
+    """Assembled again from the model as it is now — after what it was
+    behind on, said with the check. A new version when what it holds
+    changed — or failed, when a root is gone; none when nothing did. 409
+    when the context is archived."""
     try:
         outcome = await service.refresh(
             context_id, reason=body.reason if body else None, by=principal.user_id
         )
     except ContextArchivedError as error:
-        raise ApiError(
-            status.HTTP_409_CONFLICT,
-            ErrorCode.CONFLICT,
-            "This context is archived: it is read, never reassembled.",
-        ) from error
+        raise _archived() from error
     if outcome is None:
         raise _missing()
     return outcome
+
+
+@router.post("/{context_id}/expand", response_model=RefreshOutcome)
+async def expand_context(
+    context_id: uuid.UUID, service: Making, principal: Maker, body: ContextExpand | None = None
+) -> RefreshOutcome:
+    """Widened, and made again (LEKA-374): further, more of it, further
+    back, less relevant things kept, more roots, more kinds of relationship
+    — or, nothing asked, one step: a step further, twice the budget and the
+    window. A new version that says what of its request changed. 404 when
+    a root added is not the workspace's; 409 when archived; 422 when it
+    widens nothing."""
+    try:
+        outcome = await service.expand(context_id, body or ContextExpand(), by=principal.user_id)
+    except ContextArchivedError as error:
+        raise _archived() from error
+    except ContextRefusedError as error:
+        raise _refused(str(error)) from error
+    except ContextRootError as error:
+        raise _missing("A root added is not in the company model.") from error
+    if outcome is None:
+        raise _missing()
+    return outcome
+
+
+@router.post("/{context_id}/compress", response_model=RefreshOutcome)
+async def compress_context(
+    context_id: uuid.UUID, service: Making, principal: Maker, body: ContextCompress | None = None
+) -> RefreshOutcome:
+    """Narrowed to what its reader can take, and made again (LEKA-374):
+    fewer elements — the most relevant kept, its roots always — nearer, a
+    shorter window, only the more relevant; nothing asked, half its budget.
+    409 when archived; 422 when it narrows nothing."""
+    try:
+        outcome = await service.compress(
+            context_id, body or ContextCompress(), by=principal.user_id
+        )
+    except ContextArchivedError as error:
+        raise _archived() from error
+    except ContextRefusedError as error:
+        raise _refused(str(error)) from error
+    if outcome is None:
+        raise _missing()
+    return outcome
+
+
+@router.post("/{context_id}/intent", response_model=AssembledContext)
+async def reask_context(
+    context_id: uuid.UUID, body: IntentAsk, service: Making, principal: Maker
+) -> AssembledContext:
+    """Its intention asked again, as it now stands (LEKA-374): read again,
+    and the same context made again — a new version that says what LEKA
+    reads differently, and how what it holds changed. 409 when archived, or
+    not assembled for an intention; 422 when nothing can start it."""
+    try:
+        made = await service.reask(context_id, body, by=principal.user_id)
+    except ContextArchivedError as error:
+        raise _archived() from error
+    except NotAnIntentionError as error:
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.CONFLICT,
+            "This context was not assembled for an intention: there is nothing to ask again.",
+        ) from error
+    except ContextRefusedError as error:
+        raise _refused(str(error)) from error
+    if made is None:
+        raise _missing()
+    return made
+
+
+@router.get("/{context_id}/checks", response_model=PageEnvelope[ContextCheckRead])
+async def context_checks(
+    context_id: uuid.UUID, session: SessionDep, principal: Reader, page: PageParams
+) -> PageEnvelope[ContextCheckRead]:
+    """Every time it was made again, the latest first (LEKA-374): asked, or
+    LEKA following the model; after which changes; and what came of it — a
+    version, nothing new, a failure."""
+    repository = ContextRepository(session, principal.workspace_id)
+    if await repository.context(context_id) is None:
+        raise _missing()
+    result = await serve_page(
+        session,
+        repository.checks(context_id),
+        request=page,
+        catalogue=CHECK_SORTS,
+        id_column=ContextCheck.id,
+    )
+    return PageEnvelope(
+        data=ContextService.check_reads(result.items), next_cursor=result.next_cursor
+    )
 
 
 @router.post("/{context_id}/archive", response_model=ContextRead)

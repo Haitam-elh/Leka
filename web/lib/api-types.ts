@@ -2542,7 +2542,13 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Context
+         * @description Whether it is made again on its own when the company model changes
+         *     what it holds — or only when asked (LEKA-374). Behind or not, it says
+         *     so either way.
+         */
+        patch: operations["update_context_api_v1_context__context_id__patch"];
         trace?: never;
     };
     "/api/v1/context/{context_id}/refresh": {
@@ -2556,11 +2562,105 @@ export interface paths {
         put?: never;
         /**
          * Refresh Context
-         * @description Assembled again from the model as it is now. A new version when what
-         *     it holds changed — or failed, when a root is gone; none when nothing did.
-         *     409 when the context is archived.
+         * @description Assembled again from the model as it is now — after what it was
+         *     behind on, said with the check. A new version when what it holds
+         *     changed — or failed, when a root is gone; none when nothing did. 409
+         *     when the context is archived.
          */
         post: operations["refresh_context_api_v1_context__context_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/expand": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Expand Context
+         * @description Widened, and made again (LEKA-374): further, more of it, further
+         *     back, less relevant things kept, more roots, more kinds of relationship
+         *     — or, nothing asked, one step: a step further, twice the budget and the
+         *     window. A new version that says what of its request changed. 404 when
+         *     a root added is not the workspace's; 409 when archived; 422 when it
+         *     widens nothing.
+         */
+        post: operations["expand_context_api_v1_context__context_id__expand_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/compress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compress Context
+         * @description Narrowed to what its reader can take, and made again (LEKA-374):
+         *     fewer elements — the most relevant kept, its roots always — nearer, a
+         *     shorter window, only the more relevant; nothing asked, half its budget.
+         *     409 when archived; 422 when it narrows nothing.
+         */
+        post: operations["compress_context_api_v1_context__context_id__compress_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/intent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reask Context
+         * @description Its intention asked again, as it now stands (LEKA-374): read again,
+         *     and the same context made again — a new version that says what LEKA
+         *     reads differently, and how what it holds changed. 409 when archived, or
+         *     not assembled for an intention; 422 when nothing can start it.
+         */
+        post: operations["reask_context_api_v1_context__context_id__intent_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Context Checks
+         * @description Every time it was made again, the latest first (LEKA-374): asked, or
+         *     LEKA following the model; after which changes; and what came of it — a
+         *     version, nothing new, a failure.
+         */
+        get: operations["context_checks_api_v1_context__context_id__checks_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3094,6 +3194,28 @@ export interface components {
              * Format: date-time
              */
             assembled_at: string;
+            /**
+             * Trigger
+             * @description Why this version was made: created, refreshed, the model changed, expanded, compressed, asked again (LEKA-374).
+             * @default created
+             * @enum {string}
+             */
+            trigger: "created" | "refreshed" | "changed" | "expanded" | "compressed" | "reasked";
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Changes
+             * @description What made it: the model's changes it followed, or what of its request or intention changed — the first MAX_PENDING (LEKA-374).
+             */
+            changes?: components["schemas"]["ContextChange"][];
+            /**
+             * Change Count
+             * @description How many changes made it, in all.
+             * @default 0
+             */
+            change_count: number;
+            /** @description How it differs from the last version that held something (LEKA-374). */
+            delta?: components["schemas"]["ContextDelta"] | null;
         };
         /**
          * AttentionPointRead
@@ -3716,6 +3838,123 @@ export interface components {
          */
         ConnectorCategory: "code" | "project" | "docs" | "cloud" | "observability" | "data" | "chat" | "custom";
         /**
+         * ContextChange
+         * @description What made a context be made again, or what it is behind on (LEKA-374):
+         *     something the model changed of what it holds — an entity added, changed
+         *     or removed, a relationship between its ends — or a field of its request
+         *     or its intention; `model` when a build changed more than can be said
+         *     one by one.
+         */
+        ContextChange: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "entity" | "relationship" | "request" | "intent" | "model";
+            /** Change */
+            change?: ("added" | "changed" | "removed") | null;
+            /**
+             * Ref Id
+             * @description The entity, in the model.
+             */
+            ref_id?: string | null;
+            /**
+             * From Id
+             * @description A relationship's ends.
+             */
+            from_id?: string | null;
+            /** To Id */
+            to_id?: string | null;
+            /**
+             * Type
+             * @description The entity's type, or the relationship's.
+             */
+            type?: string | null;
+            /**
+             * Name
+             * @description The entity's name, or its ends: A → B.
+             */
+            name?: string | null;
+            /**
+             * Fields
+             * @description What of an entity changed.
+             */
+            fields?: string[];
+            /**
+             * Field
+             * @description What of the request or the intention changed.
+             */
+            field?: string | null;
+            /** Before */
+            before?: unknown;
+            /** After */
+            after?: unknown;
+            /**
+             * At
+             * @description When the model recorded it.
+             */
+            at?: string | null;
+            /**
+             * Touches
+             * @description How it touches the context: something it holds, or a new thing its words name.
+             */
+            touches?: ("held" | "words") | null;
+        };
+        /**
+         * ContextCheckRead
+         * @description One time a context was made again (LEKA-374): why, by whom — none
+         *     when LEKA followed the model — after which changes, and what came of
+         *     it.
+         */
+        ContextCheckRead: {
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /**
+             * Trigger
+             * @enum {string}
+             */
+            trigger: "created" | "refreshed" | "changed" | "expanded" | "compressed" | "reasked";
+            /** Checked By */
+            checked_by: string | null;
+            /** Changes */
+            changes: components["schemas"]["ContextChange"][];
+            /** Change Count */
+            change_count: number;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "version" | "unchanged" | "failed";
+            /**
+             * Version
+             * @description The version it made, or the one that still holds.
+             */
+            version: number;
+            /** Model Built At */
+            model_built_at: string | null;
+        };
+        /**
+         * ContextCompress
+         * @description A context narrowed to what a reader can take (LEKA-374): fewer
+         *     elements — the most relevant kept — nearer, a shorter window, only the
+         *     more relevant. Nothing said: half its budget.
+         */
+        ContextCompress: {
+            /** Depth */
+            depth?: number | null;
+            /** Limit */
+            limit?: number | null;
+            /** Window Days */
+            window_days?: number | null;
+            /** Min Relevance */
+            min_relevance?: number | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
          * ContextConflictRead
          * @description Something the context's sources disagree on (LEKA-372): said, every
          *     side with who says so — never silently merged.
@@ -3845,6 +4084,21 @@ export interface components {
             sources?: string[];
         };
         /**
+         * ContextDelta
+         * @description How a version differs from the last one that held something
+         *     (LEKA-374).
+         */
+        ContextDelta: {
+            /** Added */
+            added: number;
+            /** Removed */
+            removed: number;
+            /** Changed */
+            changed: number;
+            /** Unchanged */
+            unchanged: number;
+        };
+        /**
          * ContextDetail
          * @description A context and its latest version.
          */
@@ -3891,6 +4145,18 @@ export interface components {
             archived_at: string | null;
             /** @description The intention it was assembled for (LEKA-373). */
             intent?: components["schemas"]["IntentPlan"] | null;
+            /**
+             * Follow
+             * @description Made again on its own when the model changes what it holds (LEKA-374).
+             * @default true
+             */
+            follow: boolean;
+            /**
+             * Used At
+             * @description When it was last used.
+             */
+            used_at?: string | null;
+            freshness: components["schemas"]["ContextFreshness"];
             latest: components["schemas"]["ContextVersionRead"] | null;
         };
         /**
@@ -3960,6 +4226,83 @@ export interface components {
             text: string;
         };
         /**
+         * ContextExpand
+         * @description A context widened (LEKA-374): further, more of it, further back,
+         *     less relevant things kept, more roots, more kinds of relationship.
+         *     Nothing said: one step — a step further, twice the budget and the
+         *     window, as far as each goes.
+         */
+        ContextExpand: {
+            /** Depth */
+            depth?: number | null;
+            /** Limit */
+            limit?: number | null;
+            /** Window Days */
+            window_days?: number | null;
+            /** Min Relevance */
+            min_relevance?: number | null;
+            /**
+             * Roots
+             * @description Roots added.
+             */
+            roots?: string[];
+            /**
+             * Relationships
+             * @description Kinds of relationship walked through too.
+             */
+            relationships?: components["schemas"]["RelationshipType"][];
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * ContextFreshness
+         * @description Whether a context is up to date with the company model (LEKA-374):
+         *     `stale` when the model has changed what it holds since it was last
+         *     checked — the changes said — or when its last recalculation failed. And
+         *     whether it is made again on its own: `active` when it follows the model
+         *     and was used lately, `dormant` when nobody used it for a while — made
+         *     again when asked — `off` when it follows nothing, `archived`.
+         */
+        ContextFreshness: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "fresh" | "stale";
+            /** Reasons */
+            reasons: ("changes" | "failed")[];
+            /**
+             * Since
+             * @description Since when it is behind.
+             */
+            since: string | null;
+            /**
+             * Changes
+             * @description How many changes it is behind on.
+             */
+            changes: number;
+            /**
+             * Pending
+             * @description The latest of them, MAX_PENDING at most.
+             */
+            pending: components["schemas"]["ContextChange"][];
+            /**
+             * Checked At
+             * @description When it was last checked.
+             */
+            checked_at: string | null;
+            /**
+             * Checked Model At
+             * @description The build its last check read.
+             */
+            checked_model_at: string | null;
+            /**
+             * Following
+             * @enum {string}
+             */
+            following: "active" | "dormant" | "off" | "archived";
+        };
+        /**
          * ContextRead
          * @description A context: what it is for, what it asks, where it stands.
          */
@@ -4006,6 +4349,18 @@ export interface components {
             archived_at: string | null;
             /** @description The intention it was assembled for (LEKA-373). */
             intent?: components["schemas"]["IntentPlan"] | null;
+            /**
+             * Follow
+             * @description Made again on its own when the model changes what it holds (LEKA-374).
+             * @default true
+             */
+            follow: boolean;
+            /**
+             * Used At
+             * @description When it was last used.
+             */
+            used_at?: string | null;
+            freshness: components["schemas"]["ContextFreshness"];
         };
         /** ContextRefresh */
         ContextRefresh: {
@@ -4133,6 +4488,17 @@ export interface components {
             };
         };
         /**
+         * ContextUpdate
+         * @description What may be changed of a context without making it again (LEKA-374).
+         */
+        ContextUpdate: {
+            /**
+             * Follow
+             * @description Made again on its own when the model changes what it holds — or only when asked.
+             */
+            follow: boolean;
+        };
+        /**
          * ContextVersionRead
          * @description One assembly of a context: when, from which build, by what, what it
          *     holds — or why it failed.
@@ -4149,9 +4515,21 @@ export interface components {
              * Trigger
              * @enum {string}
              */
-            trigger: "created" | "refreshed";
+            trigger: "created" | "refreshed" | "changed" | "expanded" | "compressed" | "reasked";
             /** Reason */
             reason: string | null;
+            /**
+             * Changes
+             * @description What made it (LEKA-374).
+             */
+            changes?: components["schemas"]["ContextChange"][];
+            /**
+             * Change Count
+             * @default 0
+             */
+            change_count: number;
+            /** @description How it differs from the last version that held something. */
+            delta?: components["schemas"]["ContextDelta"] | null;
             strategy: components["schemas"]["ContextStrategyRead"];
             /** Contract Version */
             contract_version: number;
@@ -7341,6 +7719,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[ContextCheckRead] */
+        PageEnvelope_ContextCheckRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["ContextCheckRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[ContextRead] */
         PageEnvelope_ContextRead_: {
             /**
@@ -8141,6 +8532,8 @@ export interface components {
             changed: boolean;
             /** @description The version it made, or the one that holds. */
             version: components["schemas"]["ContextVersionRead"];
+            /** @description The check it was, and after which changes (LEKA-374). */
+            check?: components["schemas"]["ContextCheckRead"] | null;
         };
         /** RegisterRequest */
         RegisterRequest: {
@@ -22100,6 +22493,8 @@ export interface operations {
                 status?: ("assembling" | "assembled" | "failed" | "archived") | null;
                 subject_type?: ("entity" | "intention" | "request") | null;
                 subject_id?: string | null;
+                /** @description Behind the company model — or up to date (LEKA-374). */
+                stale?: boolean | null;
                 /** @description From a previous response's next_cursor. Opaque. */
                 cursor?: string | null;
                 /** @description Rows per page. */
@@ -22388,6 +22783,104 @@ export interface operations {
             };
         };
     };
+    update_context_api_v1_context__context_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContextUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContextRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     refresh_context_api_v1_context__context_id__refresh_post: {
         parameters: {
             query?: never;
@@ -22410,6 +22903,403 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RefreshOutcome"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    expand_context_api_v1_context__context_id__expand_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ContextExpand"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshOutcome"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    compress_context_api_v1_context__context_id__compress_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ContextCompress"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshOutcome"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    reask_context_api_v1_context__context_id__intent_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntentAsk"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssembledContext"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    context_checks_api_v1_context__context_id__checks_get: {
+        parameters: {
+            query?: {
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_ContextCheckRead_"];
                 };
             };
             /** @description The request could not be understood. */

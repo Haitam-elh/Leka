@@ -14,7 +14,9 @@ import { openContextTab } from "./context-tab";
  * disagree on — payment-api's SLA, GitHub's or Datadog's — is said with who
  * says what; the two accounts entity resolution found probably one person
  * are folded into one, their disagreement said; each element says why its
- * rank.
+ * rank. Keeping up (LEKA-374): it says it is up to date with the model and
+ * follows it; widened and narrowed, it makes new versions that say what of
+ * the request changed, and each time is kept.
  */
 
 test.describe("the context engine", () => {
@@ -90,5 +92,34 @@ test.describe("the context engine", () => {
     await expect(why).toContainText("Demandé");
     await expect(why).toContainText("Cohérence");
   });
-});
 
+  test("keeps up: up to date, widened, narrowed, each version saying why", async ({ page }) => {
+    await openContextTab(page);
+    await page.getByLabel("Pourquoi ?").fill("Pourquoi payment-api est lent ?");
+    await page.getByRole("button", { name: "Assembler le contexte" }).click();
+
+    const freshness = page.getByTestId("context-freshness");
+    await expect(freshness).toHaveAttribute("data-state", "fresh");
+    await expect(freshness).toContainText("À jour avec le modèle de l'entreprise");
+    await expect(page.getByTestId("context-following")).toContainText("Suit le modèle");
+    await expect(freshness.getByRole("switch", { name: "Suivre le modèle" })).toBeChecked();
+
+    const versions = page.getByTestId("context-versions").getByRole("listitem");
+    await page.getByRole("button", { name: "Élargir" }).click();
+    await expect(versions).toHaveCount(2);
+    await expect(versions.first()).toContainText("v2 · élargie");
+    await expect(versions.first()).toContainText(
+      "portée (pas) : 1 → 2 · budget : 100 → 200 · période (jours) : 14 → 28",
+    );
+
+    await page.getByRole("button", { name: "Resserrer" }).click();
+    await expect(versions).toHaveCount(3);
+    await expect(versions.first()).toContainText("v3 · resserrée");
+    await expect(versions.first()).toContainText("budget : 200 → 100");
+
+    const checks = page.getByTestId("context-checks").getByRole("listitem");
+    await expect(checks).toHaveCount(2);
+    await expect(checks.first()).toContainText("Resserré");
+    await expect(checks.first()).toContainText("version 3 créée");
+  });
+});

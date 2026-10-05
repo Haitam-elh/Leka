@@ -6,7 +6,9 @@
  * cannot be read; what LEKA understood — the kind and the words that said
  * it, what it is about and how it knows, when and from what, where, from
  * which sources; what it gathered, by kind of thing, and every element on
- * asking; the sources it came from; nothing is missing, said too.
+ * asking; the sources it came from; nothing is missing, said too. Asked
+ * again (LEKA-374): which version, what LEKA reads differently, and how
+ * what it gathered changed.
  */
 
 import { render, screen, within } from "@testing-library/react";
@@ -146,6 +148,8 @@ function assembled(over: Partial<AssembledContext> = {}): AssembledContext {
     model_version: 1,
     assembled_at: "2026-10-07T15:30:00Z",
     intent: PLAN,
+    trigger: "created",
+    change_count: 0,
     ...over,
   };
 }
@@ -211,5 +215,44 @@ describe("the context an intention asks for", () => {
       "Rien ne manque pour lire cette demande.",
     );
     expect(screen.getByTestId("intent-scope")).toHaveTextContent("Aucun élément du modèle nommé");
+  });
+
+  it("says, asked again, which version it is and what LEKA reads differently", () => {
+    show(
+      assembled({
+        version: 2,
+        trigger: "reasked",
+        changes: [
+          {
+            kind: "intent",
+            change: "changed",
+            field: "text",
+            before: "Pourquoi ?",
+            after: PLAN.text,
+          },
+          {
+            kind: "intent",
+            change: "changed",
+            field: "kind",
+            before: "ownership",
+            after: "diagnose",
+          },
+          { kind: "request", change: "changed", field: "depth", before: 1, after: 2 },
+        ],
+        change_count: 3,
+        delta: { added: 2, removed: 1, changed: 0, unchanged: 5 },
+      }),
+    );
+
+    const again = screen.getByTestId("intent-asked-again");
+    expect(again).toHaveTextContent(
+      "Version 2 de ce contexte : votre demande a changé, LEKA l'a relue.",
+    );
+    expect(within(again).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      "nature : Responsabilité → Diagnostic",
+    ]);
+    expect(again).toHaveTextContent(
+      "Contexte : 2 élément(s) ajouté(s), 1 retiré(s), 0 modifié(s).",
+    );
   });
 });

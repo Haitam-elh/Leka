@@ -30,7 +30,7 @@ import { useUnsavedChangesGuard } from "@/lib/forms/use-unsaved-changes-guard";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { ApiError } from "@/lib/api";
 import type { AssembledContext } from "@/lib/context";
-import { intentAsk, submitIntention } from "@/lib/intentions/api";
+import { intentAsk, reaskIntention, submitIntention } from "@/lib/intentions/api";
 import { notify } from "@/lib/notify";
 import { KIND_CATEGORY, type Source } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
@@ -86,6 +86,8 @@ export function IntentionForm() {
   const onDecision = params.get("step") === "decision";
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [assembled, setAssembled] = useState<AssembledContext | null>(null);
+  // Edited after step 2: the same context is asked again (LEKA-374).
+  const [reasking, setReasking] = useState<string | null>(null);
 
   const form = useLekaForm<IntentionRequest>({
     schema: intentionRequestSchema,
@@ -104,7 +106,7 @@ export function IntentionForm() {
         periodChosen: form.getFieldState("period").isDirty,
       });
       try {
-        const made = await submitIntention(ask);
+        const made = reasking ? await reaskIntention(reasking, ask) : await submitIntention(ask);
         clearDraft(workspace?.id);
         setAssembled(made);
         notify.success({ title: t.composer.submit });
@@ -190,7 +192,15 @@ export function IntentionForm() {
   if (onDecision) return <DecisionStep />;
 
   if (assembled !== null) {
-    return <IntentContext assembled={assembled} onEdit={() => setAssembled(null)} />;
+    return (
+      <IntentContext
+        assembled={assembled}
+        onEdit={() => {
+          setReasking(assembled.context_id);
+          setAssembled(null);
+        }}
+      />
+    );
   }
 
   return (

@@ -2052,6 +2052,72 @@ class GraphRepository(EntityRepository):
         )
         return found if isinstance(found, datetime) else None
 
+    async def builds_after(
+        self, after: datetime | None, *, limit: int
+    ) -> list[tuple[uuid.UUID, datetime, datetime]]:
+        """The builds that succeeded after `after`, the oldest first: each
+        run, when it started and when it finished (LEKA-374)."""
+        statement = (
+            select(ModelRun.id, ModelRun.started_at, ModelRun.finished_at)
+            .where(
+                ModelRun.workspace_id == self.workspace_id,
+                ModelRun.status == "succeeded",
+                ModelRun.finished_at.is_not(None),
+            )
+            .order_by(ModelRun.finished_at, ModelRun.id)
+            .limit(limit)
+        )
+        if after is not None:
+            statement = statement.where(ModelRun.finished_at > after)
+        rows = await self._session.execute(statement)
+        return [(run, started, finished) for run, started, finished in rows.tuples() if finished]
+
+    async def recorded(
+        self, runs: Sequence[uuid.UUID], *, limit: int
+    ) -> list[tuple[uuid.UUID, str, str, list[str], str, datetime, uuid.UUID | None]]:
+        """The entities' versions these builds recorded, the oldest first, at
+        most `limit` (LEKA-374): the entity, its type, its name and lifecycle
+        then, what changed, when, by which build."""
+        if not runs:
+            return []
+        rows = await self._session.execute(
+            select(
+                EntityVersion.entity_id,
+                Entity.type,
+                EntityVersion.content["name"].astext,
+                EntityVersion.changed,
+                EntityVersion.content["lifecycle"].astext,
+                EntityVersion.recorded_at,
+                EntityVersion.run_id,
+            )
+            .join(Entity, Entity.id == EntityVersion.entity_id)
+            .where(
+                EntityVersion.workspace_id == self.workspace_id,
+                Entity.workspace_id == self.workspace_id,
+                EntityVersion.run_id.in_(set(runs)),
+            )
+            .order_by(EntityVersion.recorded_at, EntityVersion.entity_id)
+            .limit(limit)
+        )
+        return [
+            (entity, kind, name or "", list(changed or []), lifecycle or "", at, run)
+            for entity, kind, name, changed, lifecycle, at, run in rows.tuples()
+        ]
+
+    async def changes_in(
+        self, runs: Sequence[uuid.UUID], *, limit: int
+    ) -> Sequence[RelationshipChange]:
+        """The relationships these builds added, changed or removed, the
+        oldest first, at most `limit` (LEKA-374)."""
+        if not runs:
+            return []
+        return await self.list(
+            self.select(RelationshipChange)
+            .where(RelationshipChange.run_id.in_(set(runs)))
+            .order_by(RelationshipChange.recorded_at, RelationshipChange.id)
+            .limit(limit)
+        )
+
 
 # What a bot is to the views and their coverage: a person enrichment said
 # is one (its `bot` attribute) — left out, as the people's list does.

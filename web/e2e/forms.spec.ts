@@ -40,6 +40,16 @@ test.describe("the intention journey", () => {
     await expect(scope).toContainText("lue dans la demande : « hier »");
     await expect(page.getByTestId("intent-gathered")).toContainText("Service");
     await expect(page.getByTestId("intent-sources")).toBeVisible();
+
+    // Edited, the same context is asked again: version 2 says what LEKA
+    // reads differently (LEKA-374).
+    await page.getByRole("button", { name: "Modifier" }).click();
+    await page.getByTestId("intention-input").fill("Qui est responsable de payment-api ?");
+    await page.getByTestId("intention-submit").click();
+    const again = page.getByTestId("intent-asked-again");
+    await expect(again).toContainText("Version 2 de ce contexte");
+    await expect(again).toContainText("nature : Diagnostic → Responsabilité");
+    await expect(page.getByTestId("intent-scope")).toContainText("Responsabilité");
   });
 
   test("refuses to launch a question too short to analyse", async ({ page }) => {
