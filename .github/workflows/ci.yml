@@ -7,9 +7,14 @@ on:
   push:
     branches: [main]
 
-# A new push to a branch cancels the run still going for the previous one.
+# A new push to a branch cancels the run still going for the previous one —
+# on that branch, for that event, and nothing else. The event and the PR's
+# own branch are in the group because a pull request's run that starts after
+# its PR was merged has no merge ref left, and GitHub gives it main's: grouped
+# by `github.ref` alone, it cancelled the run validating the merge on main,
+# and with it the deployment that waits on that run (CD #111, 2026-10-05).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
