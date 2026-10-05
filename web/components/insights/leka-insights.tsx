@@ -8,6 +8,7 @@ import {
   Loader2,
   type LucideIcon,
   Network,
+  Rocket,
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -36,6 +37,7 @@ const ICON: Record<string, LucideIcon> = {
   architecture: Network,
   organisation: UsersRound,
   context: Layers,
+  change: Rocket,
 };
 
 interface Worded {
@@ -99,6 +101,18 @@ export function word(t: Dictionary, finding: Finding): Worded {
             ? fill(w.context.weakDetail, { score: Math.round(p.score * 100) })
             : null,
       };
+    case "change.impact": {
+      const kinds = w.change.kinds as Record<string, string>;
+      const said = { kind: kinds[text(p.kind)] ?? text(p.kind), change: text(p.change) };
+      const incidents = Number(p.incidents) || 0;
+      const when = fill(w.change.when, { hours: text(p.hours) });
+      return {
+        title: incidents
+          ? fill(w.change.followed, { ...said, count: incidents })
+          : fill(w.change.reaches, { ...said, count: text(p.reached) }),
+        detail: p.environment ? `${when} · ${text(p.environment)}` : when,
+      };
+    }
     default:
       return { title: finding.statement, detail: null };
   }

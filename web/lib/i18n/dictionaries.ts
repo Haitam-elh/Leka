@@ -411,6 +411,18 @@ const fr = {
       weakDetail: "Qualité {score} %",
       version: "Version {version}",
     },
+    /** A change and what it reached (LEKA-378). */
+    change: {
+      kinds: {
+        deployment: "Déploiement",
+        change: "Changement",
+        release: "Version",
+        pull_request: "Pull request",
+      },
+      followed: "{kind} « {change} » : {count} incident(s) ensuite",
+      reaches: "{kind} « {change} » : {count} élément(s) concerné(s)",
+      when: "Il y a {hours} h",
+    },
   },
   /** The knowledge components (LEKA-340): entities, relations, provenance, quality. */
   knowledge: {
@@ -3520,6 +3532,17 @@ const en: Dictionary = {
       weak: "The context “{title}” is judged weak",
       weakDetail: "Quality {score}%",
       version: "Version {version}",
+    },
+    change: {
+      kinds: {
+        deployment: "Deployment",
+        change: "Change",
+        release: "Release",
+        pull_request: "Pull request",
+      },
+      followed: "{kind} “{change}”: {count} incident(s) after",
+      reaches: "{kind} “{change}”: {count} thing(s) reached",
+      when: "{hours} h ago",
     },
   },
   knowledge: {

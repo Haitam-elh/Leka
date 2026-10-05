@@ -3051,6 +3051,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/intelligence/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Changes
+         * @description The changes between two dates — deployments, change requests,
+         *     releases, pull requests — the latest first, each judged: current
+         *     (within 72 hours) or history, how much it matters and why, what it was
+         *     made to, how far it reaches, the incidents that followed. 90 days at
+         *     most.
+         */
+        get: operations["changes_api_v1_intelligence_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/changes/{change_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Change
+         * @description One change: everything it reaches, the most affected first — what
+         *     an incident hit, what it was made to, what depends on that — the
+         *     applications and the business holding it, the incidents that followed
+         *     or that its source says it caused, and what its source says of it.
+         */
+        get: operations["change_api_v1_intelligence_changes__change_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3105,7 +3152,7 @@ export interface components {
              */
             method: "rules" | "model";
             /** Reads */
-            reads: ("model" | "context")[];
+            reads: ("model" | "context" | "changes")[];
             /**
              * Summary
              * @description What it looks for (English).
@@ -3934,6 +3981,159 @@ export interface components {
             people: components["schemas"]["Tie"][];
             /** Incidents */
             incidents: components["schemas"]["Tie"][];
+        };
+        /**
+         * ChangeImpactDetail
+         * @description And everything it reaches, ranked; the business; what followed;
+         *     what its source says of it.
+         */
+        ChangeImpactDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "deployment" | "change" | "release" | "pull_request";
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** State */
+            state: string | null;
+            /** Environment */
+            environment: string | null;
+            /**
+             * Current
+             * @description Within 72 hours: still playing out. Else history.
+             */
+            current: boolean;
+            /**
+             * Significance
+             * @description 0 to 1.
+             */
+            significance: number;
+            /**
+             * Signals
+             * @description production, failed, incident_after, stated_cause, wide, business, critical.
+             */
+            signals: string[];
+            /** Touched */
+            touched: components["schemas"]["SubjectRead"][];
+            /** Reached */
+            reached: number;
+            /** Incidents */
+            incidents: number;
+            /**
+             * Top
+             * @description The three most affected.
+             */
+            top: components["schemas"]["ImpactRead"][];
+            /** Sources */
+            sources: string[];
+            /** Details */
+            details: {
+                [key: string]: string;
+            };
+            /** Source Ids */
+            source_ids: string[];
+            /** Impacts */
+            impacts: components["schemas"]["ImpactRead"][];
+            /** Applications */
+            applications: components["schemas"]["SubjectRead"][];
+            /** Capabilities */
+            capabilities: components["schemas"]["SubjectRead"][];
+            /** Processes */
+            processes: components["schemas"]["SubjectRead"][];
+            /** Followed */
+            followed: components["schemas"]["FollowedRead"][];
+        };
+        /**
+         * ChangeImpactRead
+         * @description A change, judged: what kind, when, current or history, how much it
+         *     matters and why, what it was made to, how far it reaches.
+         */
+        ChangeImpactRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "deployment" | "change" | "release" | "pull_request";
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** State */
+            state: string | null;
+            /** Environment */
+            environment: string | null;
+            /**
+             * Current
+             * @description Within 72 hours: still playing out. Else history.
+             */
+            current: boolean;
+            /**
+             * Significance
+             * @description 0 to 1.
+             */
+            significance: number;
+            /**
+             * Signals
+             * @description production, failed, incident_after, stated_cause, wide, business, critical.
+             */
+            signals: string[];
+            /** Touched */
+            touched: components["schemas"]["SubjectRead"][];
+            /** Reached */
+            reached: number;
+            /** Incidents */
+            incidents: number;
+            /**
+             * Top
+             * @description The three most affected.
+             */
+            top: components["schemas"]["ImpactRead"][];
+            /** Sources */
+            sources: string[];
+        };
+        /**
+         * ChangeImpactTimeline
+         * @description The changes between two dates, the latest first.
+         */
+        ChangeImpactTimeline: {
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             */
+            until: string;
+            /**
+             * Around
+             * @description The entity they were made to or around.
+             */
+            around: string | null;
+            /** Changes */
+            changes: components["schemas"]["ChangeImpactRead"][];
+            /** Truncated */
+            truncated: boolean;
         };
         /** ChangePasswordRequest */
         ChangePasswordRequest: {
@@ -7162,6 +7362,28 @@ export interface components {
             /** Confidence */
             confidence: number;
         };
+        /**
+         * FollowedRead
+         * @description An incident after a change, or that its source says it caused.
+         */
+        FollowedRead: {
+            subject: components["schemas"]["SubjectRead"];
+            /** Opened At */
+            opened_at: string | null;
+            /** Hours After */
+            hours_after: number | null;
+            /** Severity */
+            severity: string | null;
+            /** State */
+            state: string | null;
+            /** @description What of the change's footprint it affects. */
+            on: components["schemas"]["SubjectRead"] | null;
+            /**
+             * Stated
+             * @description Its source says the change caused it.
+             */
+            stated: boolean;
+        };
         /** ForgotPasswordRequest */
         ForgotPasswordRequest: {
             /** Email */
@@ -7325,6 +7547,25 @@ export interface components {
             capabilities: components["schemas"]["BusinessTie"][];
             /** Processes */
             processes: components["schemas"]["BusinessTie"][];
+        };
+        /**
+         * ImpactRead
+         * @description One thing a change reaches, and why it ranks there.
+         */
+        ImpactRead: {
+            subject: components["schemas"]["SubjectRead"];
+            /**
+             * Distance
+             * @description 0: made to it; 1, 2: depends on that, steps away.
+             */
+            distance: number;
+            /** Score */
+            score: number;
+            /**
+             * Reasons
+             * @description touched, depends_on:<what>, holds, incident, critical.
+             */
+            reasons: string[];
         };
         /**
          * IncidentDetail
@@ -26458,6 +26699,200 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntelligenceSummary"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    changes_api_v1_intelligence_changes_get: {
+        parameters: {
+            query?: {
+                /** @description From; 30 days before `until` when not given. */
+                since?: string | null;
+                /** @description To; now when not given. */
+                until?: string | null;
+                /** @description Made to it, to what it is made of, or to what it depends on. */
+                entity?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeImpactTimeline"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    change_api_v1_intelligence_changes__change_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeImpactDetail"];
                 };
             };
             /** @description The request could not be understood. */
