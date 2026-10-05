@@ -24,6 +24,25 @@ time a question arrives, the work is done.
                       it makes, and what is missing
     assemble_intent() that context, assembled and kept with its plan
 
+KEEPING UP (LEKA-374), dynamic.py deciding:
+
+    follow_model()    what the builds of the model since the last time
+                      changed of what each context holds: said on it
+                      (`pending`), and it is behind (`stale_since`)
+    due(), follow_one()
+                      the contexts behind that follow the model and are in
+                      use, made again — `changed`, after those changes
+    expand(), compress()
+                      its request widened or narrowed, made again
+    reask()           its intention asked again, read again, made again
+    set_follow()      made again on its own, or only when asked
+
+Every time a context is made again is a CHECK, kept whatever came of it —
+a version, nothing new, a failure — with what triggered it; a version
+says what made it (`changes`) and how it differs from the one before
+(`delta`). A context someone made again is up to date again; one read is
+in use (`used_at`).
+
 THE LIFECYCLE. A context is `assembling` until its first version is made,
 then `assembled` — or `failed`, when a refresh finds a root gone from the
 model: that attempt is a version too, holding nothing and saying why, and
@@ -43,13 +62,14 @@ from __future__ import annotations
 
 import math
 import uuid
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 
 import structlog
 
 from leka.connectors import SourceRepository, manifests
-from leka.context import assembly
+from leka.context import assembly, dynamic
 from leka.context.intent import (
     BUSINESS,
     INTENT_VERSION,
@@ -67,7 +87,7 @@ from leka.context.intent import (
     version_gaps,
 )
 from leka.context.language import expanded, words
-from leka.context.models import Context, ContextElement, ContextVersion
+from leka.context.models import Context, ContextCheck, ContextElement, ContextVersion
 from leka.context.ranking import Link
 from leka.context.repository import ContextRepository
 from leka.context.schemas import (
@@ -77,11 +97,16 @@ from leka.context.schemas import (
     MIN_RELEVANCE,
     RETRIEVERS,
     AssembledContext,
+    ContextChange,
+    ContextCheckRead,
+    ContextCompress,
     ContextConflictRead,
     ContextCreate,
+    ContextDelta,
     ContextDetail,
     ContextDiff,
     ContextElementRead,
+    ContextExpand,
     ContextRead,
     ContextRequest,
     ContextSourceRead,
@@ -98,6 +123,7 @@ from leka.context.schemas import (
     RankingReport,
     RefreshOutcome,
     RetrieverRunRead,
+    Trigger,
 )
 from leka.context.strategies import STRATEGIES, Gathered, Strategy, Tools
 from leka.ingestion import ContentRepository, ResolutionRepository
@@ -108,6 +134,7 @@ from leka.knowledge import (
     EntityType,
     GraphService,
     Lifecycle,
+    ModelChange,
     RelationshipType,
     fold,
 )
@@ -116,10 +143,32 @@ logger = structlog.get_logger(__name__)
 
 GONE = "A root of this context is no longer in the company model."
 UNKNOWN = "What this context asks for is no longer something LEKA knows: {}."
+NOTHING = "Nothing to start from: name something of the model, or say what to look for."
+
+# Following the model (LEKA-374): builds read at once, their changes at
+# most, the contexts whose words are read for new things, the contexts
+# made again in one pass — the next pass takes the rest.
+MAX_BUILDS = 20
+MAX_CHANGES = 5000
+MAX_WORDED = 500
+MAX_FOLLOWED = 50
+ROUNDS = 10
 
 
 class ContextArchivedError(Exception):
     """An archived context is read, never reassembled."""
+
+
+class ContextRefusedError(Exception):
+    """What is asked of a context cannot be done, and why (LEKA-374)."""
+
+
+class ContextRootError(Exception):
+    """A root asked for is not the workspace's (LEKA-374)."""
+
+
+class NotAnIntentionError(Exception):
+    """Only a context assembled for an intention is asked again (LEKA-374)."""
 
 
 class ContextService:
@@ -148,21 +197,7 @@ class ContextService:
         """A context and its first version — kept with the intention it was
         assembled for, as read (LEKA-373). None when a root is not the
         workspace's — nothing is kept."""
-        request = ContextRequest(
-            roots=list(dict.fromkeys(body.roots)),
-            query=body.query,
-            depth=body.depth,
-            relationships=sorted({kind.value for kind in body.relationships}),
-            environment=body.environment,
-            limit=body.limit,
-            window_days=body.window_days,
-            until=body.until,
-            retrievers=list(dict.fromkeys(body.retrievers)),
-            strategy=body.strategy,
-            min_relevance=body.min_relevance,
-            weights=dict(body.weights),
-            sources=list(dict.fromkeys(body.sources)),
-        )
+        request = _settled(body)
         strategy = self._strategies[request.strategy]
         tools = self._tools()
         gathered = await strategy.gather(tools, request, body.purpose)
@@ -178,6 +213,7 @@ class ContextService:
             status="assembling",
             current_version=0,
             created_by=by,
+            used_at=tools.now,
         )
         self._repository.keep(context)
         await self._repository.flush()
@@ -193,20 +229,250 @@ class ContextService:
             by=by,
             error=gathered.error or GONE,
         )
+        context.checked_model_at = version.model_built_at or await self._graph.built_at()
         await self._repository.reload(context)
         return _assembled(context, version, rows)
 
     async def refresh(
         self, context_id: uuid.UUID, *, reason: str | None, by: uuid.UUID | None
     ) -> RefreshOutcome | None:
-        """Assembled again from the model as it is now. None when the context
-        is not the workspace's."""
+        """Assembled again from the model as it is now — after what it was
+        behind on, if anything. None when the context is not the
+        workspace's."""
+        context = await self._open(context_id)
+        if context is None:
+            return None
+        return await self._recalculate(
+            context,
+            ContextRequest.model_validate(context.request),
+            trigger="refreshed",
+            reason=reason,
+            by=by,
+        )
+
+    async def expand(
+        self, context_id: uuid.UUID, ask: ContextExpand, *, by: uuid.UUID | None
+    ) -> RefreshOutcome | None:
+        """Its request widened as asked — or one step — and made again: a
+        new version, saying what of the request changed (LEKA-374)."""
+        context = await self._open(context_id)
+        if context is None:
+            return None
+        request = ContextRequest.model_validate(context.request)
+        try:
+            wider = dynamic.widened(request, ask)
+        except dynamic.RefusedError as error:
+            raise ContextRefusedError(str(error)) from error
+        added = [root for root in wider.roots if root not in request.roots]
+        if added and len(await self._graph.known(added)) != len(added):
+            raise ContextRootError
+        return await self._recalculate(
+            context,
+            wider,
+            trigger="expanded",
+            reason=ask.reason,
+            by=by,
+            said=dynamic.request_changes(request, wider),
+        )
+
+    async def compress(
+        self, context_id: uuid.UUID, ask: ContextCompress, *, by: uuid.UUID | None
+    ) -> RefreshOutcome | None:
+        """Its request narrowed as asked — or to half its budget, the most
+        relevant kept — and made again (LEKA-374)."""
+        context = await self._open(context_id)
+        if context is None:
+            return None
+        request = ContextRequest.model_validate(context.request)
+        try:
+            narrower = dynamic.narrowed(request, ask)
+        except dynamic.RefusedError as error:
+            raise ContextRefusedError(str(error)) from error
+        return await self._recalculate(
+            context,
+            narrower,
+            trigger="compressed",
+            reason=ask.reason,
+            by=by,
+            said=dynamic.request_changes(request, narrower),
+        )
+
+    async def reask(
+        self, context_id: uuid.UUID, ask: IntentAsk, *, by: uuid.UUID | None
+    ) -> AssembledContext | None:
+        """Its intention asked again, as it now stands: read again, and the
+        same context made again — a new version that says what LEKA reads
+        differently (LEKA-374). Only a context assembled for an intention."""
+        context = await self._open(context_id)
+        if context is None:
+            return None
+        if context.intent is None:
+            raise NotAnIntentionError
+        before = IntentPlan.model_validate(context.intent)
+        plan = await self.plan_intent(ask)
+        if not plan.request.roots and not words(plan.request.query):
+            raise ContextRefusedError(NOTHING)
+        request = ContextRequest.model_validate(context.request)
+        settled = _settled(_body_of(plan, ask))
+        context.title = ask.title or ask.text[:300]
+        context.purpose = ask.text
+        if ask.intention_id:
+            context.subject_type, context.subject_id = "intention", ask.intention_id
+        outcome = await self._recalculate(
+            context,
+            settled,
+            trigger="reasked",
+            reason=None,
+            by=by,
+            said=dynamic.intent_changes(before, plan) + dynamic.request_changes(request, settled),
+            intent=plan,
+        )
+        return await self.assembled(context.id, version=outcome.version.version)
+
+    async def set_follow(self, context_id: uuid.UUID, *, follow: bool) -> ContextRead | None:
+        """Made again on its own when the model changes what it holds — or
+        only when asked (LEKA-374)."""
         context = await self._repository.locked(context_id)
         if context is None:
             return None
-        if context.status == "archived":
+        if context.follow != follow:
+            context.follow = follow
+            await self._repository.reload(context)
+        return _context(context)
+
+    async def follow_model(self, *, now: datetime | None = None) -> dict[str, int]:
+        """What the builds of the model since the last pass changed of what
+        each context holds — or of what its words name — said on it: it is
+        behind, and on what (LEKA-374). Each build once; a change told twice
+        is one. The contexts are not made again here: due() says which."""
+        now = now or datetime.now(UTC)
+        counts = {"builds": 0, "changes": 0, "touched": 0}
+        mark = await self._repository.follow_mark()
+        after = mark.followed_at if mark is not None else await self._repository.earliest_checked()
+        if after is None:
+            # No context has read the model: nothing it built yet is news.
+            latest = await self._graph.built_at()
+            if latest is not None and mark is None:
+                await self._repository.keep_follow_mark(latest, None)
+            return counts
+        for _ in range(ROUNDS):
+            builds = await self._graph.builds_after(after, limit=MAX_BUILDS)
+            if not builds:
+                break
+            found = await self._graph.changes([b.run_id for b in builds], limit=MAX_CHANGES)
+            counts["builds"] += len(builds)
+            counts["changes"] += len(found.changes)
+            if found.truncated:
+                first = builds[0]
+                counts["touched"] += await self._repository.mark_every(
+                    ContextChange(kind="model", change="changed", at=first.started_at).model_dump(
+                        mode="json"
+                    ),
+                    first.started_at,
+                )
+            else:
+                counts["touched"] += await self._tell(found.changes)
+            after = builds[-1].finished_at
+            await self._repository.keep_follow_mark(after, builds[-1].run_id)
+            if len(builds) < MAX_BUILDS:
+                break
+        logger.info("contexts_followed", **counts)
+        return counts
+
+    async def _tell(self, changes: Sequence[ModelChange]) -> int:
+        """Each context, what of these changes is news to it."""
+        ids = {
+            i
+            for change in changes
+            for i in (change.entity_id, change.from_id, change.to_id)
+            if i is not None
+        }
+        held: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
+        checked: dict[uuid.UUID, datetime | None] = {}
+        for context_id, entity_id, at in await self._repository.held(list(ids)):
+            held[entity_id].add(context_id)
+            checked[context_id] = at
+        worded: dict[uuid.UUID, str] = {}
+        if any(c.kind == "entity" and c.change == "added" for c in changes):
+            for context_id, text, at in await self._repository.worded(MAX_WORDED):
+                worded[context_id] = text
+                checked.setdefault(context_id, at)
+        news = dynamic.touched(changes, held=held, checked=checked, worded=worded)
+        for context_id, told in news.items():
+            context = await self._repository.locked(context_id)
+            if context is None or context.status == "archived":
+                continue
+            behind, count = dynamic.pending(_behind(context), told, context.pending_count)
+            if count == context.pending_count:
+                continue
+            first = min((c.at for c in told if c.at is not None), default=datetime.now(UTC))
+            await self._repository.mark(
+                context.id,
+                since=context.stale_since or first,
+                pending=[change.model_dump(mode="json") for change in behind],
+                count=count,
+            )
+        return len(news)
+
+    async def due(self, *, now: datetime | None = None) -> list[uuid.UUID]:
+        """The contexts to make again: behind the model, following it, used
+        in the last ACTIVE_DAYS — the latest used first, MAX_FOLLOWED of
+        them. The others stay behind, and say so."""
+        now = now or datetime.now(UTC)
+        return await self._repository.due(
+            active_since=now - timedelta(days=dynamic.ACTIVE_DAYS), limit=MAX_FOLLOWED
+        )
+
+    async def follow_one(self, context_id: uuid.UUID) -> RefreshOutcome | None:
+        """A context behind the model, made again after what it was behind
+        on — `changed`, by nobody: LEKA followed the model. None when it is
+        no longer behind, followed, or there."""
+        context = await self._repository.locked(context_id)
+        if (
+            context is None
+            or context.status == "archived"
+            or not context.follow
+            or context.stale_since is None
+        ):
+            return None
+        return await self._recalculate(
+            context,
+            ContextRequest.model_validate(context.request),
+            trigger="changed",
+            reason=None,
+            by=None,
+        )
+
+    async def _open(self, context_id: uuid.UUID) -> Context | None:
+        """A context to make again, held until the transaction ends."""
+        context = await self._repository.locked(context_id)
+        if context is not None and context.status == "archived":
             raise ContextArchivedError
-        request = ContextRequest.model_validate(context.request)
+        return context
+
+    async def _recalculate(
+        self,
+        context: Context,
+        request: ContextRequest,
+        *,
+        trigger: Trigger,
+        reason: str | None,
+        by: uuid.UUID | None,
+        said: Sequence[ContextChange] = (),
+        intent: IntentPlan | None = None,
+    ) -> RefreshOutcome:
+        """A context made again from the model as it is now, for `request`.
+
+        Refreshed or followed, the same request: a new version only when
+        what it holds changed — or failed anew. Widened, narrowed or asked
+        again, a new version always: it asks something else. Either way a
+        check, saying what triggered it — what of the request or intention
+        changed (`said`), what it was behind on — and what came of it; and
+        the context is up to date again."""
+        now = datetime.now(UTC)
+        behind = _behind(context)
+        changes = [*said, *behind]
+        change_count = len(said) + max(context.pending_count, len(behind))
         strategy = self._strategies.get(request.strategy)
         unknown = _unknown(request, strategy)
         gathered = None
@@ -220,31 +486,62 @@ class ContextService:
         )
         latest = await self._repository.latest(context.id)
         status = "assembled" if built is not None else "failed"
-        if (
+        same = (
             latest is not None
             and latest.status == status
             and latest.fingerprint == (built.fingerprint if built else "")
-        ):
-            context.refreshed_at = datetime.now(UTC)
-            await self._repository.reload(context)
-            return RefreshOutcome(changed=False, version=_version(latest))
-        version, _ = await self._record(
-            context,
-            request,
-            strategy,
-            gathered,
-            built,
-            trigger="refreshed",
-            reason=reason,
-            by=by,
-            error=(
-                UNKNOWN.format(", ".join(unknown))
-                if unknown
-                else (gathered.error if gathered and gathered.error else GONE)
-            ),
         )
+        made: ContextVersion
+        if same and not said and latest is not None:
+            made = latest
+            context.refreshed_at = now
+        else:
+            made, _ = await self._record(
+                context,
+                request,
+                strategy,
+                gathered,
+                built,
+                trigger=trigger,
+                reason=reason,
+                by=by,
+                error=(
+                    UNKNOWN.format(", ".join(unknown))
+                    if unknown
+                    else (gathered.error if gathered and gathered.error else GONE)
+                ),
+                changes=changes,
+                change_count=change_count,
+            )
+        material = gathered.material if gathered is not None else None
+        model_at = (
+            material.built_at if material is not None else None
+        ) or await self._graph.built_at()
+        context.request = request.model_dump(mode="json")
+        if intent is not None:
+            context.intent = intent.model_dump(mode="json")
+        context.checked_model_at = model_at
+        context.stale_since = None
+        context.pending = []
+        context.pending_count = 0
+        if trigger != "changed":
+            context.used_at = now
+        check = ContextCheck(
+            context_id=context.id,
+            checked_at=now,
+            trigger=trigger,
+            checked_by=by,
+            changes=[c.model_dump(mode="json") for c in changes[: dynamic.MAX_PENDING]],
+            change_count=change_count,
+            outcome=("failed" if built is None else "unchanged" if made is latest else "version"),
+            version=made.version,
+            model_built_at=model_at,
+        )
+        self._repository.keep_check(check)
         await self._repository.reload(context)
-        return RefreshOutcome(changed=True, version=_version(version))
+        return RefreshOutcome(
+            changed=made is not latest, version=_version(made), check=_check(check)
+        )
 
     async def archive(self, context_id: uuid.UUID) -> ContextRead | None:
         """No longer reassembled. Archiving twice changes nothing."""
@@ -261,6 +558,7 @@ class ContextService:
         context = await self._repository.context(context_id)
         if context is None:
             return None
+        await self._repository.used(context.id, datetime.now(UTC), every=dynamic.USED_EVERY)
         latest = await self._repository.latest(context.id)
         return ContextDetail(
             **_context(context).model_dump(), latest=_version(latest) if latest else None
@@ -278,6 +576,7 @@ class ContextService:
         context = await self._repository.context(context_id)
         if context is None:
             return None
+        await self._repository.used(context.id, datetime.now(UTC), every=dynamic.USED_EVERY)
         found = (
             await self._repository.version(context.id, version)
             if version is not None
@@ -329,6 +628,11 @@ class ContextService:
     def version_reads(rows: Sequence[ContextVersion]) -> list[ContextVersionRead]:
         """Versions, as the API serves them."""
         return [_version(row) for row in rows]
+
+    @staticmethod
+    def check_reads(rows: Sequence[ContextCheck]) -> list[ContextCheckRead]:
+        """Checks, as the API serves them (LEKA-374)."""
+        return [_check(row) for row in rows]
 
     async def plan_intent(self, ask: IntentAsk) -> IntentPlan:
         """What an intention asks the company model for (LEKA-373): its kind,
@@ -456,31 +760,9 @@ class ContextService:
         was read (LEKA-373). None when nothing can start it: no thing named
         or chosen, and no word that says something."""
         plan = await self.plan_intent(ask)
-        request = plan.request
-        if not request.roots and not words(request.query):
+        if not plan.request.roots and not words(plan.request.query):
             return None
-        body = ContextCreate(
-            title=ask.title or ask.text[:300],
-            purpose=ask.text,
-            subject=ContextSubject(
-                type="intention" if ask.intention_id else "request", id=ask.intention_id
-            ),
-            roots=request.roots,
-            query=request.query,
-            depth=request.depth,
-            relationships=[RelationshipType(kind) for kind in request.relationships],
-            environment=request.environment,
-            limit=request.limit,
-            window_days=request.window_days,
-            until=request.until,
-            strategy="hybrid",
-            min_relevance=request.min_relevance,
-            weights={
-                name: weight for name, weight in request.weights.items() if name in RETRIEVERS
-            },
-            sources=request.sources,
-        )
-        return await self.create(body, by=by, intent=plan)
+        return await self.create(_body_of(plan, ask), by=by, intent=plan)
 
     async def _business_of(self, subjects: Sequence[IntentSubject]) -> list[IntentSubject]:
         """What the technical things an intention names belong to, on the
@@ -620,6 +902,22 @@ class ContextService:
             now=datetime.now(UTC),
         )
 
+    async def _delta(
+        self, context: Context, built: assembly.Assembly | None
+    ) -> ContextDelta | None:
+        """How what is made differs from the last version that held
+        something (LEKA-374): none when there is none."""
+        previous = await self._repository.latest(context.id, assembled=True)
+        if previous is None:
+            return None
+        was = [
+            element for _, element in map(_restore, await self._repository.elements(previous.id))
+        ]
+        added, removed, changed, same = assembly.diff(was, built.elements if built else [])
+        return ContextDelta(
+            added=len(added), removed=len(removed), changed=len(changed), unchanged=same
+        )
+
     async def _record(
         self,
         context: Context,
@@ -632,17 +930,24 @@ class ContextService:
         reason: str | None,
         by: uuid.UUID | None,
         error: str = GONE,
+        changes: Sequence[ContextChange] = (),
+        change_count: int = 0,
     ) -> tuple[ContextVersion, list[ContextElement]]:
-        """The next version, as made — or as failed."""
+        """The next version, as made — or as failed — with what made it, and
+        how it differs from the last version that held something."""
         now = datetime.now(UTC)
         material = gathered.material if gathered is not None else None
         retrieval = gathered.retrieval if gathered is not None else []
+        delta = await self._delta(context, built) if trigger != "created" else None
         version = ContextVersion(
             context_id=context.id,
             version=context.current_version + 1,
             status="assembled" if built is not None else "failed",
             trigger=trigger,
             reason=reason,
+            changes=[change.model_dump(mode="json") for change in changes[: dynamic.MAX_PENDING]],
+            change_count=change_count,
+            delta=delta.model_dump(mode="json") if delta is not None else None,
             strategy=strategy.name if strategy is not None else request.strategy,
             strategy_version=strategy.version if strategy is not None else 0,
             contract_version=CONTRACT_VERSION,
@@ -693,6 +998,82 @@ class ContextService:
         return version, rows
 
 
+def _settled(body: ContextCreate) -> ContextRequest:
+    """What a context asks the model for, settled: each root, retriever and
+    source once, the kinds of relationship sorted."""
+    return ContextRequest(
+        roots=list(dict.fromkeys(body.roots)),
+        query=body.query,
+        depth=body.depth,
+        relationships=sorted({kind.value for kind in body.relationships}),
+        environment=body.environment,
+        limit=body.limit,
+        window_days=body.window_days,
+        until=body.until,
+        retrievers=list(dict.fromkeys(body.retrievers)),
+        strategy=body.strategy,
+        min_relevance=body.min_relevance,
+        weights=dict(body.weights),
+        sources=list(dict.fromkeys(body.sources)),
+    )
+
+
+def _body_of(plan: IntentPlan, ask: IntentAsk) -> ContextCreate:
+    """The context an intention's plan asks for (LEKA-373)."""
+    request = plan.request
+    return ContextCreate(
+        title=ask.title or ask.text[:300],
+        purpose=ask.text,
+        subject=ContextSubject(
+            type="intention" if ask.intention_id else "request", id=ask.intention_id
+        ),
+        roots=request.roots,
+        query=request.query,
+        depth=request.depth,
+        relationships=[RelationshipType(kind) for kind in request.relationships],
+        environment=request.environment,
+        limit=request.limit,
+        window_days=request.window_days,
+        until=request.until,
+        strategy="hybrid",
+        min_relevance=request.min_relevance,
+        weights={name: weight for name, weight in request.weights.items() if name in RETRIEVERS},
+        sources=request.sources,
+    )
+
+
+def _behind(context: Context) -> list[ContextChange]:
+    """What a context is behind on, as it says it (LEKA-374)."""
+    return [
+        ContextChange.model_validate(change)
+        for change in context.pending or []
+        if isinstance(change, dict)
+    ]
+
+
+def _changes(said: object) -> list[ContextChange]:
+    return [
+        ContextChange.model_validate(change)
+        for change in (said if isinstance(said, list) else [])
+        if isinstance(change, dict)
+    ]
+
+
+def _check(row: ContextCheck) -> ContextCheckRead:
+    return ContextCheckRead.model_validate(
+        {
+            "checked_at": row.checked_at,
+            "trigger": row.trigger,
+            "checked_by": row.checked_by,
+            "changes": _changes(row.changes),
+            "change_count": row.change_count,
+            "outcome": row.outcome,
+            "version": row.version,
+            "model_built_at": row.model_built_at,
+        }
+    )
+
+
 def _ranking(built: assembly.Assembly | None) -> dict[str, object] | None:
     """How a version was ranked, as it is kept: the report and the
     conflicts."""
@@ -714,6 +1095,7 @@ def _conflicts(ranking: dict[str, object] | None) -> list[ContextConflictRead]:
 
 
 def _context(context: Context) -> ContextRead:
+    behind = _behind(context)
     return ContextRead(
         id=context.id,
         title=context.title,
@@ -730,6 +1112,20 @@ def _context(context: Context) -> ContextRead:
         refreshed_at=context.refreshed_at,
         archived_at=context.archived_at,
         intent=IntentPlan.model_validate(context.intent) if context.intent else None,
+        follow=context.follow,
+        used_at=context.used_at,
+        freshness=dynamic.freshness(
+            status=context.status,
+            follow=context.follow,
+            used_at=context.used_at,
+            created_at=context.created_at,
+            stale_since=context.stale_since,
+            behind=behind,
+            behind_count=max(context.pending_count, len(behind)),
+            checked_at=context.refreshed_at,
+            checked_model_at=context.checked_model_at,
+            now=datetime.now(UTC),
+        ),
     )
 
 
@@ -740,6 +1136,9 @@ def _version(row: ContextVersion) -> ContextVersionRead:
             "status": row.status,
             "trigger": row.trigger,
             "reason": row.reason,
+            "changes": _changes(row.changes),
+            "change_count": row.change_count,
+            "delta": row.delta,
             "strategy": {"name": row.strategy, "version": row.strategy_version},
             "contract_version": row.contract_version,
             "request": row.request,
@@ -816,6 +1215,11 @@ def _assembled(
         model_built_at=version.model_built_at,
         model_version=version.model_version,
         assembled_at=version.assembled_at,
+        trigger=version.trigger,
+        reason=version.reason,
+        changes=_changes(version.changes),
+        change_count=version.change_count,
+        delta=ContextDelta.model_validate(version.delta) if version.delta else None,
     )
 
 

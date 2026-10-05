@@ -22,6 +22,14 @@ grammar.
     IntentPlan         what LEKA reads of it: its kind, what it is about,
                        when, where, under what constraints — the structured
                        context request it makes — and what is missing
+    ContextChange      what made a context be made again, or behind: what
+                       the model changed of what it holds, or what of its
+                       request or intention changed (LEKA-374)
+    ContextFreshness   whether it is up to date, and if not since when and
+                       why; whether it follows the model on its own
+    ContextCheckRead   one time it was made again, and what came of it
+    ContextExpand,     its request widened or narrowed — a new version
+    ContextCompress
 
 What a version holds was written once and is read back as it was, whatever
 the model has become since: the types that read it take strings, not the
@@ -61,6 +69,10 @@ MIN_RELEVANCE = 0.05
 
 SubjectType = Literal["entity", "intention", "request"]
 ContextStatus = Literal["assembling", "assembled", "failed", "archived"]
+# Why a version was made, or a check run (LEKA-374): created; a refresh
+# asked; the model changed what it holds; its request widened, narrowed;
+# its intention asked again.
+Trigger = Literal["created", "refreshed", "changed", "expanded", "compressed", "reasked"]
 StrategyName = Literal["neighbourhood", "hybrid"]
 # How things are found (LEKA-371): around the roots, by the request's words
 # in the model and in the records' own text, by their time, on the ways
@@ -666,6 +678,48 @@ class IntentPlan(BaseModel):
     gaps: list[IntentGap]
 
 
+class ContextChange(BaseModel):
+    """What made a context be made again, or what it is behind on (LEKA-374):
+    something the model changed of what it holds — an entity added, changed
+    or removed, a relationship between its ends — or a field of its request
+    or its intention; `model` when a build changed more than can be said
+    one by one."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: Literal["entity", "relationship", "request", "intent", "model"]
+    change: Literal["added", "changed", "removed"] | None = None
+    ref_id: uuid.UUID | None = Field(default=None, description="The entity, in the model.")
+    from_id: uuid.UUID | None = Field(default=None, description="A relationship's ends.")
+    to_id: uuid.UUID | None = None
+    type: str | None = Field(default=None, description="The entity's type, or the relationship's.")
+    name: str | None = Field(default=None, description="The entity's name, or its ends: A → B.")
+    fields: list[str] = Field(default_factory=list, description="What of an entity changed.")
+    field: str | None = Field(
+        default=None, description="What of the request or the intention changed."
+    )
+    before: object = None
+    after: object = None
+    at: datetime | None = Field(default=None, description="When the model recorded it.")
+    touches: Literal["held", "words"] | None = Field(
+        default=None,
+        description="How it touches the context: something it holds, or a new thing its words "
+        "name.",
+    )
+
+
+class ContextDelta(BaseModel):
+    """How a version differs from the last one that held something
+    (LEKA-374)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    added: int
+    removed: int
+    changed: int
+    unchanged: int
+
+
 class AssembledContext(BaseModel):
     """One version of a context: the contract downstream services read.
 
@@ -711,6 +765,45 @@ class AssembledContext(BaseModel):
     model_built_at: datetime | None = Field(description="The build of the model it was read from.")
     model_version: int
     assembled_at: datetime
+    trigger: Trigger = Field(
+        default="created",
+        description="Why this version was made: created, refreshed, the model changed, "
+        "expanded, compressed, asked again (LEKA-374).",
+    )
+    reason: str | None = None
+    changes: list[ContextChange] = Field(
+        default_factory=list,
+        description="What made it: the model's changes it followed, or what of its request or "
+        "intention changed — the first MAX_PENDING (LEKA-374).",
+    )
+    change_count: int = Field(default=0, description="How many changes made it, in all.")
+    delta: ContextDelta | None = Field(
+        default=None,
+        description="How it differs from the last version that held something (LEKA-374).",
+    )
+
+
+Following = Literal["active", "dormant", "off", "archived"]
+
+
+class ContextFreshness(BaseModel):
+    """Whether a context is up to date with the company model (LEKA-374):
+    `stale` when the model has changed what it holds since it was last
+    checked — the changes said — or when its last recalculation failed. And
+    whether it is made again on its own: `active` when it follows the model
+    and was used lately, `dormant` when nobody used it for a while — made
+    again when asked — `off` when it follows nothing, `archived`."""
+
+    model_config = ConfigDict(frozen=True)
+
+    state: Literal["fresh", "stale"]
+    reasons: list[Literal["changes", "failed"]]
+    since: datetime | None = Field(description="Since when it is behind.")
+    changes: int = Field(description="How many changes it is behind on.")
+    pending: list[ContextChange] = Field(description="The latest of them, MAX_PENDING at most.")
+    checked_at: datetime | None = Field(description="When it was last checked.")
+    checked_model_at: datetime | None = Field(description="The build its last check read.")
+    following: Following
 
 
 class ContextRead(BaseModel):
@@ -735,6 +828,12 @@ class ContextRead(BaseModel):
     intent: IntentPlan | None = Field(
         default=None, description="The intention it was assembled for (LEKA-373)."
     )
+    follow: bool = Field(
+        default=True,
+        description="Made again on its own when the model changes what it holds (LEKA-374).",
+    )
+    used_at: datetime | None = Field(default=None, description="When it was last used.")
+    freshness: ContextFreshness
 
 
 class ContextVersionRead(BaseModel):
@@ -745,8 +844,15 @@ class ContextVersionRead(BaseModel):
 
     version: int
     status: Literal["assembled", "failed"]
-    trigger: Literal["created", "refreshed"]
+    trigger: Trigger
     reason: str | None
+    changes: list[ContextChange] = Field(
+        default_factory=list, description="What made it (LEKA-374)."
+    )
+    change_count: int = 0
+    delta: ContextDelta | None = Field(
+        default=None, description="How it differs from the last version that held something."
+    )
     strategy: ContextStrategyRead
     contract_version: int
     request: ContextRequest
@@ -780,6 +886,23 @@ class ContextRefresh(BaseModel):
     reason: str | None = Field(default=None, max_length=500, description="Why it is reassembled.")
 
 
+class ContextCheckRead(BaseModel):
+    """One time a context was made again (LEKA-374): why, by whom — none
+    when LEKA followed the model — after which changes, and what came of
+    it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    checked_at: datetime
+    trigger: Trigger
+    checked_by: uuid.UUID | None
+    changes: list[ContextChange]
+    change_count: int
+    outcome: Literal["version", "unchanged", "failed"]
+    version: int = Field(description="The version it made, or the one that still holds.")
+    model_built_at: datetime | None
+
+
 class RefreshOutcome(BaseModel):
     """What a refresh did: a new version when what the model says changed;
     none when it did not — the latest still holds."""
@@ -788,6 +911,55 @@ class RefreshOutcome(BaseModel):
 
     changed: bool
     version: ContextVersionRead = Field(description="The version it made, or the one that holds.")
+    check: ContextCheckRead | None = Field(
+        default=None, description="The check it was, and after which changes (LEKA-374)."
+    )
+
+
+class ContextUpdate(BaseModel):
+    """What may be changed of a context without making it again (LEKA-374)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    follow: bool = Field(
+        description="Made again on its own when the model changes what it holds — or only when "
+        "asked."
+    )
+
+
+class ContextExpand(BaseModel):
+    """A context widened (LEKA-374): further, more of it, further back,
+    less relevant things kept, more roots, more kinds of relationship.
+    Nothing said: one step — a step further, twice the budget and the
+    window, as far as each goes."""
+
+    model_config = ConfigDict(frozen=True)
+
+    depth: int | None = Field(default=None, ge=1, le=MAX_DEPTH)
+    limit: int | None = Field(default=None, ge=1, le=MAX_BUDGET)
+    window_days: int | None = Field(default=None, ge=1, le=MAX_WINDOW_DAYS)
+    min_relevance: float | None = Field(default=None, ge=0, le=1)
+    roots: list[uuid.UUID] = Field(
+        default_factory=list, max_length=MAX_ROOTS, description="Roots added."
+    )
+    relationships: list[RelationshipType] = Field(
+        default_factory=list, description="Kinds of relationship walked through too."
+    )
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class ContextCompress(BaseModel):
+    """A context narrowed to what a reader can take (LEKA-374): fewer
+    elements — the most relevant kept — nearer, a shorter window, only the
+    more relevant. Nothing said: half its budget."""
+
+    model_config = ConfigDict(frozen=True)
+
+    depth: int | None = Field(default=None, ge=1, le=MAX_DEPTH)
+    limit: int | None = Field(default=None, ge=1, le=MAX_BUDGET)
+    window_days: int | None = Field(default=None, ge=1, le=MAX_WINDOW_DAYS)
+    min_relevance: float | None = Field(default=None, ge=0, le=1)
+    reason: str | None = Field(default=None, max_length=500)
 
 
 class ElementChange(BaseModel):

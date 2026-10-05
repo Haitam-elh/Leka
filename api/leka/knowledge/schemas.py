@@ -167,6 +167,46 @@ class ContextMaterial(BaseModel):
     model_version: int
 
 
+class ModelBuild(BaseModel):
+    """A build of the model that succeeded (LEKA-374): what it recorded is
+    dated when it started; what read it, when it finished."""
+
+    model_config = ConfigDict(frozen=True)
+
+    run_id: uuid.UUID
+    started_at: datetime
+    finished_at: datetime
+
+
+class ModelChange(BaseModel):
+    """One thing a build changed (LEKA-374): an entity added, changed —
+    which of its fields — or removed; a relationship that appeared, changed
+    or went, between its two ends."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: Literal["entity", "relationship"]
+    change: Literal["added", "changed", "removed"]
+    entity_id: uuid.UUID | None = Field(default=None, description="The entity.")
+    from_id: uuid.UUID | None = Field(default=None, description="A relationship's ends.")
+    to_id: uuid.UUID | None = None
+    type: str = Field(description="The entity's type, or the relationship's.")
+    name: str = Field(description="The entity's name, or the relationship's ends: A → B.")
+    fields: list[str] = Field(default_factory=list, description="What of an entity changed.")
+    at: datetime = Field(description="When the build recorded it.")
+    run_id: uuid.UUID | None
+
+
+class ModelChanges(BaseModel):
+    """What some builds changed (LEKA-374), the oldest first — at most so
+    many: `truncated` when there was more."""
+
+    model_config = ConfigDict(frozen=True)
+
+    changes: list[ModelChange]
+    truncated: bool
+
+
 class ModelRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

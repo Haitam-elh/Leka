@@ -51,4 +51,7 @@ ROUTES: dict[str, tuple[Route, ...]] = {
     # Enrichment made something new (LEKA-359): the company model is built
     # again from it (LEKA-361).
     "ingestion.enriched": (Route("leka.knowledge.job.run_model_build_for_event"),),
+    # The model changed something (LEKA-374): the contexts that hold it
+    # follow — said behind, made again when they are in use.
+    "knowledge.model_built": (Route("leka.context.job.run_follow_for_event"),),
 }

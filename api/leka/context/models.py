@@ -12,6 +12,12 @@ Kept whole, not as ids: the model moves on — an entity's attributes
 change, a relationship goes — and a context must say, months later, what
 LEKA knew when it answered. docs/context.md says why each column is here.
 
+It keeps up (LEKA-374): what the model changed of what a context holds is
+noted on it (`pending`, `stale_since`) — and, when it follows the model
+and is in use, it is made again; every time it is made again is a CHECK,
+whatever came of it. One FOLLOW row per workspace says up to which build
+of the model its contexts were followed.
+
 Where embeddings will live, alongside the entity they describe — the
 pgvector column this platform runs PostgreSQL 16 for. See
 docs/adr/001-postgresql.md: keeping them in the same database means an
@@ -54,8 +60,11 @@ class Context(Base, WorkspaceScopedMixin):
         ),
         CheckConstraint("subject_type IN ('entity', 'intention', 'request')", name="subject_type"),
         CheckConstraint("current_version >= 0", name="current_version"),
+        CheckConstraint("pending_count >= 0", name="pending_count"),
         Index("ix_contexts_workspace_updated_at", "workspace_id", "updated_at"),
         Index("ix_contexts_workspace_subject", "workspace_id", "subject_type", "subject_id"),
+        # What is behind the model, and what is due to be made again.
+        Index("ix_contexts_workspace_stale_since", "workspace_id", "stale_since"),
     )
 
     title: Mapped[str] = mapped_column(String(300), nullable=False)
@@ -81,6 +90,25 @@ class Context(Base, WorkspaceScopedMixin):
     # that finds nothing new makes no version, but says it looked.
     refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Keeping up (LEKA-374). Made again on its own when the model changes
+    # what it holds — or only when asked.
+    follow: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    # When someone last used it: made it, asked for it again, read it. A
+    # context nobody used for a while is not made again on its own.
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The build of the model its last check read: what changed after it is
+    # news to it.
+    checked_model_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Since when the model says something else of what it holds — none when
+    # it is up to date — and what: the latest changes, MAX_PENDING at most,
+    # and how many in all.
+    stale_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pending: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    pending_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
 
 class ContextVersion(Base, WorkspaceScopedMixin):
@@ -100,7 +128,10 @@ class ContextVersion(Base, WorkspaceScopedMixin):
         UniqueConstraint("workspace_id", "id", name="uq_context_versions_workspace_id_id"),
         UniqueConstraint("context_id", "version", name="uq_context_versions_context_version"),
         CheckConstraint("status IN ('assembled', 'failed')", name="status"),
-        CheckConstraint("trigger IN ('created', 'refreshed')", name="trigger"),
+        CheckConstraint(
+            "trigger IN ('created', 'refreshed', 'changed', 'expanded', 'compressed', 'reasked')",
+            name="trigger",
+        ),
         CheckConstraint("version >= 1", name="version"),
         Index("ix_context_versions_workspace_context", "workspace_id", "context_id"),
     )
@@ -108,9 +139,20 @@ class ContextVersion(Base, WorkspaceScopedMixin):
     context_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
-    # Why it was made: the context's creation, or a refresh — and its reason.
+    # Why it was made: the context's creation, a refresh asked, the model
+    # changing what it holds, its request widened or narrowed, its
+    # intention asked again (LEKA-374) — and a reason, when one was given.
     trigger: Mapped[str] = mapped_column(String(20), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # What made it: the model's changes it followed, or what of its request
+    # or intention changed (LEKA-374) — MAX_PENDING at most, and how many.
+    changes: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    change_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # How it differs from the last version that held something: elements
+    # added, removed, said differently, the same. None for the first.
+    delta: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
     # What made it: the strategy and its version, the contract it fulfils.
     strategy: Mapped[str] = mapped_column(String(50), nullable=False)
     strategy_version: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -180,3 +222,50 @@ class ContextElement(Base, WorkspaceScopedMixin):
     # How it was ranked (LEKA-372): its score, its place, every signal it
     # was read from, the conflicts it is part of. None before.
     ranking: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+
+
+class ContextCheck(Base, WorkspaceScopedMixin):
+    """One time a context was made again (LEKA-374): why — asked, the model
+    changed, widened, narrowed, asked again — by whom, after which changes,
+    and what came of it: a version, nothing new, or a failure. Kept when no
+    version is made: what triggered a recalculation is traceable either
+    way."""
+
+    __tablename__ = "context_checks"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "context_id"],
+            ["contexts.workspace_id", "contexts.id"],
+            name="fk_context_checks_workspace_context",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("outcome IN ('version', 'unchanged', 'failed')", name="outcome"),
+        Index("ix_context_checks_workspace_context", "workspace_id", "context_id", "checked_at"),
+    )
+
+    context_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    trigger: Mapped[str] = mapped_column(String(20), nullable=False)
+    # Who asked; none when LEKA followed the model on its own.
+    checked_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    changes: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    change_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    outcome: Mapped[str] = mapped_column(String(20), nullable=False)
+    # The version it made, or the one that still holds.
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    model_built_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ContextFollow(Base, WorkspaceScopedMixin):
+    """Up to which build of the model a workspace's contexts were followed
+    (LEKA-374): the builds after it are what is new to them."""
+
+    __tablename__ = "context_follows"
+    __table_args__ = (UniqueConstraint("workspace_id", name="uq_context_follows_workspace"),)
+
+    followed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)

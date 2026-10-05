@@ -22,6 +22,9 @@ table, an index for each way, walked one step — one query — at a time
                 other way (LEKA-371)
     matching()  the entities a sentence's words find, any of them
     events()    what happened between two dates around some entities
+    builds_after(), changes()
+                the builds since a date, and what they changed — what
+                leka.context follows (LEKA-374)
 
 Every walk is bounded — by depth, by the entities it may reach, by the
 rows a step may read — and says when it stopped short (`truncated`). The
@@ -67,6 +70,9 @@ from leka.knowledge.schemas import (
     MaterialEntity,
     MaterialRelationship,
     MaterialSource,
+    ModelBuild,
+    ModelChange,
+    ModelChanges,
     PathRead,
     PathsRead,
     RelationshipRead,
@@ -780,6 +786,65 @@ class GraphService:
     async def built_at(self) -> datetime | None:
         """When the model was last built (LEKA-373)."""
         return await self._graph.built_at()
+
+    async def builds_after(self, after: datetime | None, *, limit: int) -> list[ModelBuild]:
+        """The builds that succeeded since `after`, the oldest first
+        (LEKA-374)."""
+        return [
+            ModelBuild(run_id=run, started_at=started, finished_at=finished)
+            for run, started, finished in await self._graph.builds_after(after, limit=limit)
+        ]
+
+    async def changes(self, runs: Sequence[uuid.UUID], *, limit: int) -> ModelChanges:
+        """What these builds changed (LEKA-374), the oldest first: each entity
+        added, changed — and what of it — or removed; each relationship
+        that appeared, changed or went, its ends named. At most `limit` of
+        each; `truncated` when there was more."""
+        versions = await self._graph.recorded(runs, limit=limit + 1)
+        edges = await self._graph.changes_in(runs, limit=limit + 1)
+        ends = await self._graph.by_ids(
+            list({i for edge in edges[:limit] for i in (edge.from_entity_id, edge.to_entity_id)})
+        )
+
+        def named(entity_id: uuid.UUID) -> str:
+            found = ends.get(entity_id)
+            return found.name if found is not None else str(entity_id)
+
+        changes = [
+            ModelChange(
+                kind="entity",
+                change=(
+                    "added"
+                    if "created" in changed
+                    else "removed"
+                    if "lifecycle" in changed and lifecycle == "removed"
+                    else "changed"
+                ),
+                entity_id=entity,
+                type=kind,
+                name=name,
+                fields=[] if "created" in changed else changed,
+                at=at,
+                run_id=run,
+            )
+            for entity, kind, name, changed, lifecycle, at, run in versions[:limit]
+        ] + [
+            ModelChange(
+                kind="relationship",
+                change=edge.change,
+                from_id=edge.from_entity_id,
+                to_id=edge.to_entity_id,
+                type=edge.type,
+                name=f"{named(edge.from_entity_id)} → {named(edge.to_entity_id)}",
+                at=edge.recorded_at,
+                run_id=edge.run_id,
+            )
+            for edge in edges[:limit]
+        ]
+        return ModelChanges(
+            changes=sorted(changes, key=lambda c: c.at),
+            truncated=len(versions) > limit or len(edges) > limit,
+        )
 
     async def matching(
         self, words: Sequence[str], *, limit: int = MAX_HITS
