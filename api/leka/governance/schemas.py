@@ -43,6 +43,10 @@ class Permission(enum.StrEnum):
     INTENTION_CREATE = "intention:create"
     INTENTION_APPROVE = "intention:approve"
 
+    # Archive, or change how it follows the model, a context someone else
+    # made (LEKA-376). Their own, any member may.
+    CONTEXT_MANAGE = "context:manage"
+
     JOB_READ = "job:read"
 
 
@@ -73,6 +77,7 @@ _ADMIN_PERMISSIONS = _MEMBER_PERMISSIONS | {
     Permission.MEMBER_REMOVE,
     Permission.SOURCE_MANAGE,
     Permission.INTENTION_APPROVE,
+    Permission.CONTEXT_MANAGE,
     Permission.JOB_READ,
 }
 
@@ -102,6 +107,7 @@ WRITE_PERMISSIONS: frozenset[Permission] = frozenset(
         Permission.SOURCE_MANAGE,
         Permission.INTENTION_CREATE,
         Permission.INTENTION_APPROVE,
+        Permission.CONTEXT_MANAGE,
     }
 )
 

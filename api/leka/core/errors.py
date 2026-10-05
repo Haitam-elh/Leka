@@ -60,6 +60,9 @@ class ErrorCode(enum.StrEnum):
     INVALID_CURSOR = "invalid_cursor"
     INVALID_SORT = "invalid_sort"
     INVALID_FILTER = "invalid_filter"
+    # A client asked for a version of a contract the API does not serve
+    # (LEKA-376: Leka-Context-Contract).
+    CONTRACT_UNSUPPORTED = "contract_unsupported"
 
     # ── Authentication (LEKA-330, spelling preserved) ────────────────────
     INVALID_CREDENTIALS = "invalid_credentials"
