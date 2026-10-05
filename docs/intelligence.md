@@ -5,10 +5,10 @@ model and the contexts, run on their own and on demand, each conclusion kept
 as a **finding** with what shows it and where that was read — for the
 intentions and the screens that build on them.
 
-This is the frame of the Intelligence epic. LEKA-378 (change and impact),
-379 (knowledge gaps), 380 (enrichment), 381 (quality), 382 (conflicts) and 383
-(evolution and insights) add their analyses to it; this ticket ships the frame
-and three representative analyses.
+This is the frame of the Intelligence epic. LEKA-377 shipped the frame and
+three representative analyses; LEKA-378 adds change and impact (§ 11); 379
+(knowledge gaps), 380 (enrichment), 381 (quality), 382 (conflicts) and 383
+(evolution and insights) add theirs to it.
 
 Code: `api/leka/intelligence/` — `analysis.py` (the frame), `rules.py` (the
 analyses), `service.py`, `repository.py`, `job.py`; the routes in
@@ -70,6 +70,9 @@ with:
 - whether it follows the model;
 - since when it has been behind, and how many changes are pending;
 - the quality level and score of its latest version.
+
+**The changes of the last 30 days** (LEKA-378), at most 100, each with its
+footprint: what it was made to, what that reaches, what followed (§ 11).
 
 Each part is read in **its own session**, and only when an analysis of the run
 needs it. A part that cannot be read is left out and logged
@@ -165,6 +168,7 @@ and the file and line that state it, and the context with its version.
 | `dependency_concentration` | architecture | model | What 3 or more things rely on (roles `calls`, `queue`, `cache`, `stores`, `files`, `email`, `uses`, `depends`, `deployed_on`; each dependent counted once) | **high** when it is in incident or needs attention, or when 5+ rely on it and nothing watches it · **medium** when unwatched, or 5+ rely on it · **low** otherwise |
 | `ownership` | organisation | model | What runs or keeps data (the *services* and *data* columns) with no owner named for it: no team and no person a source says owns it (`owned_by` from it, or `owns` to it) | **high** when 3+ rely on it or it is in incident · **medium** for a service, or when something relies on it · **low** otherwise — one step lighter when people maintain it by their work. Confidence 0.9: an owner may exist that no source names |
 | `context_health` | context | contexts | The contexts used in the last 30 days that failed, fell behind the model (following it, more than a day, changes pending), or were judged `low` | failed: **high** if used in the last 7 days, else medium · behind and weak: **medium** if used in the last 7 days, else low |
+| `change_impact` (LEKA-378) | change | changes | Each current change that matters — or that an incident followed — about the service it was made to: what it reaches, the most affected first, what followed (§ 11) | **high** when an incident followed, or a failed production change reaches something · **medium** when a production change reaches something, or it failed, or touches something critical · **low** otherwise |
 
 **What "watched" means.** A thing is watched when its state is known — from a
 monitoring tool, or its provider — and not deduced. If its state is unknown,
@@ -188,6 +192,7 @@ monitoring tool, or its provider — and not deduced. If its state is unknown,
 | `GET /intelligence/findings` | Paginated, sorted by `rank` (default) or `last_seen_at`. Filters: `status`, `severity`, `category`, `analyzer`, `subject`. | `workspace:read` |
 | `GET /intelligence/findings/{id}` | One finding, with its evidence, related things, provenance and runs. | `workspace:read` |
 | `GET /intelligence/summary` | Open findings by severity, the 5 most pressing, and the latest run — for a product surface at a glance. | `workspace:read` |
+| `GET /intelligence/changes`, `GET /intelligence/changes/{id}` | The changes, judged, and one change's impact (LEKA-378, § 11). | `workspace:read` |
 
 Another workspace's run or finding is 404. The workspace always comes from
 the session (architecture rule 3).
@@ -249,6 +254,74 @@ SELECT id, job_run_id FROM intelligence_runs WHERE id = '…';
 SELECT analyzer, severity, count(*) FROM intelligence_findings
 WHERE status = 'open' GROUP BY 1, 2 ORDER BY 1, 2;
 ```
+
+## 11. Change and impact (LEKA-378)
+
+Which changes matter, what they reach, and what followed them.
+
+**The facts** come from the company model (`GraphService.footprints`, in
+`leka.knowledge`). For each change — a deployment, a change request, a
+release, a pull request — its *footprint* is:
+
+- **What it was made to:** what its source ties it to — part of, affecting,
+  deployed to — when it is a service, an application, a repository, a
+  database or a resource (not an environment, not a commit). A change made in
+  a repository is made to the service that repository is part of
+  (`via_repository`): a GitHub deployment says its repository, and the
+  repository says its service.
+- **What it reaches:** what depends on that, two steps up, each with its
+  distance and through which.
+- **The business holding it:** the applications, capabilities and processes
+  (`KnowledgeService.impact`, the same reach an incident's analysis shows).
+- **What followed:** the incidents that opened on that footprint within
+  **48 hours** of it, with what they affected; and any incident whose source
+  says the change caused it, whenever it opened. An incident that opened
+  before the change is never tied to it.
+- **What its source says of it:** ref, commit, version, URL, risk, and the
+  kinds and ids of its sources.
+
+**The judgement** is pure (`leka/intelligence/changes.py`):
+
+| | |
+| --- | --- |
+| Signals | `production` (its environment says prod, live), `failed` (failed, error, rolled back, canceled), `incident_after` (one followed on its footprint), `stated_cause` (a source says it caused one), `wide` (3+ reached), `business` (a capability or a process holds it), `critical` (something it touches or reaches is said critical) |
+| Significance | its kind's weight (deployment 0.35, change 0.3, release 0.25, pull request 0.1) plus each signal's (stated cause 0.4, incident after 0.3, failed 0.25, production 0.2, wide 0.15, business 0.1, critical 0.1), up to 1. Made to nothing the model knows: a third of that |
+| Current or history | within **72 hours** it is current, still playing out. Older is history: it is in the timeline, never a finding |
+| Impacts ranked | what an incident hit first (+0.4), then what it was made to (0.5), then what depends on it (0.3 one step, 0.15 two); +0.1 when critical; an application holding it 0.25 |
+
+**A finding** (`change.impact`) is made of each current change that matters
+(significance ≥ 0.4) or that an incident followed. Its subject is the
+service it was made to, so it leads to that service's sheet. It says:
+- the change, when, where, how it went;
+- how much it reaches, the three most affected;
+- the incidents that followed.
+
+Its confidence is **1.0** when a source states the cause or when no incident
+is involved, and **0.7** when only time ties an incident to it: likely, not
+proven. When the change becomes history, and no incident keeps it current,
+the finding is resolved by the next run.
+
+**The API:**
+- `GET /intelligence/changes?since&until&entity&limit` lists the changes, the
+  latest first (30 days by default, 90 at most), each judged: current or
+  history, significance and signals, what it was made to, how far it
+  reaches, the three most affected, the incidents that followed. With
+  `entity`, it lists the changes made to it, to what it is made of, or to
+  what it depends on (and what each of those is made of): a deployment in
+  the repository of a service it calls is around it.
+- `GET /intelligence/changes/{id}` gives everything a change reaches,
+  ranked, the business, what followed and how many hours after, and what its
+  source says of it.
+
+Both are `workspace:read`.
+
+**For an intention**, `IntelligenceService.change_timeline` and
+`change_detail` are the same reads in code: "what changed around payment-api
+this week, and what did it reach" is one call.
+
+**Not here:** changes LEKA sees in its own model from one build to the next
+— a dependency appearing, an owner gone. Those are the model's evolution
+(LEKA-383); this reads the changes the sources record.
 
 ## Not yet
 
