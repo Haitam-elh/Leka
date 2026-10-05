@@ -102,6 +102,31 @@ class Retriever(Protocol):
 
 
 @dataclass(frozen=True)
+class Weighed:
+    """A retriever whose findings a request weighs more, or less — an
+    intention's kind (LEKA-373): what happened counts double when the
+    question is what changed."""
+
+    inner: Retriever
+    factor: float
+
+    @property
+    def name(self) -> str:
+        return self.inner.name
+
+    @property
+    def version(self) -> int:
+        return self.inner.version
+
+    @property
+    def weight(self) -> float:
+        return self.inner.weight * self.factor
+
+    async def retrieve(self, ask: Ask) -> Found:
+        return await self.inner.retrieve(ask)
+
+
+@dataclass(frozen=True)
 class Graph:
     """Around the anchors, through the relationships asked."""
 
@@ -311,6 +336,7 @@ class Runner:
                 "ms": ms,
                 "detail": found.detail if found else None,
                 "error": error,
+                "weight": round(retriever.weight, 4),
             }
         )
         run = Run(retriever, found, report)

@@ -32,7 +32,15 @@ from leka.core.security import hash_password
 from leka.db import session_factory, system_scope
 from leka.identity import User as Account
 from leka.ingestion import RESOLVER_VERSION, ResolutionDecision, ResolvedEntity
-from leka.knowledge import Entity, EntityType, Relationship, RelationshipType, search_fields
+from leka.knowledge import (
+    MODEL_VERSION,
+    Entity,
+    EntityType,
+    ModelRun,
+    Relationship,
+    RelationshipType,
+    search_fields,
+)
 from leka.platform import Membership, Role, Workspace
 
 WORKSPACE_SLUG = "acme"
@@ -413,6 +421,18 @@ async def _build_demo_workspace() -> None:
                     resolved_at=NOW,
                 )
             )
+        # Built, as far as the model knows: what it holds was written as a
+        # build writes it (LEKA-373 says a model never built is missing).
+        session.add(
+            ModelRun(
+                workspace_id=workspace.id,
+                status="succeeded",
+                started_at=NOW,
+                finished_at=NOW,
+                model_version=MODEL_VERSION,
+                counts={},
+            )
+        )
         await session.flush()
         session.add(
             ResolutionDecision(

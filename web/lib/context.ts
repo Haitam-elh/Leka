@@ -3,7 +3,8 @@
  * LEKA assembled around an entity, each version whole — every element with
  * its sources, why it is there and how it was ranked — what its sources
  * disagree on and what was left out (LEKA-372), what changed between two
- * versions, and the actions that make a version. The shapes are the generated ones;
+ * versions, and the actions that make a version — and the context an
+ * intention asks for, as LEKA reads it (LEKA-373). The shapes are the generated ones;
  * api/leka/api/context.py says what each route answers.
  */
 
@@ -19,6 +20,11 @@ export type ContextDiff = components["schemas"]["ContextDiff"];
 export type ContextCreate = components["schemas"]["ContextCreate"];
 export type RefreshOutcome = components["schemas"]["RefreshOutcome"];
 export type RetrievalMatch = components["schemas"]["RetrievalMatch"];
+/** An intention, as asked, and what LEKA reads of it (LEKA-373). */
+export type IntentAsk = components["schemas"]["IntentAsk"];
+export type IntentPlan = components["schemas"]["IntentPlan"];
+export type IntentGap = IntentPlan["gaps"][number];
+export type IntentSubject = IntentPlan["subjects"][number];
 
 interface Page<T> {
   data: T[];
@@ -66,4 +72,8 @@ export const contexts = {
   create: (body: ContextCreate) => post<AssembledContext>("/context", body),
   refresh: (id: string) => post<RefreshOutcome>(`/context/${id}/refresh`),
   archive: (id: string) => post<ContextRead>(`/context/${id}/archive`),
+  /** What an intention asks for, read from its words and scope: nothing kept. */
+  planIntent: (ask: IntentAsk) => post<IntentPlan>("/context/intents/plan", ask),
+  /** The context an intention asks for, assembled and kept with its plan. */
+  intend: (ask: IntentAsk) => post<AssembledContext>("/context/intents", ask),
 };

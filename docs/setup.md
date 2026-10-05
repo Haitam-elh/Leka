@@ -224,7 +224,9 @@ entity's sheet opens. Its incident has its dates, what it affects and what
 caused it, as normalisation writes them, so that its sheet's analysis has
 something to say (LEKA-341). Its sources disagree on payment-api's SLA —
 GitHub's 99.95, Datadog's 99.9 — so that a context says a conflict and folds
-a duplicate (LEKA-372).
+a duplicate (LEKA-372). And its model has a build on record, as a real one
+would: an intention's context says when the model was never built
+(LEKA-373).
 
 It also creates an account you can sign in with, already verified:
 

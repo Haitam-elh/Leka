@@ -8,7 +8,10 @@
  * ticked once they arrive; none connected says so and leads to connecting
  * one; the environments and the services are those the company model
  * knows, "Tous les environnements" first and production chosen when there
- * is one. Nothing invented.
+ * is one. Nothing invented. Submitted (LEKA-373): the intention is asked
+ * as the form says it — every source when all are ticked, no period nobody
+ * chose — and step 2 shows the context it asks for; nothing to start from
+ * is said in the form.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -39,6 +42,13 @@ const environmentApi = { get: vi.fn(), sheet: vi.fn() };
 vi.mock("@/lib/environment", async (original) => ({
   ...(await original<typeof import("@/lib/environment")>()),
   environment: environmentApi,
+}));
+
+// What submitting asks (LEKA-373): the context the intention needs.
+const contextApi = { intend: vi.fn() };
+vi.mock("@/lib/context", async (original) => ({
+  ...(await original<typeof import("@/lib/context")>()),
+  contexts: contextApi,
 }));
 
 const { IntentionForm } = await import("@/components/intentions/intention-form");
@@ -122,4 +132,43 @@ describe("the new intention's context and scope", () => {
     const environments = (await screen.findAllByRole("option")).map((option) => option.textContent);
     expect(environments).toEqual(["Tous les environnements", "Production", "Staging"]);
   });
+
+  it("asks for the context the intention needs, and shows it", async () => {
+    const { ApiError } = await import("@/lib/api");
+    contextApi.intend.mockRejectedValueOnce(new ApiError(422, "/context/intents", "Nothing."));
+    contextApi.intend.mockResolvedValueOnce({
+      context_id: "c1",
+      purpose: "Pourquoi acme/backend est lent depuis hier ?",
+      elements: [],
+      sources: [],
+      intent: null,
+    });
+    const user = userEvent.setup();
+    show();
+    await screen.findByRole("checkbox", { name: "acme/backend" });
+    await screen.findByText("Production");
+
+    await user.type(
+      screen.getByTestId("intention-input"),
+      "Pourquoi acme/backend est lent depuis hier ?",
+    );
+    await user.click(screen.getByTestId("intention-submit"));
+    expect(
+      await screen.findByText(
+        "Votre demande ne nomme rien du modèle et ne contient aucun mot à chercher : précisez-la.",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("intention-submit"));
+    expect(await screen.findByTestId("intention-step-2")).toBeInTheDocument();
+    expect(contextApi.intend).toHaveBeenLastCalledWith({
+      text: "Pourquoi acme/backend est lent depuis hier ?",
+      services: [],
+      // Every readable source ticked: no narrowing.
+      sources: [],
+      limit: 100,
+      environment: "production",
+    });
+  });
 });
+

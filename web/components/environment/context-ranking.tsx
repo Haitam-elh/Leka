@@ -274,7 +274,11 @@ export function LeftOutPanel({ assembled }: { assembled: AssembledContext }) {
   const ranking = assembled.ranking;
   if (!ranking) return null;
   const counts = ranking.left_out;
-  const entities = (counts.duplicate ?? 0) + (counts.low_relevance ?? 0) + (counts.budget ?? 0);
+  const entities =
+    (counts.duplicate ?? 0) +
+    (counts.low_relevance ?? 0) +
+    (counts.out_of_scope ?? 0) +
+    (counts.budget ?? 0);
   const names = new Map(assembled.elements.map((e) => [e.ref_id, e.label]));
   const reasons = w.reasons as Record<string, string>;
   return (
@@ -293,12 +297,15 @@ export function LeftOutPanel({ assembled }: { assembled: AssembledContext }) {
         })}
       </p>
       <ul className="mt-1 space-y-0.5">
-        {(["duplicate", "low_relevance", "budget"] as const).map((reason) => (
-          <li key={reason} className="flex justify-between gap-2">
-            <span>{reasons[reason]}</span>
-            <span className="tabular-nums">{counts[reason] ?? 0}</span>
-          </li>
-        ))}
+        {(["duplicate", "low_relevance", "out_of_scope", "budget"] as const)
+          // Outside the sources read: only when some were asked (LEKA-373).
+          .filter((reason) => reason !== "out_of_scope" || (counts.out_of_scope ?? 0) > 0)
+          .map((reason) => (
+            <li key={reason} className="flex justify-between gap-2">
+              <span>{reasons[reason]}</span>
+              <span className="tabular-nums">{counts[reason] ?? 0}</span>
+            </li>
+          ))}
       </ul>
       {counts.ties ? (
         <p className="mt-0.5 text-shell-muted">{fill(w.ties, { count: counts.ties })}</p>

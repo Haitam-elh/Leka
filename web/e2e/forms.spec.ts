@@ -32,7 +32,14 @@ test.describe("the intention journey", () => {
 
     await page.getByTestId("intention-submit").click();
 
+    // Step 2: the context it asks for, as LEKA read it (LEKA-373).
     await expect(page.getByTestId("intention-step-2")).toBeVisible();
+    const scope = page.getByTestId("intent-scope");
+    await expect(scope).toContainText("Diagnostic");
+    await expect(scope).toContainText("payment-api« payment api »");
+    await expect(scope).toContainText("lue dans la demande : « hier »");
+    await expect(page.getByTestId("intent-gathered")).toContainText("Service");
+    await expect(page.getByTestId("intent-sources")).toBeVisible();
   });
 
   test("refuses to launch a question too short to analyse", async ({ page }) => {

@@ -766,6 +766,21 @@ class GraphService:
         """Which of these are the workspace's entities."""
         return set(await self._graph.by_ids(list(ids)))
 
+    async def briefs(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, EntityBrief]:
+        """These entities, named — those that are the workspace's (LEKA-373)."""
+        found = await self._graph.by_ids(list(ids))
+        return {
+            entity_id: EntityBrief.model_validate(entity) for entity_id, entity in found.items()
+        }
+
+    async def environments(self) -> list[str]:
+        """The environments the model knows, folded (LEKA-373)."""
+        return await self._graph.environments()
+
+    async def built_at(self) -> datetime | None:
+        """When the model was last built (LEKA-373)."""
+        return await self._graph.built_at()
+
     async def matching(
         self, words: Sequence[str], *, limit: int = MAX_HITS
     ) -> list[tuple[uuid.UUID, float, list[str]]]:

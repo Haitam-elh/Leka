@@ -5,9 +5,11 @@ from one source's records. It is answered from what the company knows of
 billing and what surrounds it: the services it is, what they depend on,
 what happened to them this week, the page that says how to recover them —
 each piece with where it came from. The context engine (`leka/context`)
-finds that (LEKA-371), ranks it — what matters most first, duplicates
-folded, disagreements said (LEKA-372) — assembles it, keeps it version by
-version (LEKA-370), and hands it to whatever analyses the request.
+reads what an intention asks for — its kind, what it is about, when,
+where, and what is missing (LEKA-373) — finds that (LEKA-371), ranks it —
+what matters most first, duplicates folded, disagreements said (LEKA-372)
+— assembles it, keeps it version by version (LEKA-370), and hands it to
+whatever analyses the request.
 
 ```
  sources ─▶ … ─▶ company model (leka.knowledge)      records' own text (leka.ingestion)
@@ -15,6 +17,9 @@ version (LEKA-370), and hands it to whatever analyses the request.
                    provenance, events                   indexed by their words
                         │                                        │
                         ▼                                        ▼
+ an intention ─▶ read (kind, subjects, period, environment, gaps) ─▶ a request (§ 13)
+                        │
+                        ▼
  a request ─▶ retrievers: graph · search · content · timeline · paths ─▶ fused (relevance)
                         │
                         ▼
@@ -60,6 +65,8 @@ The request a context answers:
 | `retrievers` | default all | which to combine |
 | `strategy` | `hybrid` (default) or `neighbourhood` | how the elements are gathered (§ 3) |
 | `min_relevance` | 0 to 1, default 0.05 | under this score a thing found is left out — never a root (§ 5); 0 keeps all the budget holds |
+| `weights` | retriever → 0 to 3, default 1 | each retriever's findings weighed that many times its own weight — an intention's kind sets them (§ 13); 0 does not run it |
+| `sources` | source ids, default every one | only what these sources say — never a root (§ 5, `out_of_scope`) |
 
 A request must start somewhere: roots, or words that say something —
 "pourquoi ?" alone is refused (422).
@@ -218,6 +225,7 @@ never guessed.
 |---|---|
 | `duplicate` | entity resolution linked it to another as probably the same thing — a link of 0.6 or more ([resolution.md](resolution.md)): the surer is kept — the more trusted, then the better scored — the other folded into it, said on both (`ranking.duplicates`, `duplicate_of`). A root is never folded away |
 | `low_relevance` | its score is under the request's `min_relevance` (0.05 by default: low enough that a thing found once, not first, still stays) |
+| `out_of_scope` | none of the sources the request reads says it (`sources`, LEKA-373) |
 | `budget` | beyond the limit, after the order below |
 
 Each is in the version's ranking report — counted by why (`left_out`, and
@@ -330,10 +338,11 @@ old one reads what it was, whatever the model became.
 | `elements` | in order — each `{position, kind, ref_id, ref_type, label, entity \| relationship, provenance, reason, relevance, ranking, text}`; `ranking` is `{score, rank, topic, trust, signals: [{name, axis, value, weight, detail, said}], conflicts, duplicates}` |
 | `sources` | the sources its elements came from, and how many each |
 | `summary` | entities, relationships, stated and inferred, by type, by source kind, by retriever |
-| `retrieval` | what each retriever did: `{retriever, version, status, found, ms, detail, error}` |
+| `retrieval` | what each retriever did: `{retriever, version, status, found, ms, detail, error, weight}` — `weight`, what its findings counted for (LEKA-373) |
 | `truncated`, `dropped` | what the budget left out |
 | `ranking` | how it was ranked: `version`, `min_relevance`, `trust_share`, `weights`; what was left out, by why (`left_out`) and listed (`left`) — none before LEKA-372 |
 | `conflicts` | what its sources disagree on: `{id, kind, subject, label, about, chosen, values: [{value, ref_id, by}], refs, said}` |
+| `intent` | the intention it was assembled for, as read (§ 13): `IntentPlan`, its `gaps` with this version's — none for a context asked for directly |
 | `model_built_at`, `model_version`, `assembled_at` | from which build of the model, when |
 
 In Python (intentions, capabilities):
@@ -366,6 +375,8 @@ readable after a kind is renamed.
 | Route | Permission | |
 |---|---|---|
 | `POST /context` | `intention:create` | a context assembled: version 1, whole (201); a root not the workspace's: 404; nothing to start from: 422 |
+| `POST /context/intents/plan` | `intention:read` | what an intention asks for, read from its words and scope (§ 13): `IntentPlan` — nothing kept |
+| `POST /context/intents` | `intention:create` | that context, assembled and kept with its plan (201); nothing named and no word to search: 422 |
 | `GET /context` | `intention:read` | the contexts, the latest changed first, paged — `status`, `subject_type`, `subject_id` |
 | `GET /context/{id}` | `intention:read` | one, and its latest version |
 | `POST /context/{id}/refresh` | `intention:create` | `{changed, version}`; archived: 409 |
@@ -484,6 +495,113 @@ API:
   ([data-lifecycle.md](data-lifecycle.md)); deleting the workspace deletes
   them.
 
+## 13. What an intention asks for (LEKA-373)
+
+`leka/context/intent.py`, pure; `ContextService.plan_intent()` and
+`assemble_intent()`. An intention comes as a sentence — « Pourquoi l'API
+de paiement est-elle plus lente depuis hier ? » — and, from the new
+intention's form, a scope: an environment, a period, services, sources.
+LEKA reads from them the context request it makes, and says what it read
+and from which words, so that what it understood can be checked — and
+corrected by asking differently, or by choosing the scope.
+
+**Its kind**, from its words (`kind_of()`, French and English): the kind
+with the most of its words, the first on a tie.
+
+| Kind | Said by | Facets | Steps | Days | Retrievers weighed | Ties | Its sources must read |
+|---|---|---|---:|---:|---|---|---|
+| `diagnose` | pourquoi, lent, panne, erreur, échoue, incident, timeout… | technical, temporal, organizational | 2 | 7 | timeline ×1.5 | all | incidents, alerts, events, metrics, logs, deployments, changes |
+| `change` | changé, déploiement, release, version, merge… | technical, temporal | 1 | 14 | timeline ×2 | all | deployments, changes, releases, commits, pull requests |
+| `migration` | migrer, remplacer, plan, upgrade… | technical, business, organizational | 2 | 30 | graph ×1.3, paths ×1.3 | all | what runs: components, services, instances, clusters, databases… |
+| `compliance` | conformité, sécurité, RGPD, audit, règles, risque… | business, technical, organizational | 2 | 90 | content ×1.5, search ×1.2 | all | what is written: pages, spaces, files, records |
+| `dependency` | dépend, relié, connecté, architecture, utilise, impact… | technical, business | 2 | 30 | graph ×1.3, paths ×1.5, timeline ×0.5 | depends_on, uses, reads_from, deployed_to, runs_in, part_of, implements, realizes, supported_by, in_network, child_of | what runs |
+| `ownership` | qui, responsable, propriétaire, équipe, astreinte… | organizational, technical | 2 | 30 | graph ×1.5, search ×1.2, timeline ×0.5 | owns, owned_by, member_of, maintained_by, led_by, reports_to, contributes_to, authored_by | teams, people, components, repositories |
+| `knowledge` | procédure, runbook, documentation, comment, reprise… | technical | 1 | 90 | content ×2, search ×1.3, timeline ×0.5 | all | what is written |
+| `general` | none of these | technical, temporal | 1 | 14 | — | all | — |
+
+**What it is about** (`subjects`, the context's roots, first):
+
+| `how` | |
+|---|---|
+| `asked` | the services the asker chose |
+| `named` | what its words name (`named()`): a thing's name or key as written — confidence 1 — or every word of its name, in either language (« l'API de paiement » names payment-api) — 0.8; half the words is a guess, never a root, offered when nothing is named. A word a name takes as written names nothing else: « Billing API » is not also the Invoicing its « billing » could mean |
+| `business` | for a kind with a business facet: the applications, capabilities and processes the technical things named belong to, two steps away at most — so the context holds both sides and the ways between them |
+
+**When** (`period`, with its `origin`): asked; else read from the words
+(`period_of()`) — « hier », « aujourd'hui », « cette semaine », « la
+semaine dernière », « ce mois », « depuis 3 jours », « 24h », « depuis
+lundi », « le 3 octobre », 2026-10-03; « depuis le déploiement » is read
+from the model: since the latest deployment of what it is about (`model`);
+else the kind's last days (`kind`). The request reads the window in whole
+days up to the period's end.
+
+**Where** (`environment`): asked — the form's, unless "every one"; else
+read from the words — « en prod » is the production the model knows, an
+environment the model knows by name is itself — never a word of a thing's
+name (« postgres-prod » is a database). An environment the model does not
+know is not applied, and said.
+
+**Under what constraints** (`constraints`, each with its origin): the
+period, the environment, the services and the sources asked, the ties and
+the retrievers' weights of its kind. The sources asked hold the context to
+what they say (`out_of_scope`, § 5). What a source can read is what it was
+found able to read when tested, or — never tested — what its connector
+says it can.
+
+**What is missing, said** (`gaps`, each `critical` or a `warning`, with
+what it was read from):
+
+| `kind` | When | |
+|---|---|---|
+| `no_subject` | a kind that is about something names nothing in the model: the context is what its words find; what was tried, and what it may have meant | critical |
+| `ambiguous_subject` | the same words name several things: each is read | warning |
+| `unknown_service` | a thing asked for is not in the model | critical |
+| `unknown_environment` | an environment the model does not know: read everywhere | warning |
+| `no_source_for` | none of the sources read can read what its kind needs | critical for what happened (diagnose, change), else a warning |
+| `no_event_anchor` | « since the deploy », and no deployment found: the kind's window | warning |
+| `model_not_built`, `model_stale` | the version read a model never built, or built more than a day before | critical, warning |
+| `nothing_happened` | the timeline found nothing in the period, when what happened is the question | critical for a change, else a warning |
+| `retriever_failed` | a retriever failed or timed out | warning |
+| `no_business` | a business facet, and nothing of the business side in the context | warning |
+| `disputed_subject` | the sources disagree on what it is about (§ 5) | warning |
+
+The first five are read before anything is assembled and kept with the
+plan; the rest are read from each version when it is read — a refresh
+says its own.
+
+**Kept and traceable.** `assemble_intent()` makes the context — its
+subject the intention (`intention_id`) when there is one, else the request
+— and keeps the plan with it (`contexts.intent`); `AssembledContext.intent`
+gives it back with this version's gaps. Its elements say their sources
+(§ 7), its retrievers what they counted for (`weight`). Nothing named and
+no word to search: refused (422), nothing kept.
+
+**Tested** — `tests/test_context_intent.py`, on Acme's operations through
+the whole pipeline, the week before 29 September:
+
+| Intention | Read as | About | Its context holds |
+|---|---|---|---|
+| « Pourquoi la facturation est lente ? » | diagnose | Invoicing | Billing API, incident Q1, the deployment, the change |
+| « Qu'est-ce qui a changé sur Billing API ? » | change | Billing API | the deployment, the change, the incident |
+| « Comment Checkout est-il relié à la facturation ? » | dependency | Checkout, Invoicing | Billing API, the Billing platform |
+| « Qui est responsable de Billing API ? » | ownership | Billing API | Sara |
+| « Où est la procédure de reprise des paiements ? » | knowledge | — | the Confluence page |
+
+none with a critical gap — and the missing cases: nothing named, a thing
+asked for not in the model, sources unable to read what happens, nothing
+happened in the period, nothing to start from. The reading itself —
+kinds, periods, environments, names, gaps — is
+`tests/test_context_intent_reading.py`.
+
+**The screen**: step 2 of a new intention
+(`web/components/intentions/intent-context.tsx`, mockup 03): the question
+and a way back to it; what is missing, the critical first; the scope LEKA
+read — its kind and the words that said it, what it is about and how it
+knows, the period and where it comes from, the environment, the sources;
+the context gathered, by kind of thing, every element on asking; the
+sources it came from. The findings and recommendations come with the
+analysis engine (LEKA-388).
+
 ## Not yet
 
 - **Meaning, not only words.** The search reads words and a vocabulary of
@@ -499,13 +617,16 @@ API:
   them from what analyses actually used needs the intentions to say what
   they used (LEKA-384, LEKA-388) — the signals and their values are kept
   with every element for that.
-- **The retrievers per kind of intention** (LEKA-373, LEKA-387).
+- **Intentions kept, and their context with them** (LEKA-384, LEKA-387):
+  a context is assembled for an intention's words and scope today; the
+  intention itself is kept with LEKA-384, and its quality signals come
+  with LEKA-375.
 - **Refreshing on its own** when the model changes (LEKA-374) — today a
   refresh is asked; `refreshed_at` and the elements' `ref_id` index are
   there for it.
 - **A context's quality and confidence** as a whole (LEKA-375).
 - **Fine-grained access and the full inspection API** (LEKA-376).
-- **Intentions** as subjects (LEKA-384): the subject type exists, nothing
-  makes one yet.
+- **Intentions** as subjects (LEKA-384): a context takes an
+  `intention_id` as its subject today; nothing keeps the intention yet.
 - A retention for contexts nobody reads: decided with LEKA-374, when
   contexts are made without being asked.

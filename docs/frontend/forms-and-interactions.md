@@ -293,10 +293,20 @@ code (LEKA-341):
 What arrives fills only what nobody has touched, and is not counted as a
 change: leaving the page untouched does not ask.
 
+Submitted, the intention is read (LEKA-373, `lib/intentions/api.ts`): its
+words, and the scope as the form says it — the environment unless "every
+one", the services chosen, the sources when not all are ticked, the period
+only when someone chose it, so that « depuis hier » in the question says
+more than a preset nobody touched. Step 2 (`intent-context.tsx`, mockup
+03) shows what LEKA understood, what is missing and the context it
+gathered ([context.md § 13](../context.md)); nothing to start from is said
+in the form. Until LEKA-384 keeps intentions, that is what submitting
+does.
+
 ## What is deliberately not here
 
-- No real network call. `submitIntention` waits and invents an id
-  (LEKA-384).
+- No intention kept: submitting assembles its context (LEKA-373); the
+  intention itself is LEKA-384's.
 - No upload. Attachments stay in memory behind a `TODO`.
 - No dictation. Hidden where the browser could not do it, disabled behind a
   flag where it could.
