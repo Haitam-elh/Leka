@@ -6,13 +6,21 @@ things — each saying how relevant (LEKA-371); ranked, duplicates folded,
 conflicts said (LEKA-372); for an intention, what it asks for, read from
 its words, and what is missing (LEKA-373); and kept up with the company —
 behind the model said, made again when in use, widened, narrowed, asked
-again, every recalculation traced (LEKA-374).
+again, every recalculation traced (LEKA-374); and judged — complete,
+fresh, to be relied on, what it lacks, what it disagrees on and how badly
+— with what people say of it (LEKA-375).
 
 Reads state the background loop prepared. Calls no customer API — by the
 time a question arrives, the work is done.
 """
 
-from leka.context.models import Context, ContextCheck, ContextElement, ContextVersion
+from leka.context.models import (
+    Context,
+    ContextCheck,
+    ContextElement,
+    ContextFeedback,
+    ContextVersion,
+)
 from leka.context.repository import ContextFilters, ContextRepository
 from leka.context.schemas import (
     CONTRACT_VERSION,
@@ -26,7 +34,10 @@ from leka.context.schemas import (
     ContextDiff,
     ContextElementRead,
     ContextExpand,
+    ContextFeedbackCreate,
+    ContextFeedbackRead,
     ContextFreshness,
+    ContextQuality,
     ContextRead,
     ContextRefresh,
     ContextRequest,
@@ -37,7 +48,9 @@ from leka.context.schemas import (
     IntentAsk,
     IntentGap,
     IntentPlan,
+    QualityInspection,
     RefreshOutcome,
+    RetrievalFeedback,
     RetrieverName,
     RetrieverRunRead,
     SubjectType,
@@ -68,8 +81,12 @@ __all__ = [
     "ContextElement",
     "ContextElementRead",
     "ContextExpand",
+    "ContextFeedback",
+    "ContextFeedbackCreate",
+    "ContextFeedbackRead",
     "ContextFilters",
     "ContextFreshness",
+    "ContextQuality",
     "ContextRead",
     "ContextRefresh",
     "ContextRefusedError",
@@ -86,7 +103,9 @@ __all__ = [
     "IntentGap",
     "IntentPlan",
     "NotAnIntentionError",
+    "QualityInspection",
     "RefreshOutcome",
+    "RetrievalFeedback",
     "RetrieverName",
     "RetrieverRunRead",
     "Strategy",

@@ -18,6 +18,10 @@ and is in use, it is made again; every time it is made again is a CHECK,
 whatever came of it. One FOLLOW row per workspace says up to which build
 of the model its contexts were followed.
 
+How good each version is (LEKA-375) is kept with it (`quality`), judged
+when it was made; what people say of it — an element useful or wrong,
+something missing — is FEEDBACK.
+
 Where embeddings will live, alongside the entity they describe — the
 pgvector column this platform runs PostgreSQL 16 for. See
 docs/adr/001-postgresql.md: keeping them in the same database means an
@@ -153,6 +157,10 @@ class ContextVersion(Base, WorkspaceScopedMixin):
     # How it differs from the last version that held something: elements
     # added, removed, said differently, the same. None for the first.
     delta: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
+    # How good it is (LEKA-375): its measures and what each was read from,
+    # what it lacks, what it disagrees on — as judged when it was made.
+    # None before.
+    quality: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     # What made it: the strategy and its version, the contract it fulfils.
     strategy: Mapped[str] = mapped_column(String(50), nullable=False)
     strategy_version: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -269,3 +277,39 @@ class ContextFollow(Base, WorkspaceScopedMixin):
 
     followed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+
+class ContextFeedback(Base, WorkspaceScopedMixin):
+    """What someone said of a version of a context (LEKA-375): an element
+    useful, not useful, wrong — or something missing. Each keeps what the
+    element was then — its type, why it was there, the retrievers that
+    found it — so that what people say can be counted by what found it."""
+
+    __tablename__ = "context_feedback"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "context_id"],
+            ["contexts.workspace_id", "contexts.id"],
+            name="fk_context_feedback_workspace_context",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("verdict IN ('useful', 'not_useful', 'wrong', 'missing')", name="verdict"),
+        CheckConstraint("version >= 1", name="version"),
+        Index("ix_context_feedback_workspace_context", "workspace_id", "context_id", "given_at"),
+        Index("ix_context_feedback_workspace_given_at", "workspace_id", "given_at"),
+    )
+
+    context_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The element it is about, as the version said it; none for what is missing.
+    ref_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    label: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    ref_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    role: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    retrievers: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    verdict: Mapped[str] = mapped_column(String(20), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    given_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    given_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
