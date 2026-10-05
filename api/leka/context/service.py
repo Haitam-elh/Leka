@@ -37,6 +37,19 @@ KEEPING UP (LEKA-374), dynamic.py deciding:
     reask()           its intention asked again, read again, made again
     set_follow()      made again on its own, or only when asked
 
+HOW GOOD IT IS (LEKA-375), quality.py deciding: each version is judged
+when it is made — complete, fresh, to be relied on, what it lacks, what it
+disagrees on and how badly, what each retriever brought — and kept with
+it; one made before is judged when read.
+
+    inspect_quality()   a version's quality, whether it is up to date now,
+                        what people said of it
+    give_feedback()     an element useful, not useful, wrong — or what is
+                        missing — kept with what the element was then
+    retrieval_feedback()
+                        what people said, counted by the retrievers that
+                        found it: what weighing them next time can learn
+
 Every time a context is made again is a CHECK, kept whatever came of it —
 a version, nothing new, a failure — with what triggered it; a version
 says what made it (`changes`) and how it differs from the one before
@@ -69,7 +82,7 @@ from datetime import UTC, datetime, timedelta
 import structlog
 
 from leka.connectors import SourceRepository, manifests
-from leka.context import assembly, dynamic
+from leka.context import assembly, dynamic, quality
 from leka.context.intent import (
     BUSINESS,
     INTENT_VERSION,
@@ -87,7 +100,13 @@ from leka.context.intent import (
     version_gaps,
 )
 from leka.context.language import expanded, words
-from leka.context.models import Context, ContextCheck, ContextElement, ContextVersion
+from leka.context.models import (
+    Context,
+    ContextCheck,
+    ContextElement,
+    ContextFeedback,
+    ContextVersion,
+)
 from leka.context.ranking import Link
 from leka.context.repository import ContextRepository
 from leka.context.schemas import (
@@ -107,6 +126,9 @@ from leka.context.schemas import (
     ContextDiff,
     ContextElementRead,
     ContextExpand,
+    ContextFeedbackCreate,
+    ContextFeedbackRead,
+    ContextQuality,
     ContextRead,
     ContextRequest,
     ContextSourceRead,
@@ -115,18 +137,22 @@ from leka.context.schemas import (
     ContextSummary,
     ContextVersionRead,
     ElementChange,
+    FeedbackCounts,
     IntentAsk,
     IntentConstraint,
+    IntentGap,
     IntentPeriod,
     IntentPlan,
     IntentSubject,
+    QualityInspection,
     RankingReport,
     RefreshOutcome,
+    RetrievalFeedback,
     RetrieverRunRead,
     Trigger,
 )
 from leka.context.strategies import STRATEGIES, Gathered, Strategy, Tools
-from leka.ingestion import ContentRepository, ResolutionRepository
+from leka.ingestion import ContentRepository, ResolutionRepository, monitoring_kinds
 from leka.knowledge import (
     MODEL_VERSION,
     ContextMaterial,
@@ -169,6 +195,15 @@ class ContextRootError(Exception):
 
 class NotAnIntentionError(Exception):
     """Only a context assembled for an intention is asked again (LEKA-374)."""
+
+
+# What tells who owns a thing, and what a page says of it (LEKA-375).
+OWNING = (RelationshipType.OWNED_BY, RelationshipType.MAINTAINED_BY)
+OWNED = (RelationshipType.OWNS,)
+WRITTEN = (RelationshipType.DESCRIBES, RelationshipType.MENTIONS)
+# What feedback is said, counted, at most; how far back.
+MAX_FEEDBACK = 50
+MAX_FEEDBACK_COUNTED = 5000
 
 
 class ContextService:
@@ -491,6 +526,9 @@ class ContextService:
             and latest.status == status
             and latest.fingerprint == (built.fingerprint if built else "")
         )
+        context.request = request.model_dump(mode="json")
+        if intent is not None:
+            context.intent = intent.model_dump(mode="json")
         made: ContextVersion
         if same and not said and latest is not None:
             made = latest
@@ -517,9 +555,6 @@ class ContextService:
         model_at = (
             material.built_at if material is not None else None
         ) or await self._graph.built_at()
-        context.request = request.model_dump(mode="json")
-        if intent is not None:
-            context.intent = intent.model_dump(mode="json")
         context.checked_model_at = model_at
         context.stale_since = None
         context.pending = []
@@ -617,6 +652,108 @@ class ContextService:
                 for old, new, fields in changed
             ],
             unchanged=same,
+        )
+
+    async def inspect_quality(
+        self, context_id: uuid.UUID, *, version: int | None = None
+    ) -> QualityInspection | None:
+        """How good a version is (LEKA-375) — the latest that holds
+        something when none is asked — whether the context is up to date
+        now, and what people said of that version."""
+        context = await self._repository.context(context_id)
+        if context is None:
+            return None
+        made = await self.assembled(context.id, version=version)
+        if made is None or made.quality is None:
+            return None
+        counts = await self._repository.feedback_counts(context.id, made.version)
+        given = await self._repository.feedback(context.id, made.version, limit=MAX_FEEDBACK)
+        return QualityInspection(
+            context_id=context.id,
+            version=made.version,
+            quality=made.quality,
+            freshness=_context(context).freshness,
+            feedback=FeedbackCounts.model_validate(counts),
+            given=[_feedback(row) for row in given],
+        )
+
+    async def give_feedback(
+        self, context_id: uuid.UUID, body: ContextFeedbackCreate, *, by: uuid.UUID | None
+    ) -> ContextFeedbackRead | None:
+        """What someone says of a version (LEKA-375): an element useful, not
+        useful, wrong — kept with what it was then, its type, why it was
+        there, the retrievers that found it — or what is missing. None when
+        there is no such context, version or element."""
+        context = await self._repository.context(context_id)
+        if context is None:
+            return None
+        found = (
+            await self._repository.version(context.id, body.version)
+            if body.version is not None
+            else await self._repository.latest(context.id, assembled=True)
+        )
+        if found is None:
+            return None
+        element = None
+        if body.ref_id is not None:
+            element = await self._repository.element(found.id, body.ref_id)
+            if element is None:
+                return None
+        reason = element.reason if element is not None else {}
+        matches = reason.get("retrievers") if isinstance(reason, dict) else None
+        row = ContextFeedback(
+            context_id=context.id,
+            version=found.version,
+            ref_id=body.ref_id,
+            label=element.label if element is not None else None,
+            ref_type=element.ref_type if element is not None else None,
+            role=str(reason.get("role")) if element is not None and reason.get("role") else None,
+            retrievers=sorted(
+                {
+                    str(match["retriever"])
+                    for match in (matches if isinstance(matches, list) else [])
+                    if isinstance(match, dict) and match.get("retriever")
+                }
+            ),
+            verdict=body.verdict,
+            note=(body.note or "").strip() or None,
+            given_by=by,
+            given_at=datetime.now(UTC),
+        )
+        self._repository.keep_feedback(row)
+        await self._repository.flush()
+        return _feedback(row)
+
+    async def retrieval_feedback(self, *, days: int) -> RetrievalFeedback:
+        """What people said of what LEKA retrieved in the last `days`,
+        counted by the retrievers that found it, by why it was there, by
+        kind of thing (LEKA-375)."""
+        since = datetime.now(UTC) - timedelta(days=days)
+        rows = await self._repository.feedback_since(since, limit=MAX_FEEDBACK_COUNTED)
+        total: dict[str, int] = defaultdict(int)
+        by: dict[str, dict[str, dict[str, int]]] = {
+            "retriever": defaultdict(lambda: defaultdict(int)),
+            "role": defaultdict(lambda: defaultdict(int)),
+            "type": defaultdict(lambda: defaultdict(int)),
+        }
+        for row in rows:
+            total[row.verdict] += 1
+            for retriever in row.retrievers or []:
+                by["retriever"][str(retriever)][row.verdict] += 1
+            if row.role:
+                by["role"][row.role][row.verdict] += 1
+            if row.ref_type:
+                by["type"][row.ref_type][row.verdict] += 1
+
+        def counted(table: dict[str, dict[str, int]]) -> dict[str, FeedbackCounts]:
+            return {name: FeedbackCounts.model_validate(dict(c)) for name, c in table.items()}
+
+        return RetrievalFeedback(
+            since=since,
+            total=FeedbackCounts.model_validate(dict(total)),
+            by_retriever=counted(by["retriever"]),
+            by_role=counted(by["role"]),
+            by_type=counted(by["type"]),
         )
 
     @staticmethod
@@ -939,6 +1076,7 @@ class ContextService:
         material = gathered.material if gathered is not None else None
         retrieval = gathered.retrieval if gathered is not None else []
         delta = await self._delta(context, built) if trigger != "created" else None
+        judged = await self._judge(context, request, retrieval, built, material, now)
         version = ContextVersion(
             context_id=context.id,
             version=context.current_version + 1,
@@ -948,6 +1086,7 @@ class ContextService:
             changes=[change.model_dump(mode="json") for change in changes[: dynamic.MAX_PENDING]],
             change_count=change_count,
             delta=delta.model_dump(mode="json") if delta is not None else None,
+            quality=judged.model_dump(mode="json"),
             strategy=strategy.name if strategy is not None else request.strategy,
             strategy_version=strategy.version if strategy is not None else 0,
             contract_version=CONTRACT_VERSION,
@@ -994,8 +1133,102 @@ class ContextService:
             retrievers={run.retriever: run.status for run in retrieval},
             left_out=built.ranking.left_out if built and built.ranking else None,
             conflicts=len(built.conflicts) if built else 0,
+            quality=judged.score,
+            gaps=len(judged.gaps),
         )
         return version, rows
+
+    async def _judge(
+        self,
+        context: Context,
+        request: ContextRequest,
+        retrieval: Sequence[RetrieverRunRead],
+        built: assembly.Assembly | None,
+        material: ContextMaterial | None,
+        now: datetime,
+    ) -> ContextQuality:
+        """How good what is made is (LEKA-375), with what the model knows of
+        its roots now — who owns them, what describes them, what watches
+        them."""
+        plan = IntentPlan.model_validate(context.intent) if context.intent else None
+        elements = built.elements if built else []
+        conflicts = built.conflicts if built else []
+        model_at = material.built_at if material is not None else await self._graph.built_at()
+        gaps: list[IntentGap] = []
+        if plan is not None:
+            gaps = [
+                *plan.gaps,
+                *version_gaps(
+                    plan,
+                    retrieval=retrieval,
+                    by_type=(built.summary if built else assembly.summary([])).by_type,
+                    conflicts=conflicts,
+                    model_built_at=model_at,
+                    assembled_at=now,
+                ),
+            ]
+        return quality.assess(
+            elements,
+            request=request,
+            retrieval=retrieval,
+            ranking=built.ranking if built else None,
+            conflicts=conflicts,
+            plan=plan,
+            intent_gaps=gaps,
+            model_built_at=model_at,
+            assembled_at=now,
+            roots=await self._profile(elements),
+        )
+
+    async def _profile(self, elements: Sequence[assembly.Element]) -> list[quality.RootProfile]:
+        """What the model knows of the things a context starts from that
+        have an owner, a page, a watching source to know of — beyond what
+        the context holds."""
+        roots = [
+            e
+            for e in elements
+            if e.kind == "entity"
+            and e.reason.role == "root"
+            and e.ref_type in quality.OWNABLE
+            and not (e.entity is not None and e.entity.lifecycle == "removed")
+        ][:MAX_ROOTS]
+        if not roots:
+            return []
+        walked = await self._graph.walk(
+            [e.ref_id for e in roots], depth=1, types=[*OWNING, *OWNED, *WRITTEN]
+        )
+        if walked is None:
+            return []
+        types = {node.entity.id: node.entity.type.value for node in walked.nodes}
+        seen = {node.entity.id: set(node.sources) for node in walked.nodes}
+        watching = monitoring_kinds()
+        profiles: list[quality.RootProfile] = []
+        for root in roots:
+            ties = [
+                tie
+                for tie in walked.relationships
+                if root.ref_id in (tie.from_entity_id, tie.to_entity_id)
+            ]
+            profiles.append(
+                quality.RootProfile(
+                    entity_id=root.ref_id,
+                    name=root.label,
+                    type=root.ref_type,
+                    owner=any(
+                        (tie.type in OWNING and tie.from_entity_id == root.ref_id)
+                        or (tie.type in OWNED and tie.to_entity_id == root.ref_id)
+                        for tie in ties
+                    ),
+                    documented=any(
+                        tie.type in WRITTEN
+                        and tie.to_entity_id == root.ref_id
+                        and types.get(tie.from_entity_id) == "document"
+                        for tie in ties
+                    ),
+                    watched=bool(seen.get(root.ref_id, set()) & watching),
+                )
+            )
+        return profiles
 
 
 def _settled(body: ContextCreate) -> ContextRequest:
@@ -1074,6 +1307,21 @@ def _check(row: ContextCheck) -> ContextCheckRead:
     )
 
 
+def _feedback(row: ContextFeedback) -> ContextFeedbackRead:
+    return ContextFeedbackRead.model_validate(
+        {
+            "id": row.id,
+            "version": row.version,
+            "ref_id": row.ref_id,
+            "label": row.label,
+            "verdict": row.verdict,
+            "note": row.note,
+            "given_by": row.given_by,
+            "given_at": row.given_at,
+        }
+    )
+
+
 def _ranking(built: assembly.Assembly | None) -> dict[str, object] | None:
     """How a version was ranked, as it is kept: the report and the
     conflicts."""
@@ -1139,6 +1387,8 @@ def _version(row: ContextVersion) -> ContextVersionRead:
             "changes": _changes(row.changes),
             "change_count": row.change_count,
             "delta": row.delta,
+            "quality_score": (row.quality or {}).get("score"),
+            "quality_level": (row.quality or {}).get("level"),
             "strategy": {"name": row.strategy, "version": row.strategy_version},
             "contract_version": row.contract_version,
             "request": row.request,
@@ -1162,7 +1412,8 @@ def _version(row: ContextVersion) -> ContextVersionRead:
 def _assembled(
     context: Context, version: ContextVersion, rows: Sequence[ContextElement]
 ) -> AssembledContext:
-    elements = [_read(at, element) for at, element in map(_restore, rows)]
+    restored = [element for _, element in map(_restore, rows)]
+    elements = [_read(row.position, element) for row, element in zip(rows, restored, strict=True)]
     counted: dict[uuid.UUID, ContextSourceRead] = {}
     for element in elements:
         for source in {s.source_id: s for s in element.provenance.sources}.values():
@@ -1177,6 +1428,7 @@ def _assembled(
     retrieval = [RetrieverRunRead.model_validate(run) for run in version.retrieval]
     summary = ContextSummary.model_validate(version.summary)
     intent = None
+    plan = None
     if context.intent:
         plan = IntentPlan.model_validate(context.intent)
         more = version_gaps(
@@ -1188,6 +1440,26 @@ def _assembled(
             assembled_at=version.assembled_at,
         )
         intent = plan.model_copy(update={"gaps": [*plan.gaps, *more]})
+    ranking = RankingReport.model_validate(version.ranking) if version.ranking else None
+    request = ContextRequest.model_validate(version.request)
+    # Judged when it was made — or, made before, read from what it holds.
+    judged = (
+        ContextQuality.model_validate(version.quality)
+        if version.quality
+        else quality.assess(
+            restored,
+            request=request,
+            retrieval=retrieval,
+            ranking=ranking,
+            conflicts=conflicts,
+            plan=plan,
+            intent_gaps=intent.gaps if intent else [],
+            model_built_at=version.model_built_at,
+            assembled_at=version.assembled_at,
+            roots=None,
+            assessed="read",
+        )
+    )
     return AssembledContext(
         contract_version=version.contract_version,
         context_id=context.id,
@@ -1199,7 +1471,7 @@ def _assembled(
         subject=ContextSubject.model_validate(
             {"type": context.subject_type, "id": context.subject_id}
         ),
-        request=ContextRequest.model_validate(version.request),
+        request=request,
         strategy=ContextStrategyRead(name=version.strategy, version=version.strategy_version),
         elements=elements,
         sources=sorted(
@@ -1209,7 +1481,7 @@ def _assembled(
         retrieval=retrieval,
         truncated=version.truncated,
         dropped=version.dropped,
-        ranking=RankingReport.model_validate(version.ranking) if version.ranking else None,
+        ranking=ranking,
         conflicts=conflicts,
         intent=intent,
         model_built_at=version.model_built_at,
@@ -1220,6 +1492,7 @@ def _assembled(
         changes=_changes(version.changes),
         change_count=version.change_count,
         delta=ContextDelta.model_validate(version.delta) if version.delta else None,
+        quality=judged,
     )
 
 

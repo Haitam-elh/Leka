@@ -2528,6 +2528,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/context/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retrieval Feedback
+         * @description What people said of what LEKA retrieved (LEKA-375) — useful, not
+         *     useful, wrong, missing — counted by the retrievers that found it, by
+         *     why it was there, by kind of thing: what weighing them next time can
+         *     learn from.
+         */
+        get: operations["retrieval_feedback_api_v1_context_feedback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/context/{context_id}": {
         parameters: {
             query?: never;
@@ -2745,6 +2768,53 @@ export interface paths {
         get: operations["context_diff_api_v1_context__context_id__diff_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Context Quality
+         * @description How good a version is (LEKA-375) — by default the latest that holds
+         *     something: its score and level; its completeness, freshness and
+         *     confidence, each factor with the elements it was read from; what it
+         *     lacks; what it disagrees on and how badly; what each retriever brought;
+         *     whether the context is up to date now; what people said of it.
+         */
+        get: operations["context_quality_api_v1_context__context_id__quality_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/context/{context_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give Feedback
+         * @description What someone says of a version (LEKA-375): an element useful, not
+         *     useful or wrong — or what is missing, in a note. Kept with what the
+         *     element was then, so that it can be counted by what found it. 404 when
+         *     the context, the version or the element is not there.
+         */
+        post: operations["give_feedback_api_v1_context__context_id__feedback_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3216,6 +3286,8 @@ export interface components {
             change_count: number;
             /** @description How it differs from the last version that held something (LEKA-374). */
             delta?: components["schemas"]["ContextDelta"] | null;
+            /** @description How good it is: complete, fresh, to be relied on; what it lacks; what it disagrees on (LEKA-375). */
+            quality?: components["schemas"]["ContextQuality"] | null;
         };
         /**
          * AttentionPointRead
@@ -4255,6 +4327,61 @@ export interface components {
             reason?: string | null;
         };
         /**
+         * ContextFeedbackCreate
+         * @description What someone says of a context (LEKA-375): an element useful, not
+         *     useful, wrong — or something missing, said in a note.
+         */
+        ContextFeedbackCreate: {
+            /**
+             * Version
+             * @description The version read; the latest that holds something.
+             */
+            version?: number | null;
+            /**
+             * Ref Id
+             * @description The element it is about.
+             */
+            ref_id?: string | null;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "useful" | "not_useful" | "wrong" | "missing";
+            /** Note */
+            note?: string | null;
+        };
+        /** ContextFeedbackRead */
+        ContextFeedbackRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Version */
+            version: number;
+            /** Ref Id */
+            ref_id: string | null;
+            /**
+             * Label
+             * @description The element, as the version said it.
+             */
+            label: string | null;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "useful" | "not_useful" | "wrong" | "missing";
+            /** Note */
+            note: string | null;
+            /** Given By */
+            given_by: string | null;
+            /**
+             * Given At
+             * Format: date-time
+             */
+            given_at: string;
+        };
+        /**
          * ContextFreshness
          * @description Whether a context is up to date with the company model (LEKA-374):
          *     `stale` when the model has changed what it holds since it was last
@@ -4301,6 +4428,57 @@ export interface components {
              * @enum {string}
              */
             following: "active" | "dormant" | "off" | "archived";
+        };
+        /**
+         * ContextQuality
+         * @description How good a version of a context is (LEKA-375): its score and level,
+         *     each measure with what it was read from, what it lacks, what it
+         *     disagrees on and how badly, what each retriever brought.
+         */
+        ContextQuality: {
+            /**
+             * Version
+             * @description Raised each time quality is judged differently.
+             */
+            version: number;
+            /**
+             * Score
+             * @description 0 to 1; none when nothing measures it.
+             */
+            score: number | null;
+            /**
+             * Level
+             * @description high from 0.85, medium from 0.6, else low.
+             * @enum {string}
+             */
+            level: "high" | "medium" | "low" | "unknown";
+            /**
+             * Capped
+             * @description What held the score down: a critical gap (low at most), a critical conflict (medium at most).
+             */
+            capped?: ("critical_gap" | "critical_conflict") | null;
+            /** Measures */
+            measures: components["schemas"]["QualityMeasure"][];
+            /**
+             * Gaps
+             * @description The critical first.
+             */
+            gaps: components["schemas"]["QualityGap"][];
+            /**
+             * Conflicts
+             * @description The critical first.
+             */
+            conflicts: components["schemas"]["QualityConflict"][];
+            support: components["schemas"]["QualitySupport"];
+            /** Retrieval */
+            retrieval: components["schemas"]["RetrieverYield"][];
+            /**
+             * Assessed
+             * @description Judged when the version was made — or, for one made before, read from what it holds: what the model knew of its roots then is not known.
+             * @default assembled
+             * @enum {string}
+             */
+            assessed: "assembled" | "read";
         };
         /**
          * ContextRead
@@ -4530,6 +4708,13 @@ export interface components {
             change_count: number;
             /** @description How it differs from the last version that held something. */
             delta?: components["schemas"]["ContextDelta"] | null;
+            /**
+             * Quality Score
+             * @description How good it is, 0 to 1 (LEKA-375); none before.
+             */
+            quality_score?: number | null;
+            /** Quality Level */
+            quality_level?: ("high" | "medium" | "low" | "unknown") | null;
             strategy: components["schemas"]["ContextStrategyRead"];
             /** Contract Version */
             contract_version: number;
@@ -6210,6 +6395,29 @@ export interface components {
             extracted: number;
             /** Failed */
             failed: number;
+        };
+        /** FeedbackCounts */
+        FeedbackCounts: {
+            /**
+             * Useful
+             * @default 0
+             */
+            useful: number;
+            /**
+             * Not Useful
+             * @default 0
+             */
+            not_useful: number;
+            /**
+             * Wrong
+             * @default 0
+             */
+            wrong: number;
+            /**
+             * Missing
+             * @default 0
+             */
+            missing: number;
         };
         /**
          * FieldError
@@ -8398,6 +8606,158 @@ export interface components {
             company_size?: components["schemas"]["CompanySize"] | null;
         };
         /**
+         * QualityConflict
+         * @description A conflict of the context (LEKA-372), judged: how much it matters to
+         *     what was asked, and why.
+         */
+        QualityConflict: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Subject
+             * Format: uuid
+             */
+            subject: string;
+            /** Label */
+            label: string;
+            /** About */
+            about: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "critical" | "warning" | "info";
+            /**
+             * Why
+             * @description Why it matters this much.
+             */
+            why: string;
+            /** Said */
+            said: string;
+            /** Refs */
+            refs: string[];
+        };
+        /**
+         * QualityFactor
+         * @description One thing a measure of quality was read from (LEKA-375).
+         */
+        QualityFactor: {
+            /** Name */
+            name: string;
+            /**
+             * Value
+             * @description 0 to 1; none when nothing measures it — left out of its measure, never guessed.
+             */
+            value: number | null;
+            /**
+             * Weight
+             * @description What it counts for in its measure.
+             */
+            weight: number;
+            /**
+             * Said
+             * @description It, in words.
+             */
+            said: string;
+            /**
+             * Refs
+             * @description The elements it was read from, the most telling first.
+             */
+            refs?: string[];
+            /**
+             * Detail
+             * @description What it was read from.
+             */
+            detail?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * QualityGap
+         * @description What a context lacks (LEKA-375): context missing, knowledge the
+         *     company model does not have, evidence gone stale — or what an
+         *     intention's reading found missing (LEKA-373).
+         */
+        QualityGap: {
+            /** Kind */
+            kind: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "critical" | "warning" | "info";
+            /**
+             * Measure
+             * @description What it lowers.
+             * @enum {string}
+             */
+            measure: "completeness" | "freshness" | "confidence";
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "quality" | "intent";
+            /** Said */
+            said: string;
+            /**
+             * Refs
+             * @description The elements it is about.
+             */
+            refs?: string[];
+            /** Detail */
+            detail?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * QualityInspection
+         * @description A version's quality, inspected (LEKA-375): as judged, whether the
+         *     context is up to date now, and what people said of it.
+         */
+        QualityInspection: {
+            /**
+             * Context Id
+             * Format: uuid
+             */
+            context_id: string;
+            /** Version */
+            version: number;
+            quality: components["schemas"]["ContextQuality"];
+            /** @description Whether the context is up to date now. */
+            freshness: components["schemas"]["ContextFreshness"];
+            feedback: components["schemas"]["FeedbackCounts"];
+            /**
+             * Given
+             * @description What was said of it, the latest first.
+             */
+            given: components["schemas"]["ContextFeedbackRead"][];
+        };
+        /**
+         * QualityMeasure
+         * @description Completeness, freshness or confidence: a score and what it rests on.
+         */
+        QualityMeasure: {
+            /**
+             * Name
+             * @enum {string}
+             */
+            name: "completeness" | "freshness" | "confidence";
+            /**
+             * Score
+             * @description 0 to 1; none when nothing measures it.
+             */
+            score: number | null;
+            /**
+             * Weight
+             * @description What it counts for in the context's score.
+             */
+            weight: number;
+            /** Factors */
+            factors: components["schemas"]["QualityFactor"][];
+        };
+        /**
          * QualityScores
          * @description Means over the validated records, from 0 to 1 — none before any.
          */
@@ -8415,6 +8775,36 @@ export interface components {
             freshness: number | null;
             /** Confidence */
             confidence: number | null;
+        };
+        /**
+         * QualitySupport
+         * @description What a context's confidence rests on, counted.
+         */
+        QualitySupport: {
+            /** Entities */
+            entities: number;
+            /**
+             * Sources
+             * @description The sources its elements came from.
+             */
+            sources: number;
+            /**
+             * Events
+             * @description What happened that it holds: incidents, deployments…
+             */
+            events: number;
+            /**
+             * Corroborated
+             * @description Entities two sources or more say.
+             */
+            corroborated: number;
+            /** Conflicts */
+            conflicts: number;
+            /**
+             * Critical
+             * @description Conflicts that matter to what was asked.
+             */
+            critical: number;
         };
         /**
          * QuarantinedRecordRead
@@ -9009,6 +9399,32 @@ export interface components {
             days?: number | null;
         };
         /**
+         * RetrievalFeedback
+         * @description What people said of what LEKA retrieved, counted (LEKA-375): by the
+         *     retrievers that found it, by why it was there, by kind of thing — what
+         *     weighing them next time can learn from.
+         */
+        RetrievalFeedback: {
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            total: components["schemas"]["FeedbackCounts"];
+            /** By Retriever */
+            by_retriever: {
+                [key: string]: components["schemas"]["FeedbackCounts"];
+            };
+            /** By Role */
+            by_role: {
+                [key: string]: components["schemas"]["FeedbackCounts"];
+            };
+            /** By Type */
+            by_type: {
+                [key: string]: components["schemas"]["FeedbackCounts"];
+            };
+        };
+        /**
          * RetrievalMatch
          * @description One way an element was found (LEKA-371): by what, how high it ranked
          *     there, what that added to its relevance, and on what.
@@ -9073,6 +9489,34 @@ export interface components {
              * @description What its findings counted for — its own weight, times the request's (LEKA-373); none before.
              */
             weight?: number | null;
+        };
+        /**
+         * RetrieverYield
+         * @description What a retriever brought (LEKA-375): what it found, what was kept,
+         *     what only it found, what made the first ranks — a signal for weighing
+         *     it next time.
+         */
+        RetrieverYield: {
+            /** Retriever */
+            retriever: string;
+            /** Status */
+            status: string;
+            /** Found */
+            found: number;
+            /** Kept */
+            kept: number;
+            /**
+             * Only
+             * @description Kept, and found by it alone.
+             */
+            only: number;
+            /**
+             * Top
+             * @description Kept among the first ranks.
+             */
+            top: number;
+            /** Said */
+            said: string;
         };
         /**
          * Role
@@ -22689,6 +23133,101 @@ export interface operations {
             };
         };
     };
+    retrieval_feedback_api_v1_context_feedback_get: {
+        parameters: {
+            query?: {
+                /** @description How far back. */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetrievalFeedback"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     context_api_v1_context__context_id__get: {
         parameters: {
             query?: never;
@@ -23695,6 +24234,201 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContextDiff"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    context_quality_api_v1_context__context_id__quality_get: {
+        parameters: {
+            query?: {
+                /** @description This version. */
+                version?: number | null;
+            };
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityInspection"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    give_feedback_api_v1_context__context_id__feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                context_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContextFeedbackCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContextFeedbackRead"];
                 };
             };
             /** @description The request could not be understood. */

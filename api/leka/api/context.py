@@ -25,6 +25,14 @@
                                           again, the same context made again
     GET  /context/{id}/checks             every time it was made again: why,
                                           after which changes, what came of it
+    GET  /context/{id}/quality            how good a version is (LEKA-375):
+                                          its measures and what each rests on,
+                                          what it lacks, what it disagrees on,
+                                          what people said of it
+    POST /context/{id}/feedback           an element useful, not useful, wrong
+                                          — or what is missing
+    GET  /context/feedback                what people said, counted by the
+                                          retrievers that found it
     POST /context/{id}/archive            no longer reassembled; still read
     GET  /context/{id}/versions           its versions, the latest first
     GET  /context/{id}/assembled          one version whole — the latest that
@@ -66,6 +74,8 @@ from leka.context import (
     ContextDetail,
     ContextDiff,
     ContextExpand,
+    ContextFeedbackCreate,
+    ContextFeedbackRead,
     ContextFilters,
     ContextRead,
     ContextRefresh,
@@ -80,7 +90,9 @@ from leka.context import (
     IntentAsk,
     IntentPlan,
     NotAnIntentionError,
+    QualityInspection,
     RefreshOutcome,
+    RetrievalFeedback,
     SubjectType,
 )
 from leka.core.errors import ErrorCode
@@ -212,6 +224,18 @@ async def contexts(
         session, statement, request=page, catalogue=CONTEXT_SORTS, id_column=Context.id
     )
     return PageEnvelope(data=ContextService.reads(result.items), next_cursor=result.next_cursor)
+
+
+@router.get("/feedback", response_model=RetrievalFeedback)
+async def retrieval_feedback(
+    service: Reading,
+    days: Annotated[int, Query(ge=1, le=365, description="How far back.")] = 30,
+) -> RetrievalFeedback:
+    """What people said of what LEKA retrieved (LEKA-375) — useful, not
+    useful, wrong, missing — counted by the retrievers that found it, by
+    why it was there, by kind of thing: what weighing them next time can
+    learn from."""
+    return await service.retrieval_feedback(days=days)
 
 
 @router.get("/{context_id}", response_model=ContextDetail)
@@ -410,3 +434,38 @@ async def context_diff(
     if found is None:
         raise _missing("No such context, or no such version of it.")
     return found
+
+
+@router.get("/{context_id}/quality", response_model=QualityInspection)
+async def context_quality(
+    context_id: uuid.UUID,
+    service: Reading,
+    version: Annotated[int | None, Query(ge=1, description="This version.")] = None,
+) -> QualityInspection:
+    """How good a version is (LEKA-375) — by default the latest that holds
+    something: its score and level; its completeness, freshness and
+    confidence, each factor with the elements it was read from; what it
+    lacks; what it disagrees on and how badly; what each retriever brought;
+    whether the context is up to date now; what people said of it."""
+    found = await service.inspect_quality(context_id, version=version)
+    if found is None:
+        raise _missing("No such context, or no such version of it.")
+    return found
+
+
+@router.post(
+    "/{context_id}/feedback",
+    response_model=ContextFeedbackRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def give_feedback(
+    context_id: uuid.UUID, body: ContextFeedbackCreate, service: Making, principal: Maker
+) -> ContextFeedbackRead:
+    """What someone says of a version (LEKA-375): an element useful, not
+    useful or wrong — or what is missing, in a note. Kept with what the
+    element was then, so that it can be counted by what found it. 404 when
+    the context, the version or the element is not there."""
+    given = await service.give_feedback(context_id, body, by=principal.user_id)
+    if given is None:
+        raise _missing("No such context, version of it, or element in that version.")
+    return given

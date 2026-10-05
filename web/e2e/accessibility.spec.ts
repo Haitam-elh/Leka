@@ -73,6 +73,9 @@ test.describe("what a screen opens", () => {
       .getByTestId("context-left-out")
       .getByRole("button", { name: "Voir la liste" })
       .click();
+    // How good it is, in detail (LEKA-375).
+    await page.getByRole("button", { name: "Voir le détail des mesures" }).click();
+    await expect(page.getByTestId("quality-retrieval")).toBeVisible();
 
     await expectNoViolations(page);
   });

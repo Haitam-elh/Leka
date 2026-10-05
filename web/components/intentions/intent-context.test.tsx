@@ -8,7 +8,9 @@
  * which sources; what it gathered, by kind of thing, and every element on
  * asking; the sources it came from; nothing is missing, said too. Asked
  * again (LEKA-374): which version, what LEKA reads differently, and how
- * what it gathered changed.
+ * what it gathered changed. Judged (LEKA-375): how sure LEKA can be, as
+ * mockup 03's « Niveau de confiance », and what is missing — the context's
+ * own gaps beside the intention's, the critical first.
  */
 
 import { render, screen, within } from "@testing-library/react";
@@ -254,5 +256,76 @@ describe("the context an intention asks for", () => {
     expect(again).toHaveTextContent(
       "Contexte : 2 élément(s) ajouté(s), 1 retiré(s), 0 modifié(s).",
     );
+  });
+
+  it("says how sure LEKA can be, and what is missing beside the intention's gaps", () => {
+    show(
+      assembled({
+        quality: {
+          version: 1,
+          score: 0.59,
+          level: "low",
+          capped: "critical_gap",
+          measures: [
+            { name: "completeness", score: 0.8, weight: 0.35, factors: [] },
+            { name: "confidence", score: 0.9, weight: 0.4, factors: [] },
+            { name: "freshness", score: 1, weight: 0.25, factors: [] },
+          ],
+          gaps: [
+            {
+              kind: "no_owner",
+              severity: "critical",
+              measure: "completeness",
+              origin: "quality",
+              said: "x",
+              refs: [PAYMENT],
+              detail: { entity: "payment-api" },
+            },
+            {
+              kind: "nothing_happened",
+              severity: "warning",
+              measure: "completeness",
+              origin: "intent",
+              said: "x",
+              refs: [],
+              detail: {},
+            },
+            {
+              kind: "undocumented",
+              severity: "info",
+              measure: "completeness",
+              origin: "quality",
+              said: "x",
+              refs: [PAYMENT],
+              detail: { entity: "payment-api" },
+            },
+          ],
+          conflicts: [],
+          support: {
+            entities: 2,
+            sources: 1,
+            events: 1,
+            corroborated: 0,
+            conflicts: 0,
+            critical: 0,
+          },
+          retrieval: [],
+          assessed: "assembled",
+        },
+      }),
+    );
+
+    const sure = screen.getByTestId("intelligence-confidence");
+    expect(within(sure).getByRole("heading", { name: "Niveau de confiance" })).toBeVisible();
+    expect(within(sure).getByTestId("confidence")).toHaveTextContent("Faible");
+    expect(within(sure).getByTestId("support")).toHaveTextContent("1 source(s) analysée(s)");
+    expect(within(sure).getByTestId("support")).toHaveTextContent(
+      "0 contradiction(s) détectée(s)",
+    );
+    expect(screen.getAllByTestId("intent-gap").map((gap) => gap.textContent)).toEqual([
+      "CritiquePersonne n'est connu comme responsable de payment-api.",
+      "À noterRien ne s'est passé sur la période autour de ce dont parle la demande.",
+      "Pour infoAucune page ne décrit payment-api.",
+    ]);
   });
 });

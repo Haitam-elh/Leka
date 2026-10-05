@@ -6,8 +6,9 @@
  * versions, and the actions that make a version — and the context an
  * intention asks for, as LEKA reads it (LEKA-373) — and how a context keeps
  * up with the company: behind the model or not, widened, narrowed, asked
- * again, every recalculation kept (LEKA-374). The shapes are the generated
- * ones; api/leka/api/context.py says what each route answers.
+ * again, every recalculation kept (LEKA-374) — and how good it is, and what
+ * people say of it (LEKA-375). The shapes are the generated ones;
+ * api/leka/api/context.py says what each route answers.
  */
 
 import { apiFetch } from "@/lib/api";
@@ -34,6 +35,14 @@ export type ContextCheck = components["schemas"]["ContextCheckRead"];
 export type ContextDelta = components["schemas"]["ContextDelta"];
 export type ContextExpand = components["schemas"]["ContextExpand"];
 export type ContextCompress = components["schemas"]["ContextCompress"];
+/** How good a context is, and what people say of it (LEKA-375). */
+export type ContextQuality = components["schemas"]["ContextQuality"];
+export type QualityGap = ContextQuality["gaps"][number];
+export type QualityConflict = ContextQuality["conflicts"][number];
+export type QualityMeasure = ContextQuality["measures"][number];
+export type QualityInspection = components["schemas"]["QualityInspection"];
+export type ContextFeedbackCreate = components["schemas"]["ContextFeedbackCreate"];
+export type ContextFeedback = components["schemas"]["ContextFeedbackRead"];
 
 interface Page<T> {
   data: T[];
@@ -99,6 +108,12 @@ export const contexts = {
   /** Its intention asked again: the same context, made again. */
   reask: ({ id, ask }: { id: string; ask: IntentAsk }) =>
     post<AssembledContext>(`/context/${id}/intent`, ask),
+  /** How good a version is, whether it is up to date, what people said. */
+  quality: (id: string, version?: number) =>
+    apiFetch<QualityInspection>(`/context/${id}/quality${version ? `?version=${version}` : ""}`),
+  /** An element useful, not useful, wrong — or what is missing. */
+  feedback: ({ id, body }: { id: string; body: ContextFeedbackCreate }) =>
+    post<ContextFeedback>(`/context/${id}/feedback`, body),
   /** What an intention asks for, read from its words and scope: nothing kept. */
   planIntent: (ask: IntentAsk) => post<IntentPlan>("/context/intents/plan", ask),
   /** The context an intention asks for, assembled and kept with its plan. */

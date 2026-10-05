@@ -10,8 +10,9 @@ where, and what is missing (LEKA-373) — finds that (LEKA-371), ranks it —
 what matters most first, duplicates folded, disagreements said (LEKA-372)
 — assembles it, keeps it version by version (LEKA-370), keeps it up with
 the company — behind the model said, made again where it is used,
-widened, narrowed, asked again (LEKA-374) — and hands it to whatever
-analyses the request.
+widened, narrowed, asked again (LEKA-374) — judges how good it is —
+complete, fresh, to be relied on, what it lacks, what it disagrees on and
+how badly (LEKA-375) — and hands it to whatever analyses the request.
 
 ```
  sources ─▶ … ─▶ company model (leka.knowledge)      records' own text (leka.ingestion)
@@ -48,7 +49,9 @@ dependency rule: `intentions → context → knowledge → ingestion`).
 | | Table | What it holds |
 |---|---|---|
 | **Context** | `contexts` | what it is for — a title, a `purpose` in the asker's words, a `subject` (an entity today, an intention with LEKA-384, or a bare request) — what it asks for (its **request**), where it stands (`status`), its latest version (`current_version`), who made it, when it was last checked (`refreshed_at`), archived when; keeping up (§ 14): whether it follows the model (`follow`), when it was last used (`used_at`), the build its last check read (`checked_model_at`), and, behind, since when and on what (`stale_since`, `pending`, `pending_count`) |
-| **Version** | `context_versions` | one assembly, **never changed**: when, why (`trigger`: created, refreshed, changed, expanded, compressed, reasked — § 14 — and a `reason`; what made it, `changes`; how it differs from the one before, `delta`), by which strategy and its version, under which contract, the request it answered, **which build of the model** it read (`model_built_at`, `model_version`), how many elements, whether the budget cut (`truncated`, `dropped`), counts (`summary`), **what each retriever did** (`retrieval`), **how it was ranked** (`ranking`: the policy, what was left out and why, what its sources disagree on), a `fingerprint` of what it holds — or why it failed (`error`) |
+| **Version** | `context_versions` | one assembly, **never changed**: when, why (`trigger`: created, refreshed, changed, expanded, compressed, reasked — § 14 — and a `reason`; what made it, `changes`; how it differs from the one before, `delta`; how good it is, `quality` —
+§ 15), by which strategy and its version, under which contract, the request it answered, **which build of the model** it read (`model_built_at`, `model_version`), how many elements, whether the budget cut (`truncated`, `dropped`), counts (`summary`), **what each retriever did** (`retrieval`), **how it was ranked** (`ranking`: the policy, what was left out and why, what its sources disagree on), a `fingerprint` of what it holds — or why it failed (`error`) |
+| **Feedback** | `context_feedback` | what someone said of a version (§ 15): an element useful, not useful, wrong — kept with what it was then, its type, why it was there, the retrievers that found it — or something missing, in a note |
 | **Check** | `context_checks` | each time it was made again (§ 14): why, by whom — none: LEKA followed the model — after which changes, what came of it (a version, nothing new, a failure), from which build |
 | **Follow** | `context_follows` | one per workspace: up to which build of the model its contexts were followed |
 | **Element** | `context_elements` | one thing a version holds — an entity or a relationship — at its `position`: its id and type in the model, a label, **what it said then** (`content`), **where it came from** (`provenance`), **why it is there** (`reason`: every retriever that found it), **how relevant** it was found (`relevance`, 0 to 1), **how it was ranked** (`ranking`: its score, its place, every signal it was read from) |
@@ -358,6 +361,7 @@ made again — a version or not — is a check (§ 14).
 | `intent` | the intention it was assembled for, as read (§ 13): `IntentPlan`, its `gaps` with this version's — none for a context asked for directly |
 | `model_built_at`, `model_version`, `assembled_at` | from which build of the model, when |
 | `trigger`, `reason`, `changes`, `change_count`, `delta` | why this version was made — created, refreshed, the model changed, expanded, compressed, asked again — what made it, and how it differs from the last one that held something (§ 14) |
+| `quality` | how good it is (§ 15): `score`, `level`, `capped`; `measures` — completeness, confidence, freshness — each factor with its value, weight and the elements it was read from; `gaps`; `conflicts` judged; `support`; `retrieval` — what each retriever brought; `assessed` |
 
 In Python (intentions, capabilities):
 
@@ -378,7 +382,7 @@ request's `query`, `window_days`, `until`, `retrievers` under version 1;
 LEKA-372 added `ranking` and `conflicts`, each element's `ranking` and the
 request's `min_relevance` — `relevance` keeps its meaning, how it was
 found; the order follows `ranking.score`; LEKA-373 added `intent`, LEKA-374
-`trigger`, `reason`, `changes`, `change_count`, `delta`; a
+`trigger`, `reason`, `changes`, `change_count`, `delta`, LEKA-375 `quality`; a
 field that changes meaning or goes raises `CONTRACT_VERSION`, and each
 version keeps the one it was made under. What a version stored is read back
 leniently — strings, not the registry's enums; fields a later contract adds
@@ -400,6 +404,9 @@ readable after a kind is renamed.
 | `POST /context/{id}/compress` | `intention:create` | narrowed — half its budget, or as asked; wider: 422; archived: 409 |
 | `POST /context/{id}/intent` | `intention:create` | its intention asked again: the same context, version N+1 whole; not an intention's: 409; nothing to start from: 422 |
 | `GET /context/{id}/checks` | `intention:read` | each time it was made again, the latest first, paged |
+| `GET /context/{id}/quality?version=` | `intention:read` | how good a version is (§ 15) — the latest that holds something by default — whether the context is up to date now, what people said of it |
+| `POST /context/{id}/feedback` | `intention:create` | `{version?, ref_id?, verdict, note?}`: an element useful, not useful, wrong — or `missing`, with a note (201); says nothing: 422; no such version or element: 404 |
+| `GET /context/feedback?days=` | `intention:read` | what people said, counted by the retrievers that found it, by why it was there, by kind of thing (§ 15) |
 | `POST /context/{id}/archive` | `intention:create` | archived; twice changes nothing |
 | `GET /context/{id}/versions` | `intention:read` | its versions, the latest first, paged — each with its retrieval report |
 | `GET /context/{id}/assembled` | `intention:read` | one version whole: `?version=`, or `?at=`, or the latest that holds something; both: 400 |
@@ -423,7 +430,8 @@ beside them the versions, any one shown again, two compared; **the
 conflicts**, every side with who says so; **what was left out**, counted
 by why and listed on asking; reassemble, widen, narrow, archive, a new
 context; whether it is up to date with the model, why each version was
-made and each time it was made again (§ 14). The
+made and each time it was made again (§ 14); how good it is, and a way to
+say an element is useful, wrong, or that something is missing (§ 15). The
 figures say why things were left out, and a disagreement is said among
 what is uncertain. Sized for a 13-inch screen: the list scrolls, the page
 does not.
@@ -518,6 +526,9 @@ API:
   them. Checks (§ 14) are kept 90 days — the versions keep what made them;
   a context behind keeps the latest 50 changes it is behind on (a few KB),
   and `ix_contexts_workspace_stale_since` finds what is behind and due.
+  A version's quality (§ 15) is a few KB — five refs a factor at most;
+  feedback is a row each, found by `(workspace, context, given_at)` and
+  counted by `(workspace, given_at)`.
 
 ## 13. What an intention asks for (LEKA-373)
 
@@ -739,6 +750,124 @@ jour**: each time it was made again, by LEKA or asked, and what came of
 it. Step 2 of a new intention: **Modifier**, then launch, asks the same
 context again — its version 2 says what LEKA reads differently.
 
+## 15. How good it is: quality and confidence (LEKA-375)
+
+`leka/context/quality.py`, pure; `ContextService._judge()`,
+`inspect_quality()`, `give_feedback()`, `retrieval_feedback()`.
+
+An analysis must tell strong evidence from a guess. Each version is judged
+when it is made, and the judgement kept with it (`context_versions.quality`,
+`QUALITY_VERSION` 1): the same version reads the same, whatever happens
+after. A version made before is judged when read, from what it holds
+(`assessed: read`) — what the model knew of its roots then is not known,
+and said unknown.
+
+**Three measures**, each the weighted mean of what it can be read from; a
+factor nothing measures is unknown — left out, never guessed — and each
+factor names the elements it was read from (`refs`, five at most):
+
+| Measure | Weight | Factor | Weight | Read from |
+|---|---:|---|---:|---|
+| completeness | .35 | `start` | .25 | the roots in it, not removed — or, from words, something found |
+| | | `facets` | .25 | the sides it should cover: an intention's (§ 13), or its roots' — a service, an application, a repository, a database has an owner side |
+| | | `retrieval` | .20 | the retrievers that ran and did not fail |
+| | | `knowledge` | .20 | what the model knows of its roots, beyond the context: an owner (`owned_by`, `maintained_by`, `owns`), a page (`describes`, `mentions` from a document), a monitoring source that shows it |
+| | | `budget` | .10 | nothing left for the budget with a score of .5 or more |
+| freshness | .25 | `model` | .35 | the build it read: current a day, then halved each week |
+| | | `evidence` | .40 | the freshness signal of what it holds (§ 5), weighed by score |
+| | | `sources` | .25 | the sources signal: how its sources are doing |
+| confidence | .40 | `trust` | .50 | the trust of what it holds (§ 5), weighed by score |
+| | | `corroboration` | .20 | the share of entities two sources or more say |
+| | | `stated` | .15 | the share of ties a source stated, not inferred |
+| | | `consistency` | .15 | 1 − (disputed + 2 × critically disputed) / elements |
+
+`score = .35 completeness + .40 confidence + .25 freshness` over the
+measures known; **high** from 0.85, **medium** from 0.6, **low** under —
+the thresholds the screens' `confidenceLevel` reads. A critical gap holds
+it to 0.59 (low, `capped: critical_gap`); a critical conflict to 0.84
+(medium, `capped: critical_conflict`).
+
+**What it lacks** — `gaps`, the critical first, each with what it lowers
+(`measure`) and the elements it is about:
+
+| Gap | Severity | When |
+|---|---|---|
+| an intention's (§ 13) | as read | `origin: intent` — kept as the reading said it |
+| `nothing_found` | critical | it holds nothing |
+| `root_missing` | critical | a root asked for is gone, or removed |
+| `facet_missing` | warning | a side it should cover holds nothing — for an intention, not the temporal or business side: its own gaps say those |
+| `retriever_failed` | warning | a retriever failed or timed out — an intention's reading says it already |
+| `budget_cut` | warning from 3 and a quarter of what it holds, else info | relevant things left for the budget: widen it (§ 14) |
+| `no_owner` | critical for an ownership question, else warning | nobody the model ties to a root as its owner |
+| `undocumented` | critical for a knowledge question, else info | no page describes a root |
+| `unwatched` | warning for a diagnosis or a change, else info | no monitoring source shows a root |
+| `model_not_built`, `model_stale` | critical, warning | the model never built, or a day old — an intention's reading says it already |
+| `stale_evidence` | warning | of the first ten, what a source last showed over a month ago |
+| `source_unhealthy` | warning | of the first ten, what comes from a source failing or deleted |
+| `mostly_inferred` | info | four ties or more, more than half inferred |
+
+**What it disagrees on, and how badly** — LEKA-372's conflicts, judged
+(`conflicts`, the critical first, each with `why`):
+
+| Conflict | About what was asked (a root, an intention's subject) | Elsewhere |
+|---|---|---|
+| `competing` — two owners, managers, leads, parents | critical | warning |
+| `gone` — a tie to a thing gone from every source | critical | warning |
+| `attribute`, `duplicates` on what decides an answer: status, state, version, environment, owner, team, tier, criticality, SLA, SLO, lifecycle, region | critical | warning |
+| on anything else | warning | info |
+
+**What it rests on** — `support`: the entities, the sources they came
+from, the events it holds, what two sources confirm, the conflicts and
+the critical ones; mockup 03's lines.
+
+**Signals for retrieving better** — two, kept for weighing retrievers
+next time (*Not yet*: learning the weights):
+
+- **What each retriever brought**, per version (`retrieval`): found, kept,
+  found by it alone, among the first ten — or how it failed.
+- **What people say** (`context_feedback`): an element `useful`,
+  `not_useful` or `wrong`, kept with what it was then — its type, why it
+  was there, the retrievers that found it — or something `missing`, in a
+  note. Inspected with the version (`GET /context/{id}/quality`), counted
+  across the workspace by retriever, by why it was there, by kind
+  (`GET /context/feedback`).
+
+**Downstream** reads it in the contract (`AssembledContext.quality`, § 9):
+how sure to be, what is missing, what is disputed — an analysis (LEKA-388)
+can say *likely* rather than *certain*, and why.
+
+**Tested** — the judgement in `tests/test_context_quality.py`, Billing API
+as `test_context_assembly` makes it:
+
+| Scenario | Judged |
+|---|---|
+| owned by Payments, described by its runbook, watched, an incident on it; two sources each, healthy, the model current | high; every factor 1 but trust; nothing missing; support 4 entities, 3 sources, 1 event |
+| the same, judged twice; its roots' profile not read | the same; `knowledge` and an unrun `retrieval` unknown |
+| nobody owns it | `no_owner` warning; critical for an ownership question, low at most; `unwatched` a warning for a diagnosis |
+| the model ten days old, its evidence four months, its source failing | `model` .41, `sources` .3; `model_stale`, `stale_evidence`, `source_unhealthy` |
+| a retriever failed; six relevant left for a budget of 4 | `retrieval` .75, `budget` .4; `retriever_failed`, `budget_cut` |
+| its SLA disputed; a team's Slack channel too | the SLA critical, medium at most; the channel for information |
+| two teams own it | critical — a warning when neither is what was asked |
+| nothing | low, `nothing_found` |
+| retrievers | found, kept, alone, among the first |
+
+— and on Acme's model, `tests/test_context_quality_api.py`: Billing API's
+context high, its missing page said, kept and inspected; its tier disputed,
+critical, medium; « Qui est responsable de Billing platform ? » low, its
+missing owner critical beside the intention's own gaps; a version made
+before judged when read; feedback kept, refused when it says nothing or
+names what the version does not hold, and counted by retriever.
+
+**The screens.** Tab **Contexte**: **Qualité du contexte** — the level,
+the score and what held it down; what it rests on, ticked when
+established; completeness, reliability and freshness as bars, each factor
+on asking with the elements it was read from; what is missing, in French,
+the critical first; the disagreements judged; what each retrieval
+brought; what people said, and *Il manque quelque chose ?*. An element,
+opened: *Cet élément vous sert-il ?* — useful, not useful, wrong, said
+once. Step 2 of a new intention: **Niveau de confiance** (mockup 03) and
+*Ce qui manque*, the context's own gaps beside the intention's.
+
 ## Not yet
 
 - **Meaning, not only words.** The search reads words and a vocabulary of
@@ -749,22 +878,23 @@ context again — its version 2 says what LEKA reads differently.
   the API, a hosted one a paid service — a decision to take. It would be a
   sixth retriever beside the others, never instead of them: they say why a
   thing was found, in words.
-- **Relevance learned from use.** The weights are set by hand (§ 5),
-  explained signal by signal and held by representative cases; learning
-  them from what analyses actually used needs the intentions to say what
-  they used (LEKA-384, LEKA-388) — the signals and their values are kept
-  with every element for that.
+- **Relevance learned from use.** The weights are set by hand (§ 5, § 15),
+  explained signal by signal and held by representative cases. What to
+  learn them from is kept: each element's signals, what each retriever
+  brought, what people said of each element (§ 15); learning them —
+  and from what analyses actually used (LEKA-384, LEKA-388) — is next.
 - **Intentions kept, and their context with them** (LEKA-384, LEKA-387):
   a context is assembled for an intention's words and scope today; the
-  intention itself is kept with LEKA-384, and its quality signals come
-  with LEKA-375.
+  intention itself is kept with LEKA-384.
 - **A budget in words, not elements.** `compress` keeps the most relevant
   N elements; when the analysis engine (LEKA-388) says how much text its
   model reads, a budget in characters is the same cut, measured otherwise.
 - **News that is not a version of the model.** An entity's confidence or
   quality, a source turning unhealthy, records' text re-indexed: read by
   the next recalculation, not followed (§ 14).
-- **A context's quality and confidence** as a whole (LEKA-375).
+- **An owner, a page, a watching source beyond the roots.** Knowledge
+  gaps are read for what a context starts from that has them (§ 15), not
+  for everything it holds: a walk per root is what it costs today.
 - **Fine-grained access and the full inspection API** (LEKA-376).
 - **Intentions** as subjects (LEKA-384): a context takes an
   `intention_id` as its subject today; nothing keeps the intention yet.

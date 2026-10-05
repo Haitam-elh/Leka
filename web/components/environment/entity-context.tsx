@@ -21,6 +21,7 @@ import {
   FreshnessPanel,
   VersionWhy,
 } from "@/components/environment/context-freshness";
+import { ElementFeedback, QualityPanel } from "@/components/environment/context-quality";
 import {
   ConflictsPanel,
   LeftOutPanel,
@@ -79,8 +80,10 @@ import { notify } from "@/lib/notify";
  * ranked, what its sources disagree on and what was left out, and why
  * (LEKA-372), are context-ranking.tsx's; whether it is up to date with the
  * model, why each version was made and every time it was made again
- * (LEKA-374), context-freshness.tsx's — widened or narrowed here. Nothing
- * is drawn that the API did not say.
+ * (LEKA-374), context-freshness.tsx's — widened or narrowed here; how good
+ * it is, and what people say of an element or of what is missing
+ * (LEKA-375), context-quality.tsx's. Nothing is drawn that the API did not
+ * say.
  */
 
 type Dictionary = ReturnType<typeof useDictionary>;
@@ -436,9 +439,10 @@ function Shown({
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0 space-y-3">
             <ContextUsedPanel assembled={assembled.data} />
-            <Elements assembled={assembled.data} />
+            <Elements assembled={assembled.data} canMake={canMake} />
           </div>
           <div className="space-y-3">
+            <QualityPanel assembled={assembled.data} canMake={canMake} />
             <Versions
               rows={versions.data ?? []}
               shown={assembled.data.version}
@@ -476,7 +480,7 @@ function Status({ status }: { status: ContextRead["status"] }) {
   );
 }
 
-function Elements({ assembled }: { assembled: AssembledContext }) {
+function Elements({ assembled, canMake }: { assembled: AssembledContext; canMake: boolean }) {
   const t = useDictionary();
   const w = t.environment.sheet.context;
   const [open, setOpen] = useState<string | null>(null);
@@ -509,6 +513,9 @@ function Elements({ assembled }: { assembled: AssembledContext }) {
               names={names}
               open={open === key}
               onToggle={() => setOpen(open === key ? null : key)}
+              feedback={
+                canMake ? { contextId: assembled.context_id, version: assembled.version } : null
+              }
             />
           );
         })}
@@ -522,11 +529,14 @@ function ElementRow({
   names,
   open,
   onToggle,
+  feedback,
 }: {
   element: ContextElement;
   names: ReadonlyMap<string, ContextElement>;
   open: boolean;
   onToggle: () => void;
+  /** Where what is said of it goes (LEKA-375); none for who may only read. */
+  feedback: { contextId: string; version: number } | null;
 }) {
   const t = useDictionary();
   const w = t.environment.sheet.context;
@@ -559,6 +569,15 @@ function ElementRow({
         </button>
       </div>
       {open ? <Provenance element={element} names={names} /> : null}
+      {open && feedback ? (
+        <div className="mt-2 ml-6">
+          <ElementFeedback
+            contextId={feedback.contextId}
+            version={feedback.version}
+            refId={element.ref_id}
+          />
+        </div>
+      ) : null}
     </li>
   );
 }

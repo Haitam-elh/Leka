@@ -30,6 +30,11 @@ grammar.
     ContextCheckRead   one time it was made again, and what came of it
     ContextExpand,     its request widened or narrowed — a new version
     ContextCompress
+    ContextQuality     how good a version is (LEKA-375): complete, fresh,
+                       to be relied on — each measure with what it was read
+                       from — what it lacks, what it disagrees on and how
+                       badly, what each retriever brought
+    ContextFeedback*   what people said of an element, or of what is missing
 
 What a version holds was written once and is read back as it was, whatever
 the model has become since: the types that read it take strings, not the
@@ -73,6 +78,11 @@ ContextStatus = Literal["assembling", "assembled", "failed", "archived"]
 # asked; the model changed what it holds; its request widened, narrowed;
 # its intention asked again.
 Trigger = Literal["created", "refreshed", "changed", "expanded", "compressed", "reasked"]
+# How good a context is (LEKA-375).
+QualityLevel = Literal["high", "medium", "low", "unknown"]
+Severity = Literal["critical", "warning", "info"]
+MeasureName = Literal["completeness", "freshness", "confidence"]
+Verdict = Literal["useful", "not_useful", "wrong", "missing"]
 StrategyName = Literal["neighbourhood", "hybrid"]
 # How things are found (LEKA-371): around the roots, by the request's words
 # in the model and in the records' own text, by their time, on the ways
@@ -720,6 +730,124 @@ class ContextDelta(BaseModel):
     unchanged: int
 
 
+class QualityFactor(BaseModel):
+    """One thing a measure of quality was read from (LEKA-375)."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    name: str
+    value: float | None = Field(
+        description="0 to 1; none when nothing measures it — left out of its measure, never "
+        "guessed."
+    )
+    weight: float = Field(description="What it counts for in its measure.")
+    said: str = Field(description="It, in words.")
+    refs: list[uuid.UUID] = Field(
+        default_factory=list, description="The elements it was read from, the most telling first."
+    )
+    detail: dict[str, object] = Field(default_factory=dict, description="What it was read from.")
+
+
+class QualityMeasure(BaseModel):
+    """Completeness, freshness or confidence: a score and what it rests on."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    name: MeasureName
+    score: float | None = Field(description="0 to 1; none when nothing measures it.")
+    weight: float = Field(description="What it counts for in the context's score.")
+    factors: list[QualityFactor]
+
+
+class QualityGap(BaseModel):
+    """What a context lacks (LEKA-375): context missing, knowledge the
+    company model does not have, evidence gone stale — or what an
+    intention's reading found missing (LEKA-373)."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    kind: str
+    severity: Severity
+    measure: MeasureName = Field(description="What it lowers.")
+    origin: Literal["quality", "intent"]
+    said: str
+    refs: list[uuid.UUID] = Field(default_factory=list, description="The elements it is about.")
+    detail: dict[str, object] = Field(default_factory=dict)
+
+
+class QualityConflict(BaseModel):
+    """A conflict of the context (LEKA-372), judged: how much it matters to
+    what was asked, and why."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str
+    kind: str
+    subject: uuid.UUID
+    label: str
+    about: str
+    severity: Severity
+    why: str = Field(description="Why it matters this much.")
+    said: str
+    refs: list[uuid.UUID]
+
+
+class QualitySupport(BaseModel):
+    """What a context's confidence rests on, counted."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    entities: int
+    sources: int = Field(description="The sources its elements came from.")
+    events: int = Field(description="What happened that it holds: incidents, deployments…")
+    corroborated: int = Field(description="Entities two sources or more say.")
+    conflicts: int
+    critical: int = Field(description="Conflicts that matter to what was asked.")
+
+
+class RetrieverYield(BaseModel):
+    """What a retriever brought (LEKA-375): what it found, what was kept,
+    what only it found, what made the first ranks — a signal for weighing
+    it next time."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    retriever: str
+    status: str
+    found: int
+    kept: int
+    only: int = Field(description="Kept, and found by it alone.")
+    top: int = Field(description="Kept among the first ranks.")
+    said: str
+
+
+class ContextQuality(BaseModel):
+    """How good a version of a context is (LEKA-375): its score and level,
+    each measure with what it was read from, what it lacks, what it
+    disagrees on and how badly, what each retriever brought."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    version: int = Field(description="Raised each time quality is judged differently.")
+    score: float | None = Field(description="0 to 1; none when nothing measures it.")
+    level: QualityLevel = Field(description="high from 0.85, medium from 0.6, else low.")
+    capped: Literal["critical_gap", "critical_conflict"] | None = Field(
+        default=None,
+        description="What held the score down: a critical gap (low at most), a critical "
+        "conflict (medium at most).",
+    )
+    measures: list[QualityMeasure]
+    gaps: list[QualityGap] = Field(description="The critical first.")
+    conflicts: list[QualityConflict] = Field(description="The critical first.")
+    support: QualitySupport
+    retrieval: list[RetrieverYield]
+    assessed: Literal["assembled", "read"] = Field(
+        default="assembled",
+        description="Judged when the version was made — or, for one made before, read from "
+        "what it holds: what the model knew of its roots then is not known.",
+    )
+
+
 class AssembledContext(BaseModel):
     """One version of a context: the contract downstream services read.
 
@@ -780,6 +908,11 @@ class AssembledContext(BaseModel):
     delta: ContextDelta | None = Field(
         default=None,
         description="How it differs from the last version that held something (LEKA-374).",
+    )
+    quality: ContextQuality | None = Field(
+        default=None,
+        description="How good it is: complete, fresh, to be relied on; what it lacks; what it "
+        "disagrees on (LEKA-375).",
     )
 
 
@@ -853,6 +986,10 @@ class ContextVersionRead(BaseModel):
     delta: ContextDelta | None = Field(
         default=None, description="How it differs from the last version that held something."
     )
+    quality_score: float | None = Field(
+        default=None, description="How good it is, 0 to 1 (LEKA-375); none before."
+    )
+    quality_level: QualityLevel | None = None
     strategy: ContextStrategyRead
     contract_version: int
     request: ContextRequest
@@ -960,6 +1097,81 @@ class ContextCompress(BaseModel):
     window_days: int | None = Field(default=None, ge=1, le=MAX_WINDOW_DAYS)
     min_relevance: float | None = Field(default=None, ge=0, le=1)
     reason: str | None = Field(default=None, max_length=500)
+
+
+class ContextFeedbackCreate(BaseModel):
+    """What someone says of a context (LEKA-375): an element useful, not
+    useful, wrong — or something missing, said in a note."""
+
+    model_config = ConfigDict(frozen=True)
+
+    version: int | None = Field(
+        default=None, ge=1, description="The version read; the latest that holds something."
+    )
+    ref_id: uuid.UUID | None = Field(default=None, description="The element it is about.")
+    verdict: Verdict
+    note: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def _about_something(self) -> ContextFeedbackCreate:
+        if self.verdict == "missing":
+            if self.ref_id is not None:
+                raise ValueError("What is missing is not an element of it.")
+            if not (self.note or "").strip():
+                raise ValueError("Say what is missing.")
+        elif self.ref_id is None:
+            raise ValueError("Say which element it is about.")
+        return self
+
+
+class ContextFeedbackRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    version: int
+    ref_id: uuid.UUID | None
+    label: str | None = Field(description="The element, as the version said it.")
+    verdict: Verdict
+    note: str | None
+    given_by: uuid.UUID | None
+    given_at: datetime
+
+
+class FeedbackCounts(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    useful: int = 0
+    not_useful: int = 0
+    wrong: int = 0
+    missing: int = 0
+
+
+class QualityInspection(BaseModel):
+    """A version's quality, inspected (LEKA-375): as judged, whether the
+    context is up to date now, and what people said of it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    context_id: uuid.UUID
+    version: int
+    quality: ContextQuality
+    freshness: ContextFreshness = Field(description="Whether the context is up to date now.")
+    feedback: FeedbackCounts
+    given: list[ContextFeedbackRead] = Field(description="What was said of it, the latest first.")
+
+
+class RetrievalFeedback(BaseModel):
+    """What people said of what LEKA retrieved, counted (LEKA-375): by the
+    retrievers that found it, by why it was there, by kind of thing — what
+    weighing them next time can learn from."""
+
+    model_config = ConfigDict(frozen=True)
+
+    since: datetime
+    total: FeedbackCounts
+    by_retriever: dict[str, FeedbackCounts]
+    by_role: dict[str, FeedbackCounts]
+    by_type: dict[str, FeedbackCounts]
 
 
 class ElementChange(BaseModel):

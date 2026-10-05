@@ -16,7 +16,9 @@ import { openContextTab } from "./context-tab";
  * are folded into one, their disagreement said; each element says why its
  * rank. Keeping up (LEKA-374): it says it is up to date with the model and
  * follows it; widened and narrowed, it makes new versions that say what of
- * the request changed, and each time is kept.
+ * the request changed, and each time is kept. Judged (LEKA-375): its level
+ * held down by the disagreement on payment-api's SLA, said critical; an
+ * element said useful, and counted.
  */
 
 test.describe("the context engine", () => {
@@ -121,5 +123,31 @@ test.describe("the context engine", () => {
     await expect(checks).toHaveCount(2);
     await expect(checks.first()).toContainText("Resserré");
     await expect(checks.first()).toContainText("version 3 créée");
+  });
+
+  test("says how good it is, the critical disagreement, and what people say", async ({ page }) => {
+    await openContextTab(page);
+    await page.getByLabel("Pourquoi ?").fill("Pourquoi payment-api est lent ?");
+    await page.getByRole("button", { name: "Assembler le contexte" }).click();
+
+    const quality = page.getByTestId("context-quality");
+    await expect(quality).toBeVisible();
+    await expect(page.getByTestId("quality-score")).toContainText(
+      "plafonné : un désaccord critique",
+    );
+    await expect(quality.getByTestId("support")).toContainText("source(s) analysée(s)");
+    const conflict = page.getByTestId("quality-conflict").first();
+    await expect(conflict).toHaveAttribute("data-severity", "critical");
+    await expect(conflict).toContainText("payment-api · sla");
+
+    await page
+      .getByTestId("context-elements")
+      .getByRole("button", { name: "Provenance de payment-api", exact: true })
+      .click();
+    await page
+      .getByRole("group", { name: "Cet élément vous sert-il ?" })
+      .getByRole("button", { name: "Utile", exact: true })
+      .click();
+    await expect(page.getByTestId("quality-feedback-counts")).toContainText("1 utile(s)");
   });
 });

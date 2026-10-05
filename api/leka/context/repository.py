@@ -23,6 +23,7 @@ from leka.context.models import (
     Context,
     ContextCheck,
     ContextElement,
+    ContextFeedback,
     ContextFollow,
     ContextVersion,
 )
@@ -290,6 +291,54 @@ class ContextRepository(WorkspaceScopedRepository):
 
     def keep_check(self, check: ContextCheck) -> None:
         self.add(check)
+
+    # ── what people say of it (LEKA-375) ───────────────────────────────────
+
+    async def element(self, version_id: uuid.UUID, ref_id: uuid.UUID) -> ContextElement | None:
+        """One element of a version."""
+        found = await self.list(
+            self.select(ContextElement).where(
+                ContextElement.version_id == version_id, ContextElement.ref_id == ref_id
+            )
+        )
+        return found[0] if found else None
+
+    def keep_feedback(self, feedback: ContextFeedback) -> None:
+        self.add(feedback)
+
+    async def feedback(
+        self, context_id: uuid.UUID, version: int, *, limit: int
+    ) -> Sequence[ContextFeedback]:
+        """What was said of a version, the latest first."""
+        return await self.list(
+            self.select(ContextFeedback)
+            .where(ContextFeedback.context_id == context_id, ContextFeedback.version == version)
+            .order_by(ContextFeedback.given_at.desc(), ContextFeedback.id)
+            .limit(limit)
+        )
+
+    async def feedback_counts(self, context_id: uuid.UUID, version: int) -> dict[str, int]:
+        """What was said of a version, counted by verdict."""
+        rows = await self._session.execute(
+            select(ContextFeedback.verdict, func.count())
+            .where(
+                ContextFeedback.workspace_id == self.workspace_id,
+                ContextFeedback.context_id == context_id,
+                ContextFeedback.version == version,
+            )
+            .group_by(ContextFeedback.verdict)
+        )
+        return {verdict: int(count) for verdict, count in rows.tuples()}
+
+    async def feedback_since(self, since: datetime, *, limit: int) -> Sequence[ContextFeedback]:
+        """What was said of the workspace's contexts since `since`, the
+        latest first."""
+        return await self.list(
+            self.select(ContextFeedback)
+            .where(ContextFeedback.given_at >= since)
+            .order_by(ContextFeedback.given_at.desc(), ContextFeedback.id)
+            .limit(limit)
+        )
 
 
 class ContextSweeper:

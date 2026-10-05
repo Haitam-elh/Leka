@@ -40,6 +40,10 @@ test.describe("the intention journey", () => {
     await expect(scope).toContainText("lue dans la demande : « hier »");
     await expect(page.getByTestId("intent-gathered")).toContainText("Service");
     await expect(page.getByTestId("intent-sources")).toBeVisible();
+    // How sure LEKA can be of it (LEKA-375), as mockup 03 says it.
+    const sure = page.getByTestId("intelligence-confidence");
+    await expect(sure).toContainText("Niveau de confiance");
+    await expect(sure.getByTestId("confidence")).toBeVisible();
 
     // Edited, the same context is asked again: version 2 says what LEKA
     // reads differently (LEKA-374).
