@@ -44,11 +44,34 @@ vi.mock("@/lib/sources", async (original) => ({
   ...(await original<typeof import("@/lib/sources")>()),
   sources: sourcesApi,
 }));
-vi.mock("next/navigation", () => ({
-  usePathname: () => pathname.value,
-  useParams: () => params.value,
-  useRouter: () => ({ push: vi.fn(), back: vi.fn(), replace: vi.fn() }),
-}));
+// The address's query, as the router keeps it: the screen's tab lives in it
+// (LEKA-428), so replacing the address must redraw what reads it.
+const query = vi.hoisted(() => {
+  let value = "";
+  const listeners = new Set<() => void>();
+  return {
+    get: () => value,
+    set(next: string) {
+      value = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+  };
+});
+const replace = vi.fn((href: string) => query.set(href.split("?")[1] ?? ""));
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  return {
+    usePathname: () => pathname.value,
+    useParams: () => params.value,
+    useSearchParams: () =>
+      new URLSearchParams(useSyncExternalStore(query.subscribe, query.get, query.get)),
+    useRouter: () => ({ push: vi.fn(), back: vi.fn(), replace }),
+  };
+});
 
 const { EnvironmentScreen } = await import("@/components/environment/environment-screen");
 const { EntitySheetScreen } = await import("@/components/environment/entity-sheet");
@@ -288,6 +311,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   pathname.value = "/environment";
   params.value = {};
+  query.set("");
   api.get.mockResolvedValue(ENVIRONMENT);
   api.sheet.mockResolvedValue(sheet());
   sourcesApi.list.mockResolvedValue({ data: SOURCES });
@@ -314,6 +338,30 @@ describe("Mon environnement", () => {
       "href",
       "/environment/graph",
     );
+  });
+
+  it("keeps its tab in the address, so the sidebar can open each view", async () => {
+    const user = userEvent.setup();
+    query.set("tab=infrastructure");
+    mount(<EnvironmentScreen />);
+
+    expect(screen.getByTestId("env-tab-infrastructure")).toHaveAttribute("aria-pressed", "true");
+    expect(graphApi.view).toHaveBeenCalledWith("infrastructure");
+
+    await user.click(screen.getByTestId("env-tab-domains"));
+    expect(replace).toHaveBeenLastCalledWith("/environment?tab=domains", { scroll: false });
+    expect(screen.getByTestId("env-tab-domains")).toHaveAttribute("aria-pressed", "true");
+
+    // The first tab is the address with no tab at all.
+    await user.click(screen.getByTestId("env-tab-architecture"));
+    expect(replace).toHaveBeenLastCalledWith("/environment", { scroll: false });
+  });
+
+  it("opens on the architecture when the address names no tab it has", async () => {
+    query.set("tab=nonsense");
+    mount(<EnvironmentScreen />);
+
+    expect(screen.getByTestId("env-tab-architecture")).toHaveAttribute("aria-pressed", "true");
   });
 
   it("puts each thing in its layer on the other tabs, with its state in words", async () => {

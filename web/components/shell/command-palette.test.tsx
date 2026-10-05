@@ -105,6 +105,24 @@ describe("what the palette offers", () => {
     expect(screen.queryByTestId("palette-activity")).not.toBeInTheDocument();
   });
 
+  it("names a page with its pillar, so typing the pillar lists its pages", async () => {
+    const user = await openPalette();
+
+    await user.type(screen.getByTestId("palette-input"), "environnement");
+
+    const applications = screen.getByTestId("palette-environment-applications");
+    expect(applications).toHaveTextContent("Mon environnement › Applications");
+    await user.click(applications);
+    expect(push).toHaveBeenCalledWith("/environment?tab=applications");
+    expect(screen.queryByTestId("palette-sources")).not.toBeInTheDocument();
+  });
+
+  it("offers creating an intention once, as the action", async () => {
+    await openPalette();
+
+    expect(screen.queryByTestId("palette-intention-new")).not.toBeInTheDocument();
+  });
+
   it("carries what was typed into the intention it offers to create", async () => {
     const user = await openPalette();
 

@@ -13,6 +13,7 @@ import {
   Plus,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { cn } from "cn";
@@ -52,7 +53,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { routes } from "@/config/routes";
+import { ENVIRONMENT_VIEWS, routes } from "@/config/routes";
 import type { Environment, EnvironmentStatus } from "@/lib/environment";
 import { useEnvironment } from "@/lib/environment-queries";
 import type { LandscapeView, ViewName, ViewNode } from "@/lib/knowledge-graph";
@@ -77,19 +78,37 @@ import { useSources } from "@/lib/sources-queries";
  * /knowledge/views/{view}): their rows, boxes and lines, how well their
  * kinds are known; Événements, what moved. The detailed map explores the
  * graph behind them (graph-explorer.tsx).
+ *
+ * The tab is in the URL (`?tab=applications`, LEKA-428): the sidebar opens
+ * each view of "Mon environnement" by it, and a view can be shared or
+ * reloaded. No `tab`, or one that is not a tab, is the architecture.
  */
 
-const TABS = [
-  "architecture",
-  "applications",
-  "infrastructure",
-  "data",
-  "dependencies",
-  "organisation",
-  "events",
-  "domains",
-] as const;
+const TABS = ENVIRONMENT_VIEWS;
 type Tab = (typeof TABS)[number];
+const FIRST_TAB: Tab = "architecture";
+
+function isTab(value: string | null): value is Tab {
+  return (TABS as readonly (string | null)[]).includes(value);
+}
+
+/** The tab the URL asks for, and the way to another — replacing the
+ * address rather than stacking one per click. */
+function useTab(): [Tab, (next: Tab) => void] {
+  const router = useRouter();
+  const pathname = usePathname() ?? "/environment";
+  const search = useSearchParams();
+  const asked = search?.get("tab") ?? null;
+  const tab = isTab(asked) ? asked : FIRST_TAB;
+  function setTab(next: Tab) {
+    const params = new URLSearchParams(search?.toString() ?? "");
+    if (next === FIRST_TAB) params.delete("tab");
+    else params.set("tab", next);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
+  return [tab, setTab];
+}
 const VIEWS_OF: Partial<Record<Tab, ViewName>> = {
   applications: "applications",
   infrastructure: "infrastructure",
@@ -165,7 +184,7 @@ export function EnvironmentScreen() {
   const t = useDictionary();
   const w = t.environment;
   const { model, error, retry } = useModel();
-  const [tab, setTab] = useState<Tab>("architecture");
+  const [tab, setTab] = useTab();
   const [view, setView] = useState<"map" | "list">("map");
   const [scope, setScope] = useState(GLOBAL);
   const viewName = VIEWS_OF[tab] ?? null;

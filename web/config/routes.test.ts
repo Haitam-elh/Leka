@@ -40,13 +40,6 @@ describe("the route registry", () => {
     expect(orphans.map((route) => route.id)).toEqual([]);
   });
 
-  it("gives every sidebar entry an icon", () => {
-    // Without one the row collapses to a label and the rail shows nothing.
-    const iconless = ROUTES.filter((route) => route.showInSidebar && route.icon === undefined);
-
-    expect(iconless.map((route) => route.id)).toEqual([]);
-  });
-
   it("declares a permission on every route", () => {
     // A route with none is a route nobody decided about. Public pages live
     // outside the shell, under (auth).

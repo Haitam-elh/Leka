@@ -1,22 +1,26 @@
 /**
  * The sidebar, rendered the way a browser renders it.
  *
- * What these protect: the navigation is the mockup's — one list, in its
- * order, "Nouvelle intention" as its second line, no group titles — and it
- * comes from the registry; the current page is marked machine-readably and
- * only once, counts are announced, and folding the sidebar says out loud
- * what state it is in.
+ * What these protect (LEKA-428): the way home, then three pillars, each
+ * saying what it is for, their pages under them; Activité and À valider
+ * across all three; Administration. Intentions starts open, the others
+ * closed; sections open and close, say so, and are remembered; the section
+ * you are in opens on arrival, and closes again when you leave it. The
+ * current page is marked machine-readably and only once, its section with
+ * it; on the rail a section is an icon whose menu holds its pages. Counts
+ * are announced; a member sees what a member may open.
  */
 
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ROUTES } from "@/config/routes";
+import { SECTIONS_KEY } from "@/components/shell/app-sidebar";
 import { DICTIONARIES } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 
 const pathname = vi.hoisted(() => ({ value: "/overview" }));
+const search = vi.hoisted(() => ({ value: "" }));
 
 /** Everything an owner has, as docs/permissions.md lists it. */
 const OWNER = vi.hoisted(() => [
@@ -33,6 +37,7 @@ const permissions = vi.hoisted(() => ({ value: [] as string[] }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname.value,
+  useSearchParams: () => new URLSearchParams(search.value),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
@@ -62,7 +67,6 @@ const { AppSidebar } = await import("@/components/shell/app-sidebar");
 const { ShellProvider } = await import("@/components/shell/shell-provider");
 
 const fr = DICTIONARIES.fr;
-const SIDEBAR_ROUTES = ROUTES.filter((route) => route.showInSidebar);
 
 async function renderSidebar(props: Partial<Parameters<typeof AppSidebar>[0]> = {}) {
   const rendered = render(
@@ -78,54 +82,103 @@ async function renderSidebar(props: Partial<Parameters<typeof AppSidebar>[0]> = 
   return rendered;
 }
 
+function navigation() {
+  return screen.getByRole("navigation", { name: fr.shell.mainNavigation });
+}
+
+/** The lines a sighted person reads, top to bottom: open sections only. */
+function visibleLabels() {
+  return within(navigation())
+    .getAllByRole("link")
+    .map((link) => link.textContent?.replace(/,.*$/, "").trim());
+}
+
+function sectionToggle(id: string) {
+  return screen.getByTestId(`nav-section-${id}-toggle`);
+}
+
 beforeEach(() => {
   pathname.value = "/overview";
+  search.value = "";
   permissions.value = OWNER;
+  window.localStorage.clear();
 });
 
-describe("the navigation comes from the registry", () => {
-  it("renders every entry it declares, and nothing else", async () => {
+describe("the three pillars", () => {
+  it("are the product, each saying what it is for, its pages under it", async () => {
     await renderSidebar();
 
-    const navigation = screen.getByRole("navigation", { name: fr.shell.mainNavigation });
-    const links = within(navigation).getAllByRole("link");
-
-    // Plus "Nouvelle intention", which is a line of the list but not an entry.
-    expect(links).toHaveLength(SIDEBAR_ROUTES.length + 1);
-    for (const route of SIDEBAR_ROUTES) {
-      expect(within(navigation).getByTestId(`nav-${route.id}`)).toHaveAttribute(
-        "href",
-        route.path,
-      );
+    for (const [id, label, sentence] of [
+      ["intentions", "Intentions", "Dites à LEKA ce que vous voulez accomplir."],
+      ["environment", "Mon environnement", "Le système vivant de votre entreprise."],
+      ["capabilities", "Capacités", "Votre équipe technologique à la demande."],
+    ]) {
+      const toggle = sectionToggle(id);
+      expect(toggle).toHaveTextContent(label);
+      expect(toggle).toHaveTextContent(sentence);
     }
   });
 
-  it("lists them in the mockup's order, as one list with no titles", async () => {
+  it("starts with Intentions open, the rest closed — short enough to hold whole", async () => {
     await renderSidebar();
 
-    const navigation = screen.getByRole("navigation", { name: fr.shell.mainNavigation });
-    const labels = within(navigation)
-      .getAllByRole("link")
-      .map((link) => link.textContent?.replace(/,.*$/, "").trim());
-
-    // docs/product/mockups/01-vue-ensemble.jpeg, top to bottom.
-    expect(labels).toEqual([
+    expect(visibleLabels()).toEqual([
       "Vue d'ensemble",
       "Nouvelle intention",
-      "Intentions",
-      "Mon environnement",
+      "Mes intentions",
       "Activité",
       "À valider",
-      "Capacités",
+    ]);
+    for (const id of ["environment", "capabilities", "administration"]) {
+      expect(sectionToggle(id)).toHaveAttribute("aria-expanded", "false");
+    }
+  });
+
+  it("draws the approved hierarchy, every section open", async () => {
+    const user = userEvent.setup();
+    await renderSidebar();
+
+    for (const id of ["environment", "capabilities", "administration"]) {
+      await user.click(sectionToggle(id));
+    }
+
+    expect(visibleLabels()).toEqual([
+      "Vue d'ensemble",
+      "Nouvelle intention",
+      "Mes intentions",
+      "Vue globale",
+      "Applications",
+      "Infrastructure",
+      "Données",
+      "Dépendances",
+      "Équipes",
+      "Événements",
+      "Domaines",
+      "Capacités disponibles",
+      "Mes capacités",
+      "Configuration",
+      "Activité",
+      "À valider",
       "Sources",
       "Sécurité & gouvernance",
       "Équipe & accès",
       "Facturation",
       "Paramètres",
     ]);
-    for (const title of ["Travail", "Connaissance", "Administration"]) {
-      expect(screen.queryByText(title)).not.toBeInTheDocument();
-    }
+  });
+
+  it("opens each view of « Mon environnement » by its address", async () => {
+    await renderSidebar();
+
+    expect(screen.getByTestId("nav-environment-overview")).toHaveAttribute("href", "/environment");
+    expect(screen.getByTestId("nav-environment-applications")).toHaveAttribute(
+      "href",
+      "/environment?tab=applications",
+    );
+    expect(screen.getByTestId("nav-capabilities-mine")).toHaveAttribute(
+      "href",
+      "/capabilities?tab=mine",
+    );
   });
 
   it("speaks French by default", async () => {
@@ -136,34 +189,120 @@ describe("the navigation comes from the registry", () => {
   });
 });
 
-describe("the primary action", () => {
-  it("is the second line of the list, right under the way home", async () => {
+describe("a section", () => {
+  it("opens and closes, and says which it is", async () => {
+    const user = userEvent.setup();
     await renderSidebar();
 
-    const navigation = screen.getByRole("navigation", { name: fr.shell.mainNavigation });
-    const links = within(navigation).getAllByRole("link");
+    const administration = sectionToggle("administration");
+    await user.click(administration);
 
-    expect(links[1]).toBe(within(navigation).getByTestId("new-intention"));
+    expect(administration).toHaveAttribute("aria-expanded", "true");
+    const lines = document.getElementById(administration.getAttribute("aria-controls") ?? "");
+    expect(lines).toBeVisible();
+    expect(within(lines as HTMLElement).getAllByRole("link").map((link) => link.textContent)).toEqual([
+      "Sources",
+      "Sécurité & gouvernance",
+      "Équipe & accès",
+      "Facturation",
+      "Paramètres",
+    ]);
+
+    await user.click(sectionToggle("intentions"));
+    expect(sectionToggle("intentions")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("link", { name: "Mes intentions" })).not.toBeInTheDocument();
   });
 
-  it("is the thing marked as current on the composer, and Intentions is not", async () => {
-    pathname.value = "/intentions/new";
+  it("is remembered as the person left it", async () => {
+    const user = userEvent.setup();
+    const { unmount } = await renderSidebar();
+
+    await user.click(sectionToggle("intentions"));
+    await user.click(sectionToggle("administration"));
+    unmount();
     await renderSidebar();
 
-    expect(screen.getByTestId("new-intention")).toHaveAttribute("aria-current", "page");
-    expect(screen.getByTestId("nav-intentions")).not.toHaveAttribute("aria-current");
+    expect(JSON.parse(window.localStorage.getItem(SECTIONS_KEY) ?? "{}")).toEqual({
+      intentions: false,
+      administration: true,
+    });
+    expect(sectionToggle("intentions")).toHaveAttribute("aria-expanded", "false");
+    expect(sectionToggle("administration")).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("opens on arrival when the page is in it, whatever was remembered", async () => {
+    window.localStorage.setItem(SECTIONS_KEY, JSON.stringify({ administration: false }));
+    pathname.value = "/settings";
+    await renderSidebar();
+
+    expect(sectionToggle("administration")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("nav-settings")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("closes again when you leave it, unless you opened it", async () => {
+    pathname.value = "/settings";
+    const { rerender } = await renderSidebar();
+    expect(sectionToggle("administration")).toHaveAttribute("aria-expanded", "true");
+
+    pathname.value = "/activity";
+    rerender(
+      <LocaleProvider>
+        <ShellProvider>
+          <AppSidebar collapsed={false} onToggle={() => {}} />
+        </ShellProvider>
+      </LocaleProvider>,
+    );
+
+    expect(sectionToggle("administration")).toHaveAttribute("aria-expanded", "false");
+    // Nothing was remembered for it: the person chose nothing.
+    expect(window.localStorage.getItem(SECTIONS_KEY)).toBeNull();
+  });
+
+  it("survives storage holding something else", async () => {
+    window.localStorage.setItem(SECTIONS_KEY, "not json");
+    await renderSidebar();
+
+    expect(sectionToggle("intentions")).toHaveAttribute("aria-expanded", "true");
   });
 });
 
 describe("the current page", () => {
-  it("is marked once, and on the parent of a detail page", async () => {
+  it("is marked once, and its section with it", async () => {
+    pathname.value = "/intentions";
+    await renderSidebar();
+
+    const marked = within(navigation()).getAllByRole("link", { current: "page" });
+    expect(marked).toHaveLength(1);
+    expect(marked[0]).toHaveAttribute("data-testid", "nav-intentions");
+    expect(screen.getByTestId("nav-section-intentions")).toHaveAttribute("data-active", "true");
+    expect(screen.getByTestId("nav-section-environment")).not.toHaveAttribute("data-active");
+  });
+
+  it("is the composer's line on the composer, and « Mes intentions » is not", async () => {
+    pathname.value = "/intentions/new";
+    await renderSidebar();
+
+    expect(screen.getByTestId("nav-intention-new")).toHaveAttribute("aria-current", "page");
+    expect(screen.getByTestId("nav-intentions")).not.toHaveAttribute("aria-current");
+  });
+
+  it("is the view the address asks for", async () => {
+    pathname.value = "/environment";
+    search.value = "tab=dependencies";
+    await renderSidebar();
+
+    const marked = within(navigation()).getAllByRole("link", { current: "page" });
+    expect(marked).toHaveLength(1);
+    expect(marked[0]).toHaveAttribute("data-testid", "nav-environment-dependencies");
+  });
+
+  it("is the page a detail page belongs to", async () => {
     pathname.value = "/environment/services/payment-api";
     await renderSidebar();
 
-    const marked = screen.getAllByRole("link", { current: "page" });
-
+    const marked = within(navigation()).getAllByRole("link", { current: "page" });
     expect(marked).toHaveLength(1);
-    expect(marked[0]).toHaveAttribute("data-testid", "nav-environment");
+    expect(marked[0]).toHaveAttribute("data-testid", "nav-environment-overview");
   });
 });
 
@@ -190,7 +329,9 @@ describe("availability", () => {
     // Not built yet or not in the plan, the page says so when opened
     // (route-views.test.tsx). The line in the list stays a plain line.
     expect(screen.queryByText("Bientôt")).not.toBeInTheDocument();
-    expect(screen.getByTestId("nav-capabilities")).toHaveTextContent(/^Capacités$/);
+    expect(screen.getByTestId("nav-capabilities-available")).toHaveTextContent(
+      /^Capacités disponibles$/,
+    );
     expect(screen.getByTestId("nav-governance")).toHaveTextContent(/^Sécurité & gouvernance$/);
   });
 
@@ -215,11 +356,34 @@ describe("folding the sidebar", () => {
     expect(onToggle).toHaveBeenCalledOnce();
   });
 
-  it("keeps every label reachable for a screen reader on the rail", async () => {
+  it("keeps every line and every section named on the rail", async () => {
     await renderSidebar({ collapsed: true });
 
-    expect(screen.getByRole("link", { name: new RegExp(fr.nav.billing) })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: fr.nav.newIntention })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: fr.nav.overview })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: fr.nav.activity })).toBeInTheDocument();
+    for (const id of ["intentions", "environment", "capabilities", "administration"]) {
+      expect(sectionToggle(id)).toHaveAccessibleName(
+        fr.nav[id as "intentions" | "environment" | "capabilities" | "administration"],
+      );
+    }
+  });
+
+  it("gives a section's pages in a menu beside its icon, the current one marked", async () => {
+    const user = userEvent.setup();
+    pathname.value = "/environment";
+    search.value = "tab=data";
+    await renderSidebar({ collapsed: true });
+
+    const environment = sectionToggle("environment");
+    expect(environment).toHaveAccessibleName(`${fr.nav.environment}, ${fr.shell.currentSection}`);
+    await user.click(environment);
+
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByText("Le système vivant de votre entreprise.")).toBeInTheDocument();
+    const data = within(menu).getByRole("menuitem", { name: "Données" });
+    expect(data).toHaveAttribute("href", "/environment?tab=data");
+    expect(data).toHaveAttribute("aria-current", "page");
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(8);
   });
 });
 
@@ -235,14 +399,15 @@ describe("what a role may see", () => {
     expect(screen.queryByTestId("nav-governance")).not.toBeInTheDocument();
   });
 
-  it("still gives a member the product", async () => {
+  it("still gives a member the product, all three pillars", async () => {
     permissions.value = MEMBER;
     await renderSidebar();
 
     // Reading the map and creating intentions is most of the value.
-    expect(screen.getByTestId("nav-environment")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-intention-new")).toBeInTheDocument();
     expect(screen.getByTestId("nav-intentions")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-environment-applications")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-capabilities-available")).toBeInTheDocument();
     expect(screen.getByTestId("nav-sources")).toBeInTheDocument();
-    expect(screen.getByTestId("new-intention")).toBeInTheDocument();
   });
 });

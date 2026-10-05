@@ -20,6 +20,7 @@ import { LocaleProvider } from "@/lib/i18n/locale-provider";
 const router = { push: vi.fn(), replace: vi.fn(), back: vi.fn() };
 vi.mock("next/navigation", () => ({
   usePathname: () => "/overview",
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => router,
 }));
 
