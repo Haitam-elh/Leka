@@ -8,7 +8,10 @@
  * said, stated or inferred by which rule, what LEKA reads of it; its
  * versions, any one shown again, two compared; reassembling says whether
  * anything changed; a failed version says why; a role that may not
- * assemble reads, and is offered nothing it cannot do.
+ * assemble reads, and is offered nothing it cannot do. Ranked (LEKA-372):
+ * each element's score and, opened, why that rank — signal by signal, in
+ * words; what was folded into it; what its sources disagree on, every side
+ * with who says so; what was left out, counted by why and listed.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -251,6 +254,7 @@ const READ: ContextRead = {
     until: null,
     retrievers: [],
     strategy: "hybrid",
+    min_relevance: 0.05,
   },
   status: "assembled",
   current_version: 2,
@@ -329,6 +333,8 @@ function version(n: number, over: Partial<ContextVersion> = {}): ContextVersion 
     error: null,
     assembled_at: NOW,
     assembled_by: null,
+    left_out: {},
+    conflicts: 0,
     ...over,
   };
 }
@@ -386,6 +392,7 @@ describe("the context tab", () => {
       limit: 100,
       window_days: 14,
       strategy: "hybrid",
+      min_relevance: 0.05,
     }, expect.anything());
     expect(notify.success).toHaveBeenCalledWith({ title: "Contexte assemblé : 5 élément(s)." });
     expect(await screen.findByTestId("entity-context")).toBeInTheDocument();
@@ -547,5 +554,154 @@ describe("the context tab", () => {
     expect(await screen.findAllByTestId("context-element")).toHaveLength(5);
     expect(screen.queryByRole("button", { name: "Réassembler" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Nouveau contexte" })).not.toBeInTheDocument();
+  });
+
+  it("says how each was ranked, what its sources disagree on, and what was left out", async () => {
+    const ranked = (
+      element: ContextElement,
+      ranking: Partial<NonNullable<ContextElement["ranking"]>>,
+    ): ContextElement => ({
+      ...element,
+      ranking: {
+        score: 0.5,
+        rank: null,
+        topic: 0.5,
+        trust: 0.9,
+        signals: [],
+        conflicts: [],
+        duplicates: [],
+        ...ranking,
+      },
+    });
+    const signal = (
+      name: string,
+      axis: "topic" | "trust",
+      value: number | null,
+      detail: Record<string, unknown> = {},
+    ) => ({ name, axis, value, weight: 0.25, detail, said: name });
+    const tier = `attribute:${BILLING}:tier`;
+    const [billing, checkout, ...rest] = ELEMENTS;
+    api.assembled.mockResolvedValue(
+      assembled(2, {
+        elements: [
+          ranked(billing, {
+            score: 0.96,
+            rank: 1,
+            topic: 1,
+            trust: 0.9,
+            conflicts: [tier],
+            signals: [
+              signal("asked", "topic", 1),
+              signal("confidence", "trust", 0.9),
+              signal("freshness", "trust", 1, { days: 0 }),
+              signal("sources", "trust", 1, {
+                source: "Catalogue",
+                status: "active",
+                health: "healthy",
+              }),
+              signal("quality", "trust", null),
+            ],
+          }),
+          ranked(checkout, {
+            rank: 2,
+            duplicates: [
+              { ref_id: GONE, label: "checkout-web", rule: "same_name", confidence: 0.8 },
+            ],
+          }),
+          ...rest,
+        ],
+        conflicts: [
+          {
+            id: tier,
+            kind: "attribute",
+            subject: BILLING,
+            label: "Billing API",
+            about: "tier",
+            chosen: 1,
+            values: [
+              { value: 1, by: ["Catalogue"] },
+              { value: 2, by: ["a deleted source"] },
+            ],
+            refs: [BILLING],
+            said: "The sources of Billing API disagree on tier.",
+          },
+        ],
+        ranking: {
+          version: 1,
+          min_relevance: 0.05,
+          trust_share: 0.4,
+          weights: {},
+          left_out: { duplicate: 1, low_relevance: 1, budget: 0, ties: 2 },
+          left: [
+            {
+              ref_id: GONE,
+              ref_type: "service",
+              label: "checkout-web",
+              reason: "duplicate",
+              score: 0.42,
+              duplicate_of: CHECKOUT,
+              said: "Probably the same as Checkout.",
+            },
+            {
+              ref_id: DEPLOYED,
+              ref_type: "service",
+              label: "Noise",
+              reason: "low_relevance",
+              score: 0.03,
+              said: "Scored 0.03, under 0.05.",
+            },
+          ],
+        },
+      }),
+    );
+    const user = userEvent.setup();
+    show();
+
+    const rows = await screen.findAllByTestId("context-element");
+    expect(within(rows[0]).getByTestId("element-score")).toHaveTextContent("96 %");
+    expect(within(rows[0]).getByTestId("element-disputed")).toHaveTextContent("Conflit");
+    expect(rows[1]).toHaveTextContent("+1 doublon(s)");
+    expect(within(rows[1]).queryByTestId("element-disputed")).toBeNull();
+
+    await user.click(within(rows[0]).getByRole("button", { name: "Provenance de Billing API" }));
+    const why = within(rows[0]).getByTestId("element-ranking");
+    expect(why).toHaveTextContent("N° 1 · score 96 %");
+    expect(why).toHaveTextContent("Pertinence pour la demande · 100 %");
+    expect(why).toHaveTextContent("Fiabilité · 90 %");
+    const said = within(why)
+      .getAllByTestId("ranking-signal")
+      .map((line) => line.textContent);
+    expect(said).toEqual([
+      "Demandé100 %point de départ demandé",
+      "Résolution90 %la résolution en est sûre à 90 %",
+      "Fraîcheur100 %vu par une source aujourd'hui",
+      "Sources100 %Catalogue : active, saine",
+      "Qualité—jamais mesurée",
+    ]);
+    await user.click(within(rows[1]).getByRole("button", { name: "Provenance de Checkout" }));
+    expect(rows[1]).toHaveTextContent("Doublons regroupéscheckout-web (same_name, 80 %)");
+
+    const conflicts = screen.getByRole("region", { name: "Conflits (1)" });
+    expect(conflicts).toHaveTextContent("Billing API · tier");
+    expect(conflicts).toHaveTextContent("Les sources divergent");
+    expect(conflicts).toHaveTextContent("1 (retenu) · selon Catalogue");
+    expect(conflicts).toHaveTextContent("2 · selon une source supprimée depuis");
+
+    const left = screen.getByRole("region", { name: "Laissés de côté (2)" });
+    expect(left).toHaveTextContent("Seuil 5 % · la fiabilité pèse jusqu'à 40 % du score");
+    expect(left).toHaveTextContent("Doublon1Peu pertinent1Au-delà du budget0");
+    expect(left).toHaveTextContent("2 lien(s) partis avec une extrémité");
+    await user.click(within(left).getByRole("button", { name: "Voir la liste" }));
+    expect(within(left).getByTestId("left-out-list")).toHaveTextContent(
+      "checkout-web · Doublon · 42 % · doublon de Checkout",
+    );
+
+    // The figures say why, and what is disputed is said uncertain.
+    expect(screen.getByTestId("context-used")).toHaveTextContent(
+      "1 doublon(s) · 1 peu pertinent(s) · 0 au-delà du budget",
+    );
+    expect(screen.getByTestId("uncertainties")).toHaveTextContent(
+      "Ses sources se contredisent sur 1 point(s) : voir les conflits.",
+    );
   });
 });

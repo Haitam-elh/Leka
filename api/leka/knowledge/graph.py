@@ -730,7 +730,7 @@ class GraphService:
                 said = _uuid(record.get("source_id")) if isinstance(record, dict) else None
                 if said:
                     ids.add(said)
-        named = await self._graph.sources_named(list(ids))
+        named = await self._graph.sources_state(list(ids))
         return ContextMaterial(
             roots=[root for root in roots if root in entities],
             entities=[
@@ -752,8 +752,10 @@ class GraphService:
                 for edge in edges[:MAX_RELATIONSHIPS]
             ],
             sources=[
-                MaterialSource(source_id=source, kind=kind, name=name)
-                for source, (kind, name) in sorted(named.items(), key=lambda i: i[1][1])
+                MaterialSource(source_id=source, kind=kind, name=name, status=status, health=health)
+                for source, (kind, name, status, health) in sorted(
+                    named.items(), key=lambda i: i[1][1]
+                )
             ],
             truncated=truncated or len(edges) > MAX_RELATIONSHIPS,
             built_at=await self._graph.built_at(),

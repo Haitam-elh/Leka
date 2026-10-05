@@ -1601,6 +1601,38 @@ class ResolutionRepository(WorkspaceScopedRepository):
             .order_by(ResolutionDecision.kind, ResolutionDecision.confidence.desc())
         )
 
+    async def links_among(
+        self, entity_ids: Sequence[uuid.UUID]
+    ) -> list[tuple[uuid.UUID, uuid.UUID, str, float, str]]:
+        """The links between these entities: two things resolution found
+        probably the same and kept apart — each pair once, with its rule,
+        confidence and evidence (LEKA-372: a context folds them)."""
+        ids = list(set(entity_ids))
+        if len(ids) < 2:
+            return []
+        rows = await self.list(
+            self.select(ResolutionDecision)
+            .where(
+                ResolutionDecision.kind == "link",
+                ResolutionDecision.entity_id.in_(ids),
+                ResolutionDecision.other_entity_id.in_(ids),
+            )
+            .order_by(ResolutionDecision.confidence.desc(), ResolutionDecision.entity_id)
+        )
+        seen: set[frozenset[uuid.UUID]] = set()
+        links: list[tuple[uuid.UUID, uuid.UUID, str, float, str]] = []
+        for row in rows:
+            if row.other_entity_id is None:
+                continue
+            pair = frozenset({row.entity_id, row.other_entity_id})
+            if pair in seen:
+                continue
+            seen.add(pair)
+            links.append(
+                (row.entity_id, row.other_entity_id, row.rule, row.confidence, row.evidence)
+            )
+        return links
+
     async def holding(self, key: str) -> Sequence[ResolvedEntity]:
         """The entities a key names: one — or several, when it is ambiguous."""
         held = select(ResolvedKey.entity_id).where(

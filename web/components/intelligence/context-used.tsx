@@ -9,11 +9,12 @@ import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 
 /**
- * The context an output was made from (LEKA-341, LEKA-370/371): which
+ * The context an output was made from (LEKA-341, LEKA-370/371/372): which
  * version, read from which build of the company model, what it holds — the
- * entities, the relationships stated and inferred, the sources, what the
- * budget left out — how it was searched, retriever by retriever, and what
- * that leaves uncertain: a retriever that failed, things left out.
+ * entities, the relationships stated and inferred, the sources, what was
+ * left out and why — how it was searched, retriever by retriever, and what
+ * that leaves uncertain: a retriever that failed, things left out, sources
+ * that contradict each other.
  */
 
 type Dictionary = ReturnType<typeof useDictionary>;
@@ -56,7 +57,21 @@ export function ContextUsedPanel({ assembled }: { assembled: AssembledContext })
     ...(assembled.truncated
       ? [fill(w.leftOut, { count: assembled.dropped, limit: assembled.request.limit })]
       : []),
+    ...(assembled.conflicts?.length
+      ? [fill(w.conflicts, { count: assembled.conflicts.length })]
+      : []),
   ];
+  // Why things were left out (LEKA-372) — or, before, the budget alone.
+  const why = assembled.ranking?.left_out;
+  const droppedNote = why
+    ? fill(w.figures.droppedWhy, {
+        duplicate: why.duplicate ?? 0,
+        low: why.low_relevance ?? 0,
+        budget: why.budget ?? 0,
+      })
+    : assembled.truncated
+      ? fill(w.figures.droppedNote, { limit: assembled.request.limit })
+      : undefined;
   return (
     <div className="space-y-2" data-testid="context-used">
       <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -74,11 +89,7 @@ export function ContextUsedPanel({ assembled }: { assembled: AssembledContext })
         <Figure
           label={w.figures.dropped}
           value={assembled.dropped}
-          note={
-            assembled.truncated
-              ? fill(w.figures.droppedNote, { limit: assembled.request.limit })
-              : undefined
-          }
+          note={droppedNote}
           warn={assembled.truncated}
         />
       </dl>

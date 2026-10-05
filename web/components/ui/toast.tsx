@@ -118,6 +118,10 @@ function ToastClose({
     <ToastPrimitive.Close
       data-slot="toast-close"
       aria-label="Close toast"
+      // Base UI hides it from assistive technology until the stack is
+      // expanded, yet keeps it focusable: a keyboard would reach a button a
+      // screen reader is told is not there (axe: aria-hidden-focus).
+      aria-hidden={false}
       render={render}
       className={cn(
         "relative shrink-0 text-muted-foreground after:absolute after:-inset-2 after:content-[''] hover:text-foreground",

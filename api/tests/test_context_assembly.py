@@ -415,9 +415,12 @@ def test_a_stored_element_reads_back_as_it_was() -> None:
             element.content(),
             element.provenance.model_dump(mode="json"),
             element.reason.model_dump(mode="json"),
+            element.relevance,
+            element.ranking.model_dump(mode="json") if element.ranking else None,
         )
         assert stored == element
-    # What a later contract adds is ignored, not refused.
+    # What a later contract adds is ignored, not refused; an element kept
+    # before LEKA-372 reads back with no ranking.
     element = assemble(_material(), limit=1, strategy="neighbourhood").elements[0]
     later = {**element.provenance.model_dump(mode="json"), "lineage": ["a later field"]}
     assert restore(
@@ -428,5 +431,6 @@ def test_a_stored_element_reads_back_as_it_was() -> None:
         element.content(),
         later,
         element.reason.model_dump(mode="json"),
-    ) == replace(element)
-    assert fingerprint([element]) == fingerprint([replace(element)])
+    ) == replace(element, ranking=None)
+    # How it was ranked is not what it holds.
+    assert fingerprint([element]) == fingerprint([replace(element, ranking=None)])

@@ -15,6 +15,9 @@ grammar.
     ContextRead        a context: what it is for, where it stands
     ContextVersionRead one assembly: when, by what, what it holds, or why not
     ContextDiff        what changed between two versions
+    ElementRanking,    how each thing was ranked, signal by signal; what
+    RankingReport,     was left out and why; what its sources disagree on
+    ContextConflictRead  (LEKA-372)
 
 What a version holds was written once and is read back as it was, whatever
 the model has become since: the types that read it take strings, not the
@@ -48,6 +51,9 @@ MAX_ROOTS = 10
 # How far back the timeline reads (LEKA-371), in days, ending now or `until`.
 DEFAULT_WINDOW_DAYS = 14
 MAX_WINDOW_DAYS = 365
+# Under this score a thing found is left out (LEKA-372): roots and anchors
+# never are. Low enough that a thing found once, not first, still stays.
+MIN_RELEVANCE = 0.05
 
 SubjectType = Literal["entity", "intention", "request"]
 ContextStatus = Literal["assembling", "assembled", "failed", "archived"]
@@ -113,6 +119,13 @@ class ContextCreate(BaseModel):
         default_factory=list, description="Which to combine (hybrid); every one when none."
     )
     strategy: StrategyName = "hybrid"
+    min_relevance: float = Field(
+        default=MIN_RELEVANCE,
+        ge=0,
+        le=1,
+        description="Under this score a thing found is left out — never a root (LEKA-372); "
+        "0 keeps everything the budget holds.",
+    )
 
     @model_validator(mode="after")
     def _starts_somewhere(self) -> ContextCreate:
@@ -141,11 +154,13 @@ class ContextRequest(BaseModel):
     until: datetime | None
     retrievers: list[str]
     strategy: str
+    min_relevance: float = MIN_RELEVANCE
 
     @model_validator(mode="before")
     @classmethod
     def _older(cls, data: object) -> object:
-        """A request kept before LEKA-371 had none of these: they read empty."""
+        """A request kept before LEKA-371 had none of these: they read empty
+        — and before LEKA-372, the default threshold."""
         if isinstance(data, dict):
             return {
                 "query": None,
@@ -286,6 +301,145 @@ class ElementRelationship(BaseModel):
     attributes: dict[str, object]
 
 
+SignalName = Literal[
+    "asked",
+    "retrieval",
+    "proximity",
+    "ends",
+    "confidence",
+    "quality",
+    "freshness",
+    "sources",
+    "corroboration",
+    "lifecycle",
+    "consistency",
+    "origin",
+]
+
+
+class RankingSignal(BaseModel):
+    """One thing a rank was read from (LEKA-372)."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    name: str = Field(
+        description="asked, retrieval, proximity, ends — how much it is about the request; "
+        "confidence, quality, freshness, sources, corroboration, lifecycle, consistency, "
+        "origin — how far it can be relied on."
+    )
+    axis: Literal["topic", "trust"]
+    value: float | None = Field(
+        description="0 to 1; none when nothing measures it — left out of its axis, never guessed."
+    )
+    weight: float = Field(description="What it counts for on its axis.")
+    detail: dict[str, object] = Field(
+        default_factory=dict,
+        description="What it was read from: the retrievers and ranks, the steps, the days since "
+        "a source showed it, the best source and its state, how many sources…",
+    )
+    said: str = Field(description="It, in words.")
+
+
+class FoldedRead(BaseModel):
+    """A thing folded into another: entity resolution linked them as
+    probably the same (docs/resolution.md)."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    ref_id: uuid.UUID
+    label: str
+    rule: str = Field(description="The rule that linked them.")
+    confidence: float
+
+
+class ElementRanking(BaseModel):
+    """How an element was ranked (LEKA-372): its score, its place, and every
+    signal it was read from."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    score: float = Field(
+        description="What the order follows, 0 to 1: topic * (0.6 + 0.4 * trust) — for a "
+        "relationship, its weaker end's score * the same factor of its own trust."
+    )
+    rank: int | None = Field(description="Its place among the entities kept, from 1.")
+    topic: float = Field(description="How much it is about the request, 0 to 1.")
+    trust: float | None = Field(description="How far it can be relied on, 0 to 1.")
+    signals: list[RankingSignal]
+    conflicts: list[str] = Field(
+        default_factory=list, description="The ids of the conflicts it is part of."
+    )
+    duplicates: list[FoldedRead] = Field(
+        default_factory=list, description="What was folded into it, probably the same thing."
+    )
+
+
+class LeftOutRead(BaseModel):
+    """A thing found and left out (LEKA-372), and why."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    ref_id: uuid.UUID
+    ref_type: str
+    label: str
+    reason: Literal["duplicate", "low_relevance", "budget"]
+    score: float
+    duplicate_of: uuid.UUID | None = Field(
+        default=None, description="What it was folded into, when a duplicate."
+    )
+    said: str
+
+
+class RankingReport(BaseModel):
+    """How a version was ranked (LEKA-372): the policy, and what was left
+    out — counted by why, and the best of it listed."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    version: int = Field(description="Raised each time the ranking ranks differently.")
+    min_relevance: float
+    trust_share: float = Field(description="How much trust can move a score: 0.4 is 40 %.")
+    weights: dict[str, float] = Field(description="Each signal's weight on its axis.")
+    left_out: dict[str, int] = Field(
+        description="duplicate, low_relevance, budget — entities; ties — relationships left "
+        "out with an end."
+    )
+    left: list[LeftOutRead] = Field(description="What was left out, the best first, at most 100.")
+
+
+class ConflictValue(BaseModel):
+    """One side of a conflict: a value, or a thing, and who says so."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    value: object
+    ref_id: uuid.UUID | None = Field(default=None, description="The thing, when it is one.")
+    by: list[str] = Field(description="The sources that say so, or the rule.")
+
+
+class ContextConflictRead(BaseModel):
+    """Something the context's sources disagree on (LEKA-372): said, every
+    side with who says so — never silently merged."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str
+    kind: Literal["attribute", "duplicates", "competing", "gone"] = Field(
+        description="attribute — its sources give different values; duplicates — two things "
+        "probably the same disagree; competing — two of a kind that admits one: owners, "
+        "managers, leads, parents; gone — a tie still stated to a thing gone from every source."
+    )
+    subject: uuid.UUID = Field(description="The entity it is about.")
+    label: str
+    about: str = Field(description="The attribute, or the kind of tie: owner, manager…")
+    chosen: object | None = Field(
+        default=None, description="What the company model shows, when it chose."
+    )
+    values: list[ConflictValue]
+    refs: list[uuid.UUID] = Field(description="The elements it involves.")
+    said: str
+
+
 class ContextElementRead(BaseModel):
     """One thing a context holds — an entity or a relationship — what it
     said, where it came from, why it is there."""
@@ -304,6 +458,9 @@ class ContextElementRead(BaseModel):
     relevance: float | None = Field(
         description="How relevant, 0 to 1: how high and by how many retrievers it was found "
         "(LEKA-371); 1 for a root; none for a tie, and before LEKA-371."
+    )
+    ranking: ElementRanking | None = Field(
+        default=None, description="How it was ranked (LEKA-372); none before."
     )
     text: str = Field(description="It, in one line, for a model to read.")
 
@@ -387,6 +544,12 @@ class AssembledContext(BaseModel):
     )
     truncated: bool = Field(description="More was found than the budget holds.")
     dropped: int = Field(description="How many found were left out.")
+    ranking: RankingReport | None = Field(
+        default=None, description="How it was ranked, and what was left out why (LEKA-372)."
+    )
+    conflicts: list[ContextConflictRead] = Field(
+        default_factory=list, description="What its sources disagree on (LEKA-372)."
+    )
     model_built_at: datetime | None = Field(description="The build of the model it was read from.")
     model_version: int
     assembled_at: datetime
@@ -433,6 +596,11 @@ class ContextVersionRead(BaseModel):
     dropped: int
     summary: ContextSummary
     retrieval: list[RetrieverRunRead]
+    left_out: dict[str, int] = Field(
+        default_factory=dict,
+        description="What was left out, by why: duplicate, low_relevance, budget, ties (LEKA-372).",
+    )
+    conflicts: int = Field(default=0, description="How many conflicts it says (LEKA-372).")
     fingerprint: str = Field(description="What it holds, hashed: equal when nothing changed.")
     error: str | None
     assembled_at: datetime

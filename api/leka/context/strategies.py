@@ -34,8 +34,8 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Protocol
 
-from leka.context.assembly import Relevance
 from leka.context.language import words
+from leka.context.ranking import Relevance
 from leka.context.retrieval import (
     Ask,
     Content,
@@ -58,6 +58,13 @@ ANCHORS = 3
 # And what the timeline also reads around: what is one step from them.
 NEAR = 10
 EVERY_ONE_FAILED = "Every retriever failed: nothing could be read of the company model."
+
+
+def pool(limit: int) -> int:
+    """How many things to read for a budget of `limit`: more than it holds,
+    so that what the ranking folds or leaves out (LEKA-372) leaves room for
+    the next best, not a hole."""
+    return min(limit * 2, limit + 100)
 
 
 @dataclass(frozen=True)
@@ -110,7 +117,7 @@ class Neighbourhood:
             depth=request.depth,
             types=[RelationshipType(kind) for kind in request.relationships],
             environment=request.environment,
-            limit=request.limit,
+            limit=pool(request.limit),
         )
         if material is None:
             return None
@@ -188,12 +195,13 @@ class Hybrid:
                     depths.setdefault(hit.entity_id, hit.depth)
         ranked = sorted(relevance, key=lambda i: (-relevance[i].score, str(i)))
         chosen = list(dict.fromkeys([*roots, *anchors, *ranked]))
+        read = pool(request.limit)
         material = await tools.graph.gathered(
-            {entity_id: depths.get(entity_id) for entity_id in chosen[: request.limit]},
+            {entity_id: depths.get(entity_id) for entity_id in chosen[:read]},
             roots=roots,
             types=[RelationshipType(kind) for kind in request.relationships],
             environment=request.environment,
-            truncated=len(chosen) > request.limit or any(r.truncated for _, r in found),
+            truncated=len(chosen) > read or any(r.truncated for _, r in found),
         )
         return Gathered(material=material, relevance=relevance, anchors=anchors, retrieval=reports)
 

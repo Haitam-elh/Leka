@@ -57,7 +57,9 @@ test.describe("the core screens", () => {
 });
 
 test.describe("what a screen opens", () => {
-  test("an entity's context, assembled, an element's provenance open", async ({ page }) => {
+  test("an entity's context, assembled, an element's provenance and the left out open", async ({
+    page,
+  }) => {
     await openContextTab(page);
     await page.getByRole("button", { name: "Assembler le contexte" }).click();
     await page
@@ -65,6 +67,12 @@ test.describe("what a screen opens", () => {
       .getByRole("button", { name: "Provenance de payment-api", exact: true })
       .click();
     await expect(page.getByTestId("context-provenance")).toBeVisible();
+    // How it was ranked, what was left out (LEKA-372), open too.
+    await expect(page.getByTestId("element-ranking")).toBeVisible();
+    await page
+      .getByTestId("context-left-out")
+      .getByRole("button", { name: "Voir la liste" })
+      .click();
 
     await expectNoViolations(page);
   });

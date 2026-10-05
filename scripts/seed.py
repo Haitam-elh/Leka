@@ -31,7 +31,7 @@ from leka.connectors import Source, SourceKind, SourceStatus
 from leka.core.security import hash_password
 from leka.db import session_factory, system_scope
 from leka.identity import User as Account
-from leka.ingestion import RESOLVER_VERSION, ResolvedEntity
+from leka.ingestion import RESOLVER_VERSION, ResolutionDecision, ResolvedEntity
 from leka.knowledge import Entity, EntityType, Relationship, RelationshipType, search_fields
 from leka.platform import Membership, Role, Workspace
 
@@ -183,6 +183,25 @@ async def _build_demo_workspace() -> None:
                 "team": "payments",
             },
         )
+        # Datadog watches it too, and its SLO says 99.9, not 99.95: resolution
+        # chose GitHub's and kept both (LEKA-372: a context says so).
+        payment.provenance = {
+            **payment.provenance,
+            "sources": [
+                *payment.provenance["sources"],
+                {"source_id": str(datadog.id), "key": "service:payment-api", "kind": "key"},
+            ],
+            "conflicts": [
+                {
+                    "attribute": "sla",
+                    "chosen": "99.95",
+                    "values": [
+                        {"value": "99.95", "source_id": str(github.id)},
+                        {"value": "99.9", "source_id": str(datadog.id)},
+                    ],
+                }
+            ],
+        }
         auth = entity(
             github,
             EntityType.SERVICE,
@@ -246,6 +265,16 @@ async def _build_demo_workspace() -> None:
             "gh:t-berger",
             "Thomas Berger",
             {"email": "thomas.berger@acme.example", "team": "platform", "role": "sre"},
+        )
+        # Jira's account for Nadia: resolution could not be sure it is her —
+        # an address of her own — so it linked them, kept apart (below).
+        nadia_jira = entity(
+            jira,
+            EntityType.PERSON,
+            "jira:nadia.k",
+            "Nadia K.",
+            {"email": "nadia.k@acme.example", "team": "payments"},
+            confidence=0.9,
         )
         mei = entity(
             github,
@@ -351,6 +380,7 @@ async def _build_demo_workspace() -> None:
         edge(infra, users, cluster, RelationshipType.DEPLOYED_TO)
 
         edge(github, nadia, payment, RelationshipType.OWNS)
+        edge(jira, nadia_jira, payment, RelationshipType.OWNS)
         edge(github, thomas, auth, RelationshipType.OWNS)
         edge(github, thomas, users, RelationshipType.OWNS)
         edge(github, mei, repository, RelationshipType.MEMBER_OF)
@@ -383,6 +413,19 @@ async def _build_demo_workspace() -> None:
                     resolved_at=NOW,
                 )
             )
+        await session.flush()
+        session.add(
+            ResolutionDecision(
+                workspace_id=workspace.id,
+                entity_id=nadia_jira.id,
+                other_entity_id=nadia.id,
+                kind="link",
+                rule="similar_name",
+                confidence=0.78,
+                keys=["jira:nadia.k", "gh:nadia-k"],
+                evidence="Nadia K. ~ Nadia Kowalski: same team, a name that begins hers.",
+            )
+        )
 
         await session.commit()
 

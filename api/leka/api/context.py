@@ -59,7 +59,7 @@ from leka.context import (
 from leka.core.errors import ErrorCode
 from leka.db import SortableField
 from leka.governance import Permission, Principal, require_permission
-from leka.ingestion import ContentRepository
+from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.knowledge import GraphRepository, GraphService
 
 router = APIRouter(prefix="/context", tags=["context"])
@@ -85,6 +85,7 @@ def _service(session: SessionDep, principal: Principal) -> ContextService:
         ContextRepository(session, principal.workspace_id),
         GraphService(GraphRepository(session, principal.workspace_id)),
         content=ContentRepository(session, principal.workspace_id),
+        resolution=ResolutionRepository(session, principal.workspace_id),
     )
 
 

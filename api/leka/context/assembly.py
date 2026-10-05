@@ -15,14 +15,16 @@ order, is decided in one place a test can read whole.
     text()         an element in one line, for a model to read
 
 THE ORDER IS THE BUDGET'S. The roots first, as asked — or, none asked,
-what the request's words found best (its anchors); then the most relevant
-(LEKA-371: how high, and by how many retrievers, a thing was found), the
-nearest, the surest, by name. Each entity taken brings the relationships
-between it and those already taken — the surest first, a source's word
-before a rule's — so a context cut short holds what matters most and how
-it is tied, never a relationship whose end it lacks. What does not fit is
-dropped deliberately, counted, and said (`truncated`), not lost by
-accident.
+what the request's words found best (its anchors); then the best scored
+(ranking.py, LEKA-372: how much a thing is about the request — how high
+and by how many retrievers it was found, how near — and how far it can be
+relied on), the nearest, the surest, by name. Duplicates are folded and
+the barely relevant left out before the budget is spent. Each entity taken
+brings the relationships between it and those already taken — the surest
+first, a source's word before a rule's — so a context cut short holds what
+matters most and how it is tied, never a relationship whose end it lacks.
+What does not fit is dropped deliberately, counted, and said (`truncated`,
+and why in the ranking report), not lost by accident.
 
 WHY EACH IS THERE. A root was asked for; a thing tied to a root or an
 anchor was reached from it, through a relationship, so many steps away —
@@ -45,28 +47,43 @@ import json
 import uuid
 from collections import Counter, deque
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
+from datetime import datetime
 
+from leka.context.ranking import (
+    RANKING_VERSION,
+    TRUST_SHARE,
+    WEIGHTS,
+    Link,
+    Relevance,
+    left_for_budget,
+    rank,
+    tie_ranking,
+)
 from leka.context.schemas import (
+    MIN_RELEVANCE,
+    ContextConflictRead,
     ContextSummary,
     ElementEnd,
     ElementEntity,
     ElementProvenance,
+    ElementRanking,
     ElementReason,
     ElementRelationship,
     ElementSource,
-    RetrievalMatch,
+    LeftOutRead,
+    RankingReport,
 )
 from leka.knowledge import ContextMaterial, MaterialEntity, MaterialRelationship, MaterialSource
 
 # What a refresh must not count as a change: being seen again is not news,
 # nor a source renamed.
 VOLATILE = frozenset({"last_seen_at", "changed_at", "name"})
-# Where a thing tied to no root goes, among the rest: after the tied.
-MAX_DEPTH_UNKNOWN = 99
 # The attributes a line of text shows, at most, and how long each.
 TEXT_ATTRIBUTES = 8
 TEXT_VALUE = 80
+# What a ranking report lists of what was left out, at most.
+MAX_LEFT = 100
 
 
 @dataclass(frozen=True)
@@ -82,20 +99,12 @@ class Element:
     provenance: ElementProvenance
     reason: ElementReason
     relevance: float | None = None
+    ranking: ElementRanking | None = None
 
     def content(self) -> dict[str, object]:
         said = self.entity or self.relationship
         assert said is not None
         return said.model_dump(mode="json")
-
-
-@dataclass(frozen=True)
-class Relevance:
-    """How relevant a thing was found (LEKA-371), 0 to 1, and every way it
-    was found, the surest first."""
-
-    score: float
-    matches: list[RetrievalMatch]
 
 
 @dataclass(frozen=True)
@@ -105,6 +114,8 @@ class Assembly:
     truncated: bool
     summary: ContextSummary
     fingerprint: str
+    ranking: RankingReport | None = None
+    conflicts: list[ContextConflictRead] = field(default_factory=list)
 
 
 def assemble(
@@ -114,9 +125,13 @@ def assemble(
     strategy: str,
     relevance: Mapping[uuid.UUID, Relevance] | None = None,
     anchors: Sequence[uuid.UUID] = (),
+    links: Sequence[Link] = (),
+    now: datetime | None = None,
+    min_relevance: float = MIN_RELEVANCE,
 ) -> Assembly:
     """The elements of a context from `material`, `limit` at most — the
-    most relevant first when retrievers said how relevant (LEKA-371)."""
+    best scored first (LEKA-372), duplicates folded, the barely relevant
+    left out, conflicts said."""
     entities = {item.entity.id: item for item in material.entities}
     named = {source.source_id: source for source in material.sources}
     edges = sorted(
@@ -130,19 +145,15 @@ def assemble(
         for i, item in entities.items()
     }
     found = relevance or {}
-
-    def score(i: uuid.UUID) -> float:
-        return found[i].score if i in found else 0.0
-
-    order = starts + sorted(
-        (i for i in entities if i not in set(starts)),
-        key=lambda i: (
-            -score(i),
-            depths[i] if depths[i] is not None else MAX_DEPTH_UNKNOWN,
-            -entities[i].entity.confidence,
-            entities[i].entity.name.casefold(),
-            str(i),
-        ),
+    ranked = rank(
+        material,
+        starts=starts,
+        depths=depths,
+        nearest={i: way[0] for i, way in reached.items()},
+        relevance=relevance,
+        links=links,
+        now=now,
+        min_relevance=min_relevance,
     )
     touching: dict[uuid.UUID, list[MaterialRelationship]] = {}
     for edge in edges:
@@ -152,10 +163,13 @@ def assemble(
     out: list[Element] = []
     taken: set[uuid.UUID] = set()
     tied: set[uuid.UUID] = set()
-    for entity_id in order:
+    left: list[LeftOutRead] = list(ranked.left)
+    for entity_id in ranked.order:
         if len(out) >= limit:
-            break
+            left.append(left_for_budget(entities[entity_id], ranked.rankings[entity_id], limit))
+            continue
         item = entities[entity_id]
+        taken.add(entity_id)
         out.append(
             _entity(
                 item,
@@ -166,26 +180,78 @@ def assemble(
                 reached=reached.get(entity_id),
                 found=found.get(entity_id),
                 scored=relevance is not None,
+                ranking=ranked.rankings[entity_id].model_copy(update={"rank": len(taken)}),
             )
         )
-        taken.add(entity_id)
         for edge in touching.get(entity_id, []):
             if len(out) >= limit:
                 break
             edge_id = edge.relationship.id
             if edge_id in tied or not _ends(edge) <= taken:
                 continue
-            out.append(_relationship(edge, entities, named, strategy, depths))
+            tie = edge.relationship
+            ends = (tie.from_entity_id, tie.to_entity_id)
+            out.append(
+                _relationship(
+                    edge,
+                    entities,
+                    named,
+                    strategy,
+                    depths,
+                    ranking=tie_ranking(
+                        edge,
+                        (ranked.rankings[ends[0]], ranked.rankings[ends[1]]),
+                        names=(entities[ends[0]].entity.name, entities[ends[1]].entity.name),
+                        named=named,
+                        disputes=[c.id for c in ranked.conflicts if edge_id in c.refs],
+                    ),
+                )
+            )
             tied.add(edge_id)
 
+    # What the context holds is what it says is disputed: a conflict about
+    # a thing it left out is that thing's.
+    conflicts = sorted(
+        (c for c in ranked.conflicts if c.subject in taken),
+        key=lambda c: (c.kind, c.label.casefold(), c.about, c.id),
+    )
+    said = {c.id for c in conflicts}
+    out = [_disputing(element, said) for element in out]
     dropped = len(entities) + len(edges) - len(out)
+    counted = Counter(item.reason for item in left)
+    report = RankingReport(
+        version=RANKING_VERSION,
+        min_relevance=min_relevance,
+        trust_share=TRUST_SHARE,
+        weights=WEIGHTS,
+        left_out={
+            "duplicate": counted["duplicate"],
+            "low_relevance": counted["low_relevance"],
+            "budget": counted["budget"],
+            "ties": len(edges) - len(tied),
+        },
+        left=sorted(left, key=lambda item: (-item.score, item.label.casefold(), str(item.ref_id)))[
+            :MAX_LEFT
+        ],
+    )
     return Assembly(
         elements=out,
         dropped=dropped,
         truncated=material.truncated or dropped > 0,
         summary=summary(out),
         fingerprint=fingerprint(out),
+        ranking=report,
+        conflicts=conflicts,
     )
+
+
+def _disputing(element: Element, said: set[str]) -> Element:
+    """An element with only the conflicts its context says."""
+    ranking = element.ranking
+    if ranking is None or all(c in said for c in ranking.conflicts):
+        return element
+    kept = [c for c in ranking.conflicts if c in said]
+    return replace(element, ranking=ranking.model_copy(update={"conflicts": kept}))
 
 
 def restore(
@@ -197,8 +263,10 @@ def restore(
     provenance: dict[str, object],
     reason: dict[str, object],
     relevance: float | None = None,
+    ranking: dict[str, object] | None = None,
 ) -> Element:
-    """An element as a version stored it, read back."""
+    """An element as a version stored it, read back — its ranking, none
+    before LEKA-372."""
     return Element(
         kind=kind,
         ref_id=ref_id,
@@ -211,6 +279,7 @@ def restore(
         provenance=ElementProvenance.model_validate(provenance),
         reason=ElementReason.model_validate(reason),
         relevance=relevance,
+        ranking=ElementRanking.model_validate(ranking) if ranking else None,
     )
 
 
@@ -345,7 +414,8 @@ def text(element: Element) -> str:
         ][:TEXT_ATTRIBUTES]
         if shown:
             line += " — " + "; ".join(shown)
-        return line + (f" [from {', '.join(by)}]" if by else "")
+        line += f" [from {', '.join(by)}]" if by else ""
+        return line + _disputed(element)
     tie = element.relationship
     assert tie is not None
     line = f'"{tie.start.name}" {tie.type} "{tie.end.name}"'
@@ -354,6 +424,28 @@ def text(element: Element) -> str:
     elif by:
         line += f" — stated by {', '.join(by)}"
     return line + f", confidence {tie.confidence:.2f}"
+
+
+def _disputed(element: Element) -> str:
+    """What its sources disagree on, in a line: a model reading the context
+    must not take the value chosen for the only one said (LEKA-372)."""
+    names = {
+        s.source_id: s.name or s.kind or "a deleted source" for s in element.provenance.sources
+    }
+    parts = []
+    for conflict in element.provenance.conflicts:
+        about = conflict.get("attribute")
+        values = _dicts(conflict.get("values"))
+        distinct = {json.dumps(v.get("value"), sort_keys=True, default=str) for v in values}
+        if not about or len(distinct) < 2:
+            continue
+        sides = []
+        for value in values:
+            source = _uuid(value.get("source_id"))
+            who = names.get(source, "a source") if source is not None else "a source"
+            sides.append(f"{_short(value.get('value'))} by {who}")
+        parts.append(f"{about}: {', '.join(sides)}")
+    return f" — disputed: {'; '.join(parts)}" if parts else ""
 
 
 def _reached(
@@ -392,6 +484,7 @@ def _entity(
     reached: tuple[uuid.UUID, uuid.UUID | None, int] | None,
     found: Relevance | None,
     scored: bool,
+    ranking: ElementRanking | None = None,
 ) -> Element:
     entity, provenance = item.entity, item.provenance
     sources: dict[tuple[uuid.UUID, str | None], ElementSource] = {}
@@ -458,6 +551,7 @@ def _entity(
             retrievers=found.matches if found else [],
         ),
         relevance=(1.0 if root else found.score if found else 0.0) if scored else None,
+        ranking=ranking,
     )
 
 
@@ -467,6 +561,8 @@ def _relationship(
     named: dict[uuid.UUID, MaterialSource],
     strategy: str,
     depths: Mapping[uuid.UUID, int | None],
+    *,
+    ranking: ElementRanking | None = None,
 ) -> Element:
     tie = edge.relationship
     start, end = entities[tie.from_entity_id], entities[tie.to_entity_id]
@@ -539,6 +635,7 @@ def _relationship(
             via=None,
             retrievers=[],
         ),
+        ranking=ranking,
     )
 
 

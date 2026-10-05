@@ -5,8 +5,9 @@ from one source's records. It is answered from what the company knows of
 billing and what surrounds it: the services it is, what they depend on,
 what happened to them this week, the page that says how to recover them —
 each piece with where it came from. The context engine (`leka/context`)
-finds that (LEKA-371), assembles it, keeps it version by version
-(LEKA-370), and hands it to whatever analyses the request.
+finds that (LEKA-371), ranks it — what matters most first, duplicates
+folded, disagreements said (LEKA-372) — assembles it, keeps it version by
+version (LEKA-370), and hands it to whatever analyses the request.
 
 ```
  sources ─▶ … ─▶ company model (leka.knowledge)      records' own text (leka.ingestion)
@@ -15,6 +16,9 @@ finds that (LEKA-371), assembles it, keeps it version by version
                         │                                        │
                         ▼                                        ▼
  a request ─▶ retrievers: graph · search · content · timeline · paths ─▶ fused (relevance)
+                        │
+                        ▼
+              ranking (topic × trust, duplicates folded, barely relevant left out, conflicts)
                         │
                         ▼
               assembly (order, budget, provenance, why) ─▶ a version, kept
@@ -34,8 +38,8 @@ dependency rule: `intentions → context → knowledge → ingestion`).
 | | Table | What it holds |
 |---|---|---|
 | **Context** | `contexts` | what it is for — a title, a `purpose` in the asker's words, a `subject` (an entity today, an intention with LEKA-384, or a bare request) — what it asks for (its **request**), where it stands (`status`), its latest version (`current_version`), who made it, when it was last checked (`refreshed_at`), archived when |
-| **Version** | `context_versions` | one assembly, **never changed**: when, why (`trigger`: created or refreshed, and a `reason`), by which strategy and its version, under which contract, the request it answered, **which build of the model** it read (`model_built_at`, `model_version`), how many elements, whether the budget cut (`truncated`, `dropped`), counts (`summary`), **what each retriever did** (`retrieval`), a `fingerprint` of what it holds — or why it failed (`error`) |
-| **Element** | `context_elements` | one thing a version holds — an entity or a relationship — at its `position`: its id and type in the model, a label, **what it said then** (`content`), **where it came from** (`provenance`), **why it is there** (`reason`: every retriever that found it), **how relevant** (`relevance`, 0 to 1) |
+| **Version** | `context_versions` | one assembly, **never changed**: when, why (`trigger`: created or refreshed, and a `reason`), by which strategy and its version, under which contract, the request it answered, **which build of the model** it read (`model_built_at`, `model_version`), how many elements, whether the budget cut (`truncated`, `dropped`), counts (`summary`), **what each retriever did** (`retrieval`), **how it was ranked** (`ranking`: the policy, what was left out and why, what its sources disagree on), a `fingerprint` of what it holds — or why it failed (`error`) |
+| **Element** | `context_elements` | one thing a version holds — an entity or a relationship — at its `position`: its id and type in the model, a label, **what it said then** (`content`), **where it came from** (`provenance`), **why it is there** (`reason`: every retriever that found it), **how relevant** it was found (`relevance`, 0 to 1), **how it was ranked** (`ranking`: its score, its place, every signal it was read from) |
 
 **Kept whole, not as ids.** The model moves on: an attribute changes, a
 relationship goes, an entity is removed. A version must say, months later,
@@ -55,6 +59,7 @@ The request a context answers:
 | `window_days`, `until` | 1 to 365, default 14; default now | the window what happened is read in |
 | `retrievers` | default all | which to combine |
 | `strategy` | `hybrid` (default) or `neighbourhood` | how the elements are gathered (§ 3) |
+| `min_relevance` | 0 to 1, default 0.05 | under this score a thing found is left out — never a root (§ 5); 0 keeps all the budget holds |
 
 A request must start somewhere: roots, or words that say something —
 "pourquoi ?" alone is refused (422).
@@ -132,7 +137,10 @@ entity, and the words.
 retriever adds weight / (10 + r); its **relevance** is the sum over the
 retrievers that found it, scaled from 0 to 1 by the most any thing could
 have had — found first by every retriever that ran, it is 1. A thing found
-high by several is surer than a thing found high by one. Each element keeps
+high by several is surer than a thing found high by one. **Equally near is
+equally ranked** (LEKA-372): what the graph found one step away is all at
+rank 1, what it found two steps away all after them — not first to tenth by
+name, which made two things equally near unequally relevant. Each element keeps
 **every way it was found** (`reason.retrievers`: the retriever, its rank,
 what it added, on what), the surest first. A root's relevance is 1.
 
@@ -168,18 +176,94 @@ failed retriever in orange with why. When **every** retriever that ran
 failed, the version is `failed` with "Every retriever failed" — the next
 refresh, the database back, makes a version that holds something.
 
-## 5. How it is assembled: order and budget
+## 5. How it is ranked: relevance, trust, what is left out
+
+`leka/context/ranking.py`, pure — no database, no clock: the time it is is
+given. Each entity gathered is read on **two axes**, signal by signal, and
+every signal is kept with what it was read from (`detail`) and in words
+(`said`):
+
+| Axis | Signal | Read from | Weight |
+|---|---|---|---:|
+| **topic** — how much it is about the request | `asked` | a root: 1, whatever else | — |
+| | `retrieval` | how high, and by how many retrievers, it was found (§ 3) | 1 |
+| | `proximity` | 1 / (1 + steps) from the nearest root or anchor; 0 when tied to none | bonus 0.25 |
+| **trust** — how far it can be relied on | `confidence` | how sure entity resolution was of it | 0.25 |
+| | `quality` | how good its records were (validation, LEKA-358) | 0.15 |
+| | `freshness` | how lately a source showed it: halved every 30 days | 0.15 |
+| | `sources` | how its best source is doing: active and healthy 1, active 0.8, degraded 0.6, failing or disabled 0.3, deleted 0.2 | 0.15 |
+| | `corroboration` | how many sources say it: one 0.6, two 0.85, three or more 1 | 0.10 |
+| | `lifecycle` | active 1, dormant 0.6, archived 0.3, removed 0.1 | 0.10 |
+| | `consistency` | nothing disputed 1, once 0.6, more 0.4 | 0.10 |
+
+```
+topic = retrieval + (1 − retrieval) × 0.25 × proximity        (a root: 1)
+trust = the weighted mean of the trust signals something measures
+score = topic × (0.6 + 0.4 × trust)
+```
+
+**Trust moves a score by up to 40 %.** Of two things found as high, the
+better sourced comes first; nothing becomes relevant for being well
+sourced — a thing found much higher keeps its place over a thing found low
+from a perfect source. Being near the roots is a bonus on what retrieval
+left, never a cost: a thing tied to nothing keeps what retrieval said. A
+neighbourhood, with no retriever, is ranked on nearness alone. **A signal
+nothing measures** — a quality never computed, a source whose state was
+never read, a thing never seen — is said unknown and left out of the mean,
+never guessed.
+
+**What is left out, and why** — never a root, nor an anchor:
+
+| `reason` | |
+|---|---|
+| `duplicate` | entity resolution linked it to another as probably the same thing — a link of 0.6 or more ([resolution.md](resolution.md)): the surer is kept — the more trusted, then the better scored — the other folded into it, said on both (`ranking.duplicates`, `duplicate_of`). A root is never folded away |
+| `low_relevance` | its score is under the request's `min_relevance` (0.05 by default: low enough that a thing found once, not first, still stays) |
+| `budget` | beyond the limit, after the order below |
+
+Each is in the version's ranking report — counted by why (`left_out`, and
+`ties`: relationships that went with an end), the best 100 listed with
+their score and why (`left`). A strategy reads more than the budget holds
+(twice, at most a hundred more), so what is folded or left out leaves room
+for the next best, not a hole.
+
+**Conflicts are said, not merged** (`conflicts`, each with every side and
+who says so — a source by name, or a rule):
+
+| `kind` | When |
+|---|---|
+| `attribute` | its sources give different values — resolution chose one and kept every one |
+| `duplicates` | two things probably the same, one folded into the other, give different values: said, not lost with the one folded |
+| `competing` | two of a kind a thing has one of — owners (`owned_by`, `owns`), a manager (`reports_to`), a lead (`led_by`), a parent (`child_of`). Two owners folded into one are no competition |
+| `gone` | a source still states a tie to a thing gone from every source |
+
+What a conflict involves carries its id (`ranking.conflicts`) and a lower
+consistency: disputed is not wrong, but it is less sure. A conflict about
+a thing left out is that thing's, not the context's. The line a model reads
+says it: `service "payment-api" … [from acme-eu, acme/backend] — disputed:
+sla: 99.95 by acme/backend, 99.9 by acme-eu`.
+
+**A relationship** is as relevant as its weaker end, and as sure as its
+own trust: its confidence (0.5), said by a source or inferred by a rule
+(1 or 0.7, weight 0.3), by how many sources (0.2).
+
+**Traceable.** Every element says its `ranking`: its score, its place among
+the entities (`rank`, from 1), both axes and every signal; the version, the
+policy it was ranked under (`version`, `min_relevance`, `trust_share`,
+`weights`). A version made before LEKA-372 says no ranking rather than one
+made up.
+
+## 6. How it is assembled: order and budget
 
 `leka/context/assembly.py`, pure — no database, no clock.
 
 **The order is the budget's.** The roots first, as asked — or, none asked,
-the anchors; then the **most relevant**, the nearest, the surest, by name.
-Each entity taken brings, right after it, the relationships between it and
-those already taken — a source's word before a rule's, the surest first.
-So a context cut short holds what matters most and how it is tied, and
-**never a relationship whose end it lacks**. What does not fit is dropped
-deliberately, counted (`dropped`) and said (`truncated`) — also when a
-retriever itself stopped short.
+the anchors; then the **best scored** (§ 5), the nearest, the surest, by
+name. Each entity taken brings, right after it, the relationships between
+it and those already taken — a source's word before a rule's, the surest
+first. So a context cut short holds what matters most and how it is tied,
+and **never a relationship whose end it lacks**. What does not fit is
+dropped deliberately, counted (`dropped`), said (`truncated`) and listed
+with why (§ 5) — also when a retriever itself stopped short.
 
 **Why each is there** (`reason`):
 
@@ -195,7 +279,7 @@ carries `text`: itself in one line, for a model to read —
 `service "Billing API" (service:billing-api) — tier: 1 [from Catalogue]`,
 `"Checkout" depends_on "Billing API" — stated by Catalogue, confidence 0.90`.
 
-## 6. Provenance: where each element came from
+## 7. Provenance: where each element came from
 
 Copied from the model when the version is made:
 
@@ -207,7 +291,7 @@ Copied from the model when the version is made:
 | `evidence` | — | what the records said (`dependsOn`, `file:line — VAR`…) |
 | `inferred_from` | — | the entities a rule read |
 | `attributes` | each attribute's origin: a source, or an enrichment rule, its confidence and evidence | — |
-| `conflicts` | what its sources disagree on, every value with who said it | — |
+| `conflicts` | what its sources disagree on, every value with who said it — and said at the context's level too (§ 5) | — |
 | `first_seen_at`, `last_seen_at`, `changed_at` | first and last seen | first seen, last changed |
 
 **What an element is, across builds.** An entity keeps its id from build
@@ -220,7 +304,7 @@ again (`last_seen_at`, `changed_at`), a source renamed, **a rank or a
 score** — is left out of the fingerprint: the hourly model sweep does not
 make a version, nor something else being found.
 
-## 7. History: every version, as made
+## 8. History: every version, as made
 
 - **By number**: `GET /context/{id}/assembled?version=2`.
 - **As it stood at a date**: `?at=2026-10-04T09:00:00Z` — the latest
@@ -234,7 +318,7 @@ make a version, nor something else being found.
 A version is never updated — refreshing writes a new one — so reading an
 old one reads what it was, whatever the model became.
 
-## 8. The contract downstream services read
+## 9. The contract downstream services read
 
 `AssembledContext`, **contract version 1** (`CONTRACT_VERSION` in
 `leka/context/schemas.py`): one version whole.
@@ -243,11 +327,13 @@ old one reads what it was, whatever the model became.
 |---|---|
 | `contract_version`, `context_id`, `version`, `status`, `error` | which, and whether it holds anything |
 | `title`, `purpose`, `subject`, `request`, `strategy` | what it is for, what it asked, how it was gathered |
-| `elements` | in order — each `{position, kind, ref_id, ref_type, label, entity \| relationship, provenance, reason, relevance, text}` |
+| `elements` | in order — each `{position, kind, ref_id, ref_type, label, entity \| relationship, provenance, reason, relevance, ranking, text}`; `ranking` is `{score, rank, topic, trust, signals: [{name, axis, value, weight, detail, said}], conflicts, duplicates}` |
 | `sources` | the sources its elements came from, and how many each |
 | `summary` | entities, relationships, stated and inferred, by type, by source kind, by retriever |
 | `retrieval` | what each retriever did: `{retriever, version, status, found, ms, detail, error}` |
 | `truncated`, `dropped` | what the budget left out |
+| `ranking` | how it was ranked: `version`, `min_relevance`, `trust_share`, `weights`; what was left out, by why (`left_out`) and listed (`left`) — none before LEKA-372 |
+| `conflicts` | what its sources disagree on: `{id, kind, subject, label, about, chosen, values: [{value, ref_id, by}], refs, said}` |
 | `model_built_at`, `model_version`, `assembled_at` | from which build of the model, when |
 
 In Python (intentions, capabilities):
@@ -265,14 +351,17 @@ then = await service.assembled(made.context_id, at=incident_started)
 
 **The contract's rules.** A field added is no new contract — LEKA-371 added
 `retrieval`, `relevance`, `reason.retrievers`, `summary.by_retriever` and the
-request's `query`, `window_days`, `until`, `retrievers` under version 1; a
+request's `query`, `window_days`, `until`, `retrievers` under version 1;
+LEKA-372 added `ranking` and `conflicts`, each element's `ranking` and the
+request's `min_relevance` — `relevance` keeps its meaning, how it was
+found; the order follows `ranking.score`; a
 field that changes meaning or goes raises `CONTRACT_VERSION`, and each
 version keeps the one it was made under. What a version stored is read back
 leniently — strings, not the registry's enums; fields a later contract adds
 ignored; fields an older one lacked read empty — so a snapshot stays
 readable after a kind is renamed.
 
-## 9. The API and the screen
+## 10. The API and the screen
 
 | Route | Permission | |
 |---|---|---|
@@ -296,12 +385,17 @@ assembles one around the entity — why (its words guide the search), how
 far, over what period. Then: what it is for, its state and version, the
 figures, how it was searched — each retriever and what it found, a failed
 one in orange — the elements in order, each with its relevance and why it
-is there and, opened, its provenance, every way it was found and what LEKA
-reads of it; the versions, any one shown again, two compared; reassemble,
-archive, a new context. Sized for a 13-inch screen: the list scrolls, the
-page does not.
+is there — its score, a conflict, what was folded into it — and, opened,
+**why that rank** (each signal, its value, what it was read from, in
+words), its provenance, every way it was found and what LEKA reads of it;
+beside them the versions, any one shown again, two compared; **the
+conflicts**, every side with who says so; **what was left out**, counted
+by why and listed on asking; reassemble, archive, a new context. The
+figures say why things were left out, and a disagreement is said among
+what is uncertain. Sized for a 13-inch screen: the list scrolls, the page
+does not.
 
-## 10. How well it retrieves
+## 11. How well it retrieves
 
 `tests/test_context_retrieval.py`, on Acme's operations through the whole
 pipeline (GitHub, PagerDuty, Jira, a catalogue, a business system, a
@@ -332,9 +426,27 @@ all of it, ranks it lower than 0.5, or does not beat every retriever alone.
 
 The graph and the timeline alone have nothing to start from when no root
 is asked — that is why they run after the words. The table is printed by
-`pytest tests/test_context_retrieval.py -k quality -s`.
+`pytest tests/test_context_retrieval.py -k quality -s`. Ranked (LEKA-372),
+the hybrid still finds all of it, as high: ranking left nothing out of
+these five that the budget held.
 
-## 11. Storage, size, speed
+**How well it ranks** — `tests/test_context_ranking.py`, representative
+cases on Acme around Billing API, and `test_context_engine.py` through the
+API:
+
+| Case | What must hold |
+|---|---|
+| Two found as high, one only by a failing source, seen 120 days ago | the better sourced first; each signal says why |
+| A dormant thing found high from a poor source, a solid one found low | the one found high first: trust moves a score by 40 % at most |
+| Tied to the anchor, or tied to nothing, found as high | the tied one first; the other keeps what retrieval said |
+| A thing never measured, never seen, its source unknown | said unknown, left out of the mean |
+| Found barely (0.04) | left out, said why; 0 keeps it; a root never |
+| Resolution linked a service to another (0.75) | folded into the surer, said on both; their different tier said as a conflict; a link of 0.4 folds nothing; a root never folded away |
+| Two Nadia accounts, both owners, linked | one owner, not a competition; their emails said |
+| Sources disagree on a tier; two owners; a tie to a thing removed | each said with every side and who says so; the line a model reads says the dispute |
+| The budget | what does not fit listed, the ties it took counted, each kept entity at its place |
+
+## 12. Storage, size, speed
 
 - Indexes: contexts by `(workspace, updated_at)` for the list and by
   `(workspace, subject_type, subject_id)` for a subject's; versions unique
@@ -348,18 +460,25 @@ is asked — that is why they run after the words. The table is printed by
   workspace's records only.
 - Size: an element is its content and provenance as JSON — on LEKA's own
   model, a context of 31 elements weighs ~40 KB, of 74 ~90 KB. A version is
-  written only when something changed.
+  written only when something changed. Its ranking (LEKA-372) adds about 1 KB: on the demo, 0.9 KB
+  for an element's 1.2 KB.
+
 - Speed — `scripts/bench_knowledge_graph.py`, 20 000 entities and 60 000
   relationships, PostgreSQL 16 on a laptop, median of 7:
 
 | | ms |
 |---|---:|
-| neighbourhood of a typical service, 1 step — assembled and kept | 21 |
-| neighbourhood of the busiest service, 2 steps, 500 elements | 225 |
-| a version of 500 elements, read back | 13 |
-| hybrid, from words only — search, content, graph and timeline from what they found | 69 |
-| hybrid, the busiest service and its words | 70 |
-| refreshed, nothing changed (500 elements) | 96 |
+| neighbourhood of a typical service, 1 step — ranked, assembled and kept | 18 |
+| neighbourhood of the busiest service, 2 steps, 500 elements (600 read, ranked) | 351 |
+| a version of 500 elements, read back with their rankings | 58 |
+| hybrid, from words only — search, content, graph and timeline from what they found | 63 |
+| hybrid, the busiest service and its words | 61 |
+| refreshed, nothing changed (500 elements) | 120 |
+
+  Ranking (LEKA-372) costs where it reads more and keeps more: a strategy
+  reads up to twice the budget, so that what is folded or left out leaves
+  room for the next best; each element keeps its ranking, signal by signal,
+  and reads it back (13 ms before, for 500 elements).
 
 - Kept as long as the workspace, like the model's own history
   ([data-lifecycle.md](data-lifecycle.md)); deleting the workspace deletes
@@ -375,8 +494,11 @@ is asked — that is why they run after the words. The table is printed by
   the API, a hosted one a paid service — a decision to take. It would be a
   sixth retriever beside the others, never instead of them: they say why a
   thing was found, in words.
-- **Relevance tuned** against the purpose and what was useful (LEKA-372);
-  today it is how high and by how many a thing was found.
+- **Relevance learned from use.** The weights are set by hand (§ 5),
+  explained signal by signal and held by representative cases; learning
+  them from what analyses actually used needs the intentions to say what
+  they used (LEKA-384, LEKA-388) — the signals and their values are kept
+  with every element for that.
 - **The retrievers per kind of intention** (LEKA-373, LEKA-387).
 - **Refreshing on its own** when the model changes (LEKA-374) — today a
   refresh is asked; `refreshed_at` and the elements' `ref_id` index are

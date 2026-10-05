@@ -24,8 +24,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from leka.context.assembly import Relevance, assemble, fingerprint
+from leka.context.assembly import assemble, fingerprint
 from leka.context.language import content, expanded, words
+from leka.context.ranking import Relevance
 from leka.context.retrieval import Ask, Found, Hit, Runner, anchors_of, fuse
 from leka.context.schemas import ContextRequest, RetrievalMatch
 from leka.knowledge import (
@@ -243,7 +244,9 @@ def test_the_most_relevant_first_after_what_the_words_found_best() -> None:
     made = assemble(material, limit=10, strategy="hybrid", relevance=relevance, anchors=[A])
 
     entities = [e for e in made.elements if e.kind == "entity"]
-    assert [e.label for e in entities] == ["a", "d", "c", "b"]
+    # B, found lower than C, is tied to the anchor: what that adds (the
+    # ranking's proximity, LEKA-372) brings it level with C — and nearer.
+    assert [e.label for e in entities] == ["a", "d", "b", "c"]
     roles = {e.label: (e.reason.role, e.reason.depth, e.relevance) for e in entities}
     assert roles == {
         "a": ("found", 0, 0.9),

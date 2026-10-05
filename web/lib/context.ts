@@ -1,8 +1,9 @@
 /**
  * The context engine, as the screens inspect it (LEKA-370): the contexts
  * LEKA assembled around an entity, each version whole — every element with
- * its sources and why it is there — what changed between two versions, and
- * the actions that make a version. The shapes are the generated ones;
+ * its sources, why it is there and how it was ranked — what its sources
+ * disagree on and what was left out (LEKA-372), what changed between two
+ * versions, and the actions that make a version. The shapes are the generated ones;
  * api/leka/api/context.py says what each route answers.
  */
 
@@ -32,6 +33,9 @@ export const BUDGET = 100;
 
 /** How far back what happened is read, in days (LEKA-371). */
 export const WINDOWS = [7, 14, 30, 90] as const;
+
+/** Under this score a thing found is left out (LEKA-372): the API's default. */
+export const MIN_RELEVANCE = 0.05;
 
 const post = <T>(path: string, body?: unknown) =>
   apiFetch<T>(path, {
