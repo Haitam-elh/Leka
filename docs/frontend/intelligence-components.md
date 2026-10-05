@@ -42,7 +42,7 @@ Four rules hold for all of them:
 |---|---|---|
 | 03 *Analyse en cours…* | the analysis still running | `AnalysisState` `running` |
 | 03 *Premiers constats* | tinted lines, a tag, *Voir les éléments* | `FindingList`, `ProbableCauseList` |
-| 03, 05 *Niveau de confiance*, *Confiance de l'analyse* | *● Élevée*, and the lines it rests on, ticked or still missing | `ConfidencePanel`, `SupportList`, `ConfidenceBadge` |
+| 03, 05 *Niveau de confiance*, *Confiance de l'analyse* | *● Élevée*, and the lines it rests on, ticked or still missing | `ConfidencePanel`, `SupportList`, `ConfidenceBadge` — and, for a context, with what LEKA judged of it (LEKA-375): `QualityPanel` in `components/environment/context-quality.tsx` |
 | 04 *Synthèse de l'analyse* | what it comes to, how sure, on what | `AnalysisSummary` |
 | 04 *Preuves et sources clés* | a line per piece, *Voir*, *Voir toutes les preuves (N)* | `EvidenceList` (`max`) |
 | 04, 05 *Services impactés*, *Impact global* | the level in a word, then what it concerns, a line each | `ImpactPanel` under a section titled *Impact global* |
