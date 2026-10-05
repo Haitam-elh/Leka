@@ -86,6 +86,29 @@ test.describe("what a screen opens", () => {
     await expectNoViolations(page);
   });
 
+  test("the navigation, every section open", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/environment?tab=applications");
+    await page.getByTestId("nav-section-capabilities-toggle").click();
+    await page.getByTestId("nav-section-administration-toggle").click();
+    await expect(page.getByTestId("nav-capabilities-mine")).toBeVisible();
+    await expect(page.getByTestId("nav-sources")).toBeVisible();
+
+    await expectNoViolations(page);
+  });
+
+  test("the rail, a section's menu open", async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await signIn(page);
+    await page.getByTestId("nav-section-capabilities-toggle").click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    // The icon's name, shown on hover, gives way to the menu: once it has
+    // faded, what is on screen is the menu — inside the navigation.
+    await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0);
+
+    await expectNoViolations(page);
+  });
+
   test("an incident's analysis, unfolded, a probable cause's evidence open", async ({ page }) => {
     await openIncidentAnalysis(page);
     await page

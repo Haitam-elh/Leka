@@ -1,14 +1,12 @@
 /**
- * Which route a URL is, and which navigation entry should light up.
+ * Which route a URL is. Which line of the sidebar it marks is
+ * lib/navigation/tree.ts's.
  *
  * Pure functions over the registry: no React, no router, so the rules can be
  * tested in a millisecond and read without running anything.
  */
 
 import { type RouteEntry, ROUTES } from "@/config/routes";
-
-/** The one entry that is a button rather than a line in the list. */
-export const PRIMARY_ACTION_ID = "intention-new";
 
 export interface RouteMatch {
   route: RouteEntry;
@@ -81,24 +79,4 @@ export function matchRoute(pathname: string): RouteMatch | undefined {
   }
 
   return best?.match;
-}
-
-/**
- * The entry the sidebar should mark as current.
- *
- * A child marks its parent: reading `/intentions/123/evidence` is still being
- * in Intentions. The one exception is the composer — `/intentions/new` lights
- * up the primary button and NOT the Intentions entry, because they are two
- * different places to be and showing both would make the mark meaningless.
- */
-export function resolveActiveNavItem(pathname: string): RouteEntry | undefined {
-  const match = matchRoute(pathname);
-  if (match === undefined) return undefined;
-
-  let current: RouteEntry | undefined = match.route;
-  while (current !== undefined) {
-    if (current.showInSidebar || current.id === PRIMARY_ACTION_ID) return current;
-    current = current.parentId ? ROUTES.find((route) => route.id === current?.parentId) : undefined;
-  }
-  return undefined;
 }

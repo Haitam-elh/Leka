@@ -10,7 +10,7 @@ import { usePermissions } from "@/components/shell/shell-provider";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
-import { visibleRoutes } from "@/lib/navigation/access";
+import { hrefOf, navLeaves, visibleNavigation } from "@/lib/navigation/tree";
 import {
   emptySearchProvider,
   looksLikeAQuestion,
@@ -116,15 +116,21 @@ export function CommandPalette({
     const matches = (label: string) =>
       typed.length === 0 || label.toLowerCase().includes(typed.toLowerCase());
 
-    const navigation: PaletteItem[] = visibleRoutes(permissions)
-      .filter((route) => matches(t.nav[route.labelKey]))
-      .map((route) => ({
-        id: route.id,
+    // The sidebar's lines, a line of a section named with it — "Mon
+    // environnement › Applications" — so typing a pillar lists its pages.
+    // "Nouvelle intention" is the action above, which says it better.
+    const navigation: PaletteItem[] = navLeaves(visibleNavigation(permissions))
+      .filter(({ leaf }) => hrefOf(leaf) !== routes.intentionNew())
+      .map(({ leaf, section }) => ({
+        id: leaf.id,
         section: "navigation" as const,
-        label: t.nav[route.labelKey],
-        href: route.path,
-        icon: route.icon ?? ArrowRight,
-      }));
+        label: section
+          ? `${t.nav[section.labelKey]} › ${t.nav[leaf.labelKey]}`
+          : t.nav[leaf.labelKey],
+        href: hrefOf(leaf),
+        icon: leaf.icon ?? section?.icon ?? ArrowRight,
+      }))
+      .filter((item) => matches(item.label));
 
     const found: PaletteItem[] = results.map((result) => ({
       id: result.id,

@@ -43,6 +43,26 @@ const fr = {
     team: "Équipe & accès",
     billing: "Facturation",
     settings: "Paramètres",
+    // The sidebar's hierarchy (LEKA-428, config/navigation.ts).
+    myIntentions: "Mes intentions",
+    environmentOverview: "Vue globale",
+    environmentApplications: "Applications",
+    environmentInfrastructure: "Infrastructure",
+    environmentData: "Données",
+    environmentDependencies: "Dépendances",
+    environmentTeams: "Équipes",
+    environmentEvents: "Événements",
+    environmentDomains: "Domaines",
+    capabilitiesAvailable: "Capacités disponibles",
+    capabilitiesMine: "Mes capacités",
+    capabilitiesConfiguration: "Configuration",
+    administration: "Administration",
+  },
+  /** What each pillar is for, under its name (LEKA-428). */
+  pillars: {
+    intentions: "Dites à LEKA ce que vous voulez accomplir.",
+    environment: "Le système vivant de votre entreprise.",
+    capabilities: "Votre équipe technologique à la demande.",
   },
   shell: {
     tagline: "Understand. Decide. Act.",
@@ -98,6 +118,9 @@ const fr = {
     emptyPage: "Rien ici pour l'instant.",
     /** Appended to the entry's label: "À valider, 3 éléments en attente". */
     pendingApprovals: "{count} éléments en attente",
+    /** Said after a folded section's name, on the rail, when the page
+     * you are on is in it (LEKA-428). */
+    currentSection: "page actuelle",
     /** A member's role, as the API names it (owner, admin, member). Shown
      * under their name at the foot of the sidebar: "owner" in English was
      * the API's word reaching the screen untranslated. */
@@ -3111,6 +3134,7 @@ export type Dictionary = typeof fr;
 
 /** The keys config/routes.ts is allowed to point at. */
 export type NavKey = keyof Dictionary["nav"];
+export type PillarKey = keyof Dictionary["pillars"];
 
 /** And the group titles it may use. */
 
@@ -3138,6 +3162,24 @@ const en: Dictionary = {
     team: "Team & access",
     billing: "Billing",
     settings: "Settings",
+    myIntentions: "My intentions",
+    environmentOverview: "Overall view",
+    environmentApplications: "Applications",
+    environmentInfrastructure: "Infrastructure",
+    environmentData: "Data",
+    environmentDependencies: "Dependencies",
+    environmentTeams: "Teams",
+    environmentEvents: "Events",
+    environmentDomains: "Domains",
+    capabilitiesAvailable: "Available capabilities",
+    capabilitiesMine: "My capabilities",
+    capabilitiesConfiguration: "Configuration",
+    administration: "Administration",
+  },
+  pillars: {
+    intentions: "Tell LEKA what you want to achieve.",
+    environment: "Your company's living system.",
+    capabilities: "Your technology team, on demand.",
   },
   shell: {
     tagline: "Understand. Decide. Act.",
@@ -3191,6 +3233,7 @@ const en: Dictionary = {
     notFoundTitle: "Page not found",
     emptyPage: "Nothing here yet.",
     pendingApprovals: "{count} items waiting",
+    currentSection: "current page",
     roles: { owner: "Owner", admin: "Admin", member: "Member" },
   },
   tabs: {

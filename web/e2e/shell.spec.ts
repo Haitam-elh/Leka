@@ -66,10 +66,14 @@ test.describe("the shell", () => {
 
     const toggle = page.getByTestId("sidebar-toggle");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(page.getByTestId("nav-sources")).toContainText("Sources");
+    await expect(page.getByTestId("nav-activity")).toHaveText("Activité");
 
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    // On the rail a section is its icon, still named.
+    await expect(page.getByTestId("nav-section-intentions-toggle")).toHaveAccessibleName(
+      "Intentions",
+    );
 
     await page.reload();
     await expect(page.getByTestId("sidebar-toggle")).toHaveAttribute("aria-expanded", "false");
@@ -89,7 +93,7 @@ test.describe("the shell", () => {
     await expect(navigation).toBeHidden();
   });
 
-  test("lets the keyboard skip the twelve navigation links", async ({ page }) => {
+  test("lets the keyboard skip the navigation", async ({ page }) => {
     await signIn(page);
 
     const skip = page.getByRole("link", { name: "Aller au contenu" });
@@ -118,11 +122,14 @@ test.describe("the shell", () => {
   test("changes language from the account menu", async ({ page }) => {
     await signIn(page);
 
-    await expect(page.getByTestId("nav-environment")).toContainText("Mon environnement");
+    const environment = page.getByTestId("nav-section-environment-toggle");
+    await expect(environment).toContainText("Mon environnement");
+    await expect(environment).toContainText("Le système vivant de votre entreprise.");
 
     await page.getByTestId("user-menu").last().click();
     await page.getByRole("menuitemradio", { name: "English" }).click();
 
-    await expect(page.getByTestId("nav-environment")).toContainText("My environment");
+    await expect(environment).toContainText("My environment");
+    await expect(environment).toContainText("Your company's living system.");
   });
 });

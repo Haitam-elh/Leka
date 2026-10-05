@@ -2,9 +2,10 @@
  * Every route of the product, in one place.
  *
  * This is the information architecture of LEKA, and it is a value, not a set
- * of files: the sidebar, the breadcrumb, the document title, the command
- * palette and the default page title are all generated from it. A route that
- * is not here does not exist as far as navigation is concerned.
+ * of files: the breadcrumb, the document title and the default page title
+ * are generated from it, and the sidebar and the palette draw
+ * config/navigation.ts, whose every line names a route here. A route that is
+ * not here does not exist as far as navigation is concerned.
  *
  * WHAT A ROUTE MUST DECLARE, and why:
  *
@@ -24,22 +25,6 @@
  * docs/product/information-architecture.md.
  */
 
-import {
-  Home,
-  Layers,
-  type LucideIcon,
-  Search,
-  Settings,
-  ShieldCheck,
-  UserRoundKey,
-} from "lucide-react";
-
-import {
-  ActivityIcon,
-  BillingIcon,
-  CapabilitiesIcon,
-  EnvironmentIcon,
-} from "@/components/shell/nav-icons";
 import type { NavKey } from "@/lib/i18n/dictionaries";
 
 /** What the API calls a permission. Kept in the API's spelling on purpose. */
@@ -75,14 +60,14 @@ export interface RouteEntry {
   /** `/environment/:entityType/:entityId` — parameters are `:named`. */
   path: string;
   labelKey: NavKey;
-  icon?: LucideIcon;
   parentId?: string;
-  showInSidebar: boolean;
   requiredPermission?: Permission;
   availability?: Availability;
-  badgeKey?: BadgeKey;
   /** Tab segments this route accepts, in the order they are shown. */
   tabs?: readonly string[];
+  /** The views it opens in by its query, `?tab=` — the first is the
+   * address without one. What the sidebar's lines may ask (LEKA-428). */
+  views?: readonly string[];
 }
 
 /** The tabs of an intention, straight from the mockups. */
@@ -102,18 +87,29 @@ export const ENTITY_TABS = [
   "context",
 ] as const;
 
+/** The views of "Mon environnement" (LEKA-369), by `?tab=`. */
+export const ENVIRONMENT_VIEWS = [
+  "architecture",
+  "applications",
+  "infrastructure",
+  "data",
+  "dependencies",
+  "organisation",
+  "events",
+  "domains",
+] as const;
+
+/** And of Capacités: the sidebar opens them already; the catalogue, when
+ * it is built (LEKA-393 on), reads them. */
+export const CAPABILITY_VIEWS = ["available", "mine", "configuration"] as const;
+
 export const ROUTES: readonly RouteEntry[] = [
-  // In the order of the mockups' sidebar (docs/product/mockups/01), which is
-  // the order everything generated from this list follows: one flat list,
-  // no group titles. "Nouvelle intention" is its second line; it is drawn by
-  // components/shell/new-intention-button.tsx, not from this entry, because
-  // on /intentions/new it — not Intentions — is the place you are.
+  // Every page, whether the sidebar shows it or not: what the sidebar shows,
+  // and in which section, is config/navigation.ts's (LEKA-428).
   {
     id: "overview",
     path: "/overview",
     labelKey: "overview",
-    icon: Home,
-    showInSidebar: true,
     requiredPermission: "workspace:read",
   },
   {
@@ -121,15 +117,12 @@ export const ROUTES: readonly RouteEntry[] = [
     path: "/intentions/new",
     labelKey: "newIntention",
     parentId: "intentions",
-    showInSidebar: false,
     requiredPermission: "intention:create",
   },
   {
     id: "intentions",
     path: "/intentions",
     labelKey: "intentions",
-    icon: Layers,
-    showInSidebar: true,
     requiredPermission: "intention:read",
   },
   {
@@ -137,7 +130,6 @@ export const ROUTES: readonly RouteEntry[] = [
     path: "/intentions/:intentionId",
     labelKey: "intentionDetail",
     parentId: "intentions",
-    showInSidebar: false,
     requiredPermission: "intention:read",
     tabs: INTENTION_TABS,
   },
@@ -145,9 +137,8 @@ export const ROUTES: readonly RouteEntry[] = [
     id: "environment",
     path: "/environment",
     labelKey: "environment",
-    icon: EnvironmentIcon,
-    showInSidebar: true,
     requiredPermission: "workspace:read",
+    views: ENVIRONMENT_VIEWS,
   },
   {
     // The graph explored: the dependency view, or what surrounds one thing
@@ -156,7 +147,6 @@ export const ROUTES: readonly RouteEntry[] = [
     path: "/environment/graph",
     labelKey: "environmentGraph",
     parentId: "environment",
-    showInSidebar: false,
     requiredPermission: "workspace:read",
   },
   {
@@ -164,7 +154,6 @@ export const ROUTES: readonly RouteEntry[] = [
     path: "/environment/:entityType/:entityId",
     labelKey: "entityDetail",
     parentId: "environment",
-    showInSidebar: false,
     requiredPermission: "workspace:read",
     tabs: ENTITY_TABS,
   },
@@ -172,36 +161,29 @@ export const ROUTES: readonly RouteEntry[] = [
     id: "activity",
     path: "/activity",
     labelKey: "activity",
-    icon: ActivityIcon,
-    showInSidebar: true,
     requiredPermission: "workspace:read",
   },
   {
     id: "approvals",
     path: "/approvals",
     labelKey: "approvals",
-    icon: ShieldCheck,
-    showInSidebar: true,
     // A member reads and creates intentions; approving is an admin's job, so
     // the entry is hidden rather than shown and refused.
     requiredPermission: "intention:approve",
-    badgeKey: "approvals",
   },
   {
     id: "approval-detail",
     path: "/approvals/:approvalId",
     labelKey: "approvalDetail",
     parentId: "approvals",
-    showInSidebar: false,
     requiredPermission: "intention:approve",
   },
   {
     id: "capabilities",
     path: "/capabilities",
     labelKey: "capabilities",
-    icon: CapabilitiesIcon,
-    showInSidebar: true,
     requiredPermission: "workspace:read",
+    views: CAPABILITY_VIEWS,
     // The catalogue is LEKA-393 and after. Shown, labelled, and honest.
     availability: "soon",
   },
@@ -210,7 +192,6 @@ export const ROUTES: readonly RouteEntry[] = [
     path: "/capabilities/:capabilityId",
     labelKey: "capabilityDetail",
     parentId: "capabilities",
-    showInSidebar: false,
     requiredPermission: "workspace:read",
     availability: "soon",
   },
@@ -218,8 +199,6 @@ export const ROUTES: readonly RouteEntry[] = [
     id: "sources",
     path: "/sources",
     labelKey: "sources",
-    icon: Search,
-    showInSidebar: true,
     requiredPermission: "source:read",
   },
   {
@@ -227,7 +206,6 @@ export const ROUTES: readonly RouteEntry[] = [
     path: "/sources/:sourceId",
     labelKey: "sourceDetail",
     parentId: "sources",
-    showInSidebar: false,
     requiredPermission: "source:read",
   },
   {
@@ -236,15 +214,12 @@ export const ROUTES: readonly RouteEntry[] = [
     id: "welcome",
     path: "/welcome",
     labelKey: "welcome",
-    showInSidebar: false,
     requiredPermission: "source:manage",
   },
   {
     id: "governance",
     path: "/governance",
     labelKey: "governance",
-    icon: ShieldCheck,
-    showInSidebar: true,
     requiredPermission: "workspace:update",
     // Policies, audit and compliance are what an enterprise plan is for.
     // A placeholder decision — Karim owns it, and changing it is one word.
@@ -254,16 +229,12 @@ export const ROUTES: readonly RouteEntry[] = [
     id: "team",
     path: "/team",
     labelKey: "team",
-    icon: UserRoundKey,
-    showInSidebar: true,
     requiredPermission: "member:invite",
   },
   {
     id: "billing",
     path: "/billing",
     labelKey: "billing",
-    icon: BillingIcon,
-    showInSidebar: true,
     // There is no billing:* permission: paying for the workspace is part of
     // administering it, and workspace:update is what an admin has.
     requiredPermission: "workspace:update",
@@ -272,8 +243,6 @@ export const ROUTES: readonly RouteEntry[] = [
     id: "settings",
     path: "/settings",
     labelKey: "settings",
-    icon: Settings,
-    showInSidebar: true,
     requiredPermission: "workspace:read",
   },
 ];

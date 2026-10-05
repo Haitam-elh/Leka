@@ -10,15 +10,16 @@ import { LANDING, signIn } from "./sign-in";
  * above the title and the right words in the browser tab.
  */
 
-/** Every entry of the sidebar, with the title its page must carry. */
+/** Every page the sidebar opens, the line it marks, the title it carries. */
 const ZONES = [
   ["/overview", "overview", "Vue d'ensemble"],
+  ["/intentions/new", "intention-new", "Nouvelle intention"],
   ["/intentions", "intentions", "Intentions"],
-  ["/approvals", "approvals", "À valider"],
+  ["/environment", "environment-overview", "Mon environnement"],
+  ["/capabilities", "capabilities-available", "Capacités"],
   ["/activity", "activity", "Activité"],
-  ["/environment", "environment", "Mon environnement"],
+  ["/approvals", "approvals", "À valider"],
   ["/sources", "sources", "Sources"],
-  ["/capabilities", "capabilities", "Capacités"],
   ["/governance", "governance", "Sécurité & gouvernance"],
   ["/team", "team", "Équipe & accès"],
   ["/billing", "billing", "Facturation"],
@@ -33,19 +34,21 @@ test.describe("the information architecture", () => {
       await page.goto(path);
 
       await expect(page.getByRole("navigation", { name: "Navigation principale" })).toBeVisible();
+      // Marked, and in sight: the section it is in opened on arrival.
       await expect(page.getByTestId(`nav-${id}`)).toHaveAttribute("aria-current", "page");
+      await expect(page.getByTestId(`nav-${id}`)).toBeVisible();
       await expect(page.locator('a[aria-current="page"]')).toHaveCount(1);
       await expect(page).toHaveTitle(`${label} · LEKA`);
     }
   });
 
-  test("marks the button, not the list, on the intention composer", async ({ page }) => {
+  test("marks the composer's line on the composer, not « Mes intentions »", async ({ page }) => {
     await signIn(page);
 
-    await page.getByTestId("new-intention").click();
+    await page.getByTestId("nav-intention-new").click();
 
     await expect(page).toHaveURL("http://localhost:3000/intentions/new");
-    await expect(page.getByTestId("new-intention")).toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("nav-intention-new")).toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("nav-intentions")).not.toHaveAttribute("aria-current", "page");
   });
 
@@ -58,7 +61,10 @@ test.describe("the information architecture", () => {
     await expect(trail.getByText("Payment API")).toBeVisible();
     await expect(page).toHaveTitle("Payment API · LEKA");
     // The parent stays marked while you read one of its children.
-    await expect(page.getByTestId("nav-environment")).toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("nav-environment-overview")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   test("keeps a tab in the URL, so it can be sent to someone", async ({ page }) => {
@@ -95,6 +101,111 @@ test.describe("the information architecture", () => {
     await expect(page.getByTestId("route-state-not-found")).toBeVisible();
     await page.getByRole("link", { name: "Retour à la vue d'ensemble" }).click();
     await expect(page).toHaveURL("http://localhost:3000/overview");
+  });
+});
+
+test.describe("the three pillars (LEKA-428)", () => {
+  test("opens each view of « Mon environnement » from the sidebar, by its address", async ({
+    page,
+  }) => {
+    await signIn(page);
+
+    // Closed until opened, or until you are in it.
+    await expect(page.getByTestId("nav-environment-applications")).toBeHidden();
+    await page.getByTestId("nav-section-environment-toggle").click();
+    await page.getByTestId("nav-environment-applications").click();
+
+    await expect(page).toHaveURL("http://localhost:3000/environment?tab=applications");
+    await expect(page.getByTestId("env-tab-applications")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("nav-environment-applications")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await expect(page.locator('a[aria-current="page"]')).toHaveCount(1);
+
+    // A tab chosen on the page moves the sidebar's mark with it.
+    await page.getByTestId("env-tab-domains").click();
+    await expect(page).toHaveURL("http://localhost:3000/environment?tab=domains");
+    await expect(page.getByTestId("nav-environment-domains")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    // And the address is the view: reloaded, or sent, it opens there.
+    await page.reload();
+    await expect(page.getByTestId("env-tab-domains")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("opens and closes a section, from the keyboard too, and remembers it", async ({ page }) => {
+    await signIn(page);
+
+    const administration = page.getByTestId("nav-section-administration-toggle");
+    await expect(administration).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId("nav-sources")).toBeHidden();
+
+    await administration.focus();
+    await page.keyboard.press("Enter");
+    await expect(administration).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("nav-sources")).toBeVisible();
+
+    const intentions = page.getByTestId("nav-section-intentions-toggle");
+    await intentions.click();
+    await expect(intentions).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId("nav-intentions")).toBeHidden();
+
+    await page.reload();
+    await expect(page.getByTestId("nav-section-administration-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(page.getByTestId("nav-section-intentions-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  test("opens the section you arrive in, and keeps the page in sight", async ({ page }) => {
+    // A 13-inch laptop's window.
+    await page.setViewportSize({ width: 1440, height: 789 });
+    await signIn(page);
+    await page.goto("/environment?tab=domains");
+
+    await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(page.getByTestId("nav-environment-domains")).toBeInViewport();
+
+    // Leaving it closes it again: nothing was chosen.
+    await page.getByTestId("nav-activity").click();
+    await expect(page).toHaveURL("http://localhost:3000/activity");
+    await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  test("gives a section's pages in a menu on the rail", async ({ page }) => {
+    // Between 1024 and 1279px the sidebar is the rail.
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await signIn(page);
+    await page.goto("/environment?tab=events");
+
+    const environment = page.getByTestId("nav-section-environment-toggle");
+    await expect(environment).toHaveAccessibleName("Mon environnement, page actuelle");
+    await environment.click();
+
+    const menu = page.getByRole("menu");
+    await expect(menu).toContainText("Le système vivant de votre entreprise.");
+    await expect(menu.getByRole("menuitem", { name: "Événements" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await menu.getByRole("menuitem", { name: "Données" }).click();
+
+    await expect(page).toHaveURL("http://localhost:3000/environment?tab=data");
+    await expect(page.getByTestId("env-tab-data")).toHaveAttribute("aria-pressed", "true");
+    await expect(menu).toBeHidden();
   });
 });
 
@@ -213,8 +324,11 @@ test.describe("what a member may see", () => {
     await asAMember(page);
     await page.goto("/overview");
 
-    await expect(page.getByTestId("nav-billing")).toBeHidden();
-    await expect(page.getByTestId("nav-environment")).toBeVisible();
+    await expect(page.getByTestId("nav-section-environment")).toBeVisible();
+    await page.getByTestId("nav-section-administration-toggle").click();
+    await expect(page.getByTestId("nav-settings")).toBeVisible();
+    await expect(page.getByTestId("nav-billing")).toHaveCount(0);
+    await expect(page.getByTestId("nav-approvals")).toHaveCount(0);
 
     await page.goto("/billing");
 
