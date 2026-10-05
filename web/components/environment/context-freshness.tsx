@@ -107,11 +107,15 @@ export function changeSaid(t: Dictionary, locale: string, change: ContextChange)
 export function FreshnessPanel({
   context,
   canMake,
+  canFollow = canMake,
   onUpdate,
   updating,
 }: {
   context: ContextRead;
   canMake: boolean;
+  /** Whether how it follows the model may be changed: its maker's, or an
+   * admin's (LEKA-376). */
+  canFollow?: boolean;
   onUpdate: () => void;
   updating: boolean;
 }) {
@@ -197,7 +201,7 @@ export function FreshnessPanel({
       ) : null}
       <div className="mt-1 flex flex-wrap items-center gap-2 text-shell-muted">
         <span data-testid="context-following">{following[said.following]}</span>
-        {canMake && said.following !== "archived" ? (
+        {canFollow && said.following !== "archived" ? (
           <span className="ml-auto inline-flex items-center gap-2">
             <Switch
               size="sm"

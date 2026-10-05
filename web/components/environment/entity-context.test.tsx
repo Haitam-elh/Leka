@@ -16,7 +16,9 @@
  * in words — and updated on asking; whether it follows the model, switched;
  * widened and narrowed, saying what of its request changed, or why not;
  * why each version was made and how it differs; every time it was made
- * again, by LEKA or on asking, and what came of it.
+ * again, by LEKA or on asking, and what came of it. Its API (LEKA-376):
+ * archiving it, or stopping it following the model, offered to its maker
+ * or an admin only; LEKA making it again heard as it happens, and said.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -47,6 +49,9 @@ const api = {
   compress: vi.fn(),
   follow: vi.fn(),
   checks: vi.fn(),
+  inspect: vi.fn(),
+  evidence: vi.fn(),
+  events: vi.fn(),
 };
 const permissions: { value: string[] } = { value: [] };
 const notify = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
@@ -55,8 +60,10 @@ vi.mock("@/lib/context", async (original) => ({
   ...(await original<typeof import("@/lib/context")>()),
   contexts: api,
 }));
+const me = { id: "7d3bc5ff-a12e-5e92-a5ae-ad6da2029a41" };
 vi.mock("@/components/shell/shell-provider", () => ({
   usePermissions: () => permissions.value,
+  useCurrentUser: () => me,
 }));
 vi.mock("@/lib/notify", () => ({ notify }));
 
@@ -267,7 +274,8 @@ const READ: ContextRead = {
   },
   status: "assembled",
   current_version: 2,
-  created_by: null,
+  // Made by who reads it: theirs to archive (LEKA-376).
+  created_by: me.id,
   created_at: NOW,
   updated_at: NOW,
   refreshed_at: NOW,
@@ -891,5 +899,59 @@ describe("the context tab", () => {
     expect(followed).toHaveTextContent("version 2 créée · après 3 changement(s)");
     expect(asked).toHaveTextContent("rien de changé : la version 1 tient");
     expect(asked).not.toHaveTextContent("par LEKA");
+  });
+
+  it("offers archiving and unfollowing to its maker or an admin only", async () => {
+    api.ofEntity.mockResolvedValue([{ ...READ, created_by: "someone-else" }]);
+    const { unmount } = show();
+
+    expect(await screen.findByRole("button", { name: "Réassembler" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Archiver" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Suivre le modèle" })).not.toBeInTheDocument();
+    unmount();
+
+    permissions.value = ["intention:read", "intention:create", "context:manage"];
+    show();
+    expect(await screen.findByRole("button", { name: "Archiver" })).toBeVisible();
+    expect(screen.getByRole("switch", { name: "Suivre le modèle" })).toBeVisible();
+  });
+
+  it("hears LEKA making it again, says so, and reads it again", async () => {
+    const opened: { url: string; heard: Map<string, (event: MessageEvent) => void> }[] = [];
+    class FakeEventSource {
+      heard = new Map<string, (event: MessageEvent) => void>();
+      constructor(url: string, init?: { withCredentials?: boolean }) {
+        expect(init?.withCredentials).toBe(true);
+        opened.push({ url, heard: this.heard });
+      }
+      addEventListener(name: string, listener: (event: MessageEvent) => void) {
+        this.heard.set(name, listener);
+      }
+      close() {}
+    }
+    vi.stubGlobal("EventSource", FakeEventSource);
+    api.events.mockReturnValue("http://api/context/events");
+    show();
+    await screen.findAllByTestId("context-element");
+    const calls = api.assembled.mock.calls.length;
+
+    const [stream] = opened;
+    expect(stream.url).toBe("http://api/context/events");
+    expect(api.events).toHaveBeenCalledWith(CONTEXT);
+    stream.heard.get("check")?.(
+      new MessageEvent("check", {
+        data: JSON.stringify({
+          version: 3,
+          trigger: "changed",
+          outcome: "version",
+          checked_by: null,
+        }),
+      }),
+    );
+    expect(notify.info).toHaveBeenCalledWith({
+      title: "LEKA a mis ce contexte à jour : version 3.",
+    });
+    await vi.waitFor(() => expect(api.assembled.mock.calls.length).toBeGreaterThan(calls));
+    vi.unstubAllGlobals();
   });
 });

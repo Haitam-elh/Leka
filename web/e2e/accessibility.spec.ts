@@ -76,6 +76,12 @@ test.describe("what a screen opens", () => {
     // How good it is, in detail (LEKA-375).
     await page.getByRole("button", { name: "Voir le détail des mesures" }).click();
     await expect(page.getByTestId("quality-retrieval")).toBeVisible();
+    // The element inspected, its evidence asked for (LEKA-376).
+    await page
+      .getByTestId("element-inspect")
+      .getByRole("button", { name: "Voir les preuves" })
+      .click();
+    await expect(page.getByTestId("element-evidence")).toBeVisible();
 
     await expectNoViolations(page);
   });

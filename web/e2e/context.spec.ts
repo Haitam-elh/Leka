@@ -18,7 +18,10 @@ import { openContextTab } from "./context-tab";
  * follows it; widened and narrowed, it makes new versions that say what of
  * the request changed, and each time is kept. Judged (LEKA-375): its level
  * held down by the disagreement on payment-api's SLA, said critical; an
- * element said useful, and counted.
+ * element said useful, and counted. Its API (LEKA-376): the tab hears the
+ * context as it happens — a stream of server-sent events, across origins,
+ * with the session — and an element opened says how it stood in each
+ * version and, asked, the records it was read from.
  */
 
 test.describe("the context engine", () => {
@@ -149,5 +152,32 @@ test.describe("the context engine", () => {
       .getByRole("button", { name: "Utile", exact: true })
       .click();
     await expect(page.getByTestId("quality-feedback-counts")).toContainText("1 utile(s)");
+  });
+
+  test("streams what happens to it, and inspects an element down to its records", async ({
+    page,
+  }) => {
+    await openContextTab(page);
+    await page.getByLabel("Pourquoi ?").fill("Pourquoi payment-api est lent ?");
+    const streaming = page.waitForResponse((response) =>
+      /\/api\/v1\/context\/[0-9a-f-]{36}\/events/.test(response.url()),
+    );
+    await page.getByRole("button", { name: "Assembler le contexte" }).click();
+    const stream = await streaming;
+    expect(stream.status()).toBe(200);
+    expect(stream.headers()["content-type"]).toContain("text/event-stream");
+
+    await page
+      .getByTestId("context-elements")
+      .getByRole("button", { name: "Provenance de payment-api", exact: true })
+      .click();
+    const inspected = page.getByTestId("element-inspect");
+    await expect(inspected.getByTestId("element-history")).toContainText("v1 · créée · n° 1");
+    await expect(inspected.getByTestId("element-quality")).toContainText("Désaccord sur sla");
+    await inspected.getByRole("button", { name: "Voir les preuves" }).click();
+    // The demo's model is seeded, not read from records: none is kept.
+    await expect(inspected.getByTestId("element-evidence")).toContainText(
+      "Aucun enregistrement de source n'est gardé pour cet élément.",
+    );
   });
 });
