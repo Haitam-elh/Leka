@@ -12,7 +12,9 @@ what matters most first, duplicates folded, disagreements said (LEKA-372)
 the company — behind the model said, made again where it is used,
 widened, narrowed, asked again (LEKA-374) — judges how good it is —
 complete, fresh, to be relied on, what it lacks, what it disagrees on and
-how badly (LEKA-375) — and hands it to whatever analyses the request.
+how badly (LEKA-375) — and hands it to whatever analyses the request,
+through a stable, versioned, guarded API (LEKA-376,
+[context-api.md](context-api.md)).
 
 ```
  sources ─▶ … ─▶ company model (leka.knowledge)      records' own text (leka.ingestion)
@@ -407,6 +409,15 @@ readable after a kind is renamed.
 | `GET /context/{id}/quality?version=` | `intention:read` | how good a version is (§ 15) — the latest that holds something by default — whether the context is up to date now, what people said of it |
 | `POST /context/{id}/feedback` | `intention:create` | `{version?, ref_id?, verdict, note?}`: an element useful, not useful, wrong — or `missing`, with a note (201); says nothing: 422; no such version or element: 404 |
 | `GET /context/feedback?days=` | `intention:read` | what people said, counted by the retrievers that found it, by why it was there, by kind of thing (§ 15) |
+| `GET /context/contract` | `intention:read` | the contract, published (LEKA-376, § 16) |
+| `GET /context/{id}/elements/{ref}?version=` | `intention:read` | one element inspected: what quality says of it, its history across versions, what people said |
+| `GET /context/{id}/elements/{ref}/evidence?version=` | `intention:read`, `source:read` | the source records it was read from |
+| `GET /context/{id}/events` | `intention:read` | what happens to it, as server-sent events |
+
+`GET /context` filters too by `holds`, `q`, `level`, `mine`; archiving and
+`PATCH` are the context's maker's, or an admin's (`context:manage`); every
+response says its contract (`Leka-Context-Contract`). The whole API, for
+the services and screens that use it: [context-api.md](context-api.md).
 | `POST /context/{id}/archive` | `intention:create` | archived; twice changes nothing |
 | `GET /context/{id}/versions` | `intention:read` | its versions, the latest first, paged — each with its retrieval report |
 | `GET /context/{id}/assembled` | `intention:read` | one version whole: `?version=`, or `?at=`, or the latest that holds something; both: 400 |
@@ -868,6 +879,35 @@ opened: *Cet élément vous sert-il ?* — useful, not useful, wrong, said
 once. Step 2 of a new intention: **Niveau de confiance** (mockup 03) and
 *Ce qui manque*, the context's own gaps beside the intention's.
 
+## 16. The API, published (LEKA-376)
+
+Everything a client of the context engine needs is
+[context-api.md](context-api.md): who may ask for what, route by route;
+the errors; the contract and its versions — said on every response, asked
+for in a header, published with its JSON Schema at `GET /context/contract`;
+the flows end to end — assemble, query, inspect down to the source records,
+history, quality and feedback; following a context as it changes, as
+server-sent events; what holds it secure; and the same from LEKA's own
+services, in Python.
+
+What LEKA-376 added to the engine:
+
+- **Query**: `GET /context` by what its latest version holds (`holds` —
+  the elements' `(workspace, ref_id)` index), its words, its quality, its
+  maker.
+- **Inspection**: `ContextService.inspect_element()` — an element, what the
+  version's quality names it in (§ 15), its history across the context's
+  versions, what people said of it; `evidence()` — the records behind it,
+  read through `leka.ingestion` (`ContentRepository.evidence_of`, `_in`):
+  an entity's by the keys entity resolution made it of, a relationship's
+  by the records that stated it.
+- **Streaming**: `leka/context/stream.py`, server-sent events, a session per
+  look, membership read again at each.
+- **Authorization**: `context:manage`; the `_steward` dependency on archiving
+  and `PATCH`; evidence asks `source:read` too.
+- **Security tested** route by route: `tests/test_context_api_security.py`;
+  the flows: `tests/test_context_api.py`.
+
 ## Not yet
 
 - **Meaning, not only words.** The search reads words and a vocabulary of
@@ -895,7 +935,14 @@ once. Step 2 of a new intention: **Niveau de confiance** (mockup 03) and
 - **An owner, a page, a watching source beyond the roots.** Knowledge
   gaps are read for what a context starts from that has them (§ 15), not
   for everything it holds: a walk per root is what it costs today.
-- **Fine-grained access and the full inspection API** (LEKA-376).
+- **Access by source.** Who may read a context is who may read the
+  workspace's contexts; the records behind an element ask `source:read`.
+  Hiding from a member what a source they may not read says — elements as
+  well as records — needs sources to be readable per member, which no role
+  says yet.
+- **Clients other than a person.** The HTTP API takes a person's session;
+  LEKA's services call it in-process (context-api.md § 8). A token for a
+  system outside LEKA comes with the first such client.
 - **Intentions** as subjects (LEKA-384): a context takes an
   `intention_id` as its subject today; nothing keeps the intention yet.
 - **A retention for contexts nobody reads.** LEKA-374 makes none without
