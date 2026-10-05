@@ -32,6 +32,7 @@ from leka.core.security import hash_password
 from leka.db import session_factory, system_scope
 from leka.identity import User as Account
 from leka.ingestion import RESOLVER_VERSION, ResolutionDecision, ResolvedEntity
+from leka.intelligence.job import analyse_workspace
 from leka.knowledge import (
     MODEL_VERSION,
     Entity,
@@ -454,6 +455,12 @@ async def _build_demo_workspace() -> None:
             "entities": len((await session.execute(select(Entity))).scalars().all()),
             "relationships": len((await session.execute(select(Relationship))).scalars().all()),
         }
+
+    # What LEKA concludes from it (LEKA-377): the analyses, run as the job
+    # runs them — "Insights LEKA" shows what they found, nothing written by
+    # hand.
+    analysed = await analyse_workspace(workspace.id, trigger="schedule")
+    counts["open findings"] = int(str(analysed.get("opened", 0)))
 
     print(f"Seeded workspace {WORKSPACE_NAME!r} ({WORKSPACE_SLUG})")
     for label, count in counts.items():

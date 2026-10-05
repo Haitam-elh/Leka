@@ -21,6 +21,7 @@ from leka.api import (
     health,
     identity,
     ingestion,
+    intelligence,
     intentions,
     knowledge,
     platform,
@@ -50,6 +51,7 @@ api_router.include_router(knowledge.router)
 # The graph explored: search, walks, paths, the landscapes (LEKA-369).
 api_router.include_router(graph.router)
 api_router.include_router(context.router)
+api_router.include_router(intelligence.router)
 api_router.include_router(capabilities.router)
 api_router.include_router(intentions.router)
 

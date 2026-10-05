@@ -94,6 +94,11 @@ SCHEDULE: tuple[Scheduled, ...] = (
     # The contexts that follow the model (LEKA-374): what an event lost,
     # what a pass left; the checks past 90 days forgotten.
     Scheduled("context-sweep", "leka.context.job.run_context_sweep", cron="52 * * * *"),
+    # The analyses (LEKA-377): a workspace behind its model, a new analysis
+    # or version, a day without a run; dead runs closed, old ones forgotten.
+    Scheduled(
+        "intelligence-sweep", "leka.intelligence.job.run_intelligence_sweep", cron="56 * * * *"
+    ),
 )
 
 

@@ -43,8 +43,9 @@ LAYERS: dict[str, int] = {
     "knowledge": 6,
     "context": 7,
     "capabilities": 8,
-    "intentions": 9,
-    "api": 10,
+    "intelligence": 9,
+    "intentions": 10,
+    "api": 11,
 }
 
 # Files a module keeps to itself. Everything else imports the package.

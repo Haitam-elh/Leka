@@ -20,6 +20,7 @@ import leka.connectors
 import leka.context
 import leka.identity
 import leka.ingestion
+import leka.intelligence
 import leka.knowledge
 import leka.platform  # noqa: F401
 from alembic import context

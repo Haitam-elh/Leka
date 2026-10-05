@@ -44,7 +44,7 @@ from typing import Literal
 
 from leka.ingestion import monitoring_kinds
 from leka.knowledge import architecture as arch
-from leka.knowledge.models import Entity, EntityType, Relationship, RelationshipType
+from leka.knowledge.models import Entity, EntityType, Lifecycle, Relationship, RelationshipType
 from leka.knowledge.registry import MODEL_VERSION
 from leka.knowledge.repository import GraphRepository
 from leka.knowledge.schemas import (
@@ -778,6 +778,31 @@ class GraphService:
         return {
             entity_id: EntityBrief.model_validate(entity) for entity_id, entity in found.items()
         }
+
+    async def owners(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, list[EntityBrief]]:
+        """Who owns each of these (LEKA-377): the teams and the people a
+        source names as owners — `owned_by` from it, or `owns` to it — the
+        removed left out. A thing no source names an owner for is absent."""
+        edges = await self._graph.around(
+            list(ids), (RelationshipType.OWNED_BY, RelationshipType.OWNS)
+        )
+        wanted = set(ids)
+        pairs = [
+            (edge.from_entity_id, edge.to_entity_id)
+            if edge.type is RelationshipType.OWNED_BY
+            else (edge.to_entity_id, edge.from_entity_id)
+            for edge in edges
+        ]
+        named = await self._graph.by_ids([owner for _, owner in pairs])
+        found: dict[uuid.UUID, list[EntityBrief]] = {}
+        for thing, owner in pairs:
+            entity = named.get(owner)
+            if thing not in wanted or entity is None or entity.lifecycle is Lifecycle.REMOVED:
+                continue
+            briefs = found.setdefault(thing, [])
+            if all(brief.id != entity.id for brief in briefs):
+                briefs.append(EntityBrief.model_validate(entity))
+        return found
 
     async def environments(self) -> list[str]:
         """The environments the model knows, folded (LEKA-373)."""
