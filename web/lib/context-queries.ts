@@ -15,6 +15,8 @@ export const contextKeys = {
   diff: (id: string, from: number, to: number) =>
     [...contextKeys.all, "diff", id, from, to] as const,
   checks: (id: string) => [...contextKeys.all, "checks", id] as const,
+  quality: (id: string, version: number | null) =>
+    [...contextKeys.all, "quality", id, version] as const,
 };
 
 export function useEntityContexts(entityId: string) {
@@ -54,6 +56,15 @@ export function useContextChecks(id: string | null) {
   return useQuery({
     queryKey: contextKeys.checks(id ?? ""),
     queryFn: () => contexts.checks(id ?? ""),
+    enabled: id !== null,
+  });
+}
+
+/** How good a version is, and what people said of it (LEKA-375). */
+export function useContextQuality(id: string | null, version: number | null) {
+  return useQuery({
+    queryKey: contextKeys.quality(id ?? "", version),
+    queryFn: () => contexts.quality(id ?? "", version ?? undefined),
     enabled: id !== null,
   });
 }

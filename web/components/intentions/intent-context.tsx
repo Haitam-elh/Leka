@@ -7,11 +7,13 @@ import { useMemo, useState } from "react";
 import { cn } from "cn";
 
 import { changeSaid } from "@/components/environment/context-freshness";
+import { QualityPanel, qualityGapSaid } from "@/components/environment/context-quality";
+import { gapSaid } from "@/components/intentions/gap-said";
 import { entityHref, IconTile, Logo, typeIcon, typeLabel } from "@/components/environment/parts";
-import { IntelligenceSection, Pill, retrieverName } from "@/components/intelligence";
+import { IntelligenceSection, Pill } from "@/components/intelligence";
 import { exactDate } from "@/components/knowledge/time";
 import { Button } from "@/components/ui/button";
-import type { AssembledContext, IntentGap, IntentPlan } from "@/lib/context";
+import type { AssembledContext, IntentPlan, QualityGap } from "@/lib/context";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 
@@ -21,14 +23,18 @@ import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
  * what it is about and how it knows, when, where — what is missing, said
  * rather than ignored, the context it gathered from the company model, and
  * the sources that context came from. Asked again, the same context is
- * made again and says what LEKA reads differently (LEKA-374). The findings
+ * made again and says what LEKA reads differently (LEKA-374); how sure LEKA
+ * can be of that context, and what it lacks — the intention's gaps and its
+ * own — as mockup 03's « Niveau de confiance » says it (LEKA-375). The findings
  * and the recommendations come with the analysis engine; nothing here
  * pretends to be them.
  */
 
-type Dictionary = ReturnType<typeof useDictionary>;
 
 const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40";
+
+// Said where it lived (LEKA-373): its own module since LEKA-375.
+export { gapSaid };
 
 export function IntentContext({
   assembled,
@@ -62,10 +68,11 @@ export function IntentContext({
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
         <div className="min-w-0 space-y-4">
-          {plan ? <Missing gaps={plan.gaps} /> : null}
+          {plan || assembled.quality ? <Missing assembled={assembled} /> : null}
           <Gathered assembled={assembled} />
         </div>
         <div className="min-w-0 space-y-4">
+          <QualityPanel assembled={assembled} compact level={2} title={t.quality.stepTitle} />
           {plan ? <Scope plan={plan} /> : null}
           <SourcesRead assembled={assembled} />
         </div>
@@ -112,18 +119,24 @@ function AskedAgain({ assembled }: { assembled: AssembledContext }) {
   );
 }
 
-function Missing({ gaps }: { gaps: readonly IntentGap[] }) {
+/** What is missing — the intention's gaps, and, judged (LEKA-375), the
+ * context's own — the critical first. */
+function Missing({ assembled }: { assembled: AssembledContext }) {
   const t = useDictionary();
   const w = t.intent.gaps;
-  const ordered = [...gaps].sort(
-    (a, b) => Number(b.severity === "critical") - Number(a.severity === "critical"),
-  );
+  const names = new Map(assembled.elements.map((element) => [element.ref_id, element.label]));
+  const said: QualityGap[] =
+    assembled.quality?.gaps ??
+    (assembled.intent?.gaps ?? []).map((gap) => ({
+      ...gap,
+      measure: "completeness",
+      origin: "intent",
+    }));
+  const rank = { critical: 0, warning: 1, info: 2 } as const;
+  const ordered = [...said].sort((a, b) => rank[a.severity] - rank[b.severity]);
+  const tones = { critical: "danger", warning: "warning", info: "neutral" } as const;
   return (
-    <IntelligenceSection
-      kind="missing"
-      title={fill(w.title, { count: gaps.length })}
-      level={2}
-    >
+    <IntelligenceSection kind="missing" title={fill(w.title, { count: said.length })} level={2}>
       {ordered.length === 0 ? (
         <p className="text-[0.8125rem] text-state-success" data-testid="intent-nothing-missing">
           {w.none}
@@ -138,10 +151,8 @@ function Missing({ gaps }: { gaps: readonly IntentGap[] }) {
               data-kind={gap.kind}
               data-severity={gap.severity}
             >
-              <Pill tone={gap.severity === "critical" ? "danger" : "warning"}>
-                {gap.severity === "critical" ? w.critical : w.warning}
-              </Pill>
-              <span className="min-w-0 text-brand-navy">{gapSaid(t, gap)}</span>
+              <Pill tone={tones[gap.severity]}>{t.quality.gaps.severity[gap.severity]}</Pill>
+              <span className="min-w-0 text-brand-navy">{qualityGapSaid(t, gap, names)}</span>
             </li>
           ))}
         </ul>
@@ -150,51 +161,6 @@ function Missing({ gaps }: { gaps: readonly IntentGap[] }) {
   );
 }
 
-/** A gap in words, from its kind and what it was read from. */
-export function gapSaid(t: Dictionary, gap: IntentGap): string {
-  const w = t.intent.gaps.kinds as Record<string, string>;
-  const detail = (gap.detail ?? {}) as Record<string, unknown>;
-  const list = (value: unknown) => (Array.isArray(value) ? value.map(String) : []);
-  const capabilities = t.intent.capabilities as Record<string, string>;
-  switch (gap.kind) {
-    case "no_subject": {
-      const maybe = list(detail.maybe);
-      return maybe.length
-        ? `${w.no_subject} ${fill(t.intent.gaps.maybe, { names: maybe.join(", ") })}`
-        : w.no_subject;
-    }
-    case "ambiguous_subject":
-      return fill(w.ambiguous_subject, {
-        said: String(detail.said ?? ""),
-        count: Array.isArray(detail.things) ? detail.things.length : 0,
-      });
-    case "unknown_service":
-      return fill(w.unknown_service, { count: list(detail.ids).length });
-    case "unknown_environment":
-      return fill(w.unknown_environment, { environment: String(detail.environment ?? "") });
-    case "no_source_for":
-      return fill(w.no_source_for, {
-        needs: list(detail.needs)
-          .map((need) => capabilities[need] ?? need)
-          .join(", "),
-      });
-    case "no_event_anchor": {
-      const anchors = t.intent.anchors as Record<string, string>;
-      const anchor = String(detail.anchor ?? "");
-      return fill(w.no_event_anchor, { anchor: anchors[anchor] ?? anchor });
-    }
-    case "model_stale":
-      return fill(w.model_stale, { hours: Number(detail.hours ?? 0) });
-    case "retriever_failed":
-      return fill(w.retriever_failed, {
-        retriever: retrieverName(t, String(detail.retriever ?? "")),
-      });
-    case "disputed_subject":
-      return fill(w.disputed_subject, { about: String(detail.about ?? "") });
-    default:
-      return w[gap.kind] ?? gap.said;
-  }
-}
 
 function Scope({ plan }: { plan: IntentPlan }) {
   const t = useDictionary();
