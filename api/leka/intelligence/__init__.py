@@ -8,7 +8,8 @@ runs under one key, with what shows it and where that was read: opened,
 seen again, resolved, reopened.
 
 The frame (analysis.py) is the epic's: LEKA-378 to 383 add their analyses
-beside the first ones (rules.py). Model-assisted analyses are declared like
+beside the first ones (rules.py) — change and impact (changes.py, LEKA-378):
+which changes matter, what they reach, what followed them. Model-assisted analyses are declared like
 the others and skipped, said so, until leka.capabilities calls a model.
 
 Above leka.capabilities, which a model-assisted analysis will call the
@@ -37,9 +38,14 @@ from leka.intelligence.schemas import (
     AnalysisRequest,
     AnalysisRequested,
     AnalyzerRead,
+    ChangeImpactDetail,
+    ChangeImpactRead,
+    ChangeImpactTimeline,
     EvidenceRead,
     FindingDetail,
     FindingRead,
+    FollowedRead,
+    ImpactRead,
     IntelligenceSummary,
     RunDetail,
     RunRead,
@@ -54,6 +60,9 @@ __all__ = [
     "AnalysisRequested",
     "Analyzer",
     "AnalyzerRead",
+    "ChangeImpactDetail",
+    "ChangeImpactRead",
+    "ChangeImpactTimeline",
     "ContextStanding",
     "Draft",
     "Evidence",
@@ -62,6 +71,8 @@ __all__ = [
     "FindingDetail",
     "FindingFilters",
     "FindingRead",
+    "FollowedRead",
+    "ImpactRead",
     "IntelligenceRepository",
     "IntelligenceRun",
     "IntelligenceService",

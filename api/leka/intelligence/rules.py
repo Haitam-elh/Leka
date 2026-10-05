@@ -34,6 +34,7 @@ from leka.intelligence.analysis import (
     Severity,
     Subject,
 )
+from leka.intelligence.changes import ANALYZER as CHANGE_IMPACT
 from leka.knowledge import RELIED_ON, ArchitectureCardRead, ArchitectureLinkRead
 
 # What relies on a thing, before it is a concentration worth saying.
@@ -350,6 +351,7 @@ def context_health(material: Material) -> list[Draft]:
     return drafts
 
 
+# Every analysis LEKA runs: these, and the epic's after them (LEKA-378 on).
 ANALYZERS: tuple[Analyzer, ...] = (
     Analyzer(
         name="dependency_concentration",
@@ -378,6 +380,8 @@ ANALYZERS: tuple[Analyzer, ...] = (
         summary="The contexts in use that failed, fell behind the model or were judged weak.",
         run=context_health,
     ),
+    # Change and impact (LEKA-378): changes.py.
+    CHANGE_IMPACT,
 )
 
 

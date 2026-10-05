@@ -58,6 +58,10 @@ from leka.knowledge.schemas import (
     ArchitectureRankRead,
     ArchitectureRead,
     ArchitectureSourceRead,
+    ChangeFootprint,
+    ChangeIncident,
+    ChangeReach,
+    ChangeTouch,
     ContextMaterial,
     EntityBrief,
     EntityRead,
@@ -84,6 +88,7 @@ from leka.knowledge.schemas import (
     ViewSourceRead,
 )
 from leka.knowledge.search import NAMES_APART, any_of, fold, query
+from leka.knowledge.service import KnowledgeService
 from leka.knowledge.views import (
     MAX_PER_LAYER,
     VIEWS,
@@ -129,6 +134,42 @@ EVENT_NAMES = {
 }
 EVENT_SCOPE = 2
 MAX_EVENTS = 50
+# A change's footprint (LEKA-378): the changes it is drawn for; what they
+# are tied to by their sources — part of, affecting, deployed to — of these
+# kinds, not an environment or a commit; what depends on that, this far;
+# the incidents that followed, at most this many; what of its source's
+# words it keeps.
+FOOTPRINT_KINDS = (
+    EntityType.DEPLOYMENT,
+    EntityType.CHANGE,
+    EntityType.RELEASE,
+    EntityType.PULL_REQUEST,
+)
+FOOTPRINT_WORDS = {
+    EntityType.DEPLOYMENT: "deployment",
+    EntityType.CHANGE: "change",
+    EntityType.RELEASE: "release",
+    EntityType.PULL_REQUEST: "pull_request",
+}
+FOOTPRINT_TIES = (
+    RelationshipType.PART_OF,
+    RelationshipType.AFFECTS,
+    RelationshipType.DEPLOYED_TO,
+)
+FOOTPRINT_TOUCHED = (
+    EntityType.SERVICE,
+    EntityType.APPLICATION,
+    EntityType.REPOSITORY,
+    EntityType.DATABASE,
+    EntityType.INFRA_RESOURCE,
+)
+FOOTPRINT_DEPTH = 2
+FOOTPRINT_SCOPE = 2
+FOOTPRINT_DEPENDENCIES = 200
+# What an entity depends on that its timeline looks around, at most.
+FOOTPRINT_AROUND = 50
+FOOTPRINT_INCIDENTS = 20
+FOOTPRINT_DETAILS = ("ref", "commit", "version", "url", "changes", "risk", "title", "number")
 
 Direction = Literal["outgoing", "incoming", "both"]
 WAYS: dict[Direction, bool | None] = {"outgoing": True, "incoming": False, "both": None}
@@ -804,6 +845,175 @@ class GraphService:
                 briefs.append(EntityBrief.model_validate(entity))
         return found
 
+    async def footprints(
+        self,
+        *,
+        since: datetime,
+        until: datetime,
+        limit: int,
+        after: timedelta,
+        around: uuid.UUID | None = None,
+    ) -> tuple[list[ChangeFootprint], bool]:
+        """The changes between two dates — deployments, change requests,
+        releases, pull requests — the latest first, each with what the
+        model says it reaches (LEKA-378): what it was made to, what depends
+        on that, the applications and business holding them, the incidents
+        that followed within `after` or say it caused them. `around` an
+        entity: the changes made to it, to what it is made of, or to what
+        it depends on. And whether there were more than `limit`."""
+        scope = None
+        if around is not None:
+            # It, what it depends on, and what each of those is made of —
+            # a change in a repository of a service it calls is around it.
+            below, _ = await self._graph.dependencies(
+                around,
+                downstream=True,
+                depth=FOOTPRINT_DEPTH,
+                environment=None,
+                limit=FOOTPRINT_AROUND,
+            )
+            scope = set()
+            for thing in {around, *below}:
+                scope |= await self._graph.scope(thing, depth=FOOTPRINT_SCOPE)
+        found, truncated = await self._graph.happened(
+            scope=scope, kinds=FOOTPRINT_KINDS, since=since, until=until, limit=limit
+        )
+        changes = list({thing.id: thing for thing, _ in found}.values())[:limit]
+        return [await self._footprint(change, after=after) for change in changes], truncated
+
+    async def footprint(self, change_id: uuid.UUID, *, after: timedelta) -> ChangeFootprint | None:
+        """One change, and what it reaches; None when the workspace has no
+        such change."""
+        found = (await self._graph.by_ids([change_id])).get(change_id)
+        if found is None or found.type not in FOOTPRINT_KINDS or found.occurred_at is None:
+            return None
+        return await self._footprint(found, after=after)
+
+    async def _footprint(self, change: Entity, *, after: timedelta) -> ChangeFootprint:
+        at = change.occurred_at or datetime.now(UTC)
+        edges = await self._graph.around([change.id], (*FOOTPRINT_TIES, RelationshipType.CAUSED_BY))
+        ends = await self._graph.by_ids(
+            [e.to_entity_id for e in edges] + [e.from_entity_id for e in edges]
+        )
+        touched: dict[uuid.UUID, tuple[Entity, str]] = {}
+        for edge in sorted(edges, key=lambda e: -e.confidence):
+            other = ends.get(edge.to_entity_id)
+            if (
+                edge.from_entity_id == change.id
+                and edge.type in FOOTPRINT_TIES
+                and other is not None
+                and other.type in FOOTPRINT_TOUCHED
+                and other.lifecycle is not Lifecycle.REMOVED
+            ):
+                touched.setdefault(other.id, (other, edge.type.value))
+        # Made in a repository: made to the services it is part of.
+        repositories = [e for e, _ in touched.values() if e.type is EntityType.REPOSITORY]
+        if repositories:
+            lifted = await self._graph.around(
+                [r.id for r in repositories], (RelationshipType.PART_OF,)
+            )
+            holders = await self._graph.by_ids([e.to_entity_id for e in lifted])
+            for edge in lifted:
+                holder = holders.get(edge.to_entity_id)
+                if (
+                    holder is not None
+                    and edge.from_entity_id in {r.id for r in repositories}
+                    and holder.type in (EntityType.SERVICE, EntityType.APPLICATION)
+                    and holder.lifecycle is not Lifecycle.REMOVED
+                ):
+                    touched.setdefault(holder.id, (holder, "via_repository"))
+        reached: dict[uuid.UUID, tuple[int, uuid.UUID]] = {}
+        for thing in touched:
+            depths, _ = await self._graph.dependencies(
+                thing,
+                downstream=False,
+                depth=FOOTPRINT_DEPTH,
+                environment=None,
+                limit=FOOTPRINT_DEPENDENCIES,
+            )
+            for dependent, depth in depths.items():
+                if dependent in touched or dependent == change.id or depth < 1:
+                    continue
+                held = reached.get(dependent)
+                if held is None or depth < held[0]:
+                    reached[dependent] = (depth, thing)
+        named = await self._graph.by_ids(list(reached))
+        impact = await KnowledgeService(self._graph).impact(list(touched))
+        # What followed: on the footprint, within `after`; or saying so.
+        footprint = set(touched) | set(reached)
+        incidents: dict[uuid.UUID, ChangeIncident] = {}
+        stated = [
+            e.from_entity_id
+            for e in edges
+            if e.type is RelationshipType.CAUSED_BY and e.to_entity_id == change.id
+        ]
+        for incident_id in stated:
+            incident = ends.get(incident_id)
+            if incident is not None and incident.type is EntityType.INCIDENT:
+                incidents[incident.id] = _incident(incident, on=None, stated=True)
+        if footprint:
+            followed, _ = await self._graph.happened(
+                scope=footprint,
+                kinds=(EntityType.INCIDENT,),
+                since=at,
+                until=at + after,
+                limit=FOOTPRINT_INCIDENTS,
+            )
+            on_ids = {via for _, via in followed if via is not None}
+            ons = await self._graph.by_ids(list(on_ids))
+            for incident, via in followed:
+                if incident.occurred_at is None or incident.occurred_at < at:
+                    continue
+                on = ons.get(via) if via is not None else None
+                known = incidents.get(incident.id)
+                incidents[incident.id] = _incident(
+                    incident, on=on, stated=known is not None and known.stated
+                )
+        kinds = await self._graph.source_kinds(list(_source_ids(change)))
+        a = change.attributes
+        return ChangeFootprint(
+            change=EntityBrief.model_validate(change),
+            kind=FOOTPRINT_WORDS[change.type],
+            at=at,
+            state=_said(a.get("state")),
+            environment=_said(a.get("environment")),
+            details={
+                name: str(a[name])
+                for name in FOOTPRINT_DETAILS
+                if isinstance(a.get(name), str | int | float) and str(a[name])
+            },
+            sources=sorted(set(kinds.values())),
+            source_ids=sorted(str(source) for source in _source_ids(change)),
+            touched=[
+                ChangeTouch(
+                    entity=EntityBrief.model_validate(entity),
+                    how=how,
+                    criticality=_said(entity.attributes.get("criticality")),
+                )
+                for entity, how in touched.values()
+            ],
+            reached=sorted(
+                (
+                    ChangeReach(
+                        entity=EntityBrief.model_validate(named[other]),
+                        distance=depth,
+                        through=EntityBrief.model_validate(touched[through][0]),
+                        criticality=_said(named[other].attributes.get("criticality")),
+                    )
+                    for other, (depth, through) in reached.items()
+                    if other in named and named[other].lifecycle is not Lifecycle.REMOVED
+                ),
+                key=lambda r: (r.distance, r.entity.name.lower()),
+            ),
+            applications=impact.applications,
+            capabilities=impact.capabilities,
+            processes=impact.processes,
+            incidents=sorted(
+                incidents.values(),
+                key=lambda i: (not i.stated, i.opened_at or at),
+            ),
+        )
+
     async def environments(self) -> list[str]:
         """The environments the model knows, folded (LEKA-373)."""
         return await self._graph.environments()
@@ -1099,6 +1309,22 @@ def _uuid(value: object) -> uuid.UUID | None:
         return uuid.UUID(str(value))
     except ValueError:
         return None
+
+
+def _said(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _incident(entity: Entity, *, on: Entity | None, stated: bool) -> ChangeIncident:
+    a = entity.attributes
+    return ChangeIncident(
+        entity=EntityBrief.model_validate(entity),
+        opened_at=entity.occurred_at,
+        severity=_said(a.get("severity")),
+        state=_said(a.get("state")),
+        on=EntityBrief.model_validate(on) if on is not None else None,
+        stated=stated,
+    )
 
 
 def _source_ids(entity: Entity) -> set[uuid.UUID]:

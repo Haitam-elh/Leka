@@ -24,7 +24,7 @@ class AnalyzerRead(BaseModel):
     version: int
     category: str = Field(description="architecture, organisation, context…")
     method: Literal["rules", "model"]
-    reads: list[Literal["model", "context"]]
+    reads: list[Literal["model", "context", "changes"]]
     summary: str = Field(description="What it looks for (English).")
     available: bool = Field(description="False for a model-assisted one: no model gateway yet.")
 
@@ -150,3 +150,80 @@ class IntelligenceSummary(BaseModel):
     open: dict[str, int] = Field(description="The open findings, by severity.")
     top: list[FindingRead] = Field(description="The most pressing open ones.")
     latest: RunRead | None = Field(description="The latest run, whatever came of it.")
+
+
+# ── change and impact (LEKA-378) ───────────────────────────────────────
+
+
+class ImpactRead(BaseModel):
+    """One thing a change reaches, and why it ranks there."""
+
+    model_config = ConfigDict(frozen=True)
+
+    subject: SubjectRead
+    distance: int = Field(description="0: made to it; 1, 2: depends on that, steps away.")
+    score: float
+    reasons: list[str] = Field(description="touched, depends_on:<what>, holds, incident, critical.")
+
+
+class FollowedRead(BaseModel):
+    """An incident after a change, or that its source says it caused."""
+
+    model_config = ConfigDict(frozen=True)
+
+    subject: SubjectRead
+    opened_at: datetime | None
+    hours_after: float | None
+    severity: str | None
+    state: str | None
+    on: SubjectRead | None = Field(description="What of the change's footprint it affects.")
+    stated: bool = Field(description="Its source says the change caused it.")
+
+
+class ChangeImpactRead(BaseModel):
+    """A change, judged: what kind, when, current or history, how much it
+    matters and why, what it was made to, how far it reaches."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    name: str
+    kind: Literal["deployment", "change", "release", "pull_request"]
+    at: datetime
+    state: str | None
+    environment: str | None
+    current: bool = Field(description="Within 72 hours: still playing out. Else history.")
+    significance: float = Field(description="0 to 1.")
+    signals: list[str] = Field(
+        description="production, failed, incident_after, stated_cause, wide, business, critical."
+    )
+    touched: list[SubjectRead]
+    reached: int
+    incidents: int
+    top: list[ImpactRead] = Field(description="The three most affected.")
+    sources: list[str]
+
+
+class ChangeImpactDetail(ChangeImpactRead):
+    """And everything it reaches, ranked; the business; what followed;
+    what its source says of it."""
+
+    details: dict[str, str]
+    source_ids: list[str]
+    impacts: list[ImpactRead]
+    applications: list[SubjectRead]
+    capabilities: list[SubjectRead]
+    processes: list[SubjectRead]
+    followed: list[FollowedRead]
+
+
+class ChangeImpactTimeline(BaseModel):
+    """The changes between two dates, the latest first."""
+
+    model_config = ConfigDict(frozen=True)
+
+    since: datetime
+    until: datetime
+    around: uuid.UUID | None = Field(description="The entity they were made to or around.")
+    changes: list[ChangeImpactRead]
+    truncated: bool

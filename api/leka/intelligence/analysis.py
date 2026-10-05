@@ -38,7 +38,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from leka.knowledge import ArchitectureRead
+from leka.knowledge import ArchitectureRead, ChangeFootprint
 
 
 class Reads(enum.StrEnum):
@@ -46,6 +46,8 @@ class Reads(enum.StrEnum):
 
     MODEL = "model"
     CONTEXT = "context"
+    # The changes of the last HISTORY, each with its footprint (LEKA-378).
+    CHANGES = "changes"
 
 
 class Method(enum.StrEnum):
@@ -151,10 +153,13 @@ class Material:
     # read with the architecture, which names only a team.
     owners: Mapping[uuid.UUID, tuple[str, ...]] = field(default_factory=dict)
     contexts: tuple[ContextStanding, ...] | None = None
+    changes: tuple[ChangeFootprint, ...] | None = None
 
     def has(self, reads: Reads) -> bool:
         if reads is Reads.MODEL:
             return self.architecture is not None
+        if reads is Reads.CHANGES:
+            return self.changes is not None
         return self.contexts is not None
 
 

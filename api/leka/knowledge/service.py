@@ -1512,7 +1512,7 @@ class KnowledgeService:
             ],
             suspected_causes=ties(RelationshipType.CAUSED_BY, outgoing=True),
             changed_before=[e for e in changed if e.entity.id != entity.id],
-            impact=await self._impact([tie.entity.id for tie in affected]),
+            impact=await self.impact([tie.entity.id for tie in affected]),
         )
 
     async def _incidents(
@@ -1798,10 +1798,10 @@ class KnowledgeService:
             previous = state
         return sorted(found, key=lambda step: (step.at, step.origin != "source"))
 
-    async def _impact(self, affected: list[uuid.UUID]) -> Impact:
-        """What an incident reaches: what depends on what it affects — two
-        steps — the applications holding them, the business relying on
-        them."""
+    async def impact(self, affected: list[uuid.UUID]) -> Impact:
+        """What an incident — or a change (LEKA-378) — reaches: what depends
+        on what it affects, two steps, the applications holding them, the
+        business relying on them."""
         reached: set[uuid.UUID] = set()
         for thing in affected:
             found, _ = await self._entities.dependencies(
