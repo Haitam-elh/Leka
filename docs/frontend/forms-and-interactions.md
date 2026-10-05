@@ -300,8 +300,10 @@ only when someone chose it, so that « depuis hier » in the question says
 more than a preset nobody touched. Step 2 (`intent-context.tsx`, mockup
 03) shows what LEKA understood, what is missing and the context it
 gathered ([context.md § 13](../context.md)); nothing to start from is said
-in the form. Until LEKA-384 keeps intentions, that is what submitting
-does.
+in the form. Edited from step 2 (« Modifier ») and launched again, the
+same context is asked again (LEKA-374, `reaskIntention`): its version 2
+says what LEKA reads differently ([context.md § 14](../context.md)). Until
+LEKA-384 keeps intentions, that is what submitting does.
 
 ## What is deliberately not here
 
