@@ -104,7 +104,8 @@ written.
 | `ingestion` | collect → extract → parse → normalise | ← `connectors` | skeleton |
 | `knowledge` | the company model: canonical entities and relationships, their registry, versions, lifecycle and provenance; traversal | ← `ingestion` | **LEKA-361** — built from enrichment; see [company-model.md](company-model.md) |
 | `context` | retrieval, ranking, assembly of what an answer needs: contexts, their versions, each element's provenance; retrievers combined — graph, words, the records' text, time, paths | ← `knowledge`, `ingestion` (the records' text) | **LEKA-370**, **LEKA-371**, **LEKA-372**, **LEKA-373**, **LEKA-374**, **LEKA-375**, **LEKA-376** — the context engine, its retrieval, its ranking, what an intention asks of it, how it keeps up with the model (told by `knowledge.model_built`), how good it is, and its API; see [context.md](context.md), [context-api.md](context-api.md) |
-| `intentions` | intention → decision → action, with approval | ← `context` | skeleton |
+| `intentions` | intention → decision → action, with approval | ← `intelligence`, `context` | skeleton |
+| `intelligence` | what LEKA concludes from what it knows: analyses over the company model and the contexts, run when the model is built, hourly and on demand — each isolated, versioned; every run and step kept; findings kept across runs with their evidence and provenance | ← `capabilities`, `context`, `knowledge` | **LEKA-377** — the engine and its first rule analyses (told by `knowledge.model_built`); see [intelligence.md](intelligence.md) |
 | `capabilities` | **the only module that calls a language model**; loads and runs agents | `knowledge`, `context` | agent loader built, model gateway skeleton |
 | `governance` | permissions, the request principal, audit | `platform`, `identity` | permissions built, audit skeleton |
 | `api` | HTTP routes, one file per module | all of the above | health + 11 tenancy routes; other routers mounted and empty |
@@ -115,8 +116,11 @@ written.
 flowchart TD
     API[api] --> INT[intentions]
     API --> GOV[governance]
+    INT --> INTEL[intelligence]
     INT --> CTX[context]
     INT --> CAP[capabilities]
+    INTEL --> CAP
+    INTEL --> CTX
     CTX --> KNOW[knowledge]
     CAP --> CTX
     KNOW --> ING[ingestion]
@@ -135,7 +139,7 @@ flowchart TD
 **Dependencies point one way only:**
 
 ```
-intentions → context → knowledge → ingestion → connectors
+intentions → intelligence → context → knowledge → ingestion → connectors
 ```
 
 `connectors` knows nothing about the graph. `knowledge` knows nothing about
