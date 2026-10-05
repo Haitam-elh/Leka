@@ -2013,6 +2013,36 @@ class GraphRepository(EntityRepository):
         )
         return {source: kind.value for source, kind in rows.tuples().all()}
 
+    async def environments(self) -> list[str]:
+        """The environments the model knows: those its things and ties say
+        they are in, and its environments by name — folded, each once
+        (LEKA-373)."""
+        rows = await self._session.execute(
+            text(
+                """
+                SELECT DISTINCT lower(value) FROM (
+                    SELECT jsonb_array_elements_text(attributes -> 'environments') AS value
+                    FROM entities
+                    WHERE workspace_id = :workspace
+                      AND jsonb_typeof(attributes -> 'environments') = 'array'
+                    UNION
+                    SELECT jsonb_array_elements_text(attributes -> 'environments')
+                    FROM relationships
+                    WHERE workspace_id = :workspace
+                      AND jsonb_typeof(attributes -> 'environments') = 'array'
+                    UNION
+                    SELECT name FROM entities
+                    WHERE workspace_id = :workspace AND type = 'environment'
+                      AND lifecycle <> 'removed'
+                ) known
+                ORDER BY 1
+                LIMIT 100
+                """
+            ),
+            {"workspace": self.workspace_id},
+        )
+        return [str(value) for (value,) in rows.tuples().all() if value]
+
     async def built_at(self) -> datetime | None:
         """When the model was last built."""
         found = await self._session.scalar(

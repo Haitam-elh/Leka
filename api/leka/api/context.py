@@ -3,6 +3,12 @@
     POST /context                         a context, assembled from the company
                                           model around its roots: its first
                                           version, whole
+    POST /context/intents/plan            what an intention asks for, read from
+                                          its words and its scope: the context
+                                          request it makes, what is missing —
+                                          nothing kept (LEKA-373)
+    POST /context/intents                 that context, assembled, kept with
+                                          how the intention was read
     GET  /context                         the contexts, the latest changed first
                                           — by state, by subject
     GET  /context/{id}                    one: what it is for, what it asks,
@@ -38,6 +44,7 @@ from fastapi import APIRouter, Depends, Query, status
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
+from leka.connectors import SourceRepository
 from leka.context import (
     AssembledContext,
     Context,
@@ -53,6 +60,8 @@ from leka.context import (
     ContextStatus,
     ContextVersion,
     ContextVersionRead,
+    IntentAsk,
+    IntentPlan,
     RefreshOutcome,
     SubjectType,
 )
@@ -86,6 +95,7 @@ def _service(session: SessionDep, principal: Principal) -> ContextService:
         GraphService(GraphRepository(session, principal.workspace_id)),
         content=ContentRepository(session, principal.workspace_id),
         resolution=ResolutionRepository(session, principal.workspace_id),
+        sources=SourceRepository(session, principal.workspace_id),
     )
 
 
@@ -103,6 +113,33 @@ Making = Annotated[ContextService, Depends(_making)]
 
 def _missing(message: str = NOT_FOUND) -> ApiError:
     return ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, message)
+
+
+@router.post("/intents/plan", response_model=IntentPlan)
+async def plan_intent(body: IntentAsk, service: Reading) -> IntentPlan:
+    """What an intention asks the company model for, read from its words
+    and the scope it was given (LEKA-373): its kind; what it is about —
+    chosen, named, or what that belongs to on the business side; when;
+    where; under what constraints; the structured context request that
+    makes; and what is missing. Nothing is kept."""
+    return await service.plan_intent(body)
+
+
+@router.post("/intents", response_model=AssembledContext, status_code=status.HTTP_201_CREATED)
+async def assemble_intent(body: IntentAsk, service: Making, principal: Maker) -> AssembledContext:
+    """The context an intention asks for, assembled and kept with how it was
+    read — its `intent`, and what is missing for this version (LEKA-373).
+    422 when nothing can start it: it names nothing in the company model
+    and says no word to search."""
+    made = await service.assemble_intent(body, by=principal.user_id)
+    if made is None:
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.VALIDATION_FAILED,
+            "Nothing to start from: the intention names nothing in the company model and "
+            "says no word to search.",
+        )
+    return made
 
 
 @router.post("", response_model=AssembledContext, status_code=status.HTTP_201_CREATED)

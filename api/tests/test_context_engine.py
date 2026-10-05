@@ -113,6 +113,8 @@ async def test_a_context_is_created_whole_with_its_provenance_and_inspected(
         "retrievers": [],
         "strategy": "hybrid",
         "min_relevance": 0.05,
+        "weights": {},
+        "sources": [],
     }
     assert made["strategy"] == {"name": "hybrid", "version": 1}
     assert made["model_built_at"] is not None

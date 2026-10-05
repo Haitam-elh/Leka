@@ -38,6 +38,7 @@ WHAT IS LEFT OUT, AND WHY — never a root, nor an anchor:
                    more trusted, then the better scored — the other folded
                    into it, said on both
     low_relevance  its score is under the request's `min_relevance`
+    out_of_scope   none of the sources the request reads says it (LEKA-373)
 And assembly's budget: what does not fit.
 
 CONFLICTS ARE SAID, NOT MERGED. Where what the context holds disagrees —
@@ -173,6 +174,7 @@ def rank(
     links: Iterable[Link] = (),
     now: datetime | None = None,
     min_relevance: float = MIN_RELEVANCE,
+    sources: Iterable[uuid.UUID] = (),
 ) -> Ranking:
     """Every entity of `material` scored; what is kept, in order; what is
     left out and why; the conflicts. `starts` — the roots, then the
@@ -226,6 +228,18 @@ def rank(
             )
         )
     rest = [i for i in entities if i not in first and i not in folded]
+    allowed = frozenset(sources)
+    outside = {i for i in rest if not (_source_ids(entities[i]) & allowed)} if allowed else set()
+    for entity_id in outside:
+        left.append(
+            _left(
+                entities[entity_id],
+                rankings[entity_id],
+                "out_of_scope",
+                "None of the sources read says it.",
+            )
+        )
+    rest = [i for i in rest if i not in outside]
     low = {i for i in rest if rankings[i].score < min_relevance}
     for entity_id in low:
         left.append(
@@ -827,7 +841,7 @@ def _factor(trust: float | None) -> float:
 def _left(
     item: MaterialEntity,
     ranking: ElementRanking,
-    reason: Literal["duplicate", "low_relevance", "budget"],
+    reason: Literal["duplicate", "low_relevance", "out_of_scope", "budget"],
     said: str,
     *,
     duplicate_of: uuid.UUID | None = None,

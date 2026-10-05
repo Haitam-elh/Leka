@@ -67,6 +67,10 @@ class Context(Base, WorkspaceScopedMixin):
     # What it asks the model for (schemas.ContextRequest): its roots, depth,
     # relationships, environment, budget. Each version keeps its own copy.
     request: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    # The intention it was assembled for, as LEKA read it (LEKA-373): its
+    # kind, what it is about, when, where, the request it made, what was
+    # missing. None for a context asked for directly.
+    intent: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="assembling")
     # Its latest version: 0 until one is made.
     current_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")

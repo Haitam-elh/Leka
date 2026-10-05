@@ -28,7 +28,7 @@ a context is failed only when every retriever that ran failed.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
@@ -45,6 +45,7 @@ from leka.context.retrieval import (
     Runner,
     Search,
     Timeline,
+    Weighed,
     anchors_of,
     fuse,
 )
@@ -132,13 +133,26 @@ class Hybrid:
     name: str = "hybrid"
     version: int = 1
 
-    def retrievers(self, tools: Tools) -> tuple[list[Retriever], list[Retriever]]:
+    def retrievers(
+        self, tools: Tools, weights: Mapping[str, float] | None = None
+    ) -> tuple[list[Retriever], list[Retriever]]:
         """What runs first — what finds the anchors — and what runs from
-        them."""
+        them, each weighed as the request says (LEKA-373); one weighed 0
+        does not run."""
         first: list[Retriever] = [Search(tools.graph)]
         if tools.content is not None:
             first.append(Content(tools.content))
-        return first, [Graph(tools.graph), Timeline(tools.graph), Paths(tools.graph)]
+        then: list[Retriever] = [Graph(tools.graph), Timeline(tools.graph), Paths(tools.graph)]
+        said = weights or {}
+
+        def weighed(found: list[Retriever]) -> list[Retriever]:
+            return [
+                Weighed(r, said[r.name]) if r.name in said else r
+                for r in found
+                if said.get(r.name, 1.0) > 0
+            ]
+
+        return weighed(first), weighed(then)
 
     async def gather(self, tools: Tools, request: ContextRequest, purpose: str) -> Gathered | None:
         roots = list(dict.fromkeys(request.roots))
@@ -157,7 +171,7 @@ class Hybrid:
         )
         wanted = set(request.retrievers)
         runner = Runner(tools.isolated)
-        first, then = self.retrievers(tools)
+        first, then = self.retrievers(tools, request.weights)
         for retriever in first:
             if wanted and retriever.name not in wanted:
                 continue

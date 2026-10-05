@@ -18,6 +18,10 @@ grammar.
     ElementRanking,    how each thing was ranked, signal by signal; what
     RankingReport,     was left out and why; what its sources disagree on
     ContextConflictRead  (LEKA-372)
+    IntentAsk          an intention, as asked: its words, its scope (LEKA-373)
+    IntentPlan         what LEKA reads of it: its kind, what it is about,
+                       when, where, under what constraints — the structured
+                       context request it makes — and what is missing
 
 What a version holds was written once and is read back as it was, whatever
 the model has become since: the types that read it take strings, not the
@@ -63,6 +67,9 @@ StrategyName = Literal["neighbourhood", "hybrid"]
 # between two roots.
 RetrieverName = Literal["graph", "search", "content", "timeline", "paths"]
 RETRIEVERS: tuple[RetrieverName, ...] = ("graph", "search", "content", "timeline", "paths")
+# How much a retriever's findings may be weighed, against its own weight
+# (LEKA-373: an intention's kind weighs them).
+MAX_RETRIEVER_WEIGHT = 3.0
 
 
 class ContextSubject(BaseModel):
@@ -126,6 +133,16 @@ class ContextCreate(BaseModel):
         description="Under this score a thing found is left out — never a root (LEKA-372); "
         "0 keeps everything the budget holds.",
     )
+    weights: dict[RetrieverName, float] = Field(
+        default_factory=dict,
+        description="Each retriever's findings weighed this many times its own weight "
+        "(LEKA-373); 1 when not said.",
+    )
+    sources: list[uuid.UUID] = Field(
+        default_factory=list,
+        description="Only what these sources say — never a root (LEKA-373); every source "
+        "when none.",
+    )
 
     @model_validator(mode="after")
     def _starts_somewhere(self) -> ContextCreate:
@@ -135,6 +152,8 @@ class ContextCreate(BaseModel):
             raise ValueError("Retrievers are combined by the hybrid strategy only.")
         if not self.roots and not words(self.query or self.purpose):
             raise ValueError("Nothing to start from: give roots, or words that say something.")
+        if any(not 0 <= weight <= MAX_RETRIEVER_WEIGHT for weight in self.weights.values()):
+            raise ValueError(f"A retriever is weighed from 0 to {MAX_RETRIEVER_WEIGHT:g}.")
         return self
 
 
@@ -155,12 +174,15 @@ class ContextRequest(BaseModel):
     retrievers: list[str]
     strategy: str
     min_relevance: float = MIN_RELEVANCE
+    weights: dict[str, float] = Field(default_factory=dict)
+    sources: list[uuid.UUID] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
     def _older(cls, data: object) -> object:
         """A request kept before LEKA-371 had none of these: they read empty
-        — and before LEKA-372, the default threshold."""
+        — before LEKA-372, the default threshold; before LEKA-373, no
+        weights and every source."""
         if isinstance(data, dict):
             return {
                 "query": None,
@@ -382,7 +404,7 @@ class LeftOutRead(BaseModel):
     ref_id: uuid.UUID
     ref_type: str
     label: str
-    reason: Literal["duplicate", "low_relevance", "budget"]
+    reason: Literal["duplicate", "low_relevance", "out_of_scope", "budget"]
     score: float
     duplicate_of: uuid.UUID | None = Field(
         default=None, description="What it was folded into, when a duplicate."
@@ -401,8 +423,8 @@ class RankingReport(BaseModel):
     trust_share: float = Field(description="How much trust can move a score: 0.4 is 40 %.")
     weights: dict[str, float] = Field(description="Each signal's weight on its axis.")
     left_out: dict[str, int] = Field(
-        description="duplicate, low_relevance, budget — entities; ties — relationships left "
-        "out with an end."
+        description="duplicate, low_relevance, out_of_scope (none of the sources asked says "
+        "it, LEKA-373), budget — entities; ties — relationships left out with an end."
     )
     left: list[LeftOutRead] = Field(description="What was left out, the best first, at most 100.")
 
@@ -511,6 +533,137 @@ class RetrieverRunRead(BaseModel):
     ms: int = Field(description="How long it took, in milliseconds.")
     detail: str | None = Field(description="What it was asked: the words, the window, the ways.")
     error: str | None = Field(description="Why it failed, or why it was skipped.")
+    weight: float | None = Field(
+        default=None,
+        description="What its findings counted for — its own weight, times the request's "
+        "(LEKA-373); none before.",
+    )
+
+
+IntentKind = Literal[
+    "diagnose",
+    "change",
+    "ownership",
+    "dependency",
+    "compliance",
+    "migration",
+    "knowledge",
+    "general",
+]
+Facet = Literal["technical", "business", "organizational", "temporal"]
+Origin = Literal["asked", "text", "kind", "model"]
+
+
+class IntentAsk(BaseModel):
+    """An intention, as asked (LEKA-373): its words, and the scope its asker
+    gave — none of which is required beyond the words."""
+
+    model_config = ConfigDict(frozen=True)
+
+    text: str = Field(min_length=3, max_length=2000, description="The intention, in its words.")
+    intention_id: str | None = Field(
+        default=None,
+        max_length=100,
+        description="The intention it is for, when there is one (LEKA-384): the context's subject.",
+    )
+    title: str | None = Field(default=None, max_length=300)
+    environment: str | None = Field(
+        default=None, max_length=100, description="Where to look; read from the words when none."
+    )
+    since: datetime | None = Field(
+        default=None, description="The period asked; read from the words when none."
+    )
+    until: datetime | None = None
+    services: list[uuid.UUID] = Field(
+        default_factory=list,
+        max_length=MAX_ROOTS,
+        description="What the asker narrowed it to: the context's roots, first.",
+    )
+    sources: list[uuid.UUID] = Field(
+        default_factory=list, description="What to read; every source when none."
+    )
+    limit: int = Field(default=DEFAULT_BUDGET, ge=1, le=MAX_BUDGET)
+
+    @model_validator(mode="after")
+    def _a_period(self) -> IntentAsk:
+        if self.since and self.until and self.since >= self.until:
+            raise ValueError("A period starts before it ends.")
+        return self
+
+
+class IntentSubject(BaseModel):
+    """A thing an intention is about, and how LEKA knows."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    entity_id: uuid.UUID
+    name: str
+    type: str
+    facet: Facet
+    how: Literal["asked", "named", "business"] = Field(
+        description="asked — the asker chose it; named — the words name it; business — what "
+        "a thing named belongs to, for its business side."
+    )
+    said: str | None = Field(default=None, description="The words that named it.")
+    confidence: float = Field(description="How surely the words name it, 0 to 1.")
+
+
+class IntentPeriod(BaseModel):
+    """When an intention looks: asked, read from its words, or its kind's."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    since: datetime
+    until: datetime
+    origin: Origin
+    said: str | None = Field(default=None, description="The words that said it: « depuis hier ».")
+
+
+class IntentConstraint(BaseModel):
+    """What an assembly is held to, and where it comes from."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    kind: Literal["environment", "period", "services", "sources", "relationships", "retrievers"]
+    value: object
+    origin: Origin
+    said: str
+
+
+class IntentGap(BaseModel):
+    """What an intention needs that is missing — said, never ignored."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    kind: str = Field(
+        description="no_subject, ambiguous_subject, unknown_service, unknown_environment, "
+        "no_source_for, no_event_anchor, model_not_built, model_stale, nothing_happened, "
+        "retriever_failed, no_business, disputed_subject."
+    )
+    severity: Literal["critical", "warning"]
+    said: str
+    detail: dict[str, object] = Field(default_factory=dict)
+
+
+class IntentPlan(BaseModel):
+    """What LEKA reads of an intention (LEKA-373): its kind, what it is
+    about, when, where and under what constraints — the structured context
+    request it makes — and what is missing. Kept with the context it made."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    version: int = Field(description="Raised each time intentions are read differently.")
+    text: str
+    intention_id: str | None
+    kind: IntentKind
+    kind_said: list[str] = Field(description="The words that said its kind.")
+    facets: list[Facet]
+    subjects: list[IntentSubject]
+    period: IntentPeriod
+    environment: str | None
+    constraints: list[IntentConstraint]
+    request: ContextRequest = Field(description="The structured context request it makes.")
+    gaps: list[IntentGap]
 
 
 class AssembledContext(BaseModel):
@@ -550,6 +703,11 @@ class AssembledContext(BaseModel):
     conflicts: list[ContextConflictRead] = Field(
         default_factory=list, description="What its sources disagree on (LEKA-372)."
     )
+    intent: IntentPlan | None = Field(
+        default=None,
+        description="The intention it was assembled for, as LEKA read it, and what is missing "
+        "— this version's too (LEKA-373).",
+    )
     model_built_at: datetime | None = Field(description="The build of the model it was read from.")
     model_version: int
     assembled_at: datetime
@@ -574,6 +732,9 @@ class ContextRead(BaseModel):
         description="When it was last checked against the model, changed or not."
     )
     archived_at: datetime | None
+    intent: IntentPlan | None = Field(
+        default=None, description="The intention it was assembled for (LEKA-373)."
+    )
 
 
 class ContextVersionRead(BaseModel):

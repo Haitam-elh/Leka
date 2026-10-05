@@ -350,7 +350,13 @@ def test_under_the_threshold_left_out_and_said_never_a_root_nor_an_anchor() -> N
     made = _assemble(material, relevance)
     assert _labels(made) == ["Checkout", "Billing API"]
     assert made.ranking is not None
-    assert made.ranking.left_out == {"duplicate": 0, "low_relevance": 1, "budget": 0, "ties": 0}
+    assert made.ranking.left_out == {
+        "duplicate": 0,
+        "low_relevance": 1,
+        "out_of_scope": 0,
+        "budget": 0,
+        "ties": 0,
+    }
     (noise,) = made.ranking.left
     assert (noise.label, noise.reason) == ("Noise", "low_relevance")
     assert noise.said == f"Scored {noise.score:.2f}, under 0.05."
@@ -373,7 +379,13 @@ def test_what_does_not_fit_is_listed_and_the_ties_it_takes_counted() -> None:
     )
     assert [e.label for e in made.elements] == ["Billing API", "Ledger", "Billing API → Ledger"]
     assert made.ranking is not None
-    assert made.ranking.left_out == {"duplicate": 0, "low_relevance": 0, "budget": 1, "ties": 1}
+    assert made.ranking.left_out == {
+        "duplicate": 0,
+        "low_relevance": 0,
+        "out_of_scope": 0,
+        "budget": 1,
+        "ties": 1,
+    }
     assert [(i.label, i.reason) for i in made.ranking.left] == [("Vault", "budget")]
     assert made.ranking.left[0].said == "Beyond the budget of 3 elements."
     assert made.dropped == 2 and made.truncated

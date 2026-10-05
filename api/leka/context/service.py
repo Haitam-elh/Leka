@@ -19,6 +19,10 @@ time a question arrives, the work is done.
                  number, or the one that stood at a date: the contract
                  downstream services read (AssembledContext)
     diff()       what changed from one version to another
+    plan_intent()     what an intention asks for, read from its words and
+                      its scope (LEKA-373): the structured context request
+                      it makes, and what is missing
+    assemble_intent() that context, assembled and kept with its plan
 
 THE LIFECYCLE. A context is `assembling` until its first version is made,
 then `assembled` — or `failed`, when a refresh finds a root gone from the
@@ -37,18 +41,40 @@ Depends on leka.knowledge. Must not import leka.intentions (rule 1).
 
 from __future__ import annotations
 
+import math
 import uuid
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import structlog
 
+from leka.connectors import SourceRepository, manifests
 from leka.context import assembly
+from leka.context.intent import (
+    BUSINESS,
+    INTENT_VERSION,
+    MAX_BUSINESS,
+    MAX_NAMED,
+    NAMED,
+    PROFILES,
+    Readable,
+    environment_of,
+    facet_of,
+    kind_of,
+    named,
+    period_of,
+    plan_gaps,
+    version_gaps,
+)
+from leka.context.language import expanded, words
 from leka.context.models import Context, ContextElement, ContextVersion
 from leka.context.ranking import Link
 from leka.context.repository import ContextRepository
 from leka.context.schemas import (
     CONTRACT_VERSION,
+    MAX_ROOTS,
+    MAX_WINDOW_DAYS,
+    MIN_RELEVANCE,
     RETRIEVERS,
     AssembledContext,
     ContextConflictRead,
@@ -64,13 +90,27 @@ from leka.context.schemas import (
     ContextSummary,
     ContextVersionRead,
     ElementChange,
+    IntentAsk,
+    IntentConstraint,
+    IntentPeriod,
+    IntentPlan,
+    IntentSubject,
     RankingReport,
     RefreshOutcome,
     RetrieverRunRead,
 )
 from leka.context.strategies import STRATEGIES, Gathered, Strategy, Tools
 from leka.ingestion import ContentRepository, ResolutionRepository
-from leka.knowledge import MODEL_VERSION, ContextMaterial, GraphService, RelationshipType
+from leka.knowledge import (
+    MODEL_VERSION,
+    ContextMaterial,
+    EntityBrief,
+    EntityType,
+    GraphService,
+    Lifecycle,
+    RelationshipType,
+    fold,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -92,16 +132,21 @@ class ContextService:
         *,
         content: ContentRepository | None = None,
         resolution: ResolutionRepository | None = None,
+        sources: SourceRepository | None = None,
         strategies: Mapping[str, Strategy] = STRATEGIES,
     ) -> None:
         self._repository = repository
         self._graph = graph
         self._content = content
         self._resolution = resolution
+        self._sources = sources
         self._strategies = strategies
 
-    async def create(self, body: ContextCreate, *, by: uuid.UUID | None) -> AssembledContext | None:
-        """A context and its first version. None when a root is not the
+    async def create(
+        self, body: ContextCreate, *, by: uuid.UUID | None, intent: IntentPlan | None = None
+    ) -> AssembledContext | None:
+        """A context and its first version — kept with the intention it was
+        assembled for, as read (LEKA-373). None when a root is not the
         workspace's — nothing is kept."""
         request = ContextRequest(
             roots=list(dict.fromkeys(body.roots)),
@@ -115,6 +160,8 @@ class ContextService:
             retrievers=list(dict.fromkeys(body.retrievers)),
             strategy=body.strategy,
             min_relevance=body.min_relevance,
+            weights=dict(body.weights),
+            sources=list(dict.fromkeys(body.sources)),
         )
         strategy = self._strategies[request.strategy]
         tools = self._tools()
@@ -127,6 +174,7 @@ class ContextService:
             subject_type=body.subject.type,
             subject_id=body.subject.id,
             request=request.model_dump(mode="json"),
+            intent=intent.model_dump(mode="json") if intent else None,
             status="assembling",
             current_version=0,
             created_by=by,
@@ -282,6 +330,258 @@ class ContextService:
         """Versions, as the API serves them."""
         return [_version(row) for row in rows]
 
+    async def plan_intent(self, ask: IntentAsk) -> IntentPlan:
+        """What an intention asks the company model for (LEKA-373): its kind,
+        what it is about — chosen, named, or what that belongs to — when,
+        where, under what constraints; the context request that makes; and
+        what is missing, said rather than ignored."""
+        now = datetime.now(UTC)
+        kind, kind_said = kind_of(ask.text)
+        profile = PROFILES[kind]
+
+        asked = await self._graph.briefs(ask.services) if ask.services else {}
+        unknown = [i for i in dict.fromkeys(ask.services) if i not in asked]
+        said = words(ask.text)
+        found = await self._graph.matching(expanded(said), limit=40) if said else []
+        candidates = await self._graph.briefs([i for i, _, _ in found])
+        readings = named(
+            ask.text,
+            [b for b in candidates.values() if b.lifecycle != Lifecycle.REMOVED],
+        )
+        sure = [n for n in readings if n.confidence >= NAMED and n.entity.id not in asked]
+        sure = sure[:MAX_NAMED]
+        guesses = [n for n in readings if n.confidence < NAMED]
+        by_words: dict[str, list[EntityBrief]] = {}
+        for reading in sure:
+            by_words.setdefault(reading.said.casefold(), []).append(reading.entity)
+        ambiguous = {phrase: things for phrase, things in by_words.items() if len(things) > 1}
+
+        subjects = [
+            IntentSubject(
+                entity_id=brief.id,
+                name=brief.name,
+                type=brief.type.value,
+                facet=facet_of(brief.type.value),
+                how="asked",
+                confidence=1.0,
+            )
+            for brief in (asked[i] for i in dict.fromkeys(ask.services) if i in asked)
+        ] + [
+            IntentSubject(
+                entity_id=reading.entity.id,
+                name=reading.entity.name,
+                type=reading.entity.type.value,
+                facet=facet_of(reading.entity.type.value),
+                how="named",
+                said=reading.said,
+                confidence=reading.confidence,
+            )
+            for reading in sure
+        ]
+        if "business" in profile.facets:
+            subjects += await self._business_of(subjects)
+
+        period, anchor, anchored = await self._period(ask, subjects, profile.window_days, now)
+        known = await self._graph.environments()
+        environment: tuple[str, str] | None
+        if ask.environment and ask.environment.casefold() not in {"all", "*"}:
+            environment = (ask.environment, ask.environment)
+            origin = "asked"
+        else:
+            # « postgres-prod » names a database, not where to look.
+            names = {part for s in subjects for part in fold(s.name).split()}
+            environment = environment_of(ask.text, known, besides=names)
+            origin = "text"
+        applied = environment[0] if environment and (not known or environment[0] in known) else None
+        readable = await self._readable(ask.sources)
+        gaps = plan_gaps(
+            kind,
+            subjects=sum(1 for s in subjects if s.how != "business"),
+            guesses=guesses,
+            ambiguous=ambiguous,
+            unknown_services=unknown,
+            environment=environment,
+            known_environments=known,
+            sources=readable,
+            anchor=anchor,
+            anchored=anchored,
+            tried=said,
+        )
+        days = math.ceil((period.until - period.since) / timedelta(days=1))
+        request = ContextRequest(
+            roots=[s.entity_id for s in subjects][:MAX_ROOTS],
+            query=ask.text,
+            depth=profile.depth,
+            relationships=list(profile.relationships),
+            environment=applied,
+            limit=ask.limit,
+            window_days=max(1, min(MAX_WINDOW_DAYS, days)),
+            until=period.until,
+            retrievers=[],
+            strategy="hybrid",
+            min_relevance=MIN_RELEVANCE,
+            weights=dict(profile.weights),
+            sources=[s.source_id for s in readable] if ask.sources else [],
+        )
+        return IntentPlan(
+            version=INTENT_VERSION,
+            text=ask.text,
+            intention_id=ask.intention_id,
+            kind=kind,
+            kind_said=kind_said,
+            facets=list(profile.facets),
+            subjects=subjects,
+            period=period,
+            environment=applied,
+            constraints=_constraints(
+                period,
+                applied,
+                origin,
+                environment,
+                list(asked.values()),
+                readable if ask.sources else [],
+                profile.relationships,
+                profile.weights,
+                kind,
+                profile.window_days,
+            ),
+            request=request,
+            gaps=gaps,
+        )
+
+    async def assemble_intent(
+        self, ask: IntentAsk, *, by: uuid.UUID | None
+    ) -> AssembledContext | None:
+        """The context an intention asks for, assembled and kept with how it
+        was read (LEKA-373). None when nothing can start it: no thing named
+        or chosen, and no word that says something."""
+        plan = await self.plan_intent(ask)
+        request = plan.request
+        if not request.roots and not words(request.query):
+            return None
+        body = ContextCreate(
+            title=ask.title or ask.text[:300],
+            purpose=ask.text,
+            subject=ContextSubject(
+                type="intention" if ask.intention_id else "request", id=ask.intention_id
+            ),
+            roots=request.roots,
+            query=request.query,
+            depth=request.depth,
+            relationships=[RelationshipType(kind) for kind in request.relationships],
+            environment=request.environment,
+            limit=request.limit,
+            window_days=request.window_days,
+            until=request.until,
+            strategy="hybrid",
+            min_relevance=request.min_relevance,
+            weights={
+                name: weight for name, weight in request.weights.items() if name in RETRIEVERS
+            },
+            sources=request.sources,
+        )
+        return await self.create(body, by=by, intent=plan)
+
+    async def _business_of(self, subjects: Sequence[IntentSubject]) -> list[IntentSubject]:
+        """What the technical things an intention names belong to, on the
+        business side — an application, a capability, a process — so that
+        its context holds both, and the ways between them."""
+        technical = [s.entity_id for s in subjects if s.facet == "technical"]
+        if not technical:
+            return []
+        walked = await self._graph.walk(
+            technical[:MAX_ROOTS],
+            depth=2,
+            entity_types=[EntityType(kind) for kind in BUSINESS],
+        )
+        if walked is None:
+            return []
+        taken = {s.entity_id for s in subjects}
+        nodes = sorted(
+            (
+                node
+                for node in walked.nodes
+                if node.depth > 0
+                and node.entity.type.value in BUSINESS
+                and node.entity.id not in taken
+            ),
+            key=lambda node: (node.depth, node.entity.name.casefold(), str(node.entity.id)),
+        )
+        return [
+            IntentSubject(
+                entity_id=node.entity.id,
+                name=node.entity.name,
+                type=node.entity.type.value,
+                facet="business",
+                how="business",
+                confidence=round(0.9 / node.depth, 2),
+            )
+            for node in nodes[:MAX_BUSINESS]
+        ]
+
+    async def _period(
+        self, ask: IntentAsk, subjects: Sequence[IntentSubject], window_days: int, now: datetime
+    ) -> tuple[IntentPeriod, str | None, bool]:
+        """When an intention looks: asked; read from its words — or since an
+        event of what it is about, found in the model; or its kind's last
+        days. And the event it was read from, and whether it was found."""
+        default = IntentPeriod(since=now - timedelta(days=window_days), until=now, origin="kind")
+        if ask.since or ask.until:
+            until = ask.until or now
+            since = ask.since or until - timedelta(days=window_days)
+            return IntentPeriod(since=since, until=until, origin="asked"), None, False
+        read = period_of(ask.text, now)
+        if read is None:
+            return default, None, False
+        if read.anchor is None:
+            since = read.since or now - timedelta(days=window_days)
+            until = min(read.until or now, now)
+            if since >= until:
+                return default, None, False
+            return (
+                IntentPeriod(since=since, until=until, origin="text", said=read.said),
+                None,
+                False,
+            )
+        about = [s.entity_id for s in subjects]
+        events = (
+            await self._graph.events(about, since=now - timedelta(days=MAX_WINDOW_DAYS), until=now)
+            if about
+            else []
+        )
+        latest = max(
+            (at for _, at, kind, _ in events if kind.startswith(read.anchor)), default=None
+        )
+        if latest is None:
+            return default, read.anchor, False
+        return (
+            IntentPeriod(since=latest, until=now, origin="model", said=read.said),
+            read.anchor,
+            True,
+        )
+
+    async def _readable(self, chosen: Sequence[uuid.UUID]) -> list[Readable]:
+        """The sources an intention can read: connected and read — active,
+        or degraded but read — the ones chosen when some were; each with
+        what it was found able to read, or, never tested, what its
+        connector says it can."""
+        if self._sources is None:
+            return []
+        rows = await self._sources.list(self._sources.list_statement())
+        declared = {m.key.value: frozenset(c.value for c in m.capabilities) for m in manifests()}
+        wanted = set(chosen)
+        return [
+            Readable(
+                source_id=row.id,
+                name=row.name,
+                kind=row.kind.value,
+                capabilities=frozenset(str(c) for c in row.capabilities or [])
+                or declared.get(row.kind.value, frozenset()),
+            )
+            for row in rows
+            if row.status.value in {"active", "degraded"} and (not wanted or row.id in wanted)
+        ]
+
     async def _assemble(
         self, gathered: Gathered, request: ContextRequest, strategy: str, now: datetime
     ) -> assembly.Assembly | None:
@@ -298,6 +598,7 @@ class ContextService:
             links=await self._links(gathered.material),
             now=now,
             min_relevance=request.min_relevance,
+            sources=request.sources,
         )
 
     async def _links(self, material: ContextMaterial) -> list[Link]:
@@ -428,6 +729,7 @@ def _context(context: Context) -> ContextRead:
         updated_at=context.updated_at,
         refreshed_at=context.refreshed_at,
         archived_at=context.archived_at,
+        intent=IntentPlan.model_validate(context.intent) if context.intent else None,
     )
 
 
@@ -472,6 +774,21 @@ def _assembled(
                 name=source.name,
                 elements=(held.elements if held else 0) + 1,
             )
+    conflicts = _conflicts(version.ranking)
+    retrieval = [RetrieverRunRead.model_validate(run) for run in version.retrieval]
+    summary = ContextSummary.model_validate(version.summary)
+    intent = None
+    if context.intent:
+        plan = IntentPlan.model_validate(context.intent)
+        more = version_gaps(
+            plan,
+            retrieval=retrieval,
+            by_type=summary.by_type,
+            conflicts=conflicts,
+            model_built_at=version.model_built_at,
+            assembled_at=version.assembled_at,
+        )
+        intent = plan.model_copy(update={"gaps": [*plan.gaps, *more]})
     return AssembledContext(
         contract_version=version.contract_version,
         context_id=context.id,
@@ -489,12 +806,13 @@ def _assembled(
         sources=sorted(
             counted.values(), key=lambda s: (-s.elements, (s.name or s.kind or "").casefold())
         ),
-        summary=ContextSummary.model_validate(version.summary),
-        retrieval=[RetrieverRunRead.model_validate(run) for run in version.retrieval],
+        summary=summary,
+        retrieval=retrieval,
         truncated=version.truncated,
         dropped=version.dropped,
         ranking=RankingReport.model_validate(version.ranking) if version.ranking else None,
-        conflicts=_conflicts(version.ranking),
+        conflicts=conflicts,
+        intent=intent,
         model_built_at=version.model_built_at,
         model_version=version.model_version,
         assembled_at=version.assembled_at,
@@ -539,3 +857,73 @@ def _unknown(request: ContextRequest, strategy: Strategy | None) -> list[str]:
     unknown = [f"the strategy {request.strategy}"] if strategy is None else []
     unknown += [f"the retriever {name}" for name in request.retrievers if name not in RETRIEVERS]
     return unknown + [f"the relationship {k}" for k in request.relationships if k not in known]
+
+
+def _constraints(
+    period: IntentPeriod,
+    environment: str | None,
+    origin: str,
+    said: tuple[str, str] | None,
+    services: Sequence[EntityBrief],
+    sources: Sequence[Readable],
+    relationships: Sequence[str],
+    weights: Mapping[str, float],
+    kind: str,
+    window_days: int,
+) -> list[IntentConstraint]:
+    """What an intention's context is held to, each with where it comes
+    from: asked, read from its words, its kind's — or found in the model."""
+    held = [
+        IntentConstraint(
+            kind="period",
+            value={"since": period.since.isoformat(), "until": period.until.isoformat()},
+            origin=period.origin,
+            said=period.said or f"the last {window_days} days",
+        )
+    ]
+    if environment:
+        held.append(
+            IntentConstraint(
+                kind="environment",
+                value=environment,
+                origin="asked" if origin == "asked" else "text",
+                said=said[1] if said else environment,
+            )
+        )
+    if services:
+        held.append(
+            IntentConstraint(
+                kind="services",
+                value=[str(s.id) for s in services],
+                origin="asked",
+                said=", ".join(s.name for s in services),
+            )
+        )
+    if sources:
+        held.append(
+            IntentConstraint(
+                kind="sources",
+                value=[str(s.source_id) for s in sources],
+                origin="asked",
+                said=", ".join(s.name for s in sources),
+            )
+        )
+    if relationships:
+        held.append(
+            IntentConstraint(
+                kind="relationships",
+                value=list(relationships),
+                origin="kind",
+                said=f"the ties a {kind} intention reads",
+            )
+        )
+    if weights:
+        held.append(
+            IntentConstraint(
+                kind="retrievers",
+                value=dict(weights),
+                origin="kind",
+                said=", ".join(f"{name} x{weight:g}" for name, weight in weights.items()),
+            )
+        )
+    return held

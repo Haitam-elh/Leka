@@ -2,7 +2,9 @@
 context (LEKA-370) — made from the company model, kept version by version,
 each piece with where it came from; found by retrievers combined — the
 graph, words in the model and in the records' text, time, ways between
-things — each saying how relevant (LEKA-371).
+things — each saying how relevant (LEKA-371); ranked, duplicates folded,
+conflicts said (LEKA-372); and for an intention, what it asks for, read
+from its words, and what is missing (LEKA-373).
 
 Reads state the background loop prepared. Calls no customer API — by the
 time a question arrives, the work is done.
@@ -24,6 +26,9 @@ from leka.context.schemas import (
     ContextStatus,
     ContextSubject,
     ContextVersionRead,
+    IntentAsk,
+    IntentGap,
+    IntentPlan,
     RefreshOutcome,
     RetrieverName,
     RetrieverRunRead,
@@ -54,6 +59,9 @@ __all__ = [
     "ContextSubject",
     "ContextVersion",
     "ContextVersionRead",
+    "IntentAsk",
+    "IntentGap",
+    "IntentPlan",
     "RefreshOutcome",
     "RetrieverName",
     "RetrieverRunRead",
