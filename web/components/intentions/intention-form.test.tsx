@@ -11,7 +11,8 @@
  * is one. Nothing invented. Submitted (LEKA-373): the intention is asked
  * as the form says it — every source when all are ticked, no period nobody
  * chose — and step 2 shows the context it asks for; nothing to start from
- * is said in the form.
+ * is said in the form. Edited after step 2 (LEKA-374), the same context is
+ * asked again rather than a new one made.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -45,7 +46,7 @@ vi.mock("@/lib/environment", async (original) => ({
 }));
 
 // What submitting asks (LEKA-373): the context the intention needs.
-const contextApi = { intend: vi.fn() };
+const contextApi = { intend: vi.fn(), reask: vi.fn() };
 vi.mock("@/lib/context", async (original) => ({
   ...(await original<typeof import("@/lib/context")>()),
   contexts: contextApi,
@@ -170,5 +171,46 @@ describe("the new intention's context and scope", () => {
       environment: "production",
     });
   });
-});
 
+  it("asks the same context again once the intention is edited", async () => {
+    contextApi.intend.mockResolvedValueOnce({
+      context_id: "c1",
+      version: 1,
+      purpose: "Pourquoi acme/backend est lent ?",
+      elements: [],
+      sources: [],
+      intent: null,
+    });
+    contextApi.reask.mockResolvedValueOnce({
+      context_id: "c1",
+      version: 2,
+      trigger: "reasked",
+      purpose: "Qui est responsable de acme/backend ?",
+      elements: [],
+      sources: [],
+      intent: null,
+      changes: [],
+      delta: { added: 1, removed: 2, changed: 0, unchanged: 4 },
+    });
+    const user = userEvent.setup();
+    show();
+    await screen.findByRole("checkbox", { name: "acme/backend" });
+
+    await user.type(screen.getByTestId("intention-input"), "Pourquoi acme/backend est lent ?");
+    await user.click(screen.getByTestId("intention-submit"));
+    await user.click(await screen.findByRole("button", { name: "Modifier" }));
+    const input = await screen.findByTestId("intention-input");
+    await user.clear(input);
+    await user.type(input, "Qui est responsable de acme/backend ?");
+    await user.click(screen.getByTestId("intention-submit"));
+
+    expect(await screen.findByTestId("intent-asked-again")).toHaveTextContent(
+      "Version 2 de ce contexte : votre demande a changé, LEKA l'a relue.",
+    );
+    expect(contextApi.intend).toHaveBeenCalledTimes(1);
+    expect(contextApi.reask).toHaveBeenCalledWith({
+      id: "c1",
+      ask: expect.objectContaining({ text: "Qui est responsable de acme/backend ?" }),
+    });
+  });
+});

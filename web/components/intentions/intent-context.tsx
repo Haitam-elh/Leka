@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { cn } from "cn";
 
+import { changeSaid } from "@/components/environment/context-freshness";
 import { entityHref, IconTile, Logo, typeIcon, typeLabel } from "@/components/environment/parts";
 import { IntelligenceSection, Pill, retrieverName } from "@/components/intelligence";
 import { exactDate } from "@/components/knowledge/time";
@@ -19,9 +20,10 @@ import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
  * actually did (LEKA-373): what it understood of the question — its kind,
  * what it is about and how it knows, when, where — what is missing, said
  * rather than ignored, the context it gathered from the company model, and
- * the sources that context came from. The findings and the
- * recommendations come with the analysis engine; nothing here pretends to
- * be them.
+ * the sources that context came from. Asked again, the same context is
+ * made again and says what LEKA reads differently (LEKA-374). The findings
+ * and the recommendations come with the analysis engine; nothing here
+ * pretends to be them.
  */
 
 type Dictionary = ReturnType<typeof useDictionary>;
@@ -55,6 +57,7 @@ export function IntentContext({
             {w.edit}
           </Button>
         </div>
+        {assembled.trigger === "reasked" ? <AskedAgain assembled={assembled} /> : null}
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
@@ -71,6 +74,40 @@ export function IntentContext({
       <p className="rounded-xl bg-shell-highlight px-5 py-4 text-[0.8125rem] text-shell-muted">
         {w.next}
       </p>
+    </div>
+  );
+}
+
+/** Asked again (LEKA-374): which version this is, what LEKA reads
+ * differently, and how what it gathered changed. */
+function AskedAgain({ assembled }: { assembled: AssembledContext }) {
+  const t = useDictionary();
+  const { locale } = useLocale();
+  const read = (assembled.changes ?? []).filter(
+    (change) => change.kind === "intent" && change.field !== "text",
+  );
+  const delta = assembled.delta;
+  return (
+    <div className="text-[0.8125rem] text-shell-muted" data-testid="intent-asked-again">
+      <p className="font-medium text-brand-navy">
+        {fill(t.intent.again, { version: assembled.version })}
+      </p>
+      {read.length > 0 ? (
+        <ul className="mt-1 space-y-0.5">
+          {read.map((change) => (
+            <li key={change.field ?? ""}>{changeSaid(t, locale, change)}</li>
+          ))}
+        </ul>
+      ) : null}
+      {delta ? (
+        <p className="mt-1 tabular-nums">
+          {fill(t.intent.againDelta, {
+            added: delta.added,
+            removed: delta.removed,
+            changed: delta.changed,
+          })}
+        </p>
+      ) : null}
     </div>
   );
 }

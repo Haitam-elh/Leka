@@ -61,3 +61,9 @@ export function periodOf(
 export function submitIntention(ask: IntentAsk): Promise<AssembledContext> {
   return contexts.intend(ask);
 }
+
+/** The intention asked again, as it now stands: the same context made
+ * again — a new version that says what LEKA reads differently (LEKA-374). */
+export function reaskIntention(contextId: string, ask: IntentAsk): Promise<AssembledContext> {
+  return contexts.reask({ id: contextId, ask });
+}

@@ -14,6 +14,7 @@ export const contextKeys = {
     [...contextKeys.all, "assembled", id, version] as const,
   diff: (id: string, from: number, to: number) =>
     [...contextKeys.all, "diff", id, from, to] as const,
+  checks: (id: string) => [...contextKeys.all, "checks", id] as const,
 };
 
 export function useEntityContexts(entityId: string) {
@@ -45,6 +46,15 @@ export function useContextDiff(id: string | null, pair: readonly [number, number
     queryKey: contextKeys.diff(id ?? "", pair?.[0] ?? 0, pair?.[1] ?? 0),
     queryFn: () => contexts.diff(id ?? "", pair?.[0] ?? 0, pair?.[1] ?? 0),
     enabled: id !== null && pair !== null,
+  });
+}
+
+/** Every time a context was made again, and what came of it (LEKA-374). */
+export function useContextChecks(id: string | null) {
+  return useQuery({
+    queryKey: contextKeys.checks(id ?? ""),
+    queryFn: () => contexts.checks(id ?? ""),
+    enabled: id !== null,
   });
 }
 
