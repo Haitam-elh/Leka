@@ -36,6 +36,12 @@ vi.mock("@/components/intentions/compact-composer", () => ({
   CompactIntentionComposer: () => <div data-testid="composer" />,
 }));
 
+// The card has its own tests (leka-insights.test.tsx); here it is only a
+// place on the page.
+vi.mock("@/components/insights/leka-insights", () => ({
+  LekaInsights: () => <div data-testid="leka-insights" />,
+}));
+
 const { Overview } = await import("@/components/overview/overview");
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();

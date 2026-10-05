@@ -73,6 +73,12 @@ vi.mock("next/navigation", async () => {
   };
 });
 
+// The card has its own tests (leka-insights.test.tsx); here it is only a
+// place on the page.
+vi.mock("@/components/insights/leka-insights", () => ({
+  LekaInsights: () => <div data-testid="leka-insights" />,
+}));
+
 const { EnvironmentScreen } = await import("@/components/environment/environment-screen");
 const { EntitySheetScreen } = await import("@/components/environment/entity-sheet");
 

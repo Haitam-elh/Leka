@@ -2,12 +2,10 @@
 
 import {
   ArrowRight,
-  ChevronRight,
   CircleHelp,
   Layers,
   Lightbulb,
   List,
-  type LucideIcon,
   Map as MapIcon,
   Network,
   Plus,
@@ -23,6 +21,7 @@ import { StatusBadge } from "@/components/knowledge/status-badge";
 import { TONES } from "@/components/knowledge/status";
 import { timeAgo } from "@/components/knowledge/time";
 import { ArchitectureBoard, ArchitectureFigures } from "@/components/environment/architecture";
+import { LekaInsights } from "@/components/insights/leka-insights";
 import { Cartography } from "@/components/environment/cartography";
 import { CoveragePanel } from "@/components/environment/coverage";
 import {
@@ -36,7 +35,6 @@ import {
   type EventRow,
   eventRows,
   IconTile,
-  type TileTone,
   typeLabel,
 } from "@/components/environment/parts";
 import { PageContainer } from "@/components/shell/page-container";
@@ -129,19 +127,10 @@ const LEGEND_TONE = {
 const GLOBAL = "global";
 const SOURCE_ROWS = 5;
 
-interface Insight {
-  key: string;
-  icon: LucideIcon;
-  tone: TileTone;
-  title: string;
-  detail: string;
-}
-
 /** Everything the screen shows but the map, which is its tab's. */
 interface Model {
   updatedAt: string | null;
   environments: string[];
-  insights: Insight[];
   sources: SourceLine[] | null;
   events: EventRow[];
   attention: AttentionRow[];
@@ -173,7 +162,6 @@ function real(
   return {
     updatedAt: data.updated_at,
     environments: data.environments,
-    insights: [],
     sources: sources ? sourceLines(sources) : null,
     events: eventRows(t, data.events),
     attention: attentionRows(t, data.attention),
@@ -258,7 +246,7 @@ export function EnvironmentScreen() {
           </div>
         </div>
         <div className="flex flex-col gap-4">
-          <Insights insights={model?.insights ?? []} />
+          <Insights />
           <Sources lines={model?.sources ?? null} />
           <Help />
         </div>
@@ -560,46 +548,15 @@ function NodeList({ nodes }: { nodes: readonly ViewNode[] }) {
   );
 }
 
-function Insights({ insights }: { insights: readonly Insight[] }) {
+function Insights() {
   const t = useDictionary();
-  const w = t.environment.insights;
   return (
     <Card
-      title={w.title}
+      title={t.environment.insights.title}
       icon={<IconTile icon={Lightbulb} tone="violet" className="size-9" />}
-      action={
-        insights.length ? (
-          <CardLink href={routes.intentions()}>{t.environment.kpi.seeAll}</CardLink>
-        ) : null
-      }
     >
-      {insights.length ? (
-        <ul className="divide-y divide-shell-line/60">
-          {insights.map((insight) => (
-            <li key={insight.key} className="flex items-start gap-3 py-2.5">
-              <IconTile icon={insight.icon} tone={insight.tone} className="size-9" />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[0.8125rem] font-semibold text-brand-navy">
-                  {insight.title}
-                </span>
-                <span className="block text-xs text-shell-muted">{insight.detail}</span>
-              </span>
-              <ChevronRight className="mt-2 size-4 text-shell-muted" aria-hidden="true" />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <>
-          <p className="text-[0.875rem] leading-snug text-shell-muted">{w.empty}</p>
-          <Link
-            href={routes.intentionNew()}
-            className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-brand-navy px-4 py-2.5 text-sm font-medium text-white outline-none hover:bg-brand-navy/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-          >
-            {w.action}
-            <ArrowRight className="size-4" aria-hidden="true" />
-          </Link>
-        </>
-      )}
+      {/* What LEKA's analyses concluded (LEKA-377). */}
+      <LekaInsights />
     </Card>
   );
 }
