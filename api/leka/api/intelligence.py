@@ -740,7 +740,7 @@ async def quality_scores(
     return PageEnvelope(data=quality_reads(result.items), next_cursor=result.next_cursor)
 
 
-@router.get("/quality/scores/{key:path}", response_model=KnowledgeQualityDetail)
+@router.get("/quality/scores/{key}", response_model=KnowledgeQualityDetail)
 async def quality_score(key: str, service: Measuring) -> KnowledgeQualityDetail:
     """One score: each dimension's factors, what lowers it and what shows
     it, where it was read, its changes over 90 days."""
