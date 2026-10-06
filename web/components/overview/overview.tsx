@@ -27,7 +27,7 @@ import { useEffect, useState } from "react";
 
 import { cn } from "cn";
 import { FAMILY_ICON } from "@/components/approvals/parts";
-import { wordCandidate } from "@/components/approvals/words";
+import { items, wordItem } from "@/components/approvals/items";
 import { LekaInsights } from "@/components/insights/leka-insights";
 import { CompactIntentionComposer } from "@/components/intentions/compact-composer";
 import { PageContainer } from "@/components/shell/page-container";
@@ -36,6 +36,7 @@ import { exactDate, shortWhen } from "@/components/knowledge/time";
 import { ConnectedSources } from "@/components/sources/connected-sources";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
+import { useConflicts } from "@/lib/conflicts-queries";
 import { useCandidates } from "@/lib/enrichment-queries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import {
@@ -417,12 +418,14 @@ function ActivityCard({ load }: { load: Load }) {
   );
 }
 
-/** What waits on someone (LEKA-380): the enrichments LEKA proposes, the
- * three latest — each leading to its proposal in À valider. */
+/** What waits on someone: the conflicts between sources to settle
+ * (LEKA-382), then the enrichments LEKA proposes (LEKA-380) — three, each
+ * leading to itself in À valider. */
 function ApprovalsCard() {
   const t = useDictionary();
-  const waiting = useCandidates("proposed");
-  const all = waiting.data?.data ?? [];
+  const proposed = useCandidates("proposed");
+  const open = useConflicts("open");
+  const all = items(proposed.data?.data ?? [], open.data?.data ?? []);
   const shown = all.slice(0, 3);
   return (
     <Card
@@ -444,16 +447,22 @@ function ApprovalsCard() {
       ) : (
         <>
           <ul className="divide-y divide-shell-line/60" data-testid="approvals-waiting">
-            {shown.map((candidate) => {
-              const { title, why } = wordCandidate(t, candidate);
+            {shown.map((item) => {
+              const { title, why } = wordItem(t, item);
+              const sure =
+                item.kind === "candidate" ? ` · ${Math.round(item.data.confidence * 100)} %` : "";
               return (
-                <li key={candidate.id}>
+                <li key={`${item.kind}:${item.id}`}>
                   <Link
-                    href={routes.approval(candidate.id)}
+                    href={
+                      item.kind === "conflict"
+                        ? `${routes.approval(item.id)}?kind=conflict`
+                        : routes.approval(item.id)
+                    }
                     className="-mx-1.5 flex items-start gap-3 rounded-lg px-1.5 py-2.5 outline-none hover:bg-shell-canvas focus-visible:ring-3 focus-visible:ring-brand-violet/40"
                   >
                     <IconTile
-                      icon={FAMILY_ICON[candidate.family] ?? Sparkle}
+                      icon={FAMILY_ICON[item.family] ?? Sparkle}
                       tone="violet"
                       className="size-9"
                     />
@@ -462,12 +471,14 @@ function ApprovalsCard() {
                         {title}
                       </span>
                       <span className="block truncate text-xs text-shell-muted">
-                        {why ? `${why} · ` : ""}
-                        {Math.round(candidate.confidence * 100)} %
+                        {why ?? ""}
+                        {sure}
                       </span>
                     </span>
-                    <span className="mt-0.5 rounded-md bg-state-warning-soft px-2 py-0.5 text-xs font-medium text-state-warning">
-                      {t.approvals.status.proposed}
+                    <span className="mt-0.5 rounded-md bg-state-warning-soft px-2 py-0.5 text-xs font-medium whitespace-nowrap text-state-warning">
+                      {item.kind === "conflict"
+                        ? t.approvals.conflict.status.open
+                        : t.approvals.status.proposed}
                     </span>
                   </Link>
                 </li>

@@ -9,29 +9,36 @@ import { signIn } from "./sign-in";
  * (scripts/seed.py): what waits here is what they proposed, not words
  * written for the demo. Thomas and Mei maintain postgres-prod, the database
  * no one is named to own, and both are members of Platform; acme/user-service
- * is a repository nothing ties to user-service.
+ * is a repository nothing ties to user-service (LEKA-380). payment-api's SLA
+ * is 99.95 to GitHub and 99.9 to Datadog; GitHub and Jira name two owners
+ * for it, Nadia Kowalski and Nadia K. (LEKA-382).
  *
  * What a unit test cannot answer: that the proposals reach the overview,
  * the sidebar and À valider through the API, worded; and that a decision is
- * taken — accepted, rejected, sent back. The test leaves the proposal as it
- * found it, waiting: it can run again on the same database.
+ * taken — accepted, rejected, sent back; a conflict settled and reopened.
+ * The tests leave each as they found it, waiting: they can run again on the
+ * same database.
  */
 
 test.describe("À valider", () => {
-  test("says what LEKA proposes, on the overview and beside the sidebar's entry", async ({
-    page,
-  }) => {
+  test("says what waits, on the overview and beside the sidebar's entry", async ({ page }) => {
     await signIn(page);
 
+    // The conflicts first, then what LEKA proposes: three, the rest counted.
     const waiting = page.getByTestId("approvals-waiting").getByRole("listitem");
-    await expect(waiting.filter({ hasText: "Platform est responsable de postgres-prod" })).toHaveCount(1);
-    await expect(
-      waiting.filter({ hasText: "acme/user-service est le code de user-service" }),
-    ).toHaveCount(1);
-    await expect(page.getByTestId("nav-approvals")).toContainText("2");
+    await expect(waiting).toHaveCount(3);
+    await expect(waiting.filter({ hasText: "SLA de payment-api : 99.95 ou 99.9" })).toHaveCount(1);
+    await expect(page.getByText("4 élément(s) en attente")).toBeVisible();
+    await expect(page.getByTestId("nav-approvals")).toContainText("4");
 
-    await waiting.filter({ hasText: "Platform est responsable de postgres-prod" }).getByRole("link").click();
-    await expect(page).toHaveURL(/\/approvals\/[0-9a-f-]{36}$/);
+    await waiting.filter({ hasText: "SLA de payment-api" }).getByRole("link").click();
+    await expect(page).toHaveURL(/\/approvals\/[0-9a-f-]{36}\?kind=conflict$/);
+    await expect(page.getByTestId("conflict-panel").getByTestId("conflict-sides")).toContainText(
+      "acme-eu",
+    );
+
+    await page.goto("/approvals");
+    await page.getByRole("table").getByText("Platform est responsable de postgres-prod").click();
     await expect(page.getByTestId("candidate-panel")).toContainText(
       "2 des 2 personnes qui le maintiennent sont membres de Platform",
     );
@@ -67,5 +74,29 @@ test.describe("À valider", () => {
     // Sent back to its analysis: waiting again.
     await panel.getByRole("button", { name: "Retraiter" }).click();
     await expect(panel.getByTestId("candidate-status")).toHaveText("À valider");
+  });
+
+  test("settles a conflict between sources, and reopens it", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/approvals");
+
+    await page.getByRole("table").getByText("SLA de payment-api : 99.95 ou 99.9").click();
+    const panel = page.getByTestId("conflict-panel");
+    await expect(panel).toContainText("Le modèle affiche 99.95");
+    const sides = panel.getByTestId("conflict-sides");
+    await expect(sides).toContainText("acme/backend");
+    await expect(sides).toContainText("Recommandé");
+
+    // Datadog's word kept: the model will show it.
+    await panel.getByTestId("keep-1").click();
+    await expect(panel.getByTestId("conflict-status")).toHaveText("Tranché");
+    await expect(panel.getByRole("status")).toHaveText("Tranché.");
+    await expect(sides).toContainText("Retenu");
+
+    // Reopened: the decision withdrawn, waiting again.
+    await panel.getByRole("button", { name: "Rouvrir" }).click();
+    await expect(panel.getByTestId("conflict-status")).toHaveText("À arbitrer");
+    await panel.getByRole("tab", { name: "Décisions" }).click();
+    await expect(panel.getByTestId("conflict-history")).toContainText("Rouvert");
   });
 });
