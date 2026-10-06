@@ -109,8 +109,8 @@ shows it and the key it goes by there (up to 20).
 | Column | |
 |---|---|
 | `name` | resolution's choice |
-| `attributes` | what its sources say; where they say nothing, what enrichment added — **never enrichment's over a source's**. Checked against its kind's schema |
-| `provenance.attributes` | each attribute's origin: `{"origin": "source"}` — `{"origin": "source", "rule": "record"}` for what enrichment carries from the records as they say it, a date, a link, resolution keeping none (LEKA-366, LEKA-367) — or `{"origin": "enrichment", "rule", "confidence"}` |
+| `attributes` | what its sources say; where they say nothing, what was validated (LEKA-380), then what enrichment added — **never enrichment's over a source's**, and a validated value over a source's only when it was validated as an override. Checked against its kind's schema |
+| `provenance.attributes` | each attribute's origin: `{"origin": "source"}` — `{"origin": "source", "rule": "record"}` for what enrichment carries from the records as they say it, a date, a link, resolution keeping none (LEKA-366, LEKA-367) — `{"origin": "enrichment", "rule", "confidence"}` — or `{"origin": "accepted", "rule", "confidence", "evidence", "candidate_id", "decided_via", "decided_at"}` for a validated fact, with `replaced`, the source's value, when it overrides one ([intelligence.md § 13](intelligence.md)) |
 | `provenance.sources` | `{source_id, key, kind}` per source and key |
 | `provenance.conflicts` | what its sources **disagree** on (resolution's conflicts, LEKA-362): `{attribute, chosen, values: [{value, source_id}]}` — every value kept with who said it, the attribute marked `disputed` in `provenance.attributes` |
 | `confidence` | how sure the merges that made it are (resolution) |
@@ -118,8 +118,9 @@ shows it and the key it goes by there (up to 20).
 | `first_seen_at`, `last_seen_at` | the earliest and latest a source showed it |
 | `occurred_at` | when an event happened (LEKA-367): an incident opened — the earliest of detected and opened — a deployment done, a change made, a release published, a pull request merged — else, for all but a pull request, when a source first showed it. None for what is not an event. Indexed with the workspace and the type: lists and timelines go by it |
 
-A relationship says whether a source **stated** it or a rule **inferred**
-it (`origin`, `rule`), how sure it is, whether it joins two tools' things
+A relationship says whether a source **stated** it, a rule **inferred**
+it, or someone **accepted** it — proposed by LEKA's enrichment and
+validated (LEKA-380) — (`origin`, `rule`), how sure it is, whether it joins two tools' things
 (`cross_source`), the records that stated it (`provenance`), the
 **environments** it is true in (`attributes.environments`, § 9), and when
 it first appeared and last changed (`first_seen_at`, `changed_at`, § 15).
@@ -169,6 +170,13 @@ A **workspace** stage, after enrichment: `model:<workspace>`,
 - It reads what the **latest successful enrichment run** made, and the
   resolution under it; that run's id is what the model was made from. A new
   one, or a new `MODEL_VERSION`, is something to build; otherwise nothing is.
+- **And the validated facts** (`model_assertions`, LEKA-380): an attribute,
+  a relationship that LEKA's enrichment proposed and someone accepted —
+  applied beside what the sources say ([intelligence.md § 13](intelligence.md)).
+  Their fingerprint is part of what the model was made from
+  (`model_runs.assertions`): a fact accepted or withdrawn since is something
+  to build, and the decision queues it (`queue_model_build`). Withdrawn, a
+  fact is no longer applied: what the sources say comes back.
 - **One transaction**: a failed build changes nothing — the last model
   stays — and is recorded `failed` with the error's type. A build that sees
   enrichment succeed again while it reads is closed `abandoned` and reads
@@ -191,7 +199,9 @@ A **workspace** stage, after enrichment: `model:<workspace>`,
 `relationships_added`, `relationships_changed`, `relationships_removed`,
 `relationships_invalid`, `relationship_warnings` (LEKA-368),
 `not_modelled`, `attributes_dropped`, `relationships_not_modelled`,
-`relationships_to_unmodelled`.
+`relationships_to_unmodelled`, `assertions_applied`,
+`assertions_superseded` — a validated attribute a source now says, not
+overriding it (LEKA-380).
 
 ## 7. The API
 

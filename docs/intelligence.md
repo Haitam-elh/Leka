@@ -7,8 +7,9 @@ intentions and the screens that build on them.
 
 This is the frame of the Intelligence epic. LEKA-377 shipped the frame and
 three representative analyses; LEKA-378 adds change and impact (§ 11),
-LEKA-379 knowledge gaps (§ 12); 380 (enrichment), 381 (quality), 382
-(conflicts) and 383 (evolution and insights) add theirs to it.
+LEKA-379 knowledge gaps (§ 12), LEKA-380 knowledge enrichment (§ 13); 381
+(quality), 382 (conflicts) and 383 (evolution and insights) add theirs to
+it.
 
 Code: `api/leka/intelligence/` — `analysis.py` (the frame), `rules.py` (the
 analyses), `service.py`, `repository.py`, `job.py`; the routes in
@@ -24,6 +25,7 @@ analyses), `service.py`, `repository.py`, `job.py`; the routes in
 | **Run** | One time LEKA analysed a workspace: why (`model`, `schedule`, `request`), by whom, from which build of the model (`model_built_at`), which analyses, the background job that ran it (`job_run_id`), what came of it. | `intelligence_runs` |
 | **Step** | One analysis of a run: its version, its duration, what it found — or the error's type, or why it was skipped. | `intelligence_steps` |
 | **Finding** | What an analysis concluded about one thing, kept across runs under one key: open or resolved, how bad, how sure, what it is about, what shows it, where that was read, which runs saw it. | `intelligence_findings` |
+| **Candidate** (LEKA-380) | An enrichment of the company model an analysis proposed — a relationship, an attribute — kept across runs under one key: proposed, accepted, rejected or withdrawn, how sure, what shows it, every decision taken. Once accepted, a fact the model's build applies (§ 13). | `enrichment_candidates`, `model_assertions` |
 
 An analysis never touches the database. A run reads its **material** once
 (§ 3), hands it to each analysis, and keeps what comes back. So an analysis is
@@ -181,6 +183,8 @@ and the file and line that state it, and the context with its version.
 | `gaps_documentation` | gaps | model (heeds changes) | What no document describes, or none known to be current | by priority |
 | `gaps_staleness` | gaps | model (heeds changes) | A source failing or not read for 3 days; a dormant thing others still rely on | by priority |
 | `gaps_coverage` | gaps | model | A whole family of sources not connected, once, with all it leaves unknown | by priority |
+| `enrich_code`, `enrich_runtime`, `enrich_owner`, `enrich_application`, `enrich_criticality`, `enrich_description` (LEKA-380) | enrichment | model | Proposals, not findings: what the model lacks that the evidence around it says (§ 13) | — a confidence instead |
+| `enrich_summary` | enrichment | model | What a service does, in words — model-assisted: skipped until the gateway exists | — |
 
 **What "watched" means.** A thing is watched when its state is known — from a
 monitoring tool, or its provider — and not deduced. If its state is unknown,
@@ -434,7 +438,127 @@ changes (§ 3): read, they add `changing`; unread, every gap is still said.
 - postgres-prod, auth-service and user-service described by no document.
 
 **Not here:** filling a gap — finding the missing entity, writing the
-missing document. Enrichment is LEKA-380.
+missing document. Enrichment is LEKA-380 (§ 13).
+
+## 13. Knowledge enrichment (LEKA-380)
+
+What the company model lacks that the evidence around it says — proposed,
+never imposed. Code: `api/leka/intelligence/enrichment.py` (the proposals,
+pure), `curation.py` (what becomes of them).
+
+**Not ingestion's enrichment.** Enrichment at ingestion
+([enrichment.md](enrichment.md), LEKA-359) completes each record as it comes
+in and keeps every inference sure enough. This reads the whole model, as the
+other analyses do, and **proposes**. A proposal is kept as a **candidate**,
+and reaches the model only once validated.
+
+**What is proposed.** Four families, one or more analyses each (category
+`enrichment`, `params` worded by the interface):
+
+| Family | Analysis | Proposes | Confidence |
+| --- | --- | --- | --- |
+| relationship | `enrich_code` | for a service whose code is unknown, the repository of its name (`part_of`, from the repository) | 0.8 the same name, 0.65 one word more |
+| | `enrich_runtime` | for a service whose runtime is unknown, the cloud resource of its name (`deployed_to`) | 0.75, 0.6 |
+| organisation | `enrich_owner` | for what runs or keeps data that no one owns: the team owning its repository (`owned_by`) — or the team most of its maintainers are members of, two thirds at least | 0.9; 0.5 + 0.35 × the share |
+| business | `enrich_application` | for a service no application holds: the application its neighbours are part of — two at least, two thirds of them — or whose name it carries (`part_of`) | 0.5 + 0.3 × the share; 0.7 |
+| semantic | `enrich_criticality` | how critical a thing is: the level of the application holding it, when high or critical; `high` when five or more rely on it — where nothing is said, or above what is | 0.75; 0.65 |
+| | `enrich_description` | a service's description, from the repository that is its code — and its alone | 0.7 |
+| | `enrich_summary` | what a service does, in words — model-assisted, skipped until the gateway exists (`no_model`) | — |
+
+A name says what it is without what kind of thing it is: `payment-api`,
+`acme/payments` and `payments-service` are one name (`words`, the kind words
+— api, service, backend, prod… — and plurals left out). Each analysis
+proposes only where the family of sources that would say it is connected
+(the rule of § 12), only when one answer stands out — two repositories named
+alike say nothing — and nothing a thing already has.
+
+**A candidate's life.**
+
+| State | |
+| --- | --- |
+| `proposed` | waiting. Seen again, it is updated; no longer seen — its evidence went — it is `withdrawn` |
+| `accepted` | by a person, or by the **policy**: what is sure (0.9 or more), made by rules, and adds without replacing — today, the team owning a thing's repository. A fact of the model from then on |
+| `rejected` | by a person, with a reason if they give one: never proposed again under its key. An accepted candidate rejected is withdrawn from the model |
+| `withdrawn` | no longer proposed; proposed again if its evidence comes back. Forgotten after a year unseen — a decision is kept |
+
+**Reprocess** sends a rejected or withdrawn candidate back to its analysis:
+proposed again at once, the analysis queued — the next run keeps it if its
+evidence still holds, withdraws it otherwise. One in the model is rejected
+first. Every decision is kept on the candidate (`history`): status, via
+(person or policy), by whom, when, why.
+
+**Trusted information is not overwritten without a controlled
+validation.** A proposal that would replace what a source says
+(`overrides` — `EntityStanding.stated` says which attributes a source
+states) is never the policy's, and a person accepts it only by saying so
+(`override: true`; without it, 409).
+
+**How a fact reaches the model** (leka.knowledge, [company-model.md § 6](company-model.md)):
+- **Accepted** — the fact is written to `model_assertions`, under the
+  candidate's id, in the decision's transaction, and a build is queued.
+- **The build applies it**:
+  - an attribute where no source says one, before enrichment's own guess;
+  - over a source's value only when it overrides it, the value it replaced
+    kept (`provenance.attributes.<name>.replaced`);
+  - a relationship with the origin `accepted`, the decision in its
+    provenance. A source's stated relationship is kept over it; an
+    inferred one gives way to it; a loop is never broken by dropping it.
+- **The fingerprint** of the validated facts is part of what a build was
+  made from (`model_runs.assertions`): the hourly sweep builds what a
+  decision did not get built.
+- **Rejected** — the fact is deleted in the same transaction; the next
+  build no longer applies it, and what the sources say comes back.
+- **A build that fails** changes nothing — the model is written in one
+  transaction — and keeps the facts for the next.
+
+**Downstream**, a validated fact is the model's like any other, with its
+origin:
+- `GET /knowledge/relationships?origin=accepted`;
+- an entity's `provenance.attributes`;
+- the context engine — an accepted link is trusted at 0.9, between a
+  source's word (1.0) and an inference (0.7), and said "proposed by …,
+  validated" in a context's text;
+- Mon environnement's text alternative: "(proposé par LEKA, validé)".
+
+**The API:**
+
+| Route | | Permission |
+| --- | --- | --- |
+| `GET /intelligence/enrichment/candidates?status&family&analyzer&subject` | The candidates, the latest seen first (`sort=last_seen_at`) or the surest (`sort=confidence`); `subject` matches the thing enriched or either end | `workspace:read` |
+| `GET /intelligence/enrichment/candidates/{id}` | One: what it proposes, its evidence, where it was read, every decision | `workspace:read` |
+| `GET /intelligence/enrichment/summary` | How many are proposed (by family), accepted (by the policy among them), rejected, withdrawn | `workspace:read` |
+| `POST …/candidates/{id}/accept` `{override?, reason?}` | 409 when it is not proposed, when what it is about has gone, when its relationship's contract does not take its ends, or when it overrides and `override` is not said | `intention:approve` |
+| `POST …/candidates/{id}/reject` `{reason?}` | From proposed or accepted; 409 otherwise | `intention:approve` |
+| `POST …/candidates/{id}/reprocess` | 202 `{candidate, queued}`; 409 for one in the model | `intention:approve` |
+
+Deciding what goes into the company model is approving: `intention:approve`,
+as À valider is.
+
+**In the app:**
+- **À valider** (`/approvals`, mockup 09) lists the proposals: waiting,
+  accepted (by the policy among them), rejected, withdrawn; by type; each
+  worded, with why and how sure. Opened, a proposal says:
+  - what it would change, and warns when it replaces a source's word;
+  - what shows it, and where it was read;
+  - every decision taken.
+
+  Who may approve accepts — an override only once confirmed — rejects with
+  a reason, or sends back what was rejected.
+- **Vue d'ensemble**, card "À valider": the three latest proposals waiting.
+- **The sidebar**: the count of proposals waiting, beside "À valider", for
+  who may approve.
+
+**On the demo** (`scripts/seed.py`):
+- Thomas and Mei maintain postgres-prod — the database no one is named to
+  own — and both are members of Platform: "Platform est responsable de
+  postgres-prod", 0.85.
+- acme/user-service is a repository nothing ties to user-service:
+  "acme/user-service est le code de user-service", 0.8. Accepted and built,
+  the gap "Le code de user-service est inconnu" (§ 12) resolves.
+
+**Not here:** the decisions on intentions (LEKA-389, LEKA-390), which will
+join À valider's queue; a workspace's own policy threshold, which is one
+constant today (`POLICY_CONFIDENCE`).
 
 ## Not yet
 
@@ -442,5 +566,5 @@ missing document. Enrichment is LEKA-380.
   are declared and skipped.
 - **Dismissing a finding** ("known, accepted"). That is a decision, and it
   belongs to LEKA-389/390 (findings, human decision).
-- **The epic's other analyses** — enrichment, quality, conflicts, evolution
-  — are LEKA-380 to 383, on this frame.
+- **The epic's other analyses** — quality, conflicts, evolution — are
+  LEKA-381 to 383, on this frame.
