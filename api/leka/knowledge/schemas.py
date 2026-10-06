@@ -56,7 +56,10 @@ class RelationshipRead(BaseModel):
     to_entity_id: uuid.UUID
     type: RelationshipType
     confidence: float
-    origin: str = Field(description="stated by a source, or inferred by an enrichment rule.")
+    origin: str = Field(
+        description="stated by a source, inferred by an enrichment rule, or accepted: "
+        "proposed by LEKA's enrichment and validated (LEKA-380)."
+    )
     rule: str
     cross_source: bool
     attributes: dict[str, object] = Field(
@@ -269,7 +272,8 @@ class Criticality(BaseModel):
 
     level: str = Field(description="critical, high, medium, low — or the source's own word.")
     origin: str = Field(
-        description="source: a catalogue or a tag said it; enrichment: its parts show it."
+        description="source: a catalogue or a tag said it; enrichment: its parts show it; "
+        "accepted: LEKA proposed it and it was validated (LEKA-380)."
     )
     confidence: float | None
     raw: str | None = Field(description="The source's own word: tier 1, mission-critical.")
@@ -602,7 +606,7 @@ class Tie(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     entity: EntityBrief
-    origin: str = Field(description="stated, inferred.")
+    origin: str = Field(description="stated, inferred, accepted.")
     rule: str = Field(description="stated, or the rule that inferred it: inherited, works_with…")
     confidence: float
 
@@ -998,6 +1002,9 @@ class EntityStanding(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     criticality: str | None
+    # The attributes its sources state (LEKA-380): a validated fact that
+    # would replace one of these overrides a source.
+    stated: tuple[str, ...] = ()
     lifecycle: Lifecycle
     documents: int
     fresh_documents: int
@@ -1505,7 +1512,9 @@ class ArchitectureLinkRead(BaseModel):
         description="source_code, routes, calls, queue, cache, stores, files, email, uses, "
         "depends, deployed_on, hosted_on, monitored_by, part_of."
     )
-    origin: str = Field(description="stated by a source, or inferred by enrichment.")
+    origin: str = Field(
+        description="stated by a source, inferred by enrichment, or accepted (LEKA-380)."
+    )
     rule: str = Field(
         description="What inferred it: public_address, deployed_together, only_instance…"
     )

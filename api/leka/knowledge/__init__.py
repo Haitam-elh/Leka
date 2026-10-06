@@ -11,12 +11,15 @@ leka.intentions (architecture rule 1).
 """
 
 from leka.knowledge.architecture import RELIED_ON
+from leka.knowledge.build import Assertion
 from leka.knowledge.graph import GraphService
+from leka.knowledge.job import queue_model_build
 from leka.knowledge.models import (
     Entity,
     EntityType,
     EntityVersion,
     Lifecycle,
+    ModelAssertion,
     ModelRun,
     Relationship,
     RelationshipChange,
@@ -25,6 +28,7 @@ from leka.knowledge.models import (
 )
 from leka.knowledge.registry import DEPENDENCIES, ENTITY_KINDS, MODEL_VERSION, RELATIONSHIP_KINDS
 from leka.knowledge.repository import (
+    AssertionRepository,
     BusinessFilters,
     DataFilters,
     DocumentFilters,
@@ -136,6 +140,8 @@ __all__ = [
     "ArchitectureCardRead",
     "ArchitectureLinkRead",
     "ArchitectureRead",
+    "Assertion",
+    "AssertionRepository",
     "BusinessContext",
     "BusinessDetail",
     "BusinessFilters",
@@ -202,6 +208,7 @@ __all__ = [
     "MaterialEntity",
     "MaterialRelationship",
     "MaterialSource",
+    "ModelAssertion",
     "ModelBuild",
     "ModelChange",
     "ModelChanges",
@@ -238,5 +245,6 @@ __all__ = [
     "ViewNodeRead",
     "ViewSourceRead",
     "fold",
+    "queue_model_build",
     "search_fields",
 ]

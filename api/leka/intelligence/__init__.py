@@ -9,8 +9,12 @@ seen again, resolved, reopened.
 
 The frame (analysis.py) is the epic's: LEKA-378 to 383 add their analyses
 beside the first ones (rules.py) — change and impact (changes.py, LEKA-378):
-which changes matter, what they reach, what followed them. Model-assisted analyses are declared like
-the others and skipped, said so, until leka.capabilities calls a model.
+which changes matter, what they reach, what followed them; knowledge gaps
+(gaps.py, LEKA-379); knowledge enrichment (enrichment.py, LEKA-380), whose
+analyses PROPOSE — a relationship, an attribute — kept as CANDIDATES until
+validated or rejected, and applied to the model once validated
+(curation.py). Model-assisted analyses are declared like the others and
+skipped, said so, until leka.capabilities calls a model.
 
 Above leka.capabilities, which a model-assisted analysis will call the
 model through, and leka.context; below leka.intentions, which reads what it
@@ -25,28 +29,50 @@ from leka.intelligence.analysis import (
     Material,
     Method,
     Outcome,
+    Proposal,
     Reads,
     Severity,
     Subject,
     catalogue_hash,
     execute,
 )
-from leka.intelligence.models import Finding, IntelligenceRun, IntelligenceStep
-from leka.intelligence.repository import FindingFilters, IntelligenceRepository
+from leka.intelligence.curation import (
+    DecisionRefusedError,
+    EnrichmentService,
+    candidate_detail,
+    candidate_read,
+    candidate_reads,
+)
+from leka.intelligence.models import (
+    EnrichmentCandidate,
+    Finding,
+    IntelligenceRun,
+    IntelligenceStep,
+)
+from leka.intelligence.repository import (
+    CandidateFilters,
+    FindingFilters,
+    IntelligenceRepository,
+)
 from leka.intelligence.rules import ANALYZERS, analyzer_named
 from leka.intelligence.schemas import (
     AnalysisRequest,
     AnalysisRequested,
     AnalyzerRead,
+    CandidateDetail,
+    CandidateRead,
     ChangeImpactDetail,
     ChangeImpactRead,
     ChangeImpactTimeline,
+    Decision,
+    EnrichmentSummary,
     EvidenceRead,
     FindingDetail,
     FindingRead,
     FollowedRead,
     ImpactRead,
     IntelligenceSummary,
+    Reprocessed,
     RunDetail,
     RunRead,
     StepRead,
@@ -60,11 +86,19 @@ __all__ = [
     "AnalysisRequested",
     "Analyzer",
     "AnalyzerRead",
+    "CandidateDetail",
+    "CandidateFilters",
+    "CandidateRead",
     "ChangeImpactDetail",
     "ChangeImpactRead",
     "ChangeImpactTimeline",
     "ContextStanding",
+    "Decision",
+    "DecisionRefusedError",
     "Draft",
+    "EnrichmentCandidate",
+    "EnrichmentService",
+    "EnrichmentSummary",
     "Evidence",
     "EvidenceRead",
     "Finding",
@@ -81,7 +115,9 @@ __all__ = [
     "Material",
     "Method",
     "Outcome",
+    "Proposal",
     "Reads",
+    "Reprocessed",
     "RunDetail",
     "RunRead",
     "Severity",
@@ -90,6 +126,9 @@ __all__ = [
     "SubjectRead",
     "UnknownAnalyzerError",
     "analyzer_named",
+    "candidate_detail",
+    "candidate_read",
+    "candidate_reads",
     "catalogue_hash",
     "execute",
 ]

@@ -16,6 +16,13 @@ WHAT IT SAYS. Its sources' attributes; where they say nothing, enrichment's
 — each with its origin in `provenance`. Checked against its kind's schema
 (registry.py).
 
+WHAT WAS VALIDATED (LEKA-380). A fact LEKA's enrichment proposed and someone
+— or the workspace's policy — accepted: an attribute where no source says
+one, before enrichment's own guess; instead of what a source says only
+when the fact `overrides` it, the value it replaced kept in `provenance`;
+a relationship with the origin `accepted`. Withdrawn, the next build no
+longer applies it: what the sources say comes back.
+
 LIFECYCLE. `archived` when its source says so — or its catalogue says it is
 retired, its provider that it is terminated or deleted; `dormant` when
 enrichment finds nothing done to it for 180 days; `removed` when no source
@@ -168,6 +175,43 @@ class Link:
 
 
 @dataclass(frozen=True)
+class Assertion:
+    """A validated fact (LEKA-380): an attribute of an entity, or a
+    relationship between two."""
+
+    id: uuid.UUID
+    kind: str
+    rule: str
+    confidence: float
+    entity_id: uuid.UUID | None = None
+    attribute: str | None = None
+    value: object = None
+    overrides: bool = False
+    from_id: uuid.UUID | None = None
+    to_id: uuid.UUID | None = None
+    type: str | None = None
+    evidence: str = ""
+    provenance: dict[str, object] = field(default_factory=dict)
+
+    def origin(self, replaced: object = None) -> dict[str, object]:
+        """What an entity's provenance says of the attribute it sets."""
+        return {
+            "origin": "accepted",
+            "rule": self.rule,
+            "confidence": self.confidence,
+            **({"evidence": self.evidence} if self.evidence else {}),
+            **{k: v for k, v in self.provenance.items() if k in DECISION},
+            **({"replaced": replaced} if replaced is not None else {}),
+        }
+
+
+# What an applied fact's provenance keeps of its decision.
+DECISION = ("candidate_id", "decided_via", "decided_at")
+# Which of two links between the same ends of the same kind is kept.
+ORIGIN_RANK = {"stated": 2, "accepted": 1, "inferred": 0}
+
+
+@dataclass(frozen=True)
 class Current:
     """An entity as the last build left it."""
 
@@ -302,6 +346,7 @@ def build(
     *,
     now: datetime,
     previous: dict[tuple[uuid.UUID, uuid.UUID, str], Previous] | None = None,
+    assertions: list[Assertion] | None = None,
 ) -> Built:
     # What a build did, said even when it is nothing.
     counts: Counter[str] = Counter(dict.fromkeys(("created", "changed", "unchanged", "removed"), 0))
@@ -311,6 +356,10 @@ def build(
     types: dict[uuid.UUID, str] = {}
     # The one environment a thing runs in, when it runs in one.
     scope: dict[uuid.UUID, str | None] = {}
+    validated: dict[uuid.UUID, list[Assertion]] = defaultdict(list)
+    for fact in assertions or ():
+        if fact.kind == "attribute" and fact.entity_id is not None and fact.attribute:
+            validated[fact.entity_id].append(fact)
 
     for candidate in candidates:
         kind = BUILT_FROM.get(candidate.type)
@@ -319,7 +368,21 @@ def build(
             continue
         merged = dict(candidate.attributes)
         origins: dict[str, dict[str, object]] = {}
+        # Validated first: before enrichment's guess, never over a source
+        # unless that is what was validated.
+        for fact in validated.get(candidate.id, ()):
+            name = str(fact.attribute)
+            stated = name in candidate.attributes
+            if stated and not fact.overrides:
+                counts["assertions_superseded"] += 1
+                continue
+            replaced = merged.get(name) if stated else None
+            merged[name] = fact.value
+            origins[name] = fact.origin(replaced)
+            counts["assertions_applied"] += 1
         for name, value in candidate.enriched.items():
+            if name in origins:
+                continue
             if name in merged:
                 continue
             merged[name] = value.value
@@ -475,7 +538,25 @@ def build(
             scope[thing] = next(iter(places))
 
     relationships: dict[tuple[uuid.UUID, uuid.UUID, str], dict[str, object]] = {}
-    for link in links:
+    accepted = [
+        Link(
+            from_id=fact.from_id,
+            to_id=fact.to_id,
+            type=fact.type,
+            origin="accepted",
+            rule=fact.rule,
+            confidence=fact.confidence,
+            provenance=(
+                {
+                    **{k: v for k, v in fact.provenance.items() if k in DECISION},
+                    **({"evidence": fact.evidence} if fact.evidence else {}),
+                },
+            ),
+        )
+        for fact in assertions or ()
+        if fact.kind == "relationship" and fact.from_id and fact.to_id and fact.type
+    ]
+    for link in [*links, *accepted]:
         relation = RELATIONSHIP_FROM.get(link.type)
         if relation is None:
             counts["relationships_not_modelled"] += 1
@@ -486,8 +567,8 @@ def build(
         key = (link.from_id, link.to_id, relation.value)
         held = relationships.get(key)
         stronger = held is None or (
-            (link.origin == "stated", link.confidence)
-            > (held["origin"] == "stated", float(str(held["confidence"])))
+            (ORIGIN_RANK.get(link.origin, 0), link.confidence)
+            > (ORIGIN_RANK.get(str(held["origin"]), 0), float(str(held["confidence"])))
         )
         if stronger:
             environments = sorted({e for e in (scope[link.from_id], scope[link.to_id]) if e})

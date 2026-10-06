@@ -22,10 +22,15 @@ A build that changed something says so: the event "knowledge.model_built",
 written in the build's own transaction — the contexts that hold what
 changed follow it (leka.context, LEKA-374).
 
+A FACT VALIDATED or withdrawn (LEKA-380, leka.intelligence) queues a build
+too (`queue_model_build`): the build applies the validated facts, and their
+fingerprint is part of what it was made from.
+
 THE SWEEP, hourly (leka/background/schedule.py), queues what no event
 will: a workspace enriched before this module existed, a build that
-failed, a new MODEL_VERSION. It closes the runs a dead worker left and
-forgets the history past HISTORY_DAYS — never a workspace's last success.
+failed, a new MODEL_VERSION, a fact validated whose build did not run. It
+closes the runs a dead worker left and forgets the history past
+HISTORY_DAYS — never a workspace's last success.
 """
 
 from __future__ import annotations
@@ -43,7 +48,7 @@ from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion import EnrichedWorkspaces, EnrichmentRepository
 from leka.knowledge.build import Candidate, Enriched, Link, SeenKey, build
 from leka.knowledge.registry import MODEL_VERSION
-from leka.knowledge.repository import ModelRepository, ModelSweeper
+from leka.knowledge.repository import AssertionRepository, ModelRepository, ModelSweeper
 
 logger = structlog.get_logger(__name__)
 
@@ -77,6 +82,13 @@ async def _queue_for_event(event_id: uuid.UUID) -> str:
     return "queued" if await _queue(event.workspace_id) else "already queued"
 
 
+async def queue_model_build(workspace_id: uuid.UUID) -> bool:
+    """Build the workspace's model again — a fact was validated or withdrawn
+    (LEKA-380); False when a build is already queued or running, which
+    will read it."""
+    return await _queue(workspace_id)
+
+
 async def _queue(workspace_id: uuid.UUID) -> bool:
     """Queue the workspace's build; False when one is already queued or running."""
     run = await enqueue_job(
@@ -108,11 +120,12 @@ async def sweep_models(*, now: datetime | None = None) -> dict[str, int]:
             )
             enriched = await EnrichedWorkspaces(session).latest()
             built = await sweeper.built()
+            asserted = await sweeper.asserted()
             await session.commit()
     behind = [
         workspace_id
         for workspace_id, basis in enriched.items()
-        if built.get(workspace_id) != (basis, MODEL_VERSION)
+        if built.get(workspace_id) != (basis, MODEL_VERSION, asserted.get(workspace_id))
     ]
     result = {"abandoned": abandoned, "pruned": pruned, "queued": 0, "already_active": 0}
     for workspace_id in behind[:SWEEP_BATCH]:
@@ -133,16 +146,23 @@ async def build_workspace(workspace_id: uuid.UUID) -> dict[str, object]:
             async with session_factory() as session:
                 inputs = EnrichmentRepository(session, workspace_id)
                 model = ModelRepository(session, workspace_id)
+                validated = AssertionRepository(session, workspace_id)
                 basis = await inputs.latest_enrichment()
-                if not await model.pending(basis, MODEL_VERSION):
+                facts = await validated.fingerprint()
+                if not await model.pending(basis, MODEL_VERSION, facts):
                     break
                 now = datetime.now(UTC)
-                run = await model.start(basis, MODEL_VERSION, at=now)
+                run = await model.start(basis, MODEL_VERSION, at=now, assertions=facts)
                 await session.commit()
                 try:
                     candidates, links = await _inputs(inputs)
-                    if await inputs.latest_enrichment() != basis:
-                        # Enrichment ran again while this read: read again.
+                    assertions = await validated.active()
+                    if (
+                        await inputs.latest_enrichment() != basis
+                        or await validated.fingerprint() != facts
+                    ):
+                        # Enrichment ran again, or a fact was validated,
+                        # while this read: read again.
                         run.status = "abandoned"
                         run.finished_at = datetime.now(UTC)
                         await session.commit()
@@ -153,6 +173,7 @@ async def build_workspace(workspace_id: uuid.UUID) -> dict[str, object]:
                         await model.current(),
                         now=now,
                         previous=await model.current_links(),
+                        assertions=assertions,
                     )
                     await model.write(built, run_id=run.id)
                     counts = dict(built.counts)

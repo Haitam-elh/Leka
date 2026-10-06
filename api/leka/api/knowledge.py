@@ -1443,7 +1443,7 @@ async def relationships(
     page: PageParams,
     kind: RelationshipKind = None,
     entity_id: Touching = None,
-    origin: Literal["stated", "inferred"] | None = None,
+    origin: Literal["stated", "inferred", "accepted"] | None = None,
     rule: Annotated[str | None, Query(max_length=100)] = None,
     min_confidence: Annotated[float | None, Query(ge=0, le=1)] = None,
     since: Annotated[datetime | None, Query(description="Changed from this date.")] = None,

@@ -254,7 +254,8 @@ class ElementProvenance(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     origin: str = Field(
-        description="stated: its sources show it; inferred: an enrichment rule made it."
+        description="stated: its sources show it; inferred: an enrichment rule made it; "
+        "accepted: LEKA proposed it and someone validated it (LEKA-380)."
     )
     rule: str | None = Field(description="The rule that inferred it — or stated.")
     confidence: float
@@ -540,6 +541,9 @@ class ContextSummary(BaseModel):
     relationships: int
     stated: int = Field(description="Relationships its sources stated.")
     inferred: int = Field(description="Relationships an enrichment rule inferred.")
+    accepted: int = Field(
+        default=0, description="Relationships LEKA proposed and someone validated (LEKA-380)."
+    )
     by_type: dict[str, int]
     by_source_kind: dict[str, int]
     by_retriever: dict[str, int] = Field(description="Elements each retriever found (LEKA-371).")

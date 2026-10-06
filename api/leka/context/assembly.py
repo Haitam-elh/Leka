@@ -298,6 +298,7 @@ def summary(elements: Sequence[Element]) -> ContextSummary:
         relationships=sum(1 for e in elements if e.kind == "relationship"),
         stated=origins["stated"],
         inferred=origins["inferred"],
+        accepted=origins["accepted"],
         by_type=dict(sorted(Counter(e.ref_type for e in elements).items())),
         by_source_kind=dict(sorted(kinds.items())),
         by_retriever=dict(sorted(retrievers.items())),
@@ -424,6 +425,8 @@ def text(element: Element) -> str:
     line = f'"{tie.start.name}" {tie.type} "{tie.end.name}"'
     if tie.origin == "inferred":
         line += f" — inferred by {tie.rule}"
+    elif tie.origin == "accepted":
+        line += f" — proposed by {tie.rule}, validated"
     elif by:
         line += f" — stated by {', '.join(by)}"
     return line + f", confidence {tie.confidence:.2f}"

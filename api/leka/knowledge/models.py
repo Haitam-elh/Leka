@@ -278,7 +278,7 @@ class Relationship(Base, WorkspaceScopedMixin):
         Index("ix_relationships_from", "workspace_id", "from_entity_id", "type"),
         Index("ix_relationships_to", "workspace_id", "to_entity_id", "type"),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
-        CheckConstraint("origin IN ('stated', 'inferred')", name="origin"),
+        CheckConstraint("origin IN ('stated', 'inferred', 'accepted')", name="origin"),
     )
 
     from_entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -294,7 +294,8 @@ class Relationship(Base, WorkspaceScopedMixin):
         nullable=False,
     )
     confidence: Mapped[float] = mapped_column(Float, nullable=False, server_default="1.0")
-    # Stated by a source, or inferred by an enrichment rule (`rule`).
+    # Stated by a source, inferred by an enrichment rule (`rule`) — or
+    # accepted: proposed by LEKA's enrichment and validated (LEKA-380).
     origin: Mapped[str] = mapped_column(String(10), nullable=False, server_default="stated")
     rule: Mapped[str] = mapped_column(String(100), nullable=False, server_default="stated")
     cross_source: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
@@ -415,5 +416,61 @@ class ModelRun(Base, WorkspaceScopedMixin):
     # pruned, and this says what it was made from, not a link to follow.
     enrichment_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     model_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The validated facts it applied (LEKA-380), as one fingerprint: a fact
+    # accepted or withdrawn since is something new to build.
+    assertions: Mapped[str | None] = mapped_column(String(64), nullable=True)
     counts: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
     error: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+ASSERTION_KINDS = ("attribute", "relationship")
+
+
+class ModelAssertion(Base, WorkspaceScopedMixin):
+    """A fact about the company model that LEKA's enrichment proposed and
+    that was validated — by a person, or by the workspace's policy
+    (LEKA-380). Each build applies it beside what the sources say: an
+    attribute where no source says one — or, when it `overrides`, instead
+    of what a source says, only because someone said so — a relationship
+    with the origin `accepted`.
+
+    Its id is the enrichment candidate's (leka.intelligence), which keeps
+    the proposal, its evidence and the decision. A fact withdrawn is
+    deleted here: the next build no longer applies it, and what the
+    sources say comes back. No foreign key to the entities: one that goes
+    leaves a fact the build skips, not an error."""
+
+    __tablename__ = "model_assertions"
+    __table_args__ = (
+        CheckConstraint("kind IN ('attribute', 'relationship')", name="kind"),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
+        CheckConstraint(
+            "(kind = 'attribute') = (entity_id IS NOT NULL AND attribute IS NOT NULL)",
+            name="attribute_said",
+        ),
+        CheckConstraint(
+            "(kind = 'relationship') = (from_entity_id IS NOT NULL AND to_entity_id IS NOT NULL "
+            "AND relationship_type IS NOT NULL)",
+            name="relationship_said",
+        ),
+    )
+
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    # An attribute: of which entity, which, the value.
+    entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    attribute: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    value: Mapped[object | None] = mapped_column(JSONB, nullable=True)
+    overrides: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # A relationship: its ends and its kind.
+    from_entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    to_entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    relationship_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    # The analysis that proposed it, as the model's `rule` says it.
+    rule: Mapped[str] = mapped_column(String(100), nullable=False)
+    evidence: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    # Who validated it and how: {candidate_id, analyzer, decided_via,
+    # decided_by, decided_at}.
+    provenance: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )

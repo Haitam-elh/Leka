@@ -3,7 +3,7 @@
 The only place in this module where a query is written (architecture rule
 4). What a run reads of the company model and the contexts goes through
 leka.knowledge and leka.context; this reads and writes the runs, their
-steps and the findings.
+steps, the findings and the enrichment candidates (LEKA-380).
 """
 
 from __future__ import annotations
@@ -17,7 +17,12 @@ from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.db import WorkspaceScopedRepository
-from leka.intelligence.models import Finding, IntelligenceRun, IntelligenceStep
+from leka.intelligence.models import (
+    EnrichmentCandidate,
+    Finding,
+    IntelligenceRun,
+    IntelligenceStep,
+)
 from leka.knowledge import ModelRun
 
 # The most pressing first, and an order that holds between equals.
@@ -34,6 +39,14 @@ class FindingFilters:
     status: str | None = None
     severity: str | None = None
     category: str | None = None
+    analyzer: str | None = None
+    subject_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True)
+class CandidateFilters:
+    status: str | None = None
+    family: str | None = None
     analyzer: str | None = None
     subject_id: uuid.UUID | None = None
 
@@ -122,6 +135,65 @@ class IntelligenceRepository(WorkspaceScopedRepository):
             self.select(Finding).where(Finding.status == "open").order_by(*PRESSING).limit(limit)
         )
         return found.scalars().all()
+
+    # ── enrichment candidates (LEKA-380) ────────────────────────────────
+
+    def candidates(self, filters: CandidateFilters) -> Select[tuple[EnrichmentCandidate]]:
+        """The candidates, for a page: by state, family, analysis, the thing
+        they enrich or involve."""
+        statement = self.select(EnrichmentCandidate)
+        if filters.status:
+            statement = statement.where(EnrichmentCandidate.status == filters.status)
+        if filters.family:
+            statement = statement.where(EnrichmentCandidate.family == filters.family)
+        if filters.analyzer:
+            statement = statement.where(EnrichmentCandidate.analyzer == filters.analyzer)
+        if filters.subject_id is not None:
+            thing = filters.subject_id
+            statement = statement.where(
+                (EnrichmentCandidate.subject_id == thing)
+                | (EnrichmentCandidate.start_id == thing)
+                | (EnrichmentCandidate.end_id == thing)
+            )
+        return statement
+
+    async def candidate(
+        self, candidate_id: uuid.UUID, *, for_update: bool = False
+    ) -> EnrichmentCandidate | None:
+        statement = self.select(EnrichmentCandidate).where(EnrichmentCandidate.id == candidate_id)
+        if for_update:
+            statement = statement.with_for_update()
+        found = await self._session.execute(statement)
+        return found.scalar_one_or_none()
+
+    async def candidates_of(self, analyzer: str) -> dict[str, EnrichmentCandidate]:
+        """An analysis's candidates, whatever their state, by key: what a
+        step compares what it proposed with."""
+        found = await self._session.execute(
+            self.select(EnrichmentCandidate).where(EnrichmentCandidate.analyzer == analyzer)
+        )
+        return {candidate.key: candidate for candidate in found.scalars()}
+
+    def add_candidate(self, candidate: EnrichmentCandidate) -> None:
+        self.add(candidate)
+
+    async def candidate_counts(self) -> list[tuple[str, str, str | None, int]]:
+        """(status, family, decided via, how many)."""
+        found = await self._session.execute(
+            select(
+                EnrichmentCandidate.status,
+                EnrichmentCandidate.family,
+                EnrichmentCandidate.decided_via,
+                func.count(),
+            )
+            .where(EnrichmentCandidate.workspace_id == self.workspace_id)
+            .group_by(
+                EnrichmentCandidate.status,
+                EnrichmentCandidate.family,
+                EnrichmentCandidate.decided_via,
+            )
+        )
+        return [(status, family, via, int(n)) for status, family, via, n in found.tuples().all()]
 
     async def about(self, ids: Sequence[uuid.UUID], *, limit: int) -> Sequence[Finding]:
         """The open findings about these things — for a service downstream
@@ -217,10 +289,22 @@ class IntelligenceSweeper:
         return int(getattr(result, "rowcount", 0) or 0)
 
     async def prune_resolved(self, *, before: datetime) -> int:
-        """Findings resolved before `before`: what was true long ago."""
+        """Findings resolved before `before`: what was true long ago — and
+        candidates withdrawn, unseen since then (LEKA-380). A decision is
+        kept: it says why the model is what it is."""
         result = await self._session.execute(
             delete(Finding)
             .where(Finding.status == "resolved", Finding.resolved_at < before)
             .execution_options(synchronize_session=False)
         )
-        return int(getattr(result, "rowcount", 0) or 0)
+        withdrawn = await self._session.execute(
+            delete(EnrichmentCandidate)
+            .where(
+                EnrichmentCandidate.status == "withdrawn",
+                EnrichmentCandidate.last_seen_at < before,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return int(getattr(result, "rowcount", 0) or 0) + int(
+            getattr(withdrawn, "rowcount", 0) or 0
+        )

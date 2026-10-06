@@ -13,14 +13,19 @@ reads, what it says, and how one runs beside the others.
                 function, tested in a millisecond
     DRAFT       one conclusion: about what, how bad, how sure, in a code and
                 its values and in an English sentence, with what shows it
-    OUTCOME     what came of running one analysis: its drafts — or the
-                error's type, its time out, why it was skipped
+    PROPOSAL    one enrichment of the company model (LEKA-380): a
+                relationship or an attribute the model lacks, how sure,
+                what shows it — kept as a candidate until it is validated
+                or rejected
+    OUTCOME     what came of running one analysis: its drafts and its
+                proposals — or the error's type, its time out, why it was
+                skipped
 
 ISOLATION. `execute` runs one analysis and never raises: an exception is a
 `failed` outcome, a budget exceeded `timed_out`, missing material or a
 model-assisted analysis with no model gateway `skipped`. The run goes on
 with the next. A failed analysis resolves none of its findings — not
-seeing them is not knowing they are gone.
+seeing them is not knowing they are gone — nor withdraws its proposals.
 
 MODEL-ASSISTED analyses are declared like the others (`method = model`) and
 skipped, said so, until leka.capabilities calls a model (architecture rule
@@ -38,7 +43,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from leka.knowledge import ArchitectureRead, ChangeFootprint, EntityStanding
+from leka.knowledge import ArchitectureRead, ChangeFootprint, EntityBrief, EntityStanding
 
 
 class Reads(enum.StrEnum):
@@ -125,6 +130,39 @@ class Draft:
 
 
 @dataclass(frozen=True)
+class Proposal:
+    """One enrichment of the company model, before it is kept as a
+    candidate (LEKA-380): a relationship from one entity to another, or an
+    attribute of one — about `subject`, the thing it enriches.
+
+    `current` is what the model says of that attribute now; `overrides`,
+    that a source says it — accepting the proposal would replace what a
+    source says, and only a person may."""
+
+    key: str
+    # relationship, semantic, organisation, business
+    family: str
+    code: str
+    subject: Subject
+    statement: str
+    confidence: float
+    relationship: str | None = None
+    start: Subject | None = None
+    end: Subject | None = None
+    attribute: str | None = None
+    value: object = None
+    current: object = None
+    overrides: bool = False
+    params: Mapping[str, object] = field(default_factory=dict)
+    evidence: tuple[Evidence, ...] = ()
+    sources: tuple[str, ...] = ()
+
+    @property
+    def kind(self) -> str:
+        return "relationship" if self.relationship else "attribute"
+
+
+@dataclass(frozen=True)
 class ContextStanding:
     """Where one context stands: what it is, whether it follows the model,
     how far behind, how good its latest version was judged."""
@@ -158,6 +196,10 @@ class Material:
     standing: Mapping[uuid.UUID, EntityStanding] = field(default_factory=dict)
     documents: int | None = None
     categories: Mapping[str, str] = field(default_factory=dict)
+    # And (LEKA-380): the owners named for each card's entity, with their
+    # ids; the teams each maintainer is a member of.
+    owned_by: Mapping[uuid.UUID, tuple[EntityBrief, ...]] = field(default_factory=dict)
+    memberships: Mapping[uuid.UUID, tuple[EntityBrief, ...]] = field(default_factory=dict)
     contexts: tuple[ContextStanding, ...] | None = None
     changes: tuple[ChangeFootprint, ...] | None = None
 
@@ -180,7 +222,7 @@ class Analyzer:
     method: Method
     reads: frozenset[Reads]
     summary: str
-    run: Callable[[Material], Sequence[Draft]]
+    run: Callable[[Material], Sequence[Draft | Proposal]]
     # Seconds it may take before it is given up on.
     budget: float = 30.0
     # Parts read when they can be, which only weigh what it concludes —
@@ -198,6 +240,7 @@ class Outcome:
 
     status: str
     drafts: tuple[Draft, ...] = ()
+    proposals: tuple[Proposal, ...] = ()
     duration_ms: int = 0
     error: str | None = None
     reason: str | None = None
@@ -214,22 +257,28 @@ def skip_reason(analyzer: Analyzer, material: Material) -> str | None:
 
 
 async def execute(analyzer: Analyzer, material: Material) -> Outcome:
-    """Run one analysis, isolated: never raises. Its drafts deduplicated by
-    key — the last one said wins."""
+    """Run one analysis, isolated: never raises. Its drafts and its
+    proposals deduplicated by key — the last one said wins."""
     reason = skip_reason(analyzer, material)
     if reason is not None:
         return Outcome(status="skipped", reason=reason)
     started = time.monotonic()
     try:
-        drafts = await asyncio.wait_for(
+        said = await asyncio.wait_for(
             asyncio.to_thread(analyzer.run, material), timeout=analyzer.budget
         )
     except TimeoutError:
         return Outcome(status="timed_out", duration_ms=_since(started), error="TimeoutError")
     except Exception as error:
         return Outcome(status="failed", duration_ms=_since(started), error=type(error).__name__)
-    unique = {draft.key: draft for draft in drafts}
-    return Outcome(status="succeeded", drafts=tuple(unique.values()), duration_ms=_since(started))
+    drafts = {d.key: d for d in said if isinstance(d, Draft)}
+    proposals = {p.key: p for p in said if isinstance(p, Proposal)}
+    return Outcome(
+        status="succeeded",
+        drafts=tuple(drafts.values()),
+        proposals=tuple(proposals.values()),
+        duration_ms=_since(started),
+    )
 
 
 def catalogue_hash(analyzers: Sequence[Analyzer]) -> str:

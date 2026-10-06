@@ -58,7 +58,13 @@ from leka.intelligence.analysis import (
 from leka.intelligence.repository import IntelligenceRepository, IntelligenceSweeper
 from leka.intelligence.rules import ANALYZERS
 from leka.intelligence.service import IntelligenceService, ModelRead
-from leka.knowledge import ChangeFootprint, GraphRepository, GraphService
+from leka.knowledge import (
+    AssertionRepository,
+    ChangeFootprint,
+    GraphRepository,
+    GraphService,
+    queue_model_build,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -141,6 +147,7 @@ def _service(
         GraphService(GraphRepository(session, workspace_id)),
         ContextRepository(session, workspace_id),
         analyzers=analyzers,
+        assertions=AssertionRepository(session, workspace_id),
     )
 
 
@@ -188,6 +195,8 @@ async def analyse_workspace(
             standing=model.standing if model else {},
             documents=model.documents if model else None,
             categories=model.categories if model else {},
+            owned_by=model.owned_by if model else {},
+            memberships=model.memberships if model else {},
             contexts=await _contexts(workspace_id, chosen, moment),
             changes=await _changes(workspace_id, chosen, moment),
         )
@@ -217,6 +226,9 @@ async def analyse_workspace(
                 run_id, now=clock or datetime.now(UTC)
             )
             await session.commit()
+    if int(finished.counts.get("by_policy", 0) or 0):
+        # Facts the policy accepted (LEKA-380): the model applies them.
+        await queue_model_build(workspace_id)
     return {"run": str(run_id), "status": finished.status, **finished.counts}
 
 

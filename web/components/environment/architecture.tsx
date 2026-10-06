@@ -1110,8 +1110,8 @@ export function Sentences({
           return (
             <li key={`${link.from_id}:${link.role}:${link.to_id}`}>
               {`${cardName(from)} ${roleWords(w, link.role).sentence} ${cardName(to)}`}
-              {link.origin === "inferred" ? (
-                <span className="text-shell-muted">{` (${w.inferred})`}</span>
+              {link.origin === "inferred" || link.origin === "accepted" ? (
+                <span className="text-shell-muted">{` (${w[link.origin]})`}</span>
               ) : null}
             </li>
           );

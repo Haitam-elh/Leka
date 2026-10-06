@@ -185,8 +185,10 @@ see [`system-states.md`](system-states.md#accessibility).
   marks the active one; **switching is LEKA-331** — the workspace lives in
   the session and only the API may change it (architecture rule 3).
 - **Badges and notification counts** are handed to `AppShell` as props by
-  `(app)/layout.tsx`, where they are currently mocked. The features that
-  produce them own them: LEKA-338 and after.
+  `(app)/layout.tsx`, read by `useNavBadges` (`web/lib/nav-badges.ts`)
+  inside the providers. The one counted today: beside "À valider", the
+  enrichment proposals waiting, for who may approve (LEKA-380). The
+  notification count has no ticket yet: none is shown.
 - **The global search and its ⌘K palette** are LEKA-338. The header takes a
   `search` slot; until then it shows an inert picture of a search field.
 - **Loading, error and offline states** are LEKA-343's — see

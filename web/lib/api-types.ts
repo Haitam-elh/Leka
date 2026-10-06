@@ -3098,6 +3098,136 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/intelligence/enrichment/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Candidates
+         * @description The enrichments of the company model proposed, the latest seen
+         *     first (`sort=last_seen_at`, the default) or the surest
+         *     (`sort=confidence`).
+         */
+        get: operations["candidates_api_v1_intelligence_enrichment_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/enrichment/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enrichment Summary
+         * @description How many wait, by family; how many were accepted — by the policy
+         *     among them — rejected, withdrawn.
+         */
+        get: operations["enrichment_summary_api_v1_intelligence_enrichment_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/enrichment/candidates/{candidate_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Candidate
+         * @description One candidate: what it proposes, what shows it, where that was read,
+         *     every decision taken on it.
+         */
+        get: operations["candidate_api_v1_intelligence_enrichment_candidates__candidate_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/enrichment/candidates/{candidate_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept
+         * @description Validated: kept as a fact of the company model, applied by its next
+         *     build — queued now. 409 when it is no longer proposed, when what it is
+         *     about has gone, or when it replaces what a source says and `override`
+         *     does not say so.
+         */
+        post: operations["accept_api_v1_intelligence_enrichment_candidates__candidate_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/enrichment/candidates/{candidate_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject
+         * @description Not so: never proposed again under its key. An accepted candidate is
+         *     withdrawn from the model — the next build, queued now, undoes it.
+         */
+        post: operations["reject_api_v1_intelligence_enrichment_candidates__candidate_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/enrichment/candidates/{candidate_id}/reprocess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reprocess
+         * @description Back to its analysis, which runs now: proposed again if its evidence
+         *     still holds, withdrawn otherwise. 409 for one in the model: reject it
+         *     first.
+         */
+        post: operations["reprocess_api_v1_intelligence_enrichment_candidates__candidate_id__reprocess_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3402,7 +3532,7 @@ export interface components {
             role: string;
             /**
              * Origin
-             * @description stated by a source, or inferred by enrichment.
+             * @description stated by a source, inferred by enrichment, or accepted (LEKA-380).
              */
             origin: string;
             /**
@@ -3881,6 +4011,203 @@ export interface components {
             rule: string;
             /** Confidence */
             confidence: number;
+        };
+        /**
+         * CandidateDetail
+         * @description And what shows it, where that was read, and every decision taken.
+         */
+        CandidateDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Analyzer */
+            analyzer: string;
+            /**
+             * Family
+             * @description relationship, semantic, organisation, business.
+             */
+            family: string;
+            /**
+             * Code
+             * @description What it proposes, for the interface to word.
+             */
+            code: string;
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "rules" | "model";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "relationship" | "attribute";
+            /** @description The thing it enriches. */
+            subject: components["schemas"]["SubjectRead"];
+            /**
+             * Relationship
+             * @description The relationship's kind, from start to end.
+             */
+            relationship: string | null;
+            start: components["schemas"]["SubjectRead"] | null;
+            end: components["schemas"]["SubjectRead"] | null;
+            /** Attribute */
+            attribute: string | null;
+            /** @description The attribute's value proposed. */
+            value: components["schemas"]["JsonValue"];
+            /** @description What the model said of that attribute then. */
+            current: components["schemas"]["JsonValue"];
+            /**
+             * Overrides
+             * @description Accepting it replaces what a source says: only a person may, saying so.
+             */
+            overrides: boolean;
+            /**
+             * Statement
+             * @description What it proposes, in English.
+             */
+            statement: string;
+            /**
+             * Params
+             * @description The values the code is worded with.
+             */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Confidence */
+            confidence: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "accepted" | "rejected" | "withdrawn";
+            /** Decided Via */
+            decided_via: ("person" | "policy") | null;
+            /** Decided At */
+            decided_at: string | null;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Occurrences */
+            occurrences: number;
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceRead"][];
+            /**
+             * Provenance
+             * @description The build of the model, the sources' kinds, the analysis and its version.
+             */
+            provenance: {
+                [key: string]: unknown;
+            };
+            /** Decided By */
+            decided_by: string | null;
+            /** Reason */
+            reason: string | null;
+            /**
+             * History
+             * @description Every decision: {status, via, by, at, reason}, the latest last.
+             */
+            history: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
+         * CandidateRead
+         * @description An enrichment of the company model LEKA proposed: a relationship or
+         *     an attribute, how sure, and where it stands.
+         */
+        CandidateRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Analyzer */
+            analyzer: string;
+            /**
+             * Family
+             * @description relationship, semantic, organisation, business.
+             */
+            family: string;
+            /**
+             * Code
+             * @description What it proposes, for the interface to word.
+             */
+            code: string;
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "rules" | "model";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "relationship" | "attribute";
+            /** @description The thing it enriches. */
+            subject: components["schemas"]["SubjectRead"];
+            /**
+             * Relationship
+             * @description The relationship's kind, from start to end.
+             */
+            relationship: string | null;
+            start: components["schemas"]["SubjectRead"] | null;
+            end: components["schemas"]["SubjectRead"] | null;
+            /** Attribute */
+            attribute: string | null;
+            /** @description The attribute's value proposed. */
+            value: components["schemas"]["JsonValue"];
+            /** @description What the model said of that attribute then. */
+            current: components["schemas"]["JsonValue"];
+            /**
+             * Overrides
+             * @description Accepting it replaces what a source says: only a person may, saying so.
+             */
+            overrides: boolean;
+            /**
+             * Statement
+             * @description What it proposes, in English.
+             */
+            statement: string;
+            /**
+             * Params
+             * @description The values the code is worded with.
+             */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Confidence */
+            confidence: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "accepted" | "rejected" | "withdrawn";
+            /** Decided Via */
+            decided_via: ("person" | "policy") | null;
+            /** Decided At */
+            decided_at: string | null;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Occurrences */
+            occurrences: number;
         };
         /**
          * Capability
@@ -5169,6 +5496,12 @@ export interface components {
              * @description Relationships an enrichment rule inferred.
              */
             inferred: number;
+            /**
+             * Accepted
+             * @description Relationships LEKA proposed and someone validated (LEKA-380).
+             * @default 0
+             */
+            accepted: number;
             /** By Type */
             by_type: {
                 [key: string]: number;
@@ -5347,7 +5680,7 @@ export interface components {
             level: string;
             /**
              * Origin
-             * @description source: a catalogue or a tag said it; enrichment: its parts show it.
+             * @description source: a catalogue or a tag said it; enrichment: its parts show it; accepted: LEKA proposed it and it was validated (LEKA-380).
              */
             origin: string;
             /** Confidence */
@@ -5597,6 +5930,20 @@ export interface components {
             services: components["schemas"]["EntityBrief"][];
             /** Last Seen At */
             last_seen_at: string | null;
+        };
+        /**
+         * Decision
+         * @description Accept or reject a candidate.
+         */
+        Decision: {
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Override
+             * @description Accept a candidate that replaces what a source says: required for one.
+             * @default false
+             */
+            override: boolean;
         };
         /**
          * DeletionScheduled
@@ -6206,7 +6553,7 @@ export interface components {
         ElementProvenance: {
             /**
              * Origin
-             * @description stated: its sources show it; inferred: an enrichment rule made it.
+             * @description stated: its sources show it; inferred: an enrichment rule made it; accepted: LEKA proposed it and someone validated it (LEKA-380).
              */
             origin: string;
             /**
@@ -6614,6 +6961,33 @@ export interface components {
              * @description How many of each enriched attribute.
              */
             attributes: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * EnrichmentSummary
+         * @description Where the workspace's enrichment stands: how many wait, were
+         *     accepted — by a person, by the policy — were rejected or withdrawn.
+         */
+        EnrichmentSummary: {
+            /** Proposed */
+            proposed: number;
+            /** Accepted */
+            accepted: number;
+            /** Rejected */
+            rejected: number;
+            /** Withdrawn */
+            withdrawn: number;
+            /**
+             * By Policy
+             * @description Of those accepted, by the workspace's policy.
+             */
+            by_policy: number;
+            /**
+             * Families
+             * @description Those waiting, by family.
+             */
+            families: {
                 [key: string]: number;
             };
         };
@@ -7457,7 +7831,7 @@ export interface components {
             confidence: number;
             /**
              * Origin
-             * @description stated by a source, or inferred by an enrichment rule.
+             * @description stated by a source, inferred by an enrichment rule, or accepted: proposed by LEKA's enrichment and validated (LEKA-380).
              */
             origin: string;
             /** Rule */
@@ -8254,6 +8628,7 @@ export interface components {
          * @enum {string}
          */
         JobStatus: "queued" | "running" | "retrying" | "succeeded" | "failed";
+        JsonValue: unknown;
         /**
          * KindCoverageRead
          * @description How well LEKA knows one kind of thing.
@@ -8635,7 +9010,7 @@ export interface components {
             confidence: number;
             /**
              * Origin
-             * @description stated by a source, or inferred by an enrichment rule.
+             * @description stated by a source, inferred by an enrichment rule, or accepted: proposed by LEKA's enrichment and validated (LEKA-380).
              */
             origin: string;
             /** Rule */
@@ -8845,6 +9220,19 @@ export interface components {
              * @description The rows on this page, in the requested order.
              */
             data: components["schemas"]["BusinessRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[CandidateRead] */
+        PageEnvelope_CandidateRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["CandidateRead"][];
             /**
              * Next Cursor
              * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
@@ -10085,7 +10473,7 @@ export interface components {
             confidence: number;
             /**
              * Origin
-             * @description stated by a source, or inferred by an enrichment rule.
+             * @description stated by a source, inferred by an enrichment rule, or accepted: proposed by LEKA's enrichment and validated (LEKA-380).
              */
             origin: string;
             /** Rule */
@@ -10106,6 +10494,17 @@ export interface components {
          * @enum {string}
          */
         RelationshipType: "depends_on" | "owns" | "deployed_to" | "mentions" | "caused_by" | "member_of" | "part_of" | "owned_by" | "maintained_by" | "authored_by" | "assigned_to" | "reviewed_by" | "reported_by" | "led_by" | "affects" | "resolves" | "implements" | "merges" | "child_of" | "in_network" | "runs_in" | "references" | "reads_from" | "reports_to" | "contributes_to" | "describes" | "edited_by" | "supported_by" | "uses" | "realizes" | "deploys";
+        /**
+         * Reprocessed
+         * @description A candidate sent back to its analysis: proposed again if its evidence
+         *     still holds, withdrawn otherwise — `queued` false when a run was
+         *     already on its way, which will do it.
+         */
+        Reprocessed: {
+            candidate: components["schemas"]["CandidateRead"];
+            /** Queued */
+            queued: boolean;
+        };
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
             /** Password */
@@ -11509,7 +11908,7 @@ export interface components {
             entity: components["schemas"]["EntityBrief"];
             /**
              * Origin
-             * @description stated, inferred.
+             * @description stated, inferred, accepted.
              */
             origin: string;
             /**
@@ -22962,7 +23361,7 @@ export interface operations {
                 type?: components["schemas"]["RelationshipType"] | null;
                 /** @description Touching it: either end. */
                 entity_id?: string | null;
-                origin?: ("stated" | "inferred") | null;
+                origin?: ("stated" | "inferred" | "accepted") | null;
                 rule?: string | null;
                 min_confidence?: number | null;
                 /** @description Changed from this date. */
@@ -26894,6 +27293,589 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChangeImpactDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    candidates_api_v1_intelligence_enrichment_candidates_get: {
+        parameters: {
+            query?: {
+                /** @description Where it stands; none: all. */
+                status?: ("proposed" | "accepted" | "rejected" | "withdrawn") | null;
+                family?: ("relationship" | "semantic" | "organisation" | "business") | null;
+                analyzer?: string | null;
+                /** @description Enriching this entity, or joining it to another. */
+                subject?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_CandidateRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    enrichment_summary_api_v1_intelligence_enrichment_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrichmentSummary"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    candidate_api_v1_intelligence_enrichment_candidates__candidate_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    accept_api_v1_intelligence_enrichment_candidates__candidate_id__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Decision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    reject_api_v1_intelligence_enrichment_candidates__candidate_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Decision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    reprocess_api_v1_intelligence_enrichment_candidates__candidate_id__reprocess_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reprocessed"];
                 };
             };
             /** @description The request could not be understood. */

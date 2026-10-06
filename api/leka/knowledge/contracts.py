@@ -7,7 +7,9 @@ found and the changes out.
                      that `reports_to` someone: dropped, an error
     cycle_broken     an inferred link closing a loop of a kind that may
                      have none — A part of B, part of A: the weakest
-                     inferred one dropped, a warning
+                     inferred one dropped, a warning. A link someone
+                     validated (`accepted`, LEKA-380) is never the one
+                     dropped: a decision is not a guess
     cycle            a loop its sources state, or of a dependency: kept,
                      a warning
     several_targets  a thing with more than one of what it has one of — two
@@ -33,6 +35,9 @@ Key = tuple[uuid.UUID, uuid.UUID, str]
 Row = dict[str, object]
 # How much a confidence must move to be a change.
 CHANGED = 0.05
+# What a source says, and what someone validated: never dropped to break a
+# loop (LEKA-380).
+DECIDED = frozenset({"stated", "accepted"})
 
 
 @dataclass(frozen=True)
@@ -166,7 +171,7 @@ def _break_cycles(kept: dict[Key, Row], kind: str) -> list[Issue]:
         loops = _loops(kept, kind)
         broken = False
         for loop in loops:
-            inferred = [k for k in loop if kept[k]["origin"] != "stated"]
+            inferred = [k for k in loop if kept[k]["origin"] not in DECIDED]
             if not inferred:
                 continue
             weakest = min(inferred, key=lambda k: (float(str(kept[k]["confidence"])), str(k)))
@@ -268,7 +273,11 @@ def _several(kept: dict[Key, Row], kind: str) -> list[Issue]:
             continue
         ranked = sorted(
             keys,
-            key=lambda k: (kept[k]["origin"] != "stated", -float(str(kept[k]["confidence"]))),
+            key=lambda k: (
+                kept[k]["origin"] != "stated",
+                kept[k]["origin"] != "accepted",
+                -float(str(kept[k]["confidence"])),
+            ),
         )
         targets = [str(k[1]) for k in ranked]
         for other in ranked[1:]:

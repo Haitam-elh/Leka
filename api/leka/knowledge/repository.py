@@ -9,8 +9,10 @@ no legitimate query here that is not.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
-from collections.abc import Sequence
+from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -40,13 +42,14 @@ from sqlalchemy.sql.expression import Exists
 
 from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
-from leka.knowledge.build import Built, Current
+from leka.knowledge.build import Assertion, Built, Current
 from leka.knowledge.contracts import Previous
 from leka.knowledge.models import (
     Entity,
     EntityType,
     EntityVersion,
     Lifecycle,
+    ModelAssertion,
     ModelRun,
     Relationship,
     RelationshipChange,
@@ -245,15 +248,30 @@ class ModelRepository(WorkspaceScopedRepository):
         found = await self._session.execute(statement.order_by(ModelRun.started_at.desc()).limit(1))
         return found.scalar_one_or_none()
 
-    async def pending(self, basis: uuid.UUID | None, version: int) -> bool:
+    async def pending(
+        self, basis: uuid.UUID | None, version: int, assertions: str | None = None
+    ) -> bool:
         """Whether building now would read anything the last success did not:
-        a newer enrichment run, or a new model. Nothing enriched: nothing."""
+        a newer enrichment run, a new model, a fact validated or withdrawn
+        since (LEKA-380). Nothing enriched: nothing."""
         if basis is None:
             return False
         last = await self.latest_run(succeeded=True)
-        return last is None or last.enrichment_run_id != basis or last.model_version != version
+        return (
+            last is None
+            or last.enrichment_run_id != basis
+            or last.model_version != version
+            or last.assertions != assertions
+        )
 
-    async def start(self, basis: uuid.UUID | None, version: int, *, at: datetime) -> ModelRun:
+    async def start(
+        self,
+        basis: uuid.UUID | None,
+        version: int,
+        *,
+        at: datetime,
+        assertions: str | None = None,
+    ) -> ModelRun:
         """A new run; one still `running` is a dead worker's, closed first."""
         await self._session.execute(
             update(ModelRun)
@@ -261,7 +279,11 @@ class ModelRepository(WorkspaceScopedRepository):
             .values(status="abandoned", finished_at=at, updated_at=func.now())
         )
         run = ModelRun(
-            status="running", started_at=at, enrichment_run_id=basis, model_version=version
+            status="running",
+            started_at=at,
+            enrichment_run_id=basis,
+            model_version=version,
+            assertions=assertions,
         )
         self.add(run)
         await self.flush()
@@ -357,6 +379,82 @@ class ModelRepository(WorkspaceScopedRepository):
             )
 
 
+def fingerprint_of(facts: Iterable[tuple[uuid.UUID, datetime]]) -> str | None:
+    """The validated facts a build applies, as one value: none when there is
+    none — a workspace that never validated anything is never rebuilt for
+    it."""
+    said = sorted(f"{fact}:{at.isoformat()}" for fact, at in facts)
+    return hashlib.sha256(",".join(said).encode()).hexdigest() if said else None
+
+
+class AssertionRepository(WorkspaceScopedRepository):
+    """The facts validated about a workspace's company model (LEKA-380):
+    what each build applies."""
+
+    async def active(self) -> list[Assertion]:
+        rows = await self._session.execute(
+            self.select(ModelAssertion).order_by(ModelAssertion.created_at, ModelAssertion.id)
+        )
+        return [
+            Assertion(
+                id=row.id,
+                kind=row.kind,
+                rule=row.rule,
+                confidence=row.confidence,
+                entity_id=row.entity_id,
+                attribute=row.attribute,
+                value=row.value,
+                overrides=row.overrides,
+                from_id=row.from_entity_id,
+                to_id=row.to_entity_id,
+                type=row.relationship_type,
+                evidence=row.evidence,
+                provenance=dict(row.provenance or {}),
+            )
+            for row in rows.scalars()
+        ]
+
+    async def fingerprint(self) -> str | None:
+        rows = await self._session.execute(
+            select(ModelAssertion.id, ModelAssertion.updated_at).where(
+                ModelAssertion.workspace_id == self.workspace_id
+            )
+        )
+        return fingerprint_of(rows.tuples().all())
+
+    async def put(self, fact: Assertion) -> None:
+        """Validated: applied from the next build on. Said again, replaced."""
+        await self.remove(fact.id)
+        self.add(
+            ModelAssertion(
+                id=fact.id,
+                workspace_id=self.workspace_id,
+                kind=fact.kind,
+                entity_id=fact.entity_id,
+                attribute=fact.attribute,
+                value=fact.value,
+                overrides=fact.overrides,
+                from_entity_id=fact.from_id,
+                to_entity_id=fact.to_id,
+                relationship_type=fact.type,
+                confidence=fact.confidence,
+                rule=fact.rule[:100],
+                evidence=fact.evidence,
+                provenance=fact.provenance,
+            )
+        )
+        await self.flush()
+
+    async def remove(self, fact_id: uuid.UUID) -> bool:
+        """Withdrawn: the next build no longer applies it."""
+        result = await self._session.execute(
+            delete(ModelAssertion).where(
+                ModelAssertion.workspace_id == self.workspace_id, ModelAssertion.id == fact_id
+            )
+        )
+        return bool(cast("CursorResult[Any]", result).rowcount)
+
+
 class ModelSweeper:
     """The builds of every workspace, for the hourly sweep (job.py). Not
     workspace-scoped, like leka.ingestion's SyncScheduleRepository: it runs
@@ -365,24 +463,40 @@ class ModelSweeper:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    def _last_successes(self) -> Select[tuple[uuid.UUID, uuid.UUID | None, int, uuid.UUID]]:
+    def _last_successes(
+        self,
+    ) -> Select[tuple[uuid.UUID, uuid.UUID | None, int, uuid.UUID, str | None]]:
         return (
             select(
                 ModelRun.workspace_id,
                 ModelRun.enrichment_run_id,
                 ModelRun.model_version,
                 ModelRun.id,
+                ModelRun.assertions,
             )
             .where(ModelRun.status == "succeeded")
             .distinct(ModelRun.workspace_id)
             .order_by(ModelRun.workspace_id, ModelRun.started_at.desc())
         )
 
-    async def built(self) -> dict[uuid.UUID, tuple[uuid.UUID | None, int]]:
+    async def built(self) -> dict[uuid.UUID, tuple[uuid.UUID | None, int, str | None]]:
         """workspace → what its last successful build read: (enrichment
-        run, model version)."""
+        run, model version, validated facts)."""
         rows = await self._session.execute(self._last_successes())
-        return {workspace: (basis, version) for workspace, basis, version, _ in rows.all()}
+        return {
+            workspace: (basis, version, assertions)
+            for workspace, basis, version, _, assertions in rows.all()
+        }
+
+    async def asserted(self) -> dict[uuid.UUID, str | None]:
+        """workspace → the fingerprint of its validated facts (LEKA-380)."""
+        rows = await self._session.execute(
+            select(ModelAssertion.workspace_id, ModelAssertion.id, ModelAssertion.updated_at)
+        )
+        facts: dict[uuid.UUID, list[tuple[uuid.UUID, datetime]]] = defaultdict(list)
+        for workspace, fact, at in rows.tuples().all():
+            facts[workspace].append((fact, at))
+        return {workspace: fingerprint_of(said) for workspace, said in facts.items()}
 
     async def abandon_stuck(self, *, before: datetime, at: datetime) -> int:
         """Runs still `running` that started before `before`: their worker died."""
