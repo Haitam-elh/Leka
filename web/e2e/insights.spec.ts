@@ -20,9 +20,14 @@ test.describe("Insights LEKA", () => {
   test("says on the overview what the analyses found, and leads to it", async ({ page }) => {
     await signIn(page);
 
+    // Two on the overview, the most pressing first: the database no one
+    // owns, then one of the two things three others rely on — equal, so
+    // ordered by name (lib: IntelligenceRepository.top).
+    const lines = page.getByTestId("insights-findings").getByRole("listitem");
+    await expect(lines).toHaveCount(2);
+    await expect(lines.nth(0)).toContainText("Aucun responsable nommé pour postgres-prod");
+    await expect(lines.nth(1)).toContainText("3 éléments dépendent de ecs-prod-cluster");
     const found = page.getByTestId("insights-findings");
-    await expect(found).toContainText("Aucun responsable nommé pour postgres-prod");
-    await expect(found).toContainText("3 éléments dépendent de postgres-prod");
     // Owned by a person: not said.
     await expect(found).not.toContainText("payment-api");
 
@@ -42,10 +47,12 @@ test.describe("Insights LEKA", () => {
 
     await page.getByTestId("insights-analyse").click();
     // Taken: the card waits for the run — or says one was already on its way.
+    // Both when one was already on its way: the button waits, the card says so.
     await expect(
       page
         .getByRole("button", { name: /Analyse en cours/ })
-        .or(page.getByRole("status").filter({ hasText: "Une analyse est déjà en cours" })),
+        .or(page.getByRole("status").filter({ hasText: "Une analyse est déjà en cours" }))
+        .first(),
     ).toBeVisible();
   });
 });

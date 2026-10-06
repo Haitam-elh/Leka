@@ -20,6 +20,14 @@ from leka.db import WorkspaceScopedRepository
 from leka.intelligence.models import Finding, IntelligenceRun, IntelligenceStep
 from leka.knowledge import ModelRun
 
+# The most pressing first, and an order that holds between equals.
+PRESSING = (
+    Finding.rank.desc(),
+    Finding.confidence.desc(),
+    Finding.subject_name,
+    Finding.id,
+)
+
 
 @dataclass(frozen=True)
 class FindingFilters:
@@ -107,12 +115,11 @@ class IntelligenceRepository(WorkspaceScopedRepository):
         return dict(found.tuples().all())
 
     async def top(self, limit: int) -> Sequence[Finding]:
-        """The most pressing open findings: by rank, the latest seen first."""
+        """The most pressing open findings, in an order that holds: by rank;
+        between equals, the surest, then by name — never by the arbitrary
+        order of their ids."""
         found = await self._session.execute(
-            self.select(Finding)
-            .where(Finding.status == "open")
-            .order_by(Finding.rank.desc(), Finding.last_seen_at.desc(), Finding.id)
-            .limit(limit)
+            self.select(Finding).where(Finding.status == "open").order_by(*PRESSING).limit(limit)
         )
         return found.scalars().all()
 
@@ -124,7 +131,7 @@ class IntelligenceRepository(WorkspaceScopedRepository):
         found = await self._session.execute(
             self.select(Finding)
             .where(Finding.status == "open", Finding.subject_id.in_(list(ids)))
-            .order_by(Finding.rank.desc(), Finding.id)
+            .order_by(*PRESSING)
             .limit(limit)
         )
         return found.scalars().all()
