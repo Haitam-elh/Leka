@@ -25,10 +25,12 @@ from __future__ import annotations
 import uuid
 from collections import Counter
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import structlog
 
+from leka.connectors import manifests
 from leka.context import Context, ContextRepository
 from leka.intelligence.analysis import (
     Analyzer,
@@ -67,7 +69,13 @@ from leka.intelligence.schemas import (
     StepRead,
     SubjectRead,
 )
-from leka.knowledge import ArchitectureRead, ChangeFootprint, EntityBrief, GraphService
+from leka.knowledge import (
+    ArchitectureRead,
+    ChangeFootprint,
+    EntityBrief,
+    EntityStanding,
+    GraphService,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -78,6 +86,17 @@ MAX_CONTEXTS = 500
 TOP = 5
 # The changes a run reads: the last HISTORY's, at most this many.
 MAX_CHANGES = 100
+
+
+@dataclass(frozen=True)
+class ModelRead:
+    """The model part of a run's material, read in one session."""
+
+    architecture: ArchitectureRead
+    owners: dict[uuid.UUID, tuple[str, ...]]
+    standing: dict[uuid.UUID, EntityStanding]
+    documents: int
+    categories: dict[str, str]
 
 
 class UnknownAnalyzerError(ValueError):
@@ -159,17 +178,23 @@ class IntelligenceService:
         self._repository.add_run(run)
         return run
 
-    async def read_model(
-        self, *, now: datetime
-    ) -> tuple[ArchitectureRead, dict[uuid.UUID, tuple[str, ...]]]:
+    async def read_model(self, *, now: datetime) -> ModelRead:
         """The company model, as the architecture reads it — every card —
-        and who owns each card's entity, team or person."""
+        who owns each card's entity, team or person, what the model holds
+        around each (LEKA-379), how many documents there are, and the
+        family of each kind of source."""
         architecture = await self._graph.architecture(now=now, environment=None, detailed=True)
         ids = [card.entity_id for card in architecture.cards if card.entity_id is not None]
         owners = await self._graph.owners(ids)
-        return architecture, {
-            entity: tuple(brief.name for brief in briefs) for entity, briefs in owners.items()
-        }
+        return ModelRead(
+            architecture=architecture,
+            owners={
+                entity: tuple(brief.name for brief in briefs) for entity, briefs in owners.items()
+            },
+            standing=await self._graph.standing(ids),
+            documents=await self._graph.documents(),
+            categories={manifest.key.value: manifest.category.value for manifest in manifests()},
+        )
 
     async def read_contexts(self, *, now: datetime) -> tuple[ContextStanding, ...]:
         """Where the contexts used in the last month stand."""

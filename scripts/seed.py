@@ -342,7 +342,14 @@ async def _build_demo_workspace() -> None:
             EntityType.DOCUMENT,
             "conf-88421",
             "Payment API runbook",
-            {"updated_at": (NOW - timedelta(days=243)).isoformat(), "author": "nadia-k"},
+            # As enrichment says it (LEKA-366): unchanged for eight months,
+            # stale — the only document describing payment-api (LEKA-379).
+            {
+                "updated_at": (NOW - timedelta(days=243)).isoformat(),
+                "last_activity_at": (NOW - timedelta(days=243)).isoformat(),
+                "freshness": "stale",
+                "author": "nadia-k",
+            },
             confidence=0.6,
             last_seen=NOW - timedelta(days=12),
         )
@@ -399,7 +406,7 @@ async def _build_demo_workspace() -> None:
         edge(github, deployment, payment, RelationshipType.PART_OF)
         edge(datadog, incident, monitor, RelationshipType.MENTIONS)
         edge(jira, incident, payment, RelationshipType.MENTIONS)
-        edge(sources["confluence:Runbooks space"], runbook, payment, RelationshipType.MENTIONS)
+        edge(sources["confluence:Runbooks space"], runbook, payment, RelationshipType.DESCRIBES)
 
         # What the model is built from: the same things as resolution made
         # them, under the same ids — a build keeps resolution's. An entity's

@@ -65,6 +65,7 @@ from leka.knowledge.schemas import (
     ContextMaterial,
     EntityBrief,
     EntityRead,
+    EntityStanding,
     GraphNodeRead,
     GraphRead,
     GraphRelationshipRead,
@@ -169,6 +170,19 @@ FOOTPRINT_DEPENDENCIES = 200
 # What an entity depends on that its timeline looks around, at most.
 FOOTPRINT_AROUND = 50
 FOOTPRINT_INCIDENTS = 20
+# What holds a thing for the business (LEKA-379): an application it is part
+# of, a capability it supports, a process using it.
+STANDING_BUSINESS = (
+    RelationshipType.PART_OF,
+    RelationshipType.SUPPORTED_BY,
+    RelationshipType.USES,
+    RelationshipType.REALIZES,
+)
+STANDING_HOLDERS = (
+    EntityType.APPLICATION,
+    EntityType.BUSINESS_CAPABILITY,
+    EntityType.BUSINESS_PROCESS,
+)
 FOOTPRINT_DETAILS = ("ref", "commit", "version", "url", "changes", "risk", "title", "number")
 
 Direction = Literal["outgoing", "incoming", "both"]
@@ -1013,6 +1027,43 @@ class GraphService:
                 key=lambda i: (not i.stated, i.opened_at or at),
             ),
         )
+
+    async def standing(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, EntityStanding]:
+        """What the model holds around each of these (LEKA-379): how
+        critical, how documented and how freshly, whether the business
+        holds it."""
+        things = await self._graph.by_ids(list(ids))
+        documented = await self._graph.documented(list(things))
+        ties = await self._graph.around(list(things), STANDING_BUSINESS)
+        ends = await self._graph.by_ids(
+            [e.to_entity_id for e in ties] + [e.from_entity_id for e in ties]
+        )
+        held: set[uuid.UUID] = set()
+        for edge in ties:
+            for thing, other in (
+                (edge.from_entity_id, edge.to_entity_id),
+                (edge.to_entity_id, edge.from_entity_id),
+            ):
+                found = ends.get(other)
+                if thing in things and found is not None and found.type in STANDING_HOLDERS:
+                    held.add(thing)
+        standing: dict[uuid.UUID, EntityStanding] = {}
+        for thing, entity in things.items():
+            said = documented[thing]
+            standing[thing] = EntityStanding(
+                criticality=_said(entity.attributes.get("criticality")),
+                lifecycle=entity.lifecycle,
+                documents=said.count,
+                fresh_documents=said.fresh,
+                last_documented_at=said.last_changed_at,
+                business=thing in held,
+            )
+        return standing
+
+    async def documents(self) -> int:
+        """How many documents the workspace has, not removed (LEKA-379)."""
+        by_freshness, _, _ = await self._graph.documentation_counts()
+        return sum(by_freshness.values())
 
     async def environments(self) -> list[str]:
         """The environments the model knows, folded (LEKA-373)."""

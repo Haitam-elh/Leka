@@ -6,9 +6,9 @@ as a **finding** with what shows it and where that was read — for the
 intentions and the screens that build on them.
 
 This is the frame of the Intelligence epic. LEKA-377 shipped the frame and
-three representative analyses; LEKA-378 adds change and impact (§ 11); 379
-(knowledge gaps), 380 (enrichment), 381 (quality), 382 (conflicts) and 383
-(evolution and insights) add theirs to it.
+three representative analyses; LEKA-378 adds change and impact (§ 11),
+LEKA-379 knowledge gaps (§ 12); 380 (enrichment), 381 (quality), 382
+(conflicts) and 383 (evolution and insights) add theirs to it.
 
 Code: `api/leka/intelligence/` — `analysis.py` (the frame), `rules.py` (the
 analyses), `service.py`, `repository.py`, `job.py`; the routes in
@@ -63,7 +63,13 @@ teams, maintainers and named links that *Mon environnement* draws, so a
 finding never disagrees with what the person sees. Up to 200 cards per
 column. With it, who owns each card's entity: the teams and the people a
 source names as owners (`GraphService.owners`). The architecture names only
-a team.
+a team. And, read with it (LEKA-379):
+- what the model holds around each card's entity (`GraphService.standing`):
+  how critical its sources say it is, how many documents and spaces describe
+  it, how many of them are documents not stale, when the latest changed,
+  whether an application, a capability or a process holds it;
+- how many documents the workspace has;
+- each source kind's family — its connector's category (`leka.connectors`).
 
 **The contexts in use:** those used in the last 30 days, at most 500, each
 with:
@@ -75,7 +81,8 @@ with:
 footprint: what it was made to, what that reaches, what followed (§ 11).
 
 Each part is read in **its own session**, and only when an analysis of the run
-needs it. A part that cannot be read is left out and logged
+needs it — or *heeds* it (`Analyzer.heeds`): a part it reads when it can be
+read, which only weighs what it concludes. Unread, that analysis still runs. A part that cannot be read is left out and logged
 (`intelligence_material_unread`), and the analyses that need it are skipped
 with `no_material`. The others run: a database error in one read would
 otherwise abort the transaction of the next.
@@ -169,6 +176,11 @@ and the file and line that state it, and the context with its version.
 | `ownership` | organisation | model | What runs or keeps data (the *services* and *data* columns) with no owner named for it: no team and no person a source says owns it (`owned_by` from it, or `owns` to it) | **high** when 3+ rely on it or it is in incident · **medium** for a service, or when something relies on it · **low** otherwise — one step lighter when people maintain it by their work. Confidence 0.9: an owner may exist that no source names |
 | `context_health` | context | contexts | The contexts used in the last 30 days that failed, fell behind the model (following it, more than a day, changes pending), or were judged `low` | failed: **high** if used in the last 7 days, else medium · behind and weak: **medium** if used in the last 7 days, else low |
 | `change_impact` (LEKA-378) | change | changes | Each current change that matters — or that an incident followed — about the service it was made to: what it reaches, the most affected first, what followed (§ 11) | **high** when an incident followed, or a failed production change reaches something · **medium** when a production change reaches something, or it failed, or touches something critical · **low** otherwise |
+| `gaps_entities` (LEKA-379) | gaps | model (heeds changes) | A service whose runtime or code is unknown, a database whose tables are (§ 12) | by priority (§ 12): **high** from 0.6, **medium** from 0.35, **low** under |
+| `gaps_relationships` | gaps | model (heeds changes) | What is tied to nothing; a service no application, capability or process holds | by priority |
+| `gaps_documentation` | gaps | model (heeds changes) | What no document describes, or none known to be current | by priority |
+| `gaps_staleness` | gaps | model (heeds changes) | A source failing or not read for 3 days; a dormant thing others still rely on | by priority |
+| `gaps_coverage` | gaps | model | A whole family of sources not connected, once, with all it leaves unknown | by priority |
 
 **What "watched" means.** A thing is watched when its state is known — from a
 monitoring tool, or its provider — and not deduced. If its state is unknown,
@@ -225,7 +237,9 @@ All of it is done by the sweep:
    method, what it reads, a one-line summary.
 3. Give every draft a **stable key**, so that the same conclusion is the same
    finding run after run, and a code that the interface words
-   (`web/lib/i18n/dictionaries.ts`, `intelligence.codes`).
+   (`web/lib/i18n/dictionaries.ts`, `insights`; `word()` in
+   `web/components/insights/leka-insights.tsx`). A code it does not know yet
+   is shown as the draft's English `statement`.
 4. When what it concludes changes, raise its **version**. The catalogue hash
    changes, and the sweep analyses every workspace again within the hour.
 
@@ -323,11 +337,110 @@ this week, and what did it reach" is one call.
 — a dependency appearing, an owner gone. Those are the model's evolution
 (LEKA-383); this reads the changes the sources record.
 
+## 12. Knowledge gaps (LEKA-379)
+
+What LEKA does not know, or no longer knows, that limits what it can
+understand — and which gap to close first. Code:
+`api/leka/intelligence/gaps.py` (pure).
+
+**Five families, five analyses** (category `gaps`). Each family has its own
+codes, so a surface tells a missing entity from a missing relationship, from
+missing documentation; `params.gap` names the family.
+
+| Family | Analysis | Codes | What it says |
+| --- | --- | --- | --- |
+| entity | `gaps_entities` | `gap.missing_entity.runtime`, `.code`, `.data_model` | A service no cloud resource is said to run; a service no repository is said to be the code of; a database whose tables, views and collections are unknown |
+| relationship | `gaps_relationships` | `gap.missing_relationship.isolated`, `.business` | A service or a store tied to nothing at all; a service no application, capability or process holds — said only once the workspace knows its business at all |
+| documentation | `gaps_documentation` | `gap.missing_documentation`, `gap.stale_documentation` | What runs or keeps data that no document or space describes, or that only documents not known to be current describe (neither fresh nor aging) — what the Documentation page calls a gap (LEKA-366), weighed |
+| staleness | `gaps_staleness` | `gap.stale_source`, `gap.stale_knowledge.dormant` | A source switched on but in error, or not read for **3 days**: what it shows may no longer be so; a thing dormant (no activity for 180 days) that others still rely on |
+| coverage | `gaps_coverage` | `gap.coverage.<family>`: `monitoring`, `cloud`, `code`, `documentation`, `data`, `organisation` | A whole family not connected — said once, with how much it leaves unknown |
+
+**The family first, then the thing.** A thing's gap is said only when the
+family of sources that would fill it is connected: a cloud for where it runs,
+a code host for its code, a database source for its tables, any document for
+its documentation. Otherwise it is one coverage gap — with no cloud, every
+service's runtime is unknown, and that is one finding, not forty.
+- A source is connected once someone switched it on: active, degraded or in
+  error. A draft, tested or disabled one is not.
+- The family is the connector's category (`leka.connectors.manifests()`):
+  observability → monitoring, cloud, code, data.
+- Documentation is read from the documents themselves — a custom source
+  brings them too (LEKA-350).
+- The organisation is missing when no team is known and no one is named owner
+  of anything.
+
+**One question at a time.**
+- What is tied to nothing gets that gap, and its documentation's — not its
+  runtime, code and business too: they are unknown because it is.
+- An application runs as its services do: its runtime and code are not asked
+  of it.
+- What has gone dormant is asked one question, *is it still what they use?*,
+  and only while something relies on it.
+- Modules and tools drawn from the code are not what a gap is about.
+
+**Prioritization.** Each gap starts from a base, by what it is:
+
+| Base | Codes |
+| --- | --- |
+| 0.35 | `gap.stale_source` — +0.1 when in error, +0.03 per thing of the architecture it shows (at most +0.3) |
+| 0.3 | `gap.coverage.*` — +0.03 per thing it leaves unknown (at most +0.3) |
+| 0.25 | `gap.missing_entity.runtime` |
+| 0.2 | `gap.missing_entity.code`, `gap.missing_relationship.isolated`, `gap.stale_knowledge.dormant` |
+| 0.15 | `gap.missing_entity.data_model`, `gap.missing_relationship.business`, `gap.missing_documentation` |
+| 0.1 | `gap.stale_documentation` |
+
+A thing's gap then weighs what makes the thing matter — the defined signals,
+in `params.signals`:
+
+| Signal | Adds | When |
+| --- | --- | --- |
+| `relied_on` | 0.06 per thing relying on it, at most 0.3 | by the reliance roles of § 6, each dependent once |
+| `critical` | 0.2 | its sources say critical, high, tier 1 or P1 |
+| `unwell` | 0.1 | in incident, or needing attention |
+| `production` | 0.1 | its environment says prod or live |
+| `changing` | 0.15 | a current change (72 hours, § 11) touched or reached it |
+
+The score is capped at 1: **high** from 0.6, **medium** from 0.35, **low**
+under; the rank is the frame's (§ 5). Confidence is **0.9** for a thing's gap
+— something unread may know it — and **1.0** for a stale source or a
+coverage gap, facts about the workspace's own sources.
+
+**Changes only weigh.** The gap analyses read the model and *heed* the
+changes (§ 3): read, they add `changing`; unread, every gap is still said.
+
+**What shows it.**
+- A thing's gap: the thing as subject (`entity`); as evidence, what is
+  missing ("no repository of a connected code host is said to be its code");
+  the kinds of its sources.
+- A stale source: the source as subject (`source`: id, name, kind); as
+  evidence, its status and when it was last read.
+- A coverage gap: the family as subject (`coverage`, no id); as evidence, the
+  sources connected.
+
+**Who reads them.**
+- The API: `GET /intelligence/findings?category=gaps` — or `analyzer=gaps_…`,
+  or `subject=` an entity's or a source's id — the most pressing first.
+- The Insights LEKA card: each code worded in French and English, leading to
+  the thing's sheet, the source's page, or the sources, to connect one.
+- An intention, through `IntelligenceService`: the same reads.
+
+**On the demo** (`scripts/seed.py`):
+- the Confluence runbooks space, in error, never read;
+- payment-api's code unknown — the repository acme/backend is not tied to
+  it;
+- its only runbook unchanged since February, while it was deployed 26 hours
+  ago (`changing`);
+- no database source;
+- postgres-prod, auth-service and user-service described by no document.
+
+**Not here:** filling a gap — finding the missing entity, writing the
+missing document. Enrichment is LEKA-380.
+
 ## Not yet
 
 - **Model-assisted analyses.** The model gateway is empty (LEKA-329); they
   are declared and skipped.
 - **Dismissing a finding** ("known, accepted"). That is a decision, and it
   belongs to LEKA-389/390 (findings, human decision).
-- **The epic's other analyses** — change and impact, gaps, enrichment,
-  quality, conflicts, evolution — are LEKA-378 to 383, on this frame.
+- **The epic's other analyses** — enrichment, quality, conflicts, evolution
+  — are LEKA-380 to 383, on this frame.

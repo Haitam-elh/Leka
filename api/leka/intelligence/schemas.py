@@ -22,7 +22,7 @@ class AnalyzerRead(BaseModel):
 
     name: str
     version: int
-    category: str = Field(description="architecture, organisation, context…")
+    category: str = Field(description="architecture, organisation, context, changes, gaps.")
     method: Literal["rules", "model"]
     reads: list[Literal["model", "context", "changes"]]
     summary: str = Field(description="What it looks for (English).")
@@ -88,7 +88,9 @@ class RunDetail(RunRead):
 class SubjectRead(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    type: Literal["entity", "context"]
+    type: Literal["entity", "context", "source", "coverage"] = Field(
+        description="An entity, a context, a source (LEKA-379) — or a family of sources: coverage."
+    )
     id: uuid.UUID | None
     name: str
     kind: str | None

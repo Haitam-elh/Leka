@@ -990,6 +990,23 @@ class Impact(BaseModel):
     processes: list[BusinessTie]
 
 
+class EntityStanding(BaseModel):
+    """What the model holds around one thing (LEKA-379): how critical its
+    sources say it is, the documents describing it and how many are not
+    stale, when the latest changed, whether the business holds it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    criticality: str | None
+    lifecycle: Lifecycle
+    documents: int
+    fresh_documents: int
+    last_documented_at: str | None
+    business: bool = Field(
+        description="Part of an application, or tied to a capability or a process."
+    )
+
+
 class ChangeTouch(BaseModel):
     """What a change was made to (LEKA-378): a service, an application, a
     resource — said by its source (part of it, affecting it, deployed to

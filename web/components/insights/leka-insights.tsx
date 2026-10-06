@@ -8,6 +8,7 @@ import {
   Loader2,
   type LucideIcon,
   Network,
+  Puzzle,
   Rocket,
   UsersRound,
 } from "lucide-react";
@@ -15,7 +16,7 @@ import Link from "next/link";
 import { cn } from "cn";
 
 import { IconTile, type TileTone } from "@/components/environment/parts";
-import { timeAgo } from "@/components/knowledge/time";
+import { hoursSince, timeAgo } from "@/components/knowledge/time";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { routes } from "@/config/routes";
 import { typeSegment } from "@/lib/environment";
@@ -38,6 +39,7 @@ const ICON: Record<string, LucideIcon> = {
   organisation: UsersRound,
   context: Layers,
   change: Rocket,
+  gaps: Puzzle,
 };
 
 interface Worded {
@@ -47,6 +49,64 @@ interface Worded {
 
 function text(value: unknown): string {
   return typeof value === "string" || typeof value === "number" ? String(value) : "";
+}
+
+/** Whole days since a moment the API gave. */
+function days(iso: string): number {
+  return Math.max(0, Math.floor(hoursSince(iso) / 24));
+}
+
+/** A gap (LEKA-379): what LEKA does not know, or no longer knows — null
+ * for a code the interface does not know yet. */
+function wordGap(t: Dictionary, finding: Finding, kind: string): Worded | null {
+  const p = finding.params;
+  const g = t.insights.gap;
+  const name = text(p.name);
+  const count = Number(p.dependents) || 0;
+  const relied = count ? fill(g.relied, { kind, count }) : kind || null;
+  if (finding.code.startsWith("gap.coverage.")) {
+    const family = text(p.family);
+    const title = (g.coverage as Record<string, string>)[family];
+    const covers = (g.covers as Record<string, string>)[family];
+    return title ? { title, detail: covers ? fill(covers, { count: text(p.count) }) : null } : null;
+  }
+  switch (finding.code) {
+    case "gap.missing_entity.runtime":
+      return { title: fill(g.runtime, { name }), detail: relied };
+    case "gap.missing_entity.code":
+      return { title: fill(g.code, { name }), detail: relied };
+    case "gap.missing_entity.data_model":
+      return { title: fill(g.dataModel, { name }), detail: relied };
+    case "gap.missing_relationship.isolated":
+      return { title: fill(g.isolated, { name }), detail: kind || null };
+    case "gap.missing_relationship.business":
+      return { title: fill(g.business, { name }), detail: relied };
+    case "gap.missing_documentation":
+      return { title: fill(g.undocumented, { name }), detail: relied };
+    case "gap.stale_documentation": {
+      const last = p.last_documented_at;
+      return {
+        title: fill(g.outdated, { name }),
+        detail: typeof last === "string" ? fill(g.changed, { days: days(last) }) : relied,
+      };
+    }
+    case "gap.stale_knowledge.dormant":
+      return { title: fill(g.dormant, { name }), detail: relied };
+    case "gap.stale_source": {
+      const since = typeof p.since === "string" ? p.since : null;
+      if (p.status === "error") {
+        return {
+          title: fill(g.sourceFailing, { name }),
+          detail: since ? fill(g.lastRead, { days: days(since) }) : g.neverRead,
+        };
+      }
+      return since
+        ? { title: fill(g.sourceLate, { name, days: days(since) }), detail: g.mayHaveChanged }
+        : { title: fill(g.sourceNever, { name }), detail: null };
+    }
+    default:
+      return null;
+  }
 }
 
 /** A finding in the reader's words, from its code and values — its English
@@ -114,14 +174,22 @@ export function word(t: Dictionary, finding: Finding): Worded {
       };
     }
     default:
-      return { title: finding.statement, detail: null };
+      return (
+        (finding.code.startsWith("gap.") ? wordGap(t, finding, kind) : null) ?? {
+          title: finding.statement,
+          detail: null,
+        }
+      );
   }
 }
 
-/** Where a finding's subject is shown: an entity's sheet. A context has no
- * page of its own. */
+/** Where a finding's subject is shown: an entity's sheet, a source's page
+ * — or, for a family of sources not connected, the sources, to connect one.
+ * A context has no page of its own. */
 function hrefOf(finding: Finding): string | null {
   const subject = finding.subject;
+  if (subject.type === "coverage") return routes.sources();
+  if (subject.type === "source") return subject.id ? routes.source(subject.id) : null;
   if (subject.type !== "entity" || !subject.id || !subject.kind) return null;
   return routes.entity(typeSegment(subject.kind), subject.id);
 }

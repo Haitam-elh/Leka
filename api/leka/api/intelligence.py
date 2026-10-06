@@ -175,7 +175,9 @@ async def findings(
     severity: Annotated[Literal["high", "medium", "low"] | None, Query()] = None,
     category: Annotated[str | None, Query(max_length=30)] = None,
     analyzer: Annotated[str | None, Query(max_length=60)] = None,
-    subject: Annotated[uuid.UUID | None, Query(description="About this entity or context.")] = None,
+    subject: Annotated[
+        uuid.UUID | None, Query(description="About this entity, context or source.")
+    ] = None,
 ) -> PageEnvelope[FindingRead]:
     """The findings, the most pressing first (`sort=rank`, the default) or
     the latest seen (`sort=last_seen_at`)."""

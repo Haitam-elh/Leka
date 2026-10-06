@@ -10,12 +10,13 @@ import { signIn } from "./sign-in";
  * written for the demo. payment-api v2.8.4 was deployed 26 hours ago and
  * an incident followed (LEKA-378); three things rely on postgres-prod,
  * nothing watches it and no one is named as its owner — the services Nadia
- * and Thomas own are not said.
+ * and Thomas own are not said; the Confluence runbooks space is in error
+ * and was never read (LEKA-379).
  *
  * What a unit test cannot answer: that the engine's findings reach both
  * screens through the API, worded, in an order that holds, each leading to
- * the sheet of what it is about, and that asking for an analysis now is
- * taken.
+ * the sheet of what it is about — a source to its page — and that asking
+ * for an analysis now is taken.
  */
 
 test.describe("Insights LEKA", () => {
@@ -39,6 +40,18 @@ test.describe("Insights LEKA", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("postgres-prod");
   });
 
+  test("leads from a gap to the source it is about", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/environment?tab=applications");
+
+    await page
+      .getByTestId("insights-findings")
+      .getByRole("link", { name: /La source Runbooks space est en erreur/ })
+      .click();
+    await expect(page).toHaveURL(/\/sources\/[0-9a-f-]{36}$/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Runbooks space");
+  });
+
   test("leads from a change to the service it was made to", async ({ page }) => {
     await signIn(page);
 
@@ -55,11 +68,12 @@ test.describe("Insights LEKA", () => {
     // The card is the landscapes' (the architecture tab draws its own board).
     await page.goto("/environment?tab=applications");
 
-    // Three here: the third, of two equals, the surer — then by name
-    // (IntelligenceRepository.top).
+    // Three here: the third, of two equals, the surer — the source in error
+    // over payment-api's unknown code (IntelligenceRepository.top).
     const lines = page.getByTestId("insights-findings").getByRole("listitem");
     await expect(lines).toHaveCount(3);
-    await expect(lines.nth(2)).toContainText("3 éléments dépendent de ecs-prod-cluster");
+    await expect(lines.nth(2)).toContainText("La source Runbooks space est en erreur");
+    await expect(lines.nth(2)).toContainText("Jamais lue");
     await expect(page.getByText(/^Dernière analyse · /)).toBeVisible();
     // Owned by a person: not said.
     await expect(page.getByTestId("insights-findings")).not.toContainText(

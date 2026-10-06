@@ -3143,7 +3143,7 @@ export interface components {
             version: number;
             /**
              * Category
-             * @description architecture, organisation, context…
+             * @description architecture, organisation, context, changes, gaps.
              */
             category: string;
             /**
@@ -11276,9 +11276,10 @@ export interface components {
         SubjectRead: {
             /**
              * Type
+             * @description An entity, a context, a source (LEKA-379) — or a family of sources: coverage.
              * @enum {string}
              */
-            type: "entity" | "context";
+            type: "entity" | "context" | "source" | "coverage";
             /** Id */
             id: string | null;
             /** Name */
@@ -26489,7 +26490,7 @@ export interface operations {
                 severity?: ("high" | "medium" | "low") | null;
                 category?: string | null;
                 analyzer?: string | null;
-                /** @description About this entity or context. */
+                /** @description About this entity, context or source. */
                 subject?: string | null;
                 /** @description From a previous response's next_cursor. Opaque. */
                 cursor?: string | null;

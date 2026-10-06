@@ -5,7 +5,9 @@
  * What these protect: the most pressing open findings, worded in French
  * from their code and values — never the API's English when the code is
  * known — each leading to the sheet of what it is about, a context to
- * nothing; the rest counted; before any analysis it says so, after one
+ * nothing, a stale source to its page, a family of sources not connected
+ * to the sources; every gap told apart by its words; the rest counted;
+ * before any analysis it says so, after one
  * that found nothing that too; when the latest analysis ran; whoever may
  * ask LEKA something can analyse now — the button waits for the run, says
  * when one was already under way — and nobody else sees it; a summary that
@@ -32,11 +34,13 @@ vi.mock("@/components/shell/shell-provider", () => ({
   usePermissions: () => permissions.value,
 }));
 
-const { LekaInsights } = await import("@/components/insights/leka-insights");
+const { LekaInsights, word } = await import("@/components/insights/leka-insights");
+const { DICTIONARIES } = await import("@/lib/i18n/dictionaries");
 
 const DATABASE = "0c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 const SERVICE = "1c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 const CONTEXT = "2c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+const SOURCE = "3c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
 
 function finding(overrides: Partial<Finding>): Finding {
@@ -216,6 +220,110 @@ describe("Insights LEKA", () => {
       `/environment/services/${SERVICE}`,
     );
     expect(lines[1]).toHaveTextContent("Changement « CHG-12 » : 2 élément(s) concerné(s)");
+  });
+
+  it("words the gaps, leading to the thing, the source, or the sources to connect", async () => {
+    const gap = (overrides: Partial<Finding>) =>
+      finding({ analyzer: "gaps_documentation", category: "gaps", ...overrides });
+    api.summary.mockResolvedValue(
+      summary({
+        top: [
+          gap({
+            code: "gap.stale_documentation",
+            severity: "high",
+            params: {
+              gap: "documentation",
+              name: "payment-api",
+              kind: "service",
+              dependents: 1,
+              documents: 1,
+              last_documented_at: hoursAgo(24 * 243),
+            },
+            subject: { type: "entity", id: SERVICE, name: "payment-api", kind: "service" },
+          }),
+          gap({
+            analyzer: "gaps_staleness",
+            code: "gap.stale_source",
+            params: {
+              gap: "staleness",
+              name: "Runbooks",
+              kind: "confluence",
+              status: "active",
+              since: hoursAgo(24 * 5 + 2),
+              entities: 0,
+            },
+            subject: { type: "source", id: SOURCE, name: "Runbooks", kind: "confluence" },
+          }),
+          gap({
+            analyzer: "gaps_coverage",
+            code: "gap.coverage.monitoring",
+            params: { gap: "coverage", family: "monitoring", count: 4 },
+            subject: { type: "coverage", id: null, name: "monitoring", kind: "monitoring" },
+          }),
+        ],
+      }),
+    );
+    mount();
+
+    const lines = within(await screen.findByTestId("insights-findings")).getAllByRole("listitem");
+    expect(lines[0]).toHaveTextContent("La documentation de payment-api n'est plus à jour");
+    expect(lines[0]).toHaveTextContent("Important · Modifiée il y a 243 j");
+    expect(within(lines[0]).getByRole("link")).toHaveAttribute(
+      "href",
+      `/environment/services/${SERVICE}`,
+    );
+    expect(lines[1]).toHaveTextContent("La source Runbooks n'a pas été lue depuis 5 j");
+    expect(lines[1]).toHaveTextContent("Ce qu'elle montre a pu changer");
+    expect(within(lines[1]).getByRole("link")).toHaveAttribute("href", `/sources/${SOURCE}`);
+    expect(lines[2]).toHaveTextContent("Aucune supervision connectée");
+    expect(lines[2]).toHaveTextContent("4 service(s) non surveillé(s)");
+    expect(within(lines[2]).getByRole("link")).toHaveAttribute("href", "/sources");
+  });
+
+  it("tells every gap apart, never in the API's English", () => {
+    const t = DICTIONARIES.fr;
+    const thing = { name: "user-service", kind: "service", dependents: 2 };
+    const said = (code: string, params: Record<string, unknown>) =>
+      word(t, finding({ code, category: "gaps", params }));
+
+    expect(said("gap.missing_entity.runtime", thing)).toEqual({
+      title: "On ne sait pas où tourne user-service",
+      detail: "Service · 2 élément(s) en dépendent",
+    });
+    expect(said("gap.missing_entity.code", thing).title).toBe("Le code de user-service est inconnu");
+    expect(said("gap.missing_entity.data_model", { name: "postgres-prod" }).title).toBe(
+      "Les tables de postgres-prod sont inconnues",
+    );
+    expect(said("gap.missing_relationship.isolated", { name: "orphan", kind: "worker" })).toEqual({
+      title: "orphan n'est relié à rien",
+      detail: "Tâches de fond",
+    });
+    expect(said("gap.missing_relationship.business", thing).title).toBe(
+      "Aucune application ni capacité métier ne porte user-service",
+    );
+    expect(said("gap.missing_documentation", thing).title).toBe(
+      "Aucun document ne décrit user-service",
+    );
+    expect(said("gap.stale_knowledge.dormant", { ...thing, name: "ledger" })).toEqual({
+      title: "ledger est inactif depuis des mois",
+      detail: "Service · 2 élément(s) en dépendent",
+    });
+    expect(said("gap.stale_source", { name: "OPS", status: "error", since: hoursAgo(30) })).toEqual({
+      title: "La source OPS est en erreur",
+      detail: "Dernière lecture il y a 1 j",
+    });
+    expect(said("gap.stale_source", { name: "Wiki", status: "active", since: null })).toEqual({
+      title: "La source Wiki n'a jamais été lue",
+      detail: null,
+    });
+    expect(said("gap.coverage.organisation", { family: "organisation", count: 6 })).toEqual({
+      title: "Aucun responsable connu",
+      detail: "Personne n'est nommé pour 6 élément(s)",
+    });
+    // A family the interface does not know yet: its English sentence.
+    expect(said("gap.coverage.telepathy", { family: "telepathy", count: 1 }).title).toBe(
+      "An English sentence.",
+    );
   });
 
   it("says the English sentence of a code it does not know yet", async () => {
