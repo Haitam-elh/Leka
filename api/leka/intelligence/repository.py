@@ -3,7 +3,8 @@
 The only place in this module where a query is written (architecture rule
 4). What a run reads of the company model and the contexts goes through
 leka.knowledge and leka.context; this reads and writes the runs, their
-steps, the findings and the enrichment candidates (LEKA-380).
+steps, the findings, the enrichment candidates (LEKA-380), the conflicts and
+the authority rules (LEKA-382).
 """
 
 from __future__ import annotations
@@ -16,12 +17,15 @@ from datetime import datetime
 from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.connectors import Source
 from leka.db import WorkspaceScopedRepository
 from leka.intelligence.models import (
+    AuthorityRule,
     EnrichmentCandidate,
     Finding,
     IntelligenceRun,
     IntelligenceStep,
+    KnowledgeConflict,
 )
 from leka.knowledge import ModelRun
 
@@ -48,6 +52,13 @@ class CandidateFilters:
     status: str | None = None
     family: str | None = None
     analyzer: str | None = None
+    subject_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True)
+class ConflictFilters:
+    status: str | None = None
+    kind: str | None = None
     subject_id: uuid.UUID | None = None
 
 
@@ -194,6 +205,87 @@ class IntelligenceRepository(WorkspaceScopedRepository):
             )
         )
         return [(status, family, via, int(n)) for status, family, via, n in found.tuples().all()]
+
+    # ── conflicts and authority (LEKA-382) ───────────────────────────────
+
+    def conflicts(self, filters: ConflictFilters) -> Select[tuple[KnowledgeConflict]]:
+        statement = self.select(KnowledgeConflict)
+        if filters.status:
+            statement = statement.where(KnowledgeConflict.status == filters.status)
+        if filters.kind:
+            statement = statement.where(KnowledgeConflict.kind == filters.kind)
+        if filters.subject_id is not None:
+            statement = statement.where(KnowledgeConflict.subject_id == filters.subject_id)
+        return statement
+
+    async def conflict(
+        self, conflict_id: uuid.UUID, *, for_update: bool = False
+    ) -> KnowledgeConflict | None:
+        statement = self.select(KnowledgeConflict).where(KnowledgeConflict.id == conflict_id)
+        if for_update:
+            statement = statement.with_for_update()
+        found = await self._session.execute(statement)
+        return found.scalar_one_or_none()
+
+    async def all_conflicts(self) -> dict[str, KnowledgeConflict]:
+        """Every conflict, whatever its state, by key: what a run compares
+        what it found with."""
+        found = await self._session.execute(self.select(KnowledgeConflict))
+        return {conflict.key: conflict for conflict in found.scalars()}
+
+    def add_conflict(self, conflict: KnowledgeConflict) -> None:
+        self.add(conflict)
+
+    async def conflict_counts(self) -> dict[str, int]:
+        found = await self._session.execute(
+            select(KnowledgeConflict.status, func.count())
+            .where(KnowledgeConflict.workspace_id == self.workspace_id)
+            .group_by(KnowledgeConflict.status)
+        )
+        return {status: int(n) for status, n in found.tuples().all()}
+
+    async def authority_rules(self) -> list[tuple[AuthorityRule, Source | None]]:
+        """The workspace's rules, each with its source."""
+        found = await self._session.execute(
+            select(AuthorityRule, Source)
+            .outerjoin(
+                Source,
+                (Source.id == AuthorityRule.source_id)
+                & (Source.workspace_id == AuthorityRule.workspace_id),
+            )
+            .where(AuthorityRule.workspace_id == self.workspace_id)
+            .order_by(AuthorityRule.about, AuthorityRule.created_at)
+        )
+        return [(rule, source) for rule, source in found.tuples().all()]
+
+    async def authority_rule(
+        self,
+        *,
+        rule_id: uuid.UUID | None = None,
+        about: str | None = None,
+        source_id: uuid.UUID | None = None,
+    ) -> AuthorityRule | None:
+        statement = self.select(AuthorityRule)
+        if rule_id is not None:
+            statement = statement.where(AuthorityRule.id == rule_id)
+        if about is not None and source_id is not None:
+            statement = statement.where(
+                AuthorityRule.about == about, AuthorityRule.source_id == source_id
+            )
+        found = await self._session.execute(statement)
+        return found.scalar_one_or_none()
+
+    async def source(self, source_id: uuid.UUID) -> Source | None:
+        found = await self._session.execute(
+            select(Source).where(Source.workspace_id == self.workspace_id, Source.id == source_id)
+        )
+        return found.scalar_one_or_none()
+
+    def add_rule(self, rule: AuthorityRule) -> None:
+        self.add(rule)
+
+    async def delete_rule(self, rule: AuthorityRule) -> None:
+        await self._session.delete(rule)
 
     async def about(self, ids: Sequence[uuid.UUID], *, limit: int) -> Sequence[Finding]:
         """The open findings about these things — for a service downstream

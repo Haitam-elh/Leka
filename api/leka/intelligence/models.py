@@ -18,6 +18,10 @@ A CANDIDATE (LEKA-380) is an enrichment of the company model an analysis
 proposed — a relationship, an attribute — waiting for a decision, applied
 once validated.
 
+A CONFLICT (LEKA-382) is what the model's sources disagree on, with LEKA's
+recommendation and every decision taken on it; an AUTHORITY RULE, how much
+the workspace says a source is to be believed.
+
 No foreign key from a finding to its runs, nor to the entity or context it
 is about: runs are pruned and things go, and a finding must still say what
 it was. docs/intelligence.md says why each column is here.
@@ -288,3 +292,103 @@ class EnrichmentCandidate(Base, WorkspaceScopedMixin):
     first_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     last_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     occurrences: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+
+
+CONFLICT_STATUSES = ("open", "resolved", "dismissed", "gone")
+CONFLICT_KINDS = ("attribute", "relationship")
+STANCES = ("prefer", "avoid")
+
+
+class KnowledgeConflict(Base, WorkspaceScopedMixin):
+    """What the model's sources disagree on (LEKA-382), one row per thing and
+    what about across runs — an attribute two sources say differently, a
+    relationship a thing has one of said to several — with every side, who
+    says it, how much each source is to be believed, and what LEKA
+    recommends.
+
+        open       waiting for someone: seen again, updated; no longer seen —
+                   the sources agree now, or the thing went — gone
+        resolved   someone kept one side: the model shows it from the next
+                   build on, whoever says otherwise (facts in
+                   model_assertions, provenance.conflict_id = this row)
+        dismissed  someone said it is no contradiction
+        gone       no longer disagreed on
+
+    A resolved or dismissed conflict reopens when a value appears that no
+    one decided on (`decided_values`). Nothing is overwritten silently: the
+    decision is a person's, every one kept in `history`.
+    """
+
+    __tablename__ = "knowledge_conflicts"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "key", name="uq_knowledge_conflicts_key"),
+        CheckConstraint(_in("status", CONFLICT_STATUSES), name="status"),
+        CheckConstraint(_in("kind", CONFLICT_KINDS), name="kind"),
+        Index("ix_knowledge_conflicts_workspace_status", "workspace_id", "status"),
+        Index("ix_knowledge_conflicts_workspace_seen", "workspace_id", "last_seen_at"),
+        Index("ix_knowledge_conflicts_workspace_subject", "workspace_id", "subject_id"),
+    )
+
+    key: Mapped[str] = mapped_column(String(300), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    subject_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    subject_kind: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # The attribute — or, for a relationship, its role: owner, manager.
+    about: Mapped[str] = mapped_column(String(100), nullable=False)
+    relationship: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # What the model shows now.
+    chosen: Mapped[object | None] = mapped_column(JSONB, nullable=True)
+    # Every side: {value, ref_id, origin, sources: [{source_id, kind, name,
+    # status, observed_at, authority, rule}], authority, freshness,
+    # corroboration, score, edges}.
+    sides: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    # What LEKA recommends: {side, strength (rule, clear, weak, none),
+    # reasons, margin}.
+    recommendation: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    statement: Mapped[str] = mapped_column(Text, nullable=False)
+    provenance: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="open")
+    # The decision standing: {side, value, via, by, at, reason}; the values
+    # known when it was taken.
+    resolution: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    decided_values: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    history: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    first_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    last_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    occurrences: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+
+
+class AuthorityRule(Base, WorkspaceScopedMixin):
+    """How much a source is to be believed, said by the workspace (LEKA-382):
+    on an attribute — or a role, or everything (`*`) — this source is to be
+    preferred, or avoided. LEKA's recommendations follow it; it decides
+    nothing by itself."""
+
+    __tablename__ = "authority_rules"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "about", "source_id", name="uq_authority_rules_about_source"
+        ),
+        CheckConstraint(_in("stance", STANCES), name="stance"),
+    )
+
+    about: Mapped[str] = mapped_column(String(100), nullable=False)
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False
+    )
+    stance: Mapped[str] = mapped_column(String(10), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )

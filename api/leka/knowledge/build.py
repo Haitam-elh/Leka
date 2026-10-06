@@ -23,6 +23,11 @@ when the fact `overrides` it, the value it replaced kept in `provenance`;
 a relationship with the origin `accepted`. Withdrawn, the next build no
 longer applies it: what the sources say comes back.
 
+WHAT WAS SETTLED (LEKA-382). A dispute someone arbitrated is a validated
+fact too: the value kept, which the sources' disagreement no longer
+marks `disputed` — or, for a relationship a thing has one of, the others
+refuted (`absence`): the build leaves them out, whoever states them.
+
 LIFECYCLE. `archived` when its source says so — or its catalogue says it is
 retired, its provider that it is terminated or deleted; `dormant` when
 enrichment finds nothing done to it for 180 days; `removed` when no source
@@ -206,7 +211,7 @@ class Assertion:
 
 
 # What an applied fact's provenance keeps of its decision.
-DECISION = ("candidate_id", "decided_via", "decided_at")
+DECISION = ("candidate_id", "conflict_id", "decided_via", "decided_at")
 # Which of two links between the same ends of the same kind is kept.
 ORIGIN_RANK = {"stated": 2, "accepted": 1, "inferred": 0}
 
@@ -420,7 +425,12 @@ def build(
             "attributes": {
                 name: {
                     **origins.get(name, {"origin": "source"}),
-                    **({"disputed": True} if name in disputed else {}),
+                    # Settled by someone (LEKA-382): no longer disputed.
+                    **(
+                        {"disputed": True}
+                        if name in disputed and "conflict_id" not in origins.get(name, {})
+                        else {}
+                    ),
                 }
                 for name in sorted(attributes)
             },
@@ -538,6 +548,11 @@ def build(
             scope[thing] = next(iter(places))
 
     relationships: dict[tuple[uuid.UUID, uuid.UUID, str], dict[str, object]] = {}
+    refuted = {
+        (fact.from_id, fact.to_id, fact.type)
+        for fact in assertions or ()
+        if fact.kind == "absence" and fact.from_id and fact.to_id and fact.type
+    }
     accepted = [
         Link(
             from_id=fact.from_id,
@@ -565,6 +580,9 @@ def build(
             counts["relationships_to_unmodelled"] += 1
             continue
         key = (link.from_id, link.to_id, relation.value)
+        if key in refuted:
+            counts["relationships_refuted"] += 1
+            continue
         held = relationships.get(key)
         stronger = held is None or (
             (ORIGIN_RANK.get(link.origin, 0), link.confidence)

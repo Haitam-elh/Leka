@@ -445,6 +445,16 @@ class AssertionRepository(WorkspaceScopedRepository):
         )
         await self.flush()
 
+    async def remove_for(self, conflict_id: uuid.UUID) -> int:
+        """Every fact a dispute's decision made (LEKA-382), withdrawn."""
+        result = await self._session.execute(
+            delete(ModelAssertion).where(
+                ModelAssertion.workspace_id == self.workspace_id,
+                ModelAssertion.provenance["conflict_id"].astext == str(conflict_id),
+            )
+        )
+        return int(cast("CursorResult[Any]", result).rowcount or 0)
+
     async def remove(self, fact_id: uuid.UUID) -> bool:
         """Withdrawn: the next build no longer applies it."""
         result = await self._session.execute(
@@ -2092,6 +2102,39 @@ class GraphRepository(EntityRepository):
             {"workspace": self.workspace_id, "types": [kind.value for kind in types]},
         )
         return [(source, str(kind), int(count)) for source, kind, count in rows.tuples().all()]
+
+    async def disputed(self, types: Sequence[EntityType], *, limit: int) -> Sequence[Entity]:
+        """The things of these kinds — not removed — whose sources disagree
+        on something: resolution kept every value (LEKA-382)."""
+        return await self.list(
+            self.select(Entity)
+            .where(
+                Entity.type.in_(types),
+                Entity.lifecycle != Lifecycle.REMOVED,
+                text("jsonb_array_length(coalesce(entities.provenance -> 'conflicts', '[]')) > 0"),
+            )
+            .order_by(Entity.name, Entity.id)
+            .limit(limit)
+        )
+
+    async def single_ties(
+        self, types: Sequence[RelationshipType], subjects: Sequence[EntityType]
+    ) -> Sequence[Relationship]:
+        """The relationships of these kinds — each a thing has one of — that
+        start or end at a thing of these kinds, the removed left out at both
+        ends (LEKA-382)."""
+        start, end = aliased(Entity), aliased(Entity)
+        return await self.list(
+            self.select(Relationship)
+            .join(start, start.id == Relationship.from_entity_id)
+            .join(end, end.id == Relationship.to_entity_id)
+            .where(
+                Relationship.type.in_(types),
+                or_(start.type.in_(subjects), end.type.in_(subjects)),
+                start.lifecycle != Lifecycle.REMOVED,
+                end.lifecycle != Lifecycle.REMOVED,
+            )
+        )
 
     async def sources_read(self) -> list[tuple[uuid.UUID, str, str, str, datetime | None]]:
         """The workspace's sources: each, its kind, its name, its status, when

@@ -226,3 +226,63 @@ def test_the_validated_facts_are_one_fingerprint() -> None:
     # None validated: nothing to build for.
     assert fingerprint_of([]) is None
     assert by_id(build([person()], [], {}, now=NOW).entities)[PERSON]["type"] == "person"
+
+
+# ── what was settled (LEKA-382) ─────────────────────────────────────────────
+
+
+def test_a_refuted_relationship_is_left_out_whoever_states_it() -> None:
+    stated = Link(REPO, SERVICE, "part_of", "stated", "stated", 1.0)
+    refuted = fact(
+        kind="absence",
+        rule="conflict.resolution",
+        entity_id=None,
+        attribute=None,
+        value=None,
+        from_id=REPO,
+        to_id=SERVICE,
+        type="part_of",
+        provenance={"conflict_id": str(CANDIDATE), "decided_via": "person"},
+    )
+    built = build([repo(), service()], [stated], {}, now=NOW, assertions=[refuted])
+    assert built.relationships == []
+    assert built.counts["relationships_refuted"] == 1
+    # Withdrawn, the source's word comes back.
+    again = build([repo(), service()], [stated], {}, now=NOW, assertions=[])
+    assert [e["origin"] for e in again.relationships] == ["stated"]
+
+
+def test_an_attribute_someone_settled_is_no_longer_disputed() -> None:
+    disputed = Candidate(
+        **{
+            **service().__dict__,
+            "attributes": {"criticality": "low"},
+            "conflicts": (
+                {
+                    "attribute": "criticality",
+                    "chosen": "low",
+                    "values": [{"value": "low"}, {"value": "high"}],
+                },
+            ),
+        }
+    )
+    left = one(build([disputed], [], {}, now=NOW).entities)
+    assert left["provenance"]["attributes"]["criticality"]["disputed"] is True
+
+    settled = fact(
+        value="high",
+        overrides=True,
+        rule="conflict.resolution",
+        provenance={"conflict_id": str(CANDIDATE), "decided_via": "person"},
+    )
+    row = one(build([disputed], [], {}, now=NOW, assertions=[settled]).entities)
+    assert row["attributes"]["criticality"] == "high"
+    said = row["provenance"]["attributes"]["criticality"]
+    assert (said["origin"], said["conflict_id"], said["replaced"]) == (
+        "accepted",
+        str(CANDIDATE),
+        "low",
+    )
+    assert "disputed" not in said
+    # Every value its sources said stays in its provenance.
+    assert row["provenance"]["conflicts"][0]["attribute"] == "criticality"

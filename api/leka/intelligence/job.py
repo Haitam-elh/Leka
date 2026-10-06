@@ -49,6 +49,7 @@ from leka.context import ContextRepository
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.intelligence.analysis import (
     Analyzer,
+    Authority,
     ContextStanding,
     Material,
     Reads,
@@ -61,6 +62,7 @@ from leka.intelligence.service import IntelligenceService, ModelRead
 from leka.knowledge import (
     AssertionRepository,
     ChangeFootprint,
+    Dispute,
     GraphRepository,
     GraphService,
     queue_model_build,
@@ -187,6 +189,7 @@ async def analyse_workspace(
             run_id, built_at = run.id, run.model_built_at
         moment = clock or datetime.now(UTC)
         model = await _model(workspace_id, chosen, moment)
+        disputes = await _disputes(workspace_id, chosen)
         material = Material(
             now=moment,
             built_at=built_at,
@@ -197,6 +200,8 @@ async def analyse_workspace(
             categories=model.categories if model else {},
             owned_by=model.owned_by if model else {},
             memberships=model.memberships if model else {},
+            disputes=disputes[0] if disputes else None,
+            authority=disputes[1] if disputes else (),
             contexts=await _contexts(workspace_id, chosen, moment),
             changes=await _changes(workspace_id, chosen, moment),
         )
@@ -243,6 +248,22 @@ async def _model(
         except Exception as error:
             # One part unread is not the run lost.
             logger.warning("intelligence_material_unread", part="model", error=type(error).__name__)
+            return None
+
+
+async def _disputes(
+    workspace_id: uuid.UUID, analyzers: Sequence[Analyzer]
+) -> tuple[tuple[Dispute, ...], tuple[Authority, ...]] | None:
+    if not any(Reads.CONFLICTS in analyzer.wants for analyzer in analyzers):
+        return None
+    async with session_factory() as session:
+        try:
+            return await _service(session, workspace_id).read_disputes()
+        except Exception as error:
+            # One part unread is not the run lost.
+            logger.warning(
+                "intelligence_material_unread", part="conflicts", error=type(error).__name__
+            )
             return None
 
 

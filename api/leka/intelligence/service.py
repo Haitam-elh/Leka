@@ -34,6 +34,7 @@ from leka.connectors import manifests
 from leka.context import Context, ContextRepository
 from leka.intelligence.analysis import (
     Analyzer,
+    Authority,
     ContextStanding,
     Draft,
     Material,
@@ -41,6 +42,7 @@ from leka.intelligence.analysis import (
     Outcome,
     catalogue_hash,
 )
+from leka.intelligence.arbitration import observe
 from leka.intelligence.changes import (
     AFTER,
     HISTORY,
@@ -74,6 +76,7 @@ from leka.knowledge import (
     ArchitectureRead,
     AssertionRepository,
     ChangeFootprint,
+    Dispute,
     EntityBrief,
     EntityStanding,
     GraphService,
@@ -208,6 +211,15 @@ class IntelligenceService:
             memberships={person: tuple(found) for person, found in teams.items()},
         )
 
+    async def read_disputes(self) -> tuple[tuple[Dispute, ...], tuple[Authority, ...]]:
+        """What the model's sources disagree on, and the workspace's word on
+        its sources (LEKA-382)."""
+        rules = await self._repository.authority_rules()
+        return (
+            tuple(await self._graph.disputes()),
+            tuple(Authority(rule.about, rule.source_id, rule.stance) for rule, _ in rules),
+        )
+
     async def read_contexts(self, *, now: datetime) -> tuple[ContextStanding, ...]:
         """Where the contexts used in the last month stand."""
         rows = await self._contexts.standing(used_since=now - CONTEXT_WINDOW, limit=MAX_CONTEXTS)
@@ -234,8 +246,14 @@ class IntelligenceService:
         counts = {"found": len(outcome.drafts)}
         if outcome.proposals:
             counts["proposals"] = len(outcome.proposals)
+        if outcome.conflicts:
+            counts["conflicts"] = len(outcome.conflicts)
         if outcome.status == "succeeded":
             counts |= await self._apply(run_id, analyzer, outcome.drafts, material, now=now)
+            if analyzer.category == "conflicts":
+                counts |= await observe(
+                    self._repository, run_id, analyzer, outcome.conflicts, material, now=now
+                )
             if analyzer.category == "enrichment":
                 counts |= await propose(
                     self._repository,

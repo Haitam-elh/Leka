@@ -1,7 +1,8 @@
 """What the intelligence API says (LEKA-377): the analyses there are, the
 runs and what each analysis of them did, the findings and what shows them
 — and the enrichments of the company model proposed, and what was decided
-of them (LEKA-380).
+of them (LEKA-380); what its sources disagree on, and the workspace's word
+on how much each is to be believed (LEKA-382).
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 SeverityName = Literal["high", "medium", "low"]
 FindingStatus = Literal["open", "resolved"]
 CandidateStatus = Literal["proposed", "accepted", "rejected", "withdrawn"]
+ConflictStatus = Literal["open", "resolved", "dismissed", "gone"]
 
 
 class AnalyzerRead(BaseModel):
@@ -27,7 +29,7 @@ class AnalyzerRead(BaseModel):
     version: int
     category: str = Field(description="architecture, organisation, context, changes, gaps.")
     method: Literal["rules", "model"]
-    reads: list[Literal["model", "context", "changes"]]
+    reads: list[Literal["model", "context", "changes", "conflicts"]]
     summary: str = Field(description="What it looks for (English).")
     available: bool = Field(description="False for a model-assisted one: no model gateway yet.")
 
@@ -319,3 +321,124 @@ class Reprocessed(BaseModel):
 
     candidate: CandidateRead
     queued: bool
+
+
+# ── conflicts (LEKA-382) ───────────────────────────────────────────────
+
+
+class ConflictSourceRead(BaseModel):
+    """A source saying one side: how much it is believed on this, and why."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_id: uuid.UUID | None
+    kind: str | None
+    name: str | None
+    status: str | None
+    observed_at: datetime | None = Field(description="When it last said this value.")
+    authority: float = Field(description="0 to 1: its family's, or the workspace's rule.")
+    rule: Literal["prefer", "avoid"] | None = Field(description="The workspace's word on it.")
+
+
+class ConflictSideRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    value: JsonValue
+    ref_id: uuid.UUID | None = Field(description="For a relationship: the other end.")
+    origin: str | None = Field(description="For a relationship: stated, inferred, accepted.")
+    sources: list[ConflictSourceRead]
+    authority: float
+    freshness: float
+    corroboration: float
+    score: float = Field(description="0.55 authority + 0.3 freshness + 0.15 corroboration.")
+
+
+class RecommendationRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    side: int | None = Field(description="The side recommended; none when none stands out.")
+    strength: Literal["rule", "clear", "weak", "none"]
+    reasons: list[str] = Field(description="rule, authority, fresher, corroborated, chosen.")
+    margin: float
+
+
+class ConflictRead(BaseModel):
+    """What the model's sources disagree on, every side weighed, what LEKA
+    recommends, where it stands."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    kind: Literal["attribute", "relationship"]
+    subject: SubjectRead
+    about: str = Field(description="The attribute, or the relationship's role: owner, manager.")
+    relationship: str | None
+    chosen: JsonValue = Field(description="What the model shows now, for an attribute.")
+    sides: list[ConflictSideRead]
+    recommendation: RecommendationRead
+    statement: str = Field(description="The disagreement and the recommendation, in English.")
+    status: ConflictStatus
+    resolution: dict[str, object] | None = Field(
+        description="The decision standing: {side, value, via, by, at, reason}."
+    )
+    first_seen_at: datetime
+    last_seen_at: datetime
+    occurrences: int
+
+
+class ConflictDetail(ConflictRead):
+    provenance: dict[str, object]
+    history: list[dict[str, object]] = Field(
+        description="Every decision and change: {status, via, by, at, reason, value}."
+    )
+
+
+class ConflictSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    open: int
+    resolved: int
+    dismissed: int
+    gone: int
+
+
+class Arbitration(BaseModel):
+    """Keep one side."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    side: int = Field(ge=0, description="The side kept, by its place in `sides`.")
+    reason: str | None = Field(default=None, max_length=500)
+    remember: bool = Field(
+        default=False,
+        description="Prefer this side's source on this from now on: an authority rule.",
+    )
+
+
+class Dismissal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class AuthorityRuleRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    about: str = Field(description="An attribute, a role, or `*`: everything.")
+    source_id: uuid.UUID
+    source_name: str | None
+    source_kind: str | None
+    stance: Literal["prefer", "avoid"]
+    reason: str | None
+    created_by: uuid.UUID | None
+    created_at: datetime
+
+
+class AuthorityRuleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    about: str = Field(min_length=1, max_length=100, pattern=r"^(\*|[a-z_][a-z0-9_]*)$")
+    source_id: uuid.UUID
+    stance: Literal["prefer", "avoid"]
+    reason: str | None = Field(default=None, max_length=500)
