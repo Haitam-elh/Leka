@@ -488,7 +488,10 @@ class KnowledgeQualityRead(BaseModel):
     )
     areas: list[str] = Field(description="An entity's: the areas it counts in.")
     entities: int = Field(description="An area's: how many things it holds.")
-    capped: str | None = Field(description="contradiction: held to medium by one left open.")
+    capped: str | None = Field(
+        description="Held to medium: contradiction — one left open; weak_dimension — a "
+        "dimension measured under 0.6."
+    )
     measured_at: datetime
     since: datetime = Field(description="Since when it holds its level.")
 

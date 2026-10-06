@@ -208,6 +208,69 @@ def test_a_gap_is_only_counted_where_its_family_is_connected() -> None:
     assert "runtime" not in lacking(without)
 
 
+def test_a_weak_dimension_holds_it_to_medium() -> None:
+    """No owner, no page — every other side sound: its completeness is weak,
+    and so it is not reliable, whatever the mean says (the demo's
+    postgres-prod)."""
+    db = known("postgres-prod", team=None, column="data", type_="database").model_copy(
+        update={"stats": {"tables": 12}}
+    )
+    api, _, _ = pair()
+    found = material(
+        [api, db],
+        [link(api, db, "stores")],
+        standings={
+            of(api): standing(sources=(GITHUB.source_id,)),
+            of(db): standing(documents=0, fresh=0, sources=(GITHUB.source_id,)),
+        },
+    )
+    score = of_card(measure(found), db)
+    # No owner .25, no page .2: the mean would be .865, high.
+    assert score.dimensions["completeness"] == pytest.approx(0.55)
+    assert score.score == CAPPED
+    assert (score.level, score.capped) == ("medium", "weak_dimension")
+
+
+def test_an_area_weak_on_one_side_is_held_too() -> None:
+    """Every store of it owned by no one, described by nothing: the
+    workspace's completeness is weak, and so is it."""
+    stores = [
+        known(f"db-{n}", team=None, column="data", type_="database").model_copy(
+            update={"stats": {"tables": 3}}
+        )
+        for n in range(3)
+    ]
+    links = [link(stores[0], stores[1], "depends"), link(stores[1], stores[2], "depends")]
+    found = material(
+        stores,
+        links,
+        standings={
+            of(c): standing(documents=0, fresh=0, sources=(GITHUB.source_id,)) for c in stores
+        },
+    )
+    workspace = scores(measure(found))["workspace"]
+    assert workspace.dimensions["completeness"] == pytest.approx(0.55)
+    # Its things held already: the area is medium, and need not be held again.
+    assert (workspace.score, workspace.level) == (CAPPED, "medium")
+
+    # A sound resource beside them lifts the mean above medium — not the
+    # area's level: its completeness is still weak.
+    vm = card("vm-1", column="cloud", type_="infra_resource")
+    lifted = Material(
+        **{
+            **found.__dict__,
+            "architecture": found.architecture.model_copy(  # type: ignore[union-attr]
+                update={
+                    "cards": [*stores, vm],
+                    "links": [*links, link(stores[0], vm, "deployed_on")],
+                }
+            ),
+        }
+    )
+    held = scores(measure(lifted))["workspace"]
+    assert (held.score, held.level, held.capped) == (CAPPED, "medium", "weak_dimension")
+
+
 def test_what_is_not_asked_is_unknown_never_guessed() -> None:
     """A cloud resource is asked no owner; a thing with no standing has no
     freshness, no records — the score is over what is known."""

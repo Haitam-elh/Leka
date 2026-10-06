@@ -22,7 +22,8 @@ already say — nothing measured twice:
 
 A factor nothing measures is unknown — left out, never guessed: a cloud
 resource is asked no owner. high from 0.85, medium from 0.6 — the context's
-thresholds (LEKA-375), so the product says one thing. What it lacks is
+thresholds (LEKA-375), so the product says one thing — and high only when
+no dimension measured is under 0.6 and no contradiction is left open. What it lacks is
 kept beside each score (`missing`), with what it lowers: a score always
 says why.
 
@@ -129,7 +130,9 @@ DECISIVE = frozenset(
 CONFIDENCE = {"merge": 0.3, "records": 0.3, "ties": 0.2, "attributes": 0.2}
 TRUST = {"stated": 1.0, "source": 1.0, "accepted": 0.9, "inferred": 0.7, "enrichment": 0.7}
 
-# A contradiction left open, or a relationship broken, holds it to medium.
+# A contradiction left open, a relationship broken — or one dimension
+# measured weak: no owner and no page, say — holds it to medium. Reliable
+# knowledge is reliable on every side measured.
 CAPPED = 0.84
 # An area's thing weighs 1, and 0.2 more per thing relying on it, up to 5.
 PER_DEPENDENT, MAX_DEPENDENTS = 0.2, 5
@@ -150,7 +153,9 @@ def level(score: float) -> str:
 @dataclass(frozen=True)
 class Lack:
     """What lowers a score: a code the interface words, the dimension it
-    lowers, by how much, and what shows it (English)."""
+    lowers, by how much — what it takes from that dimension, at most, so
+    lacks compare across dimensions once weighed by them — and what shows
+    it (English)."""
 
     code: str
     dimension: str
@@ -250,7 +255,7 @@ def freshness(
                 Lack(
                     "unseen",
                     "freshness",
-                    round(1 - value, 3),
+                    round((1 - value) * FRESHNESS["seen"], 3),
                     f"no source has shown it since {seen.date().isoformat()}",
                 )
             )
@@ -270,7 +275,7 @@ def freshness(
             Lack(
                 "source_unhealthy",
                 "freshness",
-                round(1 - min(health), 3),
+                round((1 - min(health)) * FRESHNESS["sources"], 3),
                 "a source showing it is failing, switched off or not read for days",
             )
         )
@@ -282,7 +287,7 @@ def freshness(
                 Lack(
                     "stale_documents",
                     "freshness",
-                    1.0,
+                    FRESHNESS["documents"],
                     f"none of its {standing.documents} document(s) is known current",
                 )
             )
@@ -362,7 +367,7 @@ def confidence(standing: EntityStanding | None, ties: Sequence[str]) -> Measure:
                 Lack(
                     "uncertain_identity",
                     "confidence",
-                    round(1 - standing.confidence, 3),
+                    round((1 - standing.confidence) * CONFIDENCE["merge"], 3),
                     "the records that make it were merged with little certainty",
                 )
             )
@@ -371,7 +376,7 @@ def confidence(standing: EntityStanding | None, ties: Sequence[str]) -> Measure:
                 Lack(
                     "weak_records",
                     "confidence",
-                    round(1 - standing.quality, 3),
+                    round((1 - standing.quality) * CONFIDENCE["records"], 3),
                     f"its best record was judged {standing.quality:.2f} by validation",
                 )
             )
@@ -384,7 +389,7 @@ def confidence(standing: EntityStanding | None, ties: Sequence[str]) -> Measure:
             Lack(
                 "mostly_inferred",
                 "confidence",
-                round(inferred / len(ties) * 0.3, 3),
+                round(inferred / len(ties) * (1 - TRUST["inferred"]) * CONFIDENCE["ties"], 3),
                 f"{inferred} of its {len(ties)} ties are inferred, not said by a source",
             )
         )
@@ -435,8 +440,11 @@ def score_entity(
     )
     score = weighted({name: (values[name], WEIGHTS[name]) for name in DIMENSIONS}) or 0.0
     capped = None
-    if any(lack.code in ("disputed", "relationship_error") for lack in lacks) and score > CAPPED:
-        score, capped = CAPPED, "contradiction"
+    if score > CAPPED:
+        if any(lack.code in ("disputed", "relationship_error") for lack in lacks):
+            score, capped = CAPPED, "contradiction"
+        elif any(value is not None and value < MEDIUM for value in values.values()):
+            score, capped = CAPPED, "weak_dimension"
     return QualityScore(
         key=f"entity:{card.entity_id}",
         scope="entity",
@@ -467,6 +475,10 @@ def score_area(key: str, scope: str, subject: Subject, members: Sequence[Scored]
         for name in DIMENSIONS
     }
     score = mean((m.score.score, w) for m, w in zip(members, weights, strict=True)) or 0.0
+    # An area is held as a thing is: a dimension weak across it.
+    capped = None
+    if score > CAPPED and any(v is not None and v < MEDIUM for v in values.values()):
+        score, capped = CAPPED, "weak_dimension"
     levels = Counter(m.score.level for m in members)
     weakest = sorted(members, key=lambda m: (m.score.score, m.card.name))[:MAX_NAMED]
     lacking = Counter(
@@ -498,6 +510,7 @@ def score_area(key: str, scope: str, subject: Subject, members: Sequence[Scored]
             for code, count in sorted(lacking.items(), key=lambda item: (-item[1], item[0]))
         ),
         entities=len(members),
+        capped=capped,
         sources=tuple(sorted({s for m in members for s in m.score.sources})),
     )
 

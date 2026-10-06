@@ -166,9 +166,9 @@ async def test_a_run_keeps_each_score_and_its_history_only_when_it_moves(
     orphan = rows[f"entity:{company['orphan-worker']}"]
     payment = rows[f"entity:{company['payment-api']}"]
     assert orphan.level == "low"
-    # What lowers it most first: unseen for forty days, weak records — then
-    # what it lacks.
-    assert [lack["code"] for lack in orphan.missing][:2] == ["unseen", "weak_records"]
+    # What costs it most first, across dimensions: unseen for forty days,
+    # then tied to nothing, owned by no one.
+    assert [lack["code"] for lack in orphan.missing][:3] == ["unseen", "isolated", "no_owner"]
     assert {"isolated", "no_owner", "undocumented"} <= {lack["code"] for lack in orphan.missing}
     assert orphan.provenance["analyzer"] == "quality"
     assert orphan.provenance["sources"] == ["github"]
@@ -246,7 +246,7 @@ async def test_the_weak_thing_is_a_finding_with_what_lowers_it(
     weak = [f for f in found["data"] if f["code"] == "quality.low"]
     assert [f["subject"]["name"] for f in weak] == ["orphan-worker"]
     assert weak[0]["severity"] == "medium"
-    assert weak[0]["params"]["missing"] == ["unseen", "weak_records", "uncertain_identity"]
+    assert weak[0]["params"]["missing"] == ["unseen", "isolated", "no_owner"]
     detail = await _get(client, f"/findings/{weak[0]['id']}")
     assert detail["provenance"]["analyzer"] == "quality"
     assert {e["name"] for e in detail["evidence"]} == set(weak[0]["params"]["missing"])
