@@ -8,8 +8,8 @@ intentions and the screens that build on them.
 This is the frame of the Intelligence epic. LEKA-377 shipped the frame and
 three representative analyses; LEKA-378 adds change and impact (§ 11),
 LEKA-379 knowledge gaps (§ 12), LEKA-380 knowledge enrichment (§ 13),
-LEKA-382 knowledge conflicts (§ 14); 381 (quality) and 383 (evolution and
-insights) add theirs to it.
+LEKA-382 knowledge conflicts (§ 14), LEKA-381 knowledge quality (§ 15);
+383 (evolution and insights) adds its own to it.
 
 Code: `api/leka/intelligence/` — `analysis.py` (the frame), `rules.py` (the
 analyses), `service.py`, `repository.py`, `job.py`; the routes in
@@ -192,6 +192,7 @@ and the file and line that state it, and the context with its version.
 | `enrich_code`, `enrich_runtime`, `enrich_owner`, `enrich_application`, `enrich_criticality`, `enrich_description` (LEKA-380) | enrichment | model | Proposals, not findings: what the model lacks that the evidence around it says (§ 13) | — a confidence instead |
 | `enrich_summary` | enrichment | model | What a service does, in words — model-assisted: skipped until the gateway exists | — |
 | `conflicts` (LEKA-382) | conflicts | conflicts | Conflicts, not findings: what the model's sources disagree on, each side weighed, one recommended (§ 14) | — a recommendation instead |
+| `quality` (LEKA-381) | quality | model (heeds conflicts) | A score for each thing and each area — completeness, freshness, consistency, confidence — and, as findings, what is known weakly (§ 15) | a thing: **high** when 3+ rely on it or it is critical, **medium** for a service or what something relies on, **low** otherwise · an area: **medium**, the workspace **high** |
 
 **What "watched" means.** A thing is watched when its state is known — from a
 monitoring tool, or its provider — and not deduced. If its state is unknown,
@@ -706,11 +707,130 @@ the value.
 **Not here:** merging two accounts of one person, which is resolution's
 (LEKA-357).
 
+## 15. Knowledge quality (LEKA-381)
+
+How far what LEKA knows can be trusted — for each thing, each area, over
+time — so that complete, fresh, consistent knowledge is told from weak
+knowledge. Code: `api/leka/intelligence/quality.py` (the measure, pure),
+`measures.py` (what is kept, and read); the signals of each thing from
+`GraphService.standing` (leka.knowledge).
+
+**Nothing is measured twice.** Each dimension reads what the model and the
+other analyses already say:
+
+| Signal | From |
+| --- | --- |
+| an entity's merges, how sure | resolution (LEKA-357): `Entity.confidence` |
+| its records' quality | validation (LEKA-358): `Entity.quality`, the best of its records |
+| when a source last showed it, which | `Entity.last_seen_at`, `provenance.sources`; each source's status and last read |
+| how each attribute was made | `provenance.attributes.*.origin`: source, enrichment, accepted (LEKA-380) |
+| what its sources disagree on | the conflicts (LEKA-382, `Reads.CONFLICTS`, heeded) — not read: the attributes `disputed` in its provenance |
+| what its relationships break | `relationship_issues` (LEKA-368): errors, warnings |
+| what it lacks | the gaps (LEKA-379) — `gaps.py`'s functions called, with their rule that a gap counts only where its family of sources is connected |
+| its documents, how current | `EntityStanding.documents`, `fresh_documents` (LEKA-366) |
+
+**What is measured:** the things of the architecture (Mon environnement's
+cards), active — not a module or a tool drawn from the code; a dormant
+thing is asked one question by the gaps, not measured.
+
+**Four dimensions**, each from 0 to 1:
+
+| Dimension | Weight | How |
+| --- | ---: | --- |
+| completeness | .30 | 1, less what it should say and does not: tied to nothing .35, no owner (team or person) .25, no document .2, its runtime, code or tables unknown .15 each, no application holding it .1, no description .1. Asked only of what runs or keeps data (the *services* and *data* columns); unknown for the rest |
+| freshness | .25 | `seen` .45 — 1 within 8 days of a source showing it, 0 at 30, validation's curve; `sources` .35 — the mean of its sources' health: 1, degraded .7, in error or switched off .3, not read for 3 days .5; `documents` .2 — the share of its documents not stale |
+| consistency | .20 | 1, less each disagreement no one settled — .35 on what decides an answer (state, owner, team, tier, criticality, SLA, SLO, version, environment, region, lifecycle… and any relationship it has one of), .25 otherwise — and .25 per relationship error, .1 per warning. A settled conflict no longer counts |
+| confidence | .25 | `merge` .3 — `Entity.confidence`; `records` .3 — `Entity.quality`; `ties` .2 and `attributes` .2 — the mean trust of how they were made: said by a source 1, validated .9, inferred .7 (the context engine's trust) |
+
+A factor nothing measures is **unknown — left out, never guessed**: a
+dimension is the weighted mean of its known factors, the score the
+weighted mean of the known dimensions. A cloud resource has no
+completeness; a thing no source carries a date for, no `seen`.
+
+`score = .30 completeness + .25 freshness + .20 consistency + .25 confidence`
+
+**high** from 0.85, **medium** from 0.6, **low** under — the context's
+thresholds (LEKA-375), so a context and the thing it is about are judged
+alike. A disagreement left open or a relationship error holds a thing to
+0.84, medium (`capped: contradiction`).
+
+**What lowers it** (`missing`), the heaviest first by what it costs the
+score, each with its dimension, its weight and what shows it (English):
+`isolated`, `no_owner`, `undocumented`, `runtime`, `code`, `data_model`,
+`business`, `no_description` · `unseen`, `source_unhealthy`,
+`stale_documents` · `disputed`, `relationship_error`,
+`relationship_warning` · `uncertain_identity` (merges under .7),
+`weak_records` (records under .6), `mostly_inferred` (two ties or more,
+more than half inferred). The factors read are kept with each score
+(`factors`).
+
+**Areas** — the workspace, each column of Mon environnement, each team
+(a thing's team), each application (what is `part_of` it, and itself) —
+are the weighted mean of their things': a thing weighs 1, and .2 more per
+thing relying on it, up to 2. An area keeps its levels counted, its five
+weakest things, and what lacks most often.
+
+**As findings** (category `quality`, analysis `quality`, version 1):
+
+| Code | Of | Severity |
+| --- | --- | --- |
+| `quality.low` | a thing that runs or keeps data, judged low | **high** when 3 or more rely on it or it is said critical · **medium** for a service, or what something relies on · **low** otherwise. Its score within: 1 − the quality |
+| `quality.low_area` | a team or an application of 3 things or more, judged low — or the workspace | **medium** · the workspace **high** |
+
+Key: the score's (`entity:<id>`, `team:<id>`…). Confidence 1: a measure,
+not a guess. Its params say the score, the level, the weakest dimension
+and the three heaviest lacks, which the evidence lists. Raised above low,
+the next run resolves it.
+
+**Kept, and over time.**
+
+| Table | |
+| --- | --- |
+| `quality_scores` | one row per key, rewritten by each run that measures it: score, level, each dimension, factors, `missing`, the areas it counts in, `since` — when it took its level — and its provenance (the analysis and version, the run, the build read, the sources, whether the conflicts were read). No longer measured — removed, dormant — it is forgotten |
+| `quality_history` | a point when a score is first measured and each time it moves — by **0.02** or more, or to another level: a series of changes, not a row per run. Kept **365 days** (the sweep); never the score as it stands |
+
+A failed step writes nothing: the scores stand as the last run left them.
+
+**The API** (`workspace:read`):
+
+| Route | |
+| --- | --- |
+| `GET /intelligence/quality` | the workspace's score, the things by level, each column's, team's and application's, the five weakest things, the workspace's trend over 30 days and its change over 7 |
+| `GET /intelligence/quality/scores?scope&level&column&area&subject` | the scores, paginated — `sort=score&order=asc` for the weakest first; `area=team:<id>` for what counts in a team |
+| `GET /intelligence/quality/scores/{key}` | one: each dimension's factors, what lowers it, where it was read, its history over 90 days |
+| `GET /intelligence/findings?category=quality` | what is weak, the most pressing first |
+
+**Downstream.** In code, `QualityService.of(ids)` gives the scores of the
+things an intention looks at — to say *likely* rather than *certain*, and
+why. The context engine sits below intelligence (architecture rule 1) and
+keeps its own judgement (LEKA-375), with the same thresholds. In the app,
+the **Insights LEKA** card words each finding in French and English; a
+quality surface of its own is next (*Not yet*).
+
+**Tested.** `tests/test_intelligence_quality.py`, pure: the thresholds
+are the context's; a thing well known is high, lacking nothing; the gaps
+reused, a gap counted only where its family is connected; what is not
+asked is unknown; freshness from when seen (19 days: .5), sources failing
+or late, documents stale; an open disagreement capped, a settled one not
+counted, a relationship counted when read from the conflicts; confidence
+from merges, records, ties and attributes; areas weighing what is relied
+on; findings, the more relied on first, an area once it holds three.
+`tests/test_intelligence_quality_model.py`, on the database: each thing's
+signals read; scores kept, a point only when one moves, its level's
+`since`; a removed thing forgotten, its history kept, then pruned; the
+weak thing a finding with what lowers it; the API — summary, filters,
+detail, 404 for another workspace; `QualityService.of`.
+
 ## Not yet
 
 - **Model-assisted analyses.** The model gateway is empty (LEKA-329); they
   are declared and skipped.
 - **Dismissing a finding** ("known, accepted"). That is a decision, and it
   belongs to LEKA-389/390 (findings, human decision).
-- **The epic's other analyses** — quality (LEKA-381) and evolution
-  (LEKA-383) — on this frame.
+- **The epic's other analysis** — evolution and insights (LEKA-383) — on
+  this frame. A quality score that falls is tracked (§ 15) but not yet said
+  as a finding of its own: that is evolution's.
+- **A quality surface of its own** (LEKA-381): the scores by area, each
+  thing's on its sheet, the trend — the API serves them (§ 15); the
+  screens are next. A workspace's own weights, one constant today
+  (`WEIGHTS`).
