@@ -24,7 +24,6 @@ import { QueryProvider } from "@/lib/query";
  * been the first to forget it.
  */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const badges = useNavBadges();
   const t = useDictionary();
 
   return (
@@ -35,19 +34,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           dialog means two focus traps fighting over the keyboard. */}
         <Toaster closeLabel={t.interactions.dismiss} />
         <DocumentTitle />
-        {/* TODO LEKA-390 for the counts, and notifications have no ticket yet:
-          the shell is handed numbers rather than asking for them. None until
-          then — the red dot on the bell was a mocked "1" for everyone. */}
         <ConfirmProvider>
-          <AppShell badges={badges} notificationCount={0}>
-            {/* Before the guard: with no workspace open every page is refused,
-                and a new account needs a way in, not a refusal. */}
-            <WorkspaceGate>
-              <RouteGuard>{children}</RouteGuard>
-            </WorkspaceGate>
-          </AppShell>
+          <Shell>{children}</Shell>
         </ConfirmProvider>
       </ShellProvider>
     </QueryProvider>
+  );
+}
+
+/** The shell, handed its counts: inside the providers, which they are read
+ * through. Notifications have no ticket yet: none — the red dot on the
+ * bell was a mocked "1" for everyone. */
+function Shell({ children }: { children: React.ReactNode }) {
+  const badges = useNavBadges();
+  return (
+    <AppShell badges={badges} notificationCount={0}>
+      {/* Before the guard: with no workspace open every page is refused,
+          and a new account needs a way in, not a refusal. */}
+      <WorkspaceGate>
+        <RouteGuard>{children}</RouteGuard>
+      </WorkspaceGate>
+    </AppShell>
   );
 }

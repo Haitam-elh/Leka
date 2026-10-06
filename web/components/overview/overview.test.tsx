@@ -4,17 +4,26 @@
  * What these protect is the decision of 2026-09-25 — real data, or an
  * honest empty state, never the mockup's numbers. The mockup's "98 %",
  * "47 / 48 services" and "3 incidents" must not reach a customer; the
- * sources LEKA actually reads must.
+ * sources LEKA actually reads must — and what LEKA proposes, waiting on
+ * someone, is listed where the mockup says "À valider" (LEKA-380).
  */
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Candidate } from "@/lib/enrichment";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import type { Source, SourceEvent } from "@/lib/sources";
 
 const list = vi.fn();
 const events = vi.fn();
+const proposed = vi.fn();
+
+vi.mock("@/lib/enrichment", async (original) => ({
+  ...(await original<typeof import("@/lib/enrichment")>()),
+  enrichment: { candidates: () => proposed() },
+}));
 
 vi.mock("@/lib/sources", async (original) => ({
   ...(await original<typeof import("@/lib/sources")>()),
@@ -90,14 +99,53 @@ function event(on: Source, type: SourceEvent["type"], minutes: number) {
 }
 
 function mount() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <LocaleProvider>
-      <Overview />
-    </LocaleProvider>,
+    <QueryClientProvider client={client}>
+      <LocaleProvider>
+        <Overview />
+      </LocaleProvider>
+    </QueryClientProvider>,
   );
 }
 
+function candidate(overrides: Partial<Candidate>): Candidate {
+  return {
+    id: crypto.randomUUID(),
+    analyzer: "enrich_owner",
+    family: "organisation",
+    code: "enrichment.owner",
+    method: "rules",
+    kind: "relationship",
+    subject: { type: "entity", id: crypto.randomUUID(), name: "postgres-prod", kind: "database" },
+    relationship: "owned_by",
+    start: null,
+    end: null,
+    attribute: null,
+    value: null,
+    current: null,
+    overrides: false,
+    statement: "Platform likely owns postgres-prod.",
+    params: {
+      name: "postgres-prod",
+      team: "Platform",
+      how: "maintainers",
+      members: 2,
+      maintainers: 2,
+    },
+    confidence: 0.85,
+    status: "proposed",
+    decided_via: null,
+    decided_at: null,
+    first_seen_at: minutesAgo(30),
+    last_seen_at: minutesAgo(5),
+    occurrences: 1,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
+  proposed.mockReset().mockResolvedValue({ data: [], next_cursor: null });
   list.mockReset().mockResolvedValue({ data: [BACKEND, RUNBOOKS, PLATFORM] });
   events.mockReset().mockImplementation(async (id: string) => ({
     data:
@@ -198,5 +246,31 @@ describe("the overview", () => {
     expect(await screen.findByText("Connectez une première source pour commencer.")).toBeVisible();
     expect(screen.getByText("Aucune source connectée pour l'instant.")).toBeVisible();
     expect(screen.getByText("Aucune source n'est encore suivie.")).toBeVisible();
+  });
+
+  it("lists what LEKA proposes, waiting on someone, each leading to it", async () => {
+    const owner = candidate({});
+    const code = candidate({
+      analyzer: "enrich_code",
+      family: "relationship",
+      code: "enrichment.code",
+      subject: { type: "entity", id: crypto.randomUUID(), name: "user-service", kind: "service" },
+      params: { name: "user-service", repository: "acme/user-service", match: "same" },
+      confidence: 0.8,
+    });
+    const more = [1, 2].map((n) => candidate({ params: { name: `db-${n}`, team: "Core" } }));
+    proposed.mockResolvedValue({ data: [owner, code, ...more], next_cursor: null });
+    mount();
+
+    const lines = within(await screen.findByTestId("approvals-waiting")).getAllByRole("listitem");
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toHaveTextContent("Platform est responsable de postgres-prod");
+    expect(lines[0]).toHaveTextContent(
+      "2 des 2 personnes qui le maintiennent sont membres de Platform · 85 %",
+    );
+    expect(within(lines[0]).getByRole("link")).toHaveAttribute("href", `/approvals/${owner.id}`);
+    expect(lines[1]).toHaveTextContent("acme/user-service est le code de user-service");
+    expect(screen.getByText("4 proposition(s) en attente")).toBeVisible();
+    expect(screen.queryByText("Rien à valider pour le moment.")).not.toBeInTheDocument();
   });
 });

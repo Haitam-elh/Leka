@@ -322,6 +322,7 @@ function assembled(version: number, over: Partial<AssembledContext> = {}): Assem
       relationships: 2,
       stated: 1,
       inferred: 1,
+      accepted: 0,
       by_type: {},
       by_source_kind: {},
       by_retriever: { graph: 1, search: 2, timeline: 1 },

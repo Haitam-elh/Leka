@@ -139,6 +139,7 @@ function assembled(over: Partial<AssembledContext> = {}): AssembledContext {
       relationships: 0,
       stated: 0,
       inferred: 0,
+      accepted: 0,
       by_type: {},
       by_source_kind: {},
       by_retriever: {},

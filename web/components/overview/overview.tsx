@@ -26,6 +26,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { cn } from "cn";
+import { FAMILY_ICON } from "@/components/approvals/parts";
+import { wordCandidate } from "@/components/approvals/words";
 import { LekaInsights } from "@/components/insights/leka-insights";
 import { CompactIntentionComposer } from "@/components/intentions/compact-composer";
 import { PageContainer } from "@/components/shell/page-container";
@@ -34,6 +36,7 @@ import { exactDate, shortWhen } from "@/components/knowledge/time";
 import { ConnectedSources } from "@/components/sources/connected-sources";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
+import { useCandidates } from "@/lib/enrichment-queries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import {
   isConnected,
@@ -414,8 +417,13 @@ function ActivityCard({ load }: { load: Load }) {
   );
 }
 
+/** What waits on someone (LEKA-380): the enrichments LEKA proposes, the
+ * three latest — each leading to its proposal in À valider. */
 function ApprovalsCard() {
   const t = useDictionary();
+  const waiting = useCandidates("proposed");
+  const all = waiting.data?.data ?? [];
+  const shown = all.slice(0, 3);
   return (
     <Card
       title={t.overview.approvalsTitle}
@@ -427,11 +435,52 @@ function ApprovalsCard() {
       }
       action={{ label: t.overview.seeAll, href: routes.approvals() }}
     >
-      <Empty
-        icon={ShieldCheck}
-        title={t.overview.approvalsEmpty}
-        body={t.overview.approvalsEmptyBody}
-      />
+      {shown.length === 0 ? (
+        <Empty
+          icon={ShieldCheck}
+          title={t.overview.approvalsEmpty}
+          body={t.overview.approvalsEmptyBody}
+        />
+      ) : (
+        <>
+          <ul className="divide-y divide-shell-line/60" data-testid="approvals-waiting">
+            {shown.map((candidate) => {
+              const { title, why } = wordCandidate(t, candidate);
+              return (
+                <li key={candidate.id}>
+                  <Link
+                    href={routes.approval(candidate.id)}
+                    className="-mx-1.5 flex items-start gap-3 rounded-lg px-1.5 py-2.5 outline-none hover:bg-shell-canvas focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+                  >
+                    <IconTile
+                      icon={FAMILY_ICON[candidate.family] ?? Sparkle}
+                      tone="violet"
+                      className="size-9"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[0.8125rem] leading-snug font-semibold text-brand-navy">
+                        {title}
+                      </span>
+                      <span className="block truncate text-xs text-shell-muted">
+                        {why ? `${why} · ` : ""}
+                        {Math.round(candidate.confidence * 100)} %
+                      </span>
+                    </span>
+                    <span className="mt-0.5 rounded-md bg-state-warning-soft px-2 py-0.5 text-xs font-medium text-state-warning">
+                      {t.approvals.status.proposed}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          {all.length > shown.length ? (
+            <p className="mt-1 text-xs text-shell-muted">
+              {fill(t.approvals.overview.waiting, { count: all.length })}
+            </p>
+          ) : null}
+        </>
+      )}
     </Card>
   );
 }
