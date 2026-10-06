@@ -177,9 +177,50 @@ describe("Insights LEKA", () => {
     expect(screen.getByText("+ 3 autre(s) point(s) ouvert(s)")).toBeInTheDocument();
   });
 
+  it("words a change and what followed it, leading to the service it was made to", async () => {
+    api.summary.mockResolvedValue(
+      summary({
+        top: [
+          finding({
+            analyzer: "change_impact",
+            category: "change",
+            code: "change.impact",
+            severity: "high",
+            params: {
+              change: "payment-api v2.8.4",
+              kind: "deployment",
+              hours: 26,
+              environment: "production",
+              reached: 3,
+              incidents: 1,
+            },
+            subject: { type: "entity", id: SERVICE, name: "payment-api", kind: "service" },
+          }),
+          finding({
+            analyzer: "change_impact",
+            category: "change",
+            code: "change.impact",
+            params: { change: "CHG-12", kind: "change", hours: 5, reached: 2, incidents: 0 },
+            subject: { type: "entity", id: SERVICE, name: "user-service", kind: "service" },
+          }),
+        ],
+      }),
+    );
+    mount();
+
+    const lines = within(await screen.findByTestId("insights-findings")).getAllByRole("listitem");
+    expect(lines[0]).toHaveTextContent("Déploiement « payment-api v2.8.4 » : 1 incident(s) ensuite");
+    expect(lines[0]).toHaveTextContent("Important · Il y a 26 h · production");
+    expect(within(lines[0]).getByRole("link")).toHaveAttribute(
+      "href",
+      `/environment/services/${SERVICE}`,
+    );
+    expect(lines[1]).toHaveTextContent("Changement « CHG-12 » : 2 élément(s) concerné(s)");
+  });
+
   it("says the English sentence of a code it does not know yet", async () => {
     api.summary.mockResolvedValue(
-      summary({ top: [finding({ code: "change.impact", statement: "A change reached 3 things." })] }),
+      summary({ top: [finding({ code: "gap.undocumented", statement: "A change reached 3 things." })] }),
     );
     mount();
 

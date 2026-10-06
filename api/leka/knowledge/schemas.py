@@ -990,6 +990,70 @@ class Impact(BaseModel):
     processes: list[BusinessTie]
 
 
+class ChangeTouch(BaseModel):
+    """What a change was made to (LEKA-378): a service, an application, a
+    resource — said by its source (part of it, affecting it, deployed to
+    it), or the service a repository it was made in is part of."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    how: str = Field(description="part_of, affects, deployed_to — or via_repository.")
+    criticality: str | None
+
+
+class ChangeReach(BaseModel):
+    """What depends on what a change touched: how far, through which."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    distance: int = Field(description="1: depends on what it touched; 2: one step further.")
+    through: EntityBrief = Field(description="The touched thing it depends on.")
+    criticality: str | None
+
+
+class ChangeIncident(BaseModel):
+    """An incident after a change, on what it touched or reached — or that
+    says the change caused it, whenever it opened."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    opened_at: datetime | None
+    severity: str | None
+    state: str | None
+    on: EntityBrief | None = Field(description="What of the change's footprint it affects.")
+    stated: bool = Field(description="Its source says the change caused it.")
+
+
+class ChangeFootprint(BaseModel):
+    """A change, and what the company model says it reaches (LEKA-378):
+    what it was made to, what depends on that two steps up, the
+    applications and the business holding them, the incidents that
+    followed. Facts only — how much it matters is judged elsewhere
+    (leka.intelligence)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    change: EntityBrief
+    kind: str = Field(description="deployment, change, release or pull_request.")
+    at: datetime
+    state: str | None
+    environment: str | None
+    details: dict[str, str] = Field(
+        description="What its source says of it: ref, commit, version, url, changes, risk."
+    )
+    sources: list[str] = Field(description="The kinds of the sources that show it.")
+    source_ids: list[str]
+    touched: list[ChangeTouch]
+    reached: list[ChangeReach]
+    applications: list[EntityBrief]
+    capabilities: list[BusinessTie]
+    processes: list[BusinessTie]
+    incidents: list[ChangeIncident]
+
+
 class IncidentRead(BaseModel):
     """An incident: how bad, where it stands, when it opened and was
     handled, what it affects, who leads it, what is said or suspected to

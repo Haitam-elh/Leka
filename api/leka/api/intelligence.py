@@ -17,6 +17,14 @@
     GET  /intelligence/summary           what is open, how bad, the most
                                          pressing, the latest run — for a
                                          product surface at a glance
+    GET  /intelligence/changes           the changes between two dates, the
+                                         latest first, judged (LEKA-378):
+                                         current or history, how much they
+                                         matter and why, what they reach —
+                                         around an entity, or everywhere
+    GET  /intelligence/changes/{id}      one change: everything it reaches,
+                                         ranked, the business holding it,
+                                         the incidents that followed
 
 Read by every member (`workspace:read`), like the company model they are
 drawn from. Asking for a run is asking LEKA something, like an intention:
@@ -28,6 +36,7 @@ session's (rule 3): another workspace's run or finding is 404.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, status
@@ -43,6 +52,8 @@ from leka.intelligence import (
     AnalysisRequest,
     AnalysisRequested,
     AnalyzerRead,
+    ChangeImpactDetail,
+    ChangeImpactTimeline,
     Finding,
     FindingDetail,
     FindingFilters,
@@ -201,3 +212,54 @@ async def finding(finding_id: uuid.UUID, service: Reading) -> FindingDetail:
 async def summary(service: Reading) -> IntelligenceSummary:
     """What is open, by severity; the most pressing; the latest run."""
     return await service.summary()
+
+
+# ── change and impact (LEKA-378) ───────────────────────────────────────
+
+# A timeline's window when none is asked, and at most.
+CHANGE_WINDOW = timedelta(days=30)
+MAX_CHANGE_WINDOW = timedelta(days=90)
+
+
+@router.get("/changes", response_model=ChangeImpactTimeline)
+async def changes(
+    service: Reading,
+    since: Annotated[
+        datetime | None, Query(description="From; 30 days before `until` when not given.")
+    ] = None,
+    until: Annotated[datetime | None, Query(description="To; now when not given.")] = None,
+    entity: Annotated[
+        uuid.UUID | None,
+        Query(description="Made to it, to what it is made of, or to what it depends on."),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+) -> ChangeImpactTimeline:
+    """The changes between two dates — deployments, change requests,
+    releases, pull requests — the latest first, each judged: current
+    (within 72 hours) or history, how much it matters and why, what it was
+    made to, how far it reaches, the incidents that followed. 90 days at
+    most."""
+    now = datetime.now(UTC)
+    end = until or now
+    start = since or end - CHANGE_WINDOW
+    if start >= end or end - start > MAX_CHANGE_WINDOW:
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.VALIDATION_FAILED,
+            "`since` must come before `until`, at most 90 days before.",
+        )
+    return await service.change_timeline(
+        now=now, since=start, until=end, around=entity, limit=limit
+    )
+
+
+@router.get("/changes/{change_id}", response_model=ChangeImpactDetail)
+async def change(change_id: uuid.UUID, service: Reading) -> ChangeImpactDetail:
+    """One change: everything it reaches, the most affected first — what
+    an incident hit, what it was made to, what depends on that — the
+    applications and the business holding it, the incidents that followed
+    or that its source says it caused, and what its source says of it."""
+    found = await service.change_detail(change_id, now=datetime.now(UTC))
+    if found is None:
+        raise _missing("change")
+    return found

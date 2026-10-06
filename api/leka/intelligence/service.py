@@ -39,21 +39,35 @@ from leka.intelligence.analysis import (
     Outcome,
     catalogue_hash,
 )
+from leka.intelligence.changes import (
+    AFTER,
+    HISTORY,
+    Impacted,
+    current,
+    impacts,
+    signals,
+    significance,
+)
 from leka.intelligence.models import Finding, IntelligenceRun, IntelligenceStep
 from leka.intelligence.repository import IntelligenceRepository
 from leka.intelligence.rules import ANALYZERS
 from leka.intelligence.schemas import (
     AnalyzerRead,
+    ChangeImpactDetail,
+    ChangeImpactRead,
+    ChangeImpactTimeline,
     EvidenceRead,
     FindingDetail,
     FindingRead,
+    FollowedRead,
+    ImpactRead,
     IntelligenceSummary,
     RunDetail,
     RunRead,
     StepRead,
     SubjectRead,
 )
-from leka.knowledge import ArchitectureRead, GraphService
+from leka.knowledge import ArchitectureRead, ChangeFootprint, EntityBrief, GraphService
 
 logger = structlog.get_logger(__name__)
 
@@ -62,6 +76,8 @@ CONTEXT_WINDOW = timedelta(days=30)
 MAX_CONTEXTS = 500
 # What a summary names.
 TOP = 5
+# The changes a run reads: the last HISTORY's, at most this many.
+MAX_CHANGES = 100
 
 
 class UnknownAnalyzerError(ValueError):
@@ -159,6 +175,13 @@ class IntelligenceService:
         """Where the contexts used in the last month stand."""
         rows = await self._contexts.standing(used_since=now - CONTEXT_WINDOW, limit=MAX_CONTEXTS)
         return tuple(_standing(context, quality) for context, quality in rows)
+
+    async def read_changes(self, *, now: datetime) -> tuple[ChangeFootprint, ...]:
+        """The changes of the last HISTORY, each with its footprint (LEKA-378)."""
+        found, _ = await self._graph.footprints(
+            since=now - HISTORY, until=now, limit=MAX_CHANGES, after=AFTER
+        )
+        return tuple(found)
 
     async def record(
         self,
@@ -361,10 +384,101 @@ class IntelligenceService:
             latest=RunRead.model_validate(latest) if latest else None,
         )
 
+    async def change_timeline(
+        self,
+        *,
+        now: datetime,
+        since: datetime,
+        until: datetime,
+        around: uuid.UUID | None,
+        limit: int,
+    ) -> ChangeImpactTimeline:
+        """The changes between two dates, judged — around an entity: those
+        made to it, to what it is made of, or to what it depends on."""
+        found, truncated = await self._graph.footprints(
+            since=since, until=until, limit=limit, after=AFTER, around=around
+        )
+        return ChangeImpactTimeline(
+            since=since,
+            until=until,
+            around=around,
+            changes=[_change_read(footprint, now) for footprint in found],
+            truncated=truncated,
+        )
+
+    async def change_detail(
+        self, change_id: uuid.UUID, *, now: datetime
+    ) -> ChangeImpactDetail | None:
+        """One change: everything it reaches, ranked, the business holding
+        it, what followed, what its source says of it."""
+        footprint = await self._graph.footprint(change_id, after=AFTER)
+        if footprint is None:
+            return None
+        return ChangeImpactDetail(
+            **_change_read(footprint, now).model_dump(),
+            details=footprint.details,
+            source_ids=footprint.source_ids,
+            impacts=[_impact_read(item) for item in impacts(footprint)],
+            applications=[_subject(entity) for entity in footprint.applications],
+            capabilities=[_subject(tie.entity) for tie in footprint.capabilities],
+            processes=[_subject(tie.entity) for tie in footprint.processes],
+            followed=[
+                FollowedRead(
+                    subject=_subject(incident.entity),
+                    opened_at=incident.opened_at,
+                    hours_after=(
+                        round((incident.opened_at - footprint.at).total_seconds() / 3600, 1)
+                        if incident.opened_at
+                        else None
+                    ),
+                    severity=incident.severity,
+                    state=incident.state,
+                    on=_subject(incident.on) if incident.on else None,
+                    stated=incident.stated,
+                )
+                for incident in footprint.incidents
+            ],
+        )
+
     async def about(self, ids: Sequence[uuid.UUID], *, limit: int = 20) -> list[FindingRead]:
         """What LEKA concluded, and still holds, about these things — for a
         service downstream (an intention, a context) to start from."""
         return self.finding_reads(await self._repository.about(ids, limit=limit))
+
+
+def _subject(entity: EntityBrief) -> SubjectRead:
+    return SubjectRead(type="entity", id=entity.id, name=entity.name, kind=entity.type.value)
+
+
+def _impact_read(item: Impacted) -> ImpactRead:
+    return ImpactRead(
+        subject=SubjectRead.model_validate(item.subject.as_dict()),
+        distance=item.distance,
+        score=item.score,
+        reasons=list(item.reasons),
+    )
+
+
+def _change_read(footprint: ChangeFootprint, now: datetime) -> ChangeImpactRead:
+    ranked = impacts(footprint)
+    return ChangeImpactRead.model_validate(
+        {
+            "id": footprint.change.id,
+            "name": footprint.change.name,
+            "kind": footprint.kind,
+            "at": footprint.at,
+            "state": footprint.state,
+            "environment": footprint.environment,
+            "current": current(footprint, now),
+            "significance": significance(footprint),
+            "signals": list(signals(footprint)),
+            "touched": [_subject(touch.entity) for touch in footprint.touched],
+            "reached": len(ranked),
+            "incidents": len(footprint.incidents),
+            "top": [_impact_read(item) for item in ranked[:3]],
+            "sources": footprint.sources,
+        }
+    )
 
 
 def _standing(context: Context, quality: dict[str, object] | None) -> ContextStanding:

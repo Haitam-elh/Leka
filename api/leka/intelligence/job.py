@@ -58,7 +58,7 @@ from leka.intelligence.analysis import (
 from leka.intelligence.repository import IntelligenceRepository, IntelligenceSweeper
 from leka.intelligence.rules import ANALYZERS
 from leka.intelligence.service import IntelligenceService
-from leka.knowledge import ArchitectureRead, GraphRepository, GraphService
+from leka.knowledge import ArchitectureRead, ChangeFootprint, GraphRepository, GraphService
 
 logger = structlog.get_logger(__name__)
 
@@ -186,6 +186,7 @@ async def analyse_workspace(
             architecture=architecture,
             owners=owners,
             contexts=await _contexts(workspace_id, chosen, moment),
+            changes=await _changes(workspace_id, chosen, moment),
         )
         for analyzer in chosen:
             outcome = await execute(analyzer, material)
@@ -241,6 +242,22 @@ async def _contexts(
         except Exception as error:
             logger.warning(
                 "intelligence_material_unread", part="context", error=type(error).__name__
+            )
+            return None
+
+
+async def _changes(
+    workspace_id: uuid.UUID, analyzers: Sequence[Analyzer], now: datetime
+) -> tuple[ChangeFootprint, ...] | None:
+    if not any(Reads.CHANGES in analyzer.reads for analyzer in analyzers):
+        return None
+    async with session_factory() as session:
+        try:
+            return await _service(session, workspace_id).read_changes(now=now)
+        except Exception as error:
+            # One part unread is not the run lost.
+            logger.warning(
+                "intelligence_material_unread", part="changes", error=type(error).__name__
             )
             return None
 
