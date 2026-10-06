@@ -20,6 +20,9 @@ reads, what it says, and how one runs beside the others.
     CONFLICT    one disagreement between the model's sources (LEKA-382):
                 every side, who says it, how much each is to be believed,
                 what LEKA recommends — kept until someone settles it
+    SCORE       how far what LEKA knows of one thing, or one area, can be
+                trusted (LEKA-381): four dimensions, the factors read, what
+                lowers it — kept with its changes over time
     OUTCOME     what came of running one analysis: its drafts and its
                 proposals — or the error's type, its time out, why it was
                 skipped
@@ -204,6 +207,29 @@ class ConflictDraft:
 
 
 @dataclass(frozen=True)
+class QualityScore:
+    """How far what LEKA knows of one thing — or one area: a team, an
+    application, a column, the workspace — can be trusted (LEKA-381): its
+    score and level, each dimension, the factors read, what lowers it."""
+
+    key: str
+    # entity, team, application, column, workspace
+    scope: str
+    subject: Subject
+    score: float
+    level: str
+    dimensions: Mapping[str, float | None]
+    factors: Mapping[str, object]
+    missing: tuple[Mapping[str, object], ...] = ()
+    column: str | None = None
+    # An entity's: the areas it counts in. An area's: how many it holds.
+    areas: tuple[str, ...] = ()
+    entities: int = 1
+    capped: str | None = None
+    sources: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ContextStanding:
     """Where one context stands: what it is, whether it follows the model,
     how far behind, how good its latest version was judged."""
@@ -269,7 +295,7 @@ class Analyzer:
     method: Method
     reads: frozenset[Reads]
     summary: str
-    run: Callable[[Material], Sequence[Draft | Proposal | ConflictDraft]]
+    run: Callable[[Material], Sequence[Draft | Proposal | ConflictDraft | QualityScore]]
     # Seconds it may take before it is given up on.
     budget: float = 30.0
     # Parts read when they can be, which only weigh what it concludes —
@@ -289,6 +315,7 @@ class Outcome:
     drafts: tuple[Draft, ...] = ()
     proposals: tuple[Proposal, ...] = ()
     conflicts: tuple[ConflictDraft, ...] = ()
+    scores: tuple[QualityScore, ...] = ()
     duration_ms: int = 0
     error: str | None = None
     reason: str | None = None
@@ -322,11 +349,13 @@ async def execute(analyzer: Analyzer, material: Material) -> Outcome:
     drafts = {d.key: d for d in said if isinstance(d, Draft)}
     proposals = {p.key: p for p in said if isinstance(p, Proposal)}
     conflicts = {c.key: c for c in said if isinstance(c, ConflictDraft)}
+    scores = {s.key: s for s in said if isinstance(s, QualityScore)}
     return Outcome(
         status="succeeded",
         drafts=tuple(drafts.values()),
         proposals=tuple(proposals.values()),
         conflicts=tuple(conflicts.values()),
+        scores=tuple(scores.values()),
         duration_ms=_since(started),
     )
 

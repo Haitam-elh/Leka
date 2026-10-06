@@ -1358,6 +1358,34 @@ class EntityRepository(WorkspaceScopedRepository):
             found[thing] = Documented(int(count), last, int(not_stale))
         return found
 
+    async def issue_counts(self, things: Sequence[uuid.UUID]) -> dict[uuid.UUID, tuple[int, int]]:
+        """What the last build found wrong with the relationships of each of
+        these (LEKA-368), as (errors, warnings) — at either end (LEKA-381)."""
+        if not things:
+            return {}
+        wanted = set(things)
+        rows = await self._session.execute(
+            select(
+                RelationshipIssue.from_entity_id,
+                RelationshipIssue.to_entity_id,
+                RelationshipIssue.severity,
+            ).where(
+                RelationshipIssue.workspace_id == self.workspace_id,
+                or_(
+                    RelationshipIssue.from_entity_id.in_(wanted),
+                    RelationshipIssue.to_entity_id.in_(wanted),
+                ),
+            )
+        )
+        found: dict[uuid.UUID, tuple[int, int]] = {}
+        for start, end, severity in rows.tuples().all():
+            for thing in {start, end} & wanted:
+                errors, warnings = found.get(thing, (0, 0))
+                found[thing] = (
+                    (errors + 1, warnings) if severity == "error" else (errors, warnings + 1)
+                )
+        return found
+
     def business(self, kind: EntityType, filters: BusinessFilters) -> Select[tuple[Entity]]:
         """The capabilities — or the processes — of the workspace, for a
         page: under that one, at the top, realizing that capability, of

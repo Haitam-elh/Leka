@@ -1182,6 +1182,7 @@ class GraphService:
         holds it."""
         things = await self._graph.by_ids(list(ids))
         documented = await self._graph.documented(list(things))
+        issues = await self._graph.issue_counts(list(things))
         ties = await self._graph.around(list(things), STANDING_BUSINESS)
         ends = await self._graph.by_ids(
             [e.to_entity_id for e in ties] + [e.from_entity_id for e in ties]
@@ -1206,6 +1207,13 @@ class GraphService:
                 fresh_documents=said.fresh,
                 last_documented_at=said.last_changed_at,
                 business=thing in held,
+                confidence=entity.confidence,
+                quality=entity.quality,
+                last_seen_at=entity.last_seen_at,
+                source_ids=tuple(sorted(_source_ids(entity))),
+                origins=_origins(entity.provenance),
+                disputed=_disputed(entity.provenance),
+                issues=issues.get(thing, (0, 0)),
             )
         return standing
 
@@ -1602,6 +1610,29 @@ def _stated(provenance: object) -> tuple[str, ...]:
             for name, said in attributes.items()
             if isinstance(said, dict) and said.get("origin", "source") == "source"
         )
+    )
+
+
+def _said_of(provenance: object) -> dict[str, dict[str, object]]:
+    attributes = provenance.get("attributes") if isinstance(provenance, dict) else None
+    if not isinstance(attributes, dict):
+        return {}
+    return {name: said for name, said in attributes.items() if isinstance(said, dict)}
+
+
+def _origins(provenance: object) -> dict[str, int]:
+    """Its attributes by origin — source, enrichment, accepted (LEKA-381)."""
+    found: dict[str, int] = {}
+    for said in _said_of(provenance).values():
+        origin = str(said.get("origin", "source"))
+        found[origin] = found.get(origin, 0) + 1
+    return found
+
+
+def _disputed(provenance: object) -> tuple[str, ...]:
+    """The attributes its sources disagree on, no one having settled them."""
+    return tuple(
+        sorted(name for name, said in _said_of(provenance).items() if said.get("disputed"))
     )
 
 

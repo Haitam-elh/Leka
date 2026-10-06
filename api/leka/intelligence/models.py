@@ -392,3 +392,91 @@ class AuthorityRule(Base, WorkspaceScopedMixin):
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+
+QUALITY_SCOPES = ("entity", "team", "application", "column", "workspace")
+QUALITY_LEVELS = ("high", "medium", "low")
+_DIMENSIONS = ("completeness", "freshness", "consistency", "confidence")
+
+
+def _unit(column: str) -> str:
+    return f"{column} IS NULL OR ({column} >= 0 AND {column} <= 1)"
+
+
+class QualityScoreRow(Base, WorkspaceScopedMixin):
+    """How far what LEKA knows of one thing or one area can be trusted now
+    (LEKA-381) — one row per key, rewritten by each run that measures it,
+    gone when it is no longer measured: its score, level and dimensions,
+    the factors read (`factors`), what lowers it (`missing`), the areas it
+    counts in, where it was read."""
+
+    __tablename__ = "quality_scores"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "key", name="uq_quality_scores_key"),
+        CheckConstraint(_in("scope", QUALITY_SCOPES), name="scope"),
+        CheckConstraint(_in("level", QUALITY_LEVELS), name="level"),
+        CheckConstraint("score >= 0 AND score <= 1", name="score_range"),
+        *(CheckConstraint(_unit(name), name=f"{name}_range") for name in _DIMENSIONS),
+        Index("ix_quality_scores_workspace_scope_score", "workspace_id", "scope", "score"),
+        Index("ix_quality_scores_workspace_subject", "workspace_id", "subject_id"),
+    )
+
+    key: Mapped[str] = mapped_column(String(300), nullable=False)
+    scope: Mapped[str] = mapped_column(String(20), nullable=False)
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    subject_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    subject_kind: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # An entity's column of Mon environnement.
+    column: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    level: Mapped[str] = mapped_column(String(10), nullable=False)
+    # Each dimension; none when nothing measures it.
+    completeness: Mapped[float | None] = mapped_column(Float, nullable=True)
+    freshness: Mapped[float | None] = mapped_column(Float, nullable=True)
+    consistency: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # An entity's: each dimension's factors. An area's: its levels counted,
+    # its weakest things.
+    factors: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # What lowers it, the heaviest first: {code, dimension, weight, detail}
+    # — an area's: {code, count}.
+    missing: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    areas: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    entities: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    capped: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    provenance: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # Since when it holds its level.
+    since: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class QualityPoint(Base, WorkspaceScopedMixin):
+    """One point of a score's history (LEKA-381): written when it is first
+    measured, and each time it moves — by 0.02 or more, or to another level
+    — so a series is its changes, not a row per run. Kept a year."""
+
+    __tablename__ = "quality_history"
+    __table_args__ = (
+        CheckConstraint(_in("scope", QUALITY_SCOPES), name="scope"),
+        CheckConstraint(_in("level", QUALITY_LEVELS), name="level"),
+        CheckConstraint("score >= 0 AND score <= 1", name="score_range"),
+        Index("ix_quality_history_workspace_key_at", "workspace_id", "key", "measured_at"),
+        Index("ix_quality_history_workspace_at", "workspace_id", "measured_at"),
+    )
+
+    key: Mapped[str] = mapped_column(String(300), nullable=False)
+    scope: Mapped[str] = mapped_column(String(20), nullable=False)
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    level: Mapped[str] = mapped_column(String(10), nullable=False)
+    completeness: Mapped[float | None] = mapped_column(Float, nullable=True)
+    freshness: Mapped[float | None] = mapped_column(Float, nullable=True)
+    consistency: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)

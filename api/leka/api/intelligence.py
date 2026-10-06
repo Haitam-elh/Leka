@@ -53,6 +53,14 @@
     GET/POST /intelligence/authority-rules, DELETE …/{id}
                                          the workspace's word on its sources
 
+    GET  /intelligence/quality           how far what LEKA knows can be
+                                         trusted (LEKA-381): the workspace,
+                                         by area, the weakest, the trend
+    GET  /intelligence/quality/scores    each thing's or area's score — by
+                                         scope, level, column, area, thing
+    GET  /intelligence/quality/scores/{key}  one: its factors, where it was
+                                         read, its history
+
 Read by every member (`workspace:read`), like the company model they are
 drawn from. Asking for a run is asking LEKA something, like an intention:
 `intention:create`, refused to a suspended workspace. Deciding what goes
@@ -109,6 +117,13 @@ from leka.intelligence import (
     IntelligenceService,
     IntelligenceSummary,
     KnowledgeConflict,
+    KnowledgeQualityDetail,
+    KnowledgeQualityRead,
+    KnowledgeQualitySummary,
+    QualityFilters,
+    QualityRepository,
+    QualityScoreRow,
+    QualityService,
     Reprocessed,
     RunDetail,
     RunRead,
@@ -118,6 +133,7 @@ from leka.intelligence import (
     candidate_reads,
     conflict_detail,
     conflict_reads,
+    quality_reads,
 )
 from leka.intelligence.job import queue_run
 from leka.knowledge import (
@@ -158,6 +174,13 @@ CONFLICT_SORTS = SortCatalogue(
         ),
     ),
     default="last_seen_at",
+)
+QUALITY_SORTS = SortCatalogue(
+    fields=(
+        SortableField("score", QualityScoreRow.score, "ix_quality_scores_workspace_scope_score"),
+        SortableField("measured_at", QualityScoreRow.measured_at, "one row per thing: hundreds"),
+    ),
+    default="score",
 )
 CANDIDATE_SORTS = SortCatalogue(
     fields=(
@@ -670,3 +693,58 @@ async def delete_authority_rule(
     if not await service.delete_rule(rule_id):
         raise _missing("authority rule")
     await session.commit()
+
+
+# ── knowledge quality (LEKA-381) ───────────────────────────────────────
+
+
+def _quality(session: SessionDep, principal: Reader) -> QualityService:
+    return QualityService(QualityRepository(session, principal.workspace_id))
+
+
+Measuring = Annotated[QualityService, Depends(_quality)]
+
+
+@router.get("/quality", response_model=KnowledgeQualitySummary)
+async def quality(service: Measuring) -> KnowledgeQualitySummary:
+    """How far what LEKA knows can be trusted: the workspace's score, each
+    column's, team's and application's, the things known least well, and
+    how the workspace's moved over 30 days."""
+    return await service.summary(now=datetime.now(UTC))
+
+
+@router.get("/quality/scores", response_model=PageEnvelope[KnowledgeQualityRead])
+async def quality_scores(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    scope: Annotated[
+        Literal["entity", "team", "application", "column", "workspace"] | None, Query()
+    ] = None,
+    level: Annotated[Literal["high", "medium", "low"] | None, Query()] = None,
+    column: Annotated[str | None, Query(max_length=20)] = None,
+    area: Annotated[
+        str | None,
+        Query(max_length=300, description="Counted in this area: team:<id>, application:<id>…"),
+    ] = None,
+    subject: Annotated[uuid.UUID | None, Query(description="About this entity.")] = None,
+) -> PageEnvelope[KnowledgeQualityRead]:
+    """The scores by score (`sort=score`, the default) — `order=asc` for
+    the weakest first — or the latest measured (`sort=measured_at`)."""
+    statement = QualityRepository(session, principal.workspace_id).scores(
+        QualityFilters(scope=scope, level=level, column=column, area=area, subject_id=subject)
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=QUALITY_SORTS, id_column=QualityScoreRow.id
+    )
+    return PageEnvelope(data=quality_reads(result.items), next_cursor=result.next_cursor)
+
+
+@router.get("/quality/scores/{key:path}", response_model=KnowledgeQualityDetail)
+async def quality_score(key: str, service: Measuring) -> KnowledgeQualityDetail:
+    """One score: each dimension's factors, what lowers it and what shows
+    it, where it was read, its changes over 90 days."""
+    found = await service.detail(key, now=datetime.now(UTC))
+    if found is None:
+        raise _missing("quality score")
+    return found

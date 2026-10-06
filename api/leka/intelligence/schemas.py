@@ -93,8 +93,9 @@ class RunDetail(RunRead):
 class SubjectRead(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    type: Literal["entity", "context", "source", "coverage"] = Field(
-        description="An entity, a context, a source (LEKA-379) — or a family of sources: coverage."
+    type: Literal["entity", "context", "source", "coverage", "column", "workspace"] = Field(
+        description="An entity, a context, a source (LEKA-379) — or a family of sources: "
+        "coverage; a column of Mon environnement, or the workspace (LEKA-381)."
     )
     id: uuid.UUID | None
     name: str
@@ -442,3 +443,76 @@ class AuthorityRuleCreate(BaseModel):
     source_id: uuid.UUID
     stance: Literal["prefer", "avoid"]
     reason: str | None = Field(default=None, max_length=500)
+
+
+# ── knowledge quality (LEKA-381) ───────────────────────────────────────
+
+
+class KnowledgeQualityPoint(BaseModel):
+    """A score at one moment: when it moved, where to."""
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    measured_at: datetime
+    score: float
+    level: Literal["high", "medium", "low"]
+    completeness: float | None
+    freshness: float | None
+    consistency: float | None
+    confidence: float | None
+
+
+class KnowledgeQualityRead(BaseModel):
+    """How far what LEKA knows of one thing, or one area, can be trusted."""
+
+    model_config = ConfigDict(frozen=True)
+
+    key: str = Field(
+        description="entity:<id>, team:<id>, application:<id>, column:<name>, workspace."
+    )
+    scope: Literal["entity", "team", "application", "column", "workspace"]
+    subject: SubjectRead
+    column: str | None = Field(description="An entity's column of Mon environnement.")
+    score: float = Field(
+        description="0 to 1: .30 completeness + .25 freshness + .20 consistency "
+        "+ .25 confidence, over the dimensions known."
+    )
+    level: Literal["high", "medium", "low"] = Field(description="high from 0.85, medium from 0.6.")
+    completeness: float | None
+    freshness: float | None
+    consistency: float | None
+    confidence: float | None
+    missing: list[dict[str, JsonValue]] = Field(
+        description="What lowers it, the heaviest first: {code, dimension, weight, detail} — "
+        "an area's: {code, count}."
+    )
+    areas: list[str] = Field(description="An entity's: the areas it counts in.")
+    entities: int = Field(description="An area's: how many things it holds.")
+    capped: str | None = Field(description="contradiction: held to medium by one left open.")
+    measured_at: datetime
+    since: datetime = Field(description="Since when it holds its level.")
+
+
+class KnowledgeQualityDetail(KnowledgeQualityRead):
+    """One score: each dimension's factors, where it was read, its history."""
+
+    factors: dict[str, JsonValue]
+    provenance: dict[str, JsonValue]
+    history: list[KnowledgeQualityPoint] = Field(description="Its changes, the oldest first.")
+
+
+class KnowledgeQualitySummary(BaseModel):
+    """The workspace's knowledge quality at a glance: where it stands, by
+    area, the things known least well, and how it moved."""
+
+    model_config = ConfigDict(frozen=True)
+
+    measured_at: datetime | None
+    workspace: KnowledgeQualityRead | None
+    levels: dict[str, int] = Field(description="The things measured, by level.")
+    columns: list[KnowledgeQualityRead]
+    teams: list[KnowledgeQualityRead]
+    applications: list[KnowledgeQualityRead]
+    weakest: list[KnowledgeQualityRead]
+    trend: list[KnowledgeQualityPoint] = Field(description="The workspace's, over 30 days.")
+    change: float | None = Field(description="The workspace's score now, less 7 days ago.")
