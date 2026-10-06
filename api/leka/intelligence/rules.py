@@ -35,6 +35,7 @@ from leka.intelligence.analysis import (
     Subject,
 )
 from leka.intelligence.changes import ANALYZER as CHANGE_IMPACT
+from leka.intelligence.enrichment import ANALYZERS as ENRICHMENT
 from leka.intelligence.gaps import ANALYZERS as GAPS
 from leka.knowledge import RELIED_ON, ArchitectureCardRead, ArchitectureLinkRead
 
@@ -385,6 +386,8 @@ ANALYZERS: tuple[Analyzer, ...] = (
     CHANGE_IMPACT,
     # Knowledge gaps (LEKA-379): gaps.py.
     *GAPS,
+    # Knowledge enrichment (LEKA-380): enrichment.py — proposals, not findings.
+    *ENRICHMENT,
 )
 
 

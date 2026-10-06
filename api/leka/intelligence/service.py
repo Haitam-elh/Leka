@@ -50,6 +50,7 @@ from leka.intelligence.changes import (
     signals,
     significance,
 )
+from leka.intelligence.curation import propose
 from leka.intelligence.models import Finding, IntelligenceRun, IntelligenceStep
 from leka.intelligence.repository import IntelligenceRepository
 from leka.intelligence.rules import ANALYZERS
@@ -71,6 +72,7 @@ from leka.intelligence.schemas import (
 )
 from leka.knowledge import (
     ArchitectureRead,
+    AssertionRepository,
     ChangeFootprint,
     EntityBrief,
     EntityStanding,
@@ -97,6 +99,8 @@ class ModelRead:
     standing: dict[uuid.UUID, EntityStanding]
     documents: int
     categories: dict[str, str]
+    owned_by: dict[uuid.UUID, tuple[EntityBrief, ...]]
+    memberships: dict[uuid.UUID, tuple[EntityBrief, ...]]
 
 
 class UnknownAnalyzerError(ValueError):
@@ -115,11 +119,14 @@ class IntelligenceService:
         contexts: ContextRepository,
         *,
         analyzers: Sequence[Analyzer] = ANALYZERS,
+        assertions: AssertionRepository | None = None,
     ) -> None:
         self._repository = repository
         self._graph = graph
         self._contexts = contexts
         self._analyzers = tuple(analyzers)
+        # Where the policy's acceptances are kept (LEKA-380): none, none made.
+        self._assertions = assertions
 
     # ── the catalogue ──────────────────────────────────────────────────
 
@@ -181,11 +188,14 @@ class IntelligenceService:
     async def read_model(self, *, now: datetime) -> ModelRead:
         """The company model, as the architecture reads it — every card —
         who owns each card's entity, team or person, what the model holds
-        around each (LEKA-379), how many documents there are, and the
-        family of each kind of source."""
+        around each (LEKA-379), how many documents there are, the family of
+        each kind of source, and the teams of the people who maintain them
+        (LEKA-380)."""
         architecture = await self._graph.architecture(now=now, environment=None, detailed=True)
         ids = [card.entity_id for card in architecture.cards if card.entity_id is not None]
         owners = await self._graph.owners(ids)
+        people = list({person.id for card in architecture.cards for person in card.maintainers})
+        teams = await self._graph.memberships(people)
         return ModelRead(
             architecture=architecture,
             owners={
@@ -194,6 +204,8 @@ class IntelligenceService:
             standing=await self._graph.standing(ids),
             documents=await self._graph.documents(),
             categories={manifest.key.value: manifest.category.value for manifest in manifests()},
+            owned_by={entity: tuple(briefs) for entity, briefs in owners.items()},
+            memberships={person: tuple(found) for person, found in teams.items()},
         )
 
     async def read_contexts(self, *, now: datetime) -> tuple[ContextStanding, ...]:
@@ -217,10 +229,23 @@ class IntelligenceService:
         *,
         now: datetime,
     ) -> IntelligenceStep:
-        """One analysis's outcome: its step, and its findings kept."""
+        """One analysis's outcome: its step, its findings kept — and its
+        proposals, as candidates (LEKA-380)."""
         counts = {"found": len(outcome.drafts)}
+        if outcome.proposals:
+            counts["proposals"] = len(outcome.proposals)
         if outcome.status == "succeeded":
             counts |= await self._apply(run_id, analyzer, outcome.drafts, material, now=now)
+            if analyzer.category == "enrichment":
+                counts |= await propose(
+                    self._repository,
+                    self._assertions,
+                    run_id,
+                    analyzer,
+                    outcome.proposals,
+                    material,
+                    now=now,
+                )
         step = IntelligenceStep(
             workspace_id=self._repository.workspace_id,
             run_id=run_id,

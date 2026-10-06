@@ -146,7 +146,7 @@ def priority(
 # ── what the material says, read once ──────────────────────────────────
 
 
-def _cards(material: Material, *, active: bool = True) -> list[ArchitectureCardRead]:
+def cards_of(material: Material, *, active: bool = True) -> list[ArchitectureCardRead]:
     """The things a gap can be about — not a module or a tool, drawn from
     the code. Active only, by default: what has gone dormant is asked one
     question first (is it still used?), not every other."""
@@ -167,7 +167,7 @@ def _lifecycle(material: Material, card: ArchitectureCardRead) -> Lifecycle:
     return standing.lifecycle if standing else Lifecycle.ACTIVE
 
 
-def _dependents(material: Material) -> Counter[str]:
+def dependents_of(material: Material) -> Counter[str]:
     architecture = material.architecture
     if architecture is None:
         return Counter()
@@ -179,7 +179,7 @@ def _dependents(material: Material) -> Counter[str]:
     return Counter(to for _, to in pairs)
 
 
-def _tied(material: Material) -> set[str]:
+def tied_of(material: Material) -> set[str]:
     architecture = material.architecture
     if architecture is None:
         return set()
@@ -198,7 +198,7 @@ def _changing(material: Material) -> set[str]:
     return found
 
 
-def _connected(material: Material) -> set[str]:
+def connected_families(material: Material) -> set[str]:
     """The families of sources a person switched on: monitoring, cloud…"""
     architecture = material.architecture
     if architecture is None:
@@ -230,7 +230,7 @@ class Seen:
 
     @classmethod
     def of(cls, material: Material) -> Seen:
-        return cls(material, _dependents(material), _changing(material))
+        return cls(material, dependents_of(material), _changing(material))
 
 
 def _draft(
@@ -284,11 +284,11 @@ def missing_entities(material: Material) -> list[Draft]:
     are — when the family that would say it is connected. Not an
     application, which runs as its services do; not what is tied to
     nothing, which one gap says (gaps_relationships)."""
-    connected = _connected(material)
-    tied = _tied(material)
+    connected = connected_families(material)
+    tied = tied_of(material)
     seen = Seen.of(material)
     drafts: list[Draft] = []
-    for card in _cards(material):
+    for card in cards_of(material):
         if card.id not in tied:
             continue
         if card.column == "services" and card.type == "service":
@@ -337,11 +337,11 @@ def missing_relationships(material: Material) -> list[Draft]:
     """What runs or keeps data tied to nothing at all — that, and nothing
     more of it; a service no application, capability or process holds —
     when the business is known at all."""
-    tied = _tied(material)
+    tied = tied_of(material)
     business_known = any(standing.business for standing in material.standing.values())
     seen = Seen.of(material)
     drafts: list[Draft] = []
-    for card in _cards(material):
+    for card in cards_of(material):
         if card.column not in ("services", "data"):
             continue
         if card.id not in tied:
@@ -386,7 +386,7 @@ def documentation(material: Material) -> list[Draft]:
         return []
     seen = Seen.of(material)
     drafts: list[Draft] = []
-    for card in _cards(material):
+    for card in cards_of(material):
         if card.column not in ("services", "data") or card.entity_id is None:
             continue
         standing = material.standing.get(card.entity_id)
@@ -480,7 +480,7 @@ def staleness(material: Material) -> list[Draft]:
                 sources=(source.kind,),
             )
         )
-    for card in _cards(material, active=False):
+    for card in cards_of(material, active=False):
         standing = material.standing.get(card.entity_id) if card.entity_id else None
         if (
             standing is None
@@ -519,11 +519,11 @@ def coverage(material: Material) -> list[Draft]:
     architecture = material.architecture
     if architecture is None:
         return []
-    cards = _cards(material)
+    cards = cards_of(material)
     services = [c for c in cards if c.column == "services" and c.type == "service"]
     databases = [c for c in cards if c.column == "data" and c.type == "database"]
     things = [c for c in cards if c.column in ("services", "data", "cloud")]
-    connected = _connected(material)
+    connected = connected_families(material)
     said: list[tuple[str, int, str]] = []
     if services and "monitoring" not in connected:
         said.append(

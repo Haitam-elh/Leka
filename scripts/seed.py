@@ -361,6 +361,25 @@ async def _build_demo_workspace() -> None:
             "acme/backend",
             {"default_branch": "main", "language": "python", "private": True},
         )
+        # What LEKA's enrichment proposes, and waits for someone to validate
+        # (LEKA-380): user-service's own repository, which nothing ties to
+        # it; the Platform team, whose two members maintain postgres-prod —
+        # the database no one is named to own.
+        user_repository = entity(
+            github,
+            EntityType.REPOSITORY,
+            "gh:acme/user-service",
+            "acme/user-service",
+            {
+                "default_branch": "main",
+                "language": "go",
+                "private": True,
+                "description": "User accounts, sign-up and profiles",
+            },
+        )
+        platform = entity(
+            github, EntityType.TEAM, "gh-team:acme/platform", "Platform", {"slug": "platform"}
+        )
         await session.flush()
 
         def edge(
@@ -400,6 +419,11 @@ async def _build_demo_workspace() -> None:
         edge(github, thomas, auth, RelationshipType.OWNS)
         edge(github, thomas, users, RelationshipType.OWNS)
         edge(github, mei, repository, RelationshipType.MEMBER_OF)
+        edge(github, thomas, platform, RelationshipType.MEMBER_OF)
+        edge(github, mei, platform, RelationshipType.MEMBER_OF)
+        edge(infra, database, thomas, RelationshipType.MAINTAINED_BY)
+        edge(infra, database, mei, RelationshipType.MAINTAINED_BY)
+        edge(github, user_repository, mei, RelationshipType.MAINTAINED_BY)
 
         edge(jira, incident, deployment, RelationshipType.CAUSED_BY, confidence=0.83)
         edge(jira, incident, payment, RelationshipType.AFFECTS)

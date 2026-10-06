@@ -275,7 +275,7 @@ def test_what_is_dormant_is_asked_one_question() -> None:
         of(user): standing(),
     }
     material = world([old, user], tie(user, old), standings=standings)
-    drafts = [d for analyzer in GAPS for d in analyzer.run(material)]
+    drafts = [d for analyzer in GAPS for d in analyzer.run(material) if isinstance(d, Draft)]
     assert codes(drafts) == [("gap.stale_knowledge.dormant", "ledger")]
 
 

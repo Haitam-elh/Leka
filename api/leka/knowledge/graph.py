@@ -859,6 +859,27 @@ class GraphService:
                 briefs.append(EntityBrief.model_validate(entity))
         return found
 
+    async def memberships(self, people: Sequence[uuid.UUID]) -> dict[uuid.UUID, list[EntityBrief]]:
+        """The teams each of these people is a member of (LEKA-380) — the
+        removed left out. Someone in no team is absent."""
+        edges = await self._graph.around(list(people), (RelationshipType.MEMBER_OF,))
+        wanted = set(people)
+        named = await self._graph.by_ids([edge.to_entity_id for edge in edges])
+        found: dict[uuid.UUID, list[EntityBrief]] = {}
+        for edge in edges:
+            team = named.get(edge.to_entity_id)
+            if (
+                edge.from_entity_id not in wanted
+                or team is None
+                or team.type is not EntityType.TEAM
+                or team.lifecycle is Lifecycle.REMOVED
+            ):
+                continue
+            teams = found.setdefault(edge.from_entity_id, [])
+            if all(brief.id != team.id for brief in teams):
+                teams.append(EntityBrief.model_validate(team))
+        return found
+
     async def footprints(
         self,
         *,
@@ -1052,6 +1073,7 @@ class GraphService:
             said = documented[thing]
             standing[thing] = EntityStanding(
                 criticality=_said(entity.attributes.get("criticality")),
+                stated=_stated(entity.provenance),
                 lifecycle=entity.lifecycle,
                 documents=said.count,
                 fresh_documents=said.fresh,
@@ -1364,6 +1386,21 @@ def _uuid(value: object) -> uuid.UUID | None:
 
 def _said(value: object) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def _stated(provenance: object) -> tuple[str, ...]:
+    """The attributes a source states of an entity, as its provenance says
+    — not enrichment's, not a validated fact's (LEKA-380)."""
+    attributes = provenance.get("attributes") if isinstance(provenance, dict) else None
+    if not isinstance(attributes, dict):
+        return ()
+    return tuple(
+        sorted(
+            name
+            for name, said in attributes.items()
+            if isinstance(said, dict) and said.get("origin", "source") == "source"
+        )
+    )
 
 
 def _incident(entity: Entity, *, on: Entity | None, stated: bool) -> ChangeIncident:

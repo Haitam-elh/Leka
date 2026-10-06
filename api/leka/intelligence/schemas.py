@@ -1,5 +1,7 @@
 """What the intelligence API says (LEKA-377): the analyses there are, the
-runs and what each analysis of them did, the findings and what shows them.
+runs and what each analysis of them did, the findings and what shows them
+— and the enrichments of the company model proposed, and what was decided
+of them (LEKA-380).
 """
 
 from __future__ import annotations
@@ -8,10 +10,11 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 SeverityName = Literal["high", "medium", "low"]
 FindingStatus = Literal["open", "resolved"]
+CandidateStatus = Literal["proposed", "accepted", "rejected", "withdrawn"]
 
 
 class AnalyzerRead(BaseModel):
@@ -229,3 +232,90 @@ class ChangeImpactTimeline(BaseModel):
     around: uuid.UUID | None = Field(description="The entity they were made to or around.")
     changes: list[ChangeImpactRead]
     truncated: bool
+
+
+# ── enrichment (LEKA-380) ──────────────────────────────────────────────
+
+
+class CandidateRead(BaseModel):
+    """An enrichment of the company model LEKA proposed: a relationship or
+    an attribute, how sure, and where it stands."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    analyzer: str
+    family: str = Field(description="relationship, semantic, organisation, business.")
+    code: str = Field(description="What it proposes, for the interface to word.")
+    method: Literal["rules", "model"]
+    kind: Literal["relationship", "attribute"]
+    subject: SubjectRead = Field(description="The thing it enriches.")
+    relationship: str | None = Field(description="The relationship's kind, from start to end.")
+    start: SubjectRead | None
+    end: SubjectRead | None
+    attribute: str | None
+    value: JsonValue = Field(description="The attribute's value proposed.")
+    current: JsonValue = Field(description="What the model said of that attribute then.")
+    overrides: bool = Field(
+        description="Accepting it replaces what a source says: only a person may, saying so."
+    )
+    statement: str = Field(description="What it proposes, in English.")
+    params: dict[str, object] = Field(description="The values the code is worded with.")
+    confidence: float
+    status: CandidateStatus
+    decided_via: Literal["person", "policy"] | None
+    decided_at: datetime | None
+    first_seen_at: datetime
+    last_seen_at: datetime
+    occurrences: int
+
+
+class CandidateDetail(CandidateRead):
+    """And what shows it, where that was read, and every decision taken."""
+
+    evidence: list[EvidenceRead]
+    provenance: dict[str, object] = Field(
+        description="The build of the model, the sources' kinds, the analysis and its version."
+    )
+    decided_by: uuid.UUID | None
+    reason: str | None
+    history: list[dict[str, object]] = Field(
+        description="Every decision: {status, via, by, at, reason}, the latest last."
+    )
+
+
+class EnrichmentSummary(BaseModel):
+    """Where the workspace's enrichment stands: how many wait, were
+    accepted — by a person, by the policy — were rejected or withdrawn."""
+
+    model_config = ConfigDict(frozen=True)
+
+    proposed: int
+    accepted: int
+    rejected: int
+    withdrawn: int
+    by_policy: int = Field(description="Of those accepted, by the workspace's policy.")
+    families: dict[str, int] = Field(description="Those waiting, by family.")
+
+
+class Decision(BaseModel):
+    """Accept or reject a candidate."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(default=None, max_length=500)
+    override: bool = Field(
+        default=False,
+        description="Accept a candidate that replaces what a source says: required for one.",
+    )
+
+
+class Reprocessed(BaseModel):
+    """A candidate sent back to its analysis: proposed again if its evidence
+    still holds, withdrawn otherwise — `queued` false when a run was
+    already on its way, which will do it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    candidate: CandidateRead
+    queued: bool

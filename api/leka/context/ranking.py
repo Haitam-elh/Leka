@@ -112,7 +112,8 @@ WEIGHTS: dict[str, float] = {
 }
 
 LIFECYCLE: dict[str, float] = {"active": 1.0, "dormant": 0.6, "archived": 0.3, "removed": 0.1}
-ORIGIN: dict[str, float] = {"stated": 1.0, "inferred": 0.7}
+# A link someone validated (LEKA-380) is trusted almost as a source's word.
+ORIGIN: dict[str, float] = {"stated": 1.0, "accepted": 0.9, "inferred": 0.7}
 # How many sources say it, as trust: one is a word, three are a fact.
 CORROBORATION: dict[int, float] = {1: 0.6, 2: 0.85}
 CORROBORATED = 1.0
