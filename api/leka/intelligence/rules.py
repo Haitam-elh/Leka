@@ -35,6 +35,7 @@ from leka.intelligence.analysis import (
     Subject,
 )
 from leka.intelligence.changes import ANALYZER as CHANGE_IMPACT
+from leka.intelligence.gaps import ANALYZERS as GAPS
 from leka.knowledge import RELIED_ON, ArchitectureCardRead, ArchitectureLinkRead
 
 # What relies on a thing, before it is a concentration worth saying.
@@ -382,6 +383,8 @@ ANALYZERS: tuple[Analyzer, ...] = (
     ),
     # Change and impact (LEKA-378): changes.py.
     CHANGE_IMPACT,
+    # Knowledge gaps (LEKA-379): gaps.py.
+    *GAPS,
 )
 
 

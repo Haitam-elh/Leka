@@ -57,8 +57,8 @@ from leka.intelligence.analysis import (
 )
 from leka.intelligence.repository import IntelligenceRepository, IntelligenceSweeper
 from leka.intelligence.rules import ANALYZERS
-from leka.intelligence.service import IntelligenceService
-from leka.knowledge import ArchitectureRead, ChangeFootprint, GraphRepository, GraphService
+from leka.intelligence.service import IntelligenceService, ModelRead
+from leka.knowledge import ChangeFootprint, GraphRepository, GraphService
 
 logger = structlog.get_logger(__name__)
 
@@ -179,12 +179,15 @@ async def analyse_workspace(
             await session.commit()
             run_id, built_at = run.id, run.model_built_at
         moment = clock or datetime.now(UTC)
-        architecture, owners = await _model(workspace_id, chosen, moment)
+        model = await _model(workspace_id, chosen, moment)
         material = Material(
             now=moment,
             built_at=built_at,
-            architecture=architecture,
-            owners=owners,
+            architecture=model.architecture if model else None,
+            owners=model.owners if model else {},
+            standing=model.standing if model else {},
+            documents=model.documents if model else None,
+            categories=model.categories if model else {},
             contexts=await _contexts(workspace_id, chosen, moment),
             changes=await _changes(workspace_id, chosen, moment),
         )
@@ -219,22 +222,22 @@ async def analyse_workspace(
 
 async def _model(
     workspace_id: uuid.UUID, analyzers: Sequence[Analyzer], now: datetime
-) -> tuple[ArchitectureRead | None, dict[uuid.UUID, tuple[str, ...]]]:
-    if not any(Reads.MODEL in analyzer.reads for analyzer in analyzers):
-        return None, {}
+) -> ModelRead | None:
+    if not any(Reads.MODEL in analyzer.wants for analyzer in analyzers):
+        return None
     async with session_factory() as session:
         try:
             return await _service(session, workspace_id).read_model(now=now)
         except Exception as error:
             # One part unread is not the run lost.
             logger.warning("intelligence_material_unread", part="model", error=type(error).__name__)
-            return None, {}
+            return None
 
 
 async def _contexts(
     workspace_id: uuid.UUID, analyzers: Sequence[Analyzer], now: datetime
 ) -> tuple[ContextStanding, ...] | None:
-    if not any(Reads.CONTEXT in analyzer.reads for analyzer in analyzers):
+    if not any(Reads.CONTEXT in analyzer.wants for analyzer in analyzers):
         return None
     async with session_factory() as session:
         try:
@@ -249,7 +252,7 @@ async def _contexts(
 async def _changes(
     workspace_id: uuid.UUID, analyzers: Sequence[Analyzer], now: datetime
 ) -> tuple[ChangeFootprint, ...] | None:
-    if not any(Reads.CHANGES in analyzer.reads for analyzer in analyzers):
+    if not any(Reads.CHANGES in analyzer.wants for analyzer in analyzers):
         return None
     async with session_factory() as session:
         try:

@@ -217,10 +217,11 @@ class RelationshipFilters:
 @dataclass(frozen=True)
 class Documented:
     """How one thing is documented: by how many documents, the latest
-    changed when."""
+    changed when — and how many are documents not stale (LEKA-379)."""
 
     count: int
     last_changed_at: str | None
+    fresh: int = 0
 
 
 @dataclass(frozen=True)
@@ -1205,12 +1206,18 @@ class EntityRepository(WorkspaceScopedRepository):
 
     async def documented(self, things: Sequence[uuid.UUID]) -> dict[uuid.UUID, Documented]:
         """How many documents and spaces — not removed — describe each of
-        these, and when the latest of them changed."""
+        these, when the latest of them changed, and how many are documents
+        not stale: what `gaps` and `coverage` call documented and fresh, for
+        many things at once."""
         if not things:
             return {}
         changed = func.max(Entity.attributes["last_activity_at"].astext)
+        fresh = func.count().filter(
+            Entity.type == EntityType.DOCUMENT,
+            Entity.attributes["freshness"].astext.in_(NOT_STALE),
+        )
         rows = await self._session.execute(
-            select(Relationship.to_entity_id, func.count(), changed)
+            select(Relationship.to_entity_id, func.count(), changed, fresh)
             .join(Entity, Entity.id == Relationship.from_entity_id)
             .where(
                 Relationship.workspace_id == self.workspace_id,
@@ -1223,8 +1230,8 @@ class EntityRepository(WorkspaceScopedRepository):
             .group_by(Relationship.to_entity_id)
         )
         found = {thing: Documented(0, None) for thing in things}
-        for thing, count, last in rows.tuples().all():
-            found[thing] = Documented(int(count), last)
+        for thing, count, last, not_stale in rows.tuples().all():
+            found[thing] = Documented(int(count), last, int(not_stale))
         return found
 
     def business(self, kind: EntityType, filters: BusinessFilters) -> Select[tuple[Entity]]:

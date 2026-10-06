@@ -38,7 +38,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from leka.knowledge import ArchitectureRead, ChangeFootprint
+from leka.knowledge import ArchitectureRead, ChangeFootprint, EntityStanding
 
 
 class Reads(enum.StrEnum):
@@ -152,6 +152,12 @@ class Material:
     # Who owns each card's entity — the teams and people a source names —
     # read with the architecture, which names only a team.
     owners: Mapping[uuid.UUID, tuple[str, ...]] = field(default_factory=dict)
+    # And, read with it (LEKA-379): what the model holds around each card's
+    # entity — criticality, documents, the business — how many documents
+    # the workspace has, and each source kind's family (connector category).
+    standing: Mapping[uuid.UUID, EntityStanding] = field(default_factory=dict)
+    documents: int | None = None
+    categories: Mapping[str, str] = field(default_factory=dict)
     contexts: tuple[ContextStanding, ...] | None = None
     changes: tuple[ChangeFootprint, ...] | None = None
 
@@ -177,6 +183,13 @@ class Analyzer:
     run: Callable[[Material], Sequence[Draft]]
     # Seconds it may take before it is given up on.
     budget: float = 30.0
+    # Parts read when they can be, which only weigh what it concludes —
+    # unread, it still runs (LEKA-379: a gap on what a change just touched).
+    heeds: frozenset[Reads] = frozenset()
+
+    @property
+    def wants(self) -> frozenset[Reads]:
+        return self.reads | self.heeds
 
 
 @dataclass(frozen=True)
