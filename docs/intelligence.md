@@ -751,8 +751,13 @@ completeness; a thing no source carries a date for, no `seen`.
 
 **high** from 0.85, **medium** from 0.6, **low** under — the context's
 thresholds (LEKA-375), so a context and the thing it is about are judged
-alike. A disagreement left open or a relationship error holds a thing to
-0.84, medium (`capped: contradiction`).
+alike. **High means sound on every side measured**: a disagreement left
+open or a relationship error holds a thing to 0.84, medium (`capped:
+contradiction`); so does a dimension measured under 0.6 (`capped:
+weak_dimension`) — on the demo, postgres-prod, no owner and no page, is
+0.865 by the mean and medium by this. An area is held the same way when
+a dimension is weak across it; `capped` is said only when holding changed
+the score.
 
 **What lowers it** (`missing`), the heaviest first by what it costs the
 score, each with its dimension, its weight and what shows it (English):
@@ -761,8 +766,11 @@ score, each with its dimension, its weight and what shows it (English):
 `stale_documents` · `disputed`, `relationship_error`,
 `relationship_warning` · `uncertain_identity` (merges under .7),
 `weak_records` (records under .6), `mostly_inferred` (two ties or more,
-more than half inferred). The factors read are kept with each score
-(`factors`).
+more than half inferred). A lack's `weight` is what it takes from its
+dimension at most — a freshness or confidence lack by its factor's weight
+— so lacks of different dimensions compare once weighed by them: on the
+demo, payment-api's two disagreements come before its stale runbook. The
+factors read are kept with each score (`factors`).
 
 **Areas** — the workspace, each column of Mon environnement, each team
 (a thing's team), each application (what is `part_of` it, and itself) —
@@ -803,9 +811,21 @@ A failed step writes nothing: the scores stand as the last run left them.
 **Downstream.** In code, `QualityService.of(ids)` gives the scores of the
 things an intention looks at — to say *likely* rather than *certain*, and
 why. The context engine sits below intelligence (architecture rule 1) and
-keeps its own judgement (LEKA-375), with the same thresholds. In the app,
-the **Insights LEKA** card words each finding in French and English; a
-quality surface of its own is next (*Not yet*).
+keeps its own judgement (LEKA-375), with the same thresholds.
+
+**In the app:**
+- **Mon environnement, tab Qualité** (`/environment?tab=quality`, in the
+  sidebar under Mon environnement): the workspace's score and level, how it
+  moved in 7 days, the things by level; each dimension — one nothing
+  measured said « Non mesurée », never 0; the trend over 30 days, a step
+  line with the two thresholds, each point read on hover or with the arrow
+  keys, all of them listed for a screen reader; the things known least
+  well, filtered by level, each leading to its sheet with what lowers it
+  in words; the areas by column, team and application; how it is measured.
+  Before any measure, it says when there will be one.
+- **A thing's sheet**: its score, level and since when, each dimension,
+  what lowers it, and why it is held to medium when it is.
+- **Insights LEKA**: each finding worded in French and English.
 
 **Tested.** `tests/test_intelligence_quality.py`, pure: the thresholds
 are the context's; a thing well known is high, lacking nothing; the gaps
@@ -830,7 +850,5 @@ detail, 404 for another workspace; `QualityService.of`.
 - **The epic's other analysis** — evolution and insights (LEKA-383) — on
   this frame. A quality score that falls is tracked (§ 15) but not yet said
   as a finding of its own: that is evolution's.
-- **A quality surface of its own** (LEKA-381): the scores by area, each
-  thing's on its sheet, the trend — the API serves them (§ 15); the
-  screens are next. A workspace's own weights, one constant today
+- **A workspace's own quality weights** (LEKA-381): one constant today
   (`WEIGHTS`).

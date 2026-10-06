@@ -34,6 +34,7 @@ Mon environnement     Le système vivant de votre entreprise.
   Équipes                                        /environment?tab=organisation
   Événements                                     /environment?tab=events
   Domaines                                       /environment?tab=domains
+  Qualité                                        /environment?tab=quality
 Capacités             Votre équipe technologique à la demande.
   Capacités disponibles                          /capabilities
   Mes capacités                                  /capabilities?tab=mine
