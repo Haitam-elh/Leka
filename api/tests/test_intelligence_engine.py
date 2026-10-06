@@ -244,6 +244,45 @@ async def test_a_model_assisted_analysis_is_skipped_and_none_succeeding_is_a_fai
     assert failed["status"] == "failed"
 
 
+async def test_between_equals_the_surest_first_then_by_name_an_order_that_holds(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    def equals(_: Material) -> list[Draft]:
+        said = [("zeta", 0.9), ("alpha", 0.9), ("mid", 1.0)]
+        return [
+            Draft(
+                key=name,
+                code="probe.found",
+                severity=Severity.MEDIUM,
+                subject=Subject(type="entity", id=uuid.uuid4(), name=name),
+                statement=name,
+                score=0.3,
+                confidence=confidence,
+            )
+            for name, confidence in said
+        ]
+
+    await _analyse(
+        acme["acme"],
+        [
+            Analyzer(
+                name="equals",
+                version=1,
+                category="test",
+                method=Method.RULES,
+                reads=frozenset(),
+                summary="Three equals.",
+                run=equals,
+            )
+        ],
+    )
+    _as(identity, acme, "member")
+
+    top = (await _get(client, "/summary"))["top"]
+    # Same rank: the surest first, then by name — the same every time.
+    assert [f["subject"]["name"] for f in top] == ["mid", "alpha", "zeta"]
+
+
 # ── the real analyses, over LEKA's own repository ──────────────────────
 
 
