@@ -12,6 +12,12 @@
  * who may approve accepts — an override only once confirmed — rejects with
  * a reason, sends back what was rejected; nobody else does; with nothing
  * ever proposed, it says what will come here.
+ *
+ * And the conflicts between sources (LEKA-382), in the same queue: worded
+ * with what LEKA recommends; opened, every side with its sources — how
+ * much each is believed, when it said it — the side recommended; who may
+ * approve keeps a side, remembering its source if they say so, says it is
+ * no contradiction, reopens what was decided.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -20,6 +26,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/components/interactions/confirm";
+import type { ConflictDetail } from "@/lib/conflicts";
 import type { Candidate, CandidateDetail, EnrichmentSummary } from "@/lib/enrichment";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { makeQueryClient } from "@/lib/query";
@@ -33,6 +40,19 @@ const api = vi.hoisted(() => ({
   reprocess: vi.fn(),
 }));
 const permissions = vi.hoisted(() => ({ value: ["workspace:read", "intention:approve"] }));
+const disputes = vi.hoisted(() => ({
+  list: vi.fn(),
+  one: vi.fn(),
+  summary: vi.fn(),
+  resolve: vi.fn(),
+  dismiss: vi.fn(),
+  reopen: vi.fn(),
+}));
+
+vi.mock("@/lib/conflicts", async (original) => ({
+  ...(await original<typeof import("@/lib/conflicts")>()),
+  conflicts: disputes,
+}));
 
 vi.mock("@/lib/enrichment", async (original) => ({
   ...(await original<typeof import("@/lib/enrichment")>()),
@@ -127,6 +147,73 @@ const SUMMARY: EnrichmentSummary = {
   families: { organisation: 1, relationship: 1, semantic: 1 },
 };
 const BY_ID = new Map([OWNER, CODE, CRITICAL].map((c) => [c.id, c]));
+const GITHUB = "5c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+const DATADOG = "6c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+
+function conflict(overrides: Partial<ConflictDetail> = {}): ConflictDetail {
+  return {
+    id: crypto.randomUUID(),
+    kind: "attribute",
+    subject: { type: "entity", id: crypto.randomUUID(), name: "payment-api", kind: "service" },
+    about: "sla",
+    relationship: null,
+    chosen: "99.95",
+    sides: [
+      {
+        value: "99.95",
+        ref_id: null,
+        origin: null,
+        sources: [
+          {
+            source_id: GITHUB,
+            kind: "github",
+            name: "acme/backend",
+            status: "active",
+            observed_at: minutesAgo(60 * 24),
+            authority: 0.85,
+            rule: null,
+          },
+        ],
+        authority: 0.85,
+        freshness: 0.5,
+        corroboration: 0.333,
+        score: 0.667,
+      },
+      {
+        value: "99.9",
+        ref_id: null,
+        origin: null,
+        sources: [
+          {
+            source_id: DATADOG,
+            kind: "datadog",
+            name: "acme-eu",
+            status: "active",
+            observed_at: minutesAgo(60 * 24),
+            authority: 0.7,
+            rule: null,
+          },
+        ],
+        authority: 0.7,
+        freshness: 0.5,
+        corroboration: 0.333,
+        score: 0.585,
+      },
+    ],
+    recommendation: { side: 0, strength: "weak", reasons: ["authority", "chosen"], margin: 0.082 },
+    statement: "payment-api's sources disagree on sla.",
+    status: "open",
+    resolution: null,
+    first_seen_at: minutesAgo(60),
+    last_seen_at: minutesAgo(5),
+    occurrences: 1,
+    provenance: { analyzer: "conflicts", sources: ["datadog", "github"] },
+    history: [],
+    ...overrides,
+  };
+}
+
+const SLA = conflict();
 
 function mount() {
   return render(
@@ -152,7 +239,21 @@ beforeEach(() => {
   api.accept.mockImplementation(async (id: string) => ({ ...BY_ID.get(id), status: "accepted" }));
   api.reject.mockImplementation(async (id: string) => ({ ...BY_ID.get(id), status: "rejected" }));
   api.reprocess.mockResolvedValue({ candidate: OWNER, queued: true });
+  disputes.summary.mockResolvedValue({ open: 0, resolved: 0, dismissed: 0, gone: 0 });
+  disputes.list.mockResolvedValue({ data: [], next_cursor: null });
+  disputes.one.mockResolvedValue(SLA);
+  disputes.resolve.mockImplementation(async () => ({ ...SLA, status: "resolved" }));
+  disputes.dismiss.mockImplementation(async () => ({ ...SLA, status: "dismissed" }));
+  disputes.reopen.mockImplementation(async () => SLA);
 });
+
+function withConflict() {
+  disputes.summary.mockResolvedValue({ open: 1, resolved: 0, dismissed: 0, gone: 0 });
+  disputes.list.mockImplementation(async (status: string) => ({
+    data: status === "open" ? [SLA] : [],
+    next_cursor: null,
+  }));
+}
 
 async function open(name: RegExp) {
   const user = userEvent.setup();
@@ -286,6 +387,103 @@ describe("À valider", () => {
 
     expect(await screen.findByText("Rien à valider pour le moment.")).toBeVisible();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+});
+
+describe("À valider: the conflicts between sources", () => {
+  it("lists a conflict among the proposals, with what LEKA recommends", async () => {
+    withConflict();
+    mount();
+
+    const stats = await screen.findByTestId("approvals-stats");
+    expect(stats).toHaveTextContent("4En attente");
+    const table = await screen.findByRole("table");
+    expect(table).toHaveTextContent("SLA de payment-api : 99.95 ou 99.9");
+    expect(table).toHaveTextContent("LEKA recommande 99.95 · de peu");
+    expect(screen.getByRole("button", { name: /Conflits/ })).toBeVisible();
+    expect(disputes.list).toHaveBeenCalledWith("open");
+  });
+
+  it("weighs every side and keeps the one chosen, remembering its source", async () => {
+    withConflict();
+    mount();
+    const user = userEvent.setup();
+    await user.click(within(await screen.findByRole("table")).getByText(/SLA de payment-api/));
+    const panel = await screen.findByTestId("conflict-panel");
+
+    expect(panel).toHaveTextContent("Le modèle affiche 99.95");
+    const sides = within(panel).getByTestId("conflict-sides");
+    expect(sides).toHaveTextContent("99.95Recommandé");
+    expect(sides).toHaveTextContent("acme/backend· Fiabilité 85 %· dit il y a 1 j");
+    expect(sides).toHaveTextContent("acme-eu· Fiabilité 70 %");
+    expect(panel).toHaveTextContent("source plus fiable, déjà affiché");
+
+    await user.click(within(panel).getByRole("checkbox"));
+    await user.click(within(panel).getByTestId("keep-1"));
+    await waitFor(() =>
+      expect(disputes.resolve).toHaveBeenCalledWith(SLA.id, {
+        side: 1,
+        reason: null,
+        remember: true,
+      }),
+    );
+    expect(await within(panel).findByRole("status")).toHaveTextContent("Tranché.");
+  });
+
+  it("says it is no contradiction", async () => {
+    withConflict();
+    mount();
+    const user = userEvent.setup();
+    await user.click(within(await screen.findByRole("table")).getByText(/SLA de payment-api/));
+    const panel = await screen.findByTestId("conflict-panel");
+
+    await user.click(within(panel).getByRole("button", { name: "Ce n'est pas une contradiction" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.type(within(dialog).getByRole("textbox"), "Two SLOs");
+    await user.click(within(dialog).getByRole("button", { name: "Écarter" }));
+    await waitFor(() =>
+      expect(disputes.dismiss).toHaveBeenCalledWith(SLA.id, { reason: "Two SLOs" }),
+    );
+  });
+
+  it("reopens what was decided, its history kept", async () => {
+    const settled = conflict({
+      id: SLA.id,
+      status: "resolved",
+      resolution: { side: 1, value: "99.9", via: "person", by: "me", at: minutesAgo(2), reason: null },
+      history: [{ status: "resolved", via: "person", by: "me", at: minutesAgo(2), value: "99.9" }],
+    });
+    disputes.summary.mockResolvedValue({ open: 0, resolved: 1, dismissed: 0, gone: 0 });
+    disputes.list.mockImplementation(async (status: string) => ({
+      data: status === "resolved" ? [settled] : [],
+      next_cursor: null,
+    }));
+    disputes.one.mockResolvedValue(settled);
+    mount();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Validé" }));
+    await user.click(within(await screen.findByRole("table")).getByText(/SLA de payment-api/));
+    const panel = await screen.findByTestId("conflict-panel");
+
+    expect(within(panel).getByTestId("conflict-sides")).toHaveTextContent("99.9Retenu");
+    expect(panel).toHaveTextContent("Le modèle affichera ce choix à sa prochaine construction.");
+    await user.click(within(panel).getByRole("button", { name: "Rouvrir" }));
+    await waitFor(() => expect(disputes.reopen).toHaveBeenCalledWith(SLA.id));
+    await user.click(within(panel).getByRole("tab", { name: "Décisions" }));
+    expect(await within(panel).findByTestId("conflict-history")).toHaveTextContent(
+      "Tranché · 99.9 par une personne",
+    );
+  });
+
+  it("lets nobody else settle it", async () => {
+    withConflict();
+    permissions.value = ["workspace:read"];
+    mount();
+    const user = userEvent.setup();
+    await user.click(within(await screen.findByRole("table")).getByText(/SLA de payment-api/));
+    const panel = await screen.findByTestId("conflict-panel");
+    expect(panel).toHaveTextContent("Seul un administrateur peut décider.");
+    expect(within(panel).queryByTestId("keep-0")).not.toBeInTheDocument();
   });
 });
 

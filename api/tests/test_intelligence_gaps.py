@@ -549,7 +549,7 @@ def test_every_gap_code_says_its_family() -> None:
         standings=standings,
         teams=0,
     )
-    drafts = [d for analyzer in GAPS for d in analyzer.run(material)]
+    drafts = [d for analyzer in GAPS for d in analyzer.run(material) if isinstance(d, Draft)]
     families = {
         "entity": {
             "gap.missing_entity.runtime",

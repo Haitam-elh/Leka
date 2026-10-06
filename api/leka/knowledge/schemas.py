@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from leka.knowledge.models import EntityType, Lifecycle, RelationshipType
 
@@ -992,6 +992,54 @@ class Impact(BaseModel):
     applications: list[EntityBrief]
     capabilities: list[BusinessTie]
     processes: list[BusinessTie]
+
+
+class DisputeSource(BaseModel):
+    """A source saying one side of a dispute (LEKA-382): which, what kind,
+    whether it reads, when it last did — and when it said this."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_id: uuid.UUID | None
+    kind: str | None
+    name: str | None
+    status: str | None
+    synced_at: datetime | None
+    observed_at: datetime | None = Field(description="When this source last said this value.")
+
+
+class DisputeSide(BaseModel):
+    """One value of a dispute, and who says it. For a relationship, the
+    other end (`ref_id`) and how the tie was made."""
+
+    model_config = ConfigDict(frozen=True)
+
+    value: JsonValue
+    ref_id: uuid.UUID | None = None
+    origin: str | None = Field(default=None, description="A relationship's: stated, inferred…")
+    confidence: float | None = None
+    sources: list[DisputeSource]
+    # A relationship's ties that say it: {from, to, type} — what a decision
+    # refutes when it keeps another side.
+    edges: list[dict[str, str]] = Field(default_factory=list)
+
+
+class Dispute(BaseModel):
+    """What the model's sources disagree on (LEKA-382): an attribute of one
+    thing — the sources of acme/backend say 99.95, those of acme-eu 99.9 —
+    or a relationship it has one of — two owners, two managers. `chosen`
+    is what the model shows; `settled`, the decision behind it when one was
+    taken."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: str = Field(description="attribute or relationship.")
+    entity: EntityBrief
+    about: str = Field(description="The attribute — or the relationship's role: owner, manager.")
+    relationship: str | None = Field(description="The relationship's kind, for one.")
+    chosen: JsonValue
+    sides: list[DisputeSide]
+    settled: dict[str, object] | None = None
 
 
 class EntityStanding(BaseModel):

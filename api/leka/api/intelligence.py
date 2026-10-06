@@ -39,6 +39,20 @@
                                          withdrawn from the model
     POST .../candidates/{id}/reprocess   back to its analysis, now
 
+    GET  /intelligence/conflicts         what the model's sources disagree on
+                                         (LEKA-382), each side weighed, one
+                                         recommended — by state, kind, thing
+    GET  /intelligence/conflicts/{id}    one: every side, its sources, how
+                                         much each is believed, the history
+    GET  /intelligence/conflicts/summary how many are open, resolved…
+    POST .../conflicts/{id}/resolve      keep a side: the model shows it from
+                                         the next build on — and, asked, its
+                                         source preferred on this from now on
+    POST .../conflicts/{id}/dismiss      no contradiction
+    POST .../conflicts/{id}/reopen       the decision withdrawn
+    GET/POST /intelligence/authority-rules, DELETE …/{id}
+                                         the workspace's word on its sources
+
 Read by every member (`workspace:read`), like the company model they are
 drawn from. Asking for a run is asking LEKA something, like an intention:
 `intention:create`, refused to a suspended workspace. Deciding what goes
@@ -67,13 +81,22 @@ from leka.intelligence import (
     AnalysisRequest,
     AnalysisRequested,
     AnalyzerRead,
+    Arbitration,
+    ArbitrationService,
+    AuthorityRuleCreate,
+    AuthorityRuleRead,
     CandidateDetail,
     CandidateFilters,
     CandidateRead,
     ChangeImpactDetail,
     ChangeImpactTimeline,
+    ConflictDetail,
+    ConflictFilters,
+    ConflictRead,
+    ConflictSummary,
     Decision,
     DecisionRefusedError,
+    Dismissal,
     EnrichmentCandidate,
     EnrichmentService,
     EnrichmentSummary,
@@ -85,6 +108,7 @@ from leka.intelligence import (
     IntelligenceRun,
     IntelligenceService,
     IntelligenceSummary,
+    KnowledgeConflict,
     Reprocessed,
     RunDetail,
     RunRead,
@@ -92,6 +116,8 @@ from leka.intelligence import (
     candidate_detail,
     candidate_read,
     candidate_reads,
+    conflict_detail,
+    conflict_reads,
 )
 from leka.intelligence.job import queue_run
 from leka.knowledge import (
@@ -124,6 +150,14 @@ FINDING_SORTS = SortCatalogue(
         ),
     ),
     default="rank",
+)
+CONFLICT_SORTS = SortCatalogue(
+    fields=(
+        SortableField(
+            "last_seen_at", KnowledgeConflict.last_seen_at, "ix_knowledge_conflicts_workspace_seen"
+        ),
+    ),
+    default="last_seen_at",
 )
 CANDIDATE_SORTS = SortCatalogue(
     fields=(
@@ -464,3 +498,175 @@ async def reprocess(
         principal.workspace_id, trigger="request", by=principal.user_id, analyzers=[found.analyzer]
     )
     return Reprocessed(candidate=read, queued=queued)
+
+
+# ── conflicts (LEKA-382) ───────────────────────────────────────────────
+
+
+def _arbitration(session: SessionDep, principal: Reader) -> ArbitrationService:
+    return ArbitrationService(
+        IntelligenceRepository(session, principal.workspace_id),
+        AssertionRepository(session, principal.workspace_id),
+        EntityRepository(session, principal.workspace_id),
+    )
+
+
+Arbitrating = Annotated[ArbitrationService, Depends(_arbitration)]
+
+
+@router.get("/conflicts", response_model=PageEnvelope[ConflictRead])
+async def conflicts(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    state: Annotated[
+        Literal["open", "resolved", "dismissed", "gone"] | None,
+        Query(alias="status", description="Where it stands; none: all."),
+    ] = None,
+    kind: Annotated[Literal["attribute", "relationship"] | None, Query()] = None,
+    subject: Annotated[uuid.UUID | None, Query(description="About this entity.")] = None,
+) -> PageEnvelope[ConflictRead]:
+    """What the model's sources disagree on, the latest seen first: every
+    side weighed, one recommended."""
+    statement = IntelligenceRepository(session, principal.workspace_id).conflicts(
+        ConflictFilters(status=state, kind=kind, subject_id=subject)
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=CONFLICT_SORTS, id_column=KnowledgeConflict.id
+    )
+    return PageEnvelope(data=conflict_reads(result.items), next_cursor=result.next_cursor)
+
+
+@router.get("/conflicts/summary", response_model=ConflictSummary)
+async def conflict_summary(service: Arbitrating) -> ConflictSummary:
+    """How many are open, resolved, dismissed, gone."""
+    return await service.summary()
+
+
+@router.get("/conflicts/{conflict_id}", response_model=ConflictDetail)
+async def conflict(
+    conflict_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> ConflictDetail:
+    """One conflict: every side, who says it, how much each is believed and
+    why, what LEKA recommends, every decision taken."""
+    found = await IntelligenceRepository(session, principal.workspace_id).conflict(conflict_id)
+    if found is None:
+        raise _missing("conflict")
+    return conflict_detail(found)
+
+
+@router.post("/conflicts/{conflict_id}/resolve", response_model=ConflictDetail)
+async def resolve(
+    conflict_id: uuid.UUID,
+    body: Arbitration,
+    session: SessionDep,
+    service: Arbitrating,
+    principal: Approver,
+) -> ConflictDetail:
+    """Keep a side: the model shows it from its next build on — queued now —
+    whoever says otherwise; for a relationship a thing has one of, the
+    others are refuted. `remember`: prefer this side's source on this from
+    now on. 409 for a conflict no longer disagreed on, a side it does not
+    have, or a thing gone."""
+    try:
+        found = await service.resolve(
+            conflict_id,
+            side=body.side,
+            by=principal.user_id,
+            reason=body.reason,
+            remember=body.remember,
+            now=datetime.now(UTC),
+        )
+    except DecisionRefusedError as error:
+        raise _refused(error) from error
+    if found is None:
+        raise _missing("conflict")
+    detail = conflict_detail(found)
+    await session.commit()
+    await queue_model_build(principal.workspace_id)
+    return detail
+
+
+@router.post("/conflicts/{conflict_id}/dismiss", response_model=ConflictDetail)
+async def dismiss(
+    conflict_id: uuid.UUID,
+    body: Dismissal,
+    session: SessionDep,
+    service: Arbitrating,
+    principal: Approver,
+) -> ConflictDetail:
+    """No contradiction: the model goes on as resolution chose — an earlier
+    decision withdrawn."""
+    try:
+        found = await service.dismiss(
+            conflict_id, by=principal.user_id, reason=body.reason, now=datetime.now(UTC)
+        )
+    except DecisionRefusedError as error:
+        raise _refused(error) from error
+    if found is None:
+        raise _missing("conflict")
+    detail = conflict_detail(found)
+    await session.commit()
+    await queue_model_build(principal.workspace_id)
+    return detail
+
+
+@router.post("/conflicts/{conflict_id}/reopen", response_model=ConflictDetail)
+async def reopen(
+    conflict_id: uuid.UUID, session: SessionDep, service: Arbitrating, principal: Approver
+) -> ConflictDetail:
+    """The decision withdrawn: open again, the model as before it at its
+    next build. 409 for one not decided."""
+    try:
+        found = await service.reopen(conflict_id, by=principal.user_id, now=datetime.now(UTC))
+    except DecisionRefusedError as error:
+        raise _refused(error) from error
+    if found is None:
+        raise _missing("conflict")
+    reopened, withdrawn = found
+    detail = conflict_detail(reopened)
+    await session.commit()
+    if withdrawn:
+        await queue_model_build(principal.workspace_id)
+    return detail
+
+
+@router.get("/authority-rules", response_model=list[AuthorityRuleRead])
+async def authority_rules(service: Arbitrating) -> list[AuthorityRuleRead]:
+    """The workspace's word on its sources: on what each is preferred or
+    avoided."""
+    return await service.rules()
+
+
+@router.post(
+    "/authority-rules", response_model=AuthorityRuleRead, status_code=status.HTTP_201_CREATED
+)
+async def add_authority_rule(
+    body: AuthorityRuleCreate, session: SessionDep, service: Arbitrating, principal: Approver
+) -> AuthorityRuleRead:
+    """Prefer or avoid a source on an attribute — or everything, `*`. Said
+    again for the same source and attribute, replaced. LEKA's next
+    recommendations follow it."""
+    try:
+        rule = await service.set_rule(
+            about=body.about,
+            source_id=body.source_id,
+            stance=body.stance,
+            reason=body.reason,
+            by=principal.user_id,
+        )
+    except DecisionRefusedError as error:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, error.detail) from error
+    read = await service.rule_read(rule)
+    await session.commit()
+    return read
+
+
+@router.delete("/authority-rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_authority_rule(
+    rule_id: uuid.UUID, session: SessionDep, service: Arbitrating, principal: Approver
+) -> None:
+    """Forget a rule: the source believed by its family again."""
+    if not await service.delete_rule(rule_id):
+        raise _missing("authority rule")
+    await session.commit()

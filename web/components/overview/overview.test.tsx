@@ -24,6 +24,10 @@ vi.mock("@/lib/enrichment", async (original) => ({
   ...(await original<typeof import("@/lib/enrichment")>()),
   enrichment: { candidates: () => proposed() },
 }));
+vi.mock("@/lib/conflicts", async (original) => ({
+  ...(await original<typeof import("@/lib/conflicts")>()),
+  conflicts: { list: async () => ({ data: [], next_cursor: null }) },
+}));
 
 vi.mock("@/lib/sources", async (original) => ({
   ...(await original<typeof import("@/lib/sources")>()),
@@ -270,7 +274,7 @@ describe("the overview", () => {
     );
     expect(within(lines[0]).getByRole("link")).toHaveAttribute("href", `/approvals/${owner.id}`);
     expect(lines[1]).toHaveTextContent("acme/user-service est le code de user-service");
-    expect(screen.getByText("4 proposition(s) en attente")).toBeVisible();
+    expect(screen.getByText("4 élément(s) en attente")).toBeVisible();
     expect(screen.queryByText("Rien à valider pour le moment.")).not.toBeInTheDocument();
   });
 });

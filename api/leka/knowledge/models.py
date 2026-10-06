@@ -423,7 +423,7 @@ class ModelRun(Base, WorkspaceScopedMixin):
     error: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
-ASSERTION_KINDS = ("attribute", "relationship")
+ASSERTION_KINDS = ("attribute", "relationship", "absence")
 
 
 class ModelAssertion(Base, WorkspaceScopedMixin):
@@ -432,9 +432,12 @@ class ModelAssertion(Base, WorkspaceScopedMixin):
     (LEKA-380). Each build applies it beside what the sources say: an
     attribute where no source says one — or, when it `overrides`, instead
     of what a source says, only because someone said so — a relationship
-    with the origin `accepted`.
+    with the origin `accepted` — or, an `absence` (LEKA-382), a relationship
+    someone refuted, which the build leaves out whoever states it.
 
-    Its id is the enrichment candidate's (leka.intelligence), which keeps
+    Its id is the enrichment candidate's (leka.intelligence) — or, for a
+    dispute someone settled, one per fact the decision makes, the conflict
+    named in `provenance.conflict_id` (LEKA-382). The intelligence keeps
     the proposal, its evidence and the decision. A fact withdrawn is
     deleted here: the next build no longer applies it, and what the
     sources say comes back. No foreign key to the entities: one that goes
@@ -442,15 +445,15 @@ class ModelAssertion(Base, WorkspaceScopedMixin):
 
     __tablename__ = "model_assertions"
     __table_args__ = (
-        CheckConstraint("kind IN ('attribute', 'relationship')", name="kind"),
+        CheckConstraint("kind IN ('attribute', 'relationship', 'absence')", name="kind"),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
         CheckConstraint(
             "(kind = 'attribute') = (entity_id IS NOT NULL AND attribute IS NOT NULL)",
             name="attribute_said",
         ),
         CheckConstraint(
-            "(kind = 'relationship') = (from_entity_id IS NOT NULL AND to_entity_id IS NOT NULL "
-            "AND relationship_type IS NOT NULL)",
+            "(kind IN ('relationship', 'absence')) = (from_entity_id IS NOT NULL "
+            "AND to_entity_id IS NOT NULL AND relationship_type IS NOT NULL)",
             name="relationship_said",
         ),
     )

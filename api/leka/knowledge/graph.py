@@ -36,6 +36,7 @@ what they need of the graph.
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -63,6 +64,9 @@ from leka.knowledge.schemas import (
     ChangeReach,
     ChangeTouch,
     ContextMaterial,
+    Dispute,
+    DisputeSide,
+    DisputeSource,
     EntityBrief,
     EntityRead,
     EntityStanding,
@@ -184,6 +188,29 @@ STANDING_HOLDERS = (
     EntityType.BUSINESS_PROCESS,
 )
 FOOTPRINT_DETAILS = ("ref", "commit", "version", "url", "changes", "risk", "title", "number")
+# What a dispute can be about (LEKA-382): what runs, keeps data, is the
+# company's — not each ticket and commit, whose disagreements follow theirs.
+DISPUTED = (
+    EntityType.SERVICE,
+    EntityType.APPLICATION,
+    EntityType.DATABASE,
+    EntityType.REPOSITORY,
+    EntityType.INFRA_RESOURCE,
+    EntityType.TEAM,
+    EntityType.PERSON,
+    EntityType.BUSINESS_CAPABILITY,
+    EntityType.BUSINESS_PROCESS,
+)
+# The relationships a thing has one of, as the context engine reads them
+# (leka.context.ranking.SINGLE): kind, the end that has one, the role.
+SINGLE: tuple[tuple[RelationshipType, str, str], ...] = (
+    (RelationshipType.OWNED_BY, "from", "owner"),
+    (RelationshipType.OWNS, "to", "owner"),
+    (RelationshipType.REPORTS_TO, "from", "manager"),
+    (RelationshipType.LED_BY, "from", "lead"),
+    (RelationshipType.CHILD_OF, "from", "parent"),
+)
+MAX_DISPUTES = 500
 
 Direction = Literal["outgoing", "incoming", "both"]
 WAYS: dict[Direction, bool | None] = {"outgoing": True, "incoming": False, "both": None}
@@ -859,6 +886,106 @@ class GraphService:
                 briefs.append(EntityBrief.model_validate(entity))
         return found
 
+    async def disputes(self, *, limit: int = MAX_DISPUTES) -> list[Dispute]:
+        """What the model's sources disagree on (LEKA-382): each attribute of
+        a thing its sources say differently — resolution chose one, kept
+        all — and each relationship a thing has one of, said to several:
+        two owners, two managers. With every side, who says it, when; and
+        the decision behind what the model shows, when one was taken."""
+        sources = {
+            source: DisputeSource(
+                source_id=source,
+                kind=kind,
+                name=name,
+                status=status,
+                synced_at=synced,
+                observed_at=None,
+            )
+            for source, kind, name, status, synced in await self._graph.sources_read()
+        }
+        found = [
+            dispute
+            for entity in await self._graph.disputed(DISPUTED, limit=limit)
+            for dispute in _attribute_disputes(entity, sources)
+        ]
+        found += await self._competing(sources)
+        return found[:limit]
+
+    async def _competing(self, sources: dict[uuid.UUID, DisputeSource]) -> list[Dispute]:
+        edges = await self._graph.single_ties([kind for kind, _, _ in SINGLE], DISPUTED)
+        held: dict[tuple[uuid.UUID, str], dict[uuid.UUID, list[Relationship]]] = {}
+        for edge in edges:
+            for kind, end, role in SINGLE:
+                if edge.type is not kind:
+                    continue
+                subject, other = (
+                    (edge.from_entity_id, edge.to_entity_id)
+                    if end == "from"
+                    else (edge.to_entity_id, edge.from_entity_id)
+                )
+                held.setdefault((subject, role), {}).setdefault(other, []).append(edge)
+        competing = {key: others for key, others in held.items() if len(others) > 1}
+        named = await self._graph.by_ids(
+            list(
+                {
+                    thing
+                    for (subject, _), others in competing.items()
+                    for thing in (subject, *others)
+                }
+            )
+        )
+        found: list[Dispute] = []
+        for (subject, role), others in sorted(competing.items(), key=lambda pair: str(pair[0])):
+            entity = named.get(subject)
+            if entity is None or entity.type not in DISPUTED:
+                continue
+            sides = [
+                DisputeSide(
+                    value=named[other].name,
+                    ref_id=other,
+                    origin=_strongest(ties).origin,
+                    confidence=_strongest(ties).confidence,
+                    sources=_tie_sources(ties, sources),
+                    edges=[
+                        {
+                            "from": str(tie.from_entity_id),
+                            "to": str(tie.to_entity_id),
+                            "type": tie.type.value,
+                        }
+                        for tie in ties
+                    ],
+                )
+                for other, ties in sorted(
+                    others.items(), key=lambda pair: named[pair[0]].name.casefold()
+                )
+                if other in named
+            ]
+            if len(sides) < 2:
+                continue
+            settled = next(
+                (
+                    dict(said)
+                    for ties in others.values()
+                    for tie in ties
+                    if tie.origin == "accepted"
+                    for said in tie.provenance
+                    if isinstance(said, dict) and said.get("conflict_id")
+                ),
+                None,
+            )
+            found.append(
+                Dispute(
+                    kind="relationship",
+                    entity=EntityBrief.model_validate(entity),
+                    about=role,
+                    relationship=next(iter(next(iter(others.values())))).type.value,
+                    chosen=None,
+                    sides=sides,
+                    settled=settled,
+                )
+            )
+        return found
+
     async def memberships(self, people: Sequence[uuid.UUID]) -> dict[uuid.UUID, list[EntityBrief]]:
         """The teams each of these people is a member of (LEKA-380) — the
         removed left out. Someone in no team is absent."""
@@ -1386,6 +1513,81 @@ def _uuid(value: object) -> uuid.UUID | None:
 
 def _said(value: object) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def _attribute_disputes(entity: Entity, sources: dict[uuid.UUID, DisputeSource]) -> list[Dispute]:
+    """An entity's disagreements, as resolution kept them: each attribute
+    with two values or more, each value with the sources saying it."""
+    provenance = entity.provenance if isinstance(entity.provenance, dict) else {}
+    conflicts = provenance.get("conflicts")
+    said_of = provenance.get("attributes")
+    attributes = said_of if isinstance(said_of, dict) else {}
+    found: list[Dispute] = []
+    for conflict in conflicts if isinstance(conflicts, list) else []:
+        if not isinstance(conflict, dict) or not conflict.get("attribute"):
+            continue
+        about = str(conflict["attribute"])
+        values = conflict.get("values")
+        sides: dict[str, DisputeSide] = {}
+        for value in values if isinstance(values, list) else []:
+            if not isinstance(value, dict):
+                continue
+            key = json.dumps(value.get("value"), sort_keys=True, default=str)
+            source = _source_of(value, sources)
+            held = sides.get(key)
+            sides[key] = DisputeSide(
+                value=value.get("value"),
+                sources=[*(held.sources if held else []), source],
+            )
+        if len(sides) < 2:
+            continue
+        current = attributes.get(about)
+        settled = (
+            dict(current)
+            if isinstance(current, dict)
+            and current.get("origin") == "accepted"
+            and current.get("conflict_id")
+            else None
+        )
+        found.append(
+            Dispute(
+                kind="attribute",
+                entity=EntityBrief.model_validate(entity),
+                about=about,
+                relationship=None,
+                chosen=entity.attributes.get(about, conflict.get("chosen")),
+                sides=list(sides.values()),
+                settled=settled,
+            )
+        )
+    return found
+
+
+def _source_of(value: dict[str, object], sources: dict[uuid.UUID, DisputeSource]) -> DisputeSource:
+    source = _uuid(value.get("source_id"))
+    observed = value.get("observed_at")
+    at = observed if isinstance(observed, datetime) else _moment(observed)
+    known = sources.get(source) if source else None
+    if known is None:
+        return DisputeSource(
+            source_id=source, kind=None, name=None, status=None, synced_at=None, observed_at=at
+        )
+    return known.model_copy(update={"observed_at": at})
+
+
+def _tie_sources(
+    ties: list[Relationship], sources: dict[uuid.UUID, DisputeSource]
+) -> list[DisputeSource]:
+    found: dict[uuid.UUID | None, DisputeSource] = {}
+    for tie in ties:
+        for said in tie.provenance:
+            source = _source_of({**said, "observed_at": tie.changed_at}, sources)
+            found.setdefault(source.source_id, source)
+    return list(found.values())
+
+
+def _strongest(ties: list[Relationship]) -> Relationship:
+    return max(ties, key=lambda tie: (tie.origin == "stated", tie.confidence))
 
 
 def _stated(provenance: object) -> tuple[str, ...]:

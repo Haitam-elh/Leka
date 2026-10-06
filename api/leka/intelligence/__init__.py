@@ -13,7 +13,9 @@ which changes matter, what they reach, what followed them; knowledge gaps
 (gaps.py, LEKA-379); knowledge enrichment (enrichment.py, LEKA-380), whose
 analyses PROPOSE — a relationship, an attribute — kept as CANDIDATES until
 validated or rejected, and applied to the model once validated
-(curation.py). Model-assisted analyses are declared like the others and
+(curation.py); knowledge conflicts (conflicts.py, LEKA-382): what the
+model's sources disagree on, weighed and recommended, settled by someone
+(arbitration.py). Model-assisted analyses are declared like the others and
 skipped, said so, until leka.capabilities calls a model.
 
 Above leka.capabilities, which a model-assisted analysis will call the
@@ -23,6 +25,8 @@ concluded through this file (architecture rule 1).
 
 from leka.intelligence.analysis import (
     Analyzer,
+    Authority,
+    ConflictDraft,
     ContextStanding,
     Draft,
     Evidence,
@@ -36,6 +40,12 @@ from leka.intelligence.analysis import (
     catalogue_hash,
     execute,
 )
+from leka.intelligence.arbitration import (
+    ArbitrationService,
+    conflict_detail,
+    conflict_read,
+    conflict_reads,
+)
 from leka.intelligence.curation import (
     DecisionRefusedError,
     EnrichmentService,
@@ -44,13 +54,16 @@ from leka.intelligence.curation import (
     candidate_reads,
 )
 from leka.intelligence.models import (
+    AuthorityRule,
     EnrichmentCandidate,
     Finding,
     IntelligenceRun,
     IntelligenceStep,
+    KnowledgeConflict,
 )
 from leka.intelligence.repository import (
     CandidateFilters,
+    ConflictFilters,
     FindingFilters,
     IntelligenceRepository,
 )
@@ -59,12 +72,19 @@ from leka.intelligence.schemas import (
     AnalysisRequest,
     AnalysisRequested,
     AnalyzerRead,
+    Arbitration,
+    AuthorityRuleCreate,
+    AuthorityRuleRead,
     CandidateDetail,
     CandidateRead,
     ChangeImpactDetail,
     ChangeImpactRead,
     ChangeImpactTimeline,
+    ConflictDetail,
+    ConflictRead,
+    ConflictSummary,
     Decision,
+    Dismissal,
     EnrichmentSummary,
     EvidenceRead,
     FindingDetail,
@@ -86,15 +106,27 @@ __all__ = [
     "AnalysisRequested",
     "Analyzer",
     "AnalyzerRead",
+    "Arbitration",
+    "ArbitrationService",
+    "Authority",
+    "AuthorityRule",
+    "AuthorityRuleCreate",
+    "AuthorityRuleRead",
     "CandidateDetail",
     "CandidateFilters",
     "CandidateRead",
     "ChangeImpactDetail",
     "ChangeImpactRead",
     "ChangeImpactTimeline",
+    "ConflictDetail",
+    "ConflictDraft",
+    "ConflictFilters",
+    "ConflictRead",
+    "ConflictSummary",
     "ContextStanding",
     "Decision",
     "DecisionRefusedError",
+    "Dismissal",
     "Draft",
     "EnrichmentCandidate",
     "EnrichmentService",
@@ -112,6 +144,7 @@ __all__ = [
     "IntelligenceService",
     "IntelligenceStep",
     "IntelligenceSummary",
+    "KnowledgeConflict",
     "Material",
     "Method",
     "Outcome",
@@ -130,5 +163,8 @@ __all__ = [
     "candidate_read",
     "candidate_reads",
     "catalogue_hash",
+    "conflict_detail",
+    "conflict_read",
+    "conflict_reads",
     "execute",
 ]

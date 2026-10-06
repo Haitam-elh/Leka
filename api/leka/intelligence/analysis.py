@@ -17,6 +17,9 @@ reads, what it says, and how one runs beside the others.
                 relationship or an attribute the model lacks, how sure,
                 what shows it — kept as a candidate until it is validated
                 or rejected
+    CONFLICT    one disagreement between the model's sources (LEKA-382):
+                every side, who says it, how much each is to be believed,
+                what LEKA recommends — kept until someone settles it
     OUTCOME     what came of running one analysis: its drafts and its
                 proposals — or the error's type, its time out, why it was
                 skipped
@@ -43,7 +46,13 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from leka.knowledge import ArchitectureRead, ChangeFootprint, EntityBrief, EntityStanding
+from leka.knowledge import (
+    ArchitectureRead,
+    ChangeFootprint,
+    Dispute,
+    EntityBrief,
+    EntityStanding,
+)
 
 
 class Reads(enum.StrEnum):
@@ -53,6 +62,9 @@ class Reads(enum.StrEnum):
     CONTEXT = "context"
     # The changes of the last HISTORY, each with its footprint (LEKA-378).
     CHANGES = "changes"
+    # What the model's sources disagree on, and the workspace's authority
+    # rules (LEKA-382).
+    CONFLICTS = "conflicts"
 
 
 class Method(enum.StrEnum):
@@ -163,6 +175,35 @@ class Proposal:
 
 
 @dataclass(frozen=True)
+class Authority:
+    """A workspace's word on a source (LEKA-382): on `about` — an attribute,
+    a role, or `*` — prefer it, or avoid it."""
+
+    about: str
+    source_id: uuid.UUID
+    stance: str
+
+
+@dataclass(frozen=True)
+class ConflictDraft:
+    """One disagreement, before it is kept (LEKA-382): about which thing and
+    what, the model's value, every side assessed — who says it, how much to
+    believe it — and what LEKA recommends."""
+
+    key: str
+    kind: str
+    subject: Subject
+    about: str
+    relationship: str | None
+    chosen: object
+    sides: tuple[Mapping[str, object], ...]
+    recommendation: Mapping[str, object]
+    statement: str
+    settled: Mapping[str, object] | None = None
+    sources: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ContextStanding:
     """Where one context stands: what it is, whether it follows the model,
     how far behind, how good its latest version was judged."""
@@ -200,6 +241,10 @@ class Material:
     # ids; the teams each maintainer is a member of.
     owned_by: Mapping[uuid.UUID, tuple[EntityBrief, ...]] = field(default_factory=dict)
     memberships: Mapping[uuid.UUID, tuple[EntityBrief, ...]] = field(default_factory=dict)
+    # What the sources disagree on, and the workspace's authority rules
+    # (LEKA-382), read in a part of their own.
+    disputes: tuple[Dispute, ...] | None = None
+    authority: tuple[Authority, ...] = ()
     contexts: tuple[ContextStanding, ...] | None = None
     changes: tuple[ChangeFootprint, ...] | None = None
 
@@ -208,6 +253,8 @@ class Material:
             return self.architecture is not None
         if reads is Reads.CHANGES:
             return self.changes is not None
+        if reads is Reads.CONFLICTS:
+            return self.disputes is not None
         return self.contexts is not None
 
 
@@ -222,7 +269,7 @@ class Analyzer:
     method: Method
     reads: frozenset[Reads]
     summary: str
-    run: Callable[[Material], Sequence[Draft | Proposal]]
+    run: Callable[[Material], Sequence[Draft | Proposal | ConflictDraft]]
     # Seconds it may take before it is given up on.
     budget: float = 30.0
     # Parts read when they can be, which only weigh what it concludes —
@@ -241,6 +288,7 @@ class Outcome:
     status: str
     drafts: tuple[Draft, ...] = ()
     proposals: tuple[Proposal, ...] = ()
+    conflicts: tuple[ConflictDraft, ...] = ()
     duration_ms: int = 0
     error: str | None = None
     reason: str | None = None
@@ -273,10 +321,12 @@ async def execute(analyzer: Analyzer, material: Material) -> Outcome:
         return Outcome(status="failed", duration_ms=_since(started), error=type(error).__name__)
     drafts = {d.key: d for d in said if isinstance(d, Draft)}
     proposals = {p.key: p for p in said if isinstance(p, Proposal)}
+    conflicts = {c.key: c for c in said if isinstance(c, ConflictDraft)}
     return Outcome(
         status="succeeded",
         drafts=tuple(drafts.values()),
         proposals=tuple(proposals.values()),
+        conflicts=tuple(conflicts.values()),
         duration_ms=_since(started),
     )
 

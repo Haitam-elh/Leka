@@ -1,21 +1,20 @@
 "use client";
 
-import {
-  CircleCheck,
-  CircleSlash,
-  CircleX,
-  Clock,
-  type LucideIcon,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { CircleCheck, CircleSlash, CircleX, Clock, type LucideIcon, ShieldCheck, Sparkles } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { cn } from "cn";
 import { CandidatePanel } from "@/components/approvals/candidate-panel";
-import { CandidateBadge, FAMILY_ICON } from "@/components/approvals/parts";
-import { wordCandidate } from "@/components/approvals/words";
+import { ConflictPanel } from "@/components/approvals/conflict-panel";
+import {
+  CONFLICT_STATUS,
+  dateOf,
+  type Item,
+  items as itemsOf,
+  wordItem,
+} from "@/components/approvals/items";
+import { FAMILY_ICON, ItemBadge } from "@/components/approvals/parts";
 import { SearchInput } from "@/components/forms/search-input";
 import { type KnowledgeColumn, KnowledgeTable } from "@/components/knowledge/knowledge-table";
 import { timeAgo } from "@/components/knowledge/time";
@@ -23,49 +22,58 @@ import { PageContainer, PageHeader } from "@/components/shell/page-container";
 import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { StatePanel } from "@/components/states/state-panel";
-import {
-  type Candidate,
-  type CandidateStatus,
-  type EnrichmentSummary,
-  FAMILIES,
-  type Family,
-  STATUSES,
-} from "@/lib/enrichment";
+import { useConflicts, useConflictSummary } from "@/lib/conflicts-queries";
+import { type CandidateStatus, FAMILIES, STATUSES } from "@/lib/enrichment";
 import { useCandidates, useEnrichmentSummary } from "@/lib/enrichment-queries";
-import { fill } from "@/lib/i18n/dictionaries";
+import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 
+type Kind = Item["kind"];
+type Selected = { kind: Kind; id: string } | null;
+/** The type chips: a proposal's families, then the conflicts. */
+const TYPES = [...FAMILIES, "conflict"] as const;
+type Type = (typeof TYPES)[number];
+
 /**
- * À valider, laid out as docs/product/mockups/09-a-valider.jpeg (LEKA-380):
- * what waits on someone. Today that is what LEKA proposes to add to the
- * company model — a relationship, an owner, a criticality — each with how
- * sure it is and what shows it; the decisions on intentions (LEKA-390)
- * join the same queue.
+ * À valider, laid out as docs/product/mockups/09-a-valider.jpeg: what waits
+ * on someone. What LEKA proposes to add to the company model — a
+ * relationship, an owner, a criticality (LEKA-380) — and what its sources
+ * disagree on, to settle (LEKA-382): each worded, with why and how sure; the
+ * decisions on intentions (LEKA-390) join the same queue.
  *
  * Every figure is the workspace's own. The mockup's "Échéance < 24h" and
- * "Équipes concernées" wait for what would compute them: a proposal has no
- * deadline, and is about a thing, not a team.
+ * "Équipes concernées" wait for what would compute them: nothing here has
+ * a deadline, and each is about a thing, not a team.
  */
-export function ApprovalsPage({ initialId = null }: { initialId?: string | null }) {
+export function ApprovalsPage({
+  initialId = null,
+  initialKind = "candidate",
+}: {
+  initialId?: string | null;
+  initialKind?: Kind;
+}) {
   const t = useDictionary();
   const a = t.approvals;
   const pathname = usePathname() ?? "/approvals";
   const [status, setStatus] = useState<CandidateStatus>("proposed");
-  const [family, setFamily] = useState<Family | "all">("all");
+  const [type, setType] = useState<Type | "all">("all");
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(initialId);
-  const summary = useEnrichmentSummary();
-  const list = useCandidates(status);
-
-  const all = list.data?.data ?? [];
-  const shown = all.filter(
-    (candidate) =>
-      (family === "all" || candidate.family === family) && matches(t, candidate, search),
+  const [selected, setSelected] = useState<Selected>(
+    initialId ? { kind: initialKind, id: initialId } : null,
   );
-  const total = summary.data
-    ? summary.data.proposed + summary.data.accepted + summary.data.rejected + summary.data.withdrawn
-    : 0;
+  const proposals = useEnrichmentSummary();
+  const disputes = useConflictSummary();
+  const candidates = useCandidates(status);
+  const conflicts = useConflicts(CONFLICT_STATUS[status]);
+
+  const all = itemsOf(candidates.data?.data ?? [], conflicts.data?.data ?? []);
+  const shown = all.filter(
+    (item) => (type === "all" || item.family === type) && matches(t, item, search),
+  );
+  const figures = figuresOf(proposals.data, disputes.data);
+  const pending = proposals.isPending || disputes.isPending;
+  const failed = proposals.isError ? proposals : disputes.isError ? disputes : null;
 
   return (
     <PageContainer>
@@ -74,45 +82,51 @@ export function ApprovalsPage({ initialId = null }: { initialId?: string | null 
         subtitle={a.subtitle}
         breadcrumb={buildBreadcrumb(pathname, t)}
       />
-      {summary.isPending ? (
+      {pending ? (
         <LoadingState size="page" />
-      ) : summary.isError ? (
-        <ErrorState error={summary.error} onRetry={() => void summary.refetch()} size="page" />
-      ) : total === 0 && selectedId === null ? (
+      ) : failed ? (
+        <ErrorState error={failed.error} onRetry={() => void failed.refetch()} size="page" />
+      ) : figures.total === 0 && selected === null ? (
         <StatePanel icon={ShieldCheck} title={a.empty.title} description={a.empty.body} size="page" />
       ) : (
         <div className="flex flex-col gap-5">
-          {summary.data ? <Stats summary={summary.data} /> : null}
+          <Stats figures={figures} />
           <Filters
             status={status}
             onStatus={(next) => {
               setStatus(next);
-              setFamily("all");
+              setType("all");
             }}
-            candidates={all}
-            family={family}
-            onFamily={setFamily}
+            items={all}
+            type={type}
+            onType={setType}
             search={search}
             onSearch={setSearch}
           />
-          <div className={cn("grid gap-4", selectedId && "xl:grid-cols-[minmax(0,1fr)_22rem]")}>
-            {list.isPending ? (
+          <div className={cn("grid gap-4", selected && "xl:grid-cols-[minmax(0,1fr)_22rem]")}>
+            {candidates.isPending || conflicts.isPending ? (
               <LoadingState />
-            ) : list.isError ? (
-              <ErrorState error={list.error} onRetry={() => void list.refetch()} />
+            ) : candidates.isError ? (
+              <ErrorState error={candidates.error} onRetry={() => void candidates.refetch()} />
+            ) : conflicts.isError ? (
+              <ErrorState error={conflicts.error} onRetry={() => void conflicts.refetch()} />
             ) : (
-              <CandidatesTable
-                candidates={shown}
-                selectedId={selectedId}
-                compact={selectedId !== null}
+              <ItemsTable
+                items={shown}
+                selected={selected}
+                compact={selected !== null}
                 empty={all.length === 0 ? a.none : a.noMatch}
-                onSelect={(candidate) =>
-                  setSelectedId(candidate.id === selectedId ? null : candidate.id)
+                onSelect={(item) =>
+                  setSelected(
+                    selected?.id === item.id ? null : { kind: item.kind, id: item.id },
+                  )
                 }
               />
             )}
-            {selectedId ? (
-              <CandidatePanel id={selectedId} onClose={() => setSelectedId(null)} />
+            {selected?.kind === "candidate" ? (
+              <CandidatePanel id={selected.id} onClose={() => setSelected(null)} />
+            ) : selected?.kind === "conflict" ? (
+              <ConflictPanel id={selected.id} onClose={() => setSelected(null)} />
             ) : null}
           </div>
         </div>
@@ -121,15 +135,45 @@ export function ApprovalsPage({ initialId = null }: { initialId?: string | null 
   );
 }
 
-function matches(t: ReturnType<typeof useDictionary>, candidate: Candidate, search: string) {
+function matches(t: Dictionary, item: Item, search: string) {
   const needle = search.trim().toLowerCase();
   if (!needle) return true;
-  const { title } = wordCandidate(t, candidate);
-  return [title, candidate.subject.name, candidate.start?.name ?? "", candidate.end?.name ?? ""]
-    .some((said) => said.toLowerCase().includes(needle));
+  const { title } = wordItem(t, item);
+  const names =
+    item.kind === "candidate"
+      ? [item.data.subject.name, item.data.start?.name ?? "", item.data.end?.name ?? ""]
+      : [item.data.subject.name, item.data.about];
+  return [title, ...names].some((said) => said.toLowerCase().includes(needle));
 }
 
 // ── The figures ─────────────────────────────────────────────────────────────
+
+interface Figures {
+  waiting: number;
+  decided: number;
+  refused: number;
+  withdrawn: number;
+  byPolicy: number;
+  total: number;
+}
+
+function figuresOf(
+  proposals: { proposed: number; accepted: number; rejected: number; withdrawn: number; by_policy: number } | undefined,
+  conflicts: { open: number; resolved: number; dismissed: number; gone: number } | undefined,
+): Figures {
+  const waiting = (proposals?.proposed ?? 0) + (conflicts?.open ?? 0);
+  const decided = (proposals?.accepted ?? 0) + (conflicts?.resolved ?? 0);
+  const refused = (proposals?.rejected ?? 0) + (conflicts?.dismissed ?? 0);
+  const withdrawn = (proposals?.withdrawn ?? 0) + (conflicts?.gone ?? 0);
+  return {
+    waiting,
+    decided,
+    refused,
+    withdrawn,
+    byPolicy: proposals?.by_policy ?? 0,
+    total: waiting + decided + refused + withdrawn,
+  };
+}
 
 const TONES = {
   warning: "bg-state-warning-soft text-state-warning",
@@ -138,26 +182,26 @@ const TONES = {
   muted: "bg-shell-canvas text-shell-muted",
 } as const;
 
-function Stats({ summary }: { summary: EnrichmentSummary }) {
+function Stats({ figures }: { figures: Figures }) {
   const t = useDictionary();
   const s = t.approvals.stats;
   return (
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="approvals-stats">
-      <Stat icon={Clock} tone="warning" value={summary.proposed} label={s.proposed} />
+      <Stat icon={Clock} tone="warning" value={figures.waiting} label={s.proposed} />
       <Stat
         icon={CircleCheck}
         tone="success"
-        value={summary.accepted}
+        value={figures.decided}
         label={s.accepted}
-        note={summary.by_policy ? fill(s.byPolicy, { count: summary.by_policy }) : undefined}
+        note={figures.byPolicy ? fill(s.byPolicy, { count: figures.byPolicy }) : undefined}
       />
-      <Stat icon={CircleX} tone="danger" value={summary.rejected} label={s.rejected} />
+      <Stat icon={CircleX} tone="danger" value={figures.refused} label={s.rejected} />
       <Stat
         icon={CircleSlash}
         tone="muted"
-        value={summary.withdrawn}
+        value={figures.withdrawn}
         label={s.withdrawn}
-        note={summary.withdrawn ? s.withdrawnNote : undefined}
+        note={figures.withdrawn ? s.withdrawnNote : undefined}
       />
     </ul>
   );
@@ -197,25 +241,25 @@ function Stat({
 function Filters({
   status,
   onStatus,
-  candidates,
-  family,
-  onFamily,
+  items,
+  type,
+  onType,
   search,
   onSearch,
 }: {
   status: CandidateStatus;
   onStatus: (next: CandidateStatus) => void;
-  candidates: Candidate[];
-  family: Family | "all";
-  onFamily: (next: Family | "all") => void;
+  items: Item[];
+  type: Type | "all";
+  onType: (next: Type | "all") => void;
   search: string;
   onSearch: (next: string) => void;
 }) {
   const t = useDictionary();
   const a = t.approvals;
   const counts = new Map<string, number>();
-  for (const candidate of candidates) {
-    counts.set(candidate.family, (counts.get(candidate.family) ?? 0) + 1);
+  for (const item of items) {
+    counts.set(item.family, (counts.get(item.family) ?? 0) + 1);
   }
   return (
     <div className="flex flex-col gap-3">
@@ -232,16 +276,16 @@ function Filters({
       <div className="flex flex-wrap items-center gap-2">
         <div role="group" aria-label={a.familiesLabel} className="flex flex-wrap gap-2">
           <Chip
-            active={family === "all"}
-            onClick={() => onFamily("all")}
+            active={type === "all"}
+            onClick={() => onType("all")}
             label={a.families.all}
-            count={candidates.length}
+            count={items.length}
           />
-          {FAMILIES.filter((key) => counts.has(key)).map((key) => (
+          {TYPES.filter((key) => counts.has(key)).map((key) => (
             <Chip
               key={key}
-              active={family === key}
-              onClick={() => onFamily(key)}
+              active={type === key}
+              onClick={() => onType(key)}
               label={a.families[key]}
               count={counts.get(key) ?? 0}
             />
@@ -289,40 +333,46 @@ function Chip({
 
 // ── The table ───────────────────────────────────────────────────────────────
 
-/** The proposals. Beside an opened one, what fits a 13-inch screen: the
- * proposal, how sure, where it stands — its type and date are in the
- * panel. Who proposed is always LEKA: the panel says which analysis. */
-function CandidatesTable({
-  candidates,
-  selectedId,
+/** How sure: a proposal's confidence; for a conflict, how clearly LEKA
+ * recommends a side — sorted by that side's score, among the proposals. */
+function sureness(t: Dictionary, item: Item): { value: number; said: string } {
+  if (item.kind === "candidate") {
+    return { value: item.data.confidence, said: `${Math.round(item.data.confidence * 100)} %` };
+  }
+  const recommendation = item.data.recommendation;
+  const strength = (t.approvals.conflict.strength as Record<string, string>)[recommendation.strength];
+  const best = recommendation.side !== null ? item.data.sides[recommendation.side] : undefined;
+  return { value: best?.score ?? 0, said: strength || "—" };
+}
+
+/** What waits. Beside an opened one, what fits a 13-inch screen: what it
+ * is, how sure, where it stands — its type and date are in the panel. */
+function ItemsTable({
+  items,
+  selected,
   compact,
   empty,
   onSelect,
 }: {
-  candidates: Candidate[];
-  selectedId: string | null;
+  items: Item[];
+  selected: Selected;
   compact: boolean;
   empty: string;
-  onSelect: (candidate: Candidate) => void;
+  onSelect: (item: Item) => void;
 }) {
   const t = useDictionary();
   const a = t.approvals;
   const c = a.columns;
-  const columns: KnowledgeColumn<Candidate>[] = [
+  const columns: KnowledgeColumn<Item>[] = [
     {
       id: "element",
       header: c.element,
-      sortValue: (candidate) => wordCandidate(t, candidate).title.toLowerCase(),
-      cell: (candidate) => {
-        const { title, why } = wordCandidate(t, candidate);
-        const Icon = FAMILY_ICON[candidate.family] ?? Sparkles;
+      sortValue: (item) => wordItem(t, item).title.toLowerCase(),
+      cell: (item) => {
+        const { title, why } = wordItem(t, item);
+        const Icon = FAMILY_ICON[item.family] ?? Sparkles;
         return (
-          <div
-            className={cn(
-              "flex items-center gap-3",
-              candidate.id === selectedId && "font-semibold",
-            )}
-          >
+          <div className={cn("flex items-center gap-3", item.id === selected?.id && "font-semibold")}>
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-violet-soft text-shell-nav-active">
               <Icon className="size-4" aria-hidden="true" />
             </span>
@@ -337,10 +387,10 @@ function CandidatesTable({
     {
       id: "type",
       header: c.type,
-      sortValue: (candidate) => candidate.family,
-      cell: (candidate) => (
+      sortValue: (item) => item.family,
+      cell: (item) => (
         <span className="rounded-md bg-state-info-soft px-2 py-0.5 text-xs text-state-info">
-          {(a.family as Record<string, string>)[candidate.family] ?? candidate.family}
+          {(a.family as Record<string, string>)[item.family] ?? item.family}
         </span>
       ),
     },
@@ -348,22 +398,21 @@ function CandidatesTable({
       id: "confidence",
       header: c.confidence,
       align: "end",
-      sortValue: (candidate) => candidate.confidence,
-      cell: (candidate) => `${Math.round(candidate.confidence * 100)} %`,
+      sortValue: (item) => sureness(t, item).value,
+      cell: (item) => sureness(t, item).said,
     },
     {
       id: "date",
       header: c.date,
-      sortValue: (candidate) => candidate.decided_at ?? candidate.last_seen_at,
-      cell: (candidate) => timeAgo(t, candidate.decided_at ?? candidate.last_seen_at),
+      sortValue: (item) => dateOf(item),
+      cell: (item) => timeAgo(t, dateOf(item)),
     },
     {
       id: "status",
       header: c.status,
-      cell: (candidate) => <CandidateBadge candidate={candidate} />,
+      cell: (item) => <ItemBadge item={item} />,
     },
   ];
-
   const shownColumns = compact
     ? columns.filter((column) => column.id !== "type" && column.id !== "date")
     : columns;
@@ -372,8 +421,8 @@ function CandidatesTable({
     <KnowledgeTable
       caption={c.caption}
       columns={shownColumns}
-      rows={candidates}
-      rowKey={(candidate) => candidate.id}
+      rows={items}
+      rowKey={(item) => `${item.kind}:${item.id}`}
       onRowClick={onSelect}
       initialSort={{ id: "confidence", direction: "desc" }}
       empty={{ title: empty }}
