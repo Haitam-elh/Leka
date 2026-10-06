@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowRight,
   ChevronRight,
+  Gauge,
   Layers,
   Loader2,
   type LucideIcon,
@@ -40,6 +41,7 @@ const ICON: Record<string, LucideIcon> = {
   context: Layers,
   change: Rocket,
   gaps: Puzzle,
+  quality: Gauge,
 };
 
 interface Worded {
@@ -109,6 +111,33 @@ function wordGap(t: Dictionary, finding: Finding, kind: string): Worded | null {
   }
 }
 
+/** Weak knowledge (LEKA-381): a thing's, with what lowers it most; an
+ * area's, with how many things it holds — null for a code not known yet. */
+function wordQuality(t: Dictionary, finding: Finding): Worded | null {
+  const p = finding.params;
+  const q = t.insights.quality;
+  const score = Math.round((Number(p.score) || 0) * 100);
+  const name = text(p.name);
+  if (finding.code === "quality.low") {
+    const first = Array.isArray(p.missing) ? text(p.missing[0]) : "";
+    const lacks = (q.missing as Record<string, string>)[first];
+    const said = fill(q.score, { score });
+    return { title: fill(q.low, { name }), detail: lacks ? `${said} · ${lacks}` : said };
+  }
+  if (finding.code === "quality.low_area") {
+    const scope = text(p.scope);
+    return {
+      title: scope === "workspace" ? q.workspace : fill(q.area, { name }),
+      detail: fill(q.areaDetail, {
+        scope: (q.scopes as Record<string, string>)[scope] ?? scope,
+        count: text(p.entities),
+        score,
+      }),
+    };
+  }
+  return null;
+}
+
 /** A finding in the reader's words, from its code and values — its English
  * statement when the interface does not know the code yet. */
 export function word(t: Dictionary, finding: Finding): Worded {
@@ -175,7 +204,8 @@ export function word(t: Dictionary, finding: Finding): Worded {
     }
     default:
       return (
-        (finding.code.startsWith("gap.") ? wordGap(t, finding, kind) : null) ?? {
+        (finding.code.startsWith("gap.") ? wordGap(t, finding, kind) : null) ??
+        (finding.code.startsWith("quality.") ? wordQuality(t, finding) : null) ?? {
           title: finding.statement,
           detail: null,
         }

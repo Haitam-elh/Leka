@@ -3403,6 +3403,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/intelligence/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Quality
+         * @description How far what LEKA knows can be trusted: the workspace's score, each
+         *     column's, team's and application's, the things known least well, and
+         *     how the workspace's moved over 30 days.
+         */
+        get: operations["quality_api_v1_intelligence_quality_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/quality/scores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Quality Scores
+         * @description The scores by score (`sort=score`, the default) — `order=asc` for
+         *     the weakest first — or the latest measured (`sort=measured_at`).
+         */
+        get: operations["quality_scores_api_v1_intelligence_quality_scores_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/quality/scores/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Quality Score
+         * @description One score: each dimension's factors, what lowers it and what shows
+         *     it, where it was read, its changes over 90 days.
+         */
+        get: operations["quality_score_api_v1_intelligence_quality_scores__key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -9115,6 +9179,228 @@ export interface components {
             sources: components["schemas"]["ViewSourceRead"][];
         };
         /**
+         * KnowledgeQualityDetail
+         * @description One score: each dimension's factors, where it was read, its history.
+         */
+        KnowledgeQualityDetail: {
+            /**
+             * Key
+             * @description entity:<id>, team:<id>, application:<id>, column:<name>, workspace.
+             */
+            key: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "entity" | "team" | "application" | "column" | "workspace";
+            subject: components["schemas"]["SubjectRead"];
+            /**
+             * Column
+             * @description An entity's column of Mon environnement.
+             */
+            column: string | null;
+            /**
+             * Score
+             * @description 0 to 1: .30 completeness + .25 freshness + .20 consistency + .25 confidence, over the dimensions known.
+             */
+            score: number;
+            /**
+             * Level
+             * @description high from 0.85, medium from 0.6.
+             * @enum {string}
+             */
+            level: "high" | "medium" | "low";
+            /** Completeness */
+            completeness: number | null;
+            /** Freshness */
+            freshness: number | null;
+            /** Consistency */
+            consistency: number | null;
+            /** Confidence */
+            confidence: number | null;
+            /**
+             * Missing
+             * @description What lowers it, the heaviest first: {code, dimension, weight, detail} — an area's: {code, count}.
+             */
+            missing: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+            /**
+             * Areas
+             * @description An entity's: the areas it counts in.
+             */
+            areas: string[];
+            /**
+             * Entities
+             * @description An area's: how many things it holds.
+             */
+            entities: number;
+            /**
+             * Capped
+             * @description Held to medium: contradiction — one left open; weak_dimension — a dimension measured under 0.6.
+             */
+            capped: string | null;
+            /**
+             * Measured At
+             * Format: date-time
+             */
+            measured_at: string;
+            /**
+             * Since
+             * Format: date-time
+             * @description Since when it holds its level.
+             */
+            since: string;
+            /** Factors */
+            factors: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Provenance */
+            provenance: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * History
+             * @description Its changes, the oldest first.
+             */
+            history: components["schemas"]["KnowledgeQualityPoint"][];
+        };
+        /**
+         * KnowledgeQualityPoint
+         * @description A score at one moment: when it moved, where to.
+         */
+        KnowledgeQualityPoint: {
+            /**
+             * Measured At
+             * Format: date-time
+             */
+            measured_at: string;
+            /** Score */
+            score: number;
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "high" | "medium" | "low";
+            /** Completeness */
+            completeness: number | null;
+            /** Freshness */
+            freshness: number | null;
+            /** Consistency */
+            consistency: number | null;
+            /** Confidence */
+            confidence: number | null;
+        };
+        /**
+         * KnowledgeQualityRead
+         * @description How far what LEKA knows of one thing, or one area, can be trusted.
+         */
+        KnowledgeQualityRead: {
+            /**
+             * Key
+             * @description entity:<id>, team:<id>, application:<id>, column:<name>, workspace.
+             */
+            key: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "entity" | "team" | "application" | "column" | "workspace";
+            subject: components["schemas"]["SubjectRead"];
+            /**
+             * Column
+             * @description An entity's column of Mon environnement.
+             */
+            column: string | null;
+            /**
+             * Score
+             * @description 0 to 1: .30 completeness + .25 freshness + .20 consistency + .25 confidence, over the dimensions known.
+             */
+            score: number;
+            /**
+             * Level
+             * @description high from 0.85, medium from 0.6.
+             * @enum {string}
+             */
+            level: "high" | "medium" | "low";
+            /** Completeness */
+            completeness: number | null;
+            /** Freshness */
+            freshness: number | null;
+            /** Consistency */
+            consistency: number | null;
+            /** Confidence */
+            confidence: number | null;
+            /**
+             * Missing
+             * @description What lowers it, the heaviest first: {code, dimension, weight, detail} — an area's: {code, count}.
+             */
+            missing: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+            /**
+             * Areas
+             * @description An entity's: the areas it counts in.
+             */
+            areas: string[];
+            /**
+             * Entities
+             * @description An area's: how many things it holds.
+             */
+            entities: number;
+            /**
+             * Capped
+             * @description Held to medium: contradiction — one left open; weak_dimension — a dimension measured under 0.6.
+             */
+            capped: string | null;
+            /**
+             * Measured At
+             * Format: date-time
+             */
+            measured_at: string;
+            /**
+             * Since
+             * Format: date-time
+             * @description Since when it holds its level.
+             */
+            since: string;
+        };
+        /**
+         * KnowledgeQualitySummary
+         * @description The workspace's knowledge quality at a glance: where it stands, by
+         *     area, the things known least well, and how it moved.
+         */
+        KnowledgeQualitySummary: {
+            /** Measured At */
+            measured_at: string | null;
+            workspace: components["schemas"]["KnowledgeQualityRead"] | null;
+            /**
+             * Levels
+             * @description The things measured, by level.
+             */
+            levels: {
+                [key: string]: number;
+            };
+            /** Columns */
+            columns: components["schemas"]["KnowledgeQualityRead"][];
+            /** Teams */
+            teams: components["schemas"]["KnowledgeQualityRead"][];
+            /** Applications */
+            applications: components["schemas"]["KnowledgeQualityRead"][];
+            /** Weakest */
+            weakest: components["schemas"]["KnowledgeQualityRead"][];
+            /**
+             * Trend
+             * @description The workspace's, over 30 days.
+             */
+            trend: components["schemas"]["KnowledgeQualityPoint"][];
+            /**
+             * Change
+             * @description The workspace's score now, less 7 days ago.
+             */
+            change: number | null;
+        };
+        /**
          * KnowledgeSpaceDetail
          * @description One space: everything it is tied to, its latest documents and its
          *     stalest.
@@ -9911,6 +10197,19 @@ export interface components {
              * @description The rows on this page, in the requested order.
              */
             data: components["schemas"]["JobRunRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[KnowledgeQualityRead] */
+        PageEnvelope_KnowledgeQualityRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["KnowledgeQualityRead"][];
             /**
              * Next Cursor
              * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
@@ -12152,10 +12451,10 @@ export interface components {
         SubjectRead: {
             /**
              * Type
-             * @description An entity, a context, a source (LEKA-379) — or a family of sources: coverage.
+             * @description An entity, a context, a source (LEKA-379) — or a family of sources: coverage; a column of Mon environnement, or the workspace (LEKA-381).
              * @enum {string}
              */
-            type: "entity" | "context" | "source" | "coverage";
+            type: "entity" | "context" | "source" | "coverage" | "column" | "workspace";
             /** Id */
             id: string | null;
             /** Name */
@@ -29216,6 +29515,300 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    quality_api_v1_intelligence_quality_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeQualitySummary"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    quality_scores_api_v1_intelligence_quality_scores_get: {
+        parameters: {
+            query?: {
+                scope?: ("entity" | "team" | "application" | "column" | "workspace") | null;
+                level?: ("high" | "medium" | "low") | null;
+                column?: string | null;
+                /** @description Counted in this area: team:<id>, application:<id>… */
+                area?: string | null;
+                /** @description About this entity. */
+                subject?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_KnowledgeQualityRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    quality_score_api_v1_intelligence_quality_scores__key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeQualityDetail"];
+                };
             };
             /** @description The request could not be understood. */
             400: {

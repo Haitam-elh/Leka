@@ -50,6 +50,7 @@ describe("what a person is offered", () => {
       "environment-organisation",
       "environment-events",
       "environment-domains",
+      "environment-quality",
       "capabilities-available",
       "capabilities-mine",
       "capabilities-configuration",

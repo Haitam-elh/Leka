@@ -29,6 +29,7 @@ import { cn } from "cn";
 
 import { EntityContext } from "@/components/environment/entity-context";
 import { IncidentAnalysis } from "@/components/environment/incident-analysis";
+import { EntityQuality } from "@/components/environment/knowledge-quality";
 import { Sparkline } from "@/components/knowledge/entity-detail-panel";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { timeAgo } from "@/components/knowledge/time";
@@ -683,6 +684,9 @@ function Overview({ model, events }: { model: SheetModel; events: EventRow[] }) 
           </dl>
         </Card>
       </div>
+
+      {/* How far what LEKA knows of it can be trusted (LEKA-381). */}
+      <EntityQuality id={model.id} />
 
       {model.type === "incident" ? (
         <IncidentAnalysis id={model.id} />

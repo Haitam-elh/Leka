@@ -38,6 +38,7 @@ from leka.intelligence.changes import ANALYZER as CHANGE_IMPACT
 from leka.intelligence.conflicts import ANALYZER as CONFLICTS
 from leka.intelligence.enrichment import ANALYZERS as ENRICHMENT
 from leka.intelligence.gaps import ANALYZERS as GAPS
+from leka.intelligence.quality import ANALYZER as QUALITY
 from leka.knowledge import RELIED_ON, ArchitectureCardRead, ArchitectureLinkRead
 
 # What relies on a thing, before it is a concentration worth saying.
@@ -391,6 +392,8 @@ ANALYZERS: tuple[Analyzer, ...] = (
     *ENRICHMENT,
     # Knowledge conflicts (LEKA-382): conflicts.py — disagreements to settle.
     CONFLICTS,
+    # Knowledge quality (LEKA-381): quality.py — scores, and what is weak.
+    QUALITY,
 )
 
 

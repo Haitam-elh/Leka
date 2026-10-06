@@ -120,6 +120,8 @@ export const NAVIGATION: readonly NavGroup[] = [
           environmentView("organisation", "environmentTeams"),
           environmentView("events", "environmentEvents"),
           environmentView("domains", "environmentDomains"),
+          // How far what LEKA knows can be trusted (LEKA-381).
+          environmentView("quality", "environmentQuality"),
         ],
       },
       {

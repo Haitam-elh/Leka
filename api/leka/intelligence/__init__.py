@@ -15,7 +15,9 @@ analyses PROPOSE — a relationship, an attribute — kept as CANDIDATES until
 validated or rejected, and applied to the model once validated
 (curation.py); knowledge conflicts (conflicts.py, LEKA-382): what the
 model's sources disagree on, weighed and recommended, settled by someone
-(arbitration.py). Model-assisted analyses are declared like the others and
+(arbitration.py); knowledge quality (quality.py, LEKA-381): how complete,
+fresh, consistent and sure what LEKA knows is, each thing and each area,
+kept over time (measures.py). Model-assisted analyses are declared like the others and
 skipped, said so, until leka.capabilities calls a model.
 
 Above leka.capabilities, which a model-assisted analysis will call the
@@ -34,6 +36,7 @@ from leka.intelligence.analysis import (
     Method,
     Outcome,
     Proposal,
+    QualityScore,
     Reads,
     Severity,
     Subject,
@@ -53,6 +56,7 @@ from leka.intelligence.curation import (
     candidate_read,
     candidate_reads,
 )
+from leka.intelligence.measures import QualityService, quality_read, quality_reads
 from leka.intelligence.models import (
     AuthorityRule,
     EnrichmentCandidate,
@@ -60,12 +64,16 @@ from leka.intelligence.models import (
     IntelligenceRun,
     IntelligenceStep,
     KnowledgeConflict,
+    QualityPoint,
+    QualityScoreRow,
 )
 from leka.intelligence.repository import (
     CandidateFilters,
     ConflictFilters,
     FindingFilters,
     IntelligenceRepository,
+    QualityFilters,
+    QualityRepository,
 )
 from leka.intelligence.rules import ANALYZERS, analyzer_named
 from leka.intelligence.schemas import (
@@ -92,6 +100,10 @@ from leka.intelligence.schemas import (
     FollowedRead,
     ImpactRead,
     IntelligenceSummary,
+    KnowledgeQualityDetail,
+    KnowledgeQualityPoint,
+    KnowledgeQualityRead,
+    KnowledgeQualitySummary,
     Reprocessed,
     RunDetail,
     RunRead,
@@ -145,10 +157,20 @@ __all__ = [
     "IntelligenceStep",
     "IntelligenceSummary",
     "KnowledgeConflict",
+    "KnowledgeQualityDetail",
+    "KnowledgeQualityPoint",
+    "KnowledgeQualityRead",
+    "KnowledgeQualitySummary",
     "Material",
     "Method",
     "Outcome",
     "Proposal",
+    "QualityFilters",
+    "QualityPoint",
+    "QualityRepository",
+    "QualityScore",
+    "QualityScoreRow",
+    "QualityService",
     "Reads",
     "Reprocessed",
     "RunDetail",
@@ -167,4 +189,6 @@ __all__ = [
     "conflict_read",
     "conflict_reads",
     "execute",
+    "quality_read",
+    "quality_reads",
 ]

@@ -26,6 +26,8 @@ from leka.intelligence.models import (
     IntelligenceRun,
     IntelligenceStep,
     KnowledgeConflict,
+    QualityPoint,
+    QualityScoreRow,
 )
 from leka.knowledge import ModelRun
 
@@ -52,6 +54,16 @@ class CandidateFilters:
     status: str | None = None
     family: str | None = None
     analyzer: str | None = None
+    subject_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True)
+class QualityFilters:
+    scope: str | None = None
+    level: str | None = None
+    column: str | None = None
+    # The key of an area it counts in: team:<id>, application:<id>…
+    area: str | None = None
     subject_id: uuid.UUID | None = None
 
 
@@ -400,3 +412,109 @@ class IntelligenceSweeper:
         return int(getattr(result, "rowcount", 0) or 0) + int(
             getattr(withdrawn, "rowcount", 0) or 0
         )
+
+    async def prune_quality(self, *, before: datetime) -> int:
+        """Quality history older than `before` (LEKA-381). A score as it
+        stands is never pruned."""
+        result = await self._session.execute(
+            delete(QualityPoint)
+            .where(QualityPoint.measured_at < before)
+            .execution_options(synchronize_session=False)
+        )
+        return int(getattr(result, "rowcount", 0) or 0)
+
+
+class QualityRepository(WorkspaceScopedRepository):
+    """Knowledge quality (LEKA-381): the scores as they stand, and their
+    history."""
+
+    async def current(self) -> dict[str, QualityScoreRow]:
+        """Every score as it stands, by key: what a run compares with."""
+        found = await self._session.execute(self.select(QualityScoreRow))
+        return {row.key: row for row in found.scalars()}
+
+    async def forget(self, rows: Sequence[QualityScoreRow]) -> None:
+        for row in rows:
+            await self._session.delete(row)
+
+    def scores(self, filters: QualityFilters) -> Select[tuple[QualityScoreRow]]:
+        """The scores, for a page: by scope, level, column, area, thing."""
+        f = filters
+        statement = self.select(QualityScoreRow)
+        for column, value in (
+            (QualityScoreRow.scope, f.scope),
+            (QualityScoreRow.level, f.level),
+            (QualityScoreRow.column, f.column),
+            (QualityScoreRow.subject_id, f.subject_id),
+        ):
+            if value is not None:
+                statement = statement.where(column == value)
+        if f.area is not None:
+            statement = statement.where(QualityScoreRow.areas.contains([f.area]))
+        return statement
+
+    async def score(self, key: str) -> QualityScoreRow | None:
+        found = await self._session.execute(
+            self.select(QualityScoreRow).where(QualityScoreRow.key == key)
+        )
+        return found.scalar_one_or_none()
+
+    async def areas(self) -> Sequence[QualityScoreRow]:
+        """The areas' scores: the workspace, its columns, teams, applications."""
+        found = await self._session.execute(
+            self.select(QualityScoreRow)
+            .where(QualityScoreRow.scope != "entity")
+            .order_by(QualityScoreRow.scope, QualityScoreRow.score, QualityScoreRow.subject_name)
+        )
+        return found.scalars().all()
+
+    async def levels(self) -> dict[str, int]:
+        """The things measured, by level."""
+        found = await self._session.execute(
+            select(QualityScoreRow.level, func.count())
+            .where(
+                QualityScoreRow.workspace_id == self.workspace_id,
+                QualityScoreRow.scope == "entity",
+            )
+            .group_by(QualityScoreRow.level)
+        )
+        return dict(found.tuples().all())
+
+    async def weakest(self, limit: int) -> Sequence[QualityScoreRow]:
+        """The things known least well, in an order that holds."""
+        found = await self._session.execute(
+            self.select(QualityScoreRow)
+            .where(QualityScoreRow.scope == "entity")
+            .order_by(QualityScoreRow.score, QualityScoreRow.subject_name, QualityScoreRow.id)
+            .limit(limit)
+        )
+        return found.scalars().all()
+
+    async def of_subjects(self, ids: Sequence[uuid.UUID]) -> Sequence[QualityScoreRow]:
+        if not ids:
+            return []
+        found = await self._session.execute(
+            self.select(QualityScoreRow).where(
+                QualityScoreRow.scope == "entity", QualityScoreRow.subject_id.in_(list(ids))
+            )
+        )
+        return found.scalars().all()
+
+    def add_point(self, point: QualityPoint) -> None:
+        self.add(point)
+
+    async def history(self, key: str, *, since: datetime) -> Sequence[QualityPoint]:
+        """A score's changes since a date, the oldest first — and the point
+        it stood at then, so a series starts where it was."""
+        before = await self._session.execute(
+            self.select(QualityPoint)
+            .where(QualityPoint.key == key, QualityPoint.measured_at < since)
+            .order_by(QualityPoint.measured_at.desc(), QualityPoint.id)
+            .limit(1)
+        )
+        after = await self._session.execute(
+            self.select(QualityPoint)
+            .where(QualityPoint.key == key, QualityPoint.measured_at >= since)
+            .order_by(QualityPoint.measured_at, QualityPoint.id)
+        )
+        return [*before.scalars().all(), *after.scalars().all()]

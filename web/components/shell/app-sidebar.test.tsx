@@ -154,6 +154,7 @@ describe("the three pillars", () => {
       "Équipes",
       "Événements",
       "Domaines",
+      "Qualité",
       "Capacités disponibles",
       "Mes capacités",
       "Configuration",
@@ -383,7 +384,7 @@ describe("folding the sidebar", () => {
     const data = within(menu).getByRole("menuitem", { name: "Données" });
     expect(data).toHaveAttribute("href", "/environment?tab=data");
     expect(data).toHaveAttribute("aria-current", "page");
-    expect(within(menu).getAllByRole("menuitem")).toHaveLength(8);
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(9);
   });
 });
 

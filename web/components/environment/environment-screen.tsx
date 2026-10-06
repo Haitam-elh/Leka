@@ -23,6 +23,7 @@ import { timeAgo } from "@/components/knowledge/time";
 import { ArchitectureBoard, ArchitectureFigures } from "@/components/environment/architecture";
 import { LekaInsights } from "@/components/insights/leka-insights";
 import { Cartography } from "@/components/environment/cartography";
+import { QualityTab } from "@/components/environment/knowledge-quality";
 import { CoveragePanel } from "@/components/environment/coverage";
 import {
   AttentionList,
@@ -201,6 +202,9 @@ export function EnvironmentScreen() {
     ) : (
       <div className="h-96 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />
     );
+  } else if (tab === "quality") {
+    // How far what LEKA knows can be trusted (LEKA-381).
+    body = <QualityTab />;
   } else if (tab === "events") {
     body = (
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">

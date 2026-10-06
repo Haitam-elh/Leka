@@ -1060,6 +1060,18 @@ class EntityStanding(BaseModel):
     business: bool = Field(
         description="Part of an application, or tied to a capability or a process."
     )
+    # What its quality is measured from (LEKA-381): how sure the merges
+    # that made it are, the best quality of its records, when a source last
+    # showed it, which sources; each attribute's origin, counted — source,
+    # enrichment, accepted; the attributes its sources disagree on; what the
+    # last build found wrong with its relationships.
+    confidence: float = 1.0
+    quality: float | None = None
+    last_seen_at: datetime | None = None
+    source_ids: tuple[uuid.UUID, ...] = ()
+    origins: dict[str, int] = Field(default_factory=dict)
+    disputed: tuple[str, ...] = ()
+    issues: tuple[int, int] = Field(default=(0, 0), description="(errors, warnings).")
 
 
 class ChangeTouch(BaseModel):

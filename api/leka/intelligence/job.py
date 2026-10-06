@@ -56,7 +56,12 @@ from leka.intelligence.analysis import (
     catalogue_hash,
     execute,
 )
-from leka.intelligence.repository import IntelligenceRepository, IntelligenceSweeper
+from leka.intelligence.measures import HISTORY_DAYS as QUALITY_DAYS
+from leka.intelligence.repository import (
+    IntelligenceRepository,
+    IntelligenceSweeper,
+    QualityRepository,
+)
 from leka.intelligence.rules import ANALYZERS
 from leka.intelligence.service import IntelligenceService, ModelRead
 from leka.knowledge import (
@@ -150,6 +155,7 @@ def _service(
         ContextRepository(session, workspace_id),
         analyzers=analyzers,
         assertions=AssertionRepository(session, workspace_id),
+        quality=QualityRepository(session, workspace_id),
     )
 
 
@@ -314,6 +320,7 @@ async def sweep_intelligence(*, now: datetime | None = None) -> dict[str, int]:
             abandoned = await sweeper.abandon_stuck(before=now - STUCK_AFTER, at=now)
             pruned = await sweeper.prune_runs(before=now - timedelta(days=HISTORY_DAYS))
             forgotten = await sweeper.prune_resolved(before=now - timedelta(days=RESOLVED_DAYS))
+            forgotten += await sweeper.prune_quality(before=now - timedelta(days=QUALITY_DAYS))
             standings = await sweeper.standings()
             await session.commit()
     behind = [

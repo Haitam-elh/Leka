@@ -53,8 +53,9 @@ from leka.intelligence.changes import (
     significance,
 )
 from leka.intelligence.curation import propose
+from leka.intelligence.measures import record_scores
 from leka.intelligence.models import Finding, IntelligenceRun, IntelligenceStep
-from leka.intelligence.repository import IntelligenceRepository
+from leka.intelligence.repository import IntelligenceRepository, QualityRepository
 from leka.intelligence.rules import ANALYZERS
 from leka.intelligence.schemas import (
     AnalyzerRead,
@@ -123,6 +124,7 @@ class IntelligenceService:
         *,
         analyzers: Sequence[Analyzer] = ANALYZERS,
         assertions: AssertionRepository | None = None,
+        quality: QualityRepository | None = None,
     ) -> None:
         self._repository = repository
         self._graph = graph
@@ -130,6 +132,8 @@ class IntelligenceService:
         self._analyzers = tuple(analyzers)
         # Where the policy's acceptances are kept (LEKA-380): none, none made.
         self._assertions = assertions
+        # Where the quality scores are kept (LEKA-381): none, none kept.
+        self._quality = quality
 
     # ── the catalogue ──────────────────────────────────────────────────
 
@@ -248,11 +252,17 @@ class IntelligenceService:
             counts["proposals"] = len(outcome.proposals)
         if outcome.conflicts:
             counts["conflicts"] = len(outcome.conflicts)
+        if outcome.scores:
+            counts["scores"] = len(outcome.scores)
         if outcome.status == "succeeded":
             counts |= await self._apply(run_id, analyzer, outcome.drafts, material, now=now)
             if analyzer.category == "conflicts":
                 counts |= await observe(
                     self._repository, run_id, analyzer, outcome.conflicts, material, now=now
+                )
+            if analyzer.category == "quality" and self._quality is not None:
+                counts |= await record_scores(
+                    self._quality, run_id, analyzer, outcome.scores, material, now=now
                 )
             if analyzer.category == "enrichment":
                 counts |= await propose(

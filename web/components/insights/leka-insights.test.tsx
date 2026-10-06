@@ -326,6 +326,42 @@ describe("Insights LEKA", () => {
     );
   });
 
+  it("words weak knowledge, a thing's and an area's, in French and in English", () => {
+    const weak = finding({
+      analyzer: "quality",
+      category: "quality",
+      code: "quality.low",
+      params: { name: "orphan-worker", score: 0.414, missing: ["unseen", "weak_records"] },
+    });
+    const area = (scope: string) =>
+      finding({
+        analyzer: "quality",
+        category: "quality",
+        code: "quality.low_area",
+        params: { name: "Legacy", scope, entities: 3, score: 0.5 },
+      });
+
+    expect(word(DICTIONARIES.fr, weak)).toEqual({
+      title: "Ce que LEKA sait de orphan-worker est peu fiable",
+      detail: "Qualité 41 % · plus vu par ses sources depuis des semaines",
+    });
+    expect(word(DICTIONARIES.en, weak)).toEqual({
+      title: "What LEKA knows of orphan-worker is weak",
+      detail: "Quality 41% · not shown by its sources for weeks",
+    });
+    expect(word(DICTIONARIES.fr, area("team"))).toEqual({
+      title: "Connaissance peu fiable : Legacy",
+      detail: "Équipe · 3 élément(s) · qualité 50 %",
+    });
+    expect(word(DICTIONARIES.fr, area("workspace")).title).toBe(
+      "Ce que LEKA sait de votre environnement est peu fiable",
+    );
+    // A lack the interface does not know yet: the score alone.
+    expect(word(DICTIONARIES.fr, { ...weak, params: { ...weak.params, missing: ["telepathy"] } }).detail).toBe(
+      "Qualité 41 %",
+    );
+  });
+
   it("says the English sentence of a code it does not know yet", async () => {
     api.summary.mockResolvedValue(
       summary({ top: [finding({ code: "gap.undocumented", statement: "A change reached 3 things." })] }),
