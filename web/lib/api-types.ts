@@ -9237,7 +9237,7 @@ export interface components {
             entities: number;
             /**
              * Capped
-             * @description contradiction: held to medium by one left open.
+             * @description Held to medium: contradiction — one left open; weak_dimension — a dimension measured under 0.6.
              */
             capped: string | null;
             /**
@@ -9350,7 +9350,7 @@ export interface components {
             entities: number;
             /**
              * Capped
-             * @description contradiction: held to medium by one left open.
+             * @description Held to medium: contradiction — one left open; weak_dimension — a dimension measured under 0.6.
              */
             capped: string | null;
             /**
