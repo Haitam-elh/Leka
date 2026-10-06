@@ -114,6 +114,7 @@ recorded as a run, and is not started again while the previous one is still acti
 | `source-sync` | `leka.ingestion.sync.run_enqueue_due_syncs` — queues the passes, see [sync.md](sync.md) | :10 :25 :40 :55 | low |
 | `model-sweep` | `leka.knowledge.job.run_model_sweep` — the company models behind their enrichment, see [company-model.md](company-model.md) | hourly, :48 | low |
 | `context-sweep` | `leka.context.job.run_context_sweep` — a pass for each workspace whose contexts follow the model; old checks forgotten, see [context.md](context.md) § 14 | hourly, :52 | low |
+| `intelligence-sweep` | `leka.intelligence.job.run_intelligence_sweep` — a run for each workspace whose analysis is behind: never analysed, a newer build, a new catalogue, a day old; dead runs closed, old ones forgotten, see [intelligence.md](intelligence.md) § 2, § 8 | hourly, :56 | low |
 
 ---
 

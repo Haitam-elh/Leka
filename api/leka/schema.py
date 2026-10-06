@@ -28,6 +28,7 @@ import leka.context
 import leka.governance
 import leka.identity
 import leka.ingestion
+import leka.intelligence
 import leka.intentions
 import leka.knowledge
 import leka.platform  # noqa: F401

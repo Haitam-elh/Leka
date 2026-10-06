@@ -26,6 +26,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { cn } from "cn";
+import { LekaInsights } from "@/components/insights/leka-insights";
 import { CompactIntentionComposer } from "@/components/intentions/compact-composer";
 import { PageContainer } from "@/components/shell/page-container";
 import { useCurrentUser } from "@/components/shell/shell-provider";
@@ -341,16 +342,9 @@ function InsightsCard() {
           {t.overview.insightsTitle}
         </h2>
       </div>
-      <p className="flex-1 text-[0.9375rem] leading-snug text-shell-muted">
-        {t.overview.insightsEmpty}
-      </p>
-      <Link
-        href={routes.intentionNew()}
-        className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-brand-navy px-4 py-2.5 text-sm font-medium text-white outline-none hover:bg-brand-navy/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-      >
-        {t.overview.insightsAction}
-        <ArrowRight className="size-4" aria-hidden="true" />
-      </Link>
+      {/* What LEKA's analyses concluded (LEKA-377): two, so the card keeps
+          the height of the state beside it. */}
+      <LekaInsights shown={2} />
     </section>
   );
 }

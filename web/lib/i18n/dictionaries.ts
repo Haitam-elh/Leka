@@ -377,6 +377,41 @@ const fr = {
     statContradictions: "contradiction détectée",
     loadFailed: "Impossible de charger vos sources pour le moment.",
   },
+  /** What LEKA concluded (LEKA-377): its findings, each worded from its
+   * code and values — docs/intelligence.md says what each means. */
+  insights: {
+    failed: "Les analyses de LEKA n'ont pas pu être lues.",
+    retry: "Réessayer",
+    never: "LEKA n'a pas encore analysé votre environnement.",
+    nothing: "Rien à signaler : la dernière analyse n'a rien trouvé d'ouvert.",
+    analysed: "Dernière analyse · {when}",
+    analysing: "Analyse en cours…",
+    analyse: "Analyser maintenant",
+    already: "Une analyse est déjà en cours : elle répondra.",
+    more: "+ {count} autre(s) point(s) ouvert(s)",
+    severity: { high: "Important", medium: "À surveiller", low: "Mineur" },
+    dependency: {
+      title: "{count} éléments dépendent de {name}",
+      incident: "En incident",
+      attention: "Demande de l'attention",
+      deduced: "Rien ne le surveille — son état est déduit",
+      unwatched: "Rien ne le surveille",
+      watched: "Surveillé",
+    },
+    ownership: {
+      title: "Aucun responsable nommé pour {name}",
+      relied: "{kind} · {count} élément(s) en dépendent",
+      maintained: "Maintenu par {names}",
+    },
+    context: {
+      failed: "Le contexte « {title} » n'a pas pu être refait",
+      behind: "Le contexte « {title} » est en retard sur le modèle",
+      behindDetail: "{count} changement(s) non pris en compte",
+      weak: "Le contexte « {title} » est jugé faible",
+      weakDetail: "Qualité {score} %",
+      version: "Version {version}",
+    },
+  },
   /** The knowledge components (LEKA-340): entities, relations, provenance, quality. */
   knowledge: {
     status: {
@@ -3453,6 +3488,39 @@ const en: Dictionary = {
     statEvents: "correlated events",
     statContradictions: "contradiction found",
     loadFailed: "Your sources cannot be loaded right now.",
+  },
+  insights: {
+    failed: "LEKA's analyses could not be read.",
+    retry: "Try again",
+    never: "LEKA has not analysed your environment yet.",
+    nothing: "Nothing to report: the latest analysis found nothing open.",
+    analysed: "Latest analysis · {when}",
+    analysing: "Analysing…",
+    analyse: "Analyse now",
+    already: "An analysis is already under way: it will answer.",
+    more: "+ {count} more open point(s)",
+    severity: { high: "Important", medium: "To watch", low: "Minor" },
+    dependency: {
+      title: "{count} things rely on {name}",
+      incident: "In incident",
+      attention: "Needs attention",
+      deduced: "Nothing watches it — its state is deduced",
+      unwatched: "Nothing watches it",
+      watched: "Watched",
+    },
+    ownership: {
+      title: "No one is named as owner of {name}",
+      relied: "{kind} · {count} thing(s) rely on it",
+      maintained: "Maintained by {names}",
+    },
+    context: {
+      failed: "The context “{title}” could not be made again",
+      behind: "The context “{title}” is behind the model",
+      behindDetail: "{count} change(s) not taken in",
+      weak: "The context “{title}” is judged weak",
+      weakDetail: "Quality {score}%",
+      version: "Version {version}",
+    },
   },
   knowledge: {
     status: {

@@ -2918,6 +2918,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/intelligence/analyzers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Analyzers
+         * @description The analyses LEKA runs: what each reads, how it reasons, its version,
+         *     whether it can run here — a model-assisted one waits for the model
+         *     gateway.
+         */
+        get: operations["analyzers_api_v1_intelligence_analyzers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runs
+         * @description The runs, the latest first: why each ran, from which build of the
+         *     model, what came of it.
+         */
+        get: operations["runs_api_v1_intelligence_runs_get"];
+        put?: never;
+        /**
+         * Request Run
+         * @description Analyse now: every analysis, or those named — an unknown name is 422.
+         *     One run at a time per workspace: `queued` is false when one is already
+         *     on its way, and it will be the one that answers.
+         */
+        post: operations["request_run_api_v1_intelligence_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Run
+         * @description One run, with what each analysis did: found what, opened, resolved —
+         *     or failed, timed out, was skipped, and why.
+         */
+        get: operations["run_api_v1_intelligence_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Findings
+         * @description The findings, the most pressing first (`sort=rank`, the default) or
+         *     the latest seen (`sort=last_seen_at`).
+         */
+        get: operations["findings_api_v1_intelligence_findings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/findings/{finding_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Finding
+         * @description One finding: what shows it, where that was read — the build of the
+         *     model, the sources, the context version, the analysis and its version —
+         *     and which runs first saw it, last saw it, resolved it.
+         */
+        get: operations["finding_api_v1_intelligence_findings__finding_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intelligence/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Summary
+         * @description What is open, by severity; the most pressing; the latest run.
+         */
+        get: operations["summary_api_v1_intelligence_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2930,6 +3063,59 @@ export interface components {
         AccountDeletion: {
             /** Password */
             password: string;
+        };
+        /**
+         * AnalysisRequest
+         * @description Analyse now. Every analysis, or those named.
+         */
+        AnalysisRequest: {
+            /**
+             * Analyzers
+             * @description Their names; none: every one.
+             */
+            analyzers?: string[] | null;
+        };
+        /**
+         * AnalysisRequested
+         * @description `queued` is false when a run is already on its way: it will be the
+         *     one that answers.
+         */
+        AnalysisRequested: {
+            /** Queued */
+            queued: boolean;
+        };
+        /**
+         * AnalyzerRead
+         * @description One analysis LEKA runs: what it reads, how it reasons, whether it can
+         *     run here and now.
+         */
+        AnalyzerRead: {
+            /** Name */
+            name: string;
+            /** Version */
+            version: number;
+            /**
+             * Category
+             * @description architecture, organisation, context…
+             */
+            category: string;
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "rules" | "model";
+            /** Reads */
+            reads: ("model" | "context")[];
+            /**
+             * Summary
+             * @description What it looks for (English).
+             */
+            summary: string;
+            /**
+             * Available
+             * @description False for a model-assisted one: no model gateway yet.
+             */
+            available: boolean;
         };
         /**
          * ArchitectureBundleRead
@@ -6596,6 +6782,23 @@ export interface components {
         ErrorEnvelope: {
             error: components["schemas"]["ErrorBody"];
         };
+        /** EvidenceRead */
+        EvidenceRead: {
+            /**
+             * Kind
+             * @description entity, relationship, context.
+             */
+            kind: string;
+            /** Id */
+            id: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Detail
+             * @description What it shows (English).
+             */
+            detail: string;
+        };
         /**
          * EvidenceRecord
          * @description A record an element was read from: which source, its id there, what
@@ -6774,6 +6977,169 @@ export interface components {
             path: string;
             /** Message */
             message: string;
+        };
+        /**
+         * FindingDetail
+         * @description And what shows it, where that was read, which runs saw it.
+         */
+        FindingDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Analyzer */
+            analyzer: string;
+            /** Analyzer Version */
+            analyzer_version: number;
+            /** Category */
+            category: string;
+            /**
+             * Code
+             * @description What it says, for the interface to word.
+             */
+            code: string;
+            /**
+             * Params
+             * @description The values the code is worded with.
+             */
+            params: {
+                [key: string]: unknown;
+            };
+            /**
+             * Statement
+             * @description What it says, in English.
+             */
+            statement: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "high" | "medium" | "low";
+            /**
+             * Rank
+             * @description Its place: severity first (300s high), then its weight.
+             */
+            rank: number;
+            /** Confidence */
+            confidence: number;
+            subject: components["schemas"]["SubjectRead"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "resolved";
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Resolved At */
+            resolved_at: string | null;
+            /**
+             * Occurrences
+             * @description How many runs saw it.
+             */
+            occurrences: number;
+            /** Related */
+            related: components["schemas"]["SubjectRead"][];
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceRead"][];
+            /**
+             * Provenance
+             * @description The build of the model, the sources' kinds, the context version, the analysis and its version.
+             */
+            provenance: {
+                [key: string]: unknown;
+            };
+            /**
+             * First Run Id
+             * Format: uuid
+             */
+            first_run_id: string;
+            /**
+             * Last Run Id
+             * Format: uuid
+             */
+            last_run_id: string;
+            /** Resolved Run Id */
+            resolved_run_id: string | null;
+            /** Reopened */
+            reopened: number;
+        };
+        /**
+         * FindingRead
+         * @description What an analysis concluded about one thing.
+         */
+        FindingRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Analyzer */
+            analyzer: string;
+            /** Analyzer Version */
+            analyzer_version: number;
+            /** Category */
+            category: string;
+            /**
+             * Code
+             * @description What it says, for the interface to word.
+             */
+            code: string;
+            /**
+             * Params
+             * @description The values the code is worded with.
+             */
+            params: {
+                [key: string]: unknown;
+            };
+            /**
+             * Statement
+             * @description What it says, in English.
+             */
+            statement: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "high" | "medium" | "low";
+            /**
+             * Rank
+             * @description Its place: severity first (300s high), then its weight.
+             */
+            rank: number;
+            /** Confidence */
+            confidence: number;
+            subject: components["schemas"]["SubjectRead"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "resolved";
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Resolved At */
+            resolved_at: string | null;
+            /**
+             * Occurrences
+             * @description How many runs saw it.
+             */
+            occurrences: number;
         };
         /**
          * FoldedRead
@@ -7291,6 +7657,27 @@ export interface components {
             dependents: number;
             /** Last Seen At */
             last_seen_at: string | null;
+        };
+        /**
+         * IntelligenceSummary
+         * @description Where the workspace's analysis stands: what is open, how bad, the
+         *     most pressing — for a product surface to show at a glance.
+         */
+        IntelligenceSummary: {
+            /**
+             * Open
+             * @description The open findings, by severity.
+             */
+            open: {
+                [key: string]: number;
+            };
+            /**
+             * Top
+             * @description The most pressing open ones.
+             */
+            top: components["schemas"]["FindingRead"][];
+            /** @description The latest run, whatever came of it. */
+            latest: components["schemas"]["RunRead"] | null;
         };
         /**
          * IntentAsk
@@ -8379,6 +8766,19 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** PageEnvelope[FindingRead] */
+        PageEnvelope_FindingRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["FindingRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
         /** PageEnvelope[GraphRelationshipRead] */
         PageEnvelope_GraphRelationshipRead_: {
             /**
@@ -8529,6 +8929,19 @@ export interface components {
              * @description The rows on this page, in the requested order.
              */
             data: components["schemas"]["ResolvedEntityRead"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
+             */
+            next_cursor?: string | null;
+        };
+        /** PageEnvelope[RunRead] */
+        PageEnvelope_RunRead_: {
+            /**
+             * Data
+             * @description The rows on this page, in the requested order.
+             */
+            data: components["schemas"]["RunRead"][];
             /**
              * Next Cursor
              * @description Pass as ?cursor= to get the next page. Null means this is the last one. Opaque: do not parse it, do not build one.
@@ -9858,6 +10271,107 @@ export interface components {
          * @enum {string}
          */
         Role: "owner" | "admin" | "member";
+        /** RunDetail */
+        RunDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "succeeded" | "partial" | "failed" | "abandoned";
+            /**
+             * Trigger
+             * @enum {string}
+             */
+            trigger: "model" | "schedule" | "request";
+            /** Requested By */
+            requested_by: string | null;
+            /**
+             * Requested
+             * @description The analyses asked for; empty: every one.
+             */
+            requested: string[];
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Model Built At
+             * @description The build of the model it read.
+             */
+            model_built_at: string | null;
+            /**
+             * Job Run Id
+             * @description The background job that ran it.
+             */
+            job_run_id: string | null;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Error */
+            error: string | null;
+            /** Steps */
+            steps: components["schemas"]["StepRead"][];
+        };
+        /**
+         * RunRead
+         * @description One time LEKA analysed the workspace.
+         */
+        RunRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "succeeded" | "partial" | "failed" | "abandoned";
+            /**
+             * Trigger
+             * @enum {string}
+             */
+            trigger: "model" | "schedule" | "request";
+            /** Requested By */
+            requested_by: string | null;
+            /**
+             * Requested
+             * @description The analyses asked for; empty: every one.
+             */
+            requested: string[];
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Model Built At
+             * @description The build of the model it read.
+             */
+            model_built_at: string | null;
+            /**
+             * Job Run Id
+             * @description The background job that ran it.
+             */
+            job_run_id: string | null;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Error */
+            error: string | null;
+        };
         /**
          * SchemaRead
          * @description A schema — a MySQL or MongoDB database — and what is in it.
@@ -10477,6 +10991,59 @@ export interface components {
              */
             pending: boolean;
             last_run: components["schemas"]["ProcessingRunRead"] | null;
+        };
+        /**
+         * StepRead
+         * @description One analysis of a run: what it did, or why it did not.
+         */
+        StepRead: {
+            /** Analyzer */
+            analyzer: string;
+            /** Version */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "succeeded" | "failed" | "timed_out" | "skipped";
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Duration Ms */
+            duration_ms: number;
+            /**
+             * Counts
+             * @description found, opened, seen (again), resolved, reopened.
+             */
+            counts: {
+                [key: string]: number;
+            };
+            /**
+             * Error
+             * @description Failed or timed out: the error's type.
+             */
+            error: string | null;
+            /**
+             * Reason
+             * @description Skipped: no_model, no_material.
+             */
+            reason: string | null;
+        };
+        /** SubjectRead */
+        SubjectRead: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "entity" | "context";
+            /** Id */
+            id: string | null;
+            /** Name */
+            name: string;
+            /** Kind */
+            kind: string | null;
         };
         /** SyncRequested */
         SyncRequested: {
@@ -25214,6 +25781,683 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": unknown;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    analyzers_api_v1_intelligence_analyzers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyzerRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    runs_api_v1_intelligence_runs_get: {
+        parameters: {
+            query?: {
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_RunRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    request_run_api_v1_intelligence_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalysisRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisRequested"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    run_api_v1_intelligence_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    findings_api_v1_intelligence_findings_get: {
+        parameters: {
+            query?: {
+                /** @description Open or resolved; none: both. */
+                status?: ("open" | "resolved") | null;
+                severity?: ("high" | "medium" | "low") | null;
+                category?: string | null;
+                analyzer?: string | null;
+                /** @description About this entity or context. */
+                subject?: string | null;
+                /** @description From a previous response's next_cursor. Opaque. */
+                cursor?: string | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Field to sort by. Each resource documents what it allows. */
+                sort?: string | null;
+                /** @description Ascending or descending. */
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageEnvelope_FindingRead_"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    finding_api_v1_intelligence_findings__finding_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    summary_api_v1_intelligence_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntelligenceSummary"];
                 };
             };
             /** @description The request could not be understood. */

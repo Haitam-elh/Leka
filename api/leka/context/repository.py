@@ -325,6 +325,31 @@ class ContextRepository(WorkspaceScopedRepository):
         )
         return list(rows.scalars())
 
+    async def standing(
+        self, *, used_since: datetime, limit: int
+    ) -> list[tuple[Context, dict[str, object] | None]]:
+        """Where the contexts in use stand (LEKA-377): each, with the quality
+        its latest version was judged — the latest used first."""
+        rows = await self._session.execute(
+            select(Context, ContextVersion.quality)
+            .outerjoin(
+                ContextVersion,
+                and_(
+                    ContextVersion.workspace_id == Context.workspace_id,
+                    ContextVersion.context_id == Context.id,
+                    ContextVersion.version == Context.current_version,
+                ),
+            )
+            .where(
+                Context.workspace_id == self.workspace_id,
+                Context.status != "archived",
+                Context.used_at >= used_since,
+            )
+            .order_by(Context.used_at.desc(), Context.id)
+            .limit(limit)
+        )
+        return [(context, quality) for context, quality in rows.tuples()]
+
     def checks(self, context_id: uuid.UUID) -> Select[tuple[ContextCheck]]:
         """Every time a context was made again, for a page."""
         return self.select(ContextCheck).where(ContextCheck.context_id == context_id)

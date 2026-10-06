@@ -10,6 +10,7 @@ May depend on leka.ingestion and below. Must not import leka.context or
 leka.intentions (architecture rule 1).
 """
 
+from leka.knowledge.architecture import RELIED_ON
 from leka.knowledge.graph import GraphService
 from leka.knowledge.models import (
     Entity,
@@ -36,6 +37,8 @@ from leka.knowledge.repository import (
     RelationshipFilters,
 )
 from leka.knowledge.schemas import (
+    ArchitectureCardRead,
+    ArchitectureLinkRead,
     ArchitectureRead,
     BusinessContext,
     BusinessDetail,
@@ -122,7 +125,10 @@ __all__ = [
     "ENTITY_KINDS",
     "MODEL_VERSION",
     "RELATIONSHIP_KINDS",
+    "RELIED_ON",
     "VIEWS",
+    "ArchitectureCardRead",
+    "ArchitectureLinkRead",
     "ArchitectureRead",
     "BusinessContext",
     "BusinessDetail",

@@ -349,7 +349,8 @@ async def test_the_build_s_event_queues_a_pass_and_the_sweep_queues_each_that_fo
                 .first()
             )
     assert event is not None
-    assert [route.job for route in ROUTES[MODEL_BUILT]] == ["leka.context.job.run_follow_for_event"]
+    # The contexts follow the build — beside the analyses (LEKA-377).
+    assert "leka.context.job.run_follow_for_event" in [route.job for route in ROUTES[MODEL_BUILT]]
     queued = _capture(monkeypatch)
 
     assert await context_job._queue_for_event(event.id) == "queued"
