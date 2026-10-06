@@ -172,7 +172,11 @@ A **workspace** stage, after enrichment: `model:<workspace>`,
   one, or a new `MODEL_VERSION`, is something to build; otherwise nothing is.
 - **And the validated facts** (`model_assertions`, LEKA-380): an attribute,
   a relationship that LEKA's enrichment proposed and someone accepted —
-  applied beside what the sources say ([intelligence.md § 13](intelligence.md)).
+  applied beside what the sources say ([intelligence.md § 13](intelligence.md));
+  and what someone kept settling a conflict between sources (LEKA-382): an
+  attribute's value over its sources' — no longer `disputed` — or, for a
+  relationship a thing has one of, the others refuted (`absence`), left out
+  whoever states them ([intelligence.md § 14](intelligence.md)).
   Their fingerprint is part of what the model was made from
   (`model_runs.assertions`): a fact accepted or withdrawn since is something
   to build, and the decision queues it (`queue_model_build`). Withdrawn, a
@@ -201,7 +205,7 @@ A **workspace** stage, after enrichment: `model:<workspace>`,
 `not_modelled`, `attributes_dropped`, `relationships_not_modelled`,
 `relationships_to_unmodelled`, `assertions_applied`,
 `assertions_superseded` — a validated attribute a source now says, not
-overriding it (LEKA-380).
+overriding it (LEKA-380) — `relationships_refuted` (LEKA-382).
 
 ## 7. The API
 

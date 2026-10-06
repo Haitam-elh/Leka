@@ -7,9 +7,9 @@ intentions and the screens that build on them.
 
 This is the frame of the Intelligence epic. LEKA-377 shipped the frame and
 three representative analyses; LEKA-378 adds change and impact (§ 11),
-LEKA-379 knowledge gaps (§ 12), LEKA-380 knowledge enrichment (§ 13); 381
-(quality), 382 (conflicts) and 383 (evolution and insights) add theirs to
-it.
+LEKA-379 knowledge gaps (§ 12), LEKA-380 knowledge enrichment (§ 13),
+LEKA-382 knowledge conflicts (§ 14); 381 (quality) and 383 (evolution and
+insights) add theirs to it.
 
 Code: `api/leka/intelligence/` — `analysis.py` (the frame), `rules.py` (the
 analyses), `service.py`, `repository.py`, `job.py`; the routes in
@@ -25,6 +25,7 @@ analyses), `service.py`, `repository.py`, `job.py`; the routes in
 | **Run** | One time LEKA analysed a workspace: why (`model`, `schedule`, `request`), by whom, from which build of the model (`model_built_at`), which analyses, the background job that ran it (`job_run_id`), what came of it. | `intelligence_runs` |
 | **Step** | One analysis of a run: its version, its duration, what it found — or the error's type, or why it was skipped. | `intelligence_steps` |
 | **Finding** | What an analysis concluded about one thing, kept across runs under one key: open or resolved, how bad, how sure, what it is about, what shows it, where that was read, which runs saw it. | `intelligence_findings` |
+| **Conflict** (LEKA-382) | What the model's sources disagree on — an attribute, a relationship a thing has one of — kept across runs under one key: open, resolved, dismissed or gone, every side weighed, one recommended, every decision taken. Once resolved, facts the model's build applies (§ 14). | `knowledge_conflicts`, `authority_rules`, `model_assertions` |
 | **Candidate** (LEKA-380) | An enrichment of the company model an analysis proposed — a relationship, an attribute — kept across runs under one key: proposed, accepted, rejected or withdrawn, how sure, what shows it, every decision taken. Once accepted, a fact the model's build applies (§ 13). | `enrichment_candidates`, `model_assertions` |
 
 An analysis never touches the database. A run reads its **material** once
@@ -78,6 +79,11 @@ with:
 - whether it follows the model;
 - since when it has been behind, and how many changes are pending;
 - the quality level and score of its latest version.
+
+**What the sources disagree on** (LEKA-382, `Reads.CONFLICTS`): each
+attribute of a thing its sources say differently, each relationship a
+thing has one of said to several (`GraphService.disputes`, 500 at most),
+with every side's sources; and the workspace's authority rules.
 
 **The changes of the last 30 days** (LEKA-378), at most 100, each with its
 footprint: what it was made to, what that reaches, what followed (§ 11).
@@ -185,6 +191,7 @@ and the file and line that state it, and the context with its version.
 | `gaps_coverage` | gaps | model | A whole family of sources not connected, once, with all it leaves unknown | by priority |
 | `enrich_code`, `enrich_runtime`, `enrich_owner`, `enrich_application`, `enrich_criticality`, `enrich_description` (LEKA-380) | enrichment | model | Proposals, not findings: what the model lacks that the evidence around it says (§ 13) | — a confidence instead |
 | `enrich_summary` | enrichment | model | What a service does, in words — model-assisted: skipped until the gateway exists | — |
+| `conflicts` (LEKA-382) | conflicts | conflicts | Conflicts, not findings: what the model's sources disagree on, each side weighed, one recommended (§ 14) | — a recommendation instead |
 
 **What "watched" means.** A thing is watched when its state is known — from a
 monitoring tool, or its provider — and not deduced. If its state is unknown,
@@ -560,11 +567,150 @@ as À valider is.
 join À valider's queue; a workspace's own policy threshold, which is one
 constant today (`POLICY_CONFIDENCE`).
 
+## 14. Knowledge conflicts (LEKA-382)
+
+What the model's sources disagree on, how much each is to be believed,
+what LEKA recommends — never decided in silence. Code:
+`api/leka/intelligence/conflicts.py` (the judgement, pure), `arbitration.py`
+(what becomes of a conflict); `GraphService.disputes` (leka.knowledge).
+
+**Before this**, resolution (LEKA-357) chose a value when the sources of one
+thing disagreed — the most recent, then the surest — and kept every value
+in the entity's `provenance.conflicts`. The context engine (LEKA-372) says
+the disagreements of what a context holds. Nothing weighed the sources,
+and no one could settle a disagreement.
+
+**What a conflict is.** Of what runs, keeps data or is the company's —
+services, applications, databases, repositories, resources, teams, people,
+capabilities, processes (`knowledge.graph.DISPUTED`); a ticket's or a
+commit's disagreements follow theirs, and a removed thing has none.
+
+| Kind | | Example |
+| --- | --- | --- |
+| `attribute` | the sources of one thing say two values or more | payment-api's SLA is 99.95 to GitHub, 99.9 to Datadog |
+| `relationship` | a thing has one of something and is said to have several: an owner (`owned_by` / `owns`), a manager (`reports_to`), a lead (`led_by`), a parent (`child_of`) — the context engine's `SINGLE` | payment-api is owned by Nadia Kowalski (GitHub) and by Nadia K. (Jira) |
+
+**How much a source is believed** — its authority, from 0 to 1.
+
+By default, it depends on what is disagreed on (`DOMAINS`) and on the
+source's family, its connector's category (`ORDER`). The first family of
+each row is believed at 1, the next ones less: 0.85, 0.7, 0.6, 0.5, 0.4,
+0.35. A source of no known family is believed at 0.3.
+
+| Disagreed on | Believed first |
+| --- | --- |
+| operations — state, health, incidents, severity, priority | monitoring, cloud, code, project, docs, data, custom |
+| runtime — environment, region, instance, runtime, image, version… | cloud, code, monitoring, data, project, docs, custom |
+| organisation — owner, manager, lead, parent, team, e-mail, title… | code, project, docs, monitoring, cloud, data, custom |
+| business — criticality, tier, SLA, stage, description, category | custom (a catalogue), code, monitoring, docs, project, cloud, data |
+| anything else | code, cloud, monitoring, project, docs, data, custom |
+
+**The workspace's authority rules** (`authority_rules`) override that, on
+an attribute or role — or on everything, `*`:
+- a source **preferred** is believed at 1;
+- a source **avoided** is believed at 0.1;
+- the rule on the attribute wins over the rule on everything.
+
+A rule decides nothing by itself: it changes what LEKA recommends.
+
+**Each side, scored:**
+
+| | |
+| --- | --- |
+| authority | its most believed source's — × 0.6 for an inferred tie |
+| freshness | when its most recent source said it: 7 days 1, 30 days 0.8, 90 days 0.5, older 0.3, unknown 0.5 — × 0.6 for a source in error, 0.8 degraded, 0.3 disabled |
+| corroboration | how many sources say it, a third each, up to 1 |
+| score | 0.55 × authority + 0.3 × freshness + 0.15 × corroboration |
+
+**The recommendation** is the best side, with its strength and its
+reasons:
+
+| Strength | When |
+| --- | --- |
+| `rule` | a rule the workspace set makes it (its side has a preferred source, the next has none) |
+| `clear` | it leads by 0.1 or more |
+| `weak` | it leads by less |
+| `none` | no side leads: no recommendation |
+
+Its reasons: `rule`, `authority` (believed more by 0.1), `fresher` (by 0.1),
+`corroborated` (more sources), `chosen` (what the model shows already).
+
+**A conflict's life** (`knowledge_conflicts`, one row per thing and what
+about):
+
+| State | |
+| --- | --- |
+| `open` | waiting for someone. Seen again, updated — sides, recommendation; no longer seen — the sources agree, or the thing went — `gone` |
+| `resolved` | someone kept a side. The model shows it from the next build on, whoever says otherwise |
+| `dismissed` | someone said it is no contradiction — two SLOs, both true; the model goes on as resolution chose |
+| `gone` | no longer disagreed on; disagreed on again, open again |
+
+A resolved or dismissed conflict **reopens** when a value appears that no
+one decided on (`decided_values`). The decision stands meanwhile: the model
+goes on showing what was kept until someone decides again.
+
+**The decision's facts** are the model's validated facts (§ 13,
+`model_assertions`, `provenance.conflict_id`). They are written or
+withdrawn in the decision's transaction, and the decision queues a build:
+- **an attribute kept**: its value, as an override — the source's value
+  `replaced` is kept in the entity's provenance, and the attribute is no
+  longer `disputed`; every value its sources said stays in
+  `provenance.conflicts`;
+- **a relationship kept**: every tie of the other sides is refuted (a fact
+  of the kind `absence`). The build leaves a refuted tie out whoever
+  states it (`relationships_refuted`), and the relationship's history says
+  it went;
+- **reopened**: the facts are withdrawn, and the model is as its sources
+  say at the next build;
+- **remembered**: keeping a side may also prefer its source on this from
+  now on (`remember`), which writes an authority rule.
+
+Every decision is kept on the conflict (`history`): what, who, when, why,
+the value.
+
+**The API:**
+
+| Route | | Permission |
+| --- | --- | --- |
+| `GET /intelligence/conflicts?status&kind&subject` | the conflicts, the latest seen first | `workspace:read` |
+| `GET /intelligence/conflicts/{id}` | every side, each source's authority, freshness, rule; the recommendation; the history | `workspace:read` |
+| `GET /intelligence/conflicts/summary` | how many are open, resolved, dismissed, gone | `workspace:read` |
+| `POST …/conflicts/{id}/resolve` `{side, reason?, remember?}` | keep a side; 409 for one gone, a side it does not have, a thing removed | `intention:approve` |
+| `POST …/conflicts/{id}/dismiss` `{reason?}` | no contradiction; 409 for one gone | `intention:approve` |
+| `POST …/conflicts/{id}/reopen` | the decision withdrawn; 409 for one not decided | `intention:approve` |
+| `GET /intelligence/authority-rules`, `POST` `{about, source_id, stance, reason?}`, `DELETE …/{id}` | the workspace's word on its sources; said again for the same source and attribute, replaced | read `workspace:read`; write `intention:approve` |
+
+**In the app:**
+- **À valider**: the conflicts sit among the proposals, as the type
+  "Conflits". Each row reads « SLA de payment-api : 99.95 ou 99.9 » with
+  what LEKA recommends and how clearly.
+- **Opened**, a conflict shows:
+  - what the model shows now;
+  - every side, with each source's reliability, when it said it, and the
+    workspace's rule on it;
+  - the side recommended and why.
+
+  Who may approve keeps a side (« Retenir »), optionally preferring its
+  source from now on, says it is no contradiction, or reopens what was
+  decided. The history keeps each decision.
+- **Vue d'ensemble** and **the sidebar's count**: the conflicts waiting,
+  with the proposals.
+
+**On the demo:**
+- payment-api's SLA is 99.95 to GitHub (believed at 0.85) and 99.9 to
+  Datadog (0.7): LEKA recommends 99.95, weakly. A rule preferring Datadog
+  on the SLA makes it 99.9, by the rule.
+- payment-api is owned by Nadia Kowalski (GitHub) and Nadia K. (Jira):
+  probably one person, two accounts — dismissing it says so.
+
+**Not here:** merging two accounts of one person, which is resolution's
+(LEKA-357).
+
 ## Not yet
 
 - **Model-assisted analyses.** The model gateway is empty (LEKA-329); they
   are declared and skipped.
 - **Dismissing a finding** ("known, accepted"). That is a decision, and it
   belongs to LEKA-389/390 (findings, human decision).
-- **The epic's other analyses** — quality, conflicts, evolution — are
-  LEKA-381 to 383, on this frame.
+- **The epic's other analyses** — quality (LEKA-381) and evolution
+  (LEKA-383) — on this frame.

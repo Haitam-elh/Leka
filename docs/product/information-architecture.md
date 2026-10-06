@@ -41,7 +41,8 @@ Capacités             Votre équipe technologique à la demande.
 ─────────────────────────────────────────────────────────────────────────
 Activité                                         /activity
 À valider                                        /approvals   with a count beside it: the
-                                                              proposals waiting (LEKA-380)
+                                                              proposals (LEKA-380) and the
+                                                              conflicts (LEKA-382) waiting
 ─────────────────────────────────────────────────────────────────────────
 Administration
   Sources                                        /sources
@@ -241,7 +242,7 @@ How the sidebar is built — its components, states and accessibility — is
 
 | Mocked | Owner |
 | --- | --- |
-| The decisions on intentions in "À valider", and their part of its count — the enrichment proposals are real since LEKA-380 | LEKA-390 |
+| The decisions on intentions in "À valider", and their part of its count — the enrichment proposals (LEKA-380) and the conflicts between sources (LEKA-382) are real | LEKA-390 |
 | The notification dot | no ticket yet |
 | The Capacités pages, and their three views | LEKA-393 and after |
 | Switching workspace | LEKA-331 |
