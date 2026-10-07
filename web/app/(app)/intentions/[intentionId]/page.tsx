@@ -1,7 +1,7 @@
 "use client";
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page";
+import { IntentionScreen } from "@/components/intentions/intention-screen";
 
 export default function Page() {
-  return <PlaceholderPage />;
+  return <IntentionScreen />;
 }
