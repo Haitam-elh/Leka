@@ -165,3 +165,60 @@ class IntentionLink(Base, WorkspaceScopedMixin):
     linked_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+
+ANALYSIS_STATUSES = ("running", "complete", "partial", "inconclusive", "failed", "blocked")
+ANALYSIS_TRIGGERS = ("created", "asked_again", "requested", "sweep")
+
+
+class IntentionAnalysis(Base, WorkspaceScopedMixin):
+    """One analysis of an intention (LEKA-388): the capabilities chosen and
+    why, what each did — succeeded, failed, timed out, skipped — and the
+    result, shaped for the decision interface, every piece of evidence with
+    where it came from. One per run: asked again, it is analysed again,
+    the earlier kept."""
+
+    __tablename__ = "intention_analyses"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "intention_id"],
+            ["intentions.workspace_id", "intentions.id"],
+            ondelete="CASCADE",
+            name="fk_intention_analyses_intention",
+        ),
+        UniqueConstraint("intention_id", "number", name="uq_intention_analyses_number"),
+        CheckConstraint(_in("status", ANALYSIS_STATUSES), name="status"),
+        CheckConstraint(_in("trigger", ANALYSIS_TRIGGERS), name="trigger"),
+        Index("ix_intention_analyses_intention", "intention_id", "number"),
+    )
+
+    intention_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # Its place among the intention's analyses: 1, 2, 3…
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    trigger: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # The context it read: which, which version — no foreign key, a context
+    # is archived and the analysis must still say what it read.
+    context_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    context_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    readiness: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The capabilities considered: chosen, and why; or not, and why.
+    selection: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    # What each did: its status, how long, its error's type, why skipped.
+    steps: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    # The result: findings, causes, impact, uncertainties, missing,
+    # confidence, support — and the evidence, each with its sources.
+    result: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    # Why it could not go on: a blocked context's critical issues, the
+    # error's type.
+    error: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")

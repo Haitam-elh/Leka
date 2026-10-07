@@ -15,7 +15,7 @@ from sqlalchemy import Select, func, or_, select
 
 from leka.db import WorkspaceScopedRepository
 from leka.intentions.lifecycle import PHASES
-from leka.intentions.models import Intention, IntentionEvent, IntentionLink
+from leka.intentions.models import Intention, IntentionAnalysis, IntentionEvent, IntentionLink
 
 
 @dataclass(frozen=True)
@@ -135,3 +135,12 @@ class IntentionRepository(WorkspaceScopedRepository):
         """Written, and read back: what the database set — its dates."""
         await self._session.flush()
         await self._session.refresh(intention)
+
+    async def analyses(self, intention_id: uuid.UUID, *, limit: int) -> Sequence[IntentionAnalysis]:
+        """Its analyses (LEKA-388), the latest first."""
+        return await self.list(
+            self.select(IntentionAnalysis)
+            .where(IntentionAnalysis.intention_id == intention_id)
+            .order_by(IntentionAnalysis.number.desc())
+            .limit(limit)
+        )

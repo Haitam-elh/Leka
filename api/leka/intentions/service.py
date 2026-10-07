@@ -50,10 +50,16 @@ from leka.intentions.lifecycle import (
     moves,
     phase,
 )
-from leka.intentions.models import Intention, IntentionEvent, IntentionLink
+from leka.intentions.models import (
+    Intention,
+    IntentionAnalysis,
+    IntentionEvent,
+    IntentionLink,
+)
 from leka.intentions.repository import IntentionRepository
 from leka.intentions.schemas import (
     ContextReadiness,
+    IntentionAnalysisRead,
     IntentionCounts,
     IntentionDetail,
     IntentionEventRead,
@@ -703,3 +709,68 @@ class IntentionService:
             archived=by_status.get("archived", 0),
             **counted,
         )
+
+    # ── its analyses (LEKA-388) ─────────────────────────────────────────
+
+    async def analyses(
+        self, intention_id: uuid.UUID, *, limit: int = 20
+    ) -> list[IntentionAnalysisRead] | None:
+        """Its analyses, the latest first; None when it does not exist."""
+        if await self._repository.intention(intention_id) is None:
+            return None
+        return [
+            analysis_read(row) for row in await self._repository.analyses(intention_id, limit=limit)
+        ]
+
+    async def analyse_again(
+        self,
+        intention_id: uuid.UUID,
+        *,
+        by: uuid.UUID | None,
+        steward: bool = False,
+        now: datetime | None = None,
+    ) -> Intention | None:
+        """Analysed again, as it now stands: analysing, it is run again;
+        failed, it is retried first. IllegalTransitionError otherwise."""
+        intention = await self._repository.intention(intention_id, lock=True)
+        if intention is None:
+            return None
+        _yours(intention, by, steward)
+        if intention.status == S.FAILED.value:
+            self._move(
+                intention,
+                S.ANALYSING,
+                actor=Actor.PERSON,
+                by=by,
+                at=_now(now),
+                reason="Analysed again.",
+            )
+        elif intention.status != S.ANALYSING.value:
+            raise IllegalTransitionError(S(intention.status), S.ANALYSING, Actor.PERSON)
+        if intention.archived_at is not None:
+            raise IntentionArchivedError
+        return intention
+
+
+def analysis_read(row: IntentionAnalysis) -> IntentionAnalysisRead:
+    """One analysis, as it is read (LEKA-388)."""
+    return IntentionAnalysisRead.model_validate(
+        {
+            "id": row.id,
+            "intention_id": row.intention_id,
+            "number": row.number,
+            "trigger": row.trigger,
+            "status": row.status,
+            "requested_by": row.requested_by,
+            "context_id": row.context_id,
+            "context_version": row.context_version,
+            "readiness": row.readiness,
+            "started_at": row.started_at,
+            "finished_at": row.finished_at,
+            "selection": row.selection,
+            "steps": row.steps,
+            "result": row.result,
+            "error": row.error,
+            "detail": row.detail,
+        }
+    )
