@@ -3495,6 +3495,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/intentions/understand": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Understand
+         * @description What LEKA would understand of these words (LEKA-385) — its goal,
+         *     whether it asks or requests, the actions, the things it is about, what
+         *     is ambiguous, each with the words it came from. Nothing is kept.
+         */
+        post: operations["understand_api_v1_intentions_understand_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/intentions/counts": {
         parameters: {
             query?: never;
@@ -3693,6 +3715,53 @@ export interface components {
         AccountDeletion: {
             /** Password */
             password: string;
+        };
+        /**
+         * ActionRead
+         * @description Something the asker wants done, or done to something.
+         */
+        ActionRead: {
+            /**
+             * Code
+             * @description restart, rollback, deploy, scale, stop, fix, update, migrate, investigate, compare, assess, list, document, notify, ticket.
+             */
+            code: string;
+            /**
+             * Said
+             * @description The word that says it.
+             */
+            said: string;
+            /**
+             * Changes Systems
+             * @description It would change a customer's systems: only after a person approves (LEKA-390, 391).
+             */
+            changes_systems: boolean;
+        };
+        /**
+         * AmbiguityRead
+         * @description What LEKA cannot tell, and what it would ask to tell it.
+         */
+        AmbiguityRead: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "too_short" | "unclear_goal" | "competing_goals" | "no_subject" | "unknown_subject" | "ambiguous_subject" | "action_without_target" | "several_requests" | "unknown_environment";
+            /**
+             * Blocking
+             * @description It cannot go on without an answer.
+             */
+            blocking: boolean;
+            /**
+             * Said
+             * @description What is ambiguous, in English.
+             */
+            said: string;
+            /**
+             * Options
+             * @description What it could mean: things, goals.
+             */
+            options?: string[];
         };
         /**
          * AnalysisRequest
@@ -8485,6 +8554,27 @@ export interface components {
             /** Email */
             email: string;
         };
+        /**
+         * GoalRead
+         * @description What the asker wants to achieve, as LEKA understood it (LEKA-385).
+         */
+        GoalRead: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "explain_cause" | "find_change" | "find_owner" | "map_dependencies" | "assess_impact" | "check_compliance" | "plan_migration" | "find_knowledge" | "investigate" | "act" | "unknown";
+            /**
+             * Said
+             * @description The words that say it, as written (folded).
+             */
+            said: string[];
+            /**
+             * Confidence
+             * @description 0 to 1: 0 when it could not be told.
+             */
+            confidence: number;
+        };
         /** GraphNodeRead */
         GraphNodeRead: {
             entity: components["schemas"]["EntityBrief"];
@@ -9240,7 +9330,7 @@ export interface components {
         };
         /**
          * IntentionDetail
-         * @description An intention with what it is linked to.
+         * @description An intention with what it is linked to, and what LEKA understood.
          */
         IntentionDetail: {
             /**
@@ -9299,8 +9389,14 @@ export interface components {
              * @description The states it may go to next.
              */
             moves: components["schemas"]["IntentionStatus"][];
+            /**
+             * Goal
+             * @description What it wants to achieve, as understood (LEKA-385).
+             */
+            goal: ("explain_cause" | "find_change" | "find_owner" | "map_dependencies" | "assess_impact" | "check_compliance" | "plan_migration" | "find_knowledge" | "investigate" | "act" | "unknown") | null;
             /** Links */
             links: components["schemas"]["IntentionLinkRead"][];
+            understanding: components["schemas"]["Understanding"] | null;
         };
         /**
          * IntentionEventRead
@@ -9450,12 +9546,17 @@ export interface components {
              * @description The states it may go to next.
              */
             moves: components["schemas"]["IntentionStatus"][];
+            /**
+             * Goal
+             * @description What it wants to achieve, as understood (LEKA-385).
+             */
+            goal: ("explain_cause" | "find_change" | "find_owner" | "map_dependencies" | "assess_impact" | "check_compliance" | "plan_migration" | "find_knowledge" | "investigate" | "act" | "unknown") | null;
         };
         /**
          * IntentionStatus
          * @enum {string}
          */
-        IntentionStatus: "submitted" | "analysing" | "awaiting_decision" | "approved" | "scheduled" | "executing" | "verifying" | "completed" | "rejected" | "failed" | "cancelled";
+        IntentionStatus: "submitted" | "needs_clarification" | "analysing" | "awaiting_decision" | "approved" | "scheduled" | "executing" | "verifying" | "completed" | "rejected" | "failed" | "cancelled";
         /**
          * InvitationCreate
          * @description An invitation request.
@@ -13270,6 +13371,82 @@ export interface components {
              * @enum {string}
              */
             origin: "source" | "model";
+        };
+        /**
+         * Understanding
+         * @description What LEKA understood of an intention (LEKA-385): the structured
+         *     intent, every part of it with the words it came from — the original
+         *     wording kept beside it. docs/intentions.md § 9.
+         */
+        Understanding: {
+            /** Version */
+            version: number;
+            /**
+             * Text
+             * @description The words, as asked.
+             */
+            text: string;
+            /**
+             * Mode
+             * @description A question to answer, or a request to act on.
+             * @enum {string}
+             */
+            mode: "question" | "request";
+            /**
+             * Mode Said
+             * @description What said it: « ? », « pourquoi », « redémarre ».
+             */
+            mode_said: string | null;
+            /**
+             * Kind
+             * @description What it asks the company model for (LEKA-373).
+             */
+            kind: string;
+            goal: components["schemas"]["GoalRead"];
+            /** Actions */
+            actions: components["schemas"]["ActionRead"][];
+            /** Entities */
+            entities: components["schemas"]["UnderstoodEntity"][];
+            /**
+             * Period
+             * @description since, until, origin, said.
+             */
+            period: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Environment */
+            environment: string | null;
+            /** Ambiguities */
+            ambiguities: components["schemas"]["AmbiguityRead"][];
+            /**
+             * Clear
+             * @description No blocking ambiguity: it can be analysed.
+             */
+            clear: boolean;
+        };
+        /**
+         * UnderstoodEntity
+         * @description A thing the intention is about, and how LEKA knows.
+         */
+        UnderstoodEntity: {
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /**
+             * How
+             * @enum {string}
+             */
+            how: "asked" | "named" | "business";
+            /** Said */
+            said: string | null;
+            /** Confidence */
+            confidence: number;
         };
         /** UserRead */
         UserRead: {
@@ -30496,6 +30673,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntentionCreated"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    understand_api_v1_intentions_understand_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntentAsk"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Understanding"];
                 };
             };
             /** @description The request could not be understood. */

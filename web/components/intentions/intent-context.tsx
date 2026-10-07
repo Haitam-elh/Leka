@@ -9,6 +9,7 @@ import { cn } from "cn";
 import { changeSaid } from "@/components/environment/context-freshness";
 import { QualityPanel, qualityGapSaid } from "@/components/environment/context-quality";
 import { gapSaid } from "@/components/intentions/gap-said";
+import { UnderstandingPanel } from "@/components/intentions/understanding";
 import { entityHref, IconTile, Logo, typeIcon, typeLabel } from "@/components/environment/parts";
 import { IntelligenceSection, Pill } from "@/components/intelligence";
 import { exactDate } from "@/components/knowledge/time";
@@ -79,6 +80,10 @@ export function IntentContext({
         </div>
         {assembled.trigger === "reasked" ? <AskedAgain assembled={assembled} /> : null}
       </section>
+      {/* What LEKA understood of it (LEKA-385), and what it would ask. */}
+      {intention?.understanding ? (
+        <UnderstandingPanel understanding={intention.understanding} />
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
         <div className="min-w-0 space-y-4">

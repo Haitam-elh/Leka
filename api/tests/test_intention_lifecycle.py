@@ -86,7 +86,15 @@ def test_nothing_is_approved_before_it_is_analysed_nor_run_before_approved() -> 
 
 
 def test_cancelled_by_a_person_until_its_actions_run() -> None:
-    cancellable = {S.SUBMITTED, S.ANALYSING, S.AWAITING_DECISION, S.APPROVED, S.SCHEDULED, S.FAILED}
+    cancellable = {
+        S.SUBMITTED,
+        S.NEEDS_CLARIFICATION,
+        S.ANALYSING,
+        S.AWAITING_DECISION,
+        S.APPROVED,
+        S.SCHEDULED,
+        S.FAILED,
+    }
     for status in IntentionStatus:
         can = any(m.to is S.CANCELLED and P in m.by for m in moves(status))
         assert can is (status in cancellable), status
@@ -100,6 +108,23 @@ def test_cancelled_is_final_the_rest_may_be_asked_again() -> None:
         assert move(status, S.ANALYSING, P).name == "asked_again"
     assert move(S.FAILED, S.ANALYSING, P).name == "retried"
     assert move(S.FAILED, S.EXECUTING, SYS).name == "retried"
+
+
+def test_what_is_not_understood_is_asked_and_clarified_by_asking_again() -> None:
+    """LEKA-385: LEKA flags what it cannot understand; a person clarifies."""
+    for at in (S.SUBMITTED, S.ANALYSING):
+        assert move(at, S.NEEDS_CLARIFICATION, SYS).name == "clarification_asked"
+        with pytest.raises(IllegalTransitionError):
+            move(at, S.NEEDS_CLARIFICATION, P)
+    assert move(S.NEEDS_CLARIFICATION, S.ANALYSING, P).name == "clarified"
+    with pytest.raises(IllegalTransitionError):
+        move(S.NEEDS_CLARIFICATION, S.ANALYSING, SYS)
+    # Nothing is decided on what was not understood.
+    for to in (S.AWAITING_DECISION, S.APPROVED, S.EXECUTING):
+        for actor in Actor:
+            with pytest.raises(IllegalTransitionError):
+                move(S.NEEDS_CLARIFICATION, to, actor)
+    assert phase(S.NEEDS_CLARIFICATION) == "active"
 
 
 def test_what_fails_is_said_failed_by_leka() -> None:

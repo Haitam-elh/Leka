@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useWatch } from "react-hook-form";
 
@@ -36,6 +37,7 @@ import {
   reaskIntention,
   submitIntention,
 } from "@/lib/intentions/api";
+import { intentionKeys, useIntention } from "@/lib/intentions/queries";
 import { notify } from "@/lib/notify";
 import { KIND_CATEGORY, type Source } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
@@ -92,9 +94,13 @@ export function IntentionForm() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [assembled, setAssembled] = useState<AssembledContext | null>(null);
   // Edited after step 2: the same intention is asked again (LEKA-374) —
-  // its id, kept (LEKA-384).
-  const [reasking, setReasking] = useState<string | null>(null);
+  // its id, kept (LEKA-384). Opened with ?intention=<id> — an intention
+  // LEKA needs clarified (LEKA-385) — it is that one, asked again.
+  const clarifying = params.get("intention");
+  const [reasking, setReasking] = useState<string | null>(clarifying);
   const [intention, setIntention] = useState<IntentionDetail | null>(null);
+  const kept = useIntention(clarifying ?? "");
+  const client = useQueryClient();
 
   const form = useLekaForm<IntentionRequest>({
     schema: intentionRequestSchema,
@@ -115,6 +121,9 @@ export function IntentionForm() {
       try {
         const made = reasking ? await reaskIntention(reasking, ask) : await submitIntention(ask);
         clearDraft(workspace?.id);
+        // What every list and page says of it is now this.
+        client.setQueryData(intentionKeys.one(made.intention.id), made.intention);
+        void client.invalidateQueries({ queryKey: intentionKeys.all });
         setIntention(made.intention);
         setAssembled(made.context);
         notify.success({ title: t.composer.submit });
@@ -179,6 +188,12 @@ export function IntentionForm() {
       setValue("environment", "production");
     }
   }, [environment.data, getFieldState, setValue]);
+
+  // The intention to clarify: its words, to be said better (LEKA-385).
+  useEffect(() => {
+    if (!kept.data || getFieldState("text").isDirty) return;
+    setValue("text", kept.data.text);
+  }, [kept.data, getFieldState, setValue]);
 
   async function abandon() {
     const text = form.getValues("text");

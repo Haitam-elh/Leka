@@ -6,6 +6,7 @@ import { useParams, usePathname } from "next/navigation";
 
 import { Card, entityHref } from "@/components/environment/parts";
 import { kindOf, StatusPill } from "@/components/intentions/intentions-list";
+import { UnderstandingPanel } from "@/components/intentions/understanding";
 import { useConfirm } from "@/components/interactions/confirm";
 import { Pill } from "@/components/intelligence/pill";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
@@ -251,6 +252,12 @@ function Overview({ intention }: { intention: IntentionDetail }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
       <div className="flex flex-col gap-4">
+        {intention.understanding ? (
+          <UnderstandingPanel
+            understanding={intention.understanding}
+            intentionId={intention.status === "needs_clarification" ? intention.id : undefined}
+          />
+        ) : null}
         <Card title={w.asked}>
           <p className="text-[0.9375rem] text-brand-navy" data-testid="intention-text">
             {intention.text}

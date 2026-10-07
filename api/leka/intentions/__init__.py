@@ -9,7 +9,10 @@ analysing, awaiting a decision, approved, scheduled, executing, verifying,
 completed; or rejected, failed, cancelled — every change an event of its
 history the database refuses to rewrite, and what it is linked to: its
 context, findings, entities, and the decisions, actions and outcomes
-LEKA-390 to 392 add. docs/intentions.md.
+LEKA-390 to 392 add — and what LEKA understood of it (understanding.py,
+LEKA-385): its goal, the actions asked, the things it is about, what is
+ambiguous, each with its words; not understood enough, it is said
+needs_clarification. docs/intentions.md.
 """
 
 from leka.intentions.lifecycle import (
@@ -26,7 +29,10 @@ from leka.intentions.lifecycle import (
 from leka.intentions.models import Intention, IntentionEvent, IntentionLink
 from leka.intentions.repository import IntentionFilters, IntentionRepository
 from leka.intentions.schemas import (
+    ActionRead,
+    AmbiguityRead,
     Approval,
+    GoalRead,
     IntentionAsked,
     IntentionCounts,
     IntentionCreated,
@@ -36,6 +42,8 @@ from leka.intentions.schemas import (
     IntentionLinkRead,
     IntentionRead,
     ProposedAction,
+    Understanding,
+    UnderstoodEntity,
     Withdrawal,
 )
 from leka.intentions.service import (
@@ -46,13 +54,18 @@ from leka.intentions.service import (
     NotYoursError,
     intention_read,
 )
+from leka.intentions.understanding import UNDERSTANDING_VERSION, understand
 
 __all__ = [
     "CLOSED",
     "PHASES",
     "TRANSITIONS",
+    "UNDERSTANDING_VERSION",
+    "ActionRead",
     "Actor",
+    "AmbiguityRead",
     "Approval",
+    "GoalRead",
     "IllegalTransitionError",
     "Intention",
     "IntentionArchivedError",
@@ -75,8 +88,11 @@ __all__ = [
     "NotYoursError",
     "NothingToStartError",
     "ProposedAction",
+    "Understanding",
+    "UnderstoodEntity",
     "Withdrawal",
     "intention_read",
     "moves",
     "phase",
+    "understand",
 ]
