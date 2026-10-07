@@ -422,6 +422,60 @@ describe("an intention's page", () => {
     );
   });
 
+  it("says whether its context can ground the analysis, and what blocks it", async () => {
+    route.pathname = `/intentions/${ID}`;
+    api.one.mockResolvedValue(
+      intention({
+        readiness: {
+          status: "blocked",
+          context_id: "c1",
+          version: 2,
+          level: "low",
+          score: 0.4,
+          elements: 6,
+          facets: { technical: 4, business: 1, organizational: 1, temporal: 0 },
+          sources: 2,
+          critical: [
+            {
+              origin: "gap",
+              kind: "no_source_for",
+              severity: "critical",
+              said: "None of the sources read…",
+              refs: [],
+              gap_origin: "intent",
+              detail: { needs: ["incidents", "deployments"] },
+              label: null,
+              about: null,
+            },
+            {
+              origin: "conflict",
+              kind: "competing",
+              severity: "critical",
+              said: "two owners",
+              refs: ["e1"],
+              gap_origin: null,
+              detail: {},
+              label: "Billing API",
+              about: "owner",
+            },
+          ],
+          warnings: [],
+        },
+      }),
+    );
+    show(<IntentionScreen />);
+
+    const panel = await screen.findByTestId("intention-readiness");
+    expect(within(panel).getByTestId("readiness-status")).toHaveTextContent(
+      "Bloqué avant l'analyse",
+    );
+    expect(panel).toHaveTextContent("6 élément(s) · 2 source(s) · version 2");
+    expect(within(panel).getByTestId("readiness-facets")).toHaveTextContent("métier · 1");
+    const critical = within(panel).getByTestId("readiness-critical");
+    expect(critical).not.toHaveTextContent("None of the sources");
+    expect(critical).toHaveTextContent("Billing API : owner, ses sources se contredisent");
+  });
+
   it("says a missing intention, its tabs kept", async () => {
     route.pathname = `/intentions/${ID}`;
     api.one.mockRejectedValue(new ApiError(404, `/intentions/${ID}`, "No such intention."));

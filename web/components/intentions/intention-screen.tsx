@@ -6,6 +6,7 @@ import { useParams, usePathname } from "next/navigation";
 
 import { Card, entityHref } from "@/components/environment/parts";
 import { kindOf, StatusPill } from "@/components/intentions/intentions-list";
+import { ReadinessPanel } from "@/components/intentions/readiness";
 import { UnderstandingPanel } from "@/components/intentions/understanding";
 import { useConfirm } from "@/components/interactions/confirm";
 import { Pill } from "@/components/intelligence/pill";
@@ -284,6 +285,8 @@ function Overview({ intention }: { intention: IntentionDetail }) {
         </Card>
       </div>
       <div className="flex flex-col gap-4">
+        {/* Whether its context can ground its analysis (LEKA-387). */}
+        {intention.readiness ? <ReadinessPanel readiness={intention.readiness} /> : null}
         <Card title={w.links} icon={<Link2 className="size-4 text-shell-muted" aria-hidden="true" />}>
           {intention.links.length ? (
             <ul className="space-y-2">
