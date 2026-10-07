@@ -32,7 +32,13 @@ import uuid
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 
-from leka.context import AssembledContext, ContextRepository, ContextService, IntentAsk
+from leka.context import (
+    AssembledContext,
+    ContextRepository,
+    ContextService,
+    IntentAsk,
+    IntentPlan,
+)
 from leka.intelligence import IntelligenceRepository
 from leka.intentions.lifecycle import (
     CLOSED,
@@ -54,7 +60,7 @@ from leka.intentions.schemas import (
     Understanding,
 )
 from leka.intentions.understanding import understand
-from leka.knowledge import EntityRepository
+from leka.knowledge import GraphRepository
 
 S = IntentionStatus
 TITLE = 300
@@ -146,7 +152,7 @@ class IntentionService:
         contexts: ContextService | None = None,
         context_repository: ContextRepository | None = None,
         findings: IntelligenceRepository | None = None,
-        entities: EntityRepository | None = None,
+        entities: GraphRepository | None = None,
     ) -> None:
         self._repository = repository
         # What it is analysed from (LEKA-373) — and what links are checked
@@ -262,7 +268,7 @@ class IntentionService:
         if context is None:
             raise NothingToStartError
         await self._follow(intention, context, by=by, at=at)
-        understood = self._understood(intention, context)
+        understood = await self._understood(intention, context, at=at)
         self._move(
             intention,
             S.ANALYSING if understood.clear else S.NEEDS_CLARIFICATION,
@@ -315,7 +321,7 @@ class IntentionService:
         intention.title = (ask.title or ask.text)[:TITLE]
         intention.scope = _scope(ask)
         await self._follow(intention, context, by=by, at=at)
-        understood = self._understood(intention, context)
+        understood = await self._understood(intention, context, at=at)
         self._move(
             intention,
             to,
@@ -341,21 +347,36 @@ class IntentionService:
             )
         return intention, context
 
-    @staticmethod
-    def _understood(intention: Intention, context: AssembledContext) -> Understanding:
+    async def _understood(
+        self, intention: Intention, context: AssembledContext, *, at: datetime
+    ) -> Understanding:
         """What LEKA understands of its words, read with its context's plan
-        (LEKA-385) — kept with it."""
-        understood = understand(intention.text, context.intent)
+        (LEKA-385), and its scope (LEKA-386) — kept with it."""
+        understood = await self._understand(intention.text, context.intent, at=at)
         intention.understanding = understood.model_dump(mode="json")
         intention.goal = understood.goal.code
         return understood
 
-    async def understand(self, ask: IntentAsk) -> Understanding:
+    async def _understand(
+        self, text: str, plan: IntentPlan | None, *, at: datetime
+    ) -> Understanding:
+        """Read with what the company model says now: each thing's
+        lifecycle, the environments it knows."""
+        lifecycles: dict[uuid.UUID, str] = {}
+        environments: list[str] = []
+        if self._entities is not None:
+            ids = [s.entity_id for s in plan.subjects] if plan is not None else []
+            found = await self._entities.by_ids(ids)
+            lifecycles = {ident: entity.lifecycle.value for ident, entity in found.items()}
+            environments = await self._entities.environments()
+        return understand(text, plan, lifecycles=lifecycles, environments=environments, now=at)
+
+    async def understand(self, ask: IntentAsk, *, now: datetime | None = None) -> Understanding:
         """What LEKA would understand of these words — nothing kept."""
         if self._contexts is None:
             msg = "Understanding reads the company model: a ContextService is needed."
             raise RuntimeError(msg)
-        return understand(ask.text, await self._contexts.plan_intent(ask))
+        return await self._understand(ask.text, await self._contexts.plan_intent(ask), at=_now(now))
 
     async def _follow(
         self, intention: Intention, context: AssembledContext, *, by: uuid.UUID | None, at: datetime

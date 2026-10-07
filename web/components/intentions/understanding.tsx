@@ -7,8 +7,9 @@ import { Card, entityHref } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
+import { exactDate } from "@/components/knowledge/time";
 import { fill } from "@/lib/i18n/dictionaries";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { IntentionDetail } from "@/lib/intentions/api";
 
 /**
@@ -142,6 +143,8 @@ export function UnderstandingPanel({
           </dd>
         </dl>
 
+        {understanding.scope ? <ScopeSection scope={understanding.scope} /> : null}
+
         {notes.length ? (
           <div className="text-[0.8125rem]">
             <p className="flex items-center gap-1.5 font-medium text-brand-navy">
@@ -157,5 +160,88 @@ export function UnderstandingPanel({
         ) : null}
       </div>
     </Card>
+  );
+}
+
+type Scope = NonNullable<UnderstandingRead["scope"]>;
+
+/** Its scope (LEKA-386): where, when, what is excluded, under what
+ * constraints — each with the words that set it. */
+function ScopeSection({ scope }: { scope: Scope }) {
+  const t = useDictionary();
+  const { locale } = useLocale();
+  const w = t.intentions.understanding.scope;
+  const kinds = w.kinds as Record<string, string>;
+  const lifecycles = w.lifecycles as Record<string, string>;
+  const shown = scope.constraints.filter(
+    (c) => c.kind !== "exclude" && c.kind !== "services" && c.kind !== "sources",
+  );
+  const value = (raw: unknown) =>
+    typeof raw === "string" || typeof raw === "number" ? String(raw) : null;
+  return (
+    <div data-testid="understanding-scope">
+      <p className="mb-1.5 text-[0.8125rem] font-semibold text-brand-navy">{w.title}</p>
+      <dl className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] gap-x-3 gap-y-2 text-[0.8125rem]">
+        <dt className="text-shell-muted">{w.environments}</dt>
+        <dd className="text-brand-navy" data-testid="scope-environment">
+          {scope.environments.length ? scope.environments.join(", ") : w.everywhere}
+          {scope.environment_origin ? (
+            <span className="text-xs text-shell-muted"> · {w.origins[scope.environment_origin]}</span>
+          ) : null}
+        </dd>
+        {scope.period ? (
+          <>
+            <dt className="text-shell-muted">{w.period}</dt>
+            <dd className="text-brand-navy" data-testid="scope-period">
+              {exactDate(locale, scope.period.since)} → {exactDate(locale, scope.period.until)}
+              <span className="block text-xs text-shell-muted">
+                {scope.period.explicit
+                  ? `${w.explicit}${scope.period.said ? ` : « ${scope.period.said} »` : ""}`
+                  : w.byDefault}
+              </span>
+            </dd>
+          </>
+        ) : null}
+        {scope.excluded.length ? (
+          <>
+            <dt className="text-shell-muted">{w.excluded}</dt>
+            <dd className="text-brand-navy" data-testid="scope-excluded">
+              {scope.excluded.map((thing) => thing.name).join(", ")}
+            </dd>
+          </>
+        ) : null}
+        {shown.length ? (
+          <>
+            <dt className="text-shell-muted">{w.constraints}</dt>
+            <dd>
+              <ul className="flex flex-wrap gap-1.5" data-testid="scope-constraints">
+                {shown.map((constraint) => {
+                  const said = value(constraint.value);
+                  return (
+                    <li key={constraint.kind} data-kind={constraint.kind}>
+                      <Pill tone={constraint.hard ? "violet" : "neutral"}>
+                        {kinds[constraint.kind] ?? constraint.kind}
+                        {said && said !== "true" && constraint.kind !== "urgency" ? ` : ${said}` : ""}
+                      </Pill>
+                    </li>
+                  );
+                })}
+              </ul>
+            </dd>
+          </>
+        ) : null}
+        {scope.entities.some((e) => e.lifecycle && e.lifecycle !== "active") ? (
+          <>
+            <dt className="text-shell-muted">{t.intentions.understanding.about}</dt>
+            <dd className="text-brand-navy">
+              {scope.entities
+                .filter((e) => e.lifecycle && e.lifecycle !== "active")
+                .map((e) => `${e.name} (${lifecycles[e.lifecycle ?? ""] ?? e.lifecycle})`)
+                .join(", ")}
+            </dd>
+          </>
+        ) : null}
+      </dl>
+    </div>
   );
 }
