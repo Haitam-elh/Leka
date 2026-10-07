@@ -9,6 +9,7 @@ import { cn } from "cn";
 import { changeSaid } from "@/components/environment/context-freshness";
 import { QualityPanel, qualityGapSaid } from "@/components/environment/context-quality";
 import { gapSaid } from "@/components/intentions/gap-said";
+import { ReadinessPanel } from "@/components/intentions/readiness";
 import { UnderstandingPanel } from "@/components/intentions/understanding";
 import { entityHref, IconTile, Logo, typeIcon, typeLabel } from "@/components/environment/parts";
 import { IntelligenceSection, Pill } from "@/components/intelligence";
@@ -84,6 +85,7 @@ export function IntentContext({
       {intention?.understanding ? (
         <UnderstandingPanel understanding={intention.understanding} />
       ) : null}
+      {intention?.readiness ? <ReadinessPanel readiness={intention.readiness} /> : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
         <div className="min-w-0 space-y-4">

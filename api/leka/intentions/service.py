@@ -40,6 +40,7 @@ from leka.context import (
     IntentPlan,
 )
 from leka.intelligence import IntelligenceRepository
+from leka.intentions.grounding import readiness, refined
 from leka.intentions.lifecycle import (
     CLOSED,
     Actor,
@@ -52,6 +53,7 @@ from leka.intentions.lifecycle import (
 from leka.intentions.models import Intention, IntentionEvent, IntentionLink
 from leka.intentions.repository import IntentionRepository
 from leka.intentions.schemas import (
+    ContextReadiness,
     IntentionCounts,
     IntentionDetail,
     IntentionEventRead,
@@ -97,6 +99,12 @@ def _flagged(understood: Understanding) -> dict[str, object]:
         "goal": understood.goal.code,
         "ambiguities": [a.kind for a in understood.ambiguities if a.blocking],
     }
+
+
+def _ready(ready: ContextReadiness) -> dict[str, object]:
+    """What a move says of its context: whether it can ground an analysis,
+    and what stands in the way."""
+    return {"readiness": ready.status, "critical": [issue.kind for issue in ready.critical]}
 
 
 def _now(now: datetime | None) -> datetime:
@@ -262,13 +270,17 @@ class IntentionService:
             detail={"scope": intention.scope},
         )
         await self._repository.flush()
-        context = await self._contexts.assemble_intent(
-            ask.model_copy(update={"intention_id": str(intention.id)}), by=by
+        asked = ask.model_copy(update={"intention_id": str(intention.id)})
+        # Understood first (LEKA-385, 386), then its context assembled from
+        # its scope (LEKA-387): what it excludes is never held.
+        understood = await self._understand(
+            ask.text, await self._contexts.plan_intent(asked), at=at
         )
+        context = await self._contexts.assemble_intent(refined(asked, understood), by=by)
         if context is None:
             raise NothingToStartError
         await self._follow(intention, context, by=by, at=at)
-        understood = await self._understood(intention, context, at=at)
+        ready = self._keep(intention, understood, context)
         self._move(
             intention,
             S.ANALYSING if understood.clear else S.NEEDS_CLARIFICATION,
@@ -276,7 +288,8 @@ class IntentionService:
             by=None,
             at=at,
             detail={"context_id": str(context.context_id), "version": context.version}
-            | _flagged(understood),
+            | _flagged(understood)
+            | _ready(ready),
         )
         return intention, context
 
@@ -307,13 +320,17 @@ class IntentionService:
         to, actor = S.ANALYSING, Actor.PERSON
         move(S(intention.status), to, actor)
         asked = ask.model_copy(update={"intention_id": str(intention.id)})
+        understood = await self._understand(
+            ask.text, await self._contexts.plan_intent(asked), at=at
+        )
+        scoped = refined(asked, understood)
         context: AssembledContext | None
         if intention.context_id is not None:
-            context = await self._contexts.reask(intention.context_id, asked, by=by)
+            context = await self._contexts.reask(intention.context_id, scoped, by=by)
         else:
             context = None
         if context is None:
-            context = await self._contexts.assemble_intent(asked, by=by)
+            context = await self._contexts.assemble_intent(scoped, by=by)
         if context is None:
             raise NothingToStartError
         before = {"title": intention.title, "text": intention.text, "scope": intention.scope}
@@ -321,7 +338,7 @@ class IntentionService:
         intention.title = (ask.title or ask.text)[:TITLE]
         intention.scope = _scope(ask)
         await self._follow(intention, context, by=by, at=at)
-        understood = await self._understood(intention, context, at=at)
+        ready = self._keep(intention, understood, context)
         self._move(
             intention,
             to,
@@ -333,7 +350,8 @@ class IntentionService:
                 "scope": intention.scope,
                 "context_id": str(context.context_id),
                 "version": context.version,
-            },
+            }
+            | _ready(ready),
         )
         if not understood.clear:
             # Read again, and still not understood enough: said, again.
@@ -347,15 +365,34 @@ class IntentionService:
             )
         return intention, context
 
-    async def _understood(
-        self, intention: Intention, context: AssembledContext, *, at: datetime
-    ) -> Understanding:
-        """What LEKA understands of its words, read with its context's plan
-        (LEKA-385), and its scope (LEKA-386) — kept with it."""
-        understood = await self._understand(intention.text, context.intent, at=at)
+    @staticmethod
+    def _keep(
+        intention: Intention, understood: Understanding, context: AssembledContext
+    ) -> ContextReadiness:
+        """What LEKA understood (LEKA-385, 386) and whether its context can
+        ground an analysis (LEKA-387) — kept with it."""
         intention.understanding = understood.model_dump(mode="json")
         intention.goal = understood.goal.code
-        return understood
+        ready = readiness(context)
+        intention.readiness = ready.model_dump(mode="json")
+        return ready
+
+    async def context(
+        self, intention_id: uuid.UUID, *, version: int | None = None
+    ) -> tuple[AssembledContext, ContextReadiness] | None:
+        """Its context, as downstream capabilities read it (LEKA-387): the
+        context engine's contract (LEKA-376) — its latest version, or the
+        one asked — and whether it can ground an analysis."""
+        if self._contexts is None:
+            msg = "Reading its context needs a ContextService."
+            raise RuntimeError(msg)
+        intention = await self._repository.intention(intention_id)
+        if intention is None or intention.context_id is None:
+            return None
+        found = await self._contexts.assembled(intention.context_id, version=version)
+        if found is None:
+            return None
+        return found, readiness(found)
 
     async def _understand(
         self, text: str, plan: IntentPlan | None, *, at: datetime
@@ -632,6 +669,11 @@ class IntentionService:
             understanding=(
                 Understanding.model_validate(intention.understanding)
                 if intention.understanding
+                else None
+            ),
+            readiness=(
+                ContextReadiness.model_validate(intention.readiness)
+                if intention.readiness
                 else None
             ),
         )

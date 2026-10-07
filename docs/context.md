@@ -79,6 +79,7 @@ The request a context answers:
 | `min_relevance` | 0 to 1, default 0.05 | under this score a thing found is left out — never a root (§ 5); 0 keeps all the budget holds |
 | `weights` | retriever → 0 to 3, default 1 | each retriever's findings weighed that many times its own weight — an intention's kind sets them (§ 13); 0 does not run it |
 | `sources` | source ids, default every one | only what these sources say — never a root (§ 5, `out_of_scope`) |
+| `exclude` | entity ids, default none | never these, whatever finds them — an intention's « sauf … » (§ 5, `excluded`; LEKA-387) |
 
 A request must start somewhere: roots, or words that say something —
 "pourquoi ?" alone is refused (422).
@@ -242,6 +243,7 @@ never guessed.
 | `duplicate` | entity resolution linked it to another as probably the same thing — a link of 0.6 or more ([resolution.md](resolution.md)): the surer is kept — the more trusted, then the better scored — the other folded into it, said on both (`ranking.duplicates`, `duplicate_of`). A root is never folded away |
 | `low_relevance` | its score is under the request's `min_relevance` (0.05 by default: low enough that a thing found once, not first, still stays) |
 | `out_of_scope` | none of the sources the request reads says it (`sources`, LEKA-373) |
+| `excluded` | the request excludes it (`exclude`, LEKA-387): never held, however relevant |
 | `budget` | beyond the limit, after the order below |
 
 Each is in the version's ranking report — counted by why (`left_out`, and
@@ -590,7 +592,8 @@ know is not applied, and said.
 **Under what constraints** (`constraints`, each with its origin): the
 period, the environment, the services and the sources asked, the ties and
 the retrievers' weights of its kind. The sources asked hold the context to
-what they say (`out_of_scope`, § 5). What a source can read is what it was
+what they say (`out_of_scope`, § 5); what it excludes (`exclude`, LEKA-387)
+is never a subject, never held (`excluded`). What a source can read is what it was
 found able to read when tested, or — never tested — what its connector
 says it can.
 

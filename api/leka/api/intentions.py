@@ -14,6 +14,9 @@
     GET    /intentions/{id}              one, with what it is linked to and
                                          where it may go next
     GET    /intentions/{id}/history      everything that happened to it
+    GET    /intentions/{id}/context      its context (LEKA-387): the context
+                                         engine's contract, and whether it
+                                         can ground an analysis
     POST   /intentions/{id}/ask          asked again: its context made again
     POST   /intentions/{id}/cancel       withdrawn
     POST   /intentions/{id}/archive, /restore
@@ -61,6 +64,7 @@ from leka.intentions import (
     Intention,
     IntentionArchivedError,
     IntentionAsked,
+    IntentionContext,
     IntentionCounts,
     IntentionCreated,
     IntentionDetail,
@@ -252,6 +256,23 @@ async def history(intention_id: uuid.UUID, service: Reading) -> list[IntentionEv
     if found is None:
         raise _missing()
     return found
+
+
+@router.get("/{intention_id}/context", response_model=IntentionContext)
+async def context(
+    intention_id: uuid.UUID,
+    service: Reading,
+    version: Annotated[int | None, Query(ge=1, description="Its latest when none.")] = None,
+) -> IntentionContext:
+    """Its context, as downstream capabilities read it (LEKA-387): the
+    context engine's contract — every element with its provenance, the
+    quality and confidence, the gaps and conflicts — and whether it can
+    ground an analysis: ready, limited, blocked by what."""
+    found = await service.context(intention_id, version=version)
+    if found is None:
+        raise _missing()
+    assembled, ready = found
+    return IntentionContext(context=assembled, readiness=ready)
 
 
 @router.post("/{intention_id}/ask", response_model=IntentionAsked)
