@@ -74,7 +74,7 @@ export interface RouteEntry {
 export const INTENTION_TABS = ["overview", "analysis", "evidence", "actions", "history"] as const;
 
 /** And of an entity sheet — the eight of the Payment API screen, then what
- * LEKA assembles around it (LEKA-370). */
+ * LEKA assembles around it (LEKA-370), and its course (LEKA-383). */
 export const ENTITY_TABS = [
   "overview",
   "metrics",
@@ -85,6 +85,7 @@ export const ENTITY_TABS = [
   "configuration",
   "documentation",
   "context",
+  "history",
 ] as const;
 
 /** The views of "Mon environnement" (LEKA-369), by `?tab=`. */

@@ -1,7 +1,7 @@
 "use client";
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page";
+import { ActivityScreen } from "@/components/activity/activity";
 
 export default function Page() {
-  return <PlaceholderPage />;
+  return <ActivityScreen />;
 }

@@ -28,6 +28,7 @@ import { useMemo, useState } from "react";
 import { cn } from "cn";
 
 import { EntityContext } from "@/components/environment/entity-context";
+import { EntityHistory, RemovedEntity } from "@/components/environment/entity-history";
 import { IncidentAnalysis } from "@/components/environment/incident-analysis";
 import { EntityQuality } from "@/components/environment/knowledge-quality";
 import { Sparkline } from "@/components/knowledge/entity-detail-panel";
@@ -158,6 +159,20 @@ export function EntitySheetScreen() {
   const tab = matchRoute(pathname)?.tab ?? "overview";
   const missing =
     !isEntityId(id) || (sheet.error instanceof ApiError && sheet.error.status === 404);
+  const notFound = (
+    <StatePanel
+      icon={SearchX}
+      title={t.environment.sheet.notFoundTitle}
+      description={t.environment.sheet.notFoundBody}
+      headingLevel={1}
+      testId="route-state-not-found"
+      actions={
+        <Link href={routes.environment()} className={buttonVariants({ variant: "outline" })}>
+          {t.environment.sheet.back}
+        </Link>
+      }
+    />
+  );
 
   return (
     <PageContainer>
@@ -181,18 +196,12 @@ export function EntitySheetScreen() {
         </ol>
       </nav>
       {missing ? (
-        <StatePanel
-          icon={SearchX}
-          title={t.environment.sheet.notFoundTitle}
-          description={t.environment.sheet.notFoundBody}
-          headingLevel={1}
-          testId="route-state-not-found"
-          actions={
-            <Link href={routes.environment()} className={buttonVariants({ variant: "outline" })}>
-              {t.environment.sheet.back}
-            </Link>
-          }
-        />
+        // A thing no source shows any more: its course remains (LEKA-383).
+        isEntityId(id) ? (
+          <RemovedEntity entityId={id} fallback={notFound} />
+        ) : (
+          notFound
+        )
       ) : sheet.isError ? (
         <ErrorState error={sheet.error} onRetry={() => void sheet.refetch()} />
       ) : model ? (
@@ -369,6 +378,8 @@ function Sheet({ model, tab }: { model: SheetModel; tab: string }) {
     );
   } else if (tab === "context") {
     body = <EntityContext entityId={model.id} entityName={model.name} />;
+  } else if (tab === "history") {
+    body = <EntityHistory entityId={model.id} name={model.name} />;
   } else {
     body = (
       <StatePanel
