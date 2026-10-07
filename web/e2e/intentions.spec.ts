@@ -25,6 +25,12 @@ test.describe("Intentions", () => {
     await page.getByTestId("intention-input").fill(asked);
     await page.getByTestId("intention-submit").click();
     await expect(page.getByTestId("intention-step-2")).toBeVisible();
+    // Its scope (LEKA-386): no environment held — the demo's form chose
+    // none, the words say none — and the period its kind's default.
+    await expect(page.getByTestId("scope-environment")).toHaveText("Tous");
+    await expect(page.getByTestId("scope-period")).toContainText(
+      "par défaut pour ce type de demande",
+    );
 
     // Kept: followed from Mes intentions.
     await page.getByTestId("intention-follow").click();
@@ -59,5 +65,44 @@ test.describe("Intentions", () => {
     const row = page.getByTestId("intention-row").filter({ hasText: asked });
     await expect(row).toBeVisible();
     await expect(row.getByTestId("intention-status")).toContainText("Annulée");
+  });
+
+  test("not understood enough, it is asked, then clarified (LEKA-385)", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/intentions/new");
+    await expect(page.getByRole("checkbox", { name: "acme/backend" })).toBeChecked();
+
+    // An action on nothing named: LEKA asks on what.
+    await page.getByTestId("intention-input").fill("Redémarre le service");
+    await page.getByTestId("intention-submit").click();
+    await expect(page.getByTestId("intention-step-2")).toBeVisible();
+    await expect(page.getByTestId("understanding-needs")).toContainText(
+      "LEKA a besoin d'une précision",
+    );
+    await expect(
+      page.locator('[data-testid="understanding-question"][data-kind="action_without_target"]'),
+    ).toContainText("Sur quoi faut-il agir ?");
+
+    await page.getByTestId("intention-follow").click();
+    await expect(page.getByTestId("intention-status")).toContainText("À préciser");
+    await expect(page.getByTestId("understanding-action").first()).toContainText(
+      "validation requise",
+    );
+
+    // Clarified: the same intention, its words said better.
+    await page.getByTestId("understanding-clarify").click();
+    await expect(page).toHaveURL(/\/intentions\/new\?intention=/);
+    const input = page.getByTestId("intention-input");
+    await expect(input).toHaveValue("Redémarre le service");
+    await input.fill("Redémarre payment-api");
+    await page.getByTestId("intention-submit").click();
+    await expect(page.getByTestId("intention-step-2")).toBeVisible();
+    await expect(page.getByTestId("understanding-needs")).toHaveCount(0);
+    await expect(page.getByTestId("understanding-goal")).toContainText("Agir");
+
+    await page.getByTestId("intention-follow").click();
+    await expect(page.getByTestId("intention-status")).toContainText("En analyse");
+    await page.getByTestId("tab-history").click();
+    await expect(page.getByTestId("intention-event").last()).toContainText("Précisée");
   });
 });

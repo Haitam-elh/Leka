@@ -77,6 +77,11 @@ class Intention(Base, WorkspaceScopedMixin):
     scope: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
     status: Mapped[str] = mapped_column(String(30), nullable=False)
     status_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # What LEKA understood of it (LEKA-385): the structured intent — goal,
+    # mode, actions, entities, ambiguities, each with its words — and its
+    # goal alone, for lists.
+    understanding: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    goal: Mapped[str | None] = mapped_column(String(30), nullable=True)
     # What LEKA concluded, in a sentence, once it did (LEKA-389).
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(

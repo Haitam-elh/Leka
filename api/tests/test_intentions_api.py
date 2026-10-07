@@ -441,3 +441,118 @@ async def test_another_workspace_s_intention_is_not_there(
         )
         assert response.status_code == 404, (method, path, response.text)
     assert (await _get(client))["data"] == []
+
+
+# ── understood (LEKA-385) ──────────────────────────────────────────────────
+
+
+async def test_an_intention_is_understood_and_kept_with_its_words(
+    client: AsyncClient, model: dict[str, uuid.UUID]
+) -> None:
+    intention = (await _ask(client))["intention"]
+    understood = intention["understanding"]
+    assert understood["text"] == ASKED
+    assert (understood["mode"], understood["goal"]["code"]) == ("question", "explain_cause")
+    assert "pourquoi" in understood["goal"]["said"]
+    assert [e["entity_id"] for e in understood["entities"]] == [str(model[BILLING])]
+    assert understood["clear"] is True
+    assert intention["goal"] == "explain_cause"
+    assert intention["status"] == "analysing"
+    listed = (await _get(client))["data"]
+    assert [i["goal"] for i in listed] == ["explain_cause"]
+
+
+async def test_not_understood_enough_it_is_asked_then_clarified(
+    client: AsyncClient, model: dict[str, uuid.UUID]
+) -> None:
+    created = await _ask(client, "Redémarre le service")
+    intention = created["intention"]
+    assert intention["status"] == "needs_clarification"
+    assert intention["goal"] == "act"
+    understood = intention["understanding"]
+    assert understood["clear"] is False
+    assert understood["actions"] == [
+        {"code": "restart", "said": "redemarre", "changes_systems": True}
+    ]
+    blocking = {a["kind"] for a in understood["ambiguities"] if a["blocking"]}
+    assert "action_without_target" in blocking
+    assert intention["moves"] == ["analysing", "cancelled"]
+    moved = (await _history(client, intention["id"]))[-1]
+    assert (moved["from_status"], moved["to_status"], moved["name"], moved["actor"]) == (
+        "submitted",
+        "needs_clarification",
+        "clarification_asked",
+        "system",
+    )
+    assert "action_without_target" in moved["detail"]["ambiguities"]
+
+    # Clarified: asked again, naming what to restart.
+    response = await client.post(
+        f"{API}/{intention['id']}/ask", json={"text": "Redémarre Billing API"}
+    )
+    assert response.status_code == 200, response.text
+    clarified = response.json()["intention"]
+    assert clarified["status"] == "analysing"
+    assert clarified["understanding"]["clear"] is True
+    assert clarified["understanding"]["entities"][0]["name"] == "Billing API"
+    last = (await _history(client, intention["id"]))[-1]
+    assert (last["name"], last["actor"]) == ("clarified", "person")
+
+
+async def test_asked_again_and_still_unclear_it_is_asked_again(
+    client: AsyncClient, model: dict[str, uuid.UUID]
+) -> None:
+    intention = (await _ask(client, "Redémarre le service"))["intention"]
+    response = await client.post(f"{API}/{intention['id']}/ask", json={"text": "Redémarre le truc"})
+    assert response.status_code == 200, response.text
+    assert response.json()["intention"]["status"] == "needs_clarification"
+    names = [e["name"] for e in await _history(client, intention["id"]) if e["kind"] == "moved"]
+    assert names == ["clarification_asked", "clarified", "clarification_asked"]
+
+
+async def test_what_leka_would_understand_is_said_and_nothing_kept(
+    client: AsyncClient, model: dict[str, uuid.UUID]
+) -> None:
+    response = await client.post(
+        f"{API}/understand", json={"text": "Peux-tu faire un rollback de Billing API ?"}
+    )
+    assert response.status_code == 200, response.text
+    understood = response.json()
+    assert (understood["mode"], understood["goal"]["code"]) == ("request", "act")
+    assert [a["code"] for a in understood["actions"]] == ["rollback"]
+    assert understood["clear"] is True
+    assert (await _get(client, "/counts"))["all"] == 0
+
+
+# ── scoped (LEKA-386) ──────────────────────────────────────────────────────
+
+
+async def test_its_scope_is_kept_resolved_against_the_model(
+    client: AsyncClient, model: dict[str, uuid.UUID], acme: dict[str, uuid.UUID]
+) -> None:
+    created = await _ask(
+        client,
+        "Pourquoi Billing API est lente depuis hier ? Sans rien modifier, c'est urgent",
+    )
+    scope = created["intention"]["understanding"]["scope"]
+    assert [(e["name"], e["lifecycle"]) for e in scope["entities"]] == [("Billing API", "active")]
+    assert scope["period"]["explicit"] is True
+    assert scope["period"]["said"]
+    kinds = {c["kind"]: c for c in scope["constraints"]}
+    assert kinds["read_only"]["said"] == "sans rien modifier"
+    assert kinds["urgency"]["hard"] is False
+    assert scope["missing"] == []
+
+    # The model says it has gone dormant: said, not blocking.
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            await session.execute(
+                text("UPDATE entities SET lifecycle = 'dormant' WHERE id = :i"),
+                {"i": model[BILLING]},
+            )
+            await session.commit()
+    dormant = (await _ask(client))["intention"]
+    understood = dormant["understanding"]
+    assert understood["scope"]["entities"][0]["lifecycle"] == "dormant"
+    assert {a["kind"] for a in understood["ambiguities"]} >= {"subject_dormant"}
+    assert dormant["status"] == "analysing"

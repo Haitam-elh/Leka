@@ -2,7 +2,10 @@
 
     POST   /intentions                   ask: the intention kept and its
                                          context assembled (LEKA-373) — 422
-                                         when nothing can start it
+                                         when nothing can start it — and
+                                         understood (LEKA-385)
+    POST   /intentions/understand        what LEKA would understand of these
+                                         words; nothing kept
     GET    /intentions                   the intentions, the latest changed
                                          first — by phase (active, scheduled,
                                          finished, archived), status, mine,
@@ -72,10 +75,11 @@ from leka.intentions import (
     LinkRefusedError,
     NothingToStartError,
     NotYoursError,
+    Understanding,
     Withdrawal,
     intention_read,
 )
-from leka.knowledge import EntityRepository, GraphRepository, GraphService
+from leka.knowledge import GraphRepository, GraphService
 
 router = APIRouter(prefix="/intentions", tags=["intentions"])
 
@@ -108,7 +112,7 @@ def _service(session: SessionDep, principal: Principal) -> IntentionService:
         ),
         context_repository=ContextRepository(session, workspace),
         findings=IntelligenceRepository(session, workspace),
-        entities=EntityRepository(session, workspace),
+        entities=GraphRepository(session, workspace),
     )
 
 
@@ -177,6 +181,14 @@ async def create(body: IntentAsk, service: Asking, principal: Asker) -> Intentio
     except REFUSED as error:
         raise _refused(error) from error
     return IntentionCreated(intention=await service.detail_now(intention), context=context)
+
+
+@router.post("/understand", response_model=Understanding)
+async def understand(body: IntentAsk, service: Asking) -> Understanding:
+    """What LEKA would understand of these words (LEKA-385) — its goal,
+    whether it asks or requests, the actions, the things it is about, what
+    is ambiguous, each with the words it came from. Nothing is kept."""
+    return await service.understand(body)
 
 
 @router.get("", response_model=PageEnvelope[IntentionRead])

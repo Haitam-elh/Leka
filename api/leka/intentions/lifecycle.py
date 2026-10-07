@@ -9,6 +9,8 @@ move it, and who.
                     └──▶ completed   └──▶ analysing                  │
                          (answered)       (asked again)    failed ◀──┘ (and from executing)
 
+    submitted, analysing ──▶ needs_clarification ──▶ analysing   (LEKA-385:
+                             not understood enough; clarified by asking again)
     any state not closed ──▶ cancelled     (the asker withdraws it)
     failed ──▶ analysing | executing        (tried again)
     completed | rejected ──▶ analysing      (asked again)
@@ -36,6 +38,9 @@ from dataclasses import dataclass
 class IntentionStatus(enum.StrEnum):
     # Asked: its words and scope kept, nothing read yet.
     SUBMITTED = "submitted"
+    # Not understood enough to go on (LEKA-385): what LEKA would ask is
+    # said; asked again, it is read again.
+    NEEDS_CLARIFICATION = "needs_clarification"
     # Its context assembled, LEKA analysing it (LEKA-387, 388).
     ANALYSING = "analysing"
     # Findings and recommendations ready: a person decides (LEKA-389, 390).
@@ -84,10 +89,14 @@ def _move(to: IntentionStatus, name: str, *by: Actor) -> Move:
 TRANSITIONS: Mapping[IntentionStatus, tuple[Move, ...]] = {
     S.SUBMITTED: (
         _move(S.ANALYSING, "analysis_started", SYS),
+        _move(S.NEEDS_CLARIFICATION, "clarification_asked", SYS),
         _move(S.FAILED, "failed", SYS),
     ),
+    S.NEEDS_CLARIFICATION: (_move(S.ANALYSING, "clarified", P),),
     S.ANALYSING: (
         _move(S.AWAITING_DECISION, "proposed", SYS),
+        # Asked again, and still not understood enough.
+        _move(S.NEEDS_CLARIFICATION, "clarification_asked", SYS),
         _move(S.COMPLETED, "answered", SYS),
         _move(S.FAILED, "failed", SYS),
         # Asked again while being analysed: analysed again.
@@ -135,6 +144,7 @@ PHASES: Mapping[str, frozenset[IntentionStatus]] = {
     "active": frozenset(
         {
             S.SUBMITTED,
+            S.NEEDS_CLARIFICATION,
             S.ANALYSING,
             S.AWAITING_DECISION,
             S.APPROVED,

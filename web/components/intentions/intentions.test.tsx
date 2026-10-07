@@ -73,6 +73,8 @@ function intention(overrides: Partial<IntentionDetail> = {}): IntentionDetail {
     context_id: "c1",
     archived_at: null,
     moves: ["awaiting_decision", "completed", "failed", "analysing", "cancelled"],
+    goal: "explain_cause",
+    understanding: null,
     links: [
       {
         id: "l1",
@@ -250,6 +252,174 @@ describe("an intention's page", () => {
     expect(api.cancel).toHaveBeenCalledWith(ID, "asked twice");
     expect(await screen.findByTestId("intention-archive")).toBeInTheDocument();
     expect(screen.queryByTestId("intention-cancel")).not.toBeInTheDocument();
+  });
+
+  it("says what LEKA understood, each part with its words", async () => {
+    route.pathname = `/intentions/${ID}`;
+    api.one.mockResolvedValue(
+      intention({
+        goal: "act",
+        understanding: {
+          version: 1,
+          text: "Redémarre Billing API",
+          mode: "request",
+          mode_said: "redemarre",
+          kind: "general",
+          goal: { code: "act", said: ["redemarre"], confidence: 0.9 },
+          actions: [{ code: "restart", said: "redemarre", changes_systems: true }],
+          entities: [
+            {
+              entity_id: "e1",
+              name: "Billing API",
+              type: "service",
+              how: "named",
+              said: "billing api",
+              confidence: 1,
+            },
+          ],
+          period: null,
+          environment: null,
+          ambiguities: [
+            { kind: "several_requests", blocking: false, said: "…", options: [] },
+          ],
+          clear: true,
+        },
+      }),
+    );
+    show(<IntentionScreen />);
+
+    expect(await screen.findByTestId("understanding-goal")).toHaveTextContent(
+      "Agir · Une demande d'action« redemarre »",
+    );
+    const [action] = screen.getAllByTestId("understanding-action");
+    expect(action).toHaveTextContent("Redémarrer « redemarre »");
+    expect(action).toHaveTextContent("modifie vos systèmes : validation requise");
+    const panel = screen.getByTestId("intention-understanding");
+    expect(within(panel).getByRole("link", { name: "Billing API" })).toHaveAttribute(
+      "href",
+      "/environment/services/e1",
+    );
+    expect(screen.getByTestId("understanding-notes")).toHaveTextContent(
+      "Votre demande contient plusieurs demandes",
+    );
+    expect(screen.queryByTestId("understanding-needs")).not.toBeInTheDocument();
+  });
+
+  it("says its scope: where, when, what is excluded, under what constraints", async () => {
+    route.pathname = `/intentions/${ID}`;
+    api.one.mockResolvedValue(
+      intention({
+        understanding: {
+          version: 2,
+          text: "Qu'est-ce qui dépend de Billing API, sauf auth-service, sans rien modifier ?",
+          mode: "question",
+          mode_said: "?",
+          kind: "dependency",
+          goal: { code: "map_dependencies", said: ["depend"], confidence: 0.6 },
+          actions: [],
+          entities: [],
+          period: null,
+          environment: "production",
+          ambiguities: [],
+          clear: true,
+          scope: {
+            entities: [
+              {
+                entity_id: "e1",
+                name: "Billing API",
+                type: "service",
+                how: "named",
+                said: "billing api",
+                confidence: 1,
+                lifecycle: "dormant",
+              },
+            ],
+            excluded: [
+              {
+                entity_id: "e2",
+                name: "auth-service",
+                type: "service",
+                how: "named",
+                said: "auth service",
+                confidence: 1,
+                lifecycle: "active",
+              },
+            ],
+            environments: ["production"],
+            environment_origin: "asked",
+            period: {
+              since: ago(24),
+              until: ago(0),
+              origin: "text",
+              said: "depuis hier",
+              explicit: true,
+            },
+            sources: [],
+            constraints: [
+              { kind: "exclude", said: "auth service", value: "e2", hard: true },
+              { kind: "read_only", said: "sans rien modifier", value: true, hard: true },
+              { kind: "deadline", said: "avant vendredi", value: "2026-10-09", hard: true },
+            ],
+            missing: [],
+          },
+        },
+      }),
+    );
+    show(<IntentionScreen />);
+
+    const scope = await screen.findByTestId("understanding-scope");
+    expect(within(scope).getByTestId("scope-environment")).toHaveTextContent("production · choisi");
+    expect(within(scope).getByTestId("scope-period")).toHaveTextContent(
+      "dite dans la demande : « depuis hier »",
+    );
+    expect(within(scope).getByTestId("scope-excluded")).toHaveTextContent("auth-service");
+    const constraints = within(scope).getByTestId("scope-constraints");
+    expect(constraints).toHaveTextContent("Lecture seule");
+    expect(constraints).toHaveTextContent("Échéance : 2026-10-09");
+    expect(constraints).not.toHaveTextContent("Exclusion");
+    expect(scope).toHaveTextContent("Billing API (inactif)");
+  });
+
+  it("says what LEKA needs to go on, and leads to clarifying it", async () => {
+    route.pathname = `/intentions/${ID}`;
+    api.one.mockResolvedValue(
+      intention({
+        status: "needs_clarification",
+        goal: "act",
+        moves: ["analysing", "cancelled"],
+        understanding: {
+          version: 1,
+          text: "Redémarre le service",
+          mode: "request",
+          mode_said: "redemarre",
+          kind: "general",
+          goal: { code: "act", said: ["redemarre"], confidence: 0.5 },
+          actions: [{ code: "restart", said: "redemarre", changes_systems: true }],
+          entities: [],
+          period: null,
+          environment: null,
+          ambiguities: [
+            {
+              kind: "action_without_target",
+              blocking: true,
+              said: "…",
+              options: ["restart"],
+            },
+          ],
+          clear: false,
+        },
+      }),
+    );
+    show(<IntentionScreen />);
+
+    expect(await screen.findByTestId("intention-status")).toHaveTextContent("À préciser");
+    const [question] = screen.getAllByTestId("understanding-question");
+    expect(question).toHaveTextContent("Sur quoi faut-il agir ?");
+    expect(question).toHaveTextContent("Possibilités : Redémarrer");
+    expect(screen.getByTestId("understanding-clarify")).toHaveAttribute(
+      "href",
+      `/intentions/new?intention=${ID}`,
+    );
   });
 
   it("says a missing intention, its tabs kept", async () => {
