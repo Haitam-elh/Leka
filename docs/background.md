@@ -112,7 +112,7 @@ recorded as a run, and is not started again while the previous one is still acti
 | `processing-sweep` | `leka.ingestion.lifecycle.run_processing_sweep` — processed data, see [processing.md](processing.md) | daily 03:45 | low |
 | `source-health` | `leka.connectors.health.run_health_checks` | :05 :20 :35 :50 | low |
 | `source-sync` | `leka.ingestion.sync.run_enqueue_due_syncs` — queues the passes, see [sync.md](sync.md) | :10 :25 :40 :55 | low |
-| `model-sweep` | `leka.knowledge.job.run_model_sweep` — the company models behind their enrichment, see [company-model.md](company-model.md) | hourly, :48 | low |
+| `model-sweep` | `leka.knowledge.job.run_model_sweep` — the company models behind their enrichment, or a rebuild asked (LEKA-383); old snapshots forgotten, see [company-model.md](company-model.md) | hourly, :48 | low |
 | `context-sweep` | `leka.context.job.run_context_sweep` — a pass for each workspace whose contexts follow the model; old checks forgotten, see [context.md](context.md) § 14 | hourly, :52 | low |
 | `intelligence-sweep` | `leka.intelligence.job.run_intelligence_sweep` — a run for each workspace whose analysis is behind: never analysed, a newer build, a new catalogue, a day old; dead runs closed, old ones forgotten, see [intelligence.md](intelligence.md) § 2, § 8 | hourly, :56 | low |
 

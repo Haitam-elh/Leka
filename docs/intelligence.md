@@ -841,14 +841,99 @@ signals read; scores kept, a point only when one moves, its level's
 weak thing a finding with what lowers it; the API — summary, filters,
 detail, 404 for another workspace; `QualityService.of`.
 
+## 16. Knowledge evolution and Activité (LEKA-383)
+
+What the model's course says (company-model.md § 17), and what happened.
+Code: `api/leka/intelligence/evolution.py` (the analyses, pure),
+`activity.py` (Activité); the material, `EvolutionService.material`
+(leka.knowledge).
+
+**What they read** (`Reads.EVOLUTION`): the versions and relationship
+changes of the last 30 days, the incidents of the last 60 and what each
+affects, every thing they name as it is now — its kind, lifecycle,
+criticality, how many things depend on it and it depends on, its owners
+by name — and, read with it, how far each area's knowledge quality went
+over the 30 days (§ 15's history: the point it stood at then, the score
+now). **What the first build made is no change**: a model begins with
+everything created, and that is not the architecture moving
+(`began_at`).
+
+**The analyses** — category `evolution`, each finding with its insight
+(`params.insight`) and what to do (`params.recommendation`), its evidence
+the changes that show it — a version, a relationship change, an incident,
+a quality point, by id:
+
+| Analysis | Code | Insight | Said when | Severity | Recommendation |
+| --- | --- | --- | --- | --- | --- |
+| `evolution_dependencies` | `evolution.dependencies_grew` | dependency | a thing depends on 3 more things than a month ago (added less removed) | medium from 5, or critical; low | `review_dependencies` |
+| `evolution_ownership` | `evolution.owner_lost` | organisational | what runs or keeps data lost its owner this month (`owned_by` / `owns` went) and none is named now | high when 3 things rely on it or it is critical; medium | `name_owner` |
+| | `evolution.owner_changed` | organisational | it went, and another came | low | `confirm_owner` |
+| `evolution_removals` | `evolution.removed_relied` | risk | a thing went from every source while things still relied on it (`depends_on`, `uses`, `reads_from`, `deployed_to`, `runs_in`, `supported_by`) and they relied on nothing else of that kind in the same build — those that did moved, no risk | high from 2 left relying, or one critical; medium | `confirm_removal` |
+| `evolution_architecture` | `evolution.architecture_moved` | architecture | services, applications, databases, resources: 3 appeared or went this month — said once, of the workspace | low | `review_architecture` |
+| `evolution_incidents` | `evolution.incidents_rising` | operational | a thing had 3 incidents this month at least, twice the month before | high from 5, or critical; medium | `investigate_incidents` |
+| `evolution_volatility` | `evolution.volatile` | risk | a thing changed 4 times this month — not an event, which changes by nature | medium when relied on or critical; low | `watch_changes` |
+| `evolution_quality` | `evolution.quality_fell` | risk | an area — the workspace, a column, a team, an application — lost 0.1 of quality this month, or a level | medium to low, or 0.2 lost; low | `review_quality` |
+
+The score within a severity grows with what changed and what relies on
+the thing. Like every finding, each is opened, seen again, resolved when
+it no longer holds (§ 5).
+
+**Activité** (`GET /intelligence/activity?days=1..90&timezone&limit`,
+`workspace:read`) — what happened over the period, and over the period
+before, as long, from every source, each event in one of four categories:
+
+| Category | What |
+| --- | --- |
+| information | a build — what it created, changed, brought back, the relationships that came and went, said once per build and counted as its changes; a thing no source shows any more; a deployment, a change, a release; a source added, tested, synchronised |
+| action | an analysis LEKA ran; a proposal it made (§ 13); a decision on a proposal — a person's or the policy's — or a conflict (§ 14); a restore, an undo, a rebuild (company-model.md § 17) |
+| alert | a finding raised; a conflict found; a source failing |
+| incident | an incident |
+
+It says how many of each — against the period before — the actions LEKA
+took (the policy's with them, not people's), the incidents, what waits in
+À valider, the people who decided; how many of each category day by day
+in the reader's zone; the latest, each with who did it (`via`: `person`,
+`policy`, `leka`, `source`); the services and applications most concerned;
+who decided most. Nothing is written for it: it reads what the model, the
+analyses, the decisions and the sources keep.
+
+**In the app.**
+- **Activité** (mockup 08): the five figures — a percentage against the
+  period before when there was enough before, the difference when there
+  was little, an incident fewer said as good news; the days stacked by
+  category, by week past 30 days; the split; the latest, filtered by type
+  and origin, each leading to what it is about, exported as CSV; the
+  services most concerned; who decided most; in the banner, the evolution
+  insights, worded. Who may approve can ask a rebuild there.
+- **A thing's Historique** tab: every version against the one before, its
+  relationships that came and went, what it was at a date, restoring a
+  version — with a reason — and undoing it. A thing no source shows any
+  more opens on its history, not on « introuvable ».
+- **Insights LEKA**: each evolution finding worded in French and English,
+  with what to do — the architecture moved leading to Activité, a quality
+  lost to the Qualité view.
+
+**Tested.** `tests/test_intelligence_evolution.py`, pure: each analysis on
+a month of a company, under its threshold and over it; the first build no
+change; dependents that moved no risk; an event not volatile; every
+finding's insight, recommendation, evidence; nothing without the material.
+`tests/test_intelligence_evolution_model.py`, on the database: a real run
+finding what the written course says, its evidence the model's own rows;
+Activité over the period and the one before — builds, removals,
+incidents, a failing source, analyses, findings, a rebuild by a person —
+by category, by day in Paris, the services concerned, who decided; another
+workspace sees nothing.
+
 ## Not yet
 
 - **Model-assisted analyses.** The model gateway is empty (LEKA-329); they
   are declared and skipped.
 - **Dismissing a finding** ("known, accepted"). That is a decision, and it
   belongs to LEKA-389/390 (findings, human decision).
-- **The epic's other analysis** — evolution and insights (LEKA-383) — on
-  this frame. A quality score that falls is tracked (§ 15) but not yet said
-  as a finding of its own: that is evolution's.
+- **Evolution's own weights** (LEKA-383): its thresholds are constants
+  (`DEPENDENCY_GROWTH`, `VOLATILE`…), not the workspace's yet.
+- **Activité's people beyond decisions**: who opened an intention or
+  changed a setting appears there when those are kept as events
+  (LEKA-384, LEKA-407).
 - **A workspace's own quality weights** (LEKA-381): one constant today
   (`WEIGHTS`).

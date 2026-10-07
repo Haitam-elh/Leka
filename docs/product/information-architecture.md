@@ -71,9 +71,11 @@ Every page, including those the sidebar does not list:
 │   ├── /environment/graph                 the detailed map
 │   └── /environment/:type/:id             overview · metrics · dependencies · incidents
 │                                          deployments · logs · configuration · documentation · context
+│                                          · history (LEKA-383) — a thing no source shows any
+│                                          more opens on its history
 /capabilities                              the page says "bientôt" until LEKA-393
 │   └── /capabilities/:id
-/activity
+/activity                                  what happened and what LEKA did (LEKA-383)
 /approvals
 │   └── /approvals/:id
 /sources
