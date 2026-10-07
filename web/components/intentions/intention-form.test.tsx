@@ -45,12 +45,19 @@ vi.mock("@/lib/environment", async (original) => ({
   environment: environmentApi,
 }));
 
-// What submitting asks (LEKA-373): the context the intention needs.
-const contextApi = { intend: vi.fn(), reask: vi.fn() };
-vi.mock("@/lib/context", async (original) => ({
-  ...(await original<typeof import("@/lib/context")>()),
-  contexts: contextApi,
+// What submitting asks (LEKA-384): the intention kept, with the context it
+// needs (LEKA-373).
+const intentionsApi = { create: vi.fn(), ask: vi.fn() };
+vi.mock("@/lib/intentions/api", async (original) => ({
+  ...(await original<typeof import("@/lib/intentions/api")>()),
+  submitIntention: intentionsApi.create,
+  reaskIntention: intentionsApi.ask,
 }));
+
+/** What POST /intentions answers: the intention, and its context. */
+function created(context: Record<string, unknown>) {
+  return { intention: { id: "i1", links: [], status: "analysing" }, context };
+}
 
 const { IntentionForm } = await import("@/components/intentions/intention-form");
 
@@ -136,14 +143,16 @@ describe("the new intention's context and scope", () => {
 
   it("asks for the context the intention needs, and shows it", async () => {
     const { ApiError } = await import("@/lib/api");
-    contextApi.intend.mockRejectedValueOnce(new ApiError(422, "/context/intents", "Nothing."));
-    contextApi.intend.mockResolvedValueOnce({
-      context_id: "c1",
-      purpose: "Pourquoi acme/backend est lent depuis hier ?",
-      elements: [],
-      sources: [],
-      intent: null,
-    });
+    intentionsApi.create.mockRejectedValueOnce(new ApiError(422, "/intentions", "Nothing."));
+    intentionsApi.create.mockResolvedValueOnce(
+      created({
+        context_id: "c1",
+        purpose: "Pourquoi acme/backend est lent depuis hier ?",
+        elements: [],
+        sources: [],
+        intent: null,
+      }),
+    );
     const user = userEvent.setup();
     show();
     await screen.findByRole("checkbox", { name: "acme/backend" });
@@ -162,7 +171,9 @@ describe("the new intention's context and scope", () => {
 
     await user.click(screen.getByTestId("intention-submit"));
     expect(await screen.findByTestId("intention-step-2")).toBeInTheDocument();
-    expect(contextApi.intend).toHaveBeenLastCalledWith({
+    // Kept: followed from Mes intentions.
+    expect(screen.getByTestId("intention-follow")).toHaveAttribute("href", "/intentions/i1");
+    expect(intentionsApi.create).toHaveBeenLastCalledWith({
       text: "Pourquoi acme/backend est lent depuis hier ?",
       services: [],
       // Every readable source ticked: no narrowing.
@@ -172,26 +183,30 @@ describe("the new intention's context and scope", () => {
     });
   });
 
-  it("asks the same context again once the intention is edited", async () => {
-    contextApi.intend.mockResolvedValueOnce({
-      context_id: "c1",
-      version: 1,
-      purpose: "Pourquoi acme/backend est lent ?",
-      elements: [],
-      sources: [],
-      intent: null,
-    });
-    contextApi.reask.mockResolvedValueOnce({
-      context_id: "c1",
-      version: 2,
-      trigger: "reasked",
-      purpose: "Qui est responsable de acme/backend ?",
-      elements: [],
-      sources: [],
-      intent: null,
-      changes: [],
-      delta: { added: 1, removed: 2, changed: 0, unchanged: 4 },
-    });
+  it("asks the same intention again once it is edited", async () => {
+    intentionsApi.create.mockResolvedValueOnce(
+      created({
+        context_id: "c1",
+        version: 1,
+        purpose: "Pourquoi acme/backend est lent ?",
+        elements: [],
+        sources: [],
+        intent: null,
+      }),
+    );
+    intentionsApi.ask.mockResolvedValueOnce(
+      created({
+        context_id: "c1",
+        version: 2,
+        trigger: "reasked",
+        purpose: "Qui est responsable de acme/backend ?",
+        elements: [],
+        sources: [],
+        intent: null,
+        changes: [],
+        delta: { added: 1, removed: 2, changed: 0, unchanged: 4 },
+      }),
+    );
     const user = userEvent.setup();
     show();
     await screen.findByRole("checkbox", { name: "acme/backend" });
@@ -207,10 +222,10 @@ describe("the new intention's context and scope", () => {
     expect(await screen.findByTestId("intent-asked-again")).toHaveTextContent(
       "Version 2 de ce contexte : votre demande a changé, LEKA l'a relue.",
     );
-    expect(contextApi.intend).toHaveBeenCalledTimes(1);
-    expect(contextApi.reask).toHaveBeenCalledWith({
-      id: "c1",
-      ask: expect.objectContaining({ text: "Qui est responsable de acme/backend ?" }),
-    });
+    expect(intentionsApi.create).toHaveBeenCalledTimes(1);
+    expect(intentionsApi.ask).toHaveBeenCalledWith(
+      "i1",
+      expect.objectContaining({ text: "Qui est responsable de acme/backend ?" }),
+    );
   });
 });

@@ -13,9 +13,11 @@ import { entityHref, IconTile, Logo, typeIcon, typeLabel } from "@/components/en
 import { IntelligenceSection, Pill } from "@/components/intelligence";
 import { exactDate } from "@/components/knowledge/time";
 import { Button } from "@/components/ui/button";
+import { routes } from "@/config/routes";
 import type { AssembledContext, IntentPlan, QualityGap } from "@/lib/context";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import type { IntentionDetail } from "@/lib/intentions/api";
 
 /**
  * Step 2 of "Nouvelle intention", as mockup 03 draws it — with what LEKA
@@ -38,9 +40,12 @@ export { gapSaid };
 
 export function IntentContext({
   assembled,
+  intention = null,
   onEdit,
 }: {
   assembled: AssembledContext;
+  /** The intention kept (LEKA-384): followed from Mes intentions. */
+  intention?: IntentionDetail | null;
   onEdit: () => void;
 }) {
   const t = useDictionary();
@@ -62,6 +67,15 @@ export function IntentContext({
             <PencilLine className="size-3.5" aria-hidden="true" />
             {w.edit}
           </Button>
+          {intention ? (
+            <Link
+              href={routes.intention(intention.id)}
+              className="text-[0.8125rem] font-medium text-shell-nav-active underline-offset-2 hover:underline"
+              data-testid="intention-follow"
+            >
+              {w.follow}
+            </Link>
+          ) : null}
         </div>
         {assembled.trigger === "reasked" ? <AskedAgain assembled={assembled} /> : null}
       </section>

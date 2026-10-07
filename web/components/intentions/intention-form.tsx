@@ -30,7 +30,12 @@ import { useUnsavedChangesGuard } from "@/lib/forms/use-unsaved-changes-guard";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import { ApiError } from "@/lib/api";
 import type { AssembledContext } from "@/lib/context";
-import { intentAsk, reaskIntention, submitIntention } from "@/lib/intentions/api";
+import {
+  intentAsk,
+  type IntentionDetail,
+  reaskIntention,
+  submitIntention,
+} from "@/lib/intentions/api";
 import { notify } from "@/lib/notify";
 import { KIND_CATEGORY, type Source } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
@@ -86,8 +91,10 @@ export function IntentionForm() {
   const onDecision = params.get("step") === "decision";
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [assembled, setAssembled] = useState<AssembledContext | null>(null);
-  // Edited after step 2: the same context is asked again (LEKA-374).
+  // Edited after step 2: the same intention is asked again (LEKA-374) —
+  // its id, kept (LEKA-384).
   const [reasking, setReasking] = useState<string | null>(null);
+  const [intention, setIntention] = useState<IntentionDetail | null>(null);
 
   const form = useLekaForm<IntentionRequest>({
     schema: intentionRequestSchema,
@@ -108,7 +115,8 @@ export function IntentionForm() {
       try {
         const made = reasking ? await reaskIntention(reasking, ask) : await submitIntention(ask);
         clearDraft(workspace?.id);
-        setAssembled(made);
+        setIntention(made.intention);
+        setAssembled(made.context);
         notify.success({ title: t.composer.submit });
       } catch (caught) {
         // Nothing to start from: said in the words of the form, not the API's.
@@ -195,8 +203,9 @@ export function IntentionForm() {
     return (
       <IntentContext
         assembled={assembled}
+        intention={intention}
         onEdit={() => {
-          setReasking(assembled.context_id);
+          setReasking(intention?.id ?? null);
           setAssembled(null);
         }}
       />
