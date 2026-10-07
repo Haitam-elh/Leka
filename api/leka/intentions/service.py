@@ -1,4 +1,4 @@
-"""The lifecycle: intention -> decision -> action.
+"""The lifecycle: intention -> decision -> action (LEKA-384).
 
 The gate every action passes through. An agent in proposes_action mode
 proposes; it never executes. Execution happens here, and only after an
@@ -7,16 +7,591 @@ approval that carries a user and a timestamp.
 That is not a policy this module implements on behalf of someone else — it
 is the reason this module exists.
 
-Depends on leka.context and leka.capabilities.
+    create     an intention kept — submitted — and the context it asks for
+               assembled (LEKA-373), its subject the intention, linked:
+               then analysing. One transaction: nothing to start from
+               (no thing named, no word to search) keeps nothing
+    ask_again  its words or scope changed: its context made again, a new
+               version (LEKA-374) — analysed again
+    move       a transition the lifecycle allows, by the actor it allows
+               (lifecycle.py) — what the analysis, a decision, an action
+               (LEKA-388 to 392) call
+    cancel, archive, restore
+    link, unlink   what it rests on, what came of it
+
+Every change is an event of its history, numbered, never rewritten: who
+— a person, or LEKA itself — when, from where to where, why.
+
+Depends on leka.context; reads leka.intelligence and leka.knowledge to
+check what is linked.
 """
 
 from __future__ import annotations
 
+import uuid
+from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
+
+from leka.context import AssembledContext, ContextRepository, ContextService, IntentAsk
+from leka.intelligence import IntelligenceRepository
+from leka.intentions.lifecycle import (
+    CLOSED,
+    Actor,
+    IllegalTransitionError,
+    IntentionStatus,
+    move,
+    moves,
+    phase,
+)
+from leka.intentions.models import Intention, IntentionEvent, IntentionLink
 from leka.intentions.repository import IntentionRepository
+from leka.intentions.schemas import (
+    IntentionCounts,
+    IntentionDetail,
+    IntentionEventRead,
+    IntentionLinkRead,
+    IntentionRead,
+)
+from leka.knowledge import EntityRepository
+
+S = IntentionStatus
+TITLE = 300
+REASON = 500
+
+
+class NothingToStartError(ValueError):
+    """Its words name nothing in the company model and say no word to
+    search: nothing is kept."""
+
+
+class IntentionArchivedError(ValueError):
+    """An archived intention does not move until it is restored."""
+
+
+class NotYoursError(PermissionError):
+    """Handled by someone who neither asked it nor may approve: an
+    intention is its asker's — and its approvers' (LEKA-390)."""
+
+
+class LinkRefusedError(ValueError):
+    """What it would be linked to is not there — or not this workspace's."""
+
+
+def _yours(intention: Intention, by: uuid.UUID | None, steward: bool) -> None:
+    """Its asker, or someone who may approve: who may handle it."""
+    if not steward and (by is None or intention.created_by != by):
+        raise NotYoursError
+
+
+def _now(now: datetime | None) -> datetime:
+    return now or datetime.now(UTC)
+
+
+def _scope(ask: IntentAsk) -> dict[str, object]:
+    """The scope asked, as it is kept: what the asker chose, not the words."""
+    said = ask.model_dump(
+        mode="json",
+        include={"environment", "since", "until", "services", "sources"},
+        exclude_none=True,
+    )
+    return {key: value for key, value in said.items() if value not in ([], None)}
+
+
+def intention_read(intention: Intention) -> IntentionRead:
+    status = S(intention.status)
+    return IntentionRead.model_validate(
+        {
+            **{
+                column: getattr(intention, column)
+                for column in (
+                    "id",
+                    "title",
+                    "text",
+                    "kind",
+                    "scope",
+                    "status_changed_at",
+                    "summary",
+                    "created_by",
+                    "created_at",
+                    "updated_at",
+                    "context_id",
+                    "archived_at",
+                )
+            },
+            "status": status,
+            "phase": phase(status),
+            "moves": [m.to for m in moves(status)] if intention.archived_at is None else [],
+        }
+    )
 
 
 class IntentionService:
     """Carries an intention from proposal to execution, or to rejection."""
 
-    def __init__(self, repository: IntentionRepository) -> None:
+    def __init__(
+        self,
+        repository: IntentionRepository,
+        *,
+        contexts: ContextService | None = None,
+        context_repository: ContextRepository | None = None,
+        findings: IntelligenceRepository | None = None,
+        entities: EntityRepository | None = None,
+    ) -> None:
         self._repository = repository
+        # What it is analysed from (LEKA-373) — and what links are checked
+        # against: each module's own, never a query here.
+        self._contexts = contexts
+        self._context_repository = context_repository
+        self._findings = findings
+        self._entities = entities
+
+    # ── its history ─────────────────────────────────────────────────────
+
+    def _record(
+        self,
+        intention: Intention,
+        kind: str,
+        *,
+        actor: Actor,
+        by: uuid.UUID | None,
+        at: datetime,
+        name: str | None = None,
+        from_status: str | None = None,
+        to_status: str | None = None,
+        reason: str | None = None,
+        detail: Mapping[str, object] | None = None,
+    ) -> IntentionEvent:
+        intention.events_count += 1
+        event = IntentionEvent(
+            workspace_id=self._repository.workspace_id,
+            id=uuid.uuid4(),
+            intention_id=intention.id,
+            sequence=intention.events_count,
+            kind=kind,
+            name=name,
+            from_status=from_status,
+            to_status=to_status,
+            actor=actor.value,
+            by=by if actor is Actor.PERSON else None,
+            at=at,
+            reason=reason[:REASON] if reason else None,
+            detail=dict(detail or {}),
+        )
+        self._repository.add(event)
+        intention.updated_at = at
+        return event
+
+    def _move(
+        self,
+        intention: Intention,
+        to: IntentionStatus,
+        *,
+        actor: Actor,
+        by: uuid.UUID | None,
+        at: datetime,
+        reason: str | None = None,
+        detail: Mapping[str, object] | None = None,
+    ) -> None:
+        if intention.archived_at is not None:
+            raise IntentionArchivedError
+        at_status = S(intention.status)
+        allowed = move(at_status, to, actor)
+        intention.status = to.value
+        intention.status_changed_at = at
+        self._record(
+            intention,
+            "moved",
+            actor=actor,
+            by=by,
+            at=at,
+            name=allowed.name,
+            from_status=at_status.value,
+            to_status=to.value,
+            reason=reason,
+            detail=detail,
+        )
+
+    # ── asking ──────────────────────────────────────────────────────────
+
+    async def create(
+        self, ask: IntentAsk, *, by: uuid.UUID | None, now: datetime | None = None
+    ) -> tuple[Intention, AssembledContext]:
+        """An intention kept, its context assembled and linked — analysing.
+        NothingToStartError when nothing can start it: the caller's
+        transaction is rolled back, and nothing is kept."""
+        if self._contexts is None:
+            msg = "Creating an intention assembles its context: a ContextService is needed."
+            raise RuntimeError(msg)
+        at = _now(now)
+        intention = Intention(
+            workspace_id=self._repository.workspace_id,
+            id=uuid.uuid4(),
+            text=ask.text,
+            title=(ask.title or ask.text)[:TITLE],
+            scope=_scope(ask),
+            status=S.SUBMITTED.value,
+            status_changed_at=at,
+            created_by=by,
+            events_count=0,
+        )
+        self._repository.add(intention)
+        self._record(
+            intention,
+            "created",
+            actor=Actor.PERSON,
+            by=by,
+            at=at,
+            to_status=None,
+            detail={"scope": intention.scope},
+        )
+        await self._repository.flush()
+        context = await self._contexts.assemble_intent(
+            ask.model_copy(update={"intention_id": str(intention.id)}), by=by
+        )
+        if context is None:
+            raise NothingToStartError
+        await self._follow(intention, context, by=by, at=at)
+        self._move(
+            intention,
+            S.ANALYSING,
+            actor=Actor.SYSTEM,
+            by=None,
+            at=at,
+            detail={"context_id": str(context.context_id), "version": context.version},
+        )
+        return intention, context
+
+    async def ask_again(
+        self,
+        intention_id: uuid.UUID,
+        ask: IntentAsk,
+        *,
+        by: uuid.UUID | None,
+        steward: bool = False,
+        now: datetime | None = None,
+    ) -> tuple[Intention, AssembledContext] | None:
+        """Its words or scope as they now stand: its context made again — a
+        new version that says what LEKA reads differently (LEKA-374) — and
+        analysed again. IllegalTransitionError once cancelled, or while its
+        actions run."""
+        if self._contexts is None:
+            msg = "Asking again assembles its context: a ContextService is needed."
+            raise RuntimeError(msg)
+        intention = await self._repository.intention(intention_id, lock=True)
+        if intention is None:
+            return None
+        at = _now(now)
+        # Checked before anything is touched: a refusal changes nothing.
+        _yours(intention, by, steward)
+        if intention.archived_at is not None:
+            raise IntentionArchivedError
+        to, actor = S.ANALYSING, Actor.PERSON
+        move(S(intention.status), to, actor)
+        asked = ask.model_copy(update={"intention_id": str(intention.id)})
+        context: AssembledContext | None
+        if intention.context_id is not None:
+            context = await self._contexts.reask(intention.context_id, asked, by=by)
+        else:
+            context = None
+        if context is None:
+            context = await self._contexts.assemble_intent(asked, by=by)
+        if context is None:
+            raise NothingToStartError
+        before = {"title": intention.title, "text": intention.text, "scope": intention.scope}
+        intention.text = ask.text
+        intention.title = (ask.title or ask.text)[:TITLE]
+        intention.scope = _scope(ask)
+        await self._follow(intention, context, by=by, at=at)
+        self._move(
+            intention,
+            to,
+            actor=actor,
+            by=by,
+            at=at,
+            detail={
+                "before": before,
+                "scope": intention.scope,
+                "context_id": str(context.context_id),
+                "version": context.version,
+            },
+        )
+        return intention, context
+
+    async def _follow(
+        self, intention: Intention, context: AssembledContext, *, by: uuid.UUID | None, at: datetime
+    ) -> None:
+        """Its context, as it now is: what it is read as, and linked."""
+        intention.context_id = context.context_id
+        if context.intent is not None:
+            intention.kind = context.intent.kind
+        found = await self._repository.link(intention.id, "context", context.context_id)
+        if found is not None:
+            found.detail = {**found.detail, "version": context.version}
+            return
+        self._add_link(
+            intention,
+            "context",
+            context.context_id,
+            label=context.title,
+            detail={"version": context.version},
+            actor=Actor.SYSTEM,
+            by=by,
+            at=at,
+        )
+
+    # ── moving ──────────────────────────────────────────────────────────
+
+    async def move(
+        self,
+        intention_id: uuid.UUID,
+        to: IntentionStatus,
+        *,
+        actor: Actor,
+        by: uuid.UUID | None = None,
+        reason: str | None = None,
+        detail: Mapping[str, object] | None = None,
+        summary: str | None = None,
+        now: datetime | None = None,
+    ) -> Intention | None:
+        """A transition the lifecycle allows by this actor — what the
+        analysis, a decision, an action (LEKA-388 to 392) call. Its summary,
+        when it concluded one. IllegalTransitionError otherwise."""
+        intention = await self._repository.intention(intention_id, lock=True)
+        if intention is None:
+            return None
+        if actor is Actor.PERSON and by is None:
+            # A person's move says which person: never an anonymous one.
+            raise IllegalTransitionError(S(intention.status), to, actor)
+        self._move(intention, to, actor=actor, by=by, at=_now(now), reason=reason, detail=detail)
+        if summary is not None:
+            intention.summary = summary
+        return intention
+
+    async def cancel(
+        self,
+        intention_id: uuid.UUID,
+        *,
+        by: uuid.UUID,
+        steward: bool = False,
+        reason: str | None = None,
+        now: datetime | None = None,
+    ) -> Intention | None:
+        """Withdrawn by its asker, or by someone who may approve."""
+        intention = await self._repository.intention(intention_id, lock=True)
+        if intention is None:
+            return None
+        _yours(intention, by, steward)
+        self._move(intention, S.CANCELLED, actor=Actor.PERSON, by=by, at=_now(now), reason=reason)
+        return intention
+
+    async def archive(
+        self,
+        intention_id: uuid.UUID,
+        *,
+        by: uuid.UUID,
+        steward: bool = False,
+        now: datetime | None = None,
+    ) -> Intention | None:
+        """Set aside — only once it is done with: completed, rejected or
+        cancelled. IllegalTransitionError otherwise."""
+        intention = await self._repository.intention(intention_id, lock=True)
+        if intention is None:
+            return None
+        _yours(intention, by, steward)
+        status = S(intention.status)
+        if status not in CLOSED:
+            raise IllegalTransitionError(status, status, Actor.PERSON)
+        if intention.archived_at is None:
+            at = _now(now)
+            intention.archived_at = at
+            self._record(intention, "archived", actor=Actor.PERSON, by=by, at=at)
+        return intention
+
+    async def restore(
+        self,
+        intention_id: uuid.UUID,
+        *,
+        by: uuid.UUID,
+        steward: bool = False,
+        now: datetime | None = None,
+    ) -> Intention | None:
+        intention = await self._repository.intention(intention_id, lock=True)
+        if intention is None:
+            return None
+        _yours(intention, by, steward)
+        if intention.archived_at is not None:
+            at = _now(now)
+            intention.archived_at = None
+            self._record(intention, "restored", actor=Actor.PERSON, by=by, at=at)
+        return intention
+
+    # ── links ───────────────────────────────────────────────────────────
+
+    def _add_link(
+        self,
+        intention: Intention,
+        kind: str,
+        ref_id: uuid.UUID,
+        *,
+        label: str,
+        detail: Mapping[str, object],
+        actor: Actor,
+        by: uuid.UUID | None,
+        at: datetime,
+    ) -> IntentionLink:
+        link = IntentionLink(
+            workspace_id=self._repository.workspace_id,
+            id=uuid.uuid4(),
+            intention_id=intention.id,
+            kind=kind,
+            ref_id=ref_id,
+            label=label[:500],
+            detail=dict(detail),
+            linked_at=at,
+            linked_by=by if actor is Actor.PERSON else None,
+        )
+        self._repository.add(link)
+        self._record(
+            intention,
+            "linked",
+            actor=actor,
+            by=by,
+            at=at,
+            detail={"kind": kind, "ref_id": str(ref_id), "label": link.label},
+        )
+        return link
+
+    async def _label(self, kind: str, ref_id: uuid.UUID) -> tuple[str, dict[str, object]]:
+        """What a context, a finding or an entity is called — checked
+        through the module that owns it. LinkRefusedError when it is not
+        this workspace's."""
+        if kind == "context" and self._context_repository is not None:
+            context = await self._context_repository.context(ref_id)
+            if context is not None:
+                return context.title, {"version": context.current_version}
+        elif kind == "finding" and self._findings is not None:
+            finding = await self._findings.finding(ref_id)
+            if finding is not None:
+                return finding.statement, {"code": finding.code, "analyzer": finding.analyzer}
+        elif kind == "entity" and self._entities is not None:
+            entity = (await self._entities.by_ids([ref_id])).get(ref_id)
+            if entity is not None:
+                return entity.name, {"type": entity.type.value}
+        raise LinkRefusedError(kind)
+
+    async def link(
+        self,
+        intention_id: uuid.UUID,
+        kind: str,
+        ref_id: uuid.UUID,
+        *,
+        actor: Actor,
+        by: uuid.UUID | None = None,
+        label: str | None = None,
+        detail: Mapping[str, object] | None = None,
+        steward: bool = False,
+        now: datetime | None = None,
+    ) -> IntentionLink | None:
+        """Linked to what it rests on or what came of it. A context, a
+        finding, an entity is checked and named here; a decision, an action,
+        an outcome is named by what makes it (LEKA-390 to 392). Linked twice,
+        the same link."""
+        intention = await self._repository.intention(intention_id, lock=True)
+        if intention is None:
+            return None
+        if actor is Actor.PERSON:
+            _yours(intention, by, steward)
+        found = await self._repository.link(intention.id, kind, ref_id)
+        if found is not None:
+            return found
+        if kind in ("context", "finding", "entity"):
+            named, said = await self._label(kind, ref_id)
+        elif label:
+            named, said = label, {}
+        else:
+            raise LinkRefusedError(kind)
+        return self._add_link(
+            intention,
+            kind,
+            ref_id,
+            label=named,
+            detail={**said, **(detail or {})},
+            actor=actor,
+            by=by,
+            at=_now(now),
+        )
+
+    async def unlink(
+        self,
+        intention_id: uuid.UUID,
+        link_id: uuid.UUID,
+        *,
+        by: uuid.UUID,
+        steward: bool = False,
+        now: datetime | None = None,
+    ) -> bool:
+        """A link a person made, undone — never its context's, which is what
+        it is analysed from. False when there is no such link."""
+        intention = await self._repository.intention(intention_id, lock=True)
+        if intention is None:
+            return False
+        _yours(intention, by, steward)
+        link = next(
+            (found for found in await self._repository.links(intention.id) if found.id == link_id),
+            None,
+        )
+        if link is None:
+            return False
+        if link.kind == "context" and link.ref_id == intention.context_id:
+            raise LinkRefusedError("context")
+        await self._repository.unlink(link)
+        self._record(
+            intention,
+            "unlinked",
+            actor=Actor.PERSON,
+            by=by,
+            at=_now(now),
+            detail={"kind": link.kind, "ref_id": str(link.ref_id), "label": link.label},
+        )
+        return True
+
+    # ── reads ───────────────────────────────────────────────────────────
+
+    async def detail(self, intention_id: uuid.UUID) -> IntentionDetail | None:
+        intention = await self._repository.intention(intention_id)
+        if intention is None:
+            return None
+        return self.detail_of(intention, await self._repository.links(intention.id))
+
+    @staticmethod
+    def detail_of(intention: Intention, links: Sequence[IntentionLink]) -> IntentionDetail:
+        return IntentionDetail(
+            **intention_read(intention).model_dump(),
+            links=[IntentionLinkRead.model_validate(link) for link in links],
+        )
+
+    async def detail_now(self, intention: Intention) -> IntentionDetail:
+        """As it now is, once written: what a route answers after a change."""
+        await self._repository.refresh(intention)
+        return self.detail_of(intention, await self._repository.links(intention.id))
+
+    async def history(self, intention_id: uuid.UUID) -> list[IntentionEventRead] | None:
+        intention = await self._repository.intention(intention_id)
+        if intention is None:
+            return None
+        return [
+            IntentionEventRead.model_validate(event)
+            for event in await self._repository.events(intention.id)
+        ]
+
+    async def counts(self, *, created_by: uuid.UUID | None = None) -> IntentionCounts:
+        by_status = await self._repository.counts(created_by=created_by)
+        counted = dict.fromkeys(("active", "scheduled", "finished"), 0)
+        for status, count in by_status.items():
+            if status != "archived":
+                counted[phase(S(status))] += count
+        return IntentionCounts(
+            all=sum(counted.values()),
+            archived=by_status.get("archived", 0),
+            **counted,
+        )

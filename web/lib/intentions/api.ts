@@ -1,12 +1,14 @@
-import { type AssembledContext, BUDGET, contexts, type IntentAsk } from "@/lib/context";
+import { apiFetch } from "@/lib/api";
+import type { components } from "@/lib/api-types";
+import { BUDGET, type IntentAsk } from "@/lib/context";
 import type { IntentionRequest } from "@/lib/validation/intentions";
 
 /**
- * Submitting an intention: until LEKA-384 keeps intentions themselves,
- * submitting one assembles the context it asks for (LEKA-373) — what LEKA
- * reads of its words and its scope, what it is about, when, where, what is
- * missing — and step 2 shows it. The day intentions are kept, this posts
- * to /intentions, and the context comes with what it returns.
+ * Submitting an intention (LEKA-384): it is kept — what was asked, by whom,
+ * where it stands — and the context it asks for assembled with it (LEKA-373):
+ * what LEKA reads of its words and its scope, what it is about, when,
+ * where, what is missing. Step 2 shows that context; the intention is in
+ * Mes intentions from then on, with its history.
  *
  * WHAT THE FORM SAYS, AND WHAT IT LEAVES TO THE WORDS. The scope it shows
  * is sent as asked: an environment other than "every one", the services
@@ -58,12 +60,68 @@ export function periodOf(
   };
 }
 
-export function submitIntention(ask: IntentAsk): Promise<AssembledContext> {
-  return contexts.intend(ask);
+export type Intention = components["schemas"]["IntentionRead"];
+export type IntentionDetail = components["schemas"]["IntentionDetail"];
+export type IntentionCreated = components["schemas"]["IntentionCreated"];
+export type IntentionEvent = components["schemas"]["IntentionEventRead"];
+export type IntentionLink = components["schemas"]["IntentionLinkRead"];
+export type IntentionCounts = components["schemas"]["IntentionCounts"];
+export type IntentionStatus = Intention["status"];
+export type IntentionPhase = "active" | "scheduled" | "finished" | "archived";
+
+export interface IntentionPage {
+  data: Intention[];
+  next_cursor: string | null;
+}
+
+const BASE = "/intentions";
+
+export const intentions = {
+  /** Asked: kept, its context assembled — 422 when nothing can start it. */
+  create: (ask: IntentAsk) =>
+    apiFetch<IntentionCreated>(BASE, { method: "POST", body: JSON.stringify(ask) }),
+  /** Asked again: its context made again, a new version (LEKA-374). */
+  ask: (id: string, ask: IntentAsk) =>
+    apiFetch<IntentionCreated>(`${BASE}/${id}/ask`, {
+      method: "POST",
+      body: JSON.stringify(ask),
+    }),
+  /** A page of them, the latest changed first — not archived unless asked. */
+  list: ({
+    phase,
+    q,
+    cursor,
+    limit = 20,
+  }: {
+    phase?: IntentionPhase | null;
+    q?: string;
+    cursor?: string | null;
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (phase) query.set("phase", phase);
+    if (q) query.set("q", q);
+    if (cursor) query.set("cursor", cursor);
+    return apiFetch<IntentionPage>(`${BASE}?${query.toString()}`);
+  },
+  counts: () => apiFetch<IntentionCounts>(`${BASE}/counts`),
+  one: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}`),
+  history: (id: string) => apiFetch<IntentionEvent[]>(`${BASE}/${id}/history`),
+  cancel: (id: string, reason?: string) =>
+    apiFetch<IntentionDetail>(`${BASE}/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason || null }),
+    }),
+  archive: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}/archive`, { method: "POST" }),
+  restore: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}/restore`, { method: "POST" }),
+};
+
+export function submitIntention(ask: IntentAsk): Promise<IntentionCreated> {
+  return intentions.create(ask);
 }
 
 /** The intention asked again, as it now stands: the same context made
  * again — a new version that says what LEKA reads differently (LEKA-374). */
-export function reaskIntention(contextId: string, ask: IntentAsk): Promise<AssembledContext> {
-  return contexts.reask({ id: contextId, ask });
+export function reaskIntention(intentionId: string, ask: IntentAsk): Promise<IntentionCreated> {
+  return intentions.ask(intentionId, ask);
 }
