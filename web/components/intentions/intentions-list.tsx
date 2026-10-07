@@ -32,6 +32,7 @@ type Dictionary = ReturnType<typeof useDictionary>;
 
 export const STATUS_TONES: Record<IntentionStatus, TileTone> = {
   submitted: "neutral",
+  needs_clarification: "warning",
   analysing: "violet",
   awaiting_decision: "warning",
   approved: "violet",
