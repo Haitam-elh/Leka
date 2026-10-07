@@ -25,8 +25,12 @@ test.describe("Intentions", () => {
     await page.getByTestId("intention-input").fill(asked);
     await page.getByTestId("intention-submit").click();
     await expect(page.getByTestId("intention-step-2")).toBeVisible();
-    // Its scope (LEKA-386): production, as the form chose it.
-    await expect(page.getByTestId("scope-environment")).toContainText("production · choisi");
+    // Its scope (LEKA-386): no environment held — the demo's form chose
+    // none, the words say none — and the period its kind's default.
+    await expect(page.getByTestId("scope-environment")).toHaveText("Tous");
+    await expect(page.getByTestId("scope-period")).toContainText(
+      "par défaut pour ce type de demande",
+    );
 
     // Kept: followed from Mes intentions.
     await page.getByTestId("intention-follow").click();
