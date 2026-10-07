@@ -3,7 +3,157 @@
 An intention is the durable record of "someone asked for this, here is what
 we decided, here is who approved it". It outlives the request that created
 it, because an action taken against a customer's production system must be
-answerable months later.
+answerable months later (LEKA-384).
+
+    INTENTION   what was asked — its words, its scope — by whom, where it
+                stands in its lifecycle (lifecycle.py), what it is about
+                as LEKA read it, its current context
+    EVENT       one thing that happened to it: created, moved from one
+                state to another — asked again among them — linked,
+                archived — who,
+                when, why. Append-only: the database refuses to change one
+                (a trigger), so its history can be audited
+    LINK        what it rests on and what came of it: its context, the
+                findings, the entities it is about — and, as LEKA-390 to
+                392 add them, its decisions, actions and outcomes
+
+No foreign key from a link to what it names: findings are resolved and
+pruned, contexts archived, and a link must still say what it was.
+docs/intentions.md says why each column is here.
 """
 
 from __future__ import annotations
+
+import uuid
+from datetime import datetime
+
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from leka.db import Base, WorkspaceScopedMixin
+from leka.intentions.lifecycle import Actor, IntentionStatus
+
+STATUSES = tuple(status.value for status in IntentionStatus)
+ACTORS = tuple(actor.value for actor in Actor)
+EVENT_KINDS = ("created", "moved", "linked", "unlinked", "archived", "restored")
+LINK_KINDS = ("context", "finding", "entity", "decision", "action", "outcome")
+
+
+def _in(column: str, values: tuple[str, ...]) -> str:
+    return f"{column} IN ({', '.join(repr(value) for value in values)})"
+
+
+class Intention(Base, WorkspaceScopedMixin):
+    """What someone asked LEKA, and where it stands."""
+
+    __tablename__ = "intentions"
+    __table_args__ = (
+        # Target for the composite foreign keys of its events and links.
+        UniqueConstraint("workspace_id", "id", name="uq_intentions_workspace_id_id"),
+        CheckConstraint(_in("status", STATUSES), name="status"),
+        Index("ix_intentions_workspace_updated", "workspace_id", "updated_at"),
+        Index("ix_intentions_workspace_status", "workspace_id", "status"),
+        Index("ix_intentions_workspace_created_by", "workspace_id", "created_by"),
+    )
+
+    # Its words, as asked; its title, the first of them unless one is given.
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    # What it asks for, as LEKA read it (LEKA-373): diagnose, change…
+    kind: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # The scope it was asked with: environment, since, until, services,
+    # sources — the form's, as the context engine reads it (IntentAsk).
+    scope: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    status_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # What LEKA concluded, in a sentence, once it did (LEKA-389).
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # The context it is analysed from now (contexts.subject_id is it).
+    context_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contexts.id", ondelete="SET NULL"), nullable=True
+    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # How many events it has: each event's place in its history.
+    events_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+
+class IntentionEvent(Base, WorkspaceScopedMixin):
+    """One thing that happened to an intention. Never updated: the database
+    refuses it (trigger intention_events_append_only)."""
+
+    __tablename__ = "intention_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "intention_id"],
+            ["intentions.workspace_id", "intentions.id"],
+            ondelete="CASCADE",
+            name="fk_intention_events_intention",
+        ),
+        UniqueConstraint("intention_id", "sequence", name="uq_intention_events_sequence"),
+        CheckConstraint(_in("kind", EVENT_KINDS), name="kind"),
+        CheckConstraint(_in("actor", ACTORS), name="actor"),
+        CheckConstraint("(kind = 'moved') = (to_status IS NOT NULL)", name="moved_says_where"),
+        Index("ix_intention_events_intention", "intention_id", "sequence"),
+    )
+
+    intention_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # Its place in the intention's history: 1, 2, 3…
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    # A move's name in the lifecycle: approved, failed, asked_again…
+    name: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    from_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    to_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    actor: Mapped[str] = mapped_column(String(10), nullable=False)
+    # The person, when a person did it.
+    by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # What else it says: the scope asked, the link made, the context
+    # version, the error's type.
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+class IntentionLink(Base, WorkspaceScopedMixin):
+    """What an intention rests on, or what came of it."""
+
+    __tablename__ = "intention_links"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "intention_id"],
+            ["intentions.workspace_id", "intentions.id"],
+            ondelete="CASCADE",
+            name="fk_intention_links_intention",
+        ),
+        UniqueConstraint("intention_id", "kind", "ref_id", name="uq_intention_links_ref"),
+        CheckConstraint(_in("kind", LINK_KINDS), name="kind"),
+        Index("ix_intention_links_ref", "workspace_id", "kind", "ref_id"),
+    )
+
+    intention_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    ref_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # What it was when linked — its name, and a context's version — so the
+    # link still says it when the thing is gone.
+    label: Mapped[str] = mapped_column(String(500), nullable=False)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    linked_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
