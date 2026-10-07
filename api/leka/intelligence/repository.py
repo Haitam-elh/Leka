@@ -14,11 +14,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, delete, func, select, update
+from sqlalchemy import Select, and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.connectors import Source
+from leka.connectors import Source, SourceEvent
 from leka.db import WorkspaceScopedRepository
+from leka.identity import User
 from leka.intelligence.models import (
     AuthorityRule,
     EnrichmentCandidate,
@@ -30,6 +31,7 @@ from leka.intelligence.models import (
     QualityScoreRow,
 )
 from leka.knowledge import ModelRun
+from leka.platform import Membership
 
 # The most pressing first, and an order that holds between equals.
 PRESSING = (
@@ -503,6 +505,25 @@ class QualityRepository(WorkspaceScopedRepository):
     def add_point(self, point: QualityPoint) -> None:
         self.add(point)
 
+    async def moves(self, *, since: datetime) -> list[tuple[QualityScoreRow, QualityPoint]]:
+        """Each area's score as it stands — the workspace, its columns,
+        teams, applications — and the point it stood at `since`, when it
+        was measured by then (LEKA-383)."""
+        areas = await self.areas()
+        if not areas:
+            return []
+        then = await self._session.execute(
+            self.select(QualityPoint)
+            .where(
+                QualityPoint.key.in_([row.key for row in areas]),
+                QualityPoint.measured_at <= since,
+            )
+            .distinct(QualityPoint.key)
+            .order_by(QualityPoint.key, QualityPoint.measured_at.desc(), QualityPoint.id)
+        )
+        points = {point.key: point for point in then.scalars().all()}
+        return [(row, points[row.key]) for row in areas if row.key in points]
+
     async def history(self, key: str, *, since: datetime) -> Sequence[QualityPoint]:
         """A score's changes since a date, the oldest first — and the point
         it stood at then, so a series starts where it was."""
@@ -518,3 +539,125 @@ class QualityRepository(WorkspaceScopedRepository):
             .order_by(QualityPoint.measured_at, QualityPoint.id)
         )
         return [*before.scalars().all(), *after.scalars().all()]
+
+
+# ── the activity (LEKA-383) ──────────────────────────────────────────────────
+
+
+class ActivityRepository(WorkspaceScopedRepository):
+    """What LEKA did, and what people decided, over a period: its analyses,
+    what they raised and proposed, the decisions taken — for Activité."""
+
+    async def runs_between(self, *, since: datetime, until: datetime) -> Sequence[IntelligenceRun]:
+        """The analyses that finished between two dates and did their work."""
+        return await self.list(
+            self.select(IntelligenceRun).where(
+                IntelligenceRun.finished_at >= since,
+                IntelligenceRun.finished_at < until,
+                IntelligenceRun.status.in_(("succeeded", "partial")),
+            )
+        )
+
+    async def findings_between(
+        self, *, since: datetime, until: datetime, limit: int
+    ) -> Sequence[Finding]:
+        """The findings first raised between two dates."""
+        return await self.list(
+            self.select(Finding)
+            .where(Finding.first_seen_at >= since, Finding.first_seen_at < until)
+            .order_by(Finding.first_seen_at.desc(), Finding.id)
+            .limit(limit)
+        )
+
+    async def candidates_between(
+        self, *, since: datetime, until: datetime, limit: int
+    ) -> Sequence[EnrichmentCandidate]:
+        """The proposals first made, or decided, between two dates."""
+        return await self.list(
+            self.select(EnrichmentCandidate)
+            .where(
+                or_(
+                    and_(
+                        EnrichmentCandidate.first_seen_at >= since,
+                        EnrichmentCandidate.first_seen_at < until,
+                    ),
+                    and_(
+                        EnrichmentCandidate.decided_at >= since,
+                        EnrichmentCandidate.decided_at < until,
+                    ),
+                )
+            )
+            .order_by(EnrichmentCandidate.first_seen_at.desc(), EnrichmentCandidate.id)
+            .limit(limit)
+        )
+
+    async def conflicts_between(
+        self, *, since: datetime, until: datetime, limit: int
+    ) -> Sequence[KnowledgeConflict]:
+        """The conflicts first found — or decided on — between two dates:
+        touched since, at least."""
+        return await self.list(
+            self.select(KnowledgeConflict)
+            .where(KnowledgeConflict.updated_at >= since, KnowledgeConflict.first_seen_at < until)
+            .order_by(KnowledgeConflict.first_seen_at.desc(), KnowledgeConflict.id)
+            .limit(limit)
+        )
+
+    async def source_events_between(
+        self, *, since: datetime, until: datetime, limit: int
+    ) -> list[tuple[SourceEvent, Source | None]]:
+        """What happened to the sources between two dates — each with its
+        source, unless deleted since."""
+        rows = await self._session.execute(
+            select(SourceEvent, Source)
+            .outerjoin(
+                Source,
+                and_(Source.id == SourceEvent.source_id, Source.workspace_id == self.workspace_id),
+            )
+            .where(
+                SourceEvent.workspace_id == self.workspace_id,
+                SourceEvent.created_at >= since,
+                SourceEvent.created_at < until,
+            )
+            .order_by(SourceEvent.created_at.desc(), SourceEvent.id)
+            .limit(limit)
+        )
+        return [(event, source) for event, source in rows.tuples().all()]
+
+    async def waiting(self) -> int:
+        """What waits on someone in À valider: the proposals and the open
+        conflicts."""
+        proposed = await self._session.scalar(
+            select(func.count()).where(
+                EnrichmentCandidate.workspace_id == self.workspace_id,
+                EnrichmentCandidate.status == "proposed",
+            )
+        )
+        open_ = await self._session.scalar(
+            select(func.count()).where(
+                KnowledgeConflict.workspace_id == self.workspace_id,
+                KnowledgeConflict.status == "open",
+            )
+        )
+        return int(proposed or 0) + int(open_ or 0)
+
+    async def people(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, tuple[str, str | None]]:
+        """These people, as the workspace knows them: their name — their
+        address when they gave none — and their role here."""
+        if not ids:
+            return {}
+        rows = await self._session.execute(
+            select(User.id, User.first_name, User.last_name, User.email, Membership.role)
+            .outerjoin(
+                Membership,
+                and_(Membership.user_id == User.id, Membership.workspace_id == self.workspace_id),
+            )
+            .where(User.id.in_(set(ids)))
+        )
+        return {
+            user: (
+                " ".join(part for part in (first, last) if part) or email,
+                role.value if role is not None else None,
+            )
+            for user, first, last, email, role in rows.tuples().all()
+        }

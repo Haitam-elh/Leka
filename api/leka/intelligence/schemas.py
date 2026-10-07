@@ -8,7 +8,7 @@ on how much each is to be believed (LEKA-382).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
@@ -29,7 +29,7 @@ class AnalyzerRead(BaseModel):
     version: int
     category: str = Field(description="architecture, organisation, context, changes, gaps.")
     method: Literal["rules", "model"]
-    reads: list[Literal["model", "context", "changes", "conflicts"]]
+    reads: list[Literal["model", "context", "changes", "conflicts", "evolution"]]
     summary: str = Field(description="What it looks for (English).")
     available: bool = Field(description="False for a model-assisted one: no model gateway yet.")
 
@@ -519,3 +519,116 @@ class KnowledgeQualitySummary(BaseModel):
     weakest: list[KnowledgeQualityRead]
     trend: list[KnowledgeQualityPoint] = Field(description="The workspace's, over 30 days.")
     change: float | None = Field(description="The workspace's score now, less 7 days ago.")
+
+
+# ── the activity (LEKA-383) ──────────────────────────────────────────────────
+
+ActivityCategory = Literal["information", "action", "alert", "incident"]
+ActivityKind = Literal[
+    "model_built",
+    "entity_removed",
+    "incident",
+    "deployment",
+    "change",
+    "release",
+    "analysis",
+    "finding",
+    "proposal",
+    "decision",
+    "conflict",
+    "conflict_decision",
+    "restore",
+    "rebuild",
+    "undo",
+    "source_event",
+]
+
+
+class ActivityCount(BaseModel):
+    """A count over the period, and over the period before."""
+
+    model_config = ConfigDict(frozen=True)
+
+    value: int
+    previous: int
+
+
+class ActivityStats(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    events: ActivityCount = Field(description="Everything that happened, counted one by one.")
+    actions: ActivityCount = Field(description="What LEKA did, and what people decided.")
+    incidents: ActivityCount
+    waiting: int = Field(description="What waits in À valider now.")
+    people: ActivityCount = Field(description="The people who decided something.")
+
+
+class ActivityBucket(BaseModel):
+    """One day, in the reader's zone: how much of each category."""
+
+    model_config = ConfigDict(frozen=True)
+
+    day: date
+    information: int = 0
+    action: int = 0
+    alert: int = 0
+    incident: int = 0
+
+
+class ActivityItem(BaseModel):
+    """One thing that happened."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(description="Stable: its kind and what it is — model:<run>, finding:<id>.")
+    at: datetime
+    category: ActivityCategory = Field(
+        description="information: the model and the systems moved; action: LEKA did, someone "
+        "decided; alert: LEKA raised something; incident."
+    )
+    kind: ActivityKind
+    count: int = Field(description="How many events it stands for: a build's changes.")
+    subject: SubjectRead | None
+    params: dict[str, JsonValue] = Field(description="What the interface words it from.")
+    by: uuid.UUID | None
+    by_name: str | None
+    via: Literal["person", "policy", "leka", "source"]
+
+
+class ActivityTop(BaseModel):
+    """A service or an application, and how much concerned it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    subject: SubjectRead
+    count: int
+    previous: int
+
+
+class ActivityPerson(BaseModel):
+    """Someone who decided, and how often."""
+
+    model_config = ConfigDict(frozen=True)
+
+    user_id: uuid.UUID
+    name: str
+    role: str | None
+    count: int
+    previous: int
+
+
+class ActivityRead(BaseModel):
+    """What happened in the environment and what LEKA did, over a period —
+    and the period before, as long (LEKA-383)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    since: datetime
+    until: datetime
+    timezone: str
+    stats: ActivityStats
+    buckets: list[ActivityBucket]
+    categories: dict[str, int] = Field(description="How much of each category, the period.")
+    latest: list[ActivityItem] = Field(description="The latest first.")
+    top: list[ActivityTop] = Field(description="The services and applications most concerned.")
+    people: list[ActivityPerson] = Field(description="Those who decided most.")
