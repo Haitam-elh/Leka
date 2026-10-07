@@ -74,8 +74,25 @@
     GET /knowledge/relationships/changes       what appeared, changed, went, at each build
     GET /knowledge/relationships/issues        what the last build found wrong: an end a
                                                contract does not take, a loop, two parents
+    GET /knowledge/evolution                   the model's course (LEKA-383): each version
+                                               an entity recorded, against the one before
+    GET /knowledge/evolution/summary           what changed day by day, and the period
+                                               before
+    GET /knowledge/entities/{id}/history       its whole course: versions, relationships
+                                               that came and went, operations on it
+    GET /knowledge/entities/{id}/at            what it was at a moment, its ties then
+    GET /knowledge/snapshots                   what the model held at each build
+    GET /knowledge/snapshots/at                what it held at a moment — kept, or
+                                               rebuilt from the history
+    GET /knowledge/operations                  the restores and rebuilds asked, kept
+    POST /knowledge/entities/{id}/restore      an entity's attributes put back as a
+                                               version said them, from the next build
+    POST /knowledge/operations/{id}/undo       a restore taken back
+    POST /knowledge/model/rebuild              the model built again
 
-Read by every member (`workspace:read`): it is the company's own picture. A
+Read by every member (`workspace:read`): it is the company's own picture.
+Changing its course — restoring, undoing, rebuilding — is deciding what the
+model says: `intention:approve`, as À valider is. A
 route validates, calls one repository or service, and returns (architecture
 rule 6). The workspace is read from the session, never from the path or the
 payload (rule 3): another workspace's entity is 404.
@@ -98,8 +115,10 @@ from leka.governance import Permission, Principal, require_permission
 from leka.ingestion import EnrichmentRepository
 from leka.knowledge import (
     ENTITY_KINDS,
+    MAX_SUMMARY_DAYS,
     MODEL_VERSION,
     RELATIONSHIP_KINDS,
+    AssertionRepository,
     BusinessContext,
     BusinessDetail,
     BusinessFilters,
@@ -122,14 +141,22 @@ from leka.knowledge import (
     DocumentFilters,
     DocumentRead,
     Entity,
+    EntityAtRead,
     EntityBrief,
+    EntityChangeRead,
     EntityDetail,
+    EntityHistoryRead,
     EntityKindRead,
     EntityRead,
     EntityRepository,
     EntityType,
+    EntityVersion,
     EntityVersionRead,
     EventFilters,
+    EvolutionFilters,
+    EvolutionRepository,
+    EvolutionService,
+    EvolutionSummary,
     GraphRelationshipRead,
     IncidentDetail,
     IncidentRead,
@@ -148,8 +175,12 @@ from leka.knowledge import (
     ModelRunRead,
     ModelStatus,
     Neighbourhood,
+    OperationFilters,
+    OperationRead,
+    OperationRefusedError,
     PersonDetail,
     PersonRead,
+    RebuildRequest,
     Registry,
     Relationship,
     RelationshipChange,
@@ -160,9 +191,14 @@ from leka.knowledge import (
     RelationshipKindRead,
     RelationshipType,
     Responsibility,
+    RestoreRequest,
+    SnapshotRead,
     TeamDetail,
     TeamRead,
     Timeline,
+    UndoRequest,
+    queue_model_build,
+    utc,
 )
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -176,6 +212,7 @@ EVENTS = (
 )
 
 Reader = Annotated[Principal, Depends(require_permission(Permission.WORKSPACE_READ))]
+Approver = Annotated[Principal, Depends(require_permission(Permission.INTENTION_APPROVE))]
 
 # An entity's relationships in its detail; its neighbourhood pages the rest.
 EDGES = 100
@@ -1537,3 +1574,236 @@ async def relationship_issues(
         data=await KnowledgeService(repository).relationship_issues(list(result.items)),
         next_cursor=result.next_cursor,
     )
+
+
+# ── the model's course (LEKA-383) ───────────────────────────────────────────
+
+EVOLUTION_SORTS = SortCatalogue(
+    fields=(
+        SortableField(
+            "recorded_at", EntityVersion.recorded_at, "ix_entity_versions_workspace_recorded"
+        ),
+    ),
+    default="recorded_at",
+)
+# Snapshots a list holds at most.
+MAX_SNAPSHOTS = 400
+MAX_OPERATIONS = 200
+Moment = Annotated[datetime, Query(description="A moment; without a zone, UTC.")]
+
+
+def _evolution(session: SessionDep, principal: Principal) -> EvolutionService:
+    return EvolutionService(
+        EvolutionRepository(session, principal.workspace_id),
+        AssertionRepository(session, principal.workspace_id),
+    )
+
+
+def _no_entity() -> ApiError:
+    return ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
+
+
+def _refused(error: OperationRefusedError) -> ApiError:
+    said = {
+        "removed": "No source shows it any more: there is nothing to restore it on.",
+        "current": "That is the version it is at.",
+        "nothing_to_restore": "That version says nothing the model does not say now.",
+        "not_undoable": "Only a restore can be undone.",
+        "already_undone": "It was already undone.",
+    }
+    return ApiError(
+        status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, said.get(error.reason, error.reason)
+    )
+
+
+@router.get("/evolution", response_model=PageEnvelope[EntityChangeRead])
+async def evolution(
+    session: SessionDep,
+    principal: Reader,
+    page: PageParams,
+    entity_id: Annotated[uuid.UUID | None, Query(description="Of this entity.")] = None,
+    kind: Annotated[EntityType | None, Query(alias="type", description="Of this kind.")] = None,
+    change: Literal["created", "changed", "removed", "returned"] | None = None,
+    since: Annotated[datetime | None, Query(description="Recorded from this date.")] = None,
+    until: Annotated[datetime | None, Query(description="Recorded before this date.")] = None,
+) -> PageEnvelope[EntityChangeRead]:
+    """What changed in the model, the latest first: each version an entity
+    recorded — created, changed, removed, back — with each field it changed,
+    from what, to what."""
+    repository = EvolutionRepository(session, principal.workspace_id)
+    statement = repository.entity_changes(
+        EvolutionFilters(
+            entity_id=entity_id,
+            type=kind,
+            change=change,
+            since=utc(since) if since else None,
+            until=utc(until) if until else None,
+        )
+    )
+    result = await serve_page(
+        session, statement, request=page, catalogue=EVOLUTION_SORTS, id_column=EntityVersion.id
+    )
+    return PageEnvelope(
+        data=await _evolution(session, principal).entity_changes(list(result.items)),
+        next_cursor=result.next_cursor,
+    )
+
+
+@router.get("/evolution/summary", response_model=EvolutionSummary)
+async def evolution_summary(
+    session: SessionDep,
+    principal: Reader,
+    since: Annotated[datetime | None, Query(description="From; 7 days ago by default.")] = None,
+    until: Annotated[datetime | None, Query(description="Before; now by default.")] = None,
+    timezone: Annotated[
+        str | None, Query(max_length=64, description="The days' zone, IANA: Europe/Paris. UTC.")
+    ] = None,
+) -> EvolutionSummary:
+    """What changed day by day — things created, changed, removed, back;
+    relationships added, changed, removed — and over the period before, as
+    long."""
+    end = utc(until) if until else datetime.now(UTC)
+    start = utc(since) if since else end - timedelta(days=7)
+    if start >= end or end - start > timedelta(days=MAX_SUMMARY_DAYS):
+        raise ApiError(
+            422,
+            ErrorCode.VALIDATION_FAILED,
+            "`since` must come before `until`, a year apart at most.",
+        )
+    return await _evolution(session, principal).summary(since=start, until=end, timezone=timezone)
+
+
+@router.get("/entities/{entity_id}/history", response_model=EntityHistoryRead)
+async def entity_history(
+    entity_id: uuid.UUID, session: SessionDep, principal: Reader
+) -> EntityHistoryRead:
+    """An entity's whole course: each version against the one before, its
+    relationships that appeared, changed or went, the operations on it."""
+    found = await _evolution(session, principal).history(entity_id)
+    if found is None:
+        raise _no_entity()
+    return found
+
+
+@router.get("/entities/{entity_id}/at", response_model=EntityAtRead)
+async def entity_at(
+    entity_id: uuid.UUID, moment: Moment, session: SessionDep, principal: Reader
+) -> EntityAtRead:
+    """An entity as it was at a moment: the version in force then, its
+    relationships as they stood — `complete` false when the history does
+    not reach that far."""
+    found = await _evolution(session, principal).at(entity_id, utc(moment))
+    if found is None:
+        raise _no_entity()
+    return found
+
+
+@router.get("/snapshots", response_model=list[SnapshotRead])
+async def snapshots(
+    session: SessionDep,
+    principal: Reader,
+    since: Annotated[datetime | None, Query(description="Taken from this date.")] = None,
+    until: Annotated[datetime | None, Query(description="Taken before this date.")] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_SNAPSHOTS)] = 100,
+) -> list[SnapshotRead]:
+    """What the model held at each build that changed it — a day's first
+    at least — the oldest first: the latest `limit`."""
+    return await _evolution(session, principal).snapshots(
+        since=utc(since) if since else None, until=utc(until) if until else None, limit=limit
+    )
+
+
+@router.get("/snapshots/at", response_model=SnapshotRead)
+async def snapshot_at(moment: Moment, session: SessionDep, principal: Reader) -> SnapshotRead:
+    """What the model held at a moment: the snapshot in force then — or one
+    rebuilt now from the history. 404 where the history does not reach."""
+    found = await _evolution(session, principal).snapshot_at(utc(moment))
+    if found is None:
+        raise ApiError(
+            status.HTTP_404_NOT_FOUND,
+            ErrorCode.NOT_FOUND,
+            "The model's history does not reach that far.",
+        )
+    return found
+
+
+@router.get("/operations", response_model=list[OperationRead])
+async def operations(
+    session: SessionDep,
+    principal: Reader,
+    kind: Literal["restore", "rebuild"] | None = None,
+    state: Annotated[
+        Literal["queued", "applied", "done", "failed", "undone"] | None,
+        Query(alias="status"),
+    ] = None,
+    entity_id: Annotated[uuid.UUID | None, Query(description="On this entity.")] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_OPERATIONS)] = 50,
+) -> list[OperationRead]:
+    """The restores and rebuilds asked, the latest first: who, when, why,
+    what came of them."""
+    return await _evolution(session, principal).operations(
+        OperationFilters(kind=kind, status=state, entity_id=entity_id), limit=limit
+    )
+
+
+@router.post(
+    "/entities/{entity_id}/restore",
+    response_model=OperationRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def restore(
+    entity_id: uuid.UUID, body: RestoreRequest, session: SessionDep, principal: Approver
+) -> OperationRead:
+    """Put an entity's attributes back as one of its versions said them —
+    every one it said otherwise, or those named: the model shows them from
+    its next build, over what the sources say, until the operation is
+    undone. 404 for an unknown version; 409 for a removed entity, its own
+    version, or a version that restores nothing."""
+    try:
+        found = await _evolution(session, principal).restore(
+            entity_id,
+            body.version,
+            attributes=body.attributes,
+            reason=body.reason,
+            by=principal.user_id,
+            now=datetime.now(UTC),
+        )
+    except OperationRefusedError as error:
+        raise _refused(error) from error
+    if found is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such version.")
+    await session.commit()
+    await queue_model_build(principal.workspace_id)
+    return found
+
+
+@router.post("/operations/{operation_id}/undo", response_model=OperationRead)
+async def undo(
+    operation_id: uuid.UUID, body: UndoRequest, session: SessionDep, principal: Approver
+) -> OperationRead:
+    """A restore taken back: the next build shows what the sources say. 409
+    for a rebuild, or a restore already undone."""
+    try:
+        found = await _evolution(session, principal).undo(
+            operation_id, reason=body.reason, by=principal.user_id, now=datetime.now(UTC)
+        )
+    except OperationRefusedError as error:
+        raise _refused(error) from error
+    if found is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such operation.")
+    await session.commit()
+    await queue_model_build(principal.workspace_id)
+    return found
+
+
+@router.post("/model/rebuild", response_model=OperationRead, status_code=status.HTTP_202_ACCEPTED)
+async def rebuild(body: RebuildRequest, session: SessionDep, principal: Approver) -> OperationRead:
+    """Build the model again from what it is made of, though nothing new
+    came: queued — the operation says, when the build ran, what it did, or
+    why it could not. One already queued answers."""
+    found = await _evolution(session, principal).rebuild(
+        reason=body.reason, by=principal.user_id, now=datetime.now(UTC)
+    )
+    await session.commit()
+    await queue_model_build(principal.workspace_id)
+    return found

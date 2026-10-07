@@ -72,6 +72,10 @@
   --color-state-danger-soft: var(--state-danger-soft);
   --color-state-info: var(--state-info);
   --color-state-info-soft: var(--state-info-soft);
+  --color-activity-information: var(--activity-information);
+  --color-activity-action: var(--activity-action);
+  --color-activity-alert: var(--activity-alert);
+  --color-activity-incident: var(--activity-incident);
   --color-shell-highlight: var(--shell-highlight);
   --color-shell-accent-muted: var(--shell-accent-muted);
   --spacing-sidebar: var(--shell-sidebar-width);
@@ -192,6 +196,12 @@
    * cyan-blue measured at #e8f7fc on mockup 01. */
   --state-info: #17648f;
   --state-info-soft: #e8f6fc;
+  /* Activité's four kinds of events, as mockup 08 draws them (LEKA-383):
+     marks on a chart, never text. */
+  --activity-information: #6d79f6;
+  --activity-action: #2bbf8a;
+  --activity-alert: #f5a03a;
+  --activity-incident: #ec4b4b;
 
   /* Measured on the same screen: 222px and 64px at its 1536px width. */
   --shell-sidebar-width: 14rem;   /* 224px */

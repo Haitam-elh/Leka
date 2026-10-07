@@ -362,6 +362,112 @@ describe("Insights LEKA", () => {
     );
   });
 
+  it("words what the model's course says, and what to do, in French and in English", () => {
+    const fr = DICTIONARIES.fr;
+    const evolution = (code: string, params: Record<string, unknown>) =>
+      finding({ category: "evolution", code, params });
+    const said = [
+      evolution("evolution.dependencies_grew", {
+        name: "payment-api",
+        added: 3,
+        names: ["fx-rates", "ledger-api", "tax-service"],
+        recommendation: "review_dependencies",
+      }),
+      evolution("evolution.owner_lost", {
+        name: "billing-queue",
+        before: ["Platform"],
+        at: hoursAgo(24 * 9),
+        recommendation: "name_owner",
+      }),
+      evolution("evolution.owner_changed", {
+        name: "user-service",
+        before: ["Nadia Kowalski"],
+        after: ["Thomas Berger"],
+        recommendation: "confirm_owner",
+      }),
+      evolution("evolution.removed_relied", {
+        name: "redis-sessions",
+        names: ["auth-service"],
+        recommendation: "confirm_removal",
+      }),
+      evolution("evolution.architecture_moved", {
+        created: 3,
+        removed: 1,
+        recommendation: "review_architecture",
+      }),
+      evolution("evolution.incidents_rising", {
+        name: "checkout",
+        recent: 4,
+        before: 1,
+        recommendation: "investigate_incidents",
+      }),
+      evolution("evolution.volatile", {
+        name: "feature-flags",
+        changes: 5,
+        recommendation: "watch_changes",
+      }),
+      evolution("evolution.quality_fell", {
+        name: "workspace",
+        scope: "workspace",
+        before: 0.72,
+        after: 0.58,
+        recommendation: "review_quality",
+      }),
+      evolution("evolution.quality_fell", {
+        name: "services",
+        scope: "column",
+        column: "services",
+        before: 0.9,
+        after: 0.75,
+        recommendation: "review_quality",
+      }),
+    ].map((f) => word(fr, f));
+
+    expect(said).toEqual([
+      {
+        title: "payment-api dépend de 3 éléments de plus qu'il y a un mois",
+        detail: "Nouveaux : fx-rates, ledger-api, tax-service · Revoir ses dépendances",
+      },
+      {
+        title: "billing-queue n'a plus de responsable",
+        detail: "Platform n'est plus nommé depuis 9 j · Nommer un responsable",
+      },
+      {
+        title: "user-service a changé de responsable",
+        detail: "Nadia Kowalski → Thomas Berger · Confirmer le nouveau responsable",
+      },
+      {
+        title: "redis-sessions a disparu de vos sources",
+        detail: "auth-service en dépendai(en)t encore · Confirmer la suppression",
+      },
+      {
+        title: "Votre architecture a bougé ce mois-ci",
+        detail: "3 apparu(s), 1 disparu(s) · Revoir l'architecture",
+      },
+      {
+        title: "Les incidents augmentent sur checkout",
+        detail: "4 ce mois-ci, 1 le mois précédent · Analyser les incidents",
+      },
+      {
+        title: "feature-flags change souvent",
+        detail: "5 changements ce mois-ci · Surveiller ses changements",
+      },
+      {
+        title: "La qualité de ce que LEKA sait de votre entreprise baisse",
+        detail: "72 % il y a un mois, 58 % aujourd'hui · Voir ce qui la fait baisser",
+      },
+      {
+        title: "La qualité de ce que LEKA sait de Services baisse",
+        detail: "90 % il y a un mois, 75 % aujourd'hui · Voir ce qui la fait baisser",
+      },
+    ]);
+    const english = finding({ code: "evolution.volatile", params: { name: "x", changes: 4 } });
+    expect(word(DICTIONARIES.en, english)).toEqual({
+      title: "x changes often",
+      detail: "4 changes this month",
+    });
+  });
+
   it("says the English sentence of a code it does not know yet", async () => {
     api.summary.mockResolvedValue(
       summary({ top: [finding({ code: "gap.undocumented", statement: "A change reached 3 things." })] }),

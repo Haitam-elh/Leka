@@ -35,13 +35,20 @@ from leka.ingestion import RESOLVER_VERSION, ResolutionDecision, ResolvedEntity
 from leka.intelligence.job import analyse_workspace
 from leka.knowledge import (
     MODEL_VERSION,
+    AssertionRepository,
     Entity,
     EntityType,
+    EntityVersion,
+    EvolutionRepository,
+    EvolutionService,
+    Lifecycle,
     ModelRun,
     Relationship,
+    RelationshipChange,
     RelationshipType,
     search_fields,
 )
+from leka.knowledge.build import changes, content_of
 from leka.platform import Membership, Role, Workspace
 
 WORKSPACE_SLUG = "acme"
@@ -70,6 +77,50 @@ SOURCES: tuple[tuple[SourceKind, str, SourceStatus], ...] = (
     (SourceKind.SLACK, "#incidents", SourceStatus.ACTIVE),
     (SourceKind.SLACK, "#platform", SourceStatus.DRAFT),
 )
+
+
+# ── The month that led here (LEKA-383) ─────────────────────────────────────
+# The model's history, as its builds would have recorded it: what appeared
+# when, what each thing said before, the ties that came and went. Days ago.
+FIRST_BUILD = 30.0
+# When each thing first appeared — the rest, at the first build.
+APPEARED: dict[str, float] = {
+    "gh:mei-tanaka": 20,
+    "gh-team:acme/platform": 14,
+    "gh:acme/user-service": 3,
+    "deploy-2026-09-18-1432": 26 / 24,
+    "OPS-1841": 25 / 24,
+    "dd-monitor-77213": 25 / 24,
+}
+# What a thing said before — from when — and since when it says what it says.
+BEFORE: dict[str, tuple[list[tuple[float, dict[str, object]]], float]] = {
+    # payment-api shipped 2.8.2, 2.8.3, then 2.8.4 — the deployment.
+    "svc-payment-api": (
+        [
+            (FIRST_BUILD, {"version": "2.8.1"}),
+            (16, {"version": "2.8.2"}),
+            (8, {"version": "2.8.3"}),
+        ],
+        26 / 24,
+    ),
+    # user-service moved from Payments to Platform.
+    "svc-user-service": ([(FIRST_BUILD, {"team": "payments"})], 14),
+}
+# When a tie appeared, when not with its ends.
+TIED: dict[tuple[str, str, str], float] = {
+    ("svc-payment-api", "depends_on", "svc-user-service"): 10,
+    # Observed in traffic five days ago (Datadog).
+    ("svc-auth-service", "depends_on", "arn:aws:rds:eu-west-1:acme:db:postgres-prod"): 5,
+    ("gh:t-berger", "owns", "svc-user-service"): 14,
+}
+REDIS = "arn:aws:elasticache:eu-west-1:acme:cluster/redis-sessions"
+# Ties that went: from, kind, to, appeared, went.
+WENT: tuple[tuple[str, str, str, float, float], ...] = (
+    ("gh:nadia-k", "owns", "svc-user-service", FIRST_BUILD, 14),
+    ("svc-auth-service", "depends_on", REDIS, FIRST_BUILD, 6),
+)
+# What no source shows any more, and since when.
+REMOVED: dict[str, float] = {REDIS: 6}
 
 
 async def _reset(session: Any) -> None:
@@ -380,7 +431,27 @@ async def _build_demo_workspace() -> None:
         platform = entity(
             github, EntityType.TEAM, "gh-team:acme/platform", "Platform", {"slug": "platform"}
         )
+        # auth-service's session cache: the production account stopped
+        # showing it six days ago — removed from the model, its history kept
+        # (LEKA-383: auth-service relied on it).
+        redis = entity(
+            aws,
+            EntityType.INFRA_RESOURCE,
+            REDIS,
+            "redis-sessions",
+            {
+                "provider": "aws",
+                "region": "eu-west-1",
+                "engine": "redis",
+                "resource_class": "cache",
+            },
+            last_seen=NOW - timedelta(days=REMOVED[REDIS]),
+        )
+        redis.lifecycle = Lifecycle.REMOVED
+        redis.removed_at = redis.lifecycle_changed_at = NOW - timedelta(days=REMOVED[REDIS])
         await session.flush()
+
+        edges: list[Relationship] = []
 
         def edge(
             source: Source,
@@ -389,18 +460,18 @@ async def _build_demo_workspace() -> None:
             type_: RelationshipType,
             confidence: float = 1.0,
         ) -> None:
-            session.add(
-                Relationship(
-                    workspace_id=workspace.id,
-                    from_entity_id=from_entity.id,
-                    to_entity_id=to_entity.id,
-                    type=type_,
-                    confidence=confidence,
-                    origin="stated",
-                    rule="stated",
-                    provenance=[{"source_id": str(source.id)}],
-                )
+            tie = Relationship(
+                workspace_id=workspace.id,
+                from_entity_id=from_entity.id,
+                to_entity_id=to_entity.id,
+                type=type_,
+                confidence=confidence,
+                origin="stated",
+                rule="stated",
+                provenance=[{"source_id": str(source.id)}],
             )
+            session.add(tie)
+            edges.append(tie)
 
         edge(aws, payment, database, RelationshipType.DEPENDS_ON)
         edge(aws, users, database, RelationshipType.DEPENDS_ON)
@@ -437,7 +508,11 @@ async def _build_demo_workspace() -> None:
         # sheet reads them (LEKA-359): without them, every sheet of the demo
         # says it found nothing.
         built = await session.execute(select(Entity).where(Entity.workspace_id == workspace.id))
-        for thing in built.scalars():
+        modelled = list(built.scalars())
+        await _history(session, workspace.id, modelled, edges)
+        for thing in modelled:
+            if thing.lifecycle is Lifecycle.REMOVED:
+                continue  # no source shows it: nothing resolved it
             session.add(
                 ResolvedEntity(
                     id=thing.id,
@@ -480,6 +555,12 @@ async def _build_demo_workspace() -> None:
         )
 
         await session.commit()
+        # What the model held, week by week, rebuilt from that history — and
+        # now (LEKA-383).
+        await EvolutionService(
+            EvolutionRepository(session, workspace.id), AssertionRepository(session, workspace.id)
+        ).record(now=NOW, run_id=None)
+        await session.commit()
 
         counts = {
             "sources": len(SOURCES),
@@ -499,6 +580,114 @@ async def _build_demo_workspace() -> None:
     print(f"\nSign in at /login with {DEMO_EMAIL} / {DEMO_PASSWORD}")
     print("\nThe story it tells: payment-api v2.8.4 shipped 26h ago, p99 went")
     print("from 180ms to 2.1s, and auth-service turns out to share the database.")
+
+
+async def _history(
+    session: Any, workspace_id: Any, things: list[Entity], edges: list[Relationship]
+) -> None:
+    """The month that led to the model as it is, written as its builds
+    recorded it (LEKA-383): one build a day something changed — each
+    version, each tie that came or went. Nothing here contradicts what the
+    model holds now; it is how it got there."""
+    by_key = {thing.key: thing for thing in things}
+    days = {
+        FIRST_BUILD,
+        *APPEARED.values(),
+        *(d for said, since in BEFORE.values() for d in (since, *(day for day, _ in said))),
+        *TIED.values(),
+        *(d for *_, appeared, went in WENT for d in (appeared, went)),
+        *REMOVED.values(),
+    }
+    runs: dict[float, Any] = {}
+    for day in sorted(days, reverse=True):
+        at = NOW - timedelta(days=day)
+        run = ModelRun(
+            workspace_id=workspace_id,
+            status="succeeded",
+            started_at=at,
+            finished_at=at,
+            model_version=MODEL_VERSION,
+            counts={},
+        )
+        session.add(run)
+        runs[day] = run
+    await session.flush()
+
+    def recorded(day: float) -> dict[str, Any]:
+        return {"recorded_at": NOW - timedelta(days=day), "run_id": runs[day].id}
+
+    for thing in things:
+        now = dict(thing.attributes)
+        said, since = BEFORE.get(thing.key, ([], APPEARED.get(thing.key, FIRST_BUILD)))
+        course = [(day, {**now, **before}) for day, before in said]
+        course.append((since, now))
+        if not said:
+            course = [(APPEARED.get(thing.key, FIRST_BUILD), now)]
+        contents = [
+            (day, content_of(thing.name, attributes, "active")) for day, attributes in course
+        ]
+        if thing.key in REMOVED:
+            contents.append((REMOVED[thing.key], content_of(thing.name, now, "removed")))
+        previous: dict[str, object] | None = None
+        for number, (day, content) in enumerate(contents, start=1):
+            session.add(
+                EntityVersion(
+                    workspace_id=workspace_id,
+                    entity_id=thing.id,
+                    version=number,
+                    content=content,
+                    changed=["created"] if previous is None else changes(previous, content),
+                    schema_version=1,
+                    **recorded(day),
+                )
+            )
+            previous = content
+        thing.version = len(contents)
+        thing.first_seen_at = NOW - timedelta(days=contents[0][0])
+
+    def state(tie: Relationship | None, confidence: float = 1.0) -> dict[str, object]:
+        return {
+            "confidence": tie.confidence if tie else confidence,
+            "origin": "stated",
+            "rule": "stated",
+            "environments": [],
+        }
+
+    keys = {thing.id: thing.key for thing in things}
+    for tie in edges:
+        ends = (keys[tie.from_entity_id], tie.type.value, keys[tie.to_entity_id])
+        day = TIED.get(
+            ends,
+            min(APPEARED.get(ends[0], FIRST_BUILD), APPEARED.get(ends[2], FIRST_BUILD)),
+        )
+        tie.first_seen_at = tie.changed_at = NOW - timedelta(days=day)
+        session.add(
+            RelationshipChange(
+                workspace_id=workspace_id,
+                from_entity_id=tie.from_entity_id,
+                to_entity_id=tie.to_entity_id,
+                type=tie.type.value,
+                change="added",
+                before=None,
+                after=state(tie),
+                **recorded(day),
+            )
+        )
+    for start, kind, end, appeared, went in WENT:
+        for change, day in (("added", appeared), ("removed", went)):
+            session.add(
+                RelationshipChange(
+                    workspace_id=workspace_id,
+                    from_entity_id=by_key[start].id,
+                    to_entity_id=by_key[end].id,
+                    type=kind,
+                    change=change,
+                    before=state(None) if change == "removed" else None,
+                    after=state(None) if change == "added" else None,
+                    **recorded(day),
+                )
+            )
+    await session.flush()
 
 
 if __name__ == "__main__":

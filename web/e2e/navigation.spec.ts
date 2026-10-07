@@ -12,7 +12,7 @@ import { LANDING, signIn } from "./sign-in";
 
 /** Every page the sidebar opens, the line it marks, the title it carries. */
 const ZONES = [
-  ["/overview", "overview", "Vue d'ensemble"],
+  ["/overview", "overview", "Mon Dashboard"],
   ["/intentions/new", "intention-new", "Nouvelle intention"],
   ["/intentions", "intentions", "Intentions"],
   ["/environment", "environment-overview", "Mon environnement"],
@@ -177,8 +177,8 @@ test.describe("the three pillars (LEKA-428)", () => {
     await expect(page.getByTestId("nav-environment-domains")).toBeInViewport();
 
     // Leaving it closes it again: nothing was chosen.
-    await page.getByTestId("nav-activity").click();
-    await expect(page).toHaveURL("http://localhost:3000/activity");
+    await page.getByTestId("nav-approvals").click();
+    await expect(page).toHaveURL("http://localhost:3000/approvals");
     await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute(
       "aria-expanded",
       "false",

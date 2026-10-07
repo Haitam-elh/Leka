@@ -157,6 +157,8 @@ current but make no version of their own. A thing
 whose only news is that a day passed is not a new version of itself.
 
 Relationships are the model's present: made again whole at each build.
+What appeared, changed or went is kept (`relationship_changes`, § 15); with
+the versions, it is the model's course (§ 17).
 
 ## 6. When it builds
 
@@ -196,7 +198,12 @@ A **workspace** stage, after enrichment: `model:<workspace>`,
   a build that failed, a new `MODEL_VERSION`. It closes the runs a dead
   worker left, and forgets `model_runs` past 90 days — never a workspace's
   last success, which says what its model was made from — and the
-  relationships' history past a year (LEKA-368).
+  relationships' history past a year (LEKA-368), and the snapshots past
+  400 days — never a workspace's latest (LEKA-383). It queues a rebuild
+  someone asked for.
+- **What the model holds is written down** (LEKA-383, § 17): a build that
+  changed something — or the first of a day — writes a snapshot; a rebuild
+  someone asked for builds even when nothing new came, and is closed by it.
 
 `model_runs.counts`: `created`, `changed`, `unchanged`, `removed`,
 `still_removed`, `entities`, `relationships`, `type.<kind>`,
@@ -259,6 +266,16 @@ Read by every member (`workspace:read`); another workspace's entity is 404.
 | `GET /knowledge/views/{view}` | a landscape — `company`, `domains`, `applications`, `services`, `data`, `infrastructure`, `organisation`, `dependencies`: its rows, boxes, lines, states, coverage and sources |
 | `GET /knowledge/architecture` | what the company runs, in columns (§ 16, LEKA-369) — code and its modules, services, data, cloud, outside — each thing a card with its kind, state (deduced, and from what), technology, figures, technical facts; the links between them named; each card's links to a column together; how many of each kind there are, their states, the most relied on; `environment` to keep one; `detailed=true` for every card, the flows they make, what to confirm and the sources read |
 | `GET /knowledge/coverage` | how well the model knows each kind — how many, with an owner, documented, corroborated, connected — and from which sources |
+| `GET /knowledge/evolution` | the model's course (§ 17), the latest first, paged: each version an entity recorded — `created`, `changed`, `removed`, `returned` — with each field it changed, from what, to what; `entity_id`, `type`, `change`, `since`, `until` |
+| `GET /knowledge/evolution/summary` | what changed day by day in the reader's zone (`timezone`, IANA; UTC by default) between `since` and `until` (seven days by default, a year at most) — things created, changed, removed, back; relationships added, changed, removed — the totals, and the same over the period just before |
+| `GET /knowledge/entities/{id}/history` | a thing's whole course: every version against the one before, its relationships that appeared, changed or went (100 at most), the operations on it, how far the relationships' history goes back (`horizon`) |
+| `GET /knowledge/entities/{id}/at?moment=` | what it was then: the version in force, its relationships as they stood — `existed`, `complete` (false where the relationships' history does not reach) |
+| `GET /knowledge/snapshots` | what the model held at each snapshot, the oldest first: `since`, `until`, `limit` (400 at most) |
+| `GET /knowledge/snapshots/at?moment=` | what it held then: the snapshot in force — or one rebuilt now from the history (`id` null); 404 where the history does not reach |
+| `GET /knowledge/operations` | the restores and rebuilds asked, the latest first: `kind`, `status`, `entity_id`, `limit` |
+| `POST /knowledge/entities/{id}/restore` | `{version, attributes?, reason?}` — `intention:approve` — an entity's attributes put back as a version said them, from the next build; 404 for an unknown version, 409 for a removed entity, its own version, a version that restores nothing |
+| `POST /knowledge/operations/{id}/undo` | `{reason?}` — `intention:approve` — a restore taken back; 409 for a rebuild, or one already undone |
+| `POST /knowledge/model/rebuild` | `{reason?}` — `intention:approve` — the model built again; one already queued answers |
 
 ## 8. What reads it
 
@@ -1007,6 +1024,62 @@ ends — those among the hits come with them — or listed by
 too; the screens walk 3 steps, the API 4. The detailed map lays things out
 in rows — by distance on a walk, by row on a view — not by an auto-layout.
 No view is saved or shared yet.
+
+## 17. The model's course: history, snapshots, operations (LEKA-383)
+
+The model is its present — and how it got there. Code:
+`api/leka/knowledge/evolution.py` (pure functions, then `EvolutionService`);
+`EvolutionRepository`; the build job writes the snapshots.
+
+**What changed.** Every version an entity recorded (§ 5) against the one
+before: `created` (its first), `removed` (no source shows it any more),
+`returned` (shown again after that), or `changed` — each field it changed
+(`name`, `lifecycle`, `attributes.<name>`), from what, to what. With the
+relationships that appeared, changed or went (§ 15), that is the course,
+read workspace-wide (`GET /knowledge/evolution`), day by day in the
+reader's time zone with the period before (`/evolution/summary`), or for
+one thing (`/entities/{id}/history`).
+
+**What it was at a moment** (`/entities/{id}/at`). The version in force
+then — the latest recorded by then — and its relationships as they stood:
+today's, each change since undone, the latest first (`rewind`). Versions
+are kept for good; relationship changes a year (§ 6): before the oldest kept
+— the `horizon` — the relationships may have been otherwise, said
+`complete: false`. A thing not yet known then `existed: false`.
+
+**What it held — snapshots** (`model_snapshots`). How many of each kind,
+the removed left out; in each lifecycle; of each relationship; and how
+well each kind is known, as the coverage counts it (§ 16) — how many have
+an owner, a document, two sources, a tie (`measures`). Written:
+- by a build that changed something, or the first of a day;
+- the first time, for the twelve weeks before, rebuilt from the history —
+  one a week, where the history reaches (`reconstructed`): each entity as
+  its version then said it, the relationships rewound. What the history does
+  not keep — how many sources said each thing — is unknown there (`null`).
+`/snapshots/at` answers with the snapshot in force, or rebuilds one on the
+spot. Kept 400 days, a workspace's latest always.
+
+**Operations** (`model_operations`) — a controlled change to the model's
+course, by someone who may approve (`intention:approve`), kept: who asked,
+when, why, what came of it.
+
+| Kind | What it does | Its states |
+| --- | --- | --- |
+| `restore` | an entity's attributes put back as one of its versions said them — every one the model says otherwise, or those named. Each is a validated fact (`model_assertions`, `rule: restore`, confidence 1, `overrides`, provenance `operation_id`) the next build applies **over what the sources say**, the value it replaces kept in provenance (`replaced`). A later restore of the same attribute replaces an earlier one; the latest validated fact wins over an older one. What the version did not say is not taken away (`not_restored`) | `applied`, then `undone` — the facts withdrawn: the next build shows what the sources say |
+| `rebuild` | the model built again though nothing new came — a registry fixed, a doubt to clear. The next build takes it, even when nothing is pending, and closes it with what it did (`counts`) — or why it could not: `nothing_enriched`, an error's type | `queued`, then `done` or `failed` |
+
+Refused (409): restoring a removed thing, its own version, a version that
+restores nothing; undoing a rebuild, or a restore already undone.
+
+**Tested.** `tests/test_knowledge_evolution.py`, pure: what a version
+changed, what it was; relationships rewound; a snapshot's counts and
+coverage — unknown where rebuilt; what a restore changes and cannot take
+away; the reader's days. `tests/test_knowledge_evolution_model.py`, through
+real builds: a snapshot per build that changed something, none for
+nothing; the course read over time, narrowed, by day; a thing's course and
+what it was then; a version restored through a real build, then undone, and
+what is refused; a rebuild asked, done or failed, and where nothing was
+enriched; the first snapshot rebuilding the weeks before; the sweep; who may.
 
 ## Not yet
 

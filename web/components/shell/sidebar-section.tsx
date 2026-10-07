@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { BadgeKey } from "@/config/routes";
 import type { NavLeaf, NavSection } from "@/config/navigation";
 import { hrefOf } from "@/lib/navigation/tree";
+import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 
 interface SectionProps {
@@ -19,6 +20,17 @@ interface SectionProps {
   activeLeaf?: NavLeaf;
   badges?: Partial<Record<BadgeKey, number>>;
   onNavigate?: () => void;
+}
+
+/** What waits in a section's lines — À valider's count, in Intentions. */
+export function waitingIn(
+  section: NavSection,
+  badges: Partial<Record<BadgeKey, number>> | undefined,
+): number {
+  return section.children.reduce(
+    (sum, child) => sum + (child.badgeKey ? (badges?.[child.badgeKey] ?? 0) : 0),
+    0,
+  );
 }
 
 /**
@@ -40,6 +52,8 @@ export function SidebarSection({
   const holds = activeLeaf !== undefined;
   const listId = `nav-section-${section.id}-lines`;
   const pillar = section.tier === "pillar";
+  // Folded, the section says what waits in it: its lines cannot.
+  const waiting = open ? 0 : waitingIn(section, badges);
 
   return (
     <div data-testid={`nav-section-${section.id}`} data-active={holds || undefined}>
@@ -70,13 +84,27 @@ export function SidebarSection({
         >
           {t.nav[section.labelKey]}
         </span>
-        <ChevronDown
-          className={cn(
-            "-ml-4 size-3.5 shrink-0 text-shell-muted transition-transform",
-            !open && "-rotate-90",
-          )}
-          aria-hidden="true"
-        />
+        <span className="-ml-4 flex items-center gap-1.5">
+          {waiting > 0 ? (
+            <>
+              <span className="sr-only">{`, ${fill(t.shell.pendingApprovals, { count: waiting })}`}</span>
+              <span
+                aria-hidden="true"
+                data-testid={`nav-section-${section.id}-badge`}
+                className="rounded-full bg-shell-badge px-2 py-0.5 text-xs font-semibold text-shell-badge-foreground"
+              >
+                {waiting}
+              </span>
+            </>
+          ) : null}
+          <ChevronDown
+            className={cn(
+              "size-3.5 shrink-0 text-shell-muted transition-transform",
+              !open && "-rotate-90",
+            )}
+            aria-hidden="true"
+          />
+        </span>
         {section.hintKey ? (
           <span className="col-span-2 col-start-2 mt-0.5 text-[0.6875rem] leading-4 text-shell-muted">
             {t.pillars[section.hintKey]}
@@ -115,12 +143,14 @@ export function SidebarSection({
 export function RailSection({
   section,
   activeLeaf,
+  badges,
   onNavigate,
   container,
 }: SectionProps & { container?: React.RefObject<HTMLElement | null> }) {
   const t = useDictionary();
   const Icon = section.icon;
   const holds = activeLeaf !== undefined;
+  const waiting = waitingIn(section, badges);
   const label = t.nav[section.labelKey];
   const hint = section.hintKey ? t.pillars[section.hintKey] : null;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -134,11 +164,17 @@ export function RailSection({
           render={
             <MenuPrimitive.Trigger
               // The name on its own: the icon says nothing to a screen reader.
-              aria-label={holds ? `${label}, ${t.shell.currentSection}` : label}
+              aria-label={[
+                label,
+                holds ? t.shell.currentSection : null,
+                waiting > 0 ? fill(t.shell.pendingApprovals, { count: waiting }) : null,
+              ]
+                .filter(Boolean)
+                .join(", ")}
               data-testid={`nav-section-${section.id}-toggle`}
               data-active={holds || undefined}
               className={cn(
-                "flex w-full justify-center rounded-lg py-[10px] transition-colors outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
+                "relative flex w-full justify-center rounded-lg py-[10px] transition-colors outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
                 holds
                   ? "bg-brand-violet-soft text-shell-nav-active"
                   : "text-shell-icon hover:bg-brand-violet-soft/60",
@@ -147,6 +183,12 @@ export function RailSection({
           }
         >
           <Icon className="size-[22px] shrink-0" aria-hidden="true" />
+          {waiting > 0 ? (
+            <span
+              aria-hidden="true"
+              className="absolute top-1.5 right-3 size-1.5 rounded-full bg-shell-badge-foreground"
+            />
+          ) : null}
         </TooltipTrigger>
         <TooltipContent side="right">{hint ? `${label} — ${hint}` : label}</TooltipContent>
       </Tooltip>
@@ -185,7 +227,12 @@ export function RailSection({
                       current ? "font-semibold text-shell-nav-active" : "text-shell-nav",
                     )}
                   >
-                    {t.nav[child.labelKey]}
+                    <span className="flex-1">{t.nav[child.labelKey]}</span>
+                    {child.badgeKey && (badges?.[child.badgeKey] ?? 0) > 0 ? (
+                      <span className="rounded-full bg-shell-badge px-2 py-0.5 text-xs font-semibold text-shell-badge-foreground">
+                        {badges?.[child.badgeKey]}
+                      </span>
+                    ) : null}
                   </MenuPrimitive.LinkItem>
                 );
               })}

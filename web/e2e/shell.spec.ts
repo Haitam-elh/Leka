@@ -66,13 +66,14 @@ test.describe("the shell", () => {
 
     const toggle = page.getByTestId("sidebar-toggle");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(page.getByTestId("nav-activity")).toHaveText("Activité");
+    await expect(page.getByTestId("nav-intentions")).toHaveText("Mes intentions");
 
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    // On the rail a section is its icon, still named.
+    // On the rail a section is its icon, still named — and saying what
+    // waits in it: the demo's proposals and conflicts, under Intentions.
     await expect(page.getByTestId("nav-section-intentions-toggle")).toHaveAccessibleName(
-      "Intentions",
+      /^Intentions, \d+ éléments en attente$/,
     );
 
     await page.reload();

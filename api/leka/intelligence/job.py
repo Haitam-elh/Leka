@@ -52,10 +52,12 @@ from leka.intelligence.analysis import (
     Authority,
     ContextStanding,
     Material,
+    QualityMove,
     Reads,
     catalogue_hash,
     execute,
 )
+from leka.intelligence.evolution import quality_move
 from leka.intelligence.measures import HISTORY_DAYS as QUALITY_DAYS
 from leka.intelligence.repository import (
     IntelligenceRepository,
@@ -68,6 +70,9 @@ from leka.knowledge import (
     AssertionRepository,
     ChangeFootprint,
     Dispute,
+    EvolutionMaterial,
+    EvolutionRepository,
+    EvolutionService,
     GraphRepository,
     GraphService,
     queue_model_build,
@@ -196,6 +201,7 @@ async def analyse_workspace(
         moment = clock or datetime.now(UTC)
         model = await _model(workspace_id, chosen, moment)
         disputes = await _disputes(workspace_id, chosen)
+        course = await _evolution(workspace_id, chosen, moment)
         material = Material(
             now=moment,
             built_at=built_at,
@@ -210,6 +216,8 @@ async def analyse_workspace(
             authority=disputes[1] if disputes else (),
             contexts=await _contexts(workspace_id, chosen, moment),
             changes=await _changes(workspace_id, chosen, moment),
+            evolution=course[0] if course else None,
+            quality_moves=course[1] if course else (),
         )
         for analyzer in chosen:
             outcome = await execute(analyzer, material)
@@ -300,6 +308,29 @@ async def _changes(
             # One part unread is not the run lost.
             logger.warning(
                 "intelligence_material_unread", part="changes", error=type(error).__name__
+            )
+            return None
+
+
+async def _evolution(
+    workspace_id: uuid.UUID, analyzers: Sequence[Analyzer], now: datetime
+) -> tuple[EvolutionMaterial, tuple[QualityMove, ...]] | None:
+    """The model's recent course (LEKA-383) — and how far each area's
+    knowledge quality went over it."""
+    if not any(Reads.EVOLUTION in analyzer.wants for analyzer in analyzers):
+        return None
+    async with session_factory() as session:
+        try:
+            material = await EvolutionService(
+                EvolutionRepository(session, workspace_id),
+                AssertionRepository(session, workspace_id),
+            ).material(now=now)
+            moves = await QualityRepository(session, workspace_id).moves(since=material.since)
+            return material, tuple(quality_move(row, point) for row, point in moves)
+        except Exception as error:
+            # One part unread is not the run lost.
+            logger.warning(
+                "intelligence_material_unread", part="evolution", error=type(error).__name__
             )
             return None
 

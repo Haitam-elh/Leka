@@ -42,6 +42,7 @@ describe("what a person is offered", () => {
       "overview",
       "intention-new",
       "intentions",
+      "approvals",
       "environment-overview",
       "environment-applications",
       "environment-infrastructure",
@@ -51,11 +52,10 @@ describe("what a person is offered", () => {
       "environment-events",
       "environment-domains",
       "environment-quality",
+      "activity",
       "capabilities-available",
       "capabilities-mine",
       "capabilities-configuration",
-      "activity",
-      "approvals",
       "sources",
       "governance",
       "team",
@@ -97,7 +97,9 @@ describe("where a person is", () => {
 
   it("is the line of the page, and the section it is in", () => {
     expect(at("/intentions")).toEqual(["intentions", "intentions"]);
-    expect(at("/activity")).toEqual(["activity", undefined]);
+    // What happened is the environment's; what waits, the intentions'.
+    expect(at("/activity")).toEqual(["activity", "environment"]);
+    expect(at("/approvals")).toEqual(["approvals", "intentions"]);
     expect(at("/settings")).toEqual(["settings", "administration"]);
   });
 
@@ -130,7 +132,7 @@ describe("where a person is", () => {
     expect(at("/environment/services/payment-api")).toEqual(["environment-overview", "environment"]);
     expect(at("/environment/graph")).toEqual(["environment-overview", "environment"]);
     expect(at("/sources/github")).toEqual(["sources", "administration"]);
-    expect(at("/approvals/7")).toEqual(["approvals", undefined]);
+    expect(at("/approvals/7")).toEqual(["approvals", "intentions"]);
     // The view asked of a detail page is its own business, not a line's.
     expect(at("/capabilities/x", "tab=mine")).toEqual(["capabilities-available", "capabilities"]);
   });
