@@ -25,6 +25,8 @@ test.describe("Intentions", () => {
     await page.getByTestId("intention-input").fill(asked);
     await page.getByTestId("intention-submit").click();
     await expect(page.getByTestId("intention-step-2")).toBeVisible();
+    // Its scope (LEKA-386): production, as the form chose it.
+    await expect(page.getByTestId("scope-environment")).toContainText("production · choisi");
 
     // Kept: followed from Mes intentions.
     await page.getByTestId("intention-follow").click();

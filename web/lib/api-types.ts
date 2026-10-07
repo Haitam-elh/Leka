@@ -3746,7 +3746,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "too_short" | "unclear_goal" | "competing_goals" | "no_subject" | "unknown_subject" | "ambiguous_subject" | "action_without_target" | "several_requests" | "unknown_environment";
+            kind: "too_short" | "unclear_goal" | "competing_goals" | "no_subject" | "unknown_subject" | "ambiguous_subject" | "action_without_target" | "several_requests" | "unknown_environment" | "missing_environment" | "missing_target" | "conflicting_constraints" | "subject_gone" | "subject_dormant" | "everything_excluded";
             /**
              * Blocking
              * @description It cannot go on without an answer.
@@ -9261,6 +9261,39 @@ export interface components {
             gaps: components["schemas"]["IntentGap"][];
         };
         /**
+         * IntentScope
+         * @description What the intention is about and within which boundaries it must be
+         *     processed (LEKA-386): its things, resolved against the company model,
+         *     and those it excludes; where; when; under what constraints; what
+         *     critical information is missing. docs/intentions.md § 10.
+         */
+        IntentScope: {
+            /** Entities */
+            entities: components["schemas"]["ScopedEntity"][];
+            /** Excluded */
+            excluded: components["schemas"]["ScopedEntity"][];
+            /**
+             * Environments
+             * @description Where it is held to; none: everywhere.
+             */
+            environments: string[];
+            /** Environment Origin */
+            environment_origin: ("asked" | "text" | "constraint") | null;
+            period: components["schemas"]["ScopePeriod"] | null;
+            /**
+             * Sources
+             * @description The sources it is held to; none: every one.
+             */
+            sources: string[];
+            /** Constraints */
+            constraints: components["schemas"]["ScopeConstraint"][];
+            /**
+             * Missing
+             * @description The critical information missing: ambiguity kinds.
+             */
+            missing: string[];
+        };
+        /**
          * IntentSubject
          * @description A thing an intention is about, and how LEKA knows.
          */
@@ -12397,6 +12430,28 @@ export interface components {
             services: components["schemas"]["EntityBrief"][];
         };
         /**
+         * ScopeConstraint
+         * @description A boundary the analysis — and anything done — must keep to.
+         */
+        ScopeConstraint: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "exclude" | "read_only" | "no_downtime" | "deadline" | "window" | "urgency" | "environment_only" | "target" | "services" | "sources";
+            /**
+             * Said
+             * @description The words that say it; « asked » when the form did.
+             */
+            said: string;
+            value?: components["schemas"]["JsonValue"];
+            /**
+             * Hard
+             * @description Must hold — else it only weighs.
+             */
+            hard: boolean;
+        };
+        /**
          * ScopeOption
          * @description One thing an admin can put in a source's scope — a repository, a project.
          */
@@ -12432,6 +12487,34 @@ export interface components {
             truncated: boolean;
             diagnostic?: components["schemas"]["Diagnostic"] | null;
         };
+        /**
+         * ScopePeriod
+         * @description When it looks — and whether the asker said so.
+         */
+        ScopePeriod: {
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             */
+            until: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "asked" | "text" | "kind" | "model";
+            /** Said */
+            said: string | null;
+            /**
+             * Explicit
+             * @description Asked, or read from its words — not its kind's default.
+             */
+            explicit: boolean;
+        };
         /** ScopeRules */
         ScopeRules: {
             /**
@@ -12444,6 +12527,36 @@ export interface components {
              * @description Never these containers.
              */
             exclude?: string[];
+        };
+        /**
+         * ScopedEntity
+         * @description A thing of the company model the intention is about — or excludes —
+         *     as the model knows it now (LEKA-386).
+         */
+        ScopedEntity: {
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /**
+             * How
+             * @enum {string}
+             */
+            how: "asked" | "named" | "business";
+            /** Said */
+            said: string | null;
+            /** Confidence */
+            confidence: number;
+            /**
+             * Lifecycle
+             * @description active, dormant, archived, removed; none: unread.
+             */
+            lifecycle: string | null;
         };
         /**
          * SearchHit
@@ -13423,6 +13536,8 @@ export interface components {
              * @description No blocking ambiguity: it can be analysed.
              */
             clear: boolean;
+            /** @description Its scope and constraints (LEKA-386, version 2 on). */
+            scope?: components["schemas"]["IntentScope"] | null;
         };
         /**
          * UnderstoodEntity

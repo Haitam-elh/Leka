@@ -305,6 +305,81 @@ describe("an intention's page", () => {
     expect(screen.queryByTestId("understanding-needs")).not.toBeInTheDocument();
   });
 
+  it("says its scope: where, when, what is excluded, under what constraints", async () => {
+    route.pathname = `/intentions/${ID}`;
+    api.one.mockResolvedValue(
+      intention({
+        understanding: {
+          version: 2,
+          text: "Qu'est-ce qui dépend de Billing API, sauf auth-service, sans rien modifier ?",
+          mode: "question",
+          mode_said: "?",
+          kind: "dependency",
+          goal: { code: "map_dependencies", said: ["depend"], confidence: 0.6 },
+          actions: [],
+          entities: [],
+          period: null,
+          environment: "production",
+          ambiguities: [],
+          clear: true,
+          scope: {
+            entities: [
+              {
+                entity_id: "e1",
+                name: "Billing API",
+                type: "service",
+                how: "named",
+                said: "billing api",
+                confidence: 1,
+                lifecycle: "dormant",
+              },
+            ],
+            excluded: [
+              {
+                entity_id: "e2",
+                name: "auth-service",
+                type: "service",
+                how: "named",
+                said: "auth service",
+                confidence: 1,
+                lifecycle: "active",
+              },
+            ],
+            environments: ["production"],
+            environment_origin: "asked",
+            period: {
+              since: ago(24),
+              until: ago(0),
+              origin: "text",
+              said: "depuis hier",
+              explicit: true,
+            },
+            sources: [],
+            constraints: [
+              { kind: "exclude", said: "auth service", value: "e2", hard: true },
+              { kind: "read_only", said: "sans rien modifier", value: true, hard: true },
+              { kind: "deadline", said: "avant vendredi", value: "2026-10-09", hard: true },
+            ],
+            missing: [],
+          },
+        },
+      }),
+    );
+    show(<IntentionScreen />);
+
+    const scope = await screen.findByTestId("understanding-scope");
+    expect(within(scope).getByTestId("scope-environment")).toHaveTextContent("production · choisi");
+    expect(within(scope).getByTestId("scope-period")).toHaveTextContent(
+      "dite dans la demande : « depuis hier »",
+    );
+    expect(within(scope).getByTestId("scope-excluded")).toHaveTextContent("auth-service");
+    const constraints = within(scope).getByTestId("scope-constraints");
+    expect(constraints).toHaveTextContent("Lecture seule");
+    expect(constraints).toHaveTextContent("Échéance : 2026-10-09");
+    expect(constraints).not.toHaveTextContent("Exclusion");
+    expect(scope).toHaveTextContent("Billing API (inactif)");
+  });
+
   it("says what LEKA needs to go on, and leads to clarifying it", async () => {
     route.pathname = `/intentions/${ID}`;
     api.one.mockResolvedValue(
