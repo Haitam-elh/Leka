@@ -20,11 +20,15 @@ No component anywhere names a label or spells out a URL.
 ## The sidebar
 
 ```
-Vue d'ensemble                                   /overview
+Mon Dashboard                                    /overview
 ─────────────────────────────────────────────────────────────────────────
 Intentions            Dites à LEKA ce que vous voulez accomplir.
   Nouvelle intention                             /intentions/new
   Mes intentions                                 /intentions
+  À valider                                      /approvals   with a count beside it: the
+                                                              proposals (LEKA-380) and the
+                                                              conflicts (LEKA-382) waiting —
+                                                              on the section, when folded
 Mon environnement     Le système vivant de votre entreprise.
   Vue globale                                    /environment
   Applications                                   /environment?tab=applications
@@ -35,15 +39,11 @@ Mon environnement     Le système vivant de votre entreprise.
   Événements                                     /environment?tab=events
   Domaines                                       /environment?tab=domains
   Qualité                                        /environment?tab=quality
+  Activité                                       /activity
 Capacités             Votre équipe technologique à la demande.
   Capacités disponibles                          /capabilities
   Mes capacités                                  /capabilities?tab=mine
   Configuration                                  /capabilities?tab=configuration
-─────────────────────────────────────────────────────────────────────────
-Activité                                         /activity
-À valider                                        /approvals   with a count beside it: the
-                                                              proposals (LEKA-380) and the
-                                                              conflicts (LEKA-382) waiting
 ─────────────────────────────────────────────────────────────────────────
 Administration
   Sources                                        /sources
@@ -54,9 +54,11 @@ Administration
 ```
 
 Three pillars — what a customer does with LEKA — each with the sentence that
-says what it is for. Activité and À valider sit apart, across all three:
-what happened, and what waits on someone. Administration is about running
-LEKA rather than using it.
+says what it is for. What waits on someone, À valider, sits with the
+intentions; what happened, Activité, with the environment it happened in
+(Karim, 2026-10-07 — they sat apart, across the three, until then). The way
+home is « Mon Dashboard ». Administration is about running LEKA rather than
+using it.
 
 ## The site map
 
@@ -97,13 +99,13 @@ has no entry that is "the one without a path of its own".
 
 | Sidebar | Route | Permission | Availability |
 | --- | --- | --- | --- |
-| Vue d'ensemble | `/overview` | `workspace:read` | available |
+| Mon Dashboard | `/overview` | `workspace:read` | available |
 | Intentions › Nouvelle intention | `/intentions/new` | `intention:create` | available |
 | Intentions › Mes intentions | `/intentions`, `/intentions/:id` | `intention:read` | available |
-| Mon environnement › its 8 views | `/environment`, `/environment/graph`, `/environment/:type/:id` | `workspace:read` | available |
+| Intentions › À valider | `/approvals`, `/approvals/:id` | `intention:approve` | available |
+| Mon environnement › its 9 views | `/environment`, `/environment/graph`, `/environment/:type/:id` | `workspace:read` | available |
+| Mon environnement › Activité | `/activity` | `workspace:read` | available |
 | Capacités › its 3 views | `/capabilities`, `/capabilities/:id` | `workspace:read` | **soon** |
-| Activité | `/activity` | `workspace:read` | available |
-| À valider | `/approvals`, `/approvals/:id` | `intention:approve` | available |
 | Administration › Sources | `/sources`, `/sources/:id` | `source:read` | available |
 | Administration › Sécurité & gouvernance | `/governance` | `workspace:update` | **plan-gated** |
 | Administration › Équipe & accès | `/team` | `member:invite` | available |
@@ -121,8 +123,8 @@ paying for the workspace is treated as administering it — `workspace:update`,
 which an admin has and a member does not. And approving is `intention:approve`,
 which an admin has: a member who cannot approve is not shown the queue.
 
-What a member sees, therefore: the three pillars whole, Activité, and in
-Administration only Sources and Paramètres.
+What a member sees, therefore: the three pillars whole — Intentions
+without À valider — and in Administration only Sources and Paramètres.
 
 ## The decisions
 
@@ -167,10 +169,12 @@ the address with no tab. The Capacités views are declared ahead of the
 catalogue, which will read them.
 
 **G. Sections fold, Intentions open.** A person opens and closes sections,
-and the choice is remembered on their browser. Intentions starts open — two
-lines, the way to act — and the others closed: all open, Activité and
-À valider fell below the fold of a 13-inch laptop. Arriving on a page opens
-its section, without remembering it. The sidebar keeps the mockup's 224px:
+and the choice is remembered on their browser. Intentions starts open — the
+way to act, and what waits on a decision — and the others closed: all open,
+the navigation fell below the fold of a 13-inch laptop. A folded section
+says what waits in it: À valider's count moves to Intentions' name, and on
+the rail to a dot on its icon. Arriving on a page opens its section, without
+remembering it. The sidebar keeps the mockup's 224px:
 240px truncated the figures of Mon environnement at 1440px.
 
 ## The rules

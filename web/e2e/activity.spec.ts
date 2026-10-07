@@ -23,6 +23,8 @@ test.describe("Activité", () => {
     page,
   }) => {
     await signIn(page);
+    // Activité is one of Mon environnement's lines (2026-10-07).
+    await page.getByTestId("nav-section-environment-toggle").click();
     await page.getByTestId("nav-activity").click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Activité");
 

@@ -24,7 +24,7 @@ export function isLocale(value: unknown): value is Locale {
 const fr = {
   /** One key per route in config/routes.ts. */
   nav: {
-    overview: "Vue d'ensemble",
+    overview: "Mon Dashboard",
     newIntention: "Nouvelle intention",
     intentions: "Intentions",
     intentionDetail: "Intention",
@@ -3733,7 +3733,7 @@ export type TabKey = keyof Dictionary["tabs"];
 
 const en: Dictionary = {
   nav: {
-    overview: "Overview",
+    overview: "My Dashboard",
     newIntention: "New intention",
     intentions: "Intentions",
     intentionDetail: "Intention",

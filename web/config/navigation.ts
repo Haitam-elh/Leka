@@ -2,18 +2,20 @@
  * The sidebar, as LEKA-428 draws it: what a customer can do with LEKA, at a
  * glance.
  *
- *   Vue d'ensemble                 the way home
+ *   Mon Dashboard                  the way home
  *   Intentions                     Dites à LEKA ce que vous voulez accomplir.
- *     Nouvelle intention · Mes intentions
+ *     Nouvelle intention · Mes intentions · À valider
  *   Mon environnement              Le système vivant de votre entreprise.
  *     Vue globale · Applications · Infrastructure · Données · Dépendances
- *     · Équipes · Événements · Domaines
+ *     · Équipes · Événements · Domaines · Qualité · Activité
  *   Capacités                      Votre équipe technologique à la demande.
  *     Capacités disponibles · Mes capacités · Configuration
- *   Activité · À valider           across all three: what happened, what
- *                                  waits on someone
  *   Administration                 Sources · Sécurité & gouvernance
  *                                  · Équipe & accès · Facturation · Paramètres
+ *
+ * À valider sits with the intentions — what waits on a decision — and
+ * Activité with the environment — what happened in it: Karim's call,
+ * 2026-10-07. A folded section says what waits in it.
  *
  * THREE PILLARS, nothing technical: the knowledge graph, agents, skills are
  * how LEKA does it, not what a customer comes for — they show through the
@@ -29,10 +31,10 @@
  * reads this, the sidebar and the palette draw it.
  */
 
-import { Home, Layers, type LucideIcon, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Home, Layers, type LucideIcon, SlidersHorizontal } from "lucide-react";
 
 import type { BadgeKey } from "@/config/routes";
-import { ActivityIcon, CapabilitiesIcon, EnvironmentIcon } from "@/components/shell/nav-icons";
+import { CapabilitiesIcon, EnvironmentIcon } from "@/components/shell/nav-icons";
 import type { NavKey, PillarKey } from "@/lib/i18n/dictionaries";
 
 /** A line that opens a page — or a view of one. */
@@ -61,7 +63,7 @@ export interface NavSection {
   tier: "pillar" | "administration";
   /** Open for someone who never opened or closed it. The rest open when
    * the page you are on is in them, so a 13-inch screen holds the whole
-   * navigation, Activité and À valider included. */
+   * navigation. */
   defaultOpen?: boolean;
   children: readonly NavLeaf[];
 }
@@ -70,7 +72,7 @@ export type NavNode = NavLeaf | NavSection;
 
 /** Lines drawn together; groups are set apart from one another. */
 export interface NavGroup {
-  id: "home" | "pillars" | "operational" | "administration";
+  id: "home" | "pillars" | "administration";
   nodes: readonly NavNode[];
 }
 
@@ -97,11 +99,12 @@ export const NAVIGATION: readonly NavGroup[] = [
         hintKey: "intentions",
         icon: Layers,
         tier: "pillar",
-        // The way to act: two lines, always at hand.
+        // The way to act, and what waits on a decision: always at hand.
         defaultOpen: true,
         children: [
           leaf("intention-new", "newIntention", "intention-new"),
           leaf("intentions", "myIntentions", "intentions"),
+          leaf("approvals", "approvals", "approvals", { badgeKey: "approvals" }),
         ],
       },
       {
@@ -122,6 +125,8 @@ export const NAVIGATION: readonly NavGroup[] = [
           environmentView("domains", "environmentDomains"),
           // How far what LEKA knows can be trusted (LEKA-381).
           environmentView("quality", "environmentQuality"),
+          // What happened in it, and what LEKA did (LEKA-383).
+          leaf("activity", "activity", "activity"),
         ],
       },
       {
@@ -141,14 +146,6 @@ export const NAVIGATION: readonly NavGroup[] = [
           }),
         ],
       },
-    ],
-  },
-  {
-    // Across the three: what happened, what waits on someone.
-    id: "operational",
-    nodes: [
-      leaf("activity", "activity", "activity", { icon: ActivityIcon }),
-      leaf("approvals", "approvals", "approvals", { icon: ShieldCheck, badgeKey: "approvals" }),
     ],
   },
   {
