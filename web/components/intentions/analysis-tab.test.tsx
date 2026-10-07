@@ -1,0 +1,394 @@
+/**
+ * An intention's tabs Analyse and Preuves (LEKA-388).
+ *
+ * What these protect: how its analysis went — which one, why it ran, each
+ * capability mobilised and how it went, a failure or a timeout said — and
+ * what it found, in words, without proposals; while one is on its way,
+ * LEKA said to be analysing, read again until it is done, the intention
+ * then read again; blocked, what its context lacks; failed, run again by
+ * its asker — not by someone else; the evidence it collected, where each
+ * came from; nothing yet, said so.
+ */
+
+import { QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ConfirmProvider } from "@/components/interactions/confirm";
+import { LocaleProvider } from "@/lib/i18n/locale-provider";
+import type { IntentionAnalysisRead, IntentionDetail } from "@/lib/intentions/api";
+import { makeQueryClient } from "@/lib/query";
+
+const ID = "0c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+const ME = "9c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+const BILLING = "1c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+const PAYMENTS = "2c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+const route = vi.hoisted(() => ({ pathname: "/intentions" }));
+const me = vi.hoisted(() => ({ id: "9c3bc5ff-a12e-5e92-a5ae-ad6da2029a41" }));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => route.pathname,
+  useParams: () => ({ intentionId: route.pathname.split("/")[2] }),
+}));
+vi.mock("@/components/shell/shell-provider", () => ({
+  useCurrentUser: () => me,
+  usePermissions: () => ["intention:read", "intention:create"],
+}));
+vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+
+const api = vi.hoisted(() => ({
+  one: vi.fn(),
+  history: vi.fn(),
+  analysis: vi.fn(),
+  analyses: vi.fn(),
+  analyse: vi.fn(),
+}));
+vi.mock("@/lib/intentions/api", async (original) => ({
+  ...(await original<typeof import("@/lib/intentions/api")>()),
+  intentions: api,
+}));
+
+const { IntentionScreen } = await import("@/components/intentions/intention-screen");
+const { ApiError } = await import("@/lib/api");
+const { notify } = await import("@/lib/notify");
+
+const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+
+function intention(overrides: Partial<IntentionDetail> = {}): IntentionDetail {
+  return {
+    id: ID,
+    title: "Qui est responsable de Billing API ?",
+    text: "Qui est responsable de Billing API ?",
+    kind: "ownership",
+    scope: {},
+    status: "completed",
+    phase: "finished",
+    status_changed_at: ago(2),
+    summary: "Billing API is owned by Payments.",
+    created_by: ME,
+    created_at: ago(3),
+    updated_at: ago(2),
+    context_id: "c1",
+    archived_at: null,
+    moves: [],
+    goal: "find_owner",
+    understanding: null,
+    links: [],
+    ...overrides,
+  };
+}
+
+function analysis(overrides: Partial<IntentionAnalysisRead> = {}): IntentionAnalysisRead {
+  return {
+    id: "a1",
+    intention_id: ID,
+    number: 2,
+    trigger: "requested",
+    status: "partial",
+    requested_by: ME,
+    context_id: "c1",
+    context_version: 3,
+    readiness: "ready",
+    started_at: ago(1),
+    finished_at: new Date(new Date(ago(1)).getTime() + 1_200).toISOString(),
+    selection: [
+      { name: "standing", version: 1, method: "rules", chosen: true, reason: "always" },
+      { name: "ownership", version: 1, method: "rules", chosen: true, reason: "goal" },
+      { name: "changes", version: 1, method: "rules", chosen: true, reason: "acting" },
+    ],
+    steps: [
+      { name: "standing", version: 1, status: "succeeded", duration_ms: 8, error: null, reason: null },
+      { name: "ownership", version: 1, status: "succeeded", duration_ms: 21, error: null, reason: null },
+      { name: "changes", version: 1, status: "failed", duration_ms: 3, error: "RuntimeError", reason: null },
+    ],
+    result: {
+      status: "partial",
+      summary: [
+        {
+          code: "ownership.summary",
+          text: "Billing API is owned by Payments.",
+          params: { name: "Billing API", owners: ["Payments"] },
+        },
+      ],
+      findings: [
+        {
+          id: `owner:${BILLING}`,
+          capability: "ownership",
+          code: "ownership.owner",
+          text: "Billing API is owned by Payments.",
+          params: { name: "Billing API", owners: ["Payments"], count: 1 },
+          evidence: [`tie:${BILLING}:owned_by:${PAYMENTS}`],
+        },
+      ],
+      causes: [],
+      impact: [],
+      risk: "unknown",
+      risk_basis: null,
+      uncertainties: [],
+      missing: [
+        {
+          code: "capability.failed",
+          text: "changes did not finish: failed.",
+          params: { capability: "changes", error: "RuntimeError" },
+        },
+      ],
+      confidence: 0.95,
+      support: [
+        {
+          code: "support.sources",
+          text: "1 source(s) behind its context.",
+          params: { count: 1, established: true },
+        },
+      ],
+      evidence: [
+        {
+          id: `tie:${BILLING}:owned_by:${PAYMENTS}`,
+          kind: "record",
+          label: "Billing API owned by Payments",
+          ref_type: "owned_by",
+          ref_id: null,
+          sources: [{ id: "s1", kind: "backstage", name: "Catalogue" }],
+          records: ["component:billing-api"],
+          origin: "stated",
+          confidence: 1,
+          detail: null,
+          at: ago(60),
+          params: { from: "Billing API", to: "Payments" },
+        },
+      ],
+    },
+    error: null,
+    detail: {},
+    ...overrides,
+  };
+}
+
+const MISSING = () => new ApiError(404, `/intentions/${ID}/analysis`, "No analysis yet.");
+
+function show() {
+  return render(
+    <QueryClientProvider client={makeQueryClient()}>
+      <LocaleProvider>
+        <ConfirmProvider>
+          <IntentionScreen />
+        </ConfirmProvider>
+      </LocaleProvider>
+    </QueryClientProvider>,
+  );
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  me.id = ME;
+  route.pathname = `/intentions/${ID}/analysis`;
+  api.one.mockResolvedValue(intention());
+  api.history.mockResolvedValue([]);
+  api.analysis.mockResolvedValue(analysis());
+  api.analyses.mockResolvedValue([
+    analysis(),
+    analysis({ id: "a0", number: 1, status: "failed" }),
+  ]);
+  api.analyse.mockResolvedValue({ queued: true });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe("an intention's analysis", () => {
+  it("says how it went, step by step, and what it found — no proposal", async () => {
+    show();
+
+    const head = await screen.findByTestId("analysis-head");
+    expect(head).toHaveTextContent("Analyse de LEKA");
+    expect(within(head).getByTestId("analysis-status")).toHaveTextContent("Partielle");
+    expect(within(head).getByTestId("analysis-meta")).toHaveTextContent(
+      /^Analyse n° 2 · relancée par une personne · Il y a 1 min · en 1\.2 s · contexte v3$/,
+    );
+    const steps = screen.getAllByTestId("analysis-step");
+    expect(steps.map((s) => [s.dataset.name, s.dataset.status])).toEqual([
+      ["standing", "succeeded"],
+      ["ownership", "succeeded"],
+      ["changes", "failed"],
+    ]);
+    expect(steps[1]).toHaveTextContent("Responsabilités · pour son objectif");
+    expect(steps[2]).toHaveTextContent("Erreur : RuntimeError");
+    expect(steps[2]).toHaveTextContent("En échec");
+
+    const view = screen.getByTestId("analysis");
+    expect(view).toHaveAttribute("data-status", "partial");
+    expect(screen.getByTestId("analysis-state")).toHaveTextContent(
+      "Changements n'a pas abouti : en échec.",
+    );
+    expect(screen.getByTestId("analysis-summary")).toHaveTextContent(
+      "Billing API appartient à Payments.",
+    );
+    expect(view).toHaveTextContent("1 source(s) derrière son contexte");
+    // Proposals are LEKA-389's, decided by a person: none drawn.
+    expect(screen.queryByText("Recommandations de LEKA")).not.toBeInTheDocument();
+    // Completed: nothing to run again.
+    expect(screen.queryByTestId("analysis-again")).not.toBeInTheDocument();
+    // Its analyses, the latest first.
+    const previous = await screen.findByTestId("analysis-previous");
+    expect(previous).toHaveTextContent("Analyse n° 2Partielle");
+    expect(previous).toHaveTextContent("Analyse n° 1En échec");
+  });
+
+  it("says LEKA is analysing while one is on its way, and reads it again until done", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    api.one.mockResolvedValue(intention({ status: "analysing", phase: "active", summary: null }));
+    api.analysis
+      .mockRejectedValueOnce(MISSING())
+      .mockResolvedValueOnce(
+        analysis({ status: "running", finished_at: null, steps: [], result: null }),
+      )
+      .mockResolvedValue(analysis());
+    show();
+
+    const head = await screen.findByTestId("analysis-head");
+    expect(head).toHaveAttribute("data-live", "true");
+    expect(head).toHaveTextContent("Analyse en attente");
+    // Its asker may start it now rather than wait.
+    expect(within(head).getByTestId("analysis-again")).toHaveTextContent("Lancer l'analyse");
+
+    await vi.advanceTimersByTimeAsync(4_000);
+    await waitFor(() => expect(head).toHaveTextContent("LEKA analyse votre demande"));
+    const steps = screen.getAllByTestId("analysis-step");
+    expect(steps.every((s) => s.dataset.status === "running")).toBe(true);
+    expect(screen.getByTestId("analysis-state")).toHaveAttribute("data-status", "running");
+
+    api.one.mockResolvedValue(intention());
+    await vi.advanceTimersByTimeAsync(4_000);
+    await waitFor(() =>
+      expect(screen.getByTestId("analysis")).toHaveAttribute("data-status", "partial"),
+    );
+    // Done: the intention it moved, read again.
+    await waitFor(() => expect(api.one.mock.calls.length).toBeGreaterThan(1));
+    await waitFor(() =>
+      expect(screen.getByTestId("analysis-head")).toHaveAttribute("data-live", "false"),
+    );
+  });
+
+  it("says what its context lacks when it could not be analysed", async () => {
+    api.one.mockResolvedValue(
+      intention({
+        status: "analysing",
+        phase: "active",
+        summary: null,
+        readiness: {
+          status: "blocked",
+          context_id: "c1",
+          version: 3,
+          level: "low",
+          score: 0.4,
+          elements: 4,
+          facets: { technical: 3, business: 0, organizational: 1, temporal: 0 },
+          sources: 1,
+          critical: [
+            {
+              origin: "gap",
+              kind: "no_source_for",
+              severity: "critical",
+              said: "None of the sources read…",
+              refs: [],
+              gap_origin: "intent",
+              detail: { needs: ["incidents", "deployments"] },
+              label: null,
+              about: null,
+            },
+          ],
+          warnings: [],
+        },
+      }),
+    );
+    api.analysis.mockResolvedValue(
+      analysis({
+        status: "blocked",
+        steps: [],
+        selection: [],
+        result: null,
+        error: "context_blocked",
+      }),
+    );
+    show();
+
+    expect(await screen.findByTestId("analysis-blocked")).toHaveTextContent(
+      "Analyse non lancée : le contexte ne peut pas la fonder",
+    );
+    expect(screen.getByTestId("readiness-critical")).toBeInTheDocument();
+    expect(screen.queryByTestId("analysis-steps")).not.toBeInTheDocument();
+    expect(screen.getByTestId("analysis-again")).toHaveTextContent("Relancer l'analyse");
+  });
+
+  it("runs a failed one again, for its asker", async () => {
+    const user = userEvent.setup();
+    api.one.mockResolvedValue(intention({ status: "failed", phase: "finished", summary: null }));
+    api.analysis.mockResolvedValue(
+      analysis({
+        status: "failed",
+        result: { ...analysis().result!, status: "failed", findings: [], summary: [] },
+      }),
+    );
+    show();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Changements n'a pas abouti");
+    await user.click(screen.getByTestId("analysis-again"));
+    await waitFor(() => expect(api.analyse).toHaveBeenCalledWith(ID));
+    expect(notify.success).toHaveBeenCalledWith({ title: "Analyse relancée." });
+  });
+
+  it("offers no run again to someone who neither asked nor approves", async () => {
+    me.id = "8c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+    api.one.mockResolvedValue(intention({ status: "failed", phase: "finished" }));
+    show();
+    await screen.findByTestId("analysis-head");
+    expect(screen.queryByTestId("analysis-again")).not.toBeInTheDocument();
+  });
+
+  it("says when there is none yet", async () => {
+    api.one.mockResolvedValue(intention({ status: "needs_clarification", phase: "active" }));
+    api.analysis.mockRejectedValue(MISSING());
+    show();
+    expect(await screen.findByTestId("analysis-none")).toHaveTextContent("Pas encore d'analyse");
+  });
+});
+
+describe("its overview", () => {
+  it("says what its analysis came to, in the reader's words", async () => {
+    route.pathname = `/intentions/${ID}`;
+    show();
+    // Not the API's English sentence kept on the intention.
+    expect(await screen.findByText("Billing API appartient à Payments.")).toHaveAttribute(
+      "data-testid",
+      "intention-summary",
+    );
+  });
+});
+
+describe("its evidence", () => {
+  it("lists what it collected, where each came from", async () => {
+    const user = userEvent.setup();
+    route.pathname = `/intentions/${ID}/evidence`;
+    show();
+
+    const tab = await screen.findByTestId("intention-evidence");
+    const [item] = await within(tab).findAllByRole("listitem");
+    expect(item).toHaveTextContent("Billing API appartient à Payments");
+    expect(item).toHaveTextContent("Catalogue");
+    await user.click(within(item).getByRole("button"));
+    expect(item).toHaveTextContent("component:billing-api");
+    expect(item).toHaveTextContent("dit par une source");
+  });
+
+  it("says evidence comes once analysed", async () => {
+    route.pathname = `/intentions/${ID}/evidence`;
+    api.analysis.mockRejectedValue(MISSING());
+    show();
+    expect(await screen.findByTestId("intention-evidence")).toHaveTextContent(
+      "Les preuves apparaissent une fois l'intention analysée.",
+    );
+  });
+});

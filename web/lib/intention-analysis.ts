@@ -1,0 +1,370 @@
+/**
+ * An intention's analysis (LEKA-388), read as the screens show an analysis
+ * (lib/intelligence.ts, LEKA-341): what LEKA's capabilities found in its
+ * assembled context, put in the shapes the intelligence components draw —
+ * nothing added that the API did not say.
+ *
+ *     findings      what each capability states, worded from its code and
+ *                   values, titled by the capability that said it
+ *     causes        what may explain it — a source's word, or LEKA's
+ *                   inference and its rule — the surest first
+ *     impact        what it reaches, area by area, and the risk with what
+ *                   it is read from
+ *     uncertainties what LEKA does not know, said as such
+ *     missing       what did not finish: a capability failed, timed out
+ *     summary       each capability's one sentence
+ *     support       what the confidence rests on: its context's sources,
+ *                   their contradictions, its readiness
+ *
+ * No recommendation: they are LEKA-389's, decided by a person (LEKA-390).
+ *
+ * WORDS. The API says each sentence in English, with its code and values;
+ * the interface words it in its own language from those, and falls back
+ * to the API's sentence for a code it does not know.
+ */
+
+import type { components } from "@/lib/api-types";
+import { fill } from "@/lib/i18n/dictionaries";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
+import type {
+  Analysis,
+  AnalysisStatus,
+  EvidenceRef,
+  Finding,
+  Impact,
+  ProbableCause,
+  RiskLevel,
+} from "@/lib/intelligence";
+
+export type IntentionAnalysis = components["schemas"]["IntentionAnalysisRead"];
+export type AnalysisResult = components["schemas"]["IntentionAnalysisResult"];
+export type AnalysisEvidence = components["schemas"]["AnalysisEvidence"];
+type Note = components["schemas"]["AnalysisNote"];
+type Params = Record<string, unknown>;
+
+export interface Links {
+  /** Where a thing of the company model is seen whole. */
+  href: (entity: { id: string; type: string }) => string;
+  /** What kind of thing it is, in words. */
+  typeName: (type: string) => string;
+  /** A moment, in words: "8 oct. 2026, 14:02". */
+  date: (iso: string) => string;
+  /** What LEKA concluded, in words, as Insights says it — from its code
+   * and values, its English statement as a fallback. */
+  finding?: (
+    code: string,
+    params: Record<string, unknown>,
+    statement: string,
+  ) => { title: string; detail?: string | null };
+}
+
+/** What evidence of the company model can be opened in LEKA. */
+const OPENABLE = new Set(["entity", "event"]);
+
+function text(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.map(text).filter(Boolean).join(", ");
+  return String(value);
+}
+
+function percent(value: unknown): string {
+  return typeof value === "number" ? String(Math.round(value * 100)) : "";
+}
+
+/** A capability's name, in words. */
+export function capabilityName(t: Dictionary, name: string): string {
+  return (t.intentions.analysis.capabilities as Record<string, string>)[name] ?? name;
+}
+
+/** The values a sentence's template reads: lists joined, codes worded,
+ * what is optional said only when there. */
+function values(t: Dictionary, code: string, params: Params, links: Links) {
+  const w = t.intentions.analysis;
+  const words = (map: Record<string, string>, key: unknown) =>
+    map[String(key)] ?? text(key);
+  const said: Record<string, string | number> = {};
+  for (const [key, value] of Object.entries(params)) said[key] = text(value);
+  const p = params;
+  switch (code) {
+    case "standing.state":
+      said.type = links.typeName(text(p.type));
+      said.lifecycle = words(w.lifecycles, p.lifecycle ?? "known");
+      said.status = p.status ? `, ${text(p.status)}` : "";
+      said.criticality = p.criticality
+        ? fill(w.parts.criticality, { level: text(p.criticality) })
+        : "";
+      break;
+    case "standing.inactive":
+      said.lifecycle = words(w.lifecycles, p.lifecycle);
+      break;
+    case "standing.quality":
+      said.level = words(w.levels, p.level);
+      said.score = percent(p.score);
+      break;
+    case "incident.seen":
+      said.on = text(p.on) || w.parts.it;
+      said.severity = p.severity ? `, ${text(p.severity)}` : "";
+      said.state = p.state ? `, ${text(p.state)}` : "";
+      break;
+    case "incident.summary":
+      said.cause = p.cause ? fill(w.parts.likeliest, { cause: text(p.cause) }) : "";
+      break;
+    case "change.made":
+      said.kind = words(w.changeKinds, p.kind);
+      said.at = typeof p.at === "string" ? links.date(p.at) : "";
+      said.environment = p.environment
+        ? fill(w.parts.inEnvironment, { environment: text(p.environment) })
+        : "";
+      said.incidents = p.incidents ? fill(w.parts.followed, { count: text(p.incidents) }) : "";
+      break;
+    case "change.summary":
+      said.followed = p.followed ? fill(w.parts.followedSome, { count: text(p.followed) }) : "";
+      break;
+    case "dependency.risk":
+      said.critical = p.critical ? w.parts.someCritical : "";
+      said.business = p.business ? fill(w.parts.business, { count: text(p.business) }) : "";
+      break;
+    case "compliance.check":
+      said.check = words(w.checks, p.check);
+      said.passed = p.passed ? w.parts.yes : w.parts.no;
+      break;
+    case "action.asked":
+      said.action = words(t.intentions.understanding.actionNames, p.action);
+      said.on = text(p.on) || w.parts.something;
+      break;
+    case "action.summary":
+      said.actions = ((p.actions as unknown[]) ?? [])
+        .map((a) => words(t.intentions.understanding.actionNames, a))
+        .join(", ");
+      break;
+    case "action.last_deployment":
+      said.at = typeof p.at === "string" ? links.date(p.at) : "";
+      break;
+    case "action.constraint":
+      said.kind = words(t.intentions.understanding.scope.kinds, p.kind);
+      said.value =
+        p.value !== null && p.value !== undefined && p.value !== true ? ` (${text(p.value)})` : "";
+      break;
+    case "support.context":
+      said.readiness = words(w.readiness, p.readiness);
+      said.level = words(w.levels, p.level ?? "unknown");
+      break;
+    case "capability.failed":
+    case "capability.timed_out":
+    case "capability.skipped":
+      said.capability = capabilityName(t, text(p.capability));
+      break;
+  }
+  return said;
+}
+
+/** A sentence of the analysis, in the interface's words — the API's own
+ * for a code it does not know. */
+export function noteSaid(
+  t: Dictionary,
+  note: { code: string; text: string; params?: Params },
+  links: Links,
+): string {
+  const templates = t.intentions.analysis.said as Record<string, string>;
+  let code = note.code;
+  const params = note.params ?? {};
+  // One code, two sentences: where it moves to, said or missing.
+  if (code === "migration.summary" && !params.target) code = "migration.summary_missing";
+  const template = templates[code];
+  return template ? fill(template, values(t, code, params, links)) : note.text;
+}
+
+/** Why a cause is one, in words: its source said so, or LEKA's rule. */
+function causeWhy(t: Dictionary, cause: AnalysisResult["causes"][number], links: Links): string {
+  return noteSaid(t, { code: cause.code, text: cause.why, params: cause.params }, links);
+}
+
+/** A piece of evidence, as the evidence components draw it. */
+export function evidenceRef(
+  t: Dictionary,
+  item: AnalysisEvidence,
+  links: Links,
+  citedBy: readonly string[] = [],
+): EvidenceRef {
+  const w = t.intentions.analysis.evidence;
+  const params = (item.params ?? {}) as Record<string, unknown>;
+  const verb = item.ref_type
+    ? ((t.knowledge.relationships as Record<string, string>)[item.ref_type] ??
+      item.ref_type.replace(/_/g, " "))
+    : "";
+  const tie = item.id.startsWith("tie:") && params.from && params.to;
+  const concluded =
+    item.ref_type === "finding" && links.finding && typeof params.code === "string"
+      ? links.finding(params.code, (params.params ?? {}) as Record<string, unknown>, item.label)
+      : null;
+  const label = tie
+    ? `${text(params.from)} ${verb} ${text(params.to)}`
+    : (concluded?.title ?? item.label);
+  const [first, ...others] = item.sources;
+  const facts: { label: string; value: string }[] = [];
+  if (item.origin) {
+    facts.push({
+      label: w.origin,
+      value: (w.origins as Record<string, string>)[item.origin] ?? item.origin,
+    });
+  }
+  if (item.confidence !== null && item.confidence !== undefined) {
+    facts.push({ label: w.confidence, value: `${percent(item.confidence)} %` });
+  }
+  if (item.records.length) facts.push({ label: w.records, value: item.records.join(", ") });
+  if (others.length) {
+    facts.push({
+      label: w.alsoFrom,
+      value: others.map((s) => s.name ?? w.gone).join(", "),
+    });
+  }
+  if (first && first.name === null) facts.push({ label: w.source, value: w.gone });
+  if (citedBy.length) {
+    facts.push({ label: w.citedBy, value: citedBy.map((c) => capabilityName(t, c)).join(", ") });
+  }
+  const typed = item.ref_type && !tie ? links.typeName(item.ref_type) : null;
+  const happened = item.detail
+    ? ((w.details as Record<string, string>)[item.detail] ?? item.detail)
+    : null;
+  const detail =
+    item.kind === "entity"
+      ? typed
+      : item.kind === "event"
+        ? [typed, happened].filter(Boolean).join(" · ")
+        : item.ref_type === "finding"
+          ? (concluded?.detail ?? null)
+          : null;
+  return {
+    id: item.id,
+    label,
+    kind: item.kind,
+    source: first ? { kind: first.kind, name: first.name } : null,
+    detail: detail || null,
+    at: item.at ?? null,
+    href:
+      OPENABLE.has(item.kind) && item.ref_id && item.ref_type
+        ? links.href({ id: item.ref_id, type: item.ref_type })
+        : null,
+    facts,
+  };
+}
+
+/** Which capabilities cite each piece of evidence. */
+function citations(result: AnalysisResult): Map<string, string[]> {
+  const cited = new Map<string, string[]>();
+  for (const statement of [...result.findings, ...result.causes]) {
+    for (const id of statement.evidence) {
+      const by = cited.get(id) ?? [];
+      if (!by.includes(statement.capability)) by.push(statement.capability);
+      cited.set(id, by);
+    }
+  }
+  return cited;
+}
+
+/** Every piece of evidence the analysis collected, as the Preuves tab
+ * lists them: in the order it was collected, each with who cites it. */
+export function analysisEvidence(
+  t: Dictionary,
+  result: AnalysisResult,
+  links: Links,
+): EvidenceRef[] {
+  const cited = citations(result);
+  return result.evidence.map((item) => evidenceRef(t, item, links, cited.get(item.id) ?? []));
+}
+
+const STATUSES: Record<IntentionAnalysis["status"], AnalysisStatus> = {
+  running: "running",
+  complete: "complete",
+  partial: "partial",
+  inconclusive: "inconclusive",
+  failed: "failed",
+  // Not run: the tab says why, from its context's readiness.
+  blocked: "pending",
+};
+
+export function intentionAnalysis(
+  t: Dictionary,
+  analysis: IntentionAnalysis,
+  links: Links,
+): Analysis {
+  const result = analysis.result;
+  const status = STATUSES[analysis.status];
+  if (!result) {
+    return {
+      status,
+      missing: [],
+      findings: [],
+      causes: [],
+      impact: null,
+      recommendations: [],
+      uncertainties: [],
+      confidence: null,
+    };
+  }
+  const say = (note: Note) => noteSaid(t, note, links);
+  const cited = citations(result);
+  const evidence = new Map(
+    result.evidence.map((item) => [item.id, evidenceRef(t, item, links, cited.get(item.id) ?? [])]),
+  );
+  const refs = (ids: readonly string[]) =>
+    ids.map((id) => evidence.get(id)).filter((item): item is EvidenceRef => Boolean(item));
+  const findings = result.findings.map(
+    (statement): Finding => ({
+      id: statement.id,
+      title: capabilityName(t, statement.capability),
+      statement: noteSaid(t, statement, links),
+      evidence: refs(statement.evidence),
+    }),
+  );
+  const causes = result.causes.map(
+    (cause): ProbableCause => ({
+      id: cause.id,
+      label: cause.label,
+      kind: cause.ref_type ? links.typeName(cause.ref_type) : null,
+      href:
+        cause.ref_id && cause.ref_type
+          ? links.href({ id: cause.ref_id, type: cause.ref_type })
+          : null,
+      confidence: cause.confidence,
+      basis: cause.basis,
+      why: causeWhy(t, cause, links),
+      evidence: refs(cause.evidence),
+    }),
+  );
+  const areas = t.intentions.analysis.areas;
+  const impact: Impact | null =
+    result.impact.length || result.risk !== "unknown"
+      ? {
+          areas: result.impact.map((area) => ({
+            id: area.code,
+            label: areas[area.code],
+            items: area.items.map((item) => ({
+              id: item.ref_id,
+              label: item.name,
+              href: links.href({ id: item.ref_id, type: item.ref_type }),
+              type: item.ref_type,
+              detail: links.typeName(item.ref_type),
+            })),
+          })),
+          risk: result.risk as RiskLevel,
+          riskBasis: result.risk_basis ? say(result.risk_basis) : "",
+        }
+      : null;
+  return {
+    status: STATUSES[result.status],
+    summary: result.summary.length ? result.summary.map(say).join(" ") : null,
+    missing: result.missing.map(say),
+    findings,
+    causes,
+    impact,
+    recommendations: [],
+    uncertainties: result.uncertainties.map(say),
+    confidence: result.confidence,
+    support: result.support.map((note) => ({
+      id: note.code,
+      label: say(note),
+      established: note.params?.established === true,
+    })),
+  };
+}

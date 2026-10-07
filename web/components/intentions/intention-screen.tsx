@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 
 import { Card, entityHref } from "@/components/environment/parts";
+import { AnalysisTab, EvidenceTab, SummarySaid } from "@/components/intentions/analysis-tab";
 import { kindOf, StatusPill } from "@/components/intentions/intentions-list";
 import { ReadinessPanel } from "@/components/intentions/readiness";
 import { UnderstandingPanel } from "@/components/intentions/understanding";
@@ -36,8 +37,9 @@ import { notify } from "@/lib/notify";
  * An intention's page (LEKA-384): where it stands, what was asked, what it
  * is linked to, and — tab Historique — everything that happened to it, as
  * its history keeps it (GET /intentions/{id}/history): who, LEKA or a
- * person, when, from where to where, why. The tabs Analyse, Preuves and
- * Actions come with the analysis engine (LEKA-388 to 391) and say so.
+ * person, when, from where to where, why. Tabs Analyse and Preuves: its
+ * analysis, how it went and on what (LEKA-388). Actions comes with the
+ * decision and its execution (LEKA-390, 391) and says so.
  *
  * Its asker, or who may approve, cancels it while it can be, archives it
  * once done with, restores it. Nothing is shown that the API did not say.
@@ -81,6 +83,10 @@ export function IntentionScreen() {
     body = <div className="h-80 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
   } else if (tab === "history") {
     body = <HistoryTab id={data.id} />;
+  } else if (tab === "analysis") {
+    body = <AnalysisTab intention={data} />;
+  } else if (tab === "evidence") {
+    body = <EvidenceTab intention={data} />;
   } else if (tab === "overview") {
     body = <Overview intention={data} />;
   } else {
@@ -273,15 +279,7 @@ function Overview({ intention }: { intention: IntentionDetail }) {
           </dl>
         </Card>
         <Card title={w.summary}>
-          <p
-            className={
-              intention.summary
-                ? "text-[0.9375rem] text-brand-navy"
-                : "text-[0.875rem] text-shell-muted"
-            }
-          >
-            {intention.summary ?? w.noSummary}
-          </p>
+          <SummarySaid intention={intention} none={w.noSummary} />
         </Card>
       </div>
       <div className="flex flex-col gap-4">

@@ -66,6 +66,7 @@ export type IntentionCreated = components["schemas"]["IntentionCreated"];
 export type IntentionEvent = components["schemas"]["IntentionEventRead"];
 export type IntentionLink = components["schemas"]["IntentionLinkRead"];
 export type IntentionCounts = components["schemas"]["IntentionCounts"];
+export type IntentionAnalysisRead = components["schemas"]["IntentionAnalysisRead"];
 export type IntentionStatus = Intention["status"];
 export type IntentionPhase = "active" | "scheduled" | "finished" | "archived";
 
@@ -114,6 +115,13 @@ export const intentions = {
     }),
   archive: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}/archive`, { method: "POST" }),
   restore: (id: string) => apiFetch<IntentionDetail>(`${BASE}/${id}/restore`, { method: "POST" }),
+  /** Its latest analysis (LEKA-388) — 404 while there is none. */
+  analysis: (id: string) => apiFetch<IntentionAnalysisRead>(`${BASE}/${id}/analysis`),
+  /** Every analysis of it, the latest first. */
+  analyses: (id: string) => apiFetch<IntentionAnalysisRead[]>(`${BASE}/${id}/analyses`),
+  /** Analysed again: queued — false when one is already on its way. */
+  analyse: (id: string) =>
+    apiFetch<{ queued: boolean }>(`${BASE}/${id}/analyse`, { method: "POST" }),
 };
 
 export function submitIntention(ask: IntentAsk): Promise<IntentionCreated> {

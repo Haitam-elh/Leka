@@ -2,7 +2,13 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { type IntentionDetail, type IntentionPhase, intentions } from "@/lib/intentions/api";
+import { ApiError } from "@/lib/api";
+import {
+  type IntentionAnalysisRead,
+  type IntentionDetail,
+  type IntentionPhase,
+  intentions,
+} from "@/lib/intentions/api";
 
 export const intentionKeys = {
   all: ["intentions"] as const,
@@ -10,7 +16,12 @@ export const intentionKeys = {
   counts: ["intentions", "counts"] as const,
   one: (id: string) => ["intentions", "one", id] as const,
   history: (id: string) => ["intentions", "history", id] as const,
+  analysis: (id: string) => ["intentions", "analysis", id] as const,
+  analyses: (id: string) => ["intentions", "analyses", id] as const,
 };
+
+/** How often an analysis on its way is read again. */
+const WHILE_RUNNING = 4_000;
 
 /** A list of them, a page at a time: by phase — none, every one not
  * archived — and words. */
@@ -54,6 +65,47 @@ export function useIntentionChange(id: string) {
       change === "cancel" ? intentions.cancel(id, reason) : intentions[change](id),
     onSuccess: (updated: IntentionDetail) => {
       client.setQueryData(intentionKeys.one(id), updated);
+      void client.invalidateQueries({ queryKey: intentionKeys.all });
+    },
+  });
+}
+
+/** Its latest analysis (LEKA-388): none while there is none yet — read
+ * again every few seconds while `live` says one is on its way. */
+export function useIntentionAnalysis(
+  id: string,
+  live: (analysis: IntentionAnalysisRead | null | undefined) => boolean,
+) {
+  return useQuery({
+    queryKey: intentionKeys.analysis(id),
+    queryFn: async () => {
+      try {
+        return await intentions.analysis(id);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+    enabled: Boolean(id),
+    refetchInterval: (query) => (live(query.state.data) ? WHILE_RUNNING : false),
+  });
+}
+
+export function useIntentionAnalyses(id: string) {
+  return useQuery({
+    queryKey: intentionKeys.analyses(id),
+    queryFn: () => intentions.analyses(id),
+    enabled: Boolean(id),
+  });
+}
+
+/** Analysed again: queued; the intention, its analyses and lists read
+ * again. */
+export function useAnalyseAgain(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => intentions.analyse(id),
+    onSuccess: () => {
       void client.invalidateQueries({ queryKey: intentionKeys.all });
     },
   });

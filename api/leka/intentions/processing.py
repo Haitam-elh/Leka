@@ -1,0 +1,697 @@
+"""An intention's analysis, run (LEKA-388): from its assembled context to a
+result the decision interface reads — kept, and the intention moved on.
+
+    asked, or asked again, or asked to analyse again
+        ──▶ queue_analysis ──▶ intention-analysis:<id>  (one at a time)
+    run_analysis:
+        1. the intention, as understood, and its context's readiness
+           (LEKA-387) — blocked: said, nothing run, it stays analysing
+        2. the analysis recorded `running`, committed
+        3. its context (the context engine's contract, LEKA-376) and the
+           parts its capabilities read — each part read on its own: one
+           that cannot be read skips what needs it, the rest goes on
+        4. each capability chosen, isolated (analysis.execute)
+        5. one result, kept with the analysis; the findings it rests on
+           linked to the intention; the intention moved —
+               a question answered      completed   (answered)
+               a request on systems     awaiting_decision (proposed): a
+                                        person decides (LEKA-390)
+               nothing could run        failed
+           — unless it moved on meanwhile (cancelled, asked again): then
+           the analysis is kept, said superseded, and moves nothing
+
+THE SWEEP (`run_pending_analyses`, hourly) runs what no job did: an
+intention analysing whose context version has no analysis yet — a worker
+that died, a queue that was down.
+
+Every analysis is a row (GET /intentions/{id}/analysis): which capabilities
+and why, what each did — succeeded, failed, timed out, skipped — the
+result, the error.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import uuid
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import asdict
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import structlog
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from leka.background import enqueue_job
+from leka.connectors import Source, SourceRepository
+from leka.context import AssembledContext, ContextRepository, ContextService
+from leka.db import session_factory, system_scope, workspace_scope
+from leka.ingestion import ContentRepository, ResolutionRepository
+from leka.intelligence import IntelligenceRepository, QualityRepository, QualityService
+from leka.intentions.analysis import (
+    Asked,
+    Capability,
+    FindingBrief,
+    Material,
+    Part,
+    Result,
+    SourceRef,
+    StepOutcome,
+    Subject,
+    assemble,
+    execute,
+)
+from leka.intentions.analysis import (
+    select as choose,
+)
+from leka.intentions.capabilities import CAPABILITIES
+from leka.intentions.grounding import side
+from leka.intentions.lifecycle import Actor
+from leka.intentions.lifecycle import IntentionStatus as S
+from leka.intentions.models import Intention, IntentionAnalysis
+from leka.intentions.repository import IntentionRepository
+from leka.intentions.schemas import (
+    ContextReadiness,
+    IntentionAnalysisResult,
+    Understanding,
+)
+from leka.intentions.service import IntentionService
+from leka.knowledge import (
+    Entity,
+    EntityBrief,
+    EntityRepository,
+    EntityType,
+    GraphRepository,
+    GraphService,
+    IncidentDetail,
+    KnowledgeService,
+)
+
+logger = structlog.get_logger(__name__)
+
+ANALYSIS_JOB = "leka.intentions.processing.run_analysis"
+# The period an intention says none of: the last month.
+DEFAULT_PERIOD = timedelta(days=30)
+# How far a dependency walk goes, how many incidents and changes are read.
+DEPTH = 2
+MAX_INCIDENTS = 10
+MAX_CHANGES = 20
+MAX_FINDINGS = 50
+# What followed a change, to be said to have followed it (LEKA-378).
+AFTER = timedelta(hours=72)
+# The findings an analysis rests on, linked to the intention, at most.
+LINKED = 10
+
+
+def concurrency_key(intention_id: uuid.UUID) -> str:
+    return f"intention-analysis:{intention_id}"
+
+
+async def queue_analysis(
+    workspace_id: uuid.UUID,
+    intention_id: uuid.UUID,
+    *,
+    trigger: str,
+    by: uuid.UUID | None = None,
+) -> bool:
+    """Queue its analysis; False when one is already queued or running."""
+    run = await enqueue_job(
+        ANALYSIS_JOB,
+        str(workspace_id),
+        str(intention_id),
+        job_kwargs={"trigger": trigger, "by": str(by) if by else None},
+        for_workspace_id=workspace_id,
+        concurrency_key=concurrency_key(intention_id),
+    )
+    return run is not None
+
+
+def run_analysis(
+    workspace_id: str, intention_id: str, trigger: str = "created", by: str | None = None
+) -> dict[str, object]:
+    """Entry point for the job runner, which is synchronous."""
+    return asyncio.run(
+        analyse_intention(
+            uuid.UUID(workspace_id),
+            uuid.UUID(intention_id),
+            trigger=trigger,
+            by=uuid.UUID(by) if by else None,
+        )
+    )
+
+
+def run_pending_analyses() -> dict[str, int]:
+    """Entry point for the schedule — and for whoever runs what waits."""
+    return asyncio.run(analyse_pending())
+
+
+async def analyse_pending(*, limit: int = 100) -> dict[str, int]:
+    """Every intention analysing whose context version has no analysis yet,
+    analysed now. Idempotent."""
+    with system_scope():
+        async with session_factory() as session:
+            analysed = (
+                select(IntentionAnalysis.id)
+                .where(
+                    IntentionAnalysis.intention_id == Intention.id,
+                    IntentionAnalysis.context_id == Intention.context_id,
+                )
+                .exists()
+            )
+            rows = await session.execute(
+                select(Intention.workspace_id, Intention.id)
+                .where(
+                    Intention.status == S.ANALYSING.value,
+                    Intention.archived_at.is_(None),
+                    ~analysed,
+                )
+                .order_by(Intention.status_changed_at)
+                .limit(limit)
+            )
+            pending = rows.tuples().all()
+    done = {"analysed": 0, "blocked": 0, "failed": 0}
+    for workspace_id, intention_id in pending:
+        outcome = await analyse_intention(workspace_id, intention_id, trigger="sweep")
+        status = str(outcome.get("status"))
+        done[
+            "blocked" if status == "blocked" else "failed" if status == "failed" else "analysed"
+        ] += 1
+    logger.info("intention_analyses_swept", **done)
+    return done
+
+
+# ── one analysis ─────────────────────────────────────────────────────────────
+
+
+def asked_of(intention: Intention, understood: Understanding | None, now: datetime) -> Asked:
+    """The intention, as the analysis reads it: what it wants, about what,
+    when, where, within which constraints."""
+    scope = understood.scope if understood is not None else None
+    entities = scope.entities if scope is not None else (understood.entities if understood else [])
+    period = scope.period if scope is not None else None
+    since = period.since if period is not None else now - DEFAULT_PERIOD
+    until = period.until if period is not None else now
+    return Asked(
+        id=intention.id,
+        text=intention.text,
+        mode=understood.mode if understood else "question",
+        kind=(understood.kind if understood else None) or intention.kind or "general",
+        goal=understood.goal.code if understood else (intention.goal or "unknown"),
+        actions=tuple(
+            (a.code, a.changes_systems) for a in (understood.actions if understood else [])
+        ),
+        subjects=tuple(
+            Subject(
+                id=e.entity_id,
+                name=e.name,
+                type=e.type,
+                lifecycle=getattr(e, "lifecycle", None),
+            )
+            for e in entities
+        ),
+        since=since,
+        until=until,
+        environment=(scope.environments[0] if scope and scope.environments else None)
+        or (understood.environment if understood else None),
+        constraints=tuple(
+            (c.kind, c.value, c.hard) for c in (scope.constraints if scope is not None else [])
+        ),
+    )
+
+
+def result_of(result: Result) -> dict[str, object]:
+    """The result, as it is kept and read (IntentionAnalysisResult)."""
+
+    def note(n: object) -> dict[str, object] | None:
+        return None if n is None else {"code": n.code, "text": n.text, "params": dict(n.params)}  # type: ignore[attr-defined]
+
+    def ref(value: object) -> object:
+        return str(value) if isinstance(value, uuid.UUID) else value
+
+    said = IntentionAnalysisResult.model_validate(
+        {
+            "status": result.status,
+            "summary": [note(n) for n in result.summary],
+            "findings": [
+                {
+                    "id": s.id,
+                    "capability": name,
+                    "code": s.code,
+                    "text": s.text,
+                    "params": {k: ref(v) for k, v in s.params.items()},
+                    "evidence": list(s.evidence),
+                }
+                for name, s in result.findings
+            ],
+            "causes": [
+                {
+                    "id": c.id,
+                    "capability": name,
+                    "code": c.code,
+                    "label": c.label,
+                    "basis": c.basis,
+                    "why": c.why,
+                    "confidence": c.confidence,
+                    "ref_type": c.ref_type,
+                    "ref_id": c.ref_id,
+                    "params": {k: ref(v) for k, v in c.params.items()},
+                    "evidence": list(c.evidence),
+                }
+                for name, c in result.causes
+            ],
+            "impact": [
+                {"code": area.code, "items": [asdict(item) for item in area.items]}
+                for area in result.impact
+            ],
+            "risk": result.risk,
+            "risk_basis": note(result.risk_basis),
+            "uncertainties": [note(n) for n in result.uncertainties],
+            "missing": [note(n) for n in result.missing],
+            "confidence": result.confidence,
+            "support": [note(n) for n in result.support],
+            "evidence": [
+                {
+                    "id": e.id,
+                    "kind": e.kind,
+                    "label": e.label,
+                    "ref_type": e.ref_type,
+                    "ref_id": e.ref_id,
+                    "sources": [asdict(s) for s in e.sources],
+                    "records": list(e.records),
+                    "origin": e.origin,
+                    "confidence": e.confidence,
+                    "detail": e.detail,
+                    "at": e.at,
+                    "params": dict(e.params),
+                }
+                for e in result.evidence
+            ],
+        }
+    )
+    return said.model_dump(mode="json")
+
+
+def _contexts(session: AsyncSession, workspace_id: uuid.UUID) -> ContextService:
+    return ContextService(
+        ContextRepository(session, workspace_id),
+        GraphService(GraphRepository(session, workspace_id)),
+        content=ContentRepository(session, workspace_id),
+        resolution=ResolutionRepository(session, workspace_id),
+        sources=SourceRepository(session, workspace_id),
+    )
+
+
+async def _next_number(session: AsyncSession, intention_id: uuid.UUID) -> int:
+    found = await session.scalar(
+        select(func.max(IntentionAnalysis.number)).where(
+            IntentionAnalysis.intention_id == intention_id
+        )
+    )
+    return int(found or 0) + 1
+
+
+async def analyse_intention(
+    workspace_id: uuid.UUID,
+    intention_id: uuid.UUID,
+    *,
+    trigger: str,
+    by: uuid.UUID | None = None,
+    now: datetime | None = None,
+    capabilities: Sequence[Capability] = CAPABILITIES,
+) -> dict[str, object]:
+    """One analysis, end to end."""
+    moment = now or datetime.now(UTC)
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            intention = await IntentionRepository(session, workspace_id).intention(intention_id)
+            if intention is None:
+                return {"status": "gone"}
+            if intention.status != S.ANALYSING.value or intention.archived_at is not None:
+                return {"status": "not_analysing", "intention_status": intention.status}
+            understood = (
+                Understanding.model_validate(intention.understanding)
+                if intention.understanding
+                else None
+            )
+            ready = (
+                ContextReadiness.model_validate(intention.readiness)
+                if intention.readiness
+                else None
+            )
+            asked = asked_of(intention, understood, moment)
+            context_id = intention.context_id
+            version = ready.version if ready is not None else None
+            row = IntentionAnalysis(
+                workspace_id=workspace_id,
+                id=uuid.uuid4(),
+                intention_id=intention.id,
+                number=await _next_number(session, intention.id),
+                trigger=trigger,
+                status="running",
+                requested_by=by,
+                context_id=context_id,
+                context_version=version,
+                readiness=ready.status if ready is not None else None,
+                started_at=moment,
+                selection=[],
+                steps=[],
+                detail={},
+            )
+            if ready is not None and ready.status == "blocked":
+                # Not analysed: what is in the way is said, nothing is run.
+                row.status = "blocked"
+                row.finished_at = moment
+                row.error = "context_blocked"
+                row.detail = {
+                    "critical": [issue.model_dump(mode="json") for issue in ready.critical]
+                }
+                session.add(row)
+                await session.commit()
+                return {"status": "blocked", "analysis": str(row.id)}
+            choices = choose(asked, capabilities)
+            row.selection = [asdict(choice) for choice in choices]
+            session.add(row)
+            await session.commit()
+            analysis_id = row.id
+        chosen = [c for c in capabilities if any(ch.chosen and ch.name == c.name for ch in choices)]
+        wants = frozenset(part for c in chosen for part in c.reads)
+        context = await _context(workspace_id, context_id, version)
+        material = await _material(workspace_id, asked, context, wants, ready, moment)
+        outcomes: list[StepOutcome] = []
+        for capability in chosen:
+            outcomes.append(await execute(capability, material.on(capability.sides, side)))
+        for choice in choices:
+            if not choice.chosen and choice.reason == "no_model":
+                outcomes.append(
+                    StepOutcome(choice.name, choice.version, "skipped", reason="no_model")
+                )
+        result = assemble(
+            outcomes,
+            readiness=ready.status if ready is not None else "limited",
+            sources=len(context.sources) if context is not None else 0,
+            contradictions=len(context.conflicts) if context is not None else 0,
+            context_level=(
+                context.quality.level if context is not None and context.quality else None
+            ),
+            background=frozenset(c.name for c in chosen if c.always),
+        )
+        return await _finish(
+            workspace_id, intention_id, analysis_id, asked, result, outcomes, context_id, moment
+        )
+
+
+async def _context(
+    workspace_id: uuid.UUID, context_id: uuid.UUID | None, version: int | None
+) -> AssembledContext | None:
+    if context_id is None:
+        return None
+    async with session_factory() as session:
+        try:
+            return await _contexts(session, workspace_id).assembled(context_id, version=version)
+        except Exception as error:
+            logger.warning("intention_analysis_unread", part="context", error=type(error).__name__)
+            return None
+
+
+async def _part(name: Part, read: Awaitable[object]) -> object | None:
+    """One part, read on its own: a failure skips what needs it."""
+    try:
+        return await read
+    except Exception as error:
+        logger.warning("intention_analysis_unread", part=name.value, error=type(error).__name__)
+        return None
+
+
+async def _material(
+    workspace_id: uuid.UUID,
+    asked: Asked,
+    context: AssembledContext | None,
+    wants: frozenset[Part],
+    ready: ContextReadiness | None,
+    now: datetime,
+) -> Material:
+    """What the capabilities chosen read: the context's elements, and each
+    part they declared — each in its own session."""
+    ids = [s.id for s in asked.subjects]
+    read: dict[str, object] = {}
+    parts: set[Part] = set()
+
+    async def take(part: Part, reader: Awaitable[object]) -> None:
+        value = await _part(part, reader)
+        if value is not None:
+            read[part.value] = value
+            parts.add(part)
+
+    async with session_factory() as session:
+        graph = GraphService(GraphRepository(session, workspace_id))
+        repository = EntityRepository(session, workspace_id)
+        knowledge = KnowledgeService(repository)
+        entities = await repository.by_ids(ids)
+        if Part.STANDING in wants:
+            await take(Part.STANDING, graph.standing(ids))
+        if Part.OWNERS in wants:
+            await take(Part.OWNERS, graph.owners(ids))
+        if Part.RESPONSIBILITY in wants:
+            await take(
+                Part.RESPONSIBILITY,
+                _each(entities, lambda entity: knowledge.responsibility(entity)),
+            )
+        if Part.DOWNSTREAM in wants:
+            await take(
+                Part.DOWNSTREAM,
+                _each(
+                    entities,
+                    lambda entity: knowledge.dependencies(
+                        entity.id,
+                        direction="downstream",
+                        depth=DEPTH,
+                        environment=asked.environment,
+                    ),
+                ),
+            )
+        if Part.UPSTREAM in wants:
+            await take(
+                Part.UPSTREAM,
+                _each(
+                    entities,
+                    lambda entity: knowledge.dependencies(
+                        entity.id, direction="upstream", depth=DEPTH, environment=asked.environment
+                    ),
+                ),
+            )
+        if Part.IMPACT in wants:
+            await take(Part.IMPACT, knowledge.impact(ids))
+        if Part.INCIDENTS in wants:
+            await take(Part.INCIDENTS, _incidents(knowledge, repository, entities, asked, now))
+        if Part.CHANGES in wants:
+            await take(Part.CHANGES, _changes(graph, ids, asked, now))
+    async with session_factory() as session:
+        if Part.FINDINGS in wants:
+            await take(Part.FINDINGS, _findings(IntelligenceRepository(session, workspace_id), ids))
+        if Part.QUALITY in wants:
+            await take(
+                Part.QUALITY, QualityService(QualityRepository(session, workspace_id)).of(ids)
+            )
+        sources = await _sources(session, workspace_id, entities)
+
+    def got(part: Part, empty: object) -> Any:
+        return read.get(part.value) or empty
+
+    owners: Mapping[uuid.UUID, Sequence[EntityBrief]] = got(Part.OWNERS, {})
+    return Material(
+        asked=asked,
+        now=now,
+        readiness=ready.status if ready is not None else "limited",
+        elements=tuple(context.elements) if context is not None else (),
+        parts=frozenset(parts),
+        standing=got(Part.STANDING, {}),
+        owners={k: tuple(v) for k, v in owners.items()},
+        responsibility=got(Part.RESPONSIBILITY, {}),
+        downstream=got(Part.DOWNSTREAM, {}),
+        upstream=got(Part.UPSTREAM, {}),
+        impact=read.get(Part.IMPACT.value),  # type: ignore[arg-type]
+        incidents=tuple(got(Part.INCIDENTS, ())),
+        changes=tuple(got(Part.CHANGES, ())),
+        findings=tuple(got(Part.FINDINGS, ())),
+        quality=got(Part.QUALITY, {}),
+        sources=sources,
+    )
+
+
+async def _each(
+    entities: Mapping[uuid.UUID, Entity],
+    read: Callable[[Entity], Awaitable[object | None]],
+) -> dict[uuid.UUID, object]:
+    """A read per subject the model holds, kept by its id."""
+    found: dict[uuid.UUID, object] = {}
+    for ident, entity in entities.items():
+        value = await read(entity)
+        if value is not None:
+            found[ident] = value
+    return found
+
+
+async def _incidents(
+    knowledge: KnowledgeService,
+    repository: EntityRepository,
+    entities: Mapping[uuid.UUID, Entity],
+    asked: Asked,
+    now: datetime,
+) -> list[IncidentDetail]:
+    """The incidents on its subjects in its period, each in detail."""
+    seen: list[uuid.UUID] = []
+    since = asked.since or now - DEFAULT_PERIOD
+    until = asked.until or now
+    for entity in entities.values():
+        timeline = await knowledge.timeline(
+            entity, since=since, until=until, kinds=[EntityType.INCIDENT], limit=MAX_INCIDENTS
+        )
+        for event in timeline.events:
+            if event.kind == "incident_opened" and event.entity.id not in seen:
+                seen.append(event.entity.id)
+    found = await repository.by_ids(seen[:MAX_INCIDENTS])
+    return [await knowledge.incident(found[i]) for i in seen[:MAX_INCIDENTS] if i in found]
+
+
+async def _changes(
+    graph: GraphService, ids: Sequence[uuid.UUID], asked: Asked, now: datetime
+) -> list[object]:
+    """The changes around its subjects in its period, each with its
+    footprint (LEKA-378)."""
+    seen: dict[uuid.UUID, object] = {}
+    for ident in ids:
+        found, _ = await graph.footprints(
+            since=asked.since or now - DEFAULT_PERIOD,
+            until=asked.until or now,
+            limit=MAX_CHANGES,
+            after=AFTER,
+            around=ident,
+        )
+        for footprint in found:
+            seen.setdefault(footprint.change.id, footprint)
+    return list(seen.values())[:MAX_CHANGES]
+
+
+async def _findings(
+    repository: IntelligenceRepository, ids: Sequence[uuid.UUID]
+) -> list[FindingBrief]:
+    return [
+        FindingBrief(
+            id=f.id,
+            code=f.code,
+            category=f.category,
+            severity=f.severity,
+            statement=f.statement,
+            subject_id=f.subject_id,
+            subject_name=f.subject_name,
+            first_seen_at=f.first_seen_at,
+            params=dict(f.params or {}),
+        )
+        for f in await repository.about(ids, limit=MAX_FINDINGS)
+    ]
+
+
+async def _sources(
+    session: AsyncSession, workspace_id: uuid.UUID, entities: Mapping[uuid.UUID, Entity]
+) -> dict[uuid.UUID, tuple[SourceRef, ...]]:
+    """Each subject's sources, by its provenance: for evidence its context
+    does not hold."""
+    rows = await session.execute(
+        select(Source.id, Source.kind, Source.name).where(Source.workspace_id == workspace_id)
+    )
+    named = {ident: (kind.value, name) for ident, kind, name in rows.tuples().all()}
+    found: dict[uuid.UUID, tuple[SourceRef, ...]] = {}
+    for ident, entity in entities.items():
+        said = (entity.provenance or {}).get("sources") or []
+        refs: list[SourceRef] = []
+        for item in said if isinstance(said, list) else []:
+            try:
+                source = uuid.UUID(str(item.get("source_id")))
+            except (ValueError, AttributeError):
+                continue
+            kind, name = named.get(source, (None, None))
+            refs.append(SourceRef(source, kind, name))
+        found[ident] = tuple({r.id: r for r in refs}.values())
+    return found
+
+
+async def _finish(
+    workspace_id: uuid.UUID,
+    intention_id: uuid.UUID,
+    analysis_id: uuid.UUID,
+    asked: Asked,
+    result: Result,
+    outcomes: Sequence[StepOutcome],
+    context_id: uuid.UUID | None,
+    moment: datetime,
+) -> dict[str, object]:
+    """The result kept; the findings it rests on linked; the intention
+    moved — unless it moved on meanwhile."""
+    async with session_factory() as session:
+        repository = IntentionRepository(session, workspace_id)
+        row = await session.get(IntentionAnalysis, analysis_id)
+        intention = await repository.intention(intention_id, lock=True)
+        if row is None or intention is None:
+            return {"status": "gone"}
+        row.steps = [
+            {
+                "name": o.name,
+                "version": o.version,
+                "status": o.status,
+                "duration_ms": o.duration_ms,
+                "error": o.error,
+                "reason": o.reason,
+            }
+            for o in outcomes
+        ]
+        row.result = result_of(result)
+        row.status = result.status
+        row.finished_at = datetime.now(UTC)
+        failed = [o for o in outcomes if o.status in ("failed", "timed_out")]
+        row.error = failed[0].error if result.status == "failed" and failed else None
+        current = (
+            intention.status == S.ANALYSING.value
+            and intention.archived_at is None
+            and intention.context_id == context_id
+        )
+        if not current:
+            row.detail = {**row.detail, "superseded": True}
+            await session.commit()
+            return {"status": result.status, "analysis": str(analysis_id), "superseded": True}
+        service = IntentionService(
+            repository, findings=IntelligenceRepository(session, workspace_id)
+        )
+        summary = result.summary[0].text if result.summary else None
+        detail = {"analysis_id": str(analysis_id), "number": row.number, "status": result.status}
+        if result.status == "failed":
+            await service.move(
+                intention_id,
+                S.FAILED,
+                actor=Actor.SYSTEM,
+                reason="Its analysis could not run.",
+                detail=detail | {"error": row.error},
+                now=moment,
+            )
+        else:
+            for evidence in [e for e in result.evidence if e.ref_type == "finding"][:LINKED]:
+                if evidence.ref_id is not None:
+                    await service.link(
+                        intention_id, "finding", evidence.ref_id, actor=Actor.SYSTEM, now=moment
+                    )
+            await service.move(
+                intention_id,
+                S.AWAITING_DECISION if asked.acting else S.COMPLETED,
+                actor=Actor.SYSTEM,
+                detail=detail,
+                summary=summary,
+                now=moment,
+            )
+        await session.commit()
+    logger.info(
+        "intention_analysed",
+        intention=str(intention_id),
+        status=result.status,
+        findings=len(result.findings),
+        causes=len(result.causes),
+    )
+    return {"status": result.status, "analysis": str(analysis_id)}

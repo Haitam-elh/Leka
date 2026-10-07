@@ -99,6 +99,13 @@ SCHEDULE: tuple[Scheduled, ...] = (
     Scheduled(
         "intelligence-sweep", "leka.intelligence.job.run_intelligence_sweep", cron="56 * * * *"
     ),
+    # The intentions analysing whose context no analysis read (LEKA-388):
+    # a worker that died, a queue that was down.
+    Scheduled(
+        "intention-analysis-sweep",
+        "leka.intentions.processing.run_pending_analyses",
+        cron="7,22,37,52 * * * *",
+    ),
 )
 
 

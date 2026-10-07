@@ -1,0 +1,467 @@
+"use client";
+
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  AlertOctagon,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  Clock,
+  Layers,
+  LoaderCircle,
+  type LucideIcon,
+  RotateCw,
+  ScanSearch,
+  ShieldCheck,
+} from "lucide-react";
+import { useEffect, useMemo, useRef } from "react";
+
+import { cn } from "cn";
+
+import {
+  Card,
+  entityHref,
+  IconTile,
+  type TileTone,
+  typeLabel,
+} from "@/components/environment/parts";
+import { word } from "@/components/insights/leka-insights";
+import { ReadinessPanel } from "@/components/intentions/readiness";
+import { AnalysisState, AnalysisView, EvidenceList, Pill } from "@/components/intelligence";
+import { exactDate, timeAgo } from "@/components/knowledge/time";
+import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
+import { ErrorState } from "@/components/states/error-state";
+import { Button } from "@/components/ui/button";
+import { ApiError } from "@/lib/api";
+import { fill } from "@/lib/i18n/dictionaries";
+import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import {
+  analysisEvidence,
+  capabilityName,
+  type IntentionAnalysis,
+  intentionAnalysis,
+  type Links,
+} from "@/lib/intention-analysis";
+import type { Finding } from "@/lib/insights";
+import type { IntentionDetail } from "@/lib/intentions/api";
+import {
+  intentionKeys,
+  useAnalyseAgain,
+  useIntentionAnalyses,
+  useIntentionAnalysis,
+} from "@/lib/intentions/queries";
+import { notify } from "@/lib/notify";
+
+/**
+ * An intention's analysis (LEKA-388), its tabs Analyse and Preuves.
+ *
+ *     Analyse   how it went — which analysis, why it ran, when, how long,
+ *               on which version of its context — then each capability
+ *               LEKA mobilised, why, and how it went: done, failed, timed
+ *               out, not run; then what it found, laid out as every
+ *               analysis is (mockup 04, LEKA-341) — without proposals,
+ *               which LEKA-389 makes and a person decides (LEKA-390).
+ *               While one is on its way, mockup 03's "LEKA analyse votre
+ *               demande", read again every few seconds; blocked, what its
+ *               context lacks; failed, a way to run it again.
+ *     Preuves   every piece of evidence it collected, where each came
+ *               from — the source, the record, LEKA's rule — and which
+ *               capability cites it.
+ *
+ * Nothing is shown that the API did not say.
+ */
+
+type Step = IntentionAnalysis["steps"][number];
+
+function useLinks(): Links {
+  const t = useDictionary();
+  const { locale } = useLocale();
+  return useMemo(
+    () => ({
+      href: entityHref,
+      typeName: (type: string) => typeLabel(t, type),
+      date: (iso: string) => exactDate(locale, iso),
+      // What LEKA concluded, said as Insights says it (LEKA-377 to 383).
+      finding: (code: string, params: Record<string, unknown>, statement: string) =>
+        word(t, { code, params, statement } as unknown as Finding),
+    }),
+    [t, locale],
+  );
+}
+
+/** Whether one is on its way: the intention analysing, and no analysis
+ * finished on its current context yet. */
+function onItsWay(intention: IntentionDetail, analysis: IntentionAnalysis | null | undefined) {
+  if (intention.status !== "analysing" || intention.archived_at) return false;
+  if (!analysis) return true;
+  return analysis.status === "running" || analysis.context_id !== intention.context_id;
+}
+
+/** Its asker, or who may approve, while it can be analysed again. */
+function useMayAnalyse(intention: IntentionDetail): boolean {
+  const me = useCurrentUser();
+  const steward = usePermissions()?.includes("intention:approve") ?? false;
+  const yours = Boolean(me?.id) && intention.created_by === me?.id;
+  return (
+    (yours || steward) &&
+    !intention.archived_at &&
+    (intention.status === "failed" || intention.status === "analysing")
+  );
+}
+
+/** Its analysis read, read again while on its way; once one finishes, the
+ * intention — which it moved — read again too. */
+function useAnalysisOf(intention: IntentionDetail) {
+  const client = useQueryClient();
+  const analysis = useIntentionAnalysis(intention.id, (data) => onItsWay(intention, data));
+  const live = onItsWay(intention, analysis.data);
+  // Which analysis it is, and whether finished: once read, a change to a
+  // finished one is an analysis that just ended.
+  const seen = useRef<string | undefined>(undefined);
+  const data = analysis.data;
+  const finished = data?.finished_at ?? null;
+  const state = data === undefined ? undefined : `${data?.id ?? "none"}:${finished ?? "on its way"}`;
+  useEffect(() => {
+    if (state === undefined) return;
+    if (seen.current !== undefined && seen.current !== state && finished) {
+      void client.invalidateQueries({ queryKey: intentionKeys.one(intention.id) });
+      void client.invalidateQueries({ queryKey: intentionKeys.history(intention.id) });
+      void client.invalidateQueries({ queryKey: intentionKeys.analyses(intention.id) });
+    }
+    seen.current = state;
+  }, [state, finished, client, intention.id]);
+  return { analysis, live };
+}
+
+function AgainButton({ intention, label }: { intention: IntentionDetail; label: string }) {
+  const t = useDictionary();
+  const w = t.intentions.analysis;
+  const again = useAnalyseAgain(intention.id);
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={again.isPending}
+      data-testid="analysis-again"
+      onClick={async () => {
+        try {
+          const { queued } = await again.mutateAsync();
+          notify.success({ title: queued ? w.queued : w.already });
+        } catch (error) {
+          notify.error({ title: error instanceof ApiError ? error.message : String(error) });
+        }
+      }}
+    >
+      <RotateCw className="size-4" aria-hidden="true" />
+      {label}
+    </Button>
+  );
+}
+
+// ── how it went ──────────────────────────────────────────────────────────
+
+const RESULT_TONES: Record<IntentionAnalysis["status"], TileTone> = {
+  running: "violet",
+  complete: "success",
+  partial: "warning",
+  inconclusive: "info",
+  failed: "danger",
+  blocked: "danger",
+};
+
+function seconds(analysis: IntentionAnalysis): string | null {
+  if (!analysis.finished_at) return null;
+  const ms = new Date(analysis.finished_at).getTime() - new Date(analysis.started_at).getTime();
+  return (Math.max(ms, 0) / 1000).toFixed(1);
+}
+
+/** "Analyse n° 2 · relancée par une personne · il y a 3 min · en 1.2 s ·
+ * contexte v3". */
+function MetaLine({ analysis }: { analysis: IntentionAnalysis }) {
+  const t = useDictionary();
+  const { locale } = useLocale();
+  const w = t.intentions.analysis;
+  const took = seconds(analysis);
+  const parts = [
+    fill(w.number, { number: analysis.number }),
+    w.triggers[analysis.trigger],
+    timeAgo(t, analysis.started_at),
+    took ? fill(w.took, { seconds: took }) : null,
+    analysis.context_version ? fill(w.context, { version: analysis.context_version }) : null,
+  ].filter(Boolean);
+  return (
+    <p className="text-[0.8125rem] text-shell-muted" data-testid="analysis-meta">
+      <time dateTime={analysis.started_at} title={exactDate(locale, analysis.started_at)}>
+        {parts.join(" · ")}
+      </time>
+    </p>
+  );
+}
+
+const STEP_LOOK: Record<Step["status"], { icon: LucideIcon; tone: TileTone }> = {
+  succeeded: { icon: CircleCheck, tone: "success" },
+  failed: { icon: CircleX, tone: "danger" },
+  timed_out: { icon: Clock, tone: "warning" },
+  skipped: { icon: CircleDashed, tone: "neutral" },
+};
+
+/** Each capability chosen, why, and how it went — those still to run, on
+ * their way. */
+function StepsCard({ analysis }: { analysis: IntentionAnalysis }) {
+  const t = useDictionary();
+  const w = t.intentions.analysis.steps;
+  const ran = new Map(analysis.steps.map((step) => [step.name, step]));
+  const shown = analysis.selection.filter((choice) => choice.chosen || ran.has(choice.name));
+  return (
+    <Card title={w.title} icon={<Layers className="size-4 text-shell-muted" aria-hidden="true" />}>
+      <ul className="divide-y divide-shell-line/60" data-testid="analysis-steps">
+        {shown.map((choice) => {
+          const step = ran.get(choice.name);
+          const look = step ? STEP_LOOK[step.status] : null;
+          const Icon = look?.icon ?? LoaderCircle;
+          const reason = step?.reason ?? choice.reason;
+          return (
+            <li
+              key={choice.name}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-[0.8125rem]"
+              data-testid="analysis-step"
+              data-name={choice.name}
+              data-status={step?.status ?? "running"}
+            >
+              <Icon
+                className={cn(
+                  "size-4 shrink-0",
+                  step ? undefined : "text-shell-nav-active motion-safe:animate-spin",
+                  look?.tone === "success" && "text-state-success",
+                  look?.tone === "danger" && "text-state-danger",
+                  look?.tone === "warning" && "text-state-warning",
+                  look?.tone === "neutral" && "text-shell-muted",
+                )}
+                aria-hidden="true"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="font-medium text-brand-navy">
+                  {capabilityName(t, choice.name)}
+                </span>
+                <span className="text-shell-muted">
+                  {" · "}
+                  {(w.reasons as Record<string, string>)[reason] ?? reason}
+                </span>
+                {step?.error ? (
+                  <span className="block text-xs text-state-danger">
+                    {fill(w.error, { error: step.error })}
+                  </span>
+                ) : null}
+              </span>
+              <Pill tone={look?.tone ?? "violet"}>{w.statuses[step?.status ?? "running"]}</Pill>
+              {step && step.status !== "skipped" ? (
+                <span className="w-16 text-right text-xs tabular-nums text-shell-muted">
+                  {step.duration_ms ? fill(w.ms, { ms: step.duration_ms }) : w.instant}
+                </span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+/** Its analyses, the latest first: number, how each went, when. */
+function PreviousCard({ intentionId }: { intentionId: string }) {
+  const t = useDictionary();
+  const w = t.intentions.analysis;
+  const analyses = useIntentionAnalyses(intentionId);
+  if (!analyses.data || analyses.data.length < 2) return null;
+  return (
+    <Card
+      title={w.previous}
+      icon={<ScanSearch className="size-4 text-shell-muted" aria-hidden="true" />}
+    >
+      <ol className="space-y-1.5 text-[0.8125rem]" data-testid="analysis-previous">
+        {analyses.data.map((analysis) => (
+          <li key={analysis.id} className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-brand-navy">
+              {fill(w.number, { number: analysis.number })}
+            </span>
+            <Pill tone={RESULT_TONES[analysis.status]}>{w.statuses[analysis.status]}</Pill>
+            <span className="text-shell-muted">
+              {w.triggers[analysis.trigger]} · {timeAgo(t, analysis.started_at)}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </Card>
+  );
+}
+
+/** Mockup 03's head: LEKA analyses your request, or what it came to. */
+function Head({
+  intention,
+  analysis,
+  live,
+}: {
+  intention: IntentionDetail;
+  analysis: IntentionAnalysis | null;
+  live: boolean;
+}) {
+  const t = useDictionary();
+  const w = t.intentions.analysis;
+  const may = useMayAnalyse(intention);
+  const running = live && analysis?.status === "running";
+  const waiting = live && !running;
+  const title = running ? w.running : waiting ? w.waiting : w.title;
+  const tone: TileTone = analysis && !live ? RESULT_TONES[analysis.status] : "violet";
+  const again =
+    may && (intention.status === "failed" || (!live && analysis?.status === "blocked"))
+      ? w.again
+      : may && waiting && !analysis
+        ? w.now
+        : null;
+  return (
+    <section
+      className="flex flex-col gap-3 rounded-xl border border-shell-line bg-white p-4 sm:flex-row sm:items-center"
+      data-testid="analysis-head"
+      data-live={live ? "true" : "false"}
+    >
+      <IconTile icon={running ? LoaderCircle : ShieldCheck} tone={tone} className="size-11" />
+      <div className="min-w-0 flex-1">
+        <h2 className="text-[1.0625rem] font-semibold tracking-[-0.01em] text-brand-navy">
+          {title}
+        </h2>
+        {running ? (
+          <p className="text-[0.8125rem] text-shell-muted">{w.runningBody}</p>
+        ) : waiting ? (
+          <p className="text-[0.8125rem] text-shell-muted">{w.waitingBody}</p>
+        ) : null}
+        {analysis ? <MetaLine analysis={analysis} /> : null}
+      </div>
+      {analysis && !live ? (
+        <Pill
+          tone={RESULT_TONES[analysis.status]}
+          data-testid="analysis-status"
+          data-status={analysis.status}
+        >
+          {w.statuses[analysis.status]}
+        </Pill>
+      ) : null}
+      {again ? <AgainButton intention={intention} label={again} /> : null}
+    </section>
+  );
+}
+
+/** What its analysis came to, in the reader's words — the intention's own
+ * summary, as kept, until it is read; none, said so. */
+export function SummarySaid({ intention, none }: { intention: IntentionDetail; none: string }) {
+  const t = useDictionary();
+  const links = useLinks();
+  const { analysis } = useAnalysisOf(intention);
+  const data = analysis.data;
+  const said = useMemo(
+    () => (data?.result ? intentionAnalysis(t, data, links).summary : null),
+    [data, t, links],
+  );
+  const summary = said ?? intention.summary;
+  return (
+    <p
+      className={
+        summary ? "text-[0.9375rem] text-brand-navy" : "text-[0.875rem] text-shell-muted"
+      }
+      data-testid="intention-summary"
+    >
+      {summary ?? none}
+    </p>
+  );
+}
+
+// ── the tabs ─────────────────────────────────────────────────────────────
+
+function Loading() {
+  return <div className="h-64 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
+}
+
+function Nothing({ title, body }: { title: string; body: string }) {
+  return (
+    <div
+      className="rounded-xl border border-shell-line bg-white px-5 py-6 text-[0.875rem]"
+      data-testid="analysis-none"
+    >
+      <p className="font-semibold text-brand-navy">{title}</p>
+      <p className="text-shell-muted">{body}</p>
+    </div>
+  );
+}
+
+export function AnalysisTab({ intention }: { intention: IntentionDetail }) {
+  const t = useDictionary();
+  const w = t.intentions.analysis;
+  const links = useLinks();
+  const { analysis, live } = useAnalysisOf(intention);
+  const data = analysis.data;
+  const shown = useMemo(() => (data ? intentionAnalysis(t, data, links) : null), [data, t, links]);
+  if (analysis.isError) {
+    return <ErrorState error={analysis.error} onRetry={() => void analysis.refetch()} />;
+  }
+  if (data === undefined) return <Loading />;
+  if (data === null && !live) return <Nothing title={w.none} body={w.noneBody} />;
+  return (
+    <div className="space-y-4" data-testid="intention-analysis">
+      <Head intention={intention} analysis={data} live={live} />
+      {data?.status === "blocked" ? (
+        <>
+          <div
+            role="status"
+            className="flex items-start gap-3 rounded-xl bg-state-danger-soft px-4 py-3 text-[0.8125rem]"
+            data-testid="analysis-blocked"
+          >
+            <AlertOctagon className="mt-0.5 size-4 shrink-0 text-state-danger" aria-hidden="true" />
+            <div className="min-w-0 text-brand-navy">
+              <p className="font-semibold">{w.blocked}</p>
+              <p className="text-shell-muted">{w.blockedBody}</p>
+            </div>
+          </div>
+          {intention.readiness ? <ReadinessPanel readiness={intention.readiness} /> : null}
+        </>
+      ) : data ? (
+        <>
+          <StepsCard analysis={data} />
+          {data.status === "running" ? (
+            <AnalysisState status="running" />
+          ) : shown ? (
+            <AnalysisView analysis={shown} proposals={false} level={2} />
+          ) : null}
+        </>
+      ) : null}
+      <PreviousCard intentionId={intention.id} />
+    </div>
+  );
+}
+
+export function EvidenceTab({ intention }: { intention: IntentionDetail }) {
+  const t = useDictionary();
+  const w = t.intentions.analysis.evidence;
+  const links = useLinks();
+  const { analysis } = useAnalysisOf(intention);
+  const result = analysis.data?.result ?? null;
+  const items = useMemo(
+    () => (result ? analysisEvidence(t, result, links) : []),
+    [result, t, links],
+  );
+  if (analysis.isError) {
+    return <ErrorState error={analysis.error} onRetry={() => void analysis.refetch()} />;
+  }
+  if (analysis.data === undefined) return <Loading />;
+  return (
+    <Card
+      title={w.title}
+      icon={<ShieldCheck className="size-4 text-shell-muted" aria-hidden="true" />}
+      action={items.length ? <Pill tone="neutral">{items.length}</Pill> : undefined}
+    >
+      <div className="space-y-3" data-testid="intention-evidence">
+        <p className="text-[0.8125rem] text-shell-muted">{result ? w.body : w.noAnalysis}</p>
+        {result ? <EvidenceList items={items} /> : null}
+      </div>
+    </Card>
+  );
+}

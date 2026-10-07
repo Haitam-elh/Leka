@@ -12,7 +12,10 @@ context, findings, entities, and the decisions, actions and outcomes
 LEKA-390 to 392 add — and what LEKA understood of it (understanding.py,
 LEKA-385): its goal, the actions asked, the things it is about, what is
 ambiguous, each with its words; not understood enough, it is said
-needs_clarification. docs/intentions.md.
+needs_clarification — and analysed (processing.py, LEKA-388): the
+capabilities its goal calls for run on its context, each isolated, the
+result kept with every piece of evidence and where it came from.
+docs/intentions.md.
 """
 
 from leka.intentions.grounding import readiness, refined
@@ -27,7 +30,8 @@ from leka.intentions.lifecycle import (
     moves,
     phase,
 )
-from leka.intentions.models import Intention, IntentionEvent, IntentionLink
+from leka.intentions.models import Intention, IntentionAnalysis, IntentionEvent, IntentionLink
+from leka.intentions.processing import queue_analysis
 from leka.intentions.repository import IntentionFilters, IntentionRepository
 from leka.intentions.schemas import (
     ActionRead,
@@ -35,6 +39,8 @@ from leka.intentions.schemas import (
     Approval,
     ContextReadiness,
     GoalRead,
+    IntentionAnalysisRead,
+    IntentionAnalysisRequested,
     IntentionAsked,
     IntentionContext,
     IntentionCounts,
@@ -56,6 +62,7 @@ from leka.intentions.service import (
     LinkRefusedError,
     NothingToStartError,
     NotYoursError,
+    analysis_read,
     intention_read,
 )
 from leka.intentions.understanding import UNDERSTANDING_VERSION, understand
@@ -73,6 +80,9 @@ __all__ = [
     "GoalRead",
     "IllegalTransitionError",
     "Intention",
+    "IntentionAnalysis",
+    "IntentionAnalysisRead",
+    "IntentionAnalysisRequested",
     "IntentionArchivedError",
     "IntentionAsked",
     "IntentionContext",
@@ -98,9 +108,11 @@ __all__ = [
     "Understanding",
     "UnderstoodEntity",
     "Withdrawal",
+    "analysis_read",
     "intention_read",
     "moves",
     "phase",
+    "queue_analysis",
     "readiness",
     "refined",
     "understand",

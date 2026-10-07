@@ -363,3 +363,170 @@ class IntentionCounts(BaseModel):
     scheduled: int
     finished: int
     archived: int
+
+
+# ── its analysis (LEKA-388) ──────────────────────────────────────────────────
+
+
+class AnalysisNote(BaseModel):
+    """A sentence the interface words: its code and values — and in
+    English."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: str
+    text: str
+    params: dict[str, JsonValue] = Field(default_factory=dict)
+
+
+class EvidenceSourceRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID | None
+    kind: str | None
+    name: str | None = Field(description="None when the source has been deleted since.")
+
+
+class AnalysisEvidence(BaseModel):
+    """One thing a statement rests on, and where it came from."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(description="Stable: entity:<id>, tie:<from>:<type>:<to>, event:<id>…")
+    kind: Literal["record", "entity", "event", "inference"]
+    label: str
+    ref_type: str | None = Field(description="Its kind — service, deployment — or the tie's.")
+    ref_id: uuid.UUID | None = Field(description="What it is in the company model, or a finding.")
+    sources: list[EvidenceSourceRead] = Field(description="Where it was read.")
+    records: list[str] = Field(description="The records that stated it.")
+    origin: str | None = Field(description="stated, inferred, accepted — or leka.")
+    confidence: float | None
+    detail: str | None
+    at: datetime | None
+    params: dict[str, JsonValue] = Field(
+        default_factory=dict,
+        description="What its label is made of: a tie's from and to; a finding's code and params.",
+    )
+
+
+class AnalysisStatement(BaseModel):
+    """A fact: what a source says, or LEKA observed."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    capability: str
+    code: str
+    text: str
+    params: dict[str, JsonValue]
+    evidence: list[str] = Field(description="The ids of its evidence.")
+
+
+class AnalysisCause(BaseModel):
+    """A hypothesis: what may explain it, and how sure."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    capability: str
+    code: str
+    label: str
+    basis: Literal["stated", "inferred"]
+    why: str
+    confidence: float | None
+    ref_type: str | None
+    ref_id: uuid.UUID | None
+    params: dict[str, JsonValue]
+    evidence: list[str]
+
+
+class AnalysisImpactItem(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ref_type: str
+    ref_id: uuid.UUID
+    name: str
+
+
+class AnalysisImpactArea(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    code: Literal["dependents", "applications", "capabilities", "processes"]
+    items: list[AnalysisImpactItem]
+
+
+class IntentionAnalysisResult(BaseModel):
+    """What the analysis came to, for the decision interface (LEKA-389)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["complete", "partial", "inconclusive", "failed"]
+    summary: list[AnalysisNote]
+    findings: list[AnalysisStatement]
+    causes: list[AnalysisCause]
+    impact: list[AnalysisImpactArea]
+    risk: Literal["high", "medium", "low", "unknown"]
+    risk_basis: AnalysisNote | None
+    uncertainties: list[AnalysisNote]
+    missing: list[AnalysisNote]
+    confidence: float | None
+    support: list[AnalysisNote]
+    evidence: list[AnalysisEvidence]
+
+
+class CapabilityChoiceRead(BaseModel):
+    """A capability considered, and why it ran or not."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    version: int
+    method: Literal["rules", "model"]
+    chosen: bool
+    reason: str = Field(
+        description="always, goal, kind, acting — or no_model (it waits for LEKA-394), not_called."
+    )
+
+
+class AnalysisStepRead(BaseModel):
+    """What one capability did."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    version: int
+    status: Literal["succeeded", "failed", "timed_out", "skipped"]
+    duration_ms: int
+    error: str | None
+    reason: str | None
+
+
+class IntentionAnalysisRead(BaseModel):
+    """One analysis of an intention: how it went, and what it came to."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    intention_id: uuid.UUID
+    number: int
+    trigger: Literal["created", "asked_again", "requested", "sweep"]
+    status: Literal["running", "complete", "partial", "inconclusive", "failed", "blocked"]
+    requested_by: uuid.UUID | None
+    context_id: uuid.UUID | None
+    context_version: int | None
+    readiness: Literal["ready", "limited", "blocked"] | None
+    started_at: datetime
+    finished_at: datetime | None
+    selection: list[CapabilityChoiceRead]
+    steps: list[AnalysisStepRead]
+    result: IntentionAnalysisResult | None
+    error: str | None
+    detail: dict[str, JsonValue]
+
+
+class IntentionAnalysisRequested(BaseModel):
+    """An analysis asked for: queued, or one already on its way."""
+
+    model_config = ConfigDict(frozen=True)
+
+    queued: bool

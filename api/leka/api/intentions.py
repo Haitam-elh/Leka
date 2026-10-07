@@ -17,6 +17,12 @@
     GET    /intentions/{id}/context      its context (LEKA-387): the context
                                          engine's contract, and whether it
                                          can ground an analysis
+    GET    /intentions/{id}/analysis     its latest analysis (LEKA-388): the
+                                         capabilities chosen and why, what
+                                         each did, the result and its
+                                         evidence — 404 before any
+    GET    /intentions/{id}/analyses     every analysis, the latest first
+    POST   /intentions/{id}/analyse      analysed again — retried, failed
     POST   /intentions/{id}/ask          asked again: its context made again
     POST   /intentions/{id}/cancel       withdrawn
     POST   /intentions/{id}/archive, /restore
@@ -62,6 +68,8 @@ from leka.intentions import (
     Actor,
     IllegalTransitionError,
     Intention,
+    IntentionAnalysisRead,
+    IntentionAnalysisRequested,
     IntentionArchivedError,
     IntentionAsked,
     IntentionContext,
@@ -82,6 +90,7 @@ from leka.intentions import (
     Understanding,
     Withdrawal,
     intention_read,
+    queue_analysis,
 )
 from leka.knowledge import GraphRepository, GraphService
 
@@ -175,16 +184,33 @@ REFUSED = (
 
 
 @router.post("", response_model=IntentionCreated, status_code=status.HTTP_201_CREATED)
-async def create(body: IntentAsk, service: Asking, principal: Asker) -> IntentionCreated:
+async def create(
+    body: IntentAsk, service: Asking, principal: Asker, session: SessionDep
+) -> IntentionCreated:
     """Ask LEKA: the intention kept — submitted, then analysing — and the
     context it asks for assembled, its subject the intention (LEKA-373).
     `intention_id` in the body is ignored: it is the new intention's. 422
-    when nothing can start it — and nothing is kept."""
+    when nothing can start it — and nothing is kept. Analysing, its
+    analysis is queued (LEKA-388)."""
     try:
         intention, context = await service.create(body, by=principal.user_id)
     except REFUSED as error:
         raise _refused(error) from error
-    return IntentionCreated(intention=await service.detail_now(intention), context=context)
+    created = IntentionCreated(intention=await service.detail_now(intention), context=context)
+    await _analyse(session, principal, intention, trigger="created")
+    return created
+
+
+async def _analyse(
+    session: SessionDep, principal: Principal, intention: Intention, *, trigger: str
+) -> None:
+    """Its analysis queued, once what it reads is committed (LEKA-388)."""
+    if intention.status != IntentionStatus.ANALYSING.value:
+        return
+    await session.commit()
+    await queue_analysis(
+        principal.workspace_id, intention.id, trigger=trigger, by=principal.user_id
+    )
 
 
 @router.post("/understand", response_model=Understanding)
@@ -277,7 +303,11 @@ async def context(
 
 @router.post("/{intention_id}/ask", response_model=IntentionAsked)
 async def ask_again(
-    intention_id: uuid.UUID, body: IntentAsk, service: Asking, principal: Asker
+    intention_id: uuid.UUID,
+    body: IntentAsk,
+    service: Asking,
+    principal: Asker,
+    session: SessionDep,
 ) -> IntentionAsked:
     """Asked again, its words or scope as they now stand: its context made
     again — a new version that says what LEKA reads differently (LEKA-374)
@@ -292,7 +322,9 @@ async def ask_again(
     if found is None:
         raise _missing()
     intention, context = found
-    return IntentionAsked(intention=await service.detail_now(intention), context=context)
+    asked = IntentionAsked(intention=await service.detail_now(intention), context=context)
+    await _analyse(session, principal, intention, trigger="asked_again")
+    return asked
 
 
 @router.post("/{intention_id}/cancel", response_model=IntentionDetail)
@@ -378,3 +410,60 @@ async def unlink(
         raise _refused(error) from error
     if not done:
         raise _missing()
+
+
+# ── its analysis (LEKA-388) ─────────────────────────────────────────────────
+
+MAX_ANALYSES = 50
+
+
+@router.get("/{intention_id}/analyses", response_model=list[IntentionAnalysisRead])
+async def analyses(
+    intention_id: uuid.UUID,
+    service: Reading,
+    limit: Annotated[int, Query(ge=1, le=MAX_ANALYSES)] = 20,
+) -> list[IntentionAnalysisRead]:
+    """Its analyses, the latest first: which capabilities ran and why, what
+    each did, the result and its evidence."""
+    found = await service.analyses(intention_id, limit=limit)
+    if found is None:
+        raise _missing()
+    return found
+
+
+@router.get("/{intention_id}/analysis", response_model=IntentionAnalysisRead)
+async def analysis(intention_id: uuid.UUID, service: Reading) -> IntentionAnalysisRead:
+    """Its latest analysis — running, complete, partial, inconclusive,
+    failed, or blocked by its context. 404 before any."""
+    found = await service.analyses(intention_id, limit=1)
+    if found is None:
+        raise _missing()
+    if not found:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No analysis yet.")
+    return found[0]
+
+
+@router.post(
+    "/{intention_id}/analyse",
+    response_model=IntentionAnalysisRequested,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def analyse(
+    intention_id: uuid.UUID, service: Asking, principal: Asker, session: SessionDep
+) -> IntentionAnalysisRequested:
+    """Analysed again, as it now stands — failed, it is retried first. 409
+    in any other state than analysing or failed; `queued` false when one is
+    already on its way."""
+    try:
+        found = await service.analyse_again(
+            intention_id, by=principal.user_id, steward=_steward(principal)
+        )
+    except REFUSED as error:
+        raise _refused(error) from error
+    if found is None:
+        raise _missing()
+    await session.commit()
+    queued = await queue_analysis(
+        principal.workspace_id, found.id, trigger="requested", by=principal.user_id
+    )
+    return IntentionAnalysisRequested(queued=queued)

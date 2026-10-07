@@ -3727,7 +3727,8 @@ export interface paths {
          * @description Ask LEKA: the intention kept — submitted, then analysing — and the
          *     context it asks for assembled, its subject the intention (LEKA-373).
          *     `intention_id` in the body is ignored: it is the new intention's. 422
-         *     when nothing can start it — and nothing is kept.
+         *     when nothing can start it — and nothing is kept. Analysing, its
+         *     analysis is queued (LEKA-388).
          */
         post: operations["create_api_v1_intentions_post"];
         delete?: never;
@@ -3962,6 +3963,70 @@ export interface paths {
          * @description A link undone — never its context's: it is analysed from it (422).
          */
         delete: operations["unlink_api_v1_intentions__intention_id__links__link_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intentions/{intention_id}/analyses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Analyses
+         * @description Its analyses, the latest first: which capabilities ran and why, what
+         *     each did, the result and its evidence.
+         */
+        get: operations["analyses_api_v1_intentions__intention_id__analyses_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intentions/{intention_id}/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Analysis
+         * @description Its latest analysis — running, complete, partial, inconclusive,
+         *     failed, or blocked by its context. 404 before any.
+         */
+        get: operations["analysis_api_v1_intentions__intention_id__analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intentions/{intention_id}/analyse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyse
+         * @description Analysed again, as it now stands — failed, it is retried first. 409
+         *     in any other state than analysing or failed; `queued` false when one is
+         *     already on its way.
+         */
+        post: operations["analyse_api_v1_intentions__intention_id__analyse_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4207,6 +4272,132 @@ export interface components {
             options?: string[];
         };
         /**
+         * AnalysisCause
+         * @description A hypothesis: what may explain it, and how sure.
+         */
+        AnalysisCause: {
+            /** Id */
+            id: string;
+            /** Capability */
+            capability: string;
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+            /**
+             * Basis
+             * @enum {string}
+             */
+            basis: "stated" | "inferred";
+            /** Why */
+            why: string;
+            /** Confidence */
+            confidence: number | null;
+            /** Ref Type */
+            ref_type: string | null;
+            /** Ref Id */
+            ref_id: string | null;
+            /** Params */
+            params: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Evidence */
+            evidence: string[];
+        };
+        /**
+         * AnalysisEvidence
+         * @description One thing a statement rests on, and where it came from.
+         */
+        AnalysisEvidence: {
+            /**
+             * Id
+             * @description Stable: entity:<id>, tie:<from>:<type>:<to>, event:<id>…
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "record" | "entity" | "event" | "inference";
+            /** Label */
+            label: string;
+            /**
+             * Ref Type
+             * @description Its kind — service, deployment — or the tie's.
+             */
+            ref_type: string | null;
+            /**
+             * Ref Id
+             * @description What it is in the company model, or a finding.
+             */
+            ref_id: string | null;
+            /**
+             * Sources
+             * @description Where it was read.
+             */
+            sources: components["schemas"]["EvidenceSourceRead"][];
+            /**
+             * Records
+             * @description The records that stated it.
+             */
+            records: string[];
+            /**
+             * Origin
+             * @description stated, inferred, accepted — or leka.
+             */
+            origin: string | null;
+            /** Confidence */
+            confidence: number | null;
+            /** Detail */
+            detail: string | null;
+            /** At */
+            at: string | null;
+            /**
+             * Params
+             * @description What its label is made of: a tie's from and to; a finding's code and params.
+             */
+            params?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
+        /** AnalysisImpactArea */
+        AnalysisImpactArea: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "dependents" | "applications" | "capabilities" | "processes";
+            /** Items */
+            items: components["schemas"]["AnalysisImpactItem"][];
+        };
+        /** AnalysisImpactItem */
+        AnalysisImpactItem: {
+            /** Ref Type */
+            ref_type: string;
+            /**
+             * Ref Id
+             * Format: uuid
+             */
+            ref_id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * AnalysisNote
+         * @description A sentence the interface words: its code and values — and in
+         *     English.
+         */
+        AnalysisNote: {
+            /** Code */
+            code: string;
+            /** Text */
+            text: string;
+            /** Params */
+            params?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
+        /**
          * AnalysisRequest
          * @description Analyse now. Every analysis, or those named.
          */
@@ -4225,6 +4416,50 @@ export interface components {
         AnalysisRequested: {
             /** Queued */
             queued: boolean;
+        };
+        /**
+         * AnalysisStatement
+         * @description A fact: what a source says, or LEKA observed.
+         */
+        AnalysisStatement: {
+            /** Id */
+            id: string;
+            /** Capability */
+            capability: string;
+            /** Code */
+            code: string;
+            /** Text */
+            text: string;
+            /** Params */
+            params: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Evidence
+             * @description The ids of its evidence.
+             */
+            evidence: string[];
+        };
+        /**
+         * AnalysisStepRead
+         * @description What one capability did.
+         */
+        AnalysisStepRead: {
+            /** Name */
+            name: string;
+            /** Version */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "succeeded" | "failed" | "timed_out" | "skipped";
+            /** Duration Ms */
+            duration_ms: number;
+            /** Error */
+            error: string | null;
+            /** Reason */
+            reason: string | null;
         };
         /**
          * AnalyzerRead
@@ -5253,6 +5488,28 @@ export interface components {
          * @enum {string}
          */
         Capability: "repositories" | "commits" | "pull_requests" | "releases" | "deployments" | "components" | "issues" | "branches" | "projects" | "instances" | "db_instances" | "buckets" | "functions" | "clusters" | "networks" | "load_balancers" | "accounts" | "spaces" | "pages" | "databases" | "drives" | "files" | "alerts" | "events" | "incidents" | "changes" | "metrics" | "logs" | "services" | "dashboards" | "schemas" | "tables" | "people" | "teams" | "records";
+        /**
+         * CapabilityChoiceRead
+         * @description A capability considered, and why it ran or not.
+         */
+        CapabilityChoiceRead: {
+            /** Name */
+            name: string;
+            /** Version */
+            version: number;
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "rules" | "model";
+            /** Chosen */
+            chosen: boolean;
+            /**
+             * Reason
+             * @description always, goal, kind, acting — or no_model (it waits for LEKA-394), not_called.
+             */
+            reason: string;
+        };
         /** CatalogEntry */
         CatalogEntry: {
             key: components["schemas"]["SourceKind"];
@@ -8814,6 +9071,18 @@ export interface components {
              */
             gone: boolean;
         };
+        /** EvidenceSourceRead */
+        EvidenceSourceRead: {
+            /** Id */
+            id: string | null;
+            /** Kind */
+            kind: string | null;
+            /**
+             * Name
+             * @description None when the source has been deleted since.
+             */
+            name: string | null;
+        };
         /**
          * EvolutionBucket
          * @description What changed on one day, in the reader's time zone.
@@ -10049,6 +10318,103 @@ export interface components {
              * @description How surely the words name it, 0 to 1.
              */
             confidence: number;
+        };
+        /**
+         * IntentionAnalysisRead
+         * @description One analysis of an intention: how it went, and what it came to.
+         */
+        IntentionAnalysisRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Intention Id
+             * Format: uuid
+             */
+            intention_id: string;
+            /** Number */
+            number: number;
+            /**
+             * Trigger
+             * @enum {string}
+             */
+            trigger: "created" | "asked_again" | "requested" | "sweep";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "complete" | "partial" | "inconclusive" | "failed" | "blocked";
+            /** Requested By */
+            requested_by: string | null;
+            /** Context Id */
+            context_id: string | null;
+            /** Context Version */
+            context_version: number | null;
+            /** Readiness */
+            readiness: ("ready" | "limited" | "blocked") | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Selection */
+            selection: components["schemas"]["CapabilityChoiceRead"][];
+            /** Steps */
+            steps: components["schemas"]["AnalysisStepRead"][];
+            result: components["schemas"]["IntentionAnalysisResult"] | null;
+            /** Error */
+            error: string | null;
+            /** Detail */
+            detail: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
+        /**
+         * IntentionAnalysisRequested
+         * @description An analysis asked for: queued, or one already on its way.
+         */
+        IntentionAnalysisRequested: {
+            /** Queued */
+            queued: boolean;
+        };
+        /**
+         * IntentionAnalysisResult
+         * @description What the analysis came to, for the decision interface (LEKA-389).
+         */
+        IntentionAnalysisResult: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "complete" | "partial" | "inconclusive" | "failed";
+            /** Summary */
+            summary: components["schemas"]["AnalysisNote"][];
+            /** Findings */
+            findings: components["schemas"]["AnalysisStatement"][];
+            /** Causes */
+            causes: components["schemas"]["AnalysisCause"][];
+            /** Impact */
+            impact: components["schemas"]["AnalysisImpactArea"][];
+            /**
+             * Risk
+             * @enum {string}
+             */
+            risk: "high" | "medium" | "low" | "unknown";
+            risk_basis: components["schemas"]["AnalysisNote"] | null;
+            /** Uncertainties */
+            uncertainties: components["schemas"]["AnalysisNote"][];
+            /** Missing */
+            missing: components["schemas"]["AnalysisNote"][];
+            /** Confidence */
+            confidence: number | null;
+            /** Support */
+            support: components["schemas"]["AnalysisNote"][];
+            /** Evidence */
+            evidence: components["schemas"]["AnalysisEvidence"][];
         };
         /**
          * IntentionAsked
@@ -33881,6 +34247,290 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    analyses_api_v1_intentions__intention_id__analyses_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionAnalysisRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    analysis_api_v1_intentions__intention_id__analysis_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionAnalysisRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    analyse_api_v1_intentions__intention_id__analyse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionAnalysisRequested"];
+                };
             };
             /** @description The request could not be understood. */
             400: {
