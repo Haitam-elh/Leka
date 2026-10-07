@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ChevronRight,
   Gauge,
+  History,
   Layers,
   Loader2,
   type LucideIcon,
@@ -42,6 +43,7 @@ const ICON: Record<string, LucideIcon> = {
   change: Rocket,
   gaps: Puzzle,
   quality: Gauge,
+  evolution: History,
 };
 
 interface Worded {
@@ -138,6 +140,82 @@ function wordQuality(t: Dictionary, finding: Finding): Worded | null {
   return null;
 }
 
+/** What the model's recent course says (LEKA-383), and what to do about
+ * it — null for a code the interface does not know yet. */
+function wordEvolution(t: Dictionary, finding: Finding): Worded | null {
+  const p = finding.params;
+  const e = t.insights.evolution;
+  const name = text(p.name);
+  const listed = (key: string) => {
+    const found = p[key];
+    return Array.isArray(found) ? found.map(text).filter(Boolean).join(", ") : "";
+  };
+  const advice = (e.recommendations as Record<string, string>)[text(p.recommendation)];
+  const detail = (said: string | null) => [said, advice].filter(Boolean).join(" · ") || null;
+  switch (finding.code) {
+    case "evolution.dependencies_grew":
+      return {
+        title: fill(e.dependencies, { name, count: text(p.added) }),
+        detail: detail(fill(e.dependenciesDetail, { names: listed("names") })),
+      };
+    case "evolution.owner_lost":
+      return {
+        title: fill(e.ownerLost, { name }),
+        detail: detail(
+          typeof p.at === "string"
+            ? fill(e.ownerLostDetail, { names: listed("before"), days: days(p.at) })
+            : null,
+        ),
+      };
+    case "evolution.owner_changed":
+      return {
+        title: fill(e.ownerChanged, { name }),
+        detail: detail(
+          fill(e.ownerChangedDetail, { before: listed("before"), after: listed("after") }),
+        ),
+      };
+    case "evolution.removed_relied":
+      return {
+        title: fill(e.removed, { name }),
+        detail: detail(fill(e.removedDetail, { names: listed("names") })),
+      };
+    case "evolution.architecture_moved":
+      return {
+        title: e.architecture,
+        detail: detail(
+          fill(e.architectureDetail, { created: text(p.created), removed: text(p.removed) }),
+        ),
+      };
+    case "evolution.incidents_rising":
+      return {
+        title: fill(e.incidents, { name }),
+        detail: detail(
+          fill(e.incidentsDetail, { recent: text(p.recent), before: text(p.before) }),
+        ),
+      };
+    case "evolution.volatile":
+      return {
+        title: fill(e.volatile, { name }),
+        detail: detail(fill(e.volatileDetail, { count: text(p.changes) })),
+      };
+    case "evolution.quality_fell": {
+      const percent = (value: unknown) => Math.round((Number(value) || 0) * 100);
+      const column = (t.knowledgeQuality.columns as Record<string, string>)[text(p.column)];
+      return {
+        title:
+          p.scope === "workspace"
+            ? e.qualityFellWorkspace
+            : fill(e.qualityFell, { name: column ?? name }),
+        detail: detail(
+          fill(e.qualityFellDetail, { before: percent(p.before), after: percent(p.after) }),
+        ),
+      };
+    }
+    default:
+      return null;
+  }
+}
+
 /** A finding in the reader's words, from its code and values — its English
  * statement when the interface does not know the code yet. */
 export function word(t: Dictionary, finding: Finding): Worded {
@@ -205,7 +283,8 @@ export function word(t: Dictionary, finding: Finding): Worded {
     default:
       return (
         (finding.code.startsWith("gap.") ? wordGap(t, finding, kind) : null) ??
-        (finding.code.startsWith("quality.") ? wordQuality(t, finding) : null) ?? {
+        (finding.code.startsWith("quality.") ? wordQuality(t, finding) : null) ??
+        (finding.code.startsWith("evolution.") ? wordEvolution(t, finding) : null) ?? {
           title: finding.statement,
           detail: null,
         }
@@ -216,8 +295,14 @@ export function word(t: Dictionary, finding: Finding): Worded {
 /** Where a finding's subject is shown: an entity's sheet, a source's page
  * — or, for a family of sources not connected, the sources, to connect one.
  * A context has no page of its own. */
-function hrefOf(finding: Finding): string | null {
+export function hrefOf(finding: Finding): string | null {
   const subject = finding.subject;
+  // What the model's course says of the whole (LEKA-383): the quality an
+  // area lost is the Qualité view's; what the architecture did, Activité's.
+  if (finding.code === "evolution.quality_fell" && subject.type !== "entity") {
+    return `${routes.environment()}?tab=quality`;
+  }
+  if (subject.type === "workspace" && finding.category === "evolution") return routes.activity();
   if (subject.type === "coverage") return routes.sources();
   if (subject.type === "source") return subject.id ? routes.source(subject.id) : null;
   if (subject.type !== "entity" || !subject.id || !subject.kind) return null;

@@ -60,19 +60,19 @@ goes under `app/(auth)/` instead.
 ## The navigation (LEKA-428)
 
 Three pillars — what a customer does with LEKA — each with the sentence that
-says what it is for, and its pages under it; two lines across all three; and
-Administration:
+says what it is for, and its pages under it; and Administration. À valider
+sits with the intentions, Activité with the environment (2026-10-07); a
+folded section shows what waits in it:
 
 ```
-Vue d'ensemble
+Mon Dashboard
 Intentions            Dites à LEKA ce que vous voulez accomplir.
-  Nouvelle intention · Mes intentions
+  Nouvelle intention · Mes intentions · À valider
 Mon environnement     Le système vivant de votre entreprise.
   Vue globale · Applications · Infrastructure · Données · Dépendances
-  · Équipes · Événements · Domaines
+  · Équipes · Événements · Domaines · Qualité · Activité
 Capacités             Votre équipe technologique à la demande.
   Capacités disponibles · Mes capacités · Configuration
-Activité · À valider
 Administration
   Sources · Sécurité & gouvernance · Équipe & accès · Facturation · Paramètres
 ```

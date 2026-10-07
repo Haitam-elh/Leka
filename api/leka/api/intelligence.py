@@ -61,6 +61,12 @@
     GET  /intelligence/quality/scores/{key}  one: its factors, where it was
                                          read, its history
 
+    GET  /intelligence/activity          what happened and what LEKA did over
+                                         a period (LEKA-383): counts against
+                                         the period before, day by day, the
+                                         latest, what concerned most, who
+                                         decided most
+
 Read by every member (`workspace:read`), like the company model they are
 drawn from. Asking for a run is asking LEKA something, like an intention:
 `intention:create`, refused to a suspended workspace. Deciding what goes
@@ -86,6 +92,9 @@ from leka.core.errors import ErrorCode
 from leka.db import SortableField
 from leka.governance import Permission, Principal, require_permission
 from leka.intelligence import (
+    ActivityRead,
+    ActivityRepository,
+    ActivityService,
     AnalysisRequest,
     AnalysisRequested,
     AnalyzerRead,
@@ -135,13 +144,17 @@ from leka.intelligence import (
     conflict_reads,
     quality_reads,
 )
+from leka.intelligence.activity import MAX_LATEST
 from leka.intelligence.job import queue_run
 from leka.knowledge import (
     AssertionRepository,
     EntityRepository,
+    EvolutionRepository,
     GraphRepository,
     GraphService,
+    days_between,
     queue_model_build,
+    zone,
 )
 
 router = APIRouter(prefix="/intelligence", tags=["intelligence"])
@@ -748,3 +761,40 @@ async def quality_score(key: str, service: Measuring) -> KnowledgeQualityDetail:
     if found is None:
         raise _missing("quality score")
     return found
+
+
+# ── the activity (LEKA-383) ─────────────────────────────────────────────────
+
+MAX_ACTIVITY_DAYS = 90
+
+
+@router.get("/activity", response_model=ActivityRead)
+async def activity(
+    session: SessionDep,
+    principal: Reader,
+    days: Annotated[
+        int, Query(ge=1, le=MAX_ACTIVITY_DAYS, description="The period: so many days.")
+    ] = 7,
+    timezone: Annotated[
+        str | None, Query(max_length=64, description="The days' zone, IANA: Europe/Paris. UTC.")
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_LATEST, description="The latest, at most.")] = 20,
+) -> ActivityRead:
+    """What happened in the environment and what LEKA did over the last
+    `days` — the model built, the systems' events, the analyses, what they
+    raised and proposed, the decisions — counted against the period before,
+    day by day in the reader's zone; the latest; the services and
+    applications most concerned; who decided most."""
+    until = datetime.now(UTC)
+    since = until - timedelta(days=days)
+    tz = zone(timezone)
+    return await ActivityService(
+        ActivityRepository(session, principal.workspace_id),
+        EvolutionRepository(session, principal.workspace_id),
+    ).read(
+        since=since,
+        until=until,
+        tz=tz,
+        days=days_between(since, until, tz),
+        limit=limit,
+    )

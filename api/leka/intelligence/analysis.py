@@ -55,6 +55,7 @@ from leka.knowledge import (
     Dispute,
     EntityBrief,
     EntityStanding,
+    EvolutionMaterial,
 )
 
 
@@ -68,6 +69,8 @@ class Reads(enum.StrEnum):
     # What the model's sources disagree on, and the workspace's authority
     # rules (LEKA-382).
     CONFLICTS = "conflicts"
+    # The model's recent course: what changed, came, went (LEKA-383).
+    EVOLUTION = "evolution"
 
 
 class Method(enum.StrEnum):
@@ -230,6 +233,23 @@ class QualityScore:
 
 
 @dataclass(frozen=True)
+class QualityMove:
+    """How far an area's knowledge quality went over the evolution window
+    (LEKA-383): where it stood then, where it stands — read with the
+    model's recent course."""
+
+    key: str
+    scope: str
+    subject: Subject
+    column: str | None
+    before: float
+    after: float
+    level_before: str
+    level_after: str
+    since: datetime
+
+
+@dataclass(frozen=True)
 class ContextStanding:
     """Where one context stands: what it is, whether it follows the model,
     how far behind, how good its latest version was judged."""
@@ -273,6 +293,10 @@ class Material:
     authority: tuple[Authority, ...] = ()
     contexts: tuple[ContextStanding, ...] | None = None
     changes: tuple[ChangeFootprint, ...] | None = None
+    evolution: EvolutionMaterial | None = None
+    # And, read with it, how far each area's quality went (LEKA-381's
+    # history).
+    quality_moves: tuple[QualityMove, ...] = ()
 
     def has(self, reads: Reads) -> bool:
         if reads is Reads.MODEL:
@@ -281,6 +305,8 @@ class Material:
             return self.changes is not None
         if reads is Reads.CONFLICTS:
             return self.disputes is not None
+        if reads is Reads.EVOLUTION:
+            return self.evolution is not None
         return self.contexts is not None
 
 

@@ -28,6 +28,10 @@ fact too: the value kept, which the sources' disagreement no longer
 marks `disputed` — or, for a relationship a thing has one of, the others
 refuted (`absence`): the build leaves them out, whoever states them.
 
+WHAT WAS RESTORED (LEKA-383). An attribute someone put back as one of the
+entity's versions said it is a validated fact over the sources, its
+operation kept in provenance (`operation_id`) until it is undone.
+
 LIFECYCLE. `archived` when its source says so — or its catalogue says it is
 retired, its provider that it is terminated or deleted; `dormant` when
 enrichment finds nothing done to it for 180 days; `removed` when no source
@@ -211,7 +215,7 @@ class Assertion:
 
 
 # What an applied fact's provenance keeps of its decision.
-DECISION = ("candidate_id", "conflict_id", "decided_via", "decided_at")
+DECISION = ("candidate_id", "conflict_id", "operation_id", "decided_via", "decided_at")
 # Which of two links between the same ends of the same kind is kept.
 ORIGIN_RANK = {"stated": 2, "accepted": 1, "inferred": 0}
 

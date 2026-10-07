@@ -123,10 +123,9 @@ describe("the three pillars", () => {
     await renderSidebar();
 
     expect(visibleLabels()).toEqual([
-      "Vue d'ensemble",
+      "Mon Dashboard",
       "Nouvelle intention",
       "Mes intentions",
-      "Activité",
       "À valider",
     ]);
     for (const id of ["environment", "capabilities", "administration"]) {
@@ -143,9 +142,10 @@ describe("the three pillars", () => {
     }
 
     expect(visibleLabels()).toEqual([
-      "Vue d'ensemble",
+      "Mon Dashboard",
       "Nouvelle intention",
       "Mes intentions",
+      "À valider",
       "Vue globale",
       "Applications",
       "Infrastructure",
@@ -155,11 +155,10 @@ describe("the three pillars", () => {
       "Événements",
       "Domaines",
       "Qualité",
+      "Activité",
       "Capacités disponibles",
       "Mes capacités",
       "Configuration",
-      "Activité",
-      "À valider",
       "Sources",
       "Sécurité & gouvernance",
       "Équipe & accès",
@@ -321,6 +320,23 @@ describe("a count beside an entry", () => {
 
     expect(screen.getByTestId("nav-approvals")).not.toHaveTextContent("0");
   });
+
+  it("sits under Intentions, and is said by the section when it is folded", async () => {
+    const user = userEvent.setup();
+    await renderSidebar({ badges: { approvals: 3 } });
+
+    const lines = document.getElementById(
+      sectionToggle("intentions").getAttribute("aria-controls") ?? "",
+    );
+    expect(within(lines as HTMLElement).getByTestId("nav-approvals")).toBeVisible();
+    // Open, the line carries it; folded, the section does.
+    expect(screen.queryByTestId("nav-section-intentions-badge")).not.toBeInTheDocument();
+    await user.click(sectionToggle("intentions"));
+    expect(screen.getByTestId("nav-section-intentions-badge")).toHaveTextContent("3");
+    expect(sectionToggle("intentions")).toHaveAccessibleName(
+      expect.stringContaining("3 éléments en attente"),
+    );
+  });
 });
 
 describe("availability", () => {
@@ -361,7 +377,6 @@ describe("folding the sidebar", () => {
     await renderSidebar({ collapsed: true });
 
     expect(screen.getByRole("link", { name: fr.nav.overview })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: fr.nav.activity })).toBeInTheDocument();
     for (const id of ["intentions", "environment", "capabilities", "administration"]) {
       expect(sectionToggle(id)).toHaveAccessibleName(
         fr.nav[id as "intentions" | "environment" | "capabilities" | "administration"],
@@ -384,7 +399,23 @@ describe("folding the sidebar", () => {
     const data = within(menu).getByRole("menuitem", { name: "Données" });
     expect(data).toHaveAttribute("href", "/environment?tab=data");
     expect(data).toHaveAttribute("aria-current", "page");
-    expect(within(menu).getAllByRole("menuitem")).toHaveLength(9);
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(10);
+    // What happened in the environment is one of its lines (2026-10-07).
+    expect(within(menu).getByRole("menuitem", { name: "Activité" })).toHaveAttribute(
+      "href",
+      "/activity",
+    );
+  });
+
+  it("says on the rail what waits in a section, and in its menu", async () => {
+    const user = userEvent.setup();
+    await renderSidebar({ collapsed: true, badges: { approvals: 3 } });
+
+    const intentions = sectionToggle("intentions");
+    expect(intentions).toHaveAccessibleName(`${fr.nav.intentions}, 3 éléments en attente`);
+    await user.click(intentions);
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: /À valider/ })).toHaveTextContent("3");
   });
 });
 

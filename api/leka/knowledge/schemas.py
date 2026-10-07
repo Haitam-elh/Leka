@@ -8,7 +8,7 @@ docs/adr/003-entity-model.md.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
@@ -1668,3 +1668,276 @@ class KnowledgeCoverageRead(BaseModel):
     built_at: datetime | None
     kinds: list[KindCoverageRead]
     sources: list[ViewSourceRead]
+
+
+# ── the model's course (LEKA-383) ────────────────────────────────────────────
+
+
+class FieldChange(BaseModel):
+    """One field a version changed: "name", "lifecycle", "attributes.<name>"."""
+
+    model_config = ConfigDict(frozen=True)
+
+    field: str
+    before: JsonValue = None
+    after: JsonValue = None
+
+
+class EntityChangeRead(BaseModel):
+    """One version an entity recorded, against the one before."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    entity_id: uuid.UUID
+    entity: EntityBrief | None = Field(description="The entity as it is now.")
+    name: str = Field(description="Its name at this version.")
+    version: int
+    change: Literal["created", "changed", "removed", "returned"] = Field(
+        description="created: its first version; removed: no source shows it any more; "
+        "returned: shown again after that; changed: anything else."
+    )
+    fields: list[FieldChange] = Field(description="What changed; none for its first version.")
+    recorded_at: datetime
+    run_id: uuid.UUID | None
+
+
+class EvolutionCounts(BaseModel):
+    """What changed over a period."""
+
+    model_config = ConfigDict(frozen=True)
+
+    created: int = 0
+    changed: int = 0
+    removed: int = 0
+    returned: int = 0
+    relationships_added: int = 0
+    relationships_changed: int = 0
+    relationships_removed: int = 0
+
+
+class EvolutionBucket(EvolutionCounts):
+    """What changed on one day, in the reader's time zone."""
+
+    day: date
+
+
+class EvolutionSummary(BaseModel):
+    """What changed day by day over a period, and over the period before."""
+
+    model_config = ConfigDict(frozen=True)
+
+    since: datetime
+    until: datetime
+    timezone: str
+    buckets: list[EvolutionBucket]
+    totals: EvolutionCounts
+    previous: EvolutionCounts = Field(
+        description="The same counts over the period just before, as long."
+    )
+
+
+class SnapshotKind(BaseModel):
+    """How well the model knew one kind, then."""
+
+    model_config = ConfigDict(frozen=True)
+
+    type: str
+    total: int
+    owned: int | None = None
+    documented: int | None = None
+    corroborated: int | None = Field(
+        default=None, description="Said by two sources or more; unknown when rebuilt."
+    )
+    connected: int = 0
+
+
+class SnapshotRead(BaseModel):
+    """What the company model held at one moment."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID | None = Field(description="None: rebuilt now from the history, not kept.")
+    built_at: datetime
+    run_id: uuid.UUID | None
+    reconstructed: bool = Field(
+        description="Rebuilt from the history rather than written by a build."
+    )
+    types: dict[str, int] = Field(description="How many of each kind, the removed left out.")
+    lifecycles: dict[str, int]
+    relationships: dict[str, int]
+    kinds: list[SnapshotKind]
+
+
+class RelationshipAtRead(BaseModel):
+    """A relationship as it stood at a moment, seen from one of its ends."""
+
+    model_config = ConfigDict(frozen=True)
+
+    type: str
+    direction: Literal["outgoing", "incoming"]
+    other: EntityBrief | None
+    origin: str | None
+    confidence: float | None
+
+
+class EntityAtRead(BaseModel):
+    """An entity as it was at a moment."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    moment: datetime
+    existed: bool = Field(description="Known to the model, and not removed, then.")
+    version: EntityChangeRead | None = Field(description="The version in force then.")
+    content: dict[str, object] | None = Field(description="{name, attributes, lifecycle} then.")
+    relationships: list[RelationshipAtRead]
+    complete: bool = Field(
+        description="The relationships' history reaches that far: false, they may have been "
+        "otherwise."
+    )
+
+
+OperationKind = Literal["restore", "rebuild"]
+OperationStatus = Literal["queued", "applied", "done", "failed", "undone"]
+
+
+class OperationRead(BaseModel):
+    """A controlled change to the model's course: who asked, when, why,
+    what came of it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    kind: OperationKind
+    status: OperationStatus
+    entity_id: uuid.UUID | None
+    entity_name: str | None
+    entity: EntityBrief | None = None
+    version: int | None = Field(description="A restore: the version put back.")
+    detail: dict[str, object] = Field(
+        description="A restore: {attributes: {name: {before, after}}, not_restored, "
+        "from_version}. A rebuild: {counts} — or {error}."
+    )
+    reason: str | None
+    requested_by: uuid.UUID | None
+    created_at: datetime
+    finished_at: datetime | None
+    run_id: uuid.UUID | None = Field(description="A rebuild: the build that did it.")
+    undone_by: uuid.UUID | None
+    undone_at: datetime | None
+
+
+class EntityHistoryRead(BaseModel):
+    """An entity's whole course."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: EntityBrief
+    versions: list[EntityChangeRead] = Field(description="The latest first.")
+    relationships: list[RelationshipChangeRead] = Field(
+        description="Its relationships that appeared, changed or went, the latest first."
+    )
+    operations: list[OperationRead]
+    horizon: datetime | None = Field(
+        description="How far the relationships' history goes back; none: all of it."
+    )
+
+
+class RestoreRequest(BaseModel):
+    """Put an entity's attributes back as a version said them."""
+
+    version: int = Field(ge=1)
+    attributes: list[str] | None = Field(
+        default=None, max_length=100, description="Those to restore; none: every one."
+    )
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class RebuildRequest(BaseModel):
+    """Build the model again."""
+
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class UndoRequest(BaseModel):
+    """Take an operation back."""
+
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class EvolvedEntity(BaseModel):
+    """A thing the model's recent course names, as it is now: what its
+    insights weigh it by (LEKA-383)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    type: str
+    name: str
+    lifecycle: str
+    criticality: str | None
+    dependents: int = Field(description="What depends on it now.")
+    dependencies: int = Field(description="What it depends on now.")
+    owners: list[str] = Field(description="Who owns it now, by name.")
+
+
+class EvolvedVersion(BaseModel):
+    """A version recorded in the window."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    entity_id: uuid.UUID
+    version: int
+    change: Literal["created", "changed", "removed", "returned"]
+    fields: list[str]
+    recorded_at: datetime
+    run_id: uuid.UUID | None
+
+
+class EvolvedTie(BaseModel):
+    """A relationship change recorded in the window."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    type: str
+    change: Literal["added", "changed", "removed"]
+    from_id: uuid.UUID
+    to_id: uuid.UUID
+    recorded_at: datetime
+    run_id: uuid.UUID | None
+
+
+class EvolvedIncident(BaseModel):
+    """An incident of the longer window, and what it affected."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    name: str
+    occurred_at: datetime
+    severity: str | None
+    affects: list[uuid.UUID]
+
+
+class EvolutionMaterial(BaseModel):
+    """The model's recent course, as its insights read it (LEKA-383): the
+    versions and relationship changes since `since`, the incidents since
+    `incidents_since`, and every thing they name as it is now. Facts only —
+    what they mean is judged elsewhere (leka.intelligence)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    since: datetime
+    incidents_since: datetime
+    until: datetime
+    began_at: datetime | None = Field(
+        description="When the model's history began: its first build, which made everything."
+    )
+    versions: list[EvolvedVersion]
+    ties: list[EvolvedTie]
+    incidents: list[EvolvedIncident]
+    entities: dict[uuid.UUID, EvolvedEntity]
+    truncated: bool = Field(description="More happened than was read.")

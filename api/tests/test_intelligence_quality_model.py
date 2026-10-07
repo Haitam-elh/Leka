@@ -199,7 +199,10 @@ async def test_a_run_keeps_each_score_and_its_history_only_when_it_moves(
                 .values(last_seen_at=NOW, quality=0.9, confidence=1.0)
             )
             await session.commit()
-    later = NOW + timedelta(minutes=5)
+    # After the runs above, on their own clock: NOW is this module's import
+    # time, which a long suite leaves minutes behind (LEKA-383 added tests
+    # before it).
+    later = datetime.now(UTC).replace(microsecond=0) + timedelta(minutes=5)
     await _analysed(workspace, now=later)
     moved = (await _rows(workspace))[orphan.key]
     assert moved.score > orphan.score

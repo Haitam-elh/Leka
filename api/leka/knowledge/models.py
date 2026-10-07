@@ -379,6 +379,8 @@ class EntityVersion(Base, WorkspaceScopedMixin):
             ondelete="CASCADE",
         ),
         UniqueConstraint("entity_id", "version", name="uq_entity_versions_entity_version"),
+        # What changed over time, workspace-wide (LEKA-383).
+        Index("ix_entity_versions_workspace_recorded", "workspace_id", "recorded_at"),
     )
 
     entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -477,3 +479,75 @@ class ModelAssertion(Base, WorkspaceScopedMixin):
     provenance: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, server_default="{}"
     )
+
+
+OPERATION_KINDS = ("restore", "rebuild")
+OPERATION_STATUSES = ("queued", "applied", "done", "failed", "undone")
+
+
+class ModelSnapshot(Base, WorkspaceScopedMixin):
+    """What the company model held at one moment (LEKA-383): how many of each
+    kind, in each lifecycle, how many relationships of each kind, and how
+    well each kind is known — what its course over time is drawn from.
+    Written by a build that changed something, or the first of a day; kept
+    SNAPSHOT_DAYS, the latest always."""
+
+    __tablename__ = "model_snapshots"
+    __table_args__ = (Index("ix_model_snapshots_workspace_built", "workspace_id", "built_at"),)
+
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("model_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    built_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Rebuilt from the history (entity_versions, relationship_changes) rather
+    # than written by a build: what the history says, without what it does
+    # not keep — how many sources said each thing.
+    reconstructed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # {types: {type: n}, lifecycles: {state: n}, relationships: {type: n}}
+    counts: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # {type: {total, owned, documented, corroborated, connected}}: the
+    # coverage of each kind (GET /knowledge/coverage), then.
+    measures: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+class ModelOperation(Base, WorkspaceScopedMixin):
+    """A controlled change to the model's course (LEKA-383), asked by someone
+    and kept: who, when, why, what came of it.
+
+    restore   an entity's attributes put back as one of its versions said
+              them: validated facts (model_assertions, provenance
+              `operation_id`) the next build applies — `applied`, then
+              `undone` when someone takes it back
+    rebuild   the model built again from what it is made of, though nothing
+              new came: `queued`, then `done` with the run that did it —
+              or `failed`, and why"""
+
+    __tablename__ = "model_operations"
+    __table_args__ = (
+        CheckConstraint("kind IN ('restore', 'rebuild')", name="kind"),
+        CheckConstraint(
+            "status IN ('queued', 'applied', 'done', 'failed', 'undone')",
+            name="status",
+        ),
+        Index("ix_model_operations_workspace_created", "workspace_id", "created_at"),
+    )
+
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    entity_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # A restore: {attributes: {name: {before, after}}} — what the model
+    # said, what it says again. A rebuild: what the build did (its counts),
+    # or its error.
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    undone_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    undone_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

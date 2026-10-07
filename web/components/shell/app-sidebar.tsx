@@ -251,6 +251,7 @@ function NavigationTree({
                   key={node.id}
                   section={node}
                   activeLeaf={activeLeaf}
+                  badges={badges}
                   onNavigate={onNavigate}
                   container={container}
                 />

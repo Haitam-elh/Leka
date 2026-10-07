@@ -1,7 +1,7 @@
 """Intention analyses: what answered an intention, run on its context.
 
 Revision ID: 5e7b2c9d4a61
-Revises: 8b4f1d6a2c97
+Revises: 9c4e2a7d5b13
 Created: 2026-10-08
 
 LEKA-388. Each analysis of an intention is kept (`intention_analyses`): the
@@ -20,7 +20,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "5e7b2c9d4a61"
-down_revision: str | None = "8b4f1d6a2c97"
+down_revision: str | None = "9c4e2a7d5b13"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

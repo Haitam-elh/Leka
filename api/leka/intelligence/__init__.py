@@ -17,14 +17,19 @@ validated or rejected, and applied to the model once validated
 model's sources disagree on, weighed and recommended, settled by someone
 (arbitration.py); knowledge quality (quality.py, LEKA-381): how complete,
 fresh, consistent and sure what LEKA knows is, each thing and each area,
-kept over time (measures.py). Model-assisted analyses are declared like the others and
-skipped, said so, until leka.capabilities calls a model.
+kept over time (measures.py); knowledge evolution (evolution.py, LEKA-383):
+what the model's recent course says — dependencies grown, owners lost,
+things gone that others relied on, incidents rising — and what happened,
+day by day, for Activité (activity.py). Model-assisted analyses are
+declared like the others and skipped, said so, until leka.capabilities
+calls a model.
 
 Above leka.capabilities, which a model-assisted analysis will call the
 model through, and leka.context; below leka.intentions, which reads what it
 concluded through this file (architecture rule 1).
 """
 
+from leka.intelligence.activity import ActivityService
 from leka.intelligence.analysis import (
     Analyzer,
     Authority,
@@ -68,6 +73,7 @@ from leka.intelligence.models import (
     QualityScoreRow,
 )
 from leka.intelligence.repository import (
+    ActivityRepository,
     CandidateFilters,
     ConflictFilters,
     FindingFilters,
@@ -77,6 +83,7 @@ from leka.intelligence.repository import (
 )
 from leka.intelligence.rules import ANALYZERS, analyzer_named
 from leka.intelligence.schemas import (
+    ActivityRead,
     AnalysisRequest,
     AnalysisRequested,
     AnalyzerRead,
@@ -114,6 +121,9 @@ from leka.intelligence.service import IntelligenceService, UnknownAnalyzerError
 
 __all__ = [
     "ANALYZERS",
+    "ActivityRead",
+    "ActivityRepository",
+    "ActivityService",
     "AnalysisRequest",
     "AnalysisRequested",
     "Analyzer",

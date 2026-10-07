@@ -14,7 +14,7 @@ import uuid
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, cast
 
 from sqlalchemy import (
@@ -50,7 +50,9 @@ from leka.knowledge.models import (
     EntityVersion,
     Lifecycle,
     ModelAssertion,
+    ModelOperation,
     ModelRun,
+    ModelSnapshot,
     Relationship,
     RelationshipChange,
     RelationshipIssue,
@@ -455,6 +457,29 @@ class AssertionRepository(WorkspaceScopedRepository):
         )
         return int(cast("CursorResult[Any]", result).rowcount or 0)
 
+    async def remove_for_operation(self, operation_id: uuid.UUID) -> int:
+        """Every fact a restore made (LEKA-383), withdrawn."""
+        result = await self._session.execute(
+            delete(ModelAssertion).where(
+                ModelAssertion.workspace_id == self.workspace_id,
+                ModelAssertion.provenance["operation_id"].astext == str(operation_id),
+            )
+        )
+        return int(cast("CursorResult[Any]", result).rowcount or 0)
+
+    async def remove_restores(self, entity_id: uuid.UUID, attribute: str) -> int:
+        """What an earlier restore said of this attribute: a newer one
+        replaces it (LEKA-383)."""
+        result = await self._session.execute(
+            delete(ModelAssertion).where(
+                ModelAssertion.workspace_id == self.workspace_id,
+                ModelAssertion.entity_id == entity_id,
+                ModelAssertion.attribute == attribute,
+                ModelAssertion.provenance["operation_id"].astext.is_not(None),
+            )
+        )
+        return int(cast("CursorResult[Any]", result).rowcount or 0)
+
     async def remove(self, fact_id: uuid.UUID) -> bool:
         """Withdrawn: the next build no longer applies it."""
         result = await self._session.execute(
@@ -523,6 +548,30 @@ class ModelSweeper:
             delete(RelationshipChange).where(RelationshipChange.recorded_at < before)
         )
         return int(cast("CursorResult[Any]", result).rowcount or 0)
+
+    async def prune_snapshots(self, *, before: datetime) -> int:
+        """The snapshots taken before `before` (LEKA-383) — never a
+        workspace's latest."""
+        latest = (
+            select(ModelSnapshot.id)
+            .distinct(ModelSnapshot.workspace_id)
+            .order_by(ModelSnapshot.workspace_id, ModelSnapshot.built_at.desc())
+        )
+        result = await self._session.execute(
+            delete(ModelSnapshot).where(
+                ModelSnapshot.built_at < before, ModelSnapshot.id.not_in(latest)
+            )
+        )
+        return int(cast("CursorResult[Any]", result).rowcount or 0)
+
+    async def rebuilds(self) -> set[uuid.UUID]:
+        """The workspaces someone asked to rebuild, not built since."""
+        rows = await self._session.execute(
+            select(ModelOperation.workspace_id)
+            .where(ModelOperation.kind == "rebuild", ModelOperation.status == "queued")
+            .distinct()
+        )
+        return set(rows.scalars().all())
 
     async def prune(self, *, before: datetime) -> int:
         """Finished runs started before `before` — never a workspace's last
@@ -2381,3 +2430,552 @@ def _stamp(moment: datetime) -> str:
     """A date as normalisation writes them: `2026-09-20T08:00:00Z` — text
     that compares as dates."""
     return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# ── the model's course (LEKA-383) ─────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class EvolutionFilters:
+    """What a list of the entities' versions is narrowed to: an entity, a
+    kind of thing, what the version was, when."""
+
+    entity_id: uuid.UUID | None = None
+    type: EntityType | None = None
+    change: str | None = None
+    since: datetime | None = None
+    until: datetime | None = None
+
+
+@dataclass(frozen=True)
+class OperationFilters:
+    kind: str | None = None
+    status: str | None = None
+    entity_id: uuid.UUID | None = None
+
+
+# What a version was, in SQL: its first, the thing removed, back — or
+# changed. `p` is the version before.
+_VERSION_KIND = """
+    CASE
+      WHEN v.version = 1 OR p.id IS NULL THEN 'created'
+      WHEN v.content ->> 'lifecycle' = 'removed'
+           AND p.content ->> 'lifecycle' IS DISTINCT FROM 'removed' THEN 'removed'
+      WHEN p.content ->> 'lifecycle' = 'removed'
+           AND v.content ->> 'lifecycle' IS DISTINCT FROM 'removed' THEN 'returned'
+      ELSE 'changed'
+    END
+"""
+
+
+class EvolutionRepository(EntityRepository):
+    """The model's course: its versions and relationship changes over time,
+    its snapshots, the operations on it."""
+
+    async def entity(self, entity_id: uuid.UUID) -> Entity | None:
+        return await self.get(Entity, entity_id)
+
+    def entity_changes(self, filters: EvolutionFilters) -> Select[tuple[EntityVersion]]:
+        """The entities' versions, for a page: of an entity, of a kind, of a
+        kind of change, between those dates."""
+        f = filters
+        statement = self.select(EntityVersion)
+        if f.entity_id is not None:
+            statement = statement.where(EntityVersion.entity_id == f.entity_id)
+        if f.type is not None:
+            statement = statement.where(
+                EntityVersion.entity_id.in_(
+                    select(Entity.id).where(
+                        Entity.workspace_id == self.workspace_id, Entity.type == f.type
+                    )
+                )
+            )
+        if f.since is not None:
+            statement = statement.where(EntityVersion.recorded_at >= f.since)
+        if f.until is not None:
+            statement = statement.where(EntityVersion.recorded_at < f.until)
+        if f.change is not None:
+            before = aliased(EntityVersion)
+            lifecycle = EntityVersion.content["lifecycle"].astext
+            then = before.content["lifecycle"].astext
+            prior = exists().where(
+                before.workspace_id == self.workspace_id,
+                before.entity_id == EntityVersion.entity_id,
+                before.version == EntityVersion.version - 1,
+            )
+            removed = Lifecycle.REMOVED.value
+            if f.change == "created":
+                condition: ColumnElement[bool] = or_(EntityVersion.version == 1, ~prior)
+            elif f.change == "removed":
+                condition = and_(
+                    EntityVersion.version > 1,
+                    lifecycle == removed,
+                    prior.where(then.is_distinct_from(removed)),
+                )
+            elif f.change == "returned":
+                condition = and_(
+                    EntityVersion.version > 1,
+                    lifecycle.is_distinct_from(removed),
+                    prior.where(then == removed),
+                )
+            else:
+                condition = and_(
+                    EntityVersion.version > 1,
+                    prior.where(
+                        or_(
+                            and_(lifecycle == removed, then == removed),
+                            and_(
+                                lifecycle.is_distinct_from(removed),
+                                then.is_distinct_from(removed),
+                            ),
+                        )
+                    ),
+                )
+            statement = statement.where(condition)
+        return statement
+
+    async def previous_contents(
+        self, versions: Sequence[EntityVersion]
+    ) -> dict[tuple[uuid.UUID, int], dict[str, object]]:
+        """What each of these versions' predecessors said."""
+        wanted = {(v.entity_id, v.version - 1) for v in versions if v.version > 1}
+        if not wanted:
+            return {}
+        rows = await self._session.execute(
+            select(EntityVersion.entity_id, EntityVersion.version, EntityVersion.content).where(
+                EntityVersion.workspace_id == self.workspace_id,
+                EntityVersion.entity_id.in_({entity for entity, _ in wanted}),
+                EntityVersion.version.in_({number for _, number in wanted}),
+            )
+        )
+        return {
+            (entity, number): dict(content or {})
+            for entity, number, content in rows.tuples().all()
+            if (entity, number) in wanted
+        }
+
+    async def daily(
+        self, *, since: datetime, until: datetime, tz: str
+    ) -> list[tuple[date, str, int]]:
+        """Day by day, in this zone: how many versions of each kind — created,
+        changed, removed, returned — and relationship changes of each kind
+        were recorded."""
+        rows = await self._session.execute(
+            text(
+                f"""
+                SELECT (v.recorded_at AT TIME ZONE :tz)::date AS day,
+                       {_VERSION_KIND} AS kind, count(*)
+                FROM entity_versions v
+                LEFT JOIN entity_versions p
+                  ON p.workspace_id = v.workspace_id AND p.entity_id = v.entity_id
+                 AND p.version = v.version - 1
+                WHERE v.workspace_id = :workspace
+                  AND v.recorded_at >= :since AND v.recorded_at < :until
+                GROUP BY 1, 2
+                UNION ALL
+                SELECT (c.recorded_at AT TIME ZONE :tz)::date,
+                       'relationships_' || c.change, count(*)
+                FROM relationship_changes c
+                WHERE c.workspace_id = :workspace
+                  AND c.recorded_at >= :since AND c.recorded_at < :until
+                GROUP BY 1, 2
+                """  # noqa: S608 — _VERSION_KIND is this module's own text
+            ),
+            {"workspace": self.workspace_id, "since": since, "until": until, "tz": tz},
+        )
+        return [(day, str(kind), int(n)) for day, kind, n in rows.tuples().all()]
+
+    async def version_at(self, entity_id: uuid.UUID, moment: datetime) -> EntityVersion | None:
+        """The version in force at a moment: the latest recorded by then."""
+        found = await self._session.execute(
+            self.select(EntityVersion)
+            .where(EntityVersion.entity_id == entity_id, EntityVersion.recorded_at <= moment)
+            .order_by(EntityVersion.version.desc())
+            .limit(1)
+        )
+        return found.scalar_one_or_none()
+
+    async def version_number(self, entity_id: uuid.UUID, version: int) -> EntityVersion | None:
+        found = await self._session.execute(
+            self.select(EntityVersion).where(
+                EntityVersion.entity_id == entity_id, EntityVersion.version == version
+            )
+        )
+        return found.scalar_one_or_none()
+
+    async def edges_touching(self, entity_id: uuid.UUID) -> Sequence[Relationship]:
+        return await self.list(
+            self.select(Relationship).where(
+                or_(
+                    Relationship.from_entity_id == entity_id,
+                    Relationship.to_entity_id == entity_id,
+                )
+            )
+        )
+
+    async def edge_keys(self) -> list[tuple[uuid.UUID, uuid.UUID, str]]:
+        """Every relationship now, by its ends and its kind."""
+        rows = await self._session.execute(
+            select(Relationship.from_entity_id, Relationship.to_entity_id, Relationship.type).where(
+                Relationship.workspace_id == self.workspace_id
+            )
+        )
+        return [(a, b, kind.value) for a, b, kind in rows.tuples().all()]
+
+    async def changes_after(
+        self, moment: datetime, *, entity_id: uuid.UUID | None = None
+    ) -> Sequence[RelationshipChange]:
+        """The relationship changes recorded after a moment, the latest
+        first — touching an entity, when one is named."""
+        statement = self.select(RelationshipChange).where(RelationshipChange.recorded_at > moment)
+        if entity_id is not None:
+            statement = statement.where(
+                or_(
+                    RelationshipChange.from_entity_id == entity_id,
+                    RelationshipChange.to_entity_id == entity_id,
+                )
+            )
+        return await self.list(
+            statement.order_by(RelationshipChange.recorded_at.desc(), RelationshipChange.id.desc())
+        )
+
+    async def changes_touching(
+        self, entity_id: uuid.UUID, *, limit: int
+    ) -> Sequence[RelationshipChange]:
+        return await self.list(
+            self.select(RelationshipChange)
+            .where(
+                or_(
+                    RelationshipChange.from_entity_id == entity_id,
+                    RelationshipChange.to_entity_id == entity_id,
+                )
+            )
+            .order_by(RelationshipChange.recorded_at.desc(), RelationshipChange.id.desc())
+            .limit(limit)
+        )
+
+    async def horizon(self) -> datetime | None:
+        """How far the relationships' history goes back: its oldest change
+        — when the oldest of them was pruned, nothing before it is known.
+        None when none was ever recorded."""
+        found = await self._session.scalar(
+            select(func.min(RelationshipChange.recorded_at)).where(
+                RelationshipChange.workspace_id == self.workspace_id
+            )
+        )
+        if not isinstance(found, datetime):
+            return None
+        first = await self._session.scalar(
+            select(func.min(EntityVersion.recorded_at)).where(
+                EntityVersion.workspace_id == self.workspace_id
+            )
+        )
+        # A history that starts with the model's first build is whole.
+        if isinstance(first, datetime) and found <= first:
+            return None
+        return found
+
+    async def things_at(self, moment: datetime) -> list[tuple[uuid.UUID, str, str, bool]]:
+        """Every entity as its version in force at a moment said it: its id,
+        its kind, its lifecycle then, whether it was a bot."""
+        rows = await self._session.execute(
+            text(
+                """
+                SELECT DISTINCT ON (v.entity_id)
+                       v.entity_id, e.type, v.content ->> 'lifecycle',
+                       coalesce(v.content -> 'attributes' ->> 'bot', '') = 'true'
+                FROM entity_versions v
+                JOIN entities e ON e.workspace_id = v.workspace_id AND e.id = v.entity_id
+                WHERE v.workspace_id = :workspace AND v.recorded_at <= :moment
+                ORDER BY v.entity_id, v.version DESC
+                """
+            ),
+            {"workspace": self.workspace_id, "moment": moment},
+        )
+        return [
+            (entity, str(kind), str(lifecycle or "active"), bool(bot))
+            for entity, kind, lifecycle, bot in rows.tuples().all()
+        ]
+
+    # The recent course, for the insights ────────────────────────────────
+
+    async def recorded_between(
+        self, *, since: datetime, until: datetime, limit: int
+    ) -> list[tuple[uuid.UUID, uuid.UUID, int, str, list[str], datetime, uuid.UUID | None]]:
+        """The versions recorded between two dates, the latest first: each,
+        its entity, its number, what it was, what it changed, when, by
+        which build."""
+        rows = await self._session.execute(
+            text(
+                f"""
+                SELECT v.id, v.entity_id, v.version, {_VERSION_KIND}, v.changed,
+                       v.recorded_at, v.run_id
+                FROM entity_versions v
+                LEFT JOIN entity_versions p
+                  ON p.workspace_id = v.workspace_id AND p.entity_id = v.entity_id
+                 AND p.version = v.version - 1
+                WHERE v.workspace_id = :workspace
+                  AND v.recorded_at >= :since AND v.recorded_at < :until
+                ORDER BY v.recorded_at DESC, v.id
+                LIMIT :limit
+                """  # noqa: S608 — _VERSION_KIND is this module's own text
+            ),
+            {"workspace": self.workspace_id, "since": since, "until": until, "limit": limit},
+        )
+        return [
+            (row, entity, int(number), str(kind), [str(c) for c in changed or []], at, run)
+            for row, entity, number, kind, changed, at, run in rows.tuples().all()
+        ]
+
+    async def began_at(self) -> datetime | None:
+        """When the model's history began: its first version recorded."""
+        found = await self._session.scalar(
+            select(func.min(EntityVersion.recorded_at)).where(
+                EntityVersion.workspace_id == self.workspace_id
+            )
+        )
+        return found if isinstance(found, datetime) else None
+
+    async def changes_between(
+        self, *, since: datetime, until: datetime, limit: int
+    ) -> Sequence[RelationshipChange]:
+        """The relationship changes recorded between two dates, the latest
+        first."""
+        return await self.list(
+            self.select(RelationshipChange)
+            .where(RelationshipChange.recorded_at >= since, RelationshipChange.recorded_at < until)
+            .order_by(RelationshipChange.recorded_at.desc(), RelationshipChange.id)
+            .limit(limit)
+        )
+
+    async def incidents_since(
+        self, since: datetime, *, limit: int
+    ) -> list[tuple[uuid.UUID, str, datetime, str | None, list[uuid.UUID]]]:
+        """The incidents that happened since a date, the latest first — not
+        removed — and what each affects."""
+        rows = await self._session.execute(
+            text(
+                """
+                SELECT e.id, e.name, e.occurred_at, e.attributes ->> 'severity',
+                       coalesce(array_agg(r.to_entity_id)
+                                FILTER (WHERE r.to_entity_id IS NOT NULL), '{}')
+                FROM entities e
+                LEFT JOIN relationships r
+                  ON r.workspace_id = e.workspace_id AND r.from_entity_id = e.id
+                 AND r.type = 'affects'
+                WHERE e.workspace_id = :workspace AND e.type = 'incident'
+                  AND e.lifecycle <> 'removed' AND e.occurred_at >= :since
+                GROUP BY e.id
+                ORDER BY e.occurred_at DESC, e.id
+                LIMIT :limit
+                """
+            ),
+            {"workspace": self.workspace_id, "since": since, "limit": limit},
+        )
+        return [
+            (row, name, at, severity, list(affects or []))
+            for row, name, at, severity, affects in rows.tuples().all()
+            if at is not None
+        ]
+
+    async def standing_of(
+        self, ids: Iterable[uuid.UUID]
+    ) -> dict[uuid.UUID, tuple[Entity, int, int, list[str]]]:
+        """These entities as they are now: each, how many things depend on
+        it, how many it depends on, who owns it by name."""
+        wanted = list(set(ids))
+        if not wanted:
+            return {}
+        entities = await self.by_ids(wanted)
+        counts = await self._session.execute(
+            text(
+                """
+                SELECT e.id,
+                  (SELECT count(*) FROM relationships r WHERE r.workspace_id = :workspace
+                     AND r.to_entity_id = e.id AND r.type = 'depends_on'),
+                  (SELECT count(*) FROM relationships r WHERE r.workspace_id = :workspace
+                     AND r.from_entity_id = e.id AND r.type = 'depends_on'),
+                  coalesce((SELECT array_agg(o.name ORDER BY o.name) FROM relationships r
+                     JOIN entities o ON o.workspace_id = r.workspace_id
+                      AND o.id = CASE WHEN r.type = 'owned_by' THEN r.to_entity_id
+                                      ELSE r.from_entity_id END
+                     WHERE r.workspace_id = :workspace
+                       AND ((r.type = 'owned_by' AND r.from_entity_id = e.id)
+                         OR (r.type = 'owns' AND r.to_entity_id = e.id))), '{}')
+                FROM entities e
+                WHERE e.workspace_id = :workspace AND e.id = ANY(:ids)
+                """
+            ),
+            {"workspace": self.workspace_id, "ids": wanted},
+        )
+        return {
+            row: (entities[row], int(dependents), int(dependencies), list(owners or []))
+            for row, dependents, dependencies, owners in counts.tuples().all()
+            if row in entities
+        }
+
+    async def events_between(
+        self, *, since: datetime, until: datetime, kinds: Sequence[EntityType], limit: int
+    ) -> list[tuple[Entity, list[uuid.UUID]]]:
+        """The events — incidents, deployments, changes, releases — that
+        happened between two dates, the latest first, not removed: each,
+        and what it affects or belongs to."""
+        found = await self.list(
+            self.select(Entity)
+            .where(
+                Entity.type.in_(list(kinds)),
+                Entity.lifecycle != Lifecycle.REMOVED,
+                Entity.occurred_at >= since,
+                Entity.occurred_at < until,
+            )
+            .order_by(Entity.occurred_at.desc(), Entity.id)
+            .limit(limit)
+        )
+        if not found:
+            return []
+        rows = await self._session.execute(
+            select(Relationship.from_entity_id, Relationship.to_entity_id).where(
+                Relationship.workspace_id == self.workspace_id,
+                Relationship.from_entity_id.in_([e.id for e in found]),
+                Relationship.type.in_(
+                    [
+                        RelationshipType.AFFECTS,
+                        RelationshipType.PART_OF,
+                        RelationshipType.DEPLOYED_TO,
+                    ]
+                ),
+            )
+        )
+        concerns: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)
+        for start, end in rows.tuples().all():
+            concerns[start].append(end)
+        return [(event, sorted(set(concerns.get(event.id, [])))) for event in found]
+
+    async def operations_between(
+        self, *, since: datetime, until: datetime
+    ) -> Sequence[ModelOperation]:
+        """The operations asked — or undone — between two dates."""
+        return await self.list(
+            self.select(ModelOperation).where(
+                or_(
+                    and_(ModelOperation.created_at >= since, ModelOperation.created_at < until),
+                    and_(ModelOperation.undone_at >= since, ModelOperation.undone_at < until),
+                )
+            )
+        )
+
+    async def things_now(self) -> list[tuple[uuid.UUID, str, str, bool, int]]:
+        """Every entity as the model holds it: its id, kind, lifecycle,
+        whether it is a bot, how many sources say it."""
+        rows = await self._session.execute(
+            text(
+                f"""
+                SELECT e.id, e.type, e.lifecycle,
+                       coalesce(e.attributes ->> 'bot', '') = 'true',
+                       (SELECT count(DISTINCT s ->> 'source_id') FROM {SOURCES})
+                FROM entities e
+                WHERE e.workspace_id = :workspace
+                """  # noqa: S608 — SOURCES is this module's own text
+            ),
+            {"workspace": self.workspace_id},
+        )
+        return [
+            (entity, str(kind), str(lifecycle), bool(bot), int(sources or 0))
+            for entity, kind, lifecycle, bot, sources in rows.tuples().all()
+        ]
+
+    # The snapshots ────────────────────────────────────────────────────────
+
+    async def put_snapshot(
+        self,
+        counts: dict[str, object],
+        measures: dict[str, Any],
+        *,
+        at: datetime,
+        run_id: uuid.UUID | None,
+        reconstructed: bool = False,
+    ) -> ModelSnapshot:
+        snapshot = ModelSnapshot(
+            run_id=run_id,
+            built_at=at,
+            reconstructed=reconstructed,
+            counts=counts,
+            measures=measures,
+        )
+        self.add(snapshot)
+        await self.flush()
+        return snapshot
+
+    async def latest_snapshot(self) -> ModelSnapshot | None:
+        found = await self._session.execute(
+            self.select(ModelSnapshot).order_by(ModelSnapshot.built_at.desc()).limit(1)
+        )
+        return found.scalar_one_or_none()
+
+    async def snapshot_at(self, moment: datetime) -> ModelSnapshot | None:
+        """The snapshot in force at a moment: the latest taken by then."""
+        found = await self._session.execute(
+            self.select(ModelSnapshot)
+            .where(ModelSnapshot.built_at <= moment)
+            .order_by(ModelSnapshot.built_at.desc())
+            .limit(1)
+        )
+        return found.scalar_one_or_none()
+
+    async def snapshots(
+        self, *, since: datetime | None, until: datetime | None, limit: int
+    ) -> Sequence[ModelSnapshot]:
+        """The snapshots between two dates, the oldest first — the latest
+        `limit` of them."""
+        statement = self.select(ModelSnapshot)
+        if since is not None:
+            statement = statement.where(ModelSnapshot.built_at >= since)
+        if until is not None:
+            statement = statement.where(ModelSnapshot.built_at < until)
+        found = await self.list(statement.order_by(ModelSnapshot.built_at.desc()).limit(limit))
+        return list(reversed(found))
+
+    # The operations ───────────────────────────────────────────────────────
+
+    async def add_operation(self, operation: ModelOperation) -> None:
+        operation.workspace_id = self.workspace_id
+        self.add(operation)
+        await self.flush()
+
+    async def operation(self, operation_id: uuid.UUID) -> ModelOperation | None:
+        return await self.get(ModelOperation, operation_id)
+
+    async def operations(
+        self, filters: OperationFilters, *, limit: int
+    ) -> Sequence[ModelOperation]:
+        """The operations, the latest first."""
+        statement = self.select(ModelOperation)
+        for column, value in (
+            (ModelOperation.kind, filters.kind),
+            (ModelOperation.status, filters.status),
+            (ModelOperation.entity_id, filters.entity_id),
+        ):
+            if value is not None:
+                statement = statement.where(column == value)
+        return await self.list(
+            statement.order_by(ModelOperation.created_at.desc(), ModelOperation.id).limit(limit)
+        )
+
+    async def operations_on(self, entity_id: uuid.UUID, *, limit: int) -> Sequence[ModelOperation]:
+        return await self.operations(OperationFilters(entity_id=entity_id), limit=limit)
+
+    async def queued_rebuild(self) -> ModelOperation | None:
+        found = await self._session.execute(
+            self.select(ModelOperation)
+            .where(ModelOperation.kind == "rebuild", ModelOperation.status == "queued")
+            .order_by(ModelOperation.created_at)
+            .limit(1)
+        )
+        return found.scalar_one_or_none()
+
+    async def queued_rebuilds(self) -> Sequence[ModelOperation]:
+        return await self.list(
+            self.select(ModelOperation).where(
+                ModelOperation.kind == "rebuild", ModelOperation.status == "queued"
+            )
+        )

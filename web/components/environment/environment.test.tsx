@@ -28,6 +28,8 @@ import type { Source } from "@/lib/sources";
 
 const api = { get: vi.fn(), sheet: vi.fn() };
 const sourcesApi = { list: vi.fn() };
+// A thing's course (LEKA-383): what a sheet the sources no longer fill reads.
+const courseApi = { history: vi.fn(), at: vi.fn() };
 const graphApi = { view: vi.fn(), architecture: vi.fn() };
 const pathname = { value: "/environment" };
 const params: { value: Record<string, string> } = { value: {} };
@@ -39,6 +41,16 @@ vi.mock("@/lib/environment", async (original) => ({
 vi.mock("@/lib/knowledge-graph", async (original) => ({
   ...(await original<typeof import("@/lib/knowledge-graph")>()),
   knowledgeGraph: graphApi,
+}));
+// Who reads a thing's course: a member, who may not restore.
+vi.mock("@/components/shell/shell-provider", async (original) => ({
+  ...(await original<typeof import("@/components/shell/shell-provider")>()),
+  usePermissions: () => ["workspace:read"],
+  useCurrentUser: () => null,
+}));
+vi.mock("@/lib/evolution", async (original) => ({
+  ...(await original<typeof import("@/lib/evolution")>()),
+  evolution: courseApi,
 }));
 vi.mock("@/lib/sources", async (original) => ({
   ...(await original<typeof import("@/lib/sources")>()),
@@ -320,6 +332,7 @@ beforeEach(() => {
   query.set("");
   api.get.mockResolvedValue(ENVIRONMENT);
   api.sheet.mockResolvedValue(sheet());
+  courseApi.history.mockRejectedValue(new ApiError(404, "/x", "No such entity."));
   sourcesApi.list.mockResolvedValue({ data: SOURCES });
   graphApi.view.mockImplementation(async (name: ViewName) => LANDSCAPES[name]);
   graphApi.architecture.mockResolvedValue(ARCHITECTURE);
@@ -554,13 +567,54 @@ describe("an entity's sheet", () => {
     expect(within(trail).getByText("Payment API")).toBeInTheDocument();
   });
 
-  it("says an entity gone from the sources is not found", async () => {
+  it("says a thing the model never knew is not found", async () => {
     pathname.value = `/environment/services/${SERVICE_ID}`;
     params.value = { entityType: "services", entityId: SERVICE_ID };
     api.sheet.mockRejectedValue(new ApiError(404, "/x", "No such entity."));
     mount(<EntitySheetScreen />);
 
     expect(await screen.findByTestId("route-state-not-found")).toBeInTheDocument();
+  });
+
+  it("shows a thing no source shows any more by its history", async () => {
+    pathname.value = `/environment/resources/${SERVICE_ID}`;
+    params.value = { entityType: "resources", entityId: SERVICE_ID };
+    api.sheet.mockRejectedValue(new ApiError(404, "/x", "No such entity."));
+    const redis = {
+      id: SERVICE_ID,
+      type: "infra_resource",
+      key: "arn:redis",
+      name: "redis-sessions",
+      lifecycle: "removed",
+    };
+    const version = (number: number, change: string, at: string) => ({
+      id: crypto.randomUUID(),
+      entity_id: SERVICE_ID,
+      entity: redis,
+      name: "redis-sessions",
+      version: number,
+      change,
+      fields: change === "removed" ? [{ field: "lifecycle", before: "active", after: "removed" }] : [],
+      recorded_at: at,
+      run_id: null,
+    });
+    courseApi.history.mockResolvedValue({
+      entity: redis,
+      versions: [
+        version(2, "removed", "2026-10-01T12:00:00Z"),
+        version(1, "created", "2026-09-07T12:00:00Z"),
+      ],
+      relationships: [],
+      operations: [],
+      horizon: null,
+    });
+    mount(<EntitySheetScreen />);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "redis-sessions" })).toBeVisible();
+    expect(screen.getByText(/Aucune source ne le montre plus depuis le/)).toBeInTheDocument();
+    expect(screen.getByTestId("history-version-2")).toHaveTextContent("Retiré");
+    // Gone: nothing of it is restored.
+    expect(screen.queryByRole("button", { name: "Restaurer" })).not.toBeInTheDocument();
   });
 
   it("shows a tab the sources cannot fill as what it waits for", async () => {
