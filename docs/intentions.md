@@ -7,7 +7,7 @@ production system must be answerable months later: who asked, what LEKA
 concluded, who approved, what ran.
 
 This is the frame of the Intentions epic. LEKA-384 keeps the intention, its
-lifecycle, its history and its links; LEKA-385 understands it (§ 9); 386 to 389 scope it,
+lifecycle, its history and its links; LEKA-385 understands it (§ 9), LEKA-386 scopes it (§ 10); 387 to 389 scope it,
 assemble its context, analyse it and conclude; 390 decides; 391 acts; 392
 verifies — each moving it along this lifecycle and linking what it makes.
 
@@ -275,7 +275,72 @@ requests, an unknown environment; every part's words in the text.
 service » flagged, asked, clarified; still unclear, asked again; a dry run
 keeps nothing.
 
-## 10. Tested
+## 10. Its scope and constraints (LEKA-386)
+
+Exactly what an intention is about and within which boundaries it must be
+processed, so the analysis — and anything done after — stays within what
+was meant. Code: `api/leka/intentions/scope.py`, pure; part of the
+understanding (`Understanding.scope`, version 2 on), kept with it, routed
+the same way: what is missing blocks, and goes to clarification first.
+
+**The scope contract** — `IntentScope`:
+
+| Field | |
+| --- | --- |
+| `entities` | what it is about: LEKA-373's subjects, **resolved against the company model**, each with its `lifecycle` there now (active, dormant, archived, removed; none when unread) |
+| `excluded` | what it names to set apart: after « sauf », « hors », « à part », « except », « excluding », « sans » — not its subjects |
+| `environments`, `environment_origin` | where it is held to: `asked` (the form), `text` (« en prod »), `constraint` (« uniquement en staging ») — none: everywhere |
+| `period` | `{since, until, origin, said, explicit}` — explicit when asked, read from the words or the model (« depuis le déploiement »), not its kind's default |
+| `sources` | the sources the form held it to; none: every one |
+| `constraints` | each `{kind, said, value, hard}` (below) |
+| `missing` | the critical information missing: the kinds of the blocking ambiguities it adds |
+
+**Constraints**, from the words (French and English) and the form:
+
+| Kind | Said by | Value | Hard |
+| --- | --- | --- | --- |
+| `exclude` | sauf, hors, except… + a thing named | its id | yes |
+| `read_only` | sans rien modifier, lecture seule, read only, without changing… | true | yes |
+| `no_downtime` | sans interruption, sans coupure, zero downtime… | true | yes |
+| `deadline` | avant / d'ici / by / before + demain, ce soir, a weekday, la fin de la semaine | the day, when it can be told | yes |
+| `window` | hors heures ouvrées, la nuit, ce week-end, outside business hours, tonight… | the words | yes |
+| `urgency` | urgent, urgence, asap, au plus vite, immédiatement… | high | no — it weighs |
+| `environment_only` | uniquement / seulement / only + en / in + an environment | the environment | yes |
+| `target` | a migration's « vers … » / « to … » | the word | yes |
+| `services`, `sources` | the form | their ids | yes |
+
+**Missing or at odds** — ambiguities of the understanding:
+
+| Kind | Blocking | When |
+| --- | --- | --- |
+| `missing_environment` | yes | an action on systems, no environment held, and the model knows several — options: those |
+| `missing_target` | yes | a migration, and not where to |
+| `conflicting_constraints` | yes | an action on systems, and read only |
+| `subject_gone` | yes | a thing it is about is removed or archived in the model |
+| `everything_excluded` | yes | every thing it names, it excludes |
+| `subject_dormant` | no | a thing it is about has been inactive 180 days: is it still what is used? |
+
+**Read with the model now.** At creation and each time it is asked again,
+the service reads each subject's lifecycle and the environments the model
+knows (`GraphRepository.by_ids`, `.environments`) and hands them to the
+pure reading; `POST /intentions/understand` does the same, keeping nothing.
+
+**In the app.** « Ce que LEKA a compris » says the scope: the environment
+and where it comes from, the period — said in the request, with its words,
+or its kind's default — what is excluded, the constraints (hard ones
+marked), a thing no longer active. Its questions say what is missing.
+
+**Tested** — `tests/test_intention_scope.py`, pure: things resolved with
+their lifecycle; a default period not explicit; an exclusion set apart;
+staging only, no downtime, before Friday (the 9th, from Wednesday the 7th),
+outside business hours, urgent — each with its words; a migration's
+target; the form's services and sources; read only for a question; and
+the incomplete — acting among two environments (one known: none asked), a
+migration without where to, acting while read only, a thing removed, a
+dormant one only said, everything excluded. `tests/test_intentions_api.py`:
+the scope kept, read against Acme's model, a dormant thing said.
+
+## 11. Tested
 
 - `tests/test_intention_lifecycle.py`, pure: the way from asking to
   verified, each step's actor; a decision a person's, never LEKA's; what
@@ -298,7 +363,7 @@ keeps nothing.
 
 ## Not yet
 
-- **Scope, analysis, findings** (LEKA-386 to 389): today an intention stays
+- **Context, analysis, findings** (LEKA-387 to 389): today an intention stays
   `analysing` once understood — the analysis that moves it on comes with
   them.
 - **A model-assisted understanding** (LEKA-394): the same contract.
