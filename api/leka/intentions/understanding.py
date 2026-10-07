@@ -27,8 +27,10 @@ words it came from, so what LEKA understood can be checked.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from leka.context import IntentPlan, kinds_said
 from leka.intentions.schemas import (
@@ -38,10 +40,13 @@ from leka.intentions.schemas import (
     Understanding,
     UnderstoodEntity,
 )
+from leka.intentions.scope import scope_of
 from leka.knowledge import fold
 
 # Raised each time intentions are understood differently: kept with each.
-UNDERSTANDING_VERSION = 1
+# 2: its scope and constraints, and what critical information is missing
+#    (LEKA-386).
+UNDERSTANDING_VERSION = 2
 
 # ── actions ─────────────────────────────────────────────────────────────
 
@@ -324,14 +329,42 @@ def _ambiguities(
     return found
 
 
-def understand(text: str, plan: IntentPlan | None) -> Understanding:
-    """What LEKA understands of these words, read with LEKA-373's plan."""
-    actions = actions_of(text)
-    mode, mode_said = mode_of(text, actions)
+def understand(
+    text: str,
+    plan: IntentPlan | None,
+    *,
+    lifecycles: Mapping[uuid.UUID, str] | None = None,
+    environments: Sequence[str] = (),
+    now: datetime | None = None,
+) -> Understanding:
+    """What LEKA understands of these words, read with LEKA-373's plan —
+    and, given what the company model says of each thing and the
+    environments it knows, their scope (LEKA-386)."""
+    found = actions_of(text)
+    mode, mode_said = mode_of(text, found)
     kinds = kinds_said(text)
-    entities = _entities(plan)
-    goal = _goal(plan, kinds, mode, actions, set(fold(text).split()), bool(entities))
-    ambiguities = _ambiguities(text, plan, kinds, goal, actions, entities)
+    named = _entities(plan)
+    goal = _goal(plan, kinds, mode, found, set(fold(text).split()), bool(named))
+    actions = [
+        ActionRead(code=a.verb.code, said=a.said, changes_systems=a.verb.changes_systems)
+        for a in found
+    ]
+    scope, missing = scope_of(
+        text,
+        plan,
+        goal=goal,
+        actions=actions,
+        lifecycles=lifecycles or {},
+        environments=environments,
+        now=now or datetime.now(UTC),
+    )
+    # What it excludes is not what it is about.
+    kept = {thing.entity_id for thing in scope.entities}
+    entities = [entity for entity in named if entity.entity_id in kept]
+    ambiguities = [
+        *_ambiguities(text, plan, kinds, goal, found, entities),
+        *missing,
+    ]
     period = None
     if plan is not None:
         period = plan.period.model_dump(mode="json")
@@ -342,13 +375,11 @@ def understand(text: str, plan: IntentPlan | None) -> Understanding:
         mode_said=mode_said,
         kind=plan.kind if plan is not None else (kinds[0][0] if kinds else "general"),
         goal=goal,
-        actions=[
-            ActionRead(code=a.verb.code, said=a.said, changes_systems=a.verb.changes_systems)
-            for a in actions
-        ],
+        actions=actions,
         entities=entities,
         period=period,
         environment=plan.environment if plan is not None else None,
         ambiguities=ambiguities,
         clear=not any(a.blocking for a in ambiguities),
+        scope=scope,
     )

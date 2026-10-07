@@ -522,3 +522,37 @@ async def test_what_leka_would_understand_is_said_and_nothing_kept(
     assert [a["code"] for a in understood["actions"]] == ["rollback"]
     assert understood["clear"] is True
     assert (await _get(client, "/counts"))["all"] == 0
+
+
+# ── scoped (LEKA-386) ──────────────────────────────────────────────────────
+
+
+async def test_its_scope_is_kept_resolved_against_the_model(
+    client: AsyncClient, model: dict[str, uuid.UUID], acme: dict[str, uuid.UUID]
+) -> None:
+    created = await _ask(
+        client,
+        "Pourquoi Billing API est lente depuis hier ? Sans rien modifier, c'est urgent",
+    )
+    scope = created["intention"]["understanding"]["scope"]
+    assert [(e["name"], e["lifecycle"]) for e in scope["entities"]] == [("Billing API", "active")]
+    assert scope["period"]["explicit"] is True
+    assert scope["period"]["said"]
+    kinds = {c["kind"]: c for c in scope["constraints"]}
+    assert kinds["read_only"]["said"] == "sans rien modifier"
+    assert kinds["urgency"]["hard"] is False
+    assert scope["missing"] == []
+
+    # The model says it has gone dormant: said, not blocking.
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            await session.execute(
+                text("UPDATE entities SET lifecycle = 'dormant' WHERE id = :i"),
+                {"i": model[BILLING]},
+            )
+            await session.commit()
+    dormant = (await _ask(client))["intention"]
+    understood = dormant["understanding"]
+    assert understood["scope"]["entities"][0]["lifecycle"] == "dormant"
+    assert {a["kind"] for a in understood["ambiguities"]} >= {"subject_dormant"}
+    assert dormant["status"] == "analysing"

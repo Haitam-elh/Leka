@@ -39,6 +39,25 @@ AmbiguityKind = Literal[
     "action_without_target",
     "several_requests",
     "unknown_environment",
+    # LEKA-386: what defines how it must be processed, missing or at odds.
+    "missing_environment",
+    "missing_target",
+    "conflicting_constraints",
+    "subject_gone",
+    "subject_dormant",
+    "everything_excluded",
+]
+ConstraintKind = Literal[
+    "exclude",
+    "read_only",
+    "no_downtime",
+    "deadline",
+    "window",
+    "urgency",
+    "environment_only",
+    "target",
+    "services",
+    "sources",
 ]
 LinkKind = Literal["context", "finding", "entity", "decision", "action", "outcome"]
 # What a person may link through the API: what exists today. Decisions,
@@ -120,6 +139,62 @@ class AmbiguityRead(BaseModel):
     )
 
 
+class ScopedEntity(BaseModel):
+    """A thing of the company model the intention is about — or excludes —
+    as the model knows it now (LEKA-386)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity_id: uuid.UUID
+    name: str
+    type: str
+    how: Literal["asked", "named", "business"]
+    said: str | None
+    confidence: float
+    lifecycle: str | None = Field(description="active, dormant, archived, removed; none: unread.")
+
+
+class ScopeConstraint(BaseModel):
+    """A boundary the analysis — and anything done — must keep to."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: ConstraintKind
+    said: str = Field(description="The words that say it; « asked » when the form did.")
+    value: JsonValue = None
+    hard: bool = Field(description="Must hold — else it only weighs.")
+
+
+class ScopePeriod(BaseModel):
+    """When it looks — and whether the asker said so."""
+
+    model_config = ConfigDict(frozen=True)
+
+    since: datetime
+    until: datetime
+    origin: Literal["asked", "text", "kind", "model"]
+    said: str | None
+    explicit: bool = Field(description="Asked, or read from its words — not its kind's default.")
+
+
+class IntentScope(BaseModel):
+    """What the intention is about and within which boundaries it must be
+    processed (LEKA-386): its things, resolved against the company model,
+    and those it excludes; where; when; under what constraints; what
+    critical information is missing. docs/intentions.md § 10."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entities: list[ScopedEntity]
+    excluded: list[ScopedEntity]
+    environments: list[str] = Field(description="Where it is held to; none: everywhere.")
+    environment_origin: Literal["asked", "text", "constraint"] | None
+    period: ScopePeriod | None
+    sources: list[uuid.UUID] = Field(description="The sources it is held to; none: every one.")
+    constraints: list[ScopeConstraint]
+    missing: list[str] = Field(description="The critical information missing: ambiguity kinds.")
+
+
 class Understanding(BaseModel):
     """What LEKA understood of an intention (LEKA-385): the structured
     intent, every part of it with the words it came from — the original
@@ -139,6 +214,9 @@ class Understanding(BaseModel):
     environment: str | None
     ambiguities: list[AmbiguityRead]
     clear: bool = Field(description="No blocking ambiguity: it can be analysed.")
+    scope: IntentScope | None = Field(
+        default=None, description="Its scope and constraints (LEKA-386, version 2 on)."
+    )
 
 
 class IntentionRead(BaseModel):

@@ -79,7 +79,7 @@ from leka.intentions import (
     Withdrawal,
     intention_read,
 )
-from leka.knowledge import EntityRepository, GraphRepository, GraphService
+from leka.knowledge import GraphRepository, GraphService
 
 router = APIRouter(prefix="/intentions", tags=["intentions"])
 
@@ -112,7 +112,7 @@ def _service(session: SessionDep, principal: Principal) -> IntentionService:
         ),
         context_repository=ContextRepository(session, workspace),
         findings=IntelligenceRepository(session, workspace),
-        entities=EntityRepository(session, workspace),
+        entities=GraphRepository(session, workspace),
     )
 
 
