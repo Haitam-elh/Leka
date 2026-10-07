@@ -44,6 +44,7 @@ const api = vi.hoisted(() => ({
   cancel: vi.fn(),
   archive: vi.fn(),
   restore: vi.fn(),
+  analysis: vi.fn(),
 }));
 vi.mock("@/lib/intentions/api", async (original) => ({
   ...(await original<typeof import("@/lib/intentions/api")>()),
@@ -133,6 +134,7 @@ beforeEach(() => {
   api.counts.mockResolvedValue({ all: 3, active: 2, scheduled: 0, finished: 1, archived: 4 });
   api.one.mockResolvedValue(intention());
   api.history.mockResolvedValue([]);
+  api.analysis.mockRejectedValue(new ApiError(404, `/intentions/${ID}/analysis`, "No analysis yet."));
 });
 
 describe("Mes intentions", () => {
@@ -485,9 +487,9 @@ describe("an intention's page", () => {
     );
   });
 
-  it("asks the analysis tabs to wait for the analysis engine", async () => {
-    route.pathname = `/intentions/${ID}/evidence`;
+  it("asks the actions tab to wait for the decision and its execution", async () => {
+    route.pathname = `/intentions/${ID}/actions`;
     show(<IntentionScreen />);
-    expect(await screen.findByText(/arrivera avec le moteur d'analyse/)).toBeInTheDocument();
+    expect(await screen.findByText(/arrivera avec la décision et l'exécution/)).toBeInTheDocument();
   });
 });
