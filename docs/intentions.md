@@ -7,7 +7,7 @@ production system must be answerable months later: who asked, what LEKA
 concluded, who approved, what ran.
 
 This is the frame of the Intentions epic. LEKA-384 keeps the intention, its
-lifecycle, its history and its links; LEKA-385 understands it (§ 9), LEKA-386 scopes it (§ 10); 387 to 389 scope it,
+lifecycle, its history and its links; LEKA-385 understands it (§ 9), LEKA-386 scopes it (§ 10), LEKA-387 grounds it in its context (§ 11); 388 and 389 scope it,
 assemble its context, analyse it and conclude; 390 decides; 391 acts; 392
 verifies — each moving it along this lifecycle and linking what it makes.
 
@@ -340,7 +340,90 @@ migration without where to, acting while read only, a thing removed, a
 dormant one only said, everything excluded. `tests/test_intentions_api.py`:
 the scope kept, read against Acme's model, a dormant thing said.
 
-## 11. Tested
+## 11. Its context, and whether it can ground the analysis (LEKA-387)
+
+How an intention gets the context its analysis needs, from the context
+engine ([context.md](context.md)) and the company model. Code:
+`api/leka/intentions/grounding.py` (pure), `IntentionService.create`,
+`.ask_again`, `.context`; in the context engine, `IntentAsk.exclude` and
+the `excluded` reason.
+
+**The order, at creation and each time it is asked again:**
+
+```
+the words + the form's scope
+   ──▶ ContextService.plan_intent        LEKA-373: kind, subjects, period, environment, gaps
+   ──▶ understand()                      LEKA-385/386: goal, actions, ambiguities, the scope
+   ──▶ refined()                         the ask, as the scope settled it
+   ──▶ ContextService.assemble_intent    (or .reask: the same context, its next version)
+   ──▶ readiness()                       can it ground the analysis?
+   ──▶ kept with the intention, said in the move to analysing — or needs_clarification
+```
+
+**Assembled from its structured scope** (`refined()`):
+
+| From the scope | To the context engine |
+| --- | --- |
+| what it excludes (« sauf Checkout ») | `IntentAsk.exclude` → never a subject or a root of the plan, nor what it belongs to; `ContextRequest.exclude` → never held, whatever found it — left out as `excluded` (« Excluded by the request. »), counted in `ranking.left_out` |
+| the environment its words hold it to (« uniquement en staging ») | `IntentAsk.environment`, unless the form chose one |
+| the period, the services and sources asked, the kind's facets, retrievers and ties | as LEKA-373 reads them — the technical, business, organizational and temporal sides each kind asks for (context.md § 13) |
+
+**What it holds** is the context engine's: retrieved by its retrievers
+(graph, words, content, timeline, paths), ranked (relevance and trust,
+LEKA-372), each element with its provenance — the sources and records
+that say it (§ 7) — and the version's quality and confidence (LEKA-375).
+Nothing is retrieved twice: the intention links its context
+(`intention_links`, kind `context`, with its version) and the context's
+subject is the intention.
+
+**Can it ground the analysis?** — `ContextReadiness`, read from the
+context's own quality, never judged again:
+
+| Status | When |
+| --- | --- |
+| `blocked` | a critical gap — nothing named, a model never built, no source able to read what happened when that is the question, nothing happened… — or a critical conflict — two owners of what was asked, its tier disputed…; or it holds nothing |
+| `limited` | warnings — stale evidence, a source failing, mostly inferred ties… — or its quality is low |
+| `ready` | nothing in the way |
+
+with `level` and `score` (LEKA-375), `elements`, `facets` — how many
+things it holds on each side: technical, business, organizational,
+temporal (incidents, deployments, changes, releases, pull requests,
+commits, alerts) — `sources`, and the `critical` and `warnings` issues,
+each a gap (with its origin: the context's quality, or the reading) or a
+conflict (what about, which attribute or role), with the elements it is
+about.
+
+**Surfaced before analysis.** Kept with the intention (`readiness`, in
+`GET /intentions/{id}`), said in the move to `analysing` or
+`needs_clarification` (`detail.readiness`, `detail.critical`), shown on
+step 2 and the intention's page. A blocked intention is not analysed: the
+analysis (LEKA-388) starts from `ready` or `limited`. Readiness is not a
+state of the lifecycle — what blocks it is not always the asker's to fix
+(a model to build, a source to connect) — but what the analysis reads
+first.
+
+**Inspected and reused downstream.** `GET /intentions/{id}/context?version`
+— and `IntentionService.context(id, version=…)` in code — returns the
+context engine's contract (`AssembledContext`, LEKA-376: every element with
+its provenance, the quality and confidence, the gaps and conflicts) with
+its readiness, recomputed for that version: a context kept up with the
+model (LEKA-374) is read as it now is. `intention:read`; another
+workspace's is 404.
+
+**Tested** — `tests/test_intention_grounding.py`, pure: the ask its scope
+settled — exclusions, an environment held to, the form's word standing;
+ready with what it holds by side; blocked by a critical gap, a critical
+conflict, nothing held; limited by warnings or a low level.
+`tests/test_context_ranking.py`: what a request excludes is never held,
+however relevant, and said so. `tests/test_intentions_api.py`, on Acme's
+model: « sauf Checkout » keeps Checkout out of the context — and in it
+without; an ownership question ready, its sides and sources counted,
+provenance on every element, a version read again; a diagnosis no source
+can ground blocked by `no_source_for`, still understood; « tout est si
+lent » blocked by `no_subject` and asked to clarify; another workspace's
+context 404.
+
+## 12. Tested
 
 - `tests/test_intention_lifecycle.py`, pure: the way from asking to
   verified, each step's actor; a decision a person's, never LEKA's; what
@@ -363,7 +446,7 @@ the scope kept, read against Acme's model, a dormant thing said.
 
 ## Not yet
 
-- **Context, analysis, findings** (LEKA-387 to 389): today an intention stays
+- **Analysis, findings** (LEKA-388, 389): today an intention stays
   `analysing` once understood — the analysis that moves it on comes with
   them.
 - **A model-assisted understanding** (LEKA-394): the same contract.

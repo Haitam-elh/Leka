@@ -3820,6 +3820,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/intentions/{intention_id}/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Context
+         * @description Its context, as downstream capabilities read it (LEKA-387): the
+         *     context engine's contract — every element with its provenance, the
+         *     quality and confidence, the gaps and conflicts — and whether it can
+         *     ground an analysis: ready, limited, blocked by what.
+         */
+        get: operations["context_api_v1_intentions__intention_id__context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/intentions/{intention_id}/ask": {
         parameters: {
             query?: never;
@@ -6207,6 +6230,11 @@ export interface components {
              * @description Only what these sources say — never a root (LEKA-373); every source when none.
              */
             sources?: string[];
+            /**
+             * Exclude
+             * @description Never these, whatever finds them (LEKA-387: « sauf … »).
+             */
+            exclude?: string[];
         };
         /**
          * ContextDelta
@@ -6593,6 +6621,52 @@ export interface components {
             used_at?: string | null;
             freshness: components["schemas"]["ContextFreshness"];
         };
+        /**
+         * ContextReadiness
+         * @description Whether an intention's context can ground its analysis (LEKA-387):
+         *     `ready`; `limited` — it holds something, warnings said; `blocked` — a
+         *     critical gap or conflict first. Read from the context's own quality
+         *     (LEKA-375) and conflicts (LEKA-372), never judged again.
+         */
+        ContextReadiness: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "limited" | "blocked";
+            /**
+             * Context Id
+             * Format: uuid
+             */
+            context_id: string;
+            /** Version */
+            version: number;
+            /**
+             * Level
+             * @description The context's quality level: high, medium, low.
+             */
+            level: string;
+            /** Score */
+            score: number | null;
+            /** Elements */
+            elements: number;
+            /**
+             * Facets
+             * @description The things it holds by side: technical, business, organizational, temporal.
+             */
+            facets: {
+                [key: string]: number;
+            };
+            /**
+             * Sources
+             * @description The sources its elements came from.
+             */
+            sources: number;
+            /** Critical */
+            critical: components["schemas"]["ReadinessIssue"][];
+            /** Warnings */
+            warnings: components["schemas"]["ReadinessIssue"][];
+        };
         /** ContextRefresh */
         ContextRefresh: {
             /**
@@ -6638,6 +6712,8 @@ export interface components {
             };
             /** Sources */
             sources?: string[];
+            /** Exclude */
+            exclude?: string[];
         };
         /**
          * ContextSourceRead
@@ -9787,6 +9863,11 @@ export interface components {
              */
             sources?: string[];
             /**
+             * Exclude
+             * @description What it is not about (LEKA-387, « sauf … »): never a root, never held.
+             */
+            exclude?: string[];
+            /**
              * Limit
              * @default 100
              */
@@ -9978,6 +10059,16 @@ export interface components {
             context: components["schemas"]["AssembledContext"];
         };
         /**
+         * IntentionContext
+         * @description An intention's context, as downstream capabilities read it (LEKA-387):
+         *     the context engine's contract (LEKA-376), and whether it can ground an
+         *     analysis.
+         */
+        IntentionContext: {
+            context: components["schemas"]["AssembledContext"];
+            readiness: components["schemas"]["ContextReadiness"];
+        };
+        /**
          * IntentionCounts
          * @description How many, by phase — and archived — for a list's tabs (mockup 07).
          */
@@ -10070,6 +10161,8 @@ export interface components {
             /** Links */
             links: components["schemas"]["IntentionLinkRead"][];
             understanding: components["schemas"]["Understanding"] | null;
+            /** @description Whether its context can ground its analysis (LEKA-387). */
+            readiness?: components["schemas"]["ContextReadiness"] | null;
         };
         /**
          * IntentionEventRead
@@ -10936,7 +11029,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "duplicate" | "low_relevance" | "out_of_scope" | "budget";
+            reason: "duplicate" | "low_relevance" | "out_of_scope" | "excluded" | "budget";
             /** Score */
             score: number;
             /**
@@ -12295,7 +12388,7 @@ export interface components {
             };
             /**
              * Left Out
-             * @description duplicate, low_relevance, out_of_scope (none of the sources asked says it, LEKA-373), budget — entities; ties — relationships left out with an end.
+             * @description duplicate, low_relevance, out_of_scope (none of the sources asked says it, LEKA-373), excluded (asked not to, LEKA-387), budget — entities; ties — relationships left out with an end.
              */
             left_out: {
                 [key: string]: number;
@@ -12343,6 +12436,48 @@ export interface components {
              * @description It, in words.
              */
             said: string;
+        };
+        /**
+         * ReadinessIssue
+         * @description A gap or a conflict of an intention's context, surfaced before its
+         *     analysis (LEKA-387).
+         */
+        ReadinessIssue: {
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "gap" | "conflict";
+            /** Kind */
+            kind: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "critical" | "warning" | "info";
+            /** Said */
+            said: string;
+            /** Refs */
+            refs?: string[];
+            /**
+             * Gap Origin
+             * @description A gap's: the context's quality (LEKA-375), or the reading.
+             */
+            gap_origin?: ("quality" | "intent") | null;
+            /** Detail */
+            detail?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Label
+             * @description A conflict's: what it is about.
+             */
+            label?: string | null;
+            /**
+             * About
+             * @description A conflict's: the attribute or role.
+             */
+            about?: string | null;
         };
         /**
          * RebuildRequest
@@ -33073,6 +33208,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntentionEventRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    context_api_v1_intentions__intention_id__context_get: {
+        parameters: {
+            query?: {
+                /** @description Its latest when none. */
+                version?: number | null;
+            };
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionContext"];
                 };
             };
             /** @description The request could not be understood. */

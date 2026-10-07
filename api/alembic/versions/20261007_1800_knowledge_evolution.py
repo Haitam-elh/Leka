@@ -1,7 +1,7 @@
 """Knowledge evolution: the model's snapshots, and the operations on its course.
 
 Revision ID: 9c4e2a7d5b13
-Revises: 6d2a9f4c8e13
+Revises: 8b4f1d6a2c97
 Created: 2026-10-07
 
 LEKA-383. What the company model held at a moment — how many of each kind,
@@ -22,7 +22,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "9c4e2a7d5b13"
-down_revision: str | None = "6d2a9f4c8e13"
+down_revision: str | None = "8b4f1d6a2c97"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

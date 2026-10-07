@@ -14,7 +14,7 @@ Reads state the background loop prepared. Calls no customer API — by the
 time a question arrives, the work is done.
 """
 
-from leka.context.intent import kinds_said
+from leka.context.intent import facet_of, kinds_said
 from leka.context.models import (
     Context,
     ContextCheck,
@@ -121,5 +121,6 @@ __all__ = [
     "RetrieverRunRead",
     "Strategy",
     "SubjectType",
+    "facet_of",
     "kinds_said",
 ]

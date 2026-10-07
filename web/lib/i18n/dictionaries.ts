@@ -3641,6 +3641,26 @@ const fr = {
         },
       },
     },
+    /** Whether its context can ground its analysis (LEKA-387). */
+    readiness: {
+      title: "Contexte de l'analyse",
+      status: {
+        ready: "Prêt pour l'analyse",
+        limited: "Utilisable, avec des réserves",
+        blocked: "Bloqué avant l'analyse",
+      },
+      holds: "{count} élément(s) · {sources} source(s) · version {version}",
+      facets: {
+        technical: "technique",
+        business: "métier",
+        organizational: "organisation",
+        temporal: "événements",
+      },
+      critical: "À résoudre avant l'analyse",
+      warnings: "À noter",
+      conflict: "{label} : {about}, ses sources se contredisent",
+      see: "Voir le contexte",
+    },
     soon: "Cette partie arrivera avec le moteur d'analyse de LEKA (constats, preuves, actions).",
     history: {
       title: "Historique",
@@ -7386,6 +7406,25 @@ const en: Dictionary = {
           sources: "Sources chosen",
         },
       },
+    },
+    readiness: {
+      title: "Analysis context",
+      status: {
+        ready: "Ready for analysis",
+        limited: "Usable, with reservations",
+        blocked: "Blocked before analysis",
+      },
+      holds: "{count} element(s) · {sources} source(s) · version {version}",
+      facets: {
+        technical: "technical",
+        business: "business",
+        organizational: "organisation",
+        temporal: "events",
+      },
+      critical: "To resolve before analysis",
+      warnings: "Worth noting",
+      conflict: "{label}: {about}, its sources contradict each other",
+      see: "See the context",
     },
     soon: "This part comes with LEKA's analysis engine (findings, evidence, actions).",
     history: {

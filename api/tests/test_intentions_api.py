@@ -556,3 +556,91 @@ async def test_its_scope_is_kept_resolved_against_the_model(
     assert understood["scope"]["entities"][0]["lifecycle"] == "dormant"
     assert {a["kind"] for a in understood["ambiguities"]} >= {"subject_dormant"}
     assert dormant["status"] == "analysing"
+
+
+# ── its context (LEKA-387) ─────────────────────────────────────────────────
+
+
+async def test_its_context_is_assembled_from_its_scope_what_it_excludes_never_held(
+    client: AsyncClient, model: dict[str, uuid.UUID]
+) -> None:
+    from tests.test_knowledge_graph import CHECKOUT
+
+    plain = (await _ask(client, "Qu'est-ce qui dépend de Billing API ?"))["intention"]
+    held = await _get(client, f"/{plain['id']}/context")
+    assert str(model[CHECKOUT]) in {e["ref_id"] for e in held["context"]["elements"]}
+
+    excluding = (await _ask(client, "Qu'est-ce qui dépend de Billing API, sauf Checkout ?"))[
+        "intention"
+    ]
+    scope = excluding["understanding"]["scope"]
+    assert [e["name"] for e in scope["excluded"]] == ["Checkout"]
+    found = await _get(client, f"/{excluding['id']}/context")
+    context = found["context"]
+    assert str(model[CHECKOUT]) not in {e["ref_id"] for e in context["elements"]}
+    assert str(model[CHECKOUT]) not in context["request"]["roots"]
+    assert context["request"]["exclude"] == [str(model[CHECKOUT])]
+    assert context["subject"] == {"type": "intention", "id": excluding["id"]}
+
+
+async def test_its_context_says_whether_it_can_ground_an_analysis(
+    client: AsyncClient, model: dict[str, uuid.UUID]
+) -> None:
+    intention = (await _ask(client, "Qui est responsable de Billing API ?"))["intention"]
+    ready = intention["readiness"]
+    assert ready["status"] in ("ready", "limited")
+    assert ready["context_id"] == intention["context_id"]
+    assert ready["elements"] > 0
+    assert ready["facets"]["technical"] >= 1
+    assert ready["sources"] >= 1
+    assert ready["critical"] == []
+    moved = (await _history(client, intention["id"]))[-1]
+    assert moved["detail"]["readiness"] == ready["status"]
+
+    found = await _get(client, f"/{intention['id']}/context")
+    assert found["readiness"]["status"] == ready["status"]
+    # Every element says where it came from; the quality says how sure.
+    assert all(
+        e["provenance"]["sources"] for e in found["context"]["elements"] if e["kind"] == "entity"
+    )
+    assert found["context"]["quality"]["level"] in ("high", "medium", "low")
+    first = await _get(client, f"/{intention['id']}/context", version=1)
+    assert first["context"]["version"] == 1
+
+
+async def test_a_diagnosis_no_source_can_ground_is_blocked_said_why(
+    client: AsyncClient, model: dict[str, uuid.UUID]
+) -> None:
+    """Acme's sources read no incident, deployment or metric: why Billing API
+    is slow cannot be grounded — said before any analysis."""
+    intention = (await _ask(client))["intention"]
+    ready = intention["readiness"]
+    assert ready["status"] == "blocked"
+    assert [issue["kind"] for issue in ready["critical"]] == ["no_source_for"]
+    # Understood — the question is clear — only not groundable.
+    assert intention["status"] == "analysing"
+
+
+async def test_a_critical_gap_is_surfaced_before_any_analysis(
+    client: AsyncClient, model: dict[str, uuid.UUID]
+) -> None:
+    intention = (await _ask(client, "Pourquoi tout est si lent depuis hier ?"))["intention"]
+    ready = intention["readiness"]
+    assert ready["status"] == "blocked"
+    assert "no_subject" in {issue["kind"] for issue in ready["critical"]}
+    assert intention["status"] == "needs_clarification"
+    moved = (await _history(client, intention["id"]))[-1]
+    assert moved["detail"]["readiness"] == "blocked"
+    assert "no_subject" in moved["detail"]["critical"]
+
+
+async def test_another_workspace_s_context_is_not_there(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+) -> None:
+    intention = (await _ask(client))["intention"]
+    _as(identity, acme, "other_admin")
+    response = await client.get(f"{API}/{intention['id']}/context")
+    assert response.status_code == 404
