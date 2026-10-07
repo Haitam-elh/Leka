@@ -7,7 +7,7 @@ production system must be answerable months later: who asked, what LEKA
 concluded, who approved, what ran.
 
 This is the frame of the Intentions epic. LEKA-384 keeps the intention, its
-lifecycle, its history and its links; 385 to 389 understand it, scope it,
+lifecycle, its history and its links; LEKA-385 understands it (§ 9); 386 to 389 scope it,
 assemble its context, analyse it and conclude; 390 decides; 391 acts; 392
 verifies — each moving it along this lifecycle and linking what it makes.
 
@@ -41,6 +41,7 @@ submitted ──▶ analysing ──▶ awaiting_decision ──▶ approved ─
 | State | Means | Reached by |
 | --- | --- | --- |
 | `submitted` | asked: its words and scope kept, nothing read yet | creating it |
+| `needs_clarification` | not understood enough to go on: what LEKA would ask is said (LEKA-385, § 9) | LEKA |
 | `analysing` | its context assembled, LEKA analysing it (LEKA-387, 388) | LEKA, once its context is assembled; a person asking again |
 | `awaiting_decision` | findings and recommendations ready: a person decides (LEKA-389, 390) | LEKA |
 | `approved` | a person said act | a person — **never LEKA** |
@@ -57,9 +58,11 @@ with the actors it allows and its name in the history:
 
 | From | To | Name | By |
 | --- | --- | --- | --- |
-| submitted | analysing · failed | `analysis_started` · `failed` | LEKA |
+| submitted | analysing · needs_clarification · failed | `analysis_started` · `clarification_asked` · `failed` | LEKA |
+| needs_clarification | analysing | `clarified` | a person, asking again |
 | analysing | awaiting_decision · completed · failed | `proposed` · `answered` · `failed` | LEKA |
 | analysing | analysing | `asked_again` | a person |
+| analysing | needs_clarification | `clarification_asked` — asked again, still not understood | LEKA |
 | awaiting_decision | approved · rejected · analysing | `approved` · `rejected` · `asked_again` | a person |
 | approved | scheduled · executing | `scheduled` · `execution_started` | a person, LEKA |
 | scheduled | executing · approved | `execution_started` · `unscheduled` | a person, LEKA · a person |
@@ -155,6 +158,7 @@ Another workspace's intention is 404: the workspace is the session's
 | --- | --- |
 | `POST /intentions` | ask: 201 `{intention, context}`; 422 when nothing can start it |
 | `GET /intentions?phase&status&mine&q&linked` | paginated, the latest changed first (`sort=updated_at`) or asked (`sort=created_at`); not archived unless `phase=archived` |
+| `POST /intentions/understand` | what LEKA would understand of these words (§ 9); nothing kept |
 | `GET /intentions/counts?mine` | all, active, scheduled, finished, archived — the list's tabs |
 | `GET /intentions/{id}` | where it stands, where it may go next (`moves`), what it is linked to |
 | `GET /intentions/{id}/history` | every event, in order |
@@ -186,7 +190,92 @@ actor=…, label=…)`.
   approve, cancels it — asked first, with a reason — archives it once done
   with, restores it.
 
-## 9. Tested
+## 9. What LEKA understands of it (LEKA-385)
+
+From the words, what the asker wants to achieve — without their knowing the
+technical steps. Code: `api/leka/intentions/understanding.py`, pure; read
+with LEKA-373's reading of the same words (`IntentPlan`: the kind, the
+things named, the period, the environment, the gaps), never redone.
+
+**The structured intent** — `Understanding`, version `UNDERSTANDING_VERSION`
+(1), kept with the intention (`intentions.understanding`, its goal alone in
+`intentions.goal` for lists), returned by `GET /intentions/{id}` and by
+`POST /intentions/understand` (nothing kept):
+
+| Field | |
+| --- | --- |
+| `text` | the words, as asked — the original wording, linked to all the rest |
+| `mode`, `mode_said` | `question` — to answer — or `request` — to act on — and what said it: « ? », an interrogative first word (pourquoi, qui, comment, why, who…), a polite or wanting request (peux-tu, je veux, il faut, can you, please…) with an action, or an action verb |
+| `kind` | LEKA-373's: diagnose, change, ownership, dependency, compliance, migration, knowledge, general |
+| `goal` | `{code, said, confidence}` (below) |
+| `actions` | each `{code, said, changes_systems}` — the verbs asked, never the nouns: « déploie » is asked, « le déploiement » happened |
+| `entities` | what it is about: `{entity_id, name, type, how (asked, named, business), said, confidence}` — LEKA-373's subjects |
+| `period`, `environment` | as LEKA-373 reads them, with their origin and words |
+| `ambiguities` | each `{kind, blocking, said, options}` (below) |
+| `clear` | no blocking ambiguity: it can be analysed |
+
+**The goal**, in this order:
+
+| Goal | When | Confidence |
+| --- | --- | --- |
+| `act` | a request with an action that changes systems — or documents, notifies, opens a ticket | 0.9 with a thing named, 0.5 without |
+| `explain_cause` · `find_change` · `find_owner` · `map_dependencies` · `check_compliance` · `plan_migration` · `find_knowledge` | the kind: diagnose · change · ownership · dependency · compliance · migration · knowledge | 0.8 when two words or more say it, 0.6 one |
+| `assess_impact` | a dependency kind whose words say impact (impact, affecte, touche, casse…) | idem |
+| `investigate` | none of these, but a looking action: analyse, compare, check, list | 0.4 |
+| `unknown` | nothing says it | 0 |
+
+**Actions** (French and English verbs, folded):
+
+| Changes systems — only after a person approves (LEKA-390, 391) | Does not |
+| --- | --- |
+| `restart`, `rollback`, `deploy`, `scale`, `stop`, `fix`, `update`, `migrate` | `investigate`, `compare`, `assess`, `list`, `document`, `notify`, `ticket` |
+
+**Ambiguities** — flagged for clarification, never guessed:
+
+| Kind | Blocking | When |
+| --- | --- | --- |
+| `too_short` | yes | fewer than two words that say something |
+| `unclear_goal` | yes | no goal can be told — options: the goals |
+| `no_subject` | yes | its kind is about something, and it names nothing LEKA knows (LEKA-373's `no_subject`) — options: what it may have meant |
+| `unknown_subject` | yes | a thing asked for is not in the model |
+| `action_without_target` | yes | an action on systems, on nothing named |
+| `ambiguous_subject` | **when acting**, else a warning | the same words name several things — options: those things. Read each to answer a question; never act on a guess |
+| `competing_goals` | no | two kinds said as much: read as the first — options: both goals |
+| `several_requests` | no | several « ? », or several actions joined (et, and, puis, then) |
+| `unknown_environment` | no | an environment the model does not know — options: those it knows |
+
+**In the lifecycle.** Understood at creation, after its context is read: clear,
+it is `analysing`; not, `needs_clarification` — the move's detail says the
+goal and the blocking ambiguities. Clarified by asking again
+(`POST /intentions/{id}/ask`, a person: `clarified`) — understood again, and
+`needs_clarification` again if it still is not. Nothing is decided on what
+was not understood: `needs_clarification` leads only to `analysing` or
+`cancelled`.
+
+**In the app.** « Ce que LEKA a compris » — on step 2 and on the intention's
+page: the goal and whether it asks or requests, the actions — those that
+change systems said « validation requise » — what it is about, each with
+the words it came from; what LEKA needs, as questions with what it could
+mean; « Préciser ma demande » opens the composer on the same intention
+(`/intentions/new?intention=<id>`), its words to say better. The status
+« À préciser » in Mes intentions.
+
+**Deliberately words, not a model**: the model gateway does not exist yet
+(LEKA-394). A model-assisted understanding will fill the same contract —
+the reason it says every part's words.
+
+**Tested** — `tests/test_intention_understanding.py`, pure: seven questions,
+each its goal; a procedure needing no thing named; restart, rollback asked
+politely, documenting and opening a ticket; the noun that happened against
+the verb asked; looking without a kind; and the ambiguous — too short, no
+goal, nothing named, an action on nothing, the same words naming two things
+(a warning for a question, blocking for an act), two goals, several
+requests, an unknown environment; every part's words in the text.
+`tests/test_intentions_api.py`: understood and kept; « Redémarre le
+service » flagged, asked, clarified; still unclear, asked again; a dry run
+keeps nothing.
+
+## 10. Tested
 
 - `tests/test_intention_lifecycle.py`, pure: the way from asking to
   verified, each step's actor; a decision a person's, never LEKA's; what
@@ -209,9 +298,10 @@ actor=…, label=…)`.
 
 ## Not yet
 
-- **Understanding, scope, analysis, findings** (LEKA-385 to 389): today an
-  intention stays `analysing` once its context is assembled — the analysis
-  that moves it on comes with them.
+- **Scope, analysis, findings** (LEKA-386 to 389): today an intention stays
+  `analysing` once understood — the analysis that moves it on comes with
+  them.
+- **A model-assisted understanding** (LEKA-394): the same contract.
 - **Decisions, actions, outcomes** (LEKA-390 to 392): their tables, routes
   and screens; the lifecycle and the links are ready for them.
 - **Mes intentions**' impact and sources columns (mockup 07): from the
