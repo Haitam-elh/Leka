@@ -15,6 +15,31 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from leka.context import AssembledContext
 from leka.intentions.lifecycle import IntentionStatus
 
+Goal = Literal[
+    "explain_cause",
+    "find_change",
+    "find_owner",
+    "map_dependencies",
+    "assess_impact",
+    "check_compliance",
+    "plan_migration",
+    "find_knowledge",
+    "investigate",
+    "act",
+    "unknown",
+]
+Mode = Literal["question", "request"]
+AmbiguityKind = Literal[
+    "too_short",
+    "unclear_goal",
+    "competing_goals",
+    "no_subject",
+    "unknown_subject",
+    "ambiguous_subject",
+    "action_without_target",
+    "several_requests",
+    "unknown_environment",
+]
 LinkKind = Literal["context", "finding", "entity", "decision", "action", "outcome"]
 # What a person may link through the API: what exists today. Decisions,
 # actions and outcomes are linked by what makes them (LEKA-390 to 392).
@@ -43,6 +68,79 @@ class ProposedAction(BaseModel):
     reversible: bool
 
 
+class GoalRead(BaseModel):
+    """What the asker wants to achieve, as LEKA understood it (LEKA-385)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: Goal
+    said: list[str] = Field(description="The words that say it, as written (folded).")
+    confidence: float = Field(description="0 to 1: 0 when it could not be told.")
+
+
+class ActionRead(BaseModel):
+    """Something the asker wants done, or done to something."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: str = Field(
+        description="restart, rollback, deploy, scale, stop, fix, update, migrate, "
+        "investigate, compare, assess, list, document, notify, ticket."
+    )
+    said: str = Field(description="The word that says it.")
+    changes_systems: bool = Field(
+        description="It would change a customer's systems: only after a person approves "
+        "(LEKA-390, 391)."
+    )
+
+
+class UnderstoodEntity(BaseModel):
+    """A thing the intention is about, and how LEKA knows."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity_id: uuid.UUID
+    name: str
+    type: str
+    how: Literal["asked", "named", "business"]
+    said: str | None
+    confidence: float
+
+
+class AmbiguityRead(BaseModel):
+    """What LEKA cannot tell, and what it would ask to tell it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: AmbiguityKind
+    blocking: bool = Field(description="It cannot go on without an answer.")
+    said: str = Field(description="What is ambiguous, in English.")
+    options: list[str] = Field(
+        default_factory=list, description="What it could mean: things, goals."
+    )
+
+
+class Understanding(BaseModel):
+    """What LEKA understood of an intention (LEKA-385): the structured
+    intent, every part of it with the words it came from — the original
+    wording kept beside it. docs/intentions.md § 9."""
+
+    model_config = ConfigDict(frozen=True)
+
+    version: int
+    text: str = Field(description="The words, as asked.")
+    mode: Mode = Field(description="A question to answer, or a request to act on.")
+    mode_said: str | None = Field(description="What said it: « ? », « pourquoi », « redémarre ».")
+    kind: str = Field(description="What it asks the company model for (LEKA-373).")
+    goal: GoalRead
+    actions: list[ActionRead]
+    entities: list[UnderstoodEntity]
+    period: dict[str, JsonValue] | None = Field(description="since, until, origin, said.")
+    environment: str | None
+    ambiguities: list[AmbiguityRead]
+    clear: bool = Field(description="No blocking ambiguity: it can be analysed.")
+
+
 class IntentionRead(BaseModel):
     """An intention, where it stands."""
 
@@ -63,6 +161,7 @@ class IntentionRead(BaseModel):
     context_id: uuid.UUID | None
     archived_at: datetime | None
     moves: list[IntentionStatus] = Field(description="The states it may go to next.")
+    goal: Goal | None = Field(description="What it wants to achieve, as understood (LEKA-385).")
 
 
 class IntentionLinkRead(BaseModel):
@@ -96,9 +195,10 @@ class IntentionEventRead(BaseModel):
 
 
 class IntentionDetail(IntentionRead):
-    """An intention with what it is linked to."""
+    """An intention with what it is linked to, and what LEKA understood."""
 
     links: list[IntentionLinkRead]
+    understanding: Understanding | None
 
 
 class IntentionCreated(BaseModel):

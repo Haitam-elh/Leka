@@ -236,13 +236,21 @@ def facet_of(entity_type: str) -> Facet:
 
 def kind_of(text: str) -> tuple[IntentKind, list[str]]:
     """Its kind, and the words that said it — general when none did."""
+    found = kinds_said(text)
+    return found[0] if found else ("general", [])
+
+
+def kinds_said(text: str) -> list[tuple[IntentKind, list[str]]]:
+    """Every kind its words say, the most said first — the first declared
+    on a tie — with the words that said each (LEKA-385: two kinds said as
+    much are two goals to choose between)."""
     said = fold(text).split()
-    best: tuple[IntentKind, list[str]] = ("general", [])
+    found: list[tuple[IntentKind, list[str]]] = []
     for kind, words_of in KIND_WORDS.items():
-        found = list(dict.fromkeys(word for word in said if word in words_of))
-        if len(found) > len(best[1]):
-            best = (kind, found)
-    return best
+        words_found = list(dict.fromkeys(word for word in said if word in words_of))
+        if words_found:
+            found.append((kind, words_found))
+    return sorted(found, key=lambda item: -len(item[1]))
 
 
 # ── when ────────────────────────────────────────────────────────────────────
