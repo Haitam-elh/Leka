@@ -176,6 +176,10 @@ class ContextCreate(BaseModel):
         description="Only what these sources say — never a root (LEKA-373); every source "
         "when none.",
     )
+    exclude: list[uuid.UUID] = Field(
+        default_factory=list,
+        description="Never these, whatever finds them (LEKA-387: « sauf … »).",
+    )
 
     @model_validator(mode="after")
     def _starts_somewhere(self) -> ContextCreate:
@@ -209,6 +213,7 @@ class ContextRequest(BaseModel):
     min_relevance: float = MIN_RELEVANCE
     weights: dict[str, float] = Field(default_factory=dict)
     sources: list[uuid.UUID] = Field(default_factory=list)
+    exclude: list[uuid.UUID] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -438,7 +443,7 @@ class LeftOutRead(BaseModel):
     ref_id: uuid.UUID
     ref_type: str
     label: str
-    reason: Literal["duplicate", "low_relevance", "out_of_scope", "budget"]
+    reason: Literal["duplicate", "low_relevance", "out_of_scope", "excluded", "budget"]
     score: float
     duplicate_of: uuid.UUID | None = Field(
         default=None, description="What it was folded into, when a duplicate."
@@ -458,7 +463,8 @@ class RankingReport(BaseModel):
     weights: dict[str, float] = Field(description="Each signal's weight on its axis.")
     left_out: dict[str, int] = Field(
         description="duplicate, low_relevance, out_of_scope (none of the sources asked says "
-        "it, LEKA-373), budget — entities; ties — relationships left out with an end."
+        "it, LEKA-373), excluded (asked not to, LEKA-387), budget — entities; ties — "
+        "relationships left out with an end."
     )
     left: list[LeftOutRead] = Field(description="What was left out, the best first, at most 100.")
 
@@ -618,6 +624,10 @@ class IntentAsk(BaseModel):
     )
     sources: list[uuid.UUID] = Field(
         default_factory=list, description="What to read; every source when none."
+    )
+    exclude: list[uuid.UUID] = Field(
+        default_factory=list,
+        description="What it is not about (LEKA-387, « sauf … »): never a root, never held.",
     )
     limit: int = Field(default=DEFAULT_BUDGET, ge=1, le=MAX_BUDGET)
 

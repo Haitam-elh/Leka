@@ -980,8 +980,12 @@ class ContextService:
             )
             for reading in sure
         ]
+        # What it says it is not about (LEKA-387): never a subject, nor what
+        # that belongs to.
+        barred = set(ask.exclude)
+        subjects = [s for s in subjects if s.entity_id not in barred]
         if "business" in profile.facets:
-            subjects += await self._business_of(subjects)
+            subjects += [s for s in await self._business_of(subjects) if s.entity_id not in barred]
 
         period, anchor, anchored = await self._period(ask, subjects, profile.window_days, now)
         known = await self._graph.environments()
@@ -1024,6 +1028,7 @@ class ContextService:
             min_relevance=MIN_RELEVANCE,
             weights=dict(profile.weights),
             sources=[s.source_id for s in readable] if ask.sources else [],
+            exclude=list(dict.fromkeys(ask.exclude)),
         )
         return IntentPlan(
             version=INTENT_VERSION,
@@ -1179,6 +1184,7 @@ class ContextService:
             now=now,
             min_relevance=request.min_relevance,
             sources=request.sources,
+            exclude=request.exclude,
         )
 
     async def _links(self, material: ContextMaterial) -> list[Link]:
@@ -1409,6 +1415,7 @@ def _settled(body: ContextCreate) -> ContextRequest:
         min_relevance=body.min_relevance,
         weights=dict(body.weights),
         sources=list(dict.fromkeys(body.sources)),
+        exclude=list(dict.fromkeys(body.exclude)),
     )
 
 
@@ -1433,6 +1440,7 @@ def _body_of(plan: IntentPlan, ask: IntentAsk) -> ContextCreate:
         min_relevance=request.min_relevance,
         weights={name: weight for name, weight in request.weights.items() if name in RETRIEVERS},
         sources=request.sources,
+        exclude=request.exclude,
     )
 
 

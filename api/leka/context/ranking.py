@@ -176,6 +176,7 @@ def rank(
     now: datetime | None = None,
     min_relevance: float = MIN_RELEVANCE,
     sources: Iterable[uuid.UUID] = (),
+    exclude: Iterable[uuid.UUID] = (),
 ) -> Ranking:
     """Every entity of `material` scored; what is kept, in order; what is
     left out and why; the conflicts. `starts` — the roots, then the
@@ -229,6 +230,18 @@ def rank(
             )
         )
     rest = [i for i in entities if i not in first and i not in folded]
+    # Asked not to (LEKA-387): never held, whatever found it.
+    barred = frozenset(exclude)
+    for entity_id in [i for i in rest if i in barred]:
+        left.append(
+            _left(
+                entities[entity_id],
+                rankings[entity_id],
+                "excluded",
+                "Excluded by the request.",
+            )
+        )
+    rest = [i for i in rest if i not in barred]
     allowed = frozenset(sources)
     outside = {i for i in rest if not (_source_ids(entities[i]) & allowed)} if allowed else set()
     for entity_id in outside:
@@ -842,7 +855,7 @@ def _factor(trust: float | None) -> float:
 def _left(
     item: MaterialEntity,
     ranking: ElementRanking,
-    reason: Literal["duplicate", "low_relevance", "out_of_scope", "budget"],
+    reason: Literal["duplicate", "low_relevance", "out_of_scope", "excluded", "budget"],
     said: str,
     *,
     duplicate_of: uuid.UUID | None = None,

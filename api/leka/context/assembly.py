@@ -129,6 +129,7 @@ def assemble(
     now: datetime | None = None,
     min_relevance: float = MIN_RELEVANCE,
     sources: Sequence[uuid.UUID] = (),
+    exclude: Sequence[uuid.UUID] = (),
 ) -> Assembly:
     """The elements of a context from `material`, `limit` at most — the
     best scored first (LEKA-372), duplicates folded, the barely relevant
@@ -156,6 +157,7 @@ def assemble(
         now=now,
         min_relevance=min_relevance,
         sources=sources,
+        exclude=exclude,
     )
     touching: dict[uuid.UUID, list[MaterialRelationship]] = {}
     for edge in edges:
@@ -230,6 +232,7 @@ def assemble(
             "duplicate": counted["duplicate"],
             "low_relevance": counted["low_relevance"],
             "out_of_scope": counted["out_of_scope"],
+            "excluded": counted["excluded"],
             "budget": counted["budget"],
             "ties": len(edges) - len(tied),
         },

@@ -219,6 +219,47 @@ class Understanding(BaseModel):
     )
 
 
+class ReadinessIssue(BaseModel):
+    """A gap or a conflict of an intention's context, surfaced before its
+    analysis (LEKA-387)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    origin: Literal["gap", "conflict"]
+    kind: str
+    severity: Literal["critical", "warning", "info"]
+    said: str
+    refs: list[uuid.UUID] = Field(default_factory=list)
+    gap_origin: Literal["quality", "intent"] | None = Field(
+        default=None, description="A gap's: the context's quality (LEKA-375), or the reading."
+    )
+    detail: dict[str, JsonValue] = Field(default_factory=dict)
+    label: str | None = Field(default=None, description="A conflict's: what it is about.")
+    about: str | None = Field(default=None, description="A conflict's: the attribute or role.")
+
+
+class ContextReadiness(BaseModel):
+    """Whether an intention's context can ground its analysis (LEKA-387):
+    `ready`; `limited` — it holds something, warnings said; `blocked` — a
+    critical gap or conflict first. Read from the context's own quality
+    (LEKA-375) and conflicts (LEKA-372), never judged again."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ready", "limited", "blocked"]
+    context_id: uuid.UUID
+    version: int
+    level: str = Field(description="The context's quality level: high, medium, low.")
+    score: float | None
+    elements: int
+    facets: dict[str, int] = Field(
+        description="The things it holds by side: technical, business, organizational, temporal."
+    )
+    sources: int = Field(description="The sources its elements came from.")
+    critical: list[ReadinessIssue]
+    warnings: list[ReadinessIssue]
+
+
 class IntentionRead(BaseModel):
     """An intention, where it stands."""
 
@@ -277,6 +318,9 @@ class IntentionDetail(IntentionRead):
 
     links: list[IntentionLinkRead]
     understanding: Understanding | None
+    readiness: ContextReadiness | None = Field(
+        default=None, description="Whether its context can ground its analysis (LEKA-387)."
+    )
 
 
 class IntentionCreated(BaseModel):
@@ -284,6 +328,15 @@ class IntentionCreated(BaseModel):
 
     intention: IntentionDetail
     context: AssembledContext
+
+
+class IntentionContext(BaseModel):
+    """An intention's context, as downstream capabilities read it (LEKA-387):
+    the context engine's contract (LEKA-376), and whether it can ground an
+    analysis."""
+
+    context: AssembledContext
+    readiness: ContextReadiness
 
 
 class IntentionAsked(BaseModel):

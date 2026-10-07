@@ -178,6 +178,7 @@ def _assemble(
     links: tuple[Link, ...] = (),
     limit: int = 100,
     min_relevance: float = 0.05,
+    exclude: tuple[str, ...] = (),
 ) -> Assembly:
     return assemble(
         material,
@@ -190,6 +191,7 @@ def _assemble(
         links=links,
         now=NOW,
         min_relevance=min_relevance,
+        exclude=[_id(name) for name in exclude],
     )
 
 
@@ -337,6 +339,25 @@ def test_what_nothing_measures_is_unknown_and_left_out_of_the_mean() -> None:
 # ── what is left out ────────────────────────────────────────────────────────
 
 
+def test_what_the_request_excludes_is_never_held_and_said_so() -> None:
+    """LEKA-387: « sauf Noise » — whatever found it, however relevant."""
+    material = _material(
+        [_entity("Checkout", depth=0), BILLING, _entity("Noise", depth=1)],
+        roots=["Checkout"],
+    )
+    relevance = {"Checkout": 0.9, "Billing API": 0.8, "Noise": 0.9}
+    made = _assemble(material, relevance, exclude=("Noise",))
+    assert _labels(made) == ["Checkout", "Billing API"]
+    assert made.ranking is not None
+    assert made.ranking.left_out["excluded"] == 1
+    (noise,) = made.ranking.left
+    assert (noise.label, noise.reason, noise.said) == (
+        "Noise",
+        "excluded",
+        "Excluded by the request.",
+    )
+
+
 def test_under_the_threshold_left_out_and_said_never_a_root_nor_an_anchor() -> None:
     material = _material(
         [
@@ -354,6 +375,7 @@ def test_under_the_threshold_left_out_and_said_never_a_root_nor_an_anchor() -> N
         "duplicate": 0,
         "low_relevance": 1,
         "out_of_scope": 0,
+        "excluded": 0,
         "budget": 0,
         "ties": 0,
     }
@@ -383,6 +405,7 @@ def test_what_does_not_fit_is_listed_and_the_ties_it_takes_counted() -> None:
         "duplicate": 0,
         "low_relevance": 0,
         "out_of_scope": 0,
+        "excluded": 0,
         "budget": 1,
         "ties": 1,
     }

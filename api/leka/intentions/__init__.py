@@ -15,6 +15,7 @@ ambiguous, each with its words; not understood enough, it is said
 needs_clarification. docs/intentions.md.
 """
 
+from leka.intentions.grounding import readiness, refined
 from leka.intentions.lifecycle import (
     CLOSED,
     PHASES,
@@ -32,8 +33,10 @@ from leka.intentions.schemas import (
     ActionRead,
     AmbiguityRead,
     Approval,
+    ContextReadiness,
     GoalRead,
     IntentionAsked,
+    IntentionContext,
     IntentionCounts,
     IntentionCreated,
     IntentionDetail,
@@ -42,6 +45,7 @@ from leka.intentions.schemas import (
     IntentionLinkRead,
     IntentionRead,
     ProposedAction,
+    ReadinessIssue,
     Understanding,
     UnderstoodEntity,
     Withdrawal,
@@ -65,11 +69,13 @@ __all__ = [
     "Actor",
     "AmbiguityRead",
     "Approval",
+    "ContextReadiness",
     "GoalRead",
     "IllegalTransitionError",
     "Intention",
     "IntentionArchivedError",
     "IntentionAsked",
+    "IntentionContext",
     "IntentionCounts",
     "IntentionCreated",
     "IntentionDetail",
@@ -88,11 +94,14 @@ __all__ = [
     "NotYoursError",
     "NothingToStartError",
     "ProposedAction",
+    "ReadinessIssue",
     "Understanding",
     "UnderstoodEntity",
     "Withdrawal",
     "intention_read",
     "moves",
     "phase",
+    "readiness",
+    "refined",
     "understand",
 ]
