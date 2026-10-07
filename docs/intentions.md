@@ -7,9 +7,9 @@ production system must be answerable months later: who asked, what LEKA
 concluded, who approved, what ran.
 
 This is the frame of the Intentions epic. LEKA-384 keeps the intention, its
-lifecycle, its history and its links; LEKA-385 understands it (§ 9), LEKA-386 scopes it (§ 10), LEKA-387 grounds it in its context (§ 11); 388 and 389 scope it,
-assemble its context, analyse it and conclude; 390 decides; 391 acts; 392
-verifies — each moving it along this lifecycle and linking what it makes.
+lifecycle, its history and its links; LEKA-385 understands it (§ 9), LEKA-386 scopes it (§ 10), LEKA-387 grounds it in its context (§ 11), LEKA-388 analyses it (§ 12);
+389 concludes; 390 decides; 391 acts; 392 verifies — each moving it along
+this lifecycle and linking what it makes.
 
 Code: `api/leka/intentions/` — `lifecycle.py` (the states and moves, pure),
 `models.py`, `repository.py`, `service.py`; the routes in
@@ -165,6 +165,7 @@ Another workspace's intention is 404: the workspace is the session's
 | `POST /intentions/{id}/ask` | `{intention, context}` |
 | `POST /intentions/{id}/cancel` `{reason?}`, `/archive`, `/restore` | the intention |
 | `POST /intentions/{id}/links` `{kind, ref_id}` · `DELETE …/links/{link_id}` | context, finding, entity |
+| `GET /intentions/{id}/analysis` · `/analyses` · `POST …/analyse` | its analysis, the latest and every one; analysed again (§ 12) |
 
 **In code**, for the tickets that move it: `IntentionService.move(id, to,
 actor=…, by=…, reason=…, detail=…, summary=…)` and `link(id, kind, ref_id,
@@ -185,8 +186,9 @@ actor=…, label=…)`.
   *Vue d'ensemble* — what was asked, its kind, the scope chosen, what LEKA
   concluded (or that it has not yet), what it is linked to, where it may go
   next; *Historique* — every event in words, by LEKA or by a person, with
-  the context's version and the reason given; *Analyse*, *Preuves*,
-  *Actions* say they come with the analysis engine. Its asker, or who may
+  the context's version and the reason given; *Analyse* and *Preuves* —
+  its analysis, how it went and on what (§ 12); *Actions* says it comes
+  with the decision and its execution. Its asker, or who may
   approve, cancels it — asked first, with a reason — archives it once done
   with, restores it.
 
@@ -423,7 +425,131 @@ can ground blocked by `no_source_for`, still understood; « tout est si
 lent » blocked by `no_subject` and asked to clarify; another workspace's
 context 404.
 
-## 12. Tested
+## 12. Its analysis (LEKA-388)
+
+What answers an intention: LEKA's capabilities, run on the context
+assembled for it (§ 11) and the company model, each isolated, each said —
+then one structured result, kept, for the decision interface (LEKA-389).
+Code: `api/leka/intentions/analysis.py` (the core, pure: the material,
+selecting, running, assembling, the evidence), `capabilities.py` (LEKA's
+built-in capabilities, pure), `processing.py` (the pipeline: read, run,
+keep, move — the job and the sweep).
+
+**The pipeline**, for one intention `analysing`:
+
+```
+queued when asked, asked again, or analysed again (job intention-analysis:<id>, one at a time)
+   ──▶ its readiness blocked?        not run: an analysis `blocked`, what is in the way kept; it stays analysing
+   ──▶ asked_of()                    what it wants, about what, when, where, within which constraints
+   ──▶ select()                      the capabilities its goal, kind and actions call for — and why
+   ──▶ the material                  its context (that version) + the company model, each part read alone
+   ──▶ execute() each                on the context's sides it reads, within its budget
+   ──▶ assemble()                    one result: findings, causes, impact, risk, evidence, confidence
+   ──▶ kept, and the intention moved by LEKA
+```
+
+**The capabilities** (`CAPABILITIES`), each a `Capability`: a name and a
+version, what it is for, the goals and kinds that call it, the sides of the
+context it reads (technical, business, organizational, temporal), the parts
+of the material it needs, its budget (15 s), and how it runs — `rules` over
+the company model, or `model`: an agent (`agents/*.md`) that waits for the
+model gateway (LEKA-394) and is said `skipped`, `no_model`.
+
+| Capability | Called by | What it says |
+| --- | --- | --- |
+| `standing` | always | each thing it is about: its state, lifecycle, criticality, how well LEKA knows it, what LEKA already concluded on it (LEKA-377 to 383) — the scene, not an answer |
+| `ownership` | find_owner, act; kind ownership | who owns it, maintains it, leads its teams, knows it, its escalation — several owners an uncertainty, none said |
+| `dependencies` | map_dependencies, assess_impact, plan_migration | what it depends on, what depends on it and what that reaches — applications, business capabilities, processes; the risk: high when the business or something critical relies on it |
+| `incidents` | explain_cause, investigate; kind diagnose | its incidents in the period, their causes — a source's word first, then what is suspected, then what changed just before (0.7 within 6 h, 0.55 within a day, 0.4 after) — what they reached; the risk from the severity declared |
+| `changes` | find_change, explain_cause, act | what changed on it or around it in the period (72 h after for what followed), what each reached, the incidents that followed |
+| `documentation` | find_knowledge, check_compliance | what describes it, and whether it is current |
+| `compliance` | check_compliance | an owner, current documentation, a criticality, nothing serious open, well known — each a check |
+| `migration` | plan_migration | where to — missing when not said — and its ties both ways |
+| `action` | act | the action asked, what depends on its target, the last deployment, the hard constraints — said, never done: a person approves (LEKA-390) |
+
+**Each runs isolated.** A capability that raises is `failed` (its
+exception's type kept, not its text), one over its budget `timed_out`, one
+missing what it reads `skipped` (`no_material`) — the others go on. A part
+of the material that cannot be read is logged and skips what needs it.
+
+**The result** (`IntentionAnalysisResult`):
+
+| | |
+| --- | --- |
+| `status` | `failed` when nothing that ran succeeded; `partial` when something failed or timed out; `inconclusive` when what was asked about found nothing — what sets the scene (`standing`) does not answer, unless nothing else ran; else `complete` |
+| `summary`, `findings`, `causes` | each a code, its values and an English sentence — the interface words it from the code; findings are facts (a source says, LEKA observed), causes hypotheses (`stated` or `inferred`, how sure, why) |
+| `impact`, `risk`, `risk_basis` | what it reaches by area (dependents, applications, capabilities, processes); the worst risk said, and on what |
+| `uncertainties`, `missing` | what LEKA does not know; what did not finish (`capability.failed`, `capability.timed_out`) |
+| `confidence`, `support` | the mean of the capabilities' — × 0.85 on a `limited` context; what it rests on: the context's sources, their contradictions, its readiness |
+| `evidence` | every piece once, cited by id from the statements: an entity, a relationship's record, an event, an inference — with its sources (id, kind, name; none when deleted since), the records that stated it, its origin and confidence, and what its label is made of (a tie's ends, a finding's code and values) |
+
+**Evidence keeps its provenance.** The context's word on a thing when it
+holds it — the element's provenance (§ 11, context.md § 7): its sources,
+records, origin, confidence; else the thing's own sources in the model.
+
+**Kept** in `intention_analyses`, one row per run, numbered: why it ran
+(`created`, `asked_again`, `requested`, `sweep`), who asked, the context
+and version it read, its readiness, when it started and finished, the
+capabilities considered and why (`selection`), what each did (`steps`:
+status, duration, error), the result, an error (`context_blocked`) and
+`detail` (what blocked it; `superseded`).
+
+**The intention moved by LEKA** — `failed` when the analysis failed;
+`awaiting_decision` when it asks to act on systems (`proposed`); else
+`completed` (`answered`), its `summary` the result's first sentence — and
+up to ten of LEKA's findings it rests on linked. An intention that moved
+meanwhile (cancelled, asked again) is not moved: the analysis is kept,
+`superseded`. A failed one is analysed again by its asker or an approver:
+`retried` to `analysing`, then queued.
+
+**Queued, and swept.** Created and asked again, the route commits, then
+queues the job (`queue_analysis`); `POST …/analyse` the same. Every 15
+minutes (`intention-analysis-sweep`, :07 :22 :37 :52) the intentions
+analysing whose context has no analysis yet are analysed — what no worker
+took. Idempotent.
+
+**The API**: `GET /intentions/{id}/analysis` — the latest (404 « No
+analysis yet. »); `GET …/analyses?limit` — every one, the latest first;
+`POST …/analyse` — 202 `{queued}`, 409 in any other state than analysing
+or failed. `intention:read`, analysing again `intention:create` and its
+asker or an approver; another workspace's 404.
+
+**In the app** — the intention's tabs:
+
+- *Analyse*: which analysis, why it ran, when, how long, on which context
+  version; each capability mobilised, why, and how it went — done, failed
+  (its error), timed out, not run; then what it found, laid out as every
+  analysis is (`AnalysisView`, LEKA-341): the synthesis and its confidence
+  and support, the facts, the probable causes, the evidence, what it
+  reaches — without proposals (LEKA-389). On its way: « LEKA analyse votre
+  demande », read again every 4 s, the intention read again once done;
+  blocked: what its context lacks (§ 11); failed: « Relancer l'analyse ».
+  Its earlier analyses listed.
+- *Preuves*: every piece of evidence collected — where it came from, its
+  record, its origin and confidence, which capability cites it.
+- *Vue d'ensemble*: its summary, in the reader's words.
+
+Every sentence is worded from its code and values (`lib/intention-analysis.ts`),
+a finding LEKA already concluded as Insights words it — the API's English
+when the interface does not know a code.
+
+**Tested** — `tests/test_intention_analysis.py`, pure: what its goal, kind
+and actions call for and why, its standing always; an agent waiting for a
+model; each isolated — failed, timed out, skipped, the others going on;
+failed, partial, inconclusive — the scene alone does not conclude; each
+capability on a hand-made company. `tests/test_intention_analysis_api.py`,
+on Acme's model: « Qui est responsable de Billing API ? » answered with
+the catalogue's record, completed; what relies on it — Checkout, Invoicing,
+high; « Redémarre Billing API » awaiting a person's decision; a diagnosis
+no source can ground not analysed; a failing and a slow capability said,
+the others going on; nothing that ran failed, then analysed again; a late
+analysis superseded; queued when asked and asked again, the sweep running
+what waits; another workspace's 404. `web/lib/intention-analysis.test.ts`,
+`web/components/intentions/analysis-tab.test.tsx`;
+`e2e/intention-analysis.spec.ts`, on the demo: asked, analysed, followed,
+its evidence and history; a restart waiting for a person.
+
+## 13. Tested
 
 - `tests/test_intention_lifecycle.py`, pure: the way from asking to
   verified, each step's actor; a decision a person's, never LEKA's; what
@@ -446,9 +572,11 @@ context 404.
 
 ## Not yet
 
-- **Analysis, findings** (LEKA-388, 389): today an intention stays
-  `analysing` once understood — the analysis that moves it on comes with
-  them.
+- **Findings presented for a decision, recommendations** (LEKA-389): the
+  analysis's result (§ 12) is their input; its *Analyse* tab draws it
+  without proposals.
+- **Agents** (`agents/*.md`) as capabilities: selected, said `no_model`
+  until the model gateway (LEKA-394).
 - **A model-assisted understanding** (LEKA-394): the same contract.
 - **Decisions, actions, outcomes** (LEKA-390 to 392): their tables, routes
   and screens; the lifecycle and the links are ready for them.
