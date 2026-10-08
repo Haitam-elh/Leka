@@ -312,6 +312,8 @@ class CatalogueService:
                 enabled=enabled,
                 connected=connected,
                 model=route is not None if self._model is None else self._model,
+                # Agents run (LEKA-395): runs.py.
+                runtime=True,
                 permissions=permissions,
             )
             found.append(

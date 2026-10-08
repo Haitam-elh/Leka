@@ -278,6 +278,7 @@ async def test_the_catalogue_says_which_model_runs_what_by_what_it_needs(
     }
     architect = found["application-architecture"]
     assert "no_model" not in [r["code"] for r in architect["reasons"]]
-    assert "no_runtime" in [r["code"] for r in architect["reasons"]]
+    # And agents run (LEKA-395).
+    assert "no_runtime" not in [r["code"] for r in architect["reasons"]]
     # LEKA's own rules need no model.
     assert (found["ownership"]["answering"], found["ownership"]["model_needs"]) == (None, None)

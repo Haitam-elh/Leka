@@ -273,7 +273,8 @@ class Situation:
     connected: frozenset[str] = frozenset()
     # A model that can do what it needs can be reached here (LEKA-394).
     model: bool = False
-    # An agent can be run: not before its runtime (LEKA-395).
+    # An agent can be run: its runtime is there (LEKA-395) — said, so a
+    # process without it says no_runtime.
     runtime: bool = False
     permissions: frozenset[str] = frozenset()
 

@@ -1,5 +1,6 @@
 """Capabilities: what LEKA can do — its catalogue (LEKA-393), the agent
-loader, and the model gateway and router (LEKA-394).
+loader, the model gateway and router (LEKA-394), and the agent runtime
+(LEKA-395).
 
 Three responsibilities, one module because they are the same boundary: this
 is where what LEKA can do is defined and registered, where the instructions
@@ -68,6 +69,8 @@ from leka.capabilities.loader import (
     read_index,
 )
 from leka.capabilities.models import (
+    AgentRun,
+    AgentRunEvent,
     CapabilityEvent,
     CapabilityFavourite,
     CapabilityRegistration,
@@ -83,12 +86,29 @@ from leka.capabilities.registry import (
     provide,
 )
 from leka.capabilities.repository import CapabilityRunRepository
+from leka.capabilities.runs import execute_run, queue_run, sweep_runs
+from leka.capabilities.runtime import (
+    AgentTool,
+    Refusal,
+    RunStatus,
+    Withheld,
+    delivered,
+    inject,
+    offered,
+    output_of,
+    runnable,
+)
 from leka.capabilities.schemas import (
     Agent,
     AgentFrontMatter,
     AgentInput,
     AgentMode,
     AgentRisk,
+    AgentRunCreate,
+    AgentRunDetail,
+    AgentRunEventRead,
+    AgentRunRead,
+    AgentRunUsage,
     CapabilityDayUse,
     CapabilityDetail,
     CapabilityDiscovery,
@@ -122,9 +142,16 @@ from leka.capabilities.schemas import (
     WorkspaceModelRead,
     WorkspaceModelUpdate,
 )
-from leka.capabilities.service import CapabilityService
+from leka.capabilities.service import (
+    AgentRuntime,
+    NotYoursError,
+    RunFinishedError,
+    RunRefusedError,
+)
+from leka.capabilities.tools import TOOLS as AGENT_TOOLS
 
 __all__ = [
+    "AGENT_TOOLS",
     "CATEGORIES",
     "Agent",
     "AgentFrontMatter",
@@ -133,6 +160,15 @@ __all__ = [
     "AgentMode",
     "AgentRegistry",
     "AgentRisk",
+    "AgentRun",
+    "AgentRunCreate",
+    "AgentRunDetail",
+    "AgentRunEvent",
+    "AgentRunEventRead",
+    "AgentRunRead",
+    "AgentRunUsage",
+    "AgentRuntime",
+    "AgentTool",
     "Availability",
     "CapabilityDayUse",
     "CapabilityDetail",
@@ -149,7 +185,6 @@ __all__ = [
     "CapabilityReason",
     "CapabilityRegistration",
     "CapabilityRunRepository",
-    "CapabilityService",
     "CapabilitySettingUpdate",
     "CapabilitySourceNeed",
     "CapabilityTop",
@@ -187,10 +222,15 @@ __all__ = [
     "ModelUsageRead",
     "Needs",
     "NoModelError",
+    "NotYoursError",
     "Prefer",
     "Query",
     "Reason",
+    "Refusal",
     "Request",
+    "RunFinishedError",
+    "RunRefusedError",
+    "RunStatus",
     "Situation",
     "Standing",
     "Structured",
@@ -198,6 +238,7 @@ __all__ = [
     "Tool",
     "ToolCall",
     "ToolChoice",
+    "Withheld",
     "WorkspaceCapability",
     "WorkspaceModel",
     "WorkspaceModelRead",
@@ -208,20 +249,28 @@ __all__ = [
     "check_input",
     "default_ready",
     "definitions",
+    "delivered",
     "discover",
     "discover_capabilities",
+    "execute_run",
     "find",
+    "inject",
     "leka_default",
     "load_all",
     "may_move",
     "mentions",
     "model_usage",
     "needs_of",
+    "offered",
+    "output_of",
     "parse_agent",
     "provide",
+    "queue_run",
     "read_index",
     "run_catalogue_sync",
+    "runnable",
     "standings",
+    "sweep_runs",
     "sync",
     "sync_catalogue",
     "validated",

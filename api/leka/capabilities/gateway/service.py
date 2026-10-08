@@ -89,6 +89,10 @@ class NoModelError(Exception):
         self.passed = list(passed)
 
 
+class ToolRoundsError(NoModelError):
+    """A model that kept asking for tools and never answered (run_tools)."""
+
+
 class InvalidOutputError(Exception):
     """A structured answer that does not match what was asked."""
 
@@ -397,7 +401,7 @@ class Gateway:
                 )
             # Its first move may be forced; after it, it may answer.
             asking = replace(request, tool_choice=ToolChoice.AUTO)
-        raise NoModelError(f"No answer after {rounds} rounds of tools.")
+        raise ToolRoundsError(f"No answer after {rounds} rounds of tools.")
 
     # ── keeping it ──────────────────────────────────────────────────────────
 

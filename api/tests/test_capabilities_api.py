@@ -92,11 +92,8 @@ async def test_the_catalogue_for_a_workspace_and_a_person(
     assert [i["name"] for i in architect["inputs"]] == ["parcours", "perimetre", "vue_applicative"]
     assert (architect["output"], architect["formats"]) == ("document", ["pptx", "pdf"])
     assert architect["available"] is False
-    assert [r["code"] for r in architect["reasons"]] == [
-        "missing_source",
-        "no_model",
-        "no_runtime",
-    ]
+    # Agents run (LEKA-395): what is in its way is what it needs.
+    assert [r["code"] for r in architect["reasons"]] == ["missing_source", "no_model"]
     assert architect["sources"] == [{"any_of": ["confluence", "microsoft_365"], "connected": False}]
     # What does not run, only when asked.
     assert "correlate-deploy-with-latency" not in found
@@ -107,7 +104,7 @@ async def test_the_catalogue_for_a_workspace_and_a_person(
     # A source to read from, connected: one reason less.
     await _connect(acme, "confluence")
     architect = _by_key(await _list(client))[ARCHITECT]
-    assert [r["code"] for r in architect["reasons"]] == ["no_model", "no_runtime"]
+    assert [r["code"] for r in architect["reasons"]] == ["no_model"]
     assert architect["sources"][0]["connected"] is True
 
     # Filtered.

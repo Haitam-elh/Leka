@@ -538,3 +538,94 @@ class ModelUsageRead(BaseModel):
     by_model: list[ModelBreakdownRead]
     by_purpose: list[ModelPurposeRead]
     latest: list[ModelCallRead]
+
+
+# ── agent runs (LEKA-395) ───────────────────────────────────────────────────
+
+RunStatusWord = Literal["queued", "running", "succeeded", "failed", "cancelled"]
+
+
+class AgentRunCreate(BaseModel):
+    """An agent to run, with what its contract takes."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    key: str = Field(min_length=1, max_length=100, description="The agent's key.")
+    inputs: dict[str, str | int | float | bool | None] = Field(
+        default_factory=dict, description="What its contract takes, by name."
+    )
+    intention_id: uuid.UUID | None = Field(
+        default=None,
+        description="The intention it works for: its context is the agent's (LEKA-387).",
+    )
+    context_id: uuid.UUID | None = Field(
+        default=None,
+        description="A context to read; none: assembled from what it is given.",
+    )
+
+
+class AgentRunRead(BaseModel):
+    """One run of an agent: where it stands, what it delivers, or why not."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    title: str | None = Field(description="The agent's, as the catalogue holds it now.")
+    version: str = Field(description="The version that ran — or will.")
+    status: RunStatusWord
+    inputs: dict[str, object]
+    requested_by: uuid.UUID | None
+    mine: bool = Field(description="Asked by whoever reads it.")
+    intention_id: uuid.UUID | None
+    context_id: uuid.UUID | None
+    context_version: int | None
+    format: Literal["markdown", "json"] = Field(description="What it delivers.")
+    pending: list[str] = Field(
+        description="What it declares (pptx, pdf…) and the runtime does not render yet."
+    )
+    error: str | None = Field(
+        description="Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, "
+        "invalid_output, abandoned, error."
+    )
+    reasons: list[dict[str, object]] = Field(
+        description="When it could no longer run: the catalogue's reasons, as it said them."
+    )
+    provider: str | None
+    model: str | None
+    model_version: str | None
+    tool_calls: int
+    queued_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+
+
+class AgentRunEventRead(BaseModel):
+    """One step of a run."""
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    seq: int
+    kind: str = Field(
+        description="queued, started, context, tool_withheld, tool, answered, succeeded, "
+        "failed, cancelled"
+    )
+    at: datetime
+    detail: dict[str, object]
+
+
+class AgentRunUsage(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    calls: int = Field(description="Calls to a model, every attempt.")
+    tokens_in: int
+    tokens_out: int
+    cost_usd: float | None = Field(description="At list price; none when a price is not known.")
+
+
+class AgentRunDetail(AgentRunRead):
+    """A run, with what it delivered and every step."""
+
+    output: str | None
+    events: list[AgentRunEventRead]
+    usage: AgentRunUsage
