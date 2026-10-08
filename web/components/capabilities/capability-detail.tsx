@@ -19,6 +19,7 @@ import { useParams, usePathname } from "next/navigation";
 
 import { cn } from "cn";
 
+import { AgentRuns, RunAgent } from "@/components/capabilities/agent-runs";
 import {
   CATEGORY_ICON,
   CATEGORY_TONE,
@@ -47,7 +48,8 @@ import { useNamePage } from "@/lib/navigation/page-name";
  * One capability (LEKA-393): what it is for, what it takes and delivers,
  * what it needs and whether it is there, who may use it, whether it can be
  * used here now and why not — its versions and its history, and its week.
- * An agent's instructions stay on the server: what it is, is said.
+ * An agent is run from here, and its runs followed (LEKA-395). An agent's
+ * instructions stay on the server: what it is, is said.
  */
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -186,6 +188,12 @@ export function CapabilityScreen() {
                 ))}
               </ul>
             </Card>
+            {data.kind === "agent" ? (
+              <>
+                <RunAgent capability={data} />
+                <AgentRuns agentKey={data.key} />
+              </>
+            ) : null}
             {data.examples.length ? (
               <Card title={w.examples} icon={<MessageSquareQuote className="size-4 text-shell-muted" aria-hidden="true" />}>
                 <ul className="space-y-1 text-[0.8125rem] text-brand-navy">
