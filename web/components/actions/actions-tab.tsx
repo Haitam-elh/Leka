@@ -20,6 +20,7 @@ import { useState } from "react";
 
 import { cn } from "cn";
 
+import { ExpectedOutcome, ImpactBanner, VerificationCard } from "@/components/actions/outcome";
 import { actionWord } from "@/components/decisions/decision-card";
 import { Card, type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
@@ -35,15 +36,21 @@ import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { IntentionDetail } from "@/lib/intentions/api";
 import { notify } from "@/lib/notify";
+import type { Verification } from "@/lib/outcomes";
+import { useVerifications } from "@/lib/outcomes-queries";
 
 /**
  * An intention's tab Actions (LEKA-391), as mockup 06: what an approved
  * decision became — each action, who runs it (an authorized system, or a
- * person), how it went step by step — preparation, execution, then the
- * verification LEKA-392 brings — what shows it, and everything that
- * happened, in a log. Who may approve prepares, runs or schedules it,
- * confirms what waits on a person, stops it, retries what failed; anyone
- * else follows it. Read again every few seconds while it runs.
+ * person), how it went step by step — preparation, execution, verification,
+ * finalisation — what shows it, and everything that happened, in a log.
+ * Who may approve prepares, runs or schedules it, confirms what waits on a
+ * person, stops it, retries what failed; anyone else follows it. Read
+ * again every few seconds while it runs.
+ *
+ * Its outcome (LEKA-392): what should be true once it ran, set before it
+ * runs; then whether it came, read again while it is verified; and, as the
+ * mockup ends, its whole story one click away.
  */
 
 const PLAN_TONES: Record<Plan["status"], TileTone> = {
@@ -100,32 +107,49 @@ function useAct(intentionId: string) {
   return { run, pending: act.isPending };
 }
 
-/** "Préparation ✓ · Exécution 2 · Vérification à venir · Finalisation". */
-function Stages({ plan, step }: { plan: Plan; step: PlanStep }) {
+/** "Préparation ✓ · Exécution ✓ · Vérification En vérification · Finalisation". */
+function Stages({
+  plan,
+  step,
+  verification,
+}: {
+  plan: Plan;
+  step: PlanStep;
+  verification: Verification | undefined;
+}) {
   const t = useDictionary();
   const s = t.execution.stages;
   const prepared = plan.status !== "planned" && plan.status !== "scheduled";
   const executed = step.status === "succeeded";
-  const stages: { key: string; label: string; done: boolean; current: boolean; note?: string }[] =
-    [
-      { key: "preparation", label: s.preparation, done: prepared, current: !prepared },
-      {
-        key: "execution",
-        label: s.execution,
-        done: executed,
-        current: prepared && !executed,
-        note: t.execution.stepStatuses[step.status],
-      },
-      // LEKA-392 verifies what was done.
-      {
-        key: "verification",
-        label: s.verification,
-        done: false,
-        current: false,
-        note: t.execution.later,
-      },
-      { key: "finalisation", label: s.finalisation, done: false, current: false },
-    ];
+  // What was done, verified (LEKA-392): achieved, it is final.
+  const verified = verification?.status === "succeeded";
+  const missed = verification?.status === "partial" || verification?.status === "failed";
+  const stages: {
+    key: string;
+    label: string;
+    done: boolean;
+    current: boolean;
+    failed?: boolean;
+    note?: string;
+  }[] = [
+    { key: "preparation", label: s.preparation, done: prepared, current: !prepared },
+    {
+      key: "execution",
+      label: s.execution,
+      done: executed,
+      current: prepared && !executed,
+      note: t.execution.stepStatuses[step.status],
+    },
+    {
+      key: "verification",
+      label: s.verification,
+      done: verified,
+      current: verification?.status === "verifying",
+      failed: missed,
+      note: verification ? t.outcome.statuses[verification.status] : t.execution.later,
+    },
+    { key: "finalisation", label: s.finalisation, done: verified, current: false },
+  ];
   return (
     <ol className="grid grid-cols-4 gap-2 text-center text-xs" data-testid="plan-stages">
       {stages.map((stage, index) => (
@@ -135,15 +159,27 @@ function Stages({ plan, step }: { plan: Plan; step: PlanStep }) {
               "flex size-6 items-center justify-center rounded-full border text-[0.6875rem] font-semibold",
               stage.done
                 ? "border-shell-nav-active bg-brand-violet-soft text-shell-nav-active"
-                : stage.current
-                  ? "border-shell-nav-active bg-shell-nav-active text-white"
-                  : "border-shell-line text-shell-muted",
+                : stage.failed
+                  ? "border-state-danger bg-state-danger-soft text-state-danger"
+                  : stage.current
+                    ? "border-shell-nav-active bg-shell-nav-active text-white"
+                    : "border-shell-line text-shell-muted",
             )}
           >
-            {stage.done ? <Check className="size-3.5" aria-hidden="true" /> : index + 1}
+            {stage.done ? (
+              <Check className="size-3.5" aria-hidden="true" />
+            ) : stage.failed ? (
+              <CircleX className="size-3.5" aria-hidden="true" />
+            ) : (
+              index + 1
+            )}
           </span>
           <span className="font-medium text-brand-navy">{stage.label}</span>
-          {stage.note ? <span className="text-shell-muted">{stage.note}</span> : null}
+          {stage.note ? (
+            <span className={stage.failed ? "text-state-danger" : "text-shell-muted"}>
+              {stage.note}
+            </span>
+          ) : null}
         </li>
       ))}
     </ol>
@@ -289,10 +325,12 @@ function StepCard({
   plan,
   step,
   steward,
+  verification,
 }: {
   plan: Plan;
   step: PlanStep;
   steward: boolean;
+  verification: Verification | undefined;
 }) {
   const t = useDictionary();
   const w = t.execution;
@@ -342,7 +380,7 @@ function StepCard({
           {w.stepStatuses[step.status]}
         </Pill>
       </div>
-      <Stages plan={plan} step={step} />
+      <Stages plan={plan} step={step} verification={verification} />
       <Evidence step={step} />
       {step.status === "awaiting" && plan.status === "running" && steward ? (
         <Report intentionId={plan.intention_id} step={step} />
@@ -561,7 +599,12 @@ function Controls({ plan, intention }: { plan: Plan; intention: IntentionDetail 
       </div>
     );
   }
-  const over = plan.status === "failed" || plan.status === "cancelled" || plan.status === "blocked";
+  // Ran, but what was expected did not come (LEKA-392): tried again too.
+  const over =
+    plan.status === "failed" ||
+    plan.status === "cancelled" ||
+    plan.status === "blocked" ||
+    (plan.status === "succeeded" && intention.status === "failed");
   if (over && (intention.status === "failed" || intention.status === "approved")) {
     return (
       <div data-testid="plan-controls">
@@ -592,6 +635,9 @@ function PlanView({
 }) {
   const t = useDictionary();
   const w = t.execution;
+  // Once it ran, whether it achieved what was expected (LEKA-392).
+  const verifications = useVerifications(plan.intention_id, plan.status === "succeeded");
+  const verification = verifications.data?.find((v) => v.plan_id === plan.id);
   return (
     <div className="flex flex-col gap-4" data-testid="plan" data-status={plan.status}>
       <section className="flex flex-col gap-4 rounded-xl border border-shell-line bg-white p-4">
@@ -621,12 +667,24 @@ function PlanView({
           <p className="text-[0.8125rem] text-shell-muted">{w.readOnly}</p>
         )}
       </section>
+      {verification ? (
+        <VerificationCard verification={verification} steward={steward} />
+      ) : (
+        <ExpectedOutcome plan={plan} steward={steward} />
+      )}
       <ul className="flex flex-col gap-3" data-testid="plan-steps">
         {plan.steps.map((step) => (
-          <StepCard key={step.id} plan={plan} step={step} steward={steward} />
+          <StepCard
+            key={step.id}
+            plan={plan}
+            step={step}
+            steward={steward}
+            verification={verification}
+          />
         ))}
       </ul>
       <Journal events={plan.events} />
+      <ImpactBanner intentionId={plan.intention_id} />
     </div>
   );
 }

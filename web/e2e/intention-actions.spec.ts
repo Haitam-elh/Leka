@@ -1,6 +1,6 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import { analyse, ask } from "./intention-helpers";
+import { approved } from "./intention-helpers";
 import { signIn } from "./sign-in";
 
 /**
@@ -14,17 +14,6 @@ import { signIn } from "./sign-in";
  * are proven by the API's tests, against a stand-in that checks LEKA's
  * signature: there is no customer's system to call here.
  */
-
-/** Asked, analysed, approved from its page. */
-async function approved(page: Page): Promise<string> {
-  const id = await ask(page, `Redémarre auth-service en production (${Date.now()})`);
-  analyse(id);
-  await page.goto(`/intentions/${id}`);
-  await page.getByTestId("decision").getByTestId("decision-approve").click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Valider" }).click();
-  await expect(page.getByTestId("intention-status")).toContainText("Approuvée");
-  return id;
-}
 
 test.describe("Intention actions", () => {
   test("prepared, run, a person's step confirmed — then verifying", async ({ page }) => {

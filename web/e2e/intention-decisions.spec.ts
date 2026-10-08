@@ -62,6 +62,8 @@ test.describe("Intention decisions", () => {
     await expect(decision.getByTestId("decision-actions")).toHaveCount(0);
 
     await page.getByTestId("tab-history").click();
+    // What happened to the intention itself (its whole story: LEKA-392).
+    await page.getByTestId("timeline-category-intention").click();
     await expect(page.getByTestId("intention-event").last()).toContainText("Approuvée");
   });
 

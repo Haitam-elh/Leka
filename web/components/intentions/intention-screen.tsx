@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArchiveRestore, History, Link2, SearchX, XCircle } from "lucide-react";
+import { Archive, ArchiveRestore, Link2, SearchX, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 
@@ -10,6 +10,7 @@ import { Card, entityHref } from "@/components/environment/parts";
 import { AnalysisTab, EvidenceTab, SummarySaid } from "@/components/intentions/analysis-tab";
 import { kindOf, StatusPill } from "@/components/intentions/intentions-list";
 import { ReadinessPanel } from "@/components/intentions/readiness";
+import { TimelineTab } from "@/components/intentions/timeline-tab";
 import { UnderstandingPanel } from "@/components/intentions/understanding";
 import { useConfirm } from "@/components/interactions/confirm";
 import { Pill } from "@/components/intelligence/pill";
@@ -24,12 +25,8 @@ import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
-import type { IntentionDetail, IntentionEvent, IntentionLink } from "@/lib/intentions/api";
-import {
-  useIntention,
-  useIntentionChange,
-  useIntentionHistory,
-} from "@/lib/intentions/queries";
+import type { IntentionDetail, IntentionLink } from "@/lib/intentions/api";
+import { useIntention, useIntentionChange } from "@/lib/intentions/queries";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { matchRoute } from "@/lib/navigation/active";
 import { useNamePage } from "@/lib/navigation/page-name";
@@ -37,9 +34,8 @@ import { notify } from "@/lib/notify";
 
 /**
  * An intention's page (LEKA-384): where it stands, what was asked, what it
- * is linked to, and — tab Historique — everything that happened to it, as
- * its history keeps it (GET /intentions/{id}/history): who, LEKA or a
- * person, when, from where to where, why. Tabs Analyse and Preuves: its
+ * is linked to, and — tab Historique — its whole story, from its analysis
+ * to its outcome (LEKA-392, timeline-tab). Tabs Analyse and Preuves: its
  * analysis, how it went and on what (LEKA-388). Actions: what its approved
  * decision became, how it runs, its evidence (LEKA-391).
  *
@@ -84,7 +80,7 @@ export function IntentionScreen() {
   } else if (!data) {
     body = <div className="h-80 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
   } else if (tab === "history") {
-    body = <HistoryTab id={data.id} />;
+    body = <TimelineTab id={data.id} />;
   } else if (tab === "analysis") {
     body = <AnalysisTab intention={data} />;
   } else if (tab === "evidence") {
@@ -317,91 +313,5 @@ function Overview({ intention }: { intention: IntentionDetail }) {
         </Card>
       </div>
     </div>
-  );
-}
-
-// ── Historique ──────────────────────────────────────────────────────────
-
-/** One event of its history, in words. */
-export function eventSaid(t: Dictionary, event: IntentionEvent): string {
-  const w = t.intentions.history;
-  const detail = event.detail as Record<string, unknown>;
-  const kinds = t.intentions.linkKinds as Record<string, string>;
-  switch (event.kind) {
-    case "created":
-      return w.created;
-    case "linked":
-    case "unlinked":
-      return fill(w[event.kind], {
-        kind: kinds[String(detail.kind)] ?? String(detail.kind),
-        label: String(detail.label ?? ""),
-      });
-    case "archived":
-    case "restored":
-      return w[event.kind];
-    case "moved": {
-      const named = event.name ? (w.names as Record<string, string>)[event.name] : undefined;
-      if (named) return named;
-      const statuses = t.intentions.statuses as Record<string, string>;
-      return fill(w.moved, {
-        from: statuses[event.from_status ?? ""] ?? "",
-        to: statuses[event.to_status ?? ""] ?? "",
-      });
-    }
-    default:
-      return event.kind;
-  }
-}
-
-function HistoryTab({ id }: { id: string }) {
-  const t = useDictionary();
-  const { locale } = useLocale();
-  const me = useCurrentUser();
-  const w = t.intentions.history;
-  const history = useIntentionHistory(id);
-  if (history.isError) {
-    return <ErrorState error={history.error} onRetry={() => void history.refetch()} />;
-  }
-  if (!history.data) {
-    return <div className="h-64 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
-  }
-  return (
-    <Card title={w.title} icon={<History className="size-4 text-shell-muted" aria-hidden="true" />}>
-      {history.data.length === 0 ? (
-        <p className="text-[0.8125rem] text-shell-muted">{w.empty}</p>
-      ) : (
-        <ol className="relative space-y-4 border-l border-shell-line pl-5" data-testid="intention-history">
-          {history.data.map((event) => {
-            const detail = event.detail as Record<string, unknown>;
-            const who =
-              event.actor === "system"
-                ? w.leka
-                : event.by && event.by === me?.id
-                  ? fill(w.by, { name: t.intentions.you })
-                  : w.someone;
-            return (
-              <li key={event.id} className="relative" data-testid="intention-event" data-kind={event.kind}>
-                <span
-                  aria-hidden="true"
-                  className="absolute top-1.5 -left-[1.6rem] size-2.5 rounded-full border-2 border-white bg-brand-violet"
-                />
-                <p className="text-[0.875rem] font-medium text-brand-navy">{eventSaid(t, event)}</p>
-                <p className="text-xs text-shell-muted">
-                  <time dateTime={event.at}>{exactDate(locale, event.at)}</time> · {who}
-                  {typeof detail.version === "number"
-                    ? ` · ${fill(w.version, { version: detail.version })}`
-                    : ""}
-                </p>
-                {event.reason ? (
-                  <p className="mt-0.5 text-xs text-brand-navy">
-                    {fill(w.reason, { reason: event.reason })}
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
-      )}
-    </Card>
   );
 }

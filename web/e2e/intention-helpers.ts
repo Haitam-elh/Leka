@@ -7,9 +7,9 @@ import { pythonExecutable, repositoryRoot } from "./python";
 
 /**
  * Asking an intention, and analysing it as the job runner would — for the
- * specs of its analysis (LEKA-388) and its decision (LEKA-390). There is no
- * worker in these tests: the analysis the API queues is run here, for one
- * intention only.
+ * specs of its analysis (LEKA-388), its decision (LEKA-390), its actions
+ * (LEKA-391) and its outcome (LEKA-392). There is no worker in these
+ * tests: the analysis the API queues is run here, for one intention only.
  */
 
 /** Its analysis, run now — the job the API queued. */
@@ -48,4 +48,15 @@ export async function ask(page: Page, words: string): Promise<string> {
   await page.getByTestId("intention-follow").click();
   await expect(page).toHaveURL(/\/intentions\/[0-9a-f-]{36}$/);
   return page.url().split("/").pop() ?? "";
+}
+
+/** Asked, analysed, approved from its page (LEKA-390): its id. */
+export async function approved(page: Page): Promise<string> {
+  const id = await ask(page, `Redémarre auth-service en production (${Date.now()})`);
+  analyse(id);
+  await page.goto(`/intentions/${id}`);
+  await page.getByTestId("decision").getByTestId("decision-approve").click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Valider" }).click();
+  await expect(page.getByTestId("intention-status")).toContainText("Approuvée");
+  return id;
 }
