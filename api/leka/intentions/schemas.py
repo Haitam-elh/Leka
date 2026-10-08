@@ -530,3 +530,137 @@ class IntentionAnalysisRequested(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     queued: bool
+
+
+# ── decisions (LEKA-390) ──────────────────────────────────────────────────────
+
+
+class ProposalTargetRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    name: str
+    type: str
+
+
+class ProposalRead(BaseModel):
+    """One action proposed: what, on what, where, within which constraints,
+    whether it can be undone."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    action: str
+    targets: list[ProposalTargetRead]
+    environment: str | None
+    constraints: list[dict[str, JsonValue]]
+    reversible: bool | None
+
+
+class DecisionVoteRead(BaseModel):
+    """A vote, as kept: who, when, why, on which revision, in which context."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    revision: int
+    verdict: Literal["approve", "reject", "modify", "request_changes"]
+    by: uuid.UUID | None = Field(description="None once the user is deleted.")
+    at: datetime
+    reason: str | None
+    changes: dict[str, JsonValue]
+    context: dict[str, JsonValue]
+
+
+class DecisionRead(BaseModel):
+    """A decision on what an intention asks to do: where it stands, what it
+    needs, what was voted."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    intention_id: uuid.UUID
+    number: int
+    status: Literal["proposed", "approved", "rejected", "changes_requested", "superseded"]
+    open: bool = Field(description="Proposed, and its intention awaiting a decision: votable.")
+    risk: Literal["low", "medium", "high"]
+    analysis_risk: str | None
+    revision: int
+    required_approvals: int
+    separate_asker: bool = Field(description="The asker may not be one of the approvers.")
+    approvers: list[uuid.UUID] = Field(description="Who approved its current revision, in order.")
+    proposals: list[ProposalRead]
+    analysis_id: uuid.UUID | None
+    context_version: int | None
+    asked_by: uuid.UUID | None
+    created_at: datetime
+    decided_at: datetime | None
+    votes: list[DecisionVoteRead]
+
+
+class DecisionIntention(BaseModel):
+    """The intention a decision is on, as the queue shows it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    title: str
+    status: str
+    kind: str | None
+    created_by: uuid.UUID | None
+    summary: str | None
+
+
+class DecisionQueueItem(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    decision: DecisionRead
+    intention: DecisionIntention
+
+
+class DecisionQueuePage(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    data: list[DecisionQueueItem]
+
+
+class DecisionSummary(BaseModel):
+    """How many decisions stand where — for À valider's figures."""
+
+    model_config = ConfigDict(frozen=True)
+
+    proposed: int
+    approved: int
+    rejected: int
+    changes_requested: int
+    superseded: int
+
+
+class ApprovalPolicyRead(BaseModel):
+    """How many must approve, per risk; when the asker may not be one."""
+
+    model_config = ConfigDict(frozen=True)
+
+    approvals: dict[Literal["low", "medium", "high"], int]
+    separate: list[Literal["low", "medium", "high"]]
+    production_raises: bool
+    customised: bool = Field(description="False: LEKA's default policy.")
+
+
+class ApprovalPolicyUpdate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    approvals: dict[Literal["low", "medium", "high"], int] = Field(default_factory=dict)
+    separate: list[Literal["low", "medium", "high"]] | None = None
+    production_raises: bool | None = None
+
+
+class DecisionVoteRequest(BaseModel):
+    """A vote: why — required to reject, modify or ask for changes — and,
+    to modify, where it should run and which actions are kept."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    reason: str | None = Field(default=None, max_length=2000)
+    environment: str | None = Field(default=None, min_length=1, max_length=60)
+    keep: list[str] | None = Field(default=None, max_length=20)

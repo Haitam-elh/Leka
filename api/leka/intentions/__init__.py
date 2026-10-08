@@ -14,10 +14,19 @@ LEKA-385): its goal, the actions asked, the things it is about, what is
 ambiguous, each with its words; not understood enough, it is said
 needs_clarification — and analysed (processing.py, LEKA-388): the
 capabilities its goal calls for run on its context, each isolated, the
-result kept with every piece of evidence and where it came from.
-docs/intentions.md.
+result kept with every piece of evidence and where it came from — and,
+when it asks to act, put to people's decision (approval.py, LEKA-390):
+approved, rejected, modified, under the workspace's policy, every vote
+kept. docs/intentions.md.
 """
 
+from leka.intentions.approval import (
+    DecisionClosedError,
+    DecisionRefusedError,
+    DecisionService,
+    policy_read,
+)
+from leka.intentions.decisions import Change, PolicyError, Verdict
 from leka.intentions.grounding import readiness, refined
 from leka.intentions.lifecycle import (
     CLOSED,
@@ -30,14 +39,27 @@ from leka.intentions.lifecycle import (
     moves,
     phase,
 )
-from leka.intentions.models import Intention, IntentionAnalysis, IntentionEvent, IntentionLink
+from leka.intentions.models import (
+    Intention,
+    IntentionAnalysis,
+    IntentionDecision,
+    IntentionDecisionVote,
+    IntentionEvent,
+    IntentionLink,
+)
 from leka.intentions.processing import queue_analysis
 from leka.intentions.repository import IntentionFilters, IntentionRepository
 from leka.intentions.schemas import (
     ActionRead,
     AmbiguityRead,
     Approval,
+    ApprovalPolicyRead,
+    ApprovalPolicyUpdate,
     ContextReadiness,
+    DecisionQueuePage,
+    DecisionRead,
+    DecisionSummary,
+    DecisionVoteRequest,
     GoalRead,
     IntentionAnalysisRead,
     IntentionAnalysisRequested,
@@ -76,7 +98,17 @@ __all__ = [
     "Actor",
     "AmbiguityRead",
     "Approval",
+    "ApprovalPolicyRead",
+    "ApprovalPolicyUpdate",
+    "Change",
     "ContextReadiness",
+    "DecisionClosedError",
+    "DecisionQueuePage",
+    "DecisionRead",
+    "DecisionRefusedError",
+    "DecisionService",
+    "DecisionSummary",
+    "DecisionVoteRequest",
     "GoalRead",
     "IllegalTransitionError",
     "Intention",
@@ -88,6 +120,8 @@ __all__ = [
     "IntentionContext",
     "IntentionCounts",
     "IntentionCreated",
+    "IntentionDecision",
+    "IntentionDecisionVote",
     "IntentionDetail",
     "IntentionEvent",
     "IntentionEventRead",
@@ -103,15 +137,18 @@ __all__ = [
     "Move",
     "NotYoursError",
     "NothingToStartError",
+    "PolicyError",
     "ProposedAction",
     "ReadinessIssue",
     "Understanding",
     "UnderstoodEntity",
+    "Verdict",
     "Withdrawal",
     "analysis_read",
     "intention_read",
     "moves",
     "phase",
+    "policy_read",
     "queue_analysis",
     "readiness",
     "refined",

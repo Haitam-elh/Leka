@@ -15,6 +15,7 @@ from leka.api import (
     capabilities,
     connectors,
     context,
+    decisions,
     enrichment,
     governance,
     graph,
@@ -54,5 +55,7 @@ api_router.include_router(context.router)
 api_router.include_router(intelligence.router)
 api_router.include_router(capabilities.router)
 api_router.include_router(intentions.router)
+# What people decide on what intentions ask to do (LEKA-390).
+api_router.include_router(decisions.router)
 
 __all__ = ["api_router"]
