@@ -1,4 +1,4 @@
-# Capabilities — what LEKA can do (LEKA-393)
+# Capabilities — what LEKA can do (LEKA-393, LEKA-394)
 
 One model for everything LEKA can do — its own rules over the company model
 (LEKA-388) and the agents written as markdown (ADR 004) — so that what routes
@@ -6,7 +6,8 @@ an intention to them (LEKA-398) and what runs them (LEKA-395) read the same
 thing. Code: `api/leka/capabilities/` — `definition.py` (pure: the model, its
 lifecycle, availability, discovery), `registry.py` (where definitions come
 from), `catalogue.py` (their history, and the catalogue for a workspace), the
-routes in `api/leka/api/capabilities.py`.
+routes in `api/leka/api/capabilities.py`; the model gateway and router in
+`gateway/` ([model-gateway.md](model-gateway.md)).
 
 ## 1. A capability
 
@@ -15,11 +16,11 @@ routes in `api/leka/api/capabilities.py`.
 | `key` | unique, kebab-case — an agent's `name`, an analysis's name |
 | `title`, `summary` | what people call it; **when to use it** — what routing reads first |
 | `category` | architecture, development, infrastructure, operations, security, compliance, data, documentation, project_management, business, knowledge |
-| `kind` | `rules` (LEKA's own, run in the analysis) or `agent` (instructions a model follows — LEKA-394/395) |
+| `kind` | `rules` (LEKA's own, run in the analysis), `model` (LEKA's own, written by a language model through the gateway — the synthesis, LEKA-394) or `agent` (instructions a model follows — LEKA-395) |
 | `version` | semver |
 | `lifecycle` | `draft` → `review` → `active` ⇄ `deprecated` → `retired`; only active and deprecated run; **retired is final** |
 | contract | `inputs` (name, type text·number·boolean·choice·entity, required, choices), `output` (finding, analysis, document, proposal), `formats` (json, markdown, pptx, pdf, docx, xlsx, csv) |
-| needs | `sources` — each a source kind, or alternatives (`confluence|microsoft_365`); `model` — run by a language model |
+| needs | `sources` — each a source kind, or alternatives (`confluence|microsoft_365`); `model` — run by a language model, and `model_needs` — what that model must do: a structured answer, tools, a context this long, a quality at least: **the router picks the model by them** ([model-gateway.md](model-gateway.md) § 3) |
 | who | `permission` (default `intention:create`), `mode` (`read_only`, `proposes_action`), `risk` |
 | discovery | `goals` (LEKA-385), `kinds` (LEKA-373), `entity_types`, `examples` (how people ask for it) |
 
@@ -35,7 +36,8 @@ every CI run). Two capabilities never share a key.
   **Its lifecycle is `agents/registry.yaml`'s `status`** — an agent missing
   from the index is a draft: going live is a line there, reviewed in a pull
   request. The index's version must be the file's.
-- **LEKA's own** — the analysis's nine capabilities (LEKA-388), declared by
+- **LEKA's own** — the analysis's nine capabilities (LEKA-388) and its
+  synthesis (LEKA-394), declared by
   `leka.intentions` with `provide(…)` when it is imported, as every module
   declares its tables for `leka/schema.py`: `capabilities` sits below
   `intentions` and never imports it.
@@ -51,7 +53,8 @@ LEKA's catalogue, no customer's (`capability_registrations`,
 `capability_events`, no `workspace_id`):
 
 - each version of each capability **registered once**, with what it is — its
-  fingerprint (everything but its lifecycle) and what the catalogue says of
+  fingerprint (everything but its lifecycle; `model_needs` at its default
+  left out, so what was registered before LEKA-394 stands) and what the catalogue says of
   it (an agent's instructions never: hashed only); a new version supersedes
   the last;
 - a move its lifecycle allows, kept; **a move it forbids** (retired → active),
@@ -74,7 +77,8 @@ Whether it can be used here, now — **every reason it cannot**, not the first:
 | `lifecycle` | draft, in review, retired |
 | `disabled` | turned off in the workspace — an admin, saying why |
 | `missing_source` | none of the sources it needs is connected (active or degraded) |
-| `no_model` | it is run by a model, and no model is called yet (LEKA-394) |
+| `no_model` | it is run by a model, and **no model this workspace can reach does what it needs** (LEKA-394: asked of the router, per workspace — its own model, LEKA's) |
+| `no_runtime` | an agent, and agents are not run yet (LEKA-395) |
 | `not_permitted` | the person's role lacks its permission |
 
 Deprecated: used, and said (`notes`). Turned off, **the analyses no longer
@@ -110,13 +114,14 @@ how long).
 runs this week against the last, the analysis time; by category, searched,
 sorted; each capability in words (LEKA's own in French, an agent as its file
 says it) with its category, its runs, and whether it can be used — and why
-not, in words: « Source à connecter : Confluence ou Microsoft 365 », « En
-attente du modèle de langage »; the week's use by category, the most used,
+not, in words: « Source à connecter : Confluence ou Microsoft 365 », « Aucun
+modèle de langage ne peut l'exécuter ici »; the week's use by category, the most used,
 the latest added; « Demander une capacité » asks LEKA (a new intention).
 **Mes capacités**: the starred. **Configuration**: every capability, turned
 on or off by an admin, saying why. A capability's sheet: what it takes and
-delivers, what it needs and whether it is there, who may use it, its
-versions and history, its week.
+delivers, what it needs and whether it is there — **the model that would run
+it here, chosen by what it needs** (« Gemini 3.8 Flash (LEKA), choisi selon ses
+besoins ») — who may use it, its versions and history, its week.
 
 ## 8. The first agent
 
@@ -126,13 +131,13 @@ the application architecture of a business journey on a perimeter, as a deck
 business rules, RACI, points to confirm, sources), built only from the
 documentation (Confluence or SharePoint), never invented. Version 18.0.0 —
 the prompt's v18, kept as written. Takes `parcours`, `perimetre`,
-`vue_applicative`; delivers `pptx` and `pdf`. Registered and active; it runs
-once the model gateway (LEKA-394) and the agent runtime (LEKA-395) are there —
-until then the catalogue says so.
+`vue_applicative`; delivers `pptx` and `pdf`. Registered and active; the model
+gateway is there (LEKA-394), it runs with the agent runtime (LEKA-395) —
+until then the catalogue says so (`no_runtime`).
 
 ## Not yet
 
-- **Running an agent**: the model gateway (LEKA-394), the runtime (LEKA-395).
+- **Running an agent**: the runtime (LEKA-395), on the gateway's `run_tools`.
 - **Routing an intention to a capability**: the router (LEKA-398) reads
   `discover`.
 - **What an agent delivers as files** (an architecture deck as PPTX and PDF):

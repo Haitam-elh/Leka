@@ -98,14 +98,20 @@ python -m leka.identity.email --test someone@example.com
 
 ## Model access
 
-Read by `leka.capabilities` and nowhere else (architecture rule 7). Both keys
-may be absent: the platform boots and serves without a model.
+Read by `leka.capabilities` and nowhere else (architecture rule 7): the
+model gateway (LEKA-394, [model-gateway.md](model-gateway.md)). Every key may
+be absent: the platform boots and serves without a model — what needs one
+says so, the rules answer in its place.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `LEKA_LLM_PROVIDER` | `mistral` | `mistral` or `anthropic`. Mistral is the default so the European path is the one exercised every day |
-| `LEKA_ANTHROPIC_API_KEY` | — | |
+| `LEKA_LLM_PROVIDER` | `google` | The default model's provider: `google`, `mistral` or `anthropic` |
+| `LEKA_LLM_MODEL` | `gemini-3.8-flash` | The default model — Gemini 3.8 Flash for the MVP. Configured here, never written where it is used |
+| `LEKA_LLM_FALLBACKS` | — | Tried in order when the default fails or cannot do what is asked: `provider:model`, comma-separated (`mistral:mistral-large-latest`). Empty: every other provider a key is set for, with its default |
+| `LEKA_LLM_RETRIES` | `1` | How many more times a temporary failure (busy, rate-limited, down) is tried before the next model |
+| `LEKA_GOOGLE_API_KEY` | — | Google AI Studio key (paid tier: free-tier prompts may be used by Google) |
 | `LEKA_MISTRAL_API_KEY` | — | |
+| `LEKA_ANTHROPIC_API_KEY` | — | |
 
 ## Object storage and retention
 
@@ -174,6 +180,7 @@ are in `docs/runbook.md`.
 | `LEKA_REDIS_URL` | `leka.core.ratelimit`, `leka.platform.health`, `leka.background.jobs` | 365 days |
 | `LEKA_SMTP_PASSWORD` | `leka.identity.email` | 365 days |
 | `LEKA_RESEND_API_KEY` | `leka.identity.email` | 90 days |
+| `LEKA_GOOGLE_API_KEY` | `leka.capabilities` | 90 days |
 | `LEKA_ANTHROPIC_API_KEY` | `leka.capabilities` | 90 days |
 | `LEKA_MISTRAL_API_KEY` | `leka.capabilities` | 90 days |
 | `LEKA_S3_SECRET_ACCESS_KEY` | `leka.platform.storage` | 90 days |
@@ -184,7 +191,7 @@ for keys another company issued and sees used — that is AWS's own figure for
 access keys; 365 for what only we hold.
 
 Two exceptions, neither of them a variable. `settings.llm_api_key` returns
-whichever model key the selected provider uses, and belongs to
+whichever model key the default provider uses, and belongs to
 `leka.capabilities` like the keys themselves. `settings.secret_values`
 returns every configured secret at once and belongs to `leka.core.logging`:
 recognising secrets in a log line is exactly that module's job, and nobody

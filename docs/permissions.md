@@ -162,3 +162,12 @@ the workspace entered at once. `GET /billing/usage` — what the workspace
 holds and did this month, counted — any member; no plan, payment nor
 invoice is held by LEKA yet.
 
+## Modèle de langage (LEKA-394)
+
+`GET /models` (what answers here, the providers one may bring) and
+`GET /models/usage` (calls, tokens, cost) — any member. Bringing, changing,
+testing or removing the workspace's own model (`PUT`, `DELETE
+/models/settings`, `POST /models/settings/test`) takes `workspace:update`.
+Its key is never sent back, to anyone: its last four characters are.
+[model-gateway.md](model-gateway.md).
+
