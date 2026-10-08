@@ -153,7 +153,9 @@ In the app: **Paramètres › Modèle de langage**.
   dropped, an answer resting on nothing is not kept. The intention's summary
   is that answer. Its needs (a structured answer, quality 2) choose its
   model.
-- **The agents** (LEKA-395) — `run_tools`, `deep` tier.
+- **The agents** (LEKA-395, [agent-runtime.md](agent-runtime.md)) —
+  `run_tools`, `deep` tier, what the agent needs choosing the model; each
+  call kept with its run (`agent_run:<id>`).
 
 No model configured, or none answering: the rules read and analyse, as
 before LEKA-394, and the screens say so.

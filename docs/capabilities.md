@@ -1,4 +1,4 @@
-# Capabilities — what LEKA can do (LEKA-393, LEKA-394)
+# Capabilities — what LEKA can do (LEKA-393, LEKA-394, LEKA-395)
 
 One model for everything LEKA can do — its own rules over the company model
 (LEKA-388) and the agents written as markdown (ADR 004) — so that what routes
@@ -7,7 +7,8 @@ thing. Code: `api/leka/capabilities/` — `definition.py` (pure: the model, its
 lifecycle, availability, discovery), `registry.py` (where definitions come
 from), `catalogue.py` (their history, and the catalogue for a workspace), the
 routes in `api/leka/api/capabilities.py`; the model gateway and router in
-`gateway/` ([model-gateway.md](model-gateway.md)).
+`gateway/` ([model-gateway.md](model-gateway.md)); what runs the agents in
+`runtime.py`, `tools.py`, `runs.py` ([agent-runtime.md](agent-runtime.md)).
 
 ## 1. A capability
 
@@ -78,7 +79,7 @@ Whether it can be used here, now — **every reason it cannot**, not the first:
 | `disabled` | turned off in the workspace — an admin, saying why |
 | `missing_source` | none of the sources it needs is connected (active or degraded) |
 | `no_model` | it is run by a model, and **no model this workspace can reach does what it needs** (LEKA-394: asked of the router, per workspace — its own model, LEKA's) |
-| `no_runtime` | an agent, and agents are not run yet (LEKA-395) |
+| `no_runtime` | an agent, where agents cannot run — none since the runtime ([agent-runtime.md](agent-runtime.md), LEKA-395) |
 | `not_permitted` | the person's role lacks its permission |
 
 Deprecated: used, and said (`notes`). Turned off, **the analyses no longer
@@ -91,7 +92,7 @@ by the intention's goal (3), its kind (2), what it acts on (1 each, at most
 2), the words it is asked in (1 each, at most 3); each match with its
 reasons; never retired; the unavailable left out when asked
 (`available_only`). `check_input(contract, given)` says what is wrong with
-what a capability is given — for the runtime (LEKA-395).
+what a capability is given — what the runtime refuses (LEKA-395).
 
 ## 6. The API
 
@@ -131,14 +132,15 @@ the application architecture of a business journey on a perimeter, as a deck
 business rules, RACI, points to confirm, sources), built only from the
 documentation (Confluence or SharePoint), never invented. Version 18.0.0 —
 the prompt's v18, kept as written. Takes `parcours`, `perimetre`,
-`vue_applicative`; delivers `pptx` and `pdf`. Registered and active; the model
-gateway is there (LEKA-394), it runs with the agent runtime (LEKA-395) —
-until then the catalogue says so (`no_runtime`).
+`vue_applicative`; delivers `pptx` and `pdf`. Registered and active; run by
+the agent runtime (LEKA-395, [agent-runtime.md](agent-runtime.md)) through the
+model gateway (LEKA-394) — its deck delivered as markdown, its PPTX and PDF
+said pending.
 
 ## Not yet
 
-- **Running an agent**: the runtime (LEKA-395), on the gateway's `run_tools`.
 - **Routing an intention to a capability**: the router (LEKA-398) reads
   `discover`.
 - **What an agent delivers as files** (an architecture deck as PPTX and PDF):
-  with the runtime; each agent declares its own (`formats`).
+  rendered from what the runtime delivers; each agent declares its own
+  (`formats`).
