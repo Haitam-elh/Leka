@@ -70,6 +70,21 @@ The agent's instructions, in markdown.
 | `risk` | yes | `low`, `medium`, `high` |
 | `outputs` | yes | the kind of finding it produces |
 | `origin` | yes | `internal` or `vendor:<owner>/<repo>` |
+| `category` | yes | what it is about, for the catalogue: architecture, development, infrastructure, operations, security, compliance, data, documentation, project_management, business, knowledge |
+| `title` | no | how people call it; its `name` otherwise |
+| `inputs` | no | what it takes: `{name, type: text·number·boolean·choice·entity, required, description, choices}` |
+| `deliverables` | no | the formats it delivers: `pptx`, `pdf`, `markdown`… |
+| `goals`, `kinds` | no | the intentions it answers (LEKA-385, LEKA-373) — what routes to it |
+| `examples` | no | how people ask for it |
+| `permission` | no | what a person needs to use it — `intention:create` by default |
+
+`requires` names source kinds; alternatives in one entry, `"confluence|microsoft_365"`.
+
+**Its lifecycle is `registry.yaml`'s `status`** (draft, review, active,
+deprecated, retired): an agent not indexed is a draft. The capability
+catalogue keeps every version; changing an agent without bumping its
+`version` is refused, and said — see
+[docs/capabilities.md](../docs/capabilities.md).
 
 ### `description` is the field that matters
 

@@ -485,7 +485,8 @@ class CapabilityChoiceRead(BaseModel):
     method: Literal["rules", "model"]
     chosen: bool
     reason: str = Field(
-        description="always, goal, kind, acting — or no_model (it waits for LEKA-394), not_called."
+        description="always, goal, kind, acting — or no_model (it waits for LEKA-394), "
+        "disabled (turned off in the workspace's catalogue, LEKA-393), not_called."
     )
 
 

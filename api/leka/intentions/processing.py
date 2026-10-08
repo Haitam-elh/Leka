@@ -43,6 +43,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import enqueue_job
+from leka.capabilities import CatalogueService
 from leka.connectors import Source, SourceRepository
 from leka.context import AssembledContext, ContextRepository, ContextService
 from leka.db import session_factory, system_scope, workspace_scope
@@ -370,7 +371,9 @@ async def analyse_intention(
                 session.add(row)
                 await session.commit()
                 return {"status": "blocked", "analysis": str(row.id)}
-            choices = choose(asked, capabilities)
+            # What the workspace turned off in its catalogue (LEKA-393).
+            disabled = await CatalogueService(session, workspace_id).disabled()
+            choices = choose(asked, capabilities, disabled=disabled)
             row.selection = [asdict(choice) for choice in choices]
             session.add(row)
             await session.commit()

@@ -34,6 +34,7 @@ mode: read_only
 risk: low
 outputs: finding
 origin: internal
+category: operations
 ---
 
 The body.

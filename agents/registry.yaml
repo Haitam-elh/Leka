@@ -5,17 +5,28 @@
 # agent at once, and a place to record status — which a scattered set of
 # markdown files cannot give you.
 #
-# status:
-#   draft     written, not ready to trigger
-#   active    live
-#   review    vendor skill awaiting the line-by-line review
-#   retired   kept for history, must not trigger
+# status — the agent's lifecycle in the capability catalogue (LEKA-393):
+#   draft       written, not ready to trigger
+#   review      vendor skill awaiting the line-by-line review
+#   active      live
+#   deprecated  still runs, to be replaced
+#   retired     kept for history, must not trigger — final
+#
+# An agent missing from this file loads as a draft: going live is a line
+# here, reviewed in a pull request. The version must be the file's. A move
+# the lifecycle does not allow (retired → active), or a change to an agent
+# without a new version, is refused by the catalogue and said.
 #
 # Keep entries sorted by path.
 
 version: 1
 
 agents:
+  - path: architecture/application-architecture/SKILL.md
+    name: application-architecture
+    version: 18.0.0
+    status: active
+
   - path: codebase/map-service-ownership/SKILL.md
     name: map-service-ownership
     version: 0.1.0

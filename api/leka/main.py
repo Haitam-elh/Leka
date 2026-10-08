@@ -20,6 +20,7 @@ from leka.api import api_router
 from leka.api.errors import ERROR_RESPONSES, register_error_handlers
 from leka.api.ratelimit import rate_limit_middleware
 from leka.api.request_id import REQUEST_ID_HEADER, request_id_middleware
+from leka.capabilities import sync_catalogue
 from leka.core.config import settings
 from leka.core.logging import configure_logging
 from leka.db import engine
@@ -43,6 +44,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # lifetime would be manufacturing an outage. See core/settings/_rotation.py.
     for overdue in settings.overdue_secrets(datetime.now(UTC).date()):
         logger.warning("secret_rotation_overdue", **overdue._asdict())
+    # What LEKA can do, registered — every version, every move of its
+    # lifecycle (LEKA-393). Never in the way of starting: the hourly sync
+    # registers what this one could not.
+    try:
+        await sync_catalogue()
+    except Exception:
+        logger.exception("capability_catalogue_sync_failed")
     yield
     await engine.dispose()
     logger.info("leka_stopped")

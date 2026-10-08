@@ -119,6 +119,14 @@ SCHEDULE: tuple[Scheduled, ...] = (
         "leka.intentions.verification.run_due_verifications",
         cron="2,7,12,17,22,27,32,37,42,47,52,57 * * * *",
     ),
+    # The capability catalogue registered — every version, every move of its
+    # lifecycle — as the API does when it starts, for a release whose API has
+    # not restarted yet (LEKA-393).
+    Scheduled(
+        "capability-registry-sync",
+        "leka.capabilities.catalogue.run_catalogue_sync",
+        cron="23 * * * *",
+    ),
 )
 
 

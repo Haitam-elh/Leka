@@ -8,6 +8,7 @@ mode: read_only
 risk: medium
 outputs: finding
 origin: internal
+category: architecture
 ---
 
 Placeholder. The instructions for this agent are product work, not
