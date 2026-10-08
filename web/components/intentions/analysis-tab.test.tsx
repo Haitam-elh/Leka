@@ -368,6 +368,60 @@ describe("its overview", () => {
   });
 });
 
+describe("its answer, written by a model (LEKA-394)", () => {
+  function answered() {
+    const base = analysis();
+    return analysis({
+      result: {
+        ...base.result!,
+        answer: {
+          text: "Payments est responsable de Billing API.",
+          points: [
+            {
+              text: "Le catalogue de services le dit.",
+              cites: [`owner:${BILLING}`, `tie:${BILLING}:owned_by:${PAYMENTS}`],
+            },
+          ],
+          caveats: ["Une seule source le dit."],
+          provider: "google",
+          model: "gemini-3.8-flash",
+          version: "gemini-3.8-flash-001",
+        },
+      },
+    });
+  }
+
+  it("leads the analysis, each point saying how much it rests on, and who wrote it", async () => {
+    api.analysis.mockResolvedValue(answered());
+    show();
+    const answer = await screen.findByTestId("analysis-answer");
+    expect(answer).toHaveTextContent("Payments est responsable de Billing API.");
+    expect(within(answer).getByTestId("answer-point")).toHaveTextContent(
+      "Le catalogue de services le dit.2 élément(s) cité(s)",
+    );
+    expect(answer).toHaveTextContent("Une seule source le dit.");
+    expect(answer).toHaveTextContent(
+      "Rédigée par Gemini 3.8 Flash à partir de l'analyse de LEKA",
+    );
+  });
+
+  it("is what the analysis came to, on its overview", async () => {
+    route.pathname = `/intentions/${ID}`;
+    api.analysis.mockResolvedValue(answered());
+    show();
+    expect(await screen.findByText("Payments est responsable de Billing API.")).toHaveAttribute(
+      "data-testid",
+      "intention-summary",
+    );
+  });
+
+  it("is not shown when no model wrote one", async () => {
+    show();
+    await screen.findByTestId("intention-analysis");
+    expect(screen.queryByTestId("analysis-answer")).not.toBeInTheDocument();
+  });
+});
+
 describe("its evidence", () => {
   it("lists what it collected, where each came from", async () => {
     const user = userEvent.setup();

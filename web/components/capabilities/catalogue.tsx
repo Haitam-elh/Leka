@@ -133,12 +133,12 @@ function categorySaid(t: Dictionary, category: string): string {
 
 /** Its title: LEKA's own in its words, an agent's as its file says it. */
 export function titleOf(t: Dictionary, c: Pick<Capability, "key" | "kind" | "title">): string {
-  if (c.kind !== "rules") return c.title;
+  if (c.kind === "agent") return c.title;
   return (t.intentions.analysis.capabilities as Record<string, string>)[c.key] ?? c.title;
 }
 
 export function summaryOf(t: Dictionary, c: Pick<Capability, "key" | "kind" | "summary">): string {
-  if (c.kind !== "rules") return c.summary;
+  if (c.kind === "agent") return c.summary;
   return (t.catalogue.summaries as Record<string, string>)[c.key] ?? c.summary;
 }
 

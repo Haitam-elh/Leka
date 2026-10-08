@@ -70,6 +70,8 @@ function capability(overrides: Partial<Capability> = {}): Capability {
     formats: ["json"],
     sources: [],
     model: false,
+    model_needs: null,
+    answering: null,
     goals: ["find_owner"],
     kinds: ["ownership"],
     entity_types: [],
@@ -182,7 +184,7 @@ describe("the catalogue", () => {
     expect(architect).toHaveTextContent("Architecte applicatif");
     expect(architect).toHaveAttribute("data-available", "false");
     expect(within(architect).getByTestId("capability-reasons")).toHaveTextContent(
-      "Source à connecter : Confluence ou Microsoft 365 · En attente du modèle de langage",
+      "Source à connecter : Confluence ou Microsoft 365 · Aucun modèle de langage ne peut l'exécuter ici",
     );
     expect(screen.getByTestId("catalogue-top")).toHaveTextContent("Responsabilités");
     expect(screen.getByTestId("catalogue-latest")).toHaveTextContent("Architecte applicatif");
@@ -293,10 +295,10 @@ describe("a capability's sheet", () => {
       "Une source : Confluence ou Microsoft 365 · à connecter",
     );
     expect(within(sheet).getByTestId("capability-needs")).toHaveTextContent(
-      "Un modèle de langage · en attente",
+      "Un modèle de langage · aucun ne peut l'exécuter ici",
     );
     expect(within(sheet).getByTestId("capability-availability")).toHaveTextContent(
-      "En attente du modèle de langage",
+      "Aucun modèle de langage ne peut l'exécuter ici",
     );
     expect(within(sheet).getByTestId("capability-versions")).toHaveTextContent("v18.0.0");
     expect(within(sheet).getByTestId("capability-events")).toHaveTextContent("Enregistrée");

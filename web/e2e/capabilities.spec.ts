@@ -27,7 +27,8 @@ test.describe("Capabilities", () => {
     await expect(architect).toContainText("Architecte applicatif");
     await expect(architect).toHaveAttribute("data-available", "false");
     await expect(architect.getByTestId("capability-reasons")).toContainText(
-      "En attente du modèle de langage",
+      // No model key in CI, and agents are not run yet (LEKA-395).
+      "Aucun modèle de langage ne peut l'exécuter ici · En attente de l'exécution des agents (LEKA-395)",
     );
 
     // Its words find it.
