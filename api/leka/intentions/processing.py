@@ -32,9 +32,10 @@ result, the error.
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -43,13 +44,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import enqueue_job
-from leka.capabilities import CatalogueService
+from leka.capabilities import CatalogueService, Gateway, NoModelError
 from leka.connectors import Source, SourceRepository
 from leka.context import AssembledContext, ContextRepository, ContextService
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.intelligence import IntelligenceRepository, QualityRepository, QualityService
 from leka.intentions.analysis import (
+    Answer,
     Asked,
     Capability,
     FindingBrief,
@@ -79,6 +81,8 @@ from leka.intentions.schemas import (
     Understanding,
 )
 from leka.intentions.service import IntentionService
+from leka.intentions.writing import NEEDS as WRITING
+from leka.intentions.writing import write
 from leka.knowledge import (
     Entity,
     EntityBrief,
@@ -289,6 +293,20 @@ def result_of(result: Result) -> dict[str, object]:
                 }
                 for e in result.evidence
             ],
+            "answer": (
+                {
+                    "text": result.answer.text,
+                    "points": [
+                        {"text": p.text, "cites": list(p.cites)} for p in result.answer.points
+                    ],
+                    "caveats": list(result.answer.caveats),
+                    "provider": result.answer.provider,
+                    "model": result.answer.model,
+                    "version": result.answer.version,
+                }
+                if result.answer is not None
+                else None
+            ),
         }
     )
     return said.model_dump(mode="json")
@@ -373,17 +391,22 @@ async def analyse_intention(
                 return {"status": "blocked", "analysis": str(row.id)}
             # What the workspace turned off in its catalogue (LEKA-393).
             disabled = await CatalogueService(session, workspace_id).disabled()
-            choices = choose(asked, capabilities, disabled=disabled)
+            # Whether a model can write its answer here (LEKA-394).
+            writes = await Gateway(session, workspace_id).ready(WRITING)
+            choices = choose(asked, capabilities, disabled=disabled, model=writes)
             row.selection = [asdict(choice) for choice in choices]
             session.add(row)
             await session.commit()
             analysis_id = row.id
         chosen = [c for c in capabilities if any(ch.chosen and ch.name == c.name for ch in choices)]
-        wants = frozenset(part for c in chosen for part in c.reads)
+        rules = [c for c in chosen if c.method == "rules"]
+        # What a model writes, from what the rules found: after them.
+        writers = [c for c in chosen if c.method == "model"]
+        wants = frozenset(part for c in rules for part in c.reads)
         context = await _context(workspace_id, context_id, version)
         material = await _material(workspace_id, asked, context, wants, ready, moment)
         outcomes: list[StepOutcome] = []
-        for capability in chosen:
+        for capability in rules:
             outcomes.append(await execute(capability, material.on(capability.sides, side)))
         for choice in choices:
             if not choice.chosen and choice.reason == "no_model":
@@ -398,11 +421,50 @@ async def analyse_intention(
             context_level=(
                 context.quality.level if context is not None and context.quality else None
             ),
-            background=frozenset(c.name for c in chosen if c.always),
+            background=frozenset(c.name for c in rules if c.always),
         )
+        for capability in writers:
+            outcome, answer = await _write(workspace_id, capability, asked, result)
+            outcomes.append(outcome)
+            if answer is not None:
+                result = replace(result, answer=answer)
         return await _finish(
             workspace_id, intention_id, analysis_id, asked, result, outcomes, context_id, moment
         )
+
+
+async def _write(
+    workspace_id: uuid.UUID, capability: Capability, asked: Asked, result: Result
+) -> tuple[StepOutcome, Answer | None]:
+    """The analysis answered in words, by a model — or said why not. Every
+    call to a model is kept, answered or not."""
+    started = time.monotonic()
+
+    def took() -> int:
+        return max(0, round((time.monotonic() - started) * 1000))
+
+    try:
+        with workspace_scope(workspace_id):
+            async with session_factory() as session:
+                try:
+                    answer = await write(Gateway(session, workspace_id), asked, result)
+                finally:
+                    await session.commit()
+    except NoModelError:
+        return StepOutcome(
+            capability.name, capability.version, "failed", took(), error="no_model_answered"
+        ), None
+    except Exception:
+        logger.exception("analysis_answer_failed", intention_id=str(asked.id))
+        return StepOutcome(
+            capability.name, capability.version, "failed", took(), error="error"
+        ), None
+    if answer is None:
+        # Written, but resting on nothing the analysis holds: not kept.
+        return StepOutcome(
+            capability.name, capability.version, "failed", took(), error="ungrounded"
+        ), None
+    return StepOutcome(capability.name, capability.version, "succeeded", took()), answer
 
 
 async def _context(
@@ -666,7 +728,14 @@ async def _finish(
         service = IntentionService(
             repository, findings=IntelligenceRepository(session, workspace_id)
         )
-        summary = result.summary[0].text if result.summary else None
+        # What it came to, in a line: the answer written, else the rules' own.
+        summary = (
+            result.answer.text
+            if result.answer is not None
+            else result.summary[0].text
+            if result.summary
+            else None
+        )
         detail = {"analysis_id": str(analysis_id), "number": row.number, "status": result.status}
         if result.status == "failed":
             await service.move(

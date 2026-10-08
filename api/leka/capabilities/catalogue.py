@@ -43,12 +43,13 @@ from leka.capabilities.definition import (
     may_move,
     semver,
 )
+from leka.capabilities.gateway import Gateway, Needs, Route
 from leka.capabilities.models import (
     CapabilityEvent,
     CapabilityRegistration,
     WorkspaceCapability,
 )
-from leka.capabilities.registry import catalogue, model_ready
+from leka.capabilities.registry import catalogue
 from leka.capabilities.repository import CatalogueRepository, WorkspaceCatalogueRepository
 from leka.db import load_schema, session_factory, system_scope
 
@@ -243,10 +244,23 @@ class Entry:
     enabled: bool
     setting: WorkspaceCapability | None
     favourite: bool
+    # The model that would run it here, chosen by what it needs (LEKA-394).
+    model: Route | None = None
 
     @property
     def definition(self) -> Definition:
         return self.standing.definition
+
+
+def needs_of(definition: Definition) -> Needs:
+    """What a capability asks of a model, as the router reads it."""
+    need = definition.model_needs
+    return Needs(
+        structured=need.structured,
+        tools=need.tools,
+        context=need.context,
+        quality=need.quality,
+    )
 
 
 class CatalogueService:
@@ -257,12 +271,24 @@ class CatalogueService:
         *,
         definitions: Sequence[Definition] | None = None,
         model: bool | None = None,
+        gateway: Gateway | None = None,
     ) -> None:
         self._session = session
         self._history = CatalogueRepository(session)
         self._workspace = WorkspaceCatalogueRepository(session, workspace_id)
         self._definitions = definitions
-        self._model = model_ready() if model is None else model
+        # Said outright (a test), or asked of the router, per what each needs.
+        self._model = model
+        self._gateway = gateway or Gateway(session, workspace_id)
+        self._routes: dict[Needs, Route | None] = {}
+
+    async def _route(self, definition: Definition) -> Route | None:
+        """The model that would run it here — none when none can."""
+        needs = needs_of(definition)
+        if needs not in self._routes:
+            routing = await self._gateway.routing(needs)
+            self._routes[needs] = routing.routes[0] if routing.routes else None
+        return self._routes[needs]
 
     def _all(self) -> Sequence[Definition]:
         return self._definitions if self._definitions is not None else catalogue()
@@ -281,8 +307,12 @@ class CatalogueService:
             key = standing.definition.key
             setting = settings.get(key)
             enabled = setting.enabled if setting is not None else True
+            route = await self._route(standing.definition) if standing.definition.model else None
             situation = Situation(
-                enabled=enabled, connected=connected, model=self._model, permissions=permissions
+                enabled=enabled,
+                connected=connected,
+                model=route is not None if self._model is None else self._model,
+                permissions=permissions,
             )
             found.append(
                 Entry(
@@ -293,6 +323,7 @@ class CatalogueService:
                     enabled=enabled,
                     setting=setting,
                     favourite=key in favourites,
+                    model=route,
                 )
             )
         return found

@@ -111,7 +111,12 @@ async def test_an_owner_question_is_answered_with_the_record_that_says_so(
     analysis = await _get(client, f"/{intention['id']}/analysis")
     chosen = {c["name"]: c["reason"] for c in analysis["selection"] if c["chosen"]}
     assert chosen == {"standing": "always", "ownership": "goal"}
-    assert [s["status"] for s in analysis["steps"]] == ["succeeded", "succeeded"]
+    # No model here: the synthesis waits for one, said (LEKA-394).
+    assert [(s["name"], s["status"]) for s in analysis["steps"]] == [
+        ("standing", "succeeded"),
+        ("ownership", "succeeded"),
+        ("synthesis", "skipped"),
+    ]
     # Read as its context was judged when asked (LEKA-387).
     assert (analysis["number"], analysis["trigger"], analysis["readiness"]) == (
         1,
@@ -238,6 +243,7 @@ async def test_a_capability_that_fails_or_times_out_is_said_the_others_go_on(
         "ownership": ("succeeded", None),
         "boom": ("failed", "RuntimeError"),
         "slow": ("timed_out", "TimeoutError"),
+        "synthesis": ("skipped", None),
     }
     assert analysis["status"] == "partial"
     assert {m["code"] for m in analysis["result"]["missing"]} == {

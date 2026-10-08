@@ -29,7 +29,7 @@ check what is linked.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime
 
 from leka.context import (
@@ -167,8 +167,12 @@ class IntentionService:
         context_repository: ContextRepository | None = None,
         findings: IntelligenceRepository | None = None,
         entities: GraphRepository | None = None,
+        reading: Callable[[str, Understanding], Awaitable[Understanding]] | None = None,
     ) -> None:
         self._repository = repository
+        # A language model reading it with the rules (LEKA-394): none, the
+        # rules alone.
+        self._reading = reading
         # What it is analysed from (LEKA-373) — and what links are checked
         # against: each module's own, never a query here.
         self._contexts = contexts
@@ -412,7 +416,12 @@ class IntentionService:
             found = await self._entities.by_ids(ids)
             lifecycles = {ident: entity.lifecycle.value for ident, entity in found.items()}
             environments = await self._entities.environments()
-        return understand(text, plan, lifecycles=lifecycles, environments=environments, now=at)
+        understood = understand(
+            text, plan, lifecycles=lifecycles, environments=environments, now=at
+        )
+        if self._reading is not None:
+            understood = await self._reading(text, understood)
+        return understood
 
     async def understand(self, ask: IntentAsk, *, now: datetime | None = None) -> Understanding:
         """What LEKA would understand of these words — nothing kept."""

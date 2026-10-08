@@ -66,8 +66,11 @@ def _index(root: Path, *rows: tuple[str, str, str]) -> None:
 
 def test_the_repositorys_catalogue_loads_whole() -> None:
     found = {d.key: d for d in catalogue()}
-    rules = [d for d in found.values() if d.kind is Kind.RULES]
+    rules = [d for d in found.values() if d.kind in (Kind.RULES, Kind.MODEL)]
     assert {d.key for d in rules} == {d.key for d in analyses()}
+    # The synthesis is LEKA's own, written by a model: what it needs of one, said.
+    assert found["synthesis"].kind is Kind.MODEL
+    assert (found["synthesis"].model_needs.structured, found["synthesis"].model) == (True, True)
     assert all(d.lifecycle is Lifecycle.ACTIVE for d in rules)
     assert found["standing"].always
 

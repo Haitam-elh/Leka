@@ -21,6 +21,9 @@ import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import LargeBinary, select, update
 
+from leka.capabilities import WorkspaceModel
+from leka.capabilities.tasks import ROTATED_COLUMNS as MODEL_KEYS
+from leka.capabilities.tasks import rotate_model_keys
 from leka.connectors import (
     ROTATED_COLUMNS,
     RotationRefusedError,
@@ -283,7 +286,7 @@ def test_every_encrypted_column_is_rotated() -> None:
     assert NOT_ENCRYPTED.keys() <= binary, sorted(NOT_ENCRYPTED.keys() - binary)
     encrypted = binary - NOT_ENCRYPTED.keys()
     assert encrypted, "no encrypted column found at all: are the models imported?"
-    rotated = ROTATED_COLUMNS | ENDPOINT_SECRETS
+    rotated = ROTATED_COLUMNS | ENDPOINT_SECRETS | MODEL_KEYS
     assert encrypted <= rotated, (
         f"encrypted but never rotated: {sorted(encrypted - rotated)}. "
         "Rotate it in its module's tasks.py and call that from "
@@ -347,6 +350,49 @@ async def test_the_signing_secrets_of_authorized_systems_are_rotated_too() -> No
         # Read by the new key alone: the old one can go.
         assert SecretBox((NEW,)).decrypt(stored) == "lks_secret"
         again = await rotate_endpoint_secrets(ROTATING)
+        assert again.rotated == 0
+    finally:
+        with system_scope():
+            async with session_factory() as session:
+                leftover = await session.get(Workspace, workspace_id)
+                if leftover is not None:
+                    await session.delete(leftover)
+                await session.commit()
+
+
+async def test_the_keys_of_the_workspaces_own_models_are_rotated_too() -> None:
+    """LEKA-394's workspace models hold a key under the same key: rotated by
+    the same rules — counted in a dry run, rewritten, then already current."""
+    old = SecretBox((OLD,))
+    with system_scope():
+        async with session_factory() as session:
+            workspace = Workspace(name="delta", slug=f"delta-{uuid.uuid4().hex[:10]}")
+            session.add(workspace)
+            await session.flush()
+            model = WorkspaceModel(
+                workspace_id=workspace.id,
+                id=uuid.uuid4(),
+                provider="mistral",
+                key_ciphertext=old.encrypt("sk-own-model"),
+                key_hint="odel",
+                enabled=True,
+                changed_at=datetime.now(UTC),
+            )
+            session.add(model)
+            await session.commit()
+            workspace_id, model_id = workspace.id, model.id
+    try:
+        dry = await rotate_model_keys(ROTATING, dry_run=True)
+        assert (dry.rotated, dry.unreadable) >= (1, 0)
+        await rotate_model_keys(ROTATING)
+        with system_scope():
+            async with session_factory() as session:
+                stored = await session.scalar(
+                    select(WorkspaceModel.key_ciphertext).where(WorkspaceModel.id == model_id)
+                )
+        assert stored is not None
+        assert SecretBox((NEW,)).decrypt(stored) == "sk-own-model"
+        again = await rotate_model_keys(ROTATING)
         assert again.rotated == 0
     finally:
         with system_scope():

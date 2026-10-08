@@ -279,7 +279,8 @@ class Capability:
     sides: frozenset[str] = frozenset()
     reads: frozenset[Part] = frozenset()
     run: Callable[[Material], Output] | None = None
-    # rules: LEKA's own; model: an agent, run by a model (LEKA-394).
+    # rules: LEKA's own; model: written by a language model from what the
+    # rules found (LEKA-394), run after them.
     method: str = "rules"
     budget: float = 15.0
     # Run whatever the goal: what any answer starts from.
@@ -311,6 +312,28 @@ class StepOutcome:
 
 
 @dataclass(frozen=True)
+class Point:
+    """One thing the answer says, and what it rests on: the ids of the
+    findings, causes and evidence it cites."""
+
+    text: str
+    cites: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Answer:
+    """The analysis, answered in words by a language model (LEKA-394): only
+    what the analysis holds, each point citing what it rests on."""
+
+    text: str
+    points: tuple[Point, ...]
+    caveats: tuple[str, ...]
+    provider: str
+    model: str
+    version: str
+
+
+@dataclass(frozen=True)
 class Result:
     """The analysis, whole: what the decision interface reads."""
 
@@ -326,6 +349,8 @@ class Result:
     confidence: float | None
     support: tuple[Note, ...]
     evidence: tuple[Evidence, ...]
+    # Written by a model from all of the above, when one can (LEKA-394).
+    answer: Answer | None = None
 
 
 # ── selecting ────────────────────────────────────────────────────────────────

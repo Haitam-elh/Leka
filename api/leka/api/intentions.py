@@ -85,6 +85,7 @@ from leka.intentions import (
     IntentionService,
     IntentionStatus,
     LinkRefusedError,
+    ModelReading,
     NothingToStartError,
     NotYoursError,
     Understanding,
@@ -126,6 +127,8 @@ def _service(session: SessionDep, principal: Principal) -> IntentionService:
         context_repository=ContextRepository(session, workspace),
         findings=IntelligenceRepository(session, workspace),
         entities=GraphRepository(session, workspace),
+        # A model reads it with the rules, when one can (LEKA-394).
+        reading=ModelReading(session, workspace),
     )
 
 

@@ -56,6 +56,7 @@ from leka.intentions.models import (
     IntentionLink,
 )
 from leka.intentions.processing import queue_analysis
+from leka.intentions.reading import ModelReading
 from leka.intentions.repository import IntentionFilters, IntentionRepository
 from leka.intentions.schemas import (
     ActionEndpointCreate,
@@ -179,6 +180,7 @@ __all__ = [
     "IntentionStatus",
     "IntentionVerificationRead",
     "LinkRefusedError",
+    "ModelReading",
     "Move",
     "NotYoursError",
     "NothingToStartError",

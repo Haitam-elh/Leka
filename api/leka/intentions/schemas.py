@@ -196,6 +196,18 @@ class IntentScope(BaseModel):
     missing: list[str] = Field(description="The critical information missing: ambiguity kinds.")
 
 
+class UnderstoodBy(BaseModel):
+    """Who read it (LEKA-394): LEKA's rules, or a language model with them."""
+
+    model_config = ConfigDict(frozen=True)
+
+    method: Literal["rules", "model"]
+    provider: str | None = None
+    model: str | None = None
+    version: str | None = None
+    confidence: float | None = Field(default=None, description="The model's, of its goal.")
+
+
 class Understanding(BaseModel):
     """What LEKA understood of an intention (LEKA-385): the structured
     intent, every part of it with the words it came from — the original
@@ -217,6 +229,12 @@ class Understanding(BaseModel):
     clear: bool = Field(description="No blocking ambiguity: it can be analysed.")
     scope: IntentScope | None = Field(
         default=None, description="Its scope and constraints (LEKA-386, version 2 on)."
+    )
+    restated: str | None = Field(
+        default=None, description="What is asked, in a sentence, as a model read it (LEKA-394)."
+    )
+    read_by: UnderstoodBy | None = Field(
+        default=None, description="Who read it; none: LEKA's rules, before LEKA-394."
     )
 
 
@@ -456,6 +474,27 @@ class AnalysisImpactArea(BaseModel):
     items: list[AnalysisImpactItem]
 
 
+class AnalysisPoint(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    text: str
+    cites: list[str] = Field(description="The findings, causes and evidence it rests on (ids).")
+
+
+class AnalysisAnswer(BaseModel):
+    """The analysis answered in words by a language model (LEKA-394): only
+    what the analysis holds, each point citing what it rests on."""
+
+    model_config = ConfigDict(frozen=True)
+
+    text: str
+    points: list[AnalysisPoint]
+    caveats: list[str]
+    provider: str
+    model: str
+    version: str
+
+
 class IntentionAnalysisResult(BaseModel):
     """What the analysis came to, for the decision interface (LEKA-389)."""
 
@@ -473,6 +512,9 @@ class IntentionAnalysisResult(BaseModel):
     confidence: float | None
     support: list[AnalysisNote]
     evidence: list[AnalysisEvidence]
+    answer: AnalysisAnswer | None = Field(
+        default=None, description="Written by a model from the above, when one can (LEKA-394)."
+    )
 
 
 class CapabilityChoiceRead(BaseModel):
@@ -485,7 +527,7 @@ class CapabilityChoiceRead(BaseModel):
     method: Literal["rules", "model"]
     chosen: bool
     reason: str = Field(
-        description="always, goal, kind, acting — or no_model (it waits for LEKA-394), "
+        description="always, goal, kind, acting — or no_model (no model can run it here), "
         "disabled (turned off in the workspace's catalogue, LEKA-393), not_called."
     )
 

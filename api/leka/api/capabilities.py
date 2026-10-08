@@ -35,6 +35,8 @@ from leka.capabilities import (
     CapabilityInputRead,
     CapabilityLatest,
     CapabilityMatch,
+    CapabilityModelNeeds,
+    CapabilityModelRead,
     CapabilityRead,
     CapabilityReason,
     CapabilitySettingUpdate,
@@ -114,6 +116,26 @@ def capability_read(entry: Entry, use: Use) -> CapabilityRead:
             for group in d.sources
         ],
         model=d.model,
+        model_needs=(
+            CapabilityModelNeeds(
+                structured=d.model_needs.structured,
+                tools=d.model_needs.tools,
+                context=d.model_needs.context,
+                quality=d.model_needs.quality,
+            )
+            if d.model
+            else None
+        ),
+        answering=(
+            CapabilityModelRead(
+                provider=entry.model.endpoint.provider,
+                model=entry.model.profile.model,
+                title=entry.model.profile.title,
+                owner="workspace" if entry.model.endpoint.owner == "workspace" else "leka",
+            )
+            if entry.model is not None
+            else None
+        ),
         goals=sorted(d.goals),
         kinds=sorted(d.kinds),
         entity_types=list(d.entity_types),
@@ -151,7 +173,7 @@ async def capabilities(
     session: SessionDep,
     view: Literal["all", "mine"] = "all",
     category: Annotated[list[str] | None, Query()] = None,
-    kind: Literal["rules", "agent"] | None = None,
+    kind: Literal["rules", "model", "agent"] | None = None,
     lifecycle: Annotated[list[LifecycleWord] | None, Query()] = None,
     available: bool | None = None,
     q: Annotated[str | None, Query(max_length=200)] = None,
