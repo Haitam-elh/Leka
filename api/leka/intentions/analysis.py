@@ -334,6 +334,28 @@ class Answer:
 
 
 @dataclass(frozen=True)
+class Recommendation:
+    """What LEKA proposes to do (LEKA-389) — never a fact: a proposal, from
+    the findings and causes it names, that a person decides on."""
+
+    id: str
+    code: str
+    text: str
+    action: str  # rollback, change, monitor, other
+    changes_systems: bool
+    priority: str  # high, medium, low
+    risk: str  # high, medium, low, unknown
+    reversible: bool | None
+    confidence: float | None
+    why: Note
+    params: Mapping[str, object] = field(default_factory=dict)
+    # The findings and causes it follows from; the evidence they rest on.
+    basis: tuple[str, ...] = ()
+    evidence: tuple[str, ...] = ()
+    target: ImpactItem | None = None
+
+
+@dataclass(frozen=True)
 class Result:
     """The analysis, whole: what the decision interface reads."""
 
@@ -351,6 +373,8 @@ class Result:
     evidence: tuple[Evidence, ...]
     # Written by a model from all of the above, when one can (LEKA-394).
     answer: Answer | None = None
+    # What LEKA proposes, apart from what it found (LEKA-389, recommend.py).
+    recommendations: tuple[Recommendation, ...] = ()
 
 
 # ── selecting ────────────────────────────────────────────────────────────────

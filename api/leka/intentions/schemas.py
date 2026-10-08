@@ -495,6 +495,43 @@ class AnalysisAnswer(BaseModel):
     version: str
 
 
+class RecommendationTarget(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ref_type: str
+    ref_id: uuid.UUID
+    name: str
+
+
+class AnalysisRecommendation(BaseModel):
+    """What LEKA proposes to do (LEKA-389) — a proposal, never a fact: from
+    the findings and causes it names (`basis`), on the evidence they rest
+    on; a person decides."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    code: str = Field(
+        description="recommend.rollback, recommend.assign_owner… — worded by the interface."
+    )
+    text: str = Field(description="In English, for what reads it without a dictionary.")
+    params: dict[str, JsonValue]
+    action: Literal["rollback", "change", "monitor", "other"]
+    changes_systems: bool = Field(
+        description="It would change a customer's systems: only once a person approves (LEKA-390)."
+    )
+    priority: Literal["high", "medium", "low"]
+    risk: Literal["high", "medium", "low", "unknown"]
+    reversible: bool | None
+    confidence: float | None = Field(
+        description="Never surer than what it follows from; none when it is not a bet."
+    )
+    why: AnalysisNote
+    basis: list[str] = Field(description="The ids of the findings and causes it follows from.")
+    evidence: list[str] = Field(description="The ids of the evidence they rest on.")
+    target: RecommendationTarget | None
+
+
 class IntentionAnalysisResult(BaseModel):
     """What the analysis came to, for the decision interface (LEKA-389)."""
 
@@ -514,6 +551,10 @@ class IntentionAnalysisResult(BaseModel):
     evidence: list[AnalysisEvidence]
     answer: AnalysisAnswer | None = Field(
         default=None, description="Written by a model from the above, when one can (LEKA-394)."
+    )
+    recommendations: list[AnalysisRecommendation] = Field(
+        default_factory=list,
+        description="What LEKA proposes, apart from what it found (LEKA-389).",
     )
 
 
