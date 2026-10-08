@@ -75,7 +75,7 @@ Every page, including those the sidebar does not list:
 │                                          deployments · logs · configuration · documentation · context
 │                                          · history (LEKA-383) — a thing no source shows any
 │                                          more opens on its history
-/capabilities                              the page says "bientôt" until LEKA-393
+/capabilities                              the catalogue (LEKA-393): available · mine · configuration
 │   └── /capabilities/:id
 /activity                                  what happened and what LEKA did (LEKA-383)
 /approvals
@@ -105,7 +105,7 @@ has no entry that is "the one without a path of its own".
 | Intentions › À valider | `/approvals`, `/approvals/:id` | `intention:approve` | available |
 | Mon environnement › its 9 views | `/environment`, `/environment/graph`, `/environment/:type/:id` | `workspace:read` | available |
 | Mon environnement › Activité | `/activity` | `workspace:read` | available |
-| Capacités › its 3 views | `/capabilities`, `/capabilities/:id` | `workspace:read` | **soon** |
+| Capacités › its 3 views | `/capabilities`, `/capabilities/:id` | `workspace:read` | available |
 | Administration › Sources | `/sources`, `/sources/:id` | `source:read` | available |
 | Administration › Sécurité & gouvernance | `/governance` | `workspace:update` | **plan-gated** |
 | Administration › Équipe & accès | `/team` | `member:invite` | available |
@@ -113,10 +113,9 @@ has no entry that is "the one without a path of its own".
 | Administration › Paramètres | `/settings` | `workspace:read` | available |
 | — (workspace gate) | `/welcome` | `source:manage` | available |
 
-Two of these are choices rather than facts, and Karim owns them: Capacités
-is marked "bientôt" because its catalogue is LEKA-393 and after, and
-Sécurité & gouvernance is marked as an upper-plan feature. Changing either is
-one word in the registry.
+One of these is a choice rather than a fact, and Karim owns it: Sécurité &
+gouvernance is marked as an upper-plan feature. Changing it is one word in
+the registry. (Capacités was marked "bientôt" until its catalogue, LEKA-393.)
 
 Two more are decisions worth stating. There is no `billing:*` permission, so
 paying for the workspace is treated as administering it — `workspace:update`,
@@ -165,8 +164,8 @@ technical word at the top level, every page still reachable.
 Mon environnement are one screen with tabs (LEKA-369), and an address like
 `/environment/applications` would collide with an entity's sheet,
 `/environment/:type/:id`. A route declares the views it has; the first is
-the address with no tab. The Capacités views are declared ahead of the
-catalogue, which will read them.
+the address with no tab. The Capacités views are read by its catalogue
+(LEKA-393): `?tab=mine`, `?tab=configuration`.
 
 **G. Sections fold, Intentions open.** A person opens and closes sections,
 and the choice is remembered on their browser. Intentions starts open — the
