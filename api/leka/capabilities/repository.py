@@ -9,13 +9,16 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.models import (
+    AgentRun,
+    AgentRunEvent,
     CapabilityEvent,
     CapabilityFavourite,
     CapabilityRegistration,
+    ModelCall,
     WorkspaceCapability,
 )
 from leka.connectors import Source, SourceStatus
@@ -25,10 +28,124 @@ CONNECTED = (SourceStatus.ACTIVE, SourceStatus.DEGRADED)
 
 
 class CapabilityRunRepository:
-    """Reads and writes the record of agent runs."""
+    """Reads and writes the record of agent runs (LEKA-395) — one
+    workspace's."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, workspace_id: uuid.UUID) -> None:
         self._session = session
+        self._workspace_id = workspace_id
+
+    def add(self, row: AgentRun | AgentRunEvent) -> None:
+        self._session.add(row)
+
+    async def run(self, run_id: uuid.UUID, *, lock: bool = False) -> AgentRun | None:
+        query = select(AgentRun).where(
+            AgentRun.workspace_id == self._workspace_id, AgentRun.id == run_id
+        )
+        found: AgentRun | None = await self._session.scalar(
+            query.with_for_update() if lock else query
+        )
+        return found
+
+    async def runs(
+        self, *, key: str | None = None, status: str | None = None, limit: int = 50
+    ) -> Sequence[AgentRun]:
+        query = (
+            select(AgentRun)
+            .where(AgentRun.workspace_id == self._workspace_id)
+            .order_by(AgentRun.queued_at.desc(), AgentRun.id)
+            .limit(limit)
+        )
+        if key is not None:
+            query = query.where(AgentRun.key == key)
+        if status is not None:
+            query = query.where(AgentRun.status == status)
+        return (await self._session.scalars(query)).all()
+
+    async def events(self, run_id: uuid.UUID) -> Sequence[AgentRunEvent]:
+        return (
+            await self._session.scalars(
+                select(AgentRunEvent)
+                .where(
+                    AgentRunEvent.workspace_id == self._workspace_id,
+                    AgentRunEvent.run_id == run_id,
+                )
+                .order_by(AgentRunEvent.at, AgentRunEvent.seq)
+            )
+        ).all()
+
+    async def last_seq(self, run_id: uuid.UUID) -> int:
+        found = await self._session.scalar(
+            select(func.max(AgentRunEvent.seq)).where(AgentRunEvent.run_id == run_id)
+        )
+        return int(found or 0)
+
+    async def claim(self, run_id: uuid.UUID, *, at: datetime) -> bool:
+        """Queued to running — True for the one worker that wins it."""
+        claimed = await self._session.execute(
+            update(AgentRun)
+            .where(
+                AgentRun.workspace_id == self._workspace_id,
+                AgentRun.id == run_id,
+                AgentRun.status == "queued",
+            )
+            .values(status="running", started_at=at)
+        )
+        return bool(claimed.rowcount)  # type: ignore[attr-defined]
+
+    async def finish(self, run_id: uuid.UUID, **values: object) -> bool:
+        """Running to how it ended — False when it no longer runs: cancelled
+        meanwhile, that stands."""
+        done = await self._session.execute(
+            update(AgentRun)
+            .where(
+                AgentRun.workspace_id == self._workspace_id,
+                AgentRun.id == run_id,
+                AgentRun.status == "running",
+            )
+            .values(**values)
+        )
+        return bool(done.rowcount)  # type: ignore[attr-defined]
+
+    async def usage(self, run_id: uuid.UUID) -> tuple[int, int, int, float | None]:
+        """Its calls to a model: how many, tokens in and out, what they
+        cost — none when a price is not published."""
+        row = (
+            await self._session.execute(
+                select(
+                    func.count(ModelCall.id),
+                    func.coalesce(func.sum(ModelCall.tokens_in), 0),
+                    func.coalesce(func.sum(ModelCall.tokens_out), 0),
+                    func.sum(ModelCall.cost_usd),
+                    func.count(ModelCall.id).filter(ModelCall.cost_usd.is_(None)),
+                ).where(
+                    ModelCall.workspace_id == self._workspace_id,
+                    ModelCall.ref == f"agent_run:{run_id}",
+                )
+            )
+        ).one()
+        calls, tokens_in, tokens_out, cost, unpriced = row
+        return int(calls), int(tokens_in), int(tokens_out), None if unpriced else cost
+
+
+async def stale_runs(
+    session: AsyncSession, *, running_before: datetime, queued_before: datetime, limit: int
+) -> Sequence[tuple[uuid.UUID, uuid.UUID]]:
+    """Every workspace's runs no worker will finish: running since before
+    `running_before`, queued since before `queued_before`. The sweep's,
+    under system scope."""
+    rows = await session.execute(
+        select(AgentRun.workspace_id, AgentRun.id)
+        .where(
+            or_(
+                and_(AgentRun.status == "running", AgentRun.started_at < running_before),
+                and_(AgentRun.status == "queued", AgentRun.queued_at < queued_before),
+            )
+        )
+        .order_by(AgentRun.queued_at)
+        .limit(limit)
+    )
+    return rows.tuples().all()
 
 
 class CatalogueRepository:

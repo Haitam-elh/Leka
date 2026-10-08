@@ -127,6 +127,9 @@ SCHEDULE: tuple[Scheduled, ...] = (
         "leka.capabilities.catalogue.run_catalogue_sync",
         cron="23 * * * *",
     ),
+    # The agent runs no worker will finish (LEKA-395): its worker went away,
+    # its job was lost — failed, abandoned, said.
+    Scheduled("agent-runs-sweep", "leka.capabilities.runs.run_runs_sweep", cron="41 * * * *"),
 )
 
 

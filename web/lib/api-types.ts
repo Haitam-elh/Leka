@@ -3912,6 +3912,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The workspace's agent runs */
+        get: operations["list_runs_api_v1_agent_runs_get"];
+        put?: never;
+        /**
+         * Run an agent
+         * @description Queued for a worker — or refused, said why: no such agent (404), the
+         *     person's role may not use it (403), it cannot run here now, or what it
+         *     was given is not what it takes (422, each reason in `details`).
+         */
+        post: operations["start_run_api_v1_agent_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One agent run, every step */
+        get: operations["get_run_api_v1_agent_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel an agent run
+         * @description Queued, it never runs; running, what it delivers is not kept. 403 for
+         *     another's run, unless one may approve; 409 once it ended.
+         */
+        post: operations["cancel_run_api_v1_agent_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/models": {
         parameters: {
             query?: never;
@@ -4996,6 +5057,248 @@ export interface components {
             count: number;
             /** Previous */
             previous: number;
+        };
+        /**
+         * AgentRunCreate
+         * @description An agent to run, with what its contract takes.
+         */
+        AgentRunCreate: {
+            /**
+             * Key
+             * @description The agent's key.
+             */
+            key: string;
+            /**
+             * Inputs
+             * @description What its contract takes, by name.
+             */
+            inputs?: {
+                [key: string]: string | number | boolean | null;
+            };
+            /**
+             * Intention Id
+             * @description The intention it works for: its context is the agent's (LEKA-387).
+             */
+            intention_id?: string | null;
+            /**
+             * Context Id
+             * @description A context to read; none: assembled from what it is given.
+             */
+            context_id?: string | null;
+        };
+        /**
+         * AgentRunDetail
+         * @description A run, with what it delivered and every step.
+         */
+        AgentRunDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /**
+             * Title
+             * @description The agent's, as the catalogue holds it now.
+             */
+            title: string | null;
+            /**
+             * Version
+             * @description The version that ran — or will.
+             */
+            version: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            /** Inputs */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /** Requested By */
+            requested_by: string | null;
+            /**
+             * Mine
+             * @description Asked by whoever reads it.
+             */
+            mine: boolean;
+            /** Intention Id */
+            intention_id: string | null;
+            /** Context Id */
+            context_id: string | null;
+            /** Context Version */
+            context_version: number | null;
+            /**
+             * Format
+             * @description What it delivers.
+             * @enum {string}
+             */
+            format: "markdown" | "json";
+            /**
+             * Pending
+             * @description What it declares (pptx, pdf…) and the runtime does not render yet.
+             */
+            pending: string[];
+            /**
+             * Error
+             * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
+             */
+            error: string | null;
+            /**
+             * Reasons
+             * @description When it could no longer run: the catalogue's reasons, as it said them.
+             */
+            reasons: {
+                [key: string]: unknown;
+            }[];
+            /** Provider */
+            provider: string | null;
+            /** Model */
+            model: string | null;
+            /** Model Version */
+            model_version: string | null;
+            /** Tool Calls */
+            tool_calls: number;
+            /**
+             * Queued At
+             * Format: date-time
+             */
+            queued_at: string;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Output */
+            output: string | null;
+            /** Events */
+            events: components["schemas"]["AgentRunEventRead"][];
+            usage: components["schemas"]["AgentRunUsage"];
+        };
+        /**
+         * AgentRunEventRead
+         * @description One step of a run.
+         */
+        AgentRunEventRead: {
+            /** Seq */
+            seq: number;
+            /**
+             * Kind
+             * @description queued, started, context, tool_withheld, tool, answered, succeeded, failed, cancelled
+             */
+            kind: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * AgentRunRead
+         * @description One run of an agent: where it stands, what it delivers, or why not.
+         */
+        AgentRunRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /**
+             * Title
+             * @description The agent's, as the catalogue holds it now.
+             */
+            title: string | null;
+            /**
+             * Version
+             * @description The version that ran — or will.
+             */
+            version: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            /** Inputs */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /** Requested By */
+            requested_by: string | null;
+            /**
+             * Mine
+             * @description Asked by whoever reads it.
+             */
+            mine: boolean;
+            /** Intention Id */
+            intention_id: string | null;
+            /** Context Id */
+            context_id: string | null;
+            /** Context Version */
+            context_version: number | null;
+            /**
+             * Format
+             * @description What it delivers.
+             * @enum {string}
+             */
+            format: "markdown" | "json";
+            /**
+             * Pending
+             * @description What it declares (pptx, pdf…) and the runtime does not render yet.
+             */
+            pending: string[];
+            /**
+             * Error
+             * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
+             */
+            error: string | null;
+            /**
+             * Reasons
+             * @description When it could no longer run: the catalogue's reasons, as it said them.
+             */
+            reasons: {
+                [key: string]: unknown;
+            }[];
+            /** Provider */
+            provider: string | null;
+            /** Model */
+            model: string | null;
+            /** Model Version */
+            model_version: string | null;
+            /** Tool Calls */
+            tool_calls: number;
+            /**
+             * Queued At
+             * Format: date-time
+             */
+            queued_at: string;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+        };
+        /** AgentRunUsage */
+        AgentRunUsage: {
+            /**
+             * Calls
+             * @description Calls to a model, every attempt.
+             */
+            calls: number;
+            /** Tokens In */
+            tokens_in: number;
+            /** Tokens Out */
+            tokens_out: number;
+            /**
+             * Cost Usd
+             * @description At list price; none when a price is not known.
+             */
+            cost_usd: number | null;
         };
         /**
          * AmbiguityRead
@@ -36487,6 +36790,386 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_runs_api_v1_agent_runs_get: {
+        parameters: {
+            query?: {
+                key?: string | null;
+                status?: ("queued" | "running" | "succeeded" | "failed" | "cancelled") | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    start_run_api_v1_agent_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRunCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_run_api_v1_agent_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    cancel_run_api_v1_agent_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunRead"];
+                };
             };
             /** @description The request could not be understood. */
             400: {

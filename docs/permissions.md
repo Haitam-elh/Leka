@@ -162,6 +162,16 @@ the workspace entered at once. `GET /billing/usage` — what the workspace
 holds and did this month, counted — any member; no plan, payment nor
 invoice is held by LEKA yet.
 
+## Agents (LEKA-395)
+
+Running an agent (`POST /agent-runs`) takes `intention:create` **and the
+agent's own permission** (its front matter's, `intention:create` by
+default): a role without it is refused, 403. Its tools are offered only
+when the person who asked holds their permission — read when it runs, not
+when it was asked: someone who left the workspace meanwhile, their run
+fails. Reading runs takes `intention:read`; cancelling one, being who asked
+it or holding `intention:approve`. [agent-runtime.md](agent-runtime.md).
+
 ## Modèle de langage (LEKA-394)
 
 `GET /models` (what answers here, the providers one may bring) and

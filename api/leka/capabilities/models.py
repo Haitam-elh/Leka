@@ -4,7 +4,7 @@ The catalogue's history (LEKA-393), LEKA's and no customer's: every version
 of every capability ever registered — what it was (its fingerprint), where
 it stood in its lifecycle — and every event of that history, append-only.
 And each workspace's say on them: enabled or not, and its people's
-favourites.
+favourites. And every run of an agent, with its steps (LEKA-395).
 
 Agents themselves are never stored here. They are files in agents/
 (architecture rule 8); what is kept is that they were registered, as what.
@@ -17,9 +17,11 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     LargeBinary,
@@ -169,3 +171,74 @@ class ModelCall(Base, WorkspaceScopedMixin):
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     request_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AgentRun(Base, WorkspaceScopedMixin):
+    """One run of an agent (LEKA-395): which agent, which version, asked by
+    whom with what, on which context — where it stands, what it delivered,
+    which model answered, or why it failed. Its steps are its events."""
+
+    __tablename__ = "agent_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')", name="status"
+        ),
+        Index("ix_agent_runs_workspace_queued", "workspace_id", "queued_at"),
+        UniqueConstraint("workspace_id", "id", name="uq_agent_runs_workspace_id_id"),
+    )
+
+    key: Mapped[str] = mapped_column(String(100), nullable=False)
+    version: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(10), nullable=False)
+    # What it was given, as its contract takes it.
+    inputs: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # What it was asked for, when it was: an intention (LEKA-384) — no
+    # foreign key, capabilities sits below intentions.
+    intention_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # The context it read: which, which version — kept when the context is
+    # archived, as an analysis keeps it.
+    context_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    context_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # markdown or json; what it declares and the runtime does not render
+    # yet is in detail.pending.
+    format: Mapped[str] = mapped_column(String(10), nullable=False)
+    output: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Why it failed (runtime.FAILURES), or who cancelled it.
+    error: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # The model whose answer it delivered.
+    provider: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    model_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    tool_calls: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    queued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentRunEvent(Base, WorkspaceScopedMixin):
+    """One step of a run: queued, started, its context injected, a tool
+    withheld or called — and what came of it — the model's answer, how it
+    ended. Append-only: the database refuses to change one."""
+
+    __tablename__ = "agent_run_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "run_id"],
+            ["agent_runs.workspace_id", "agent_runs.id"],
+            ondelete="CASCADE",
+            name="fk_agent_run_events_run",
+        ),
+        Index("ix_agent_run_events_run", "run_id", "at", "seq"),
+    )
+
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    # queued, started, context, tool_withheld, tool, answered, succeeded,
+    # failed, cancelled
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")

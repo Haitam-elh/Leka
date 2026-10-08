@@ -9,7 +9,8 @@ import { signIn } from "./sign-in";
  * it starts, and that on the demo the page shows it — LEKA's own analyses,
  * available, and the application architect registered, saying why it cannot
  * run yet: no source to read from connected, the language model to come;
- * that its sheet says what it takes and delivers; and that an admin turns a
+ * that its sheet says what it takes and delivers, and offers to run it —
+ * not without a model (LEKA-395); and that an admin turns a
  * capability off, saying why, and on again.
  */
 
@@ -26,10 +27,11 @@ test.describe("Capabilities", () => {
     const architect = page.locator('[data-testid="capability-card"][data-key="application-architecture"]');
     await expect(architect).toContainText("Architecte applicatif");
     await expect(architect).toHaveAttribute("data-available", "false");
+    // No model key in CI; agents run (LEKA-395): that is all in its way.
     await expect(architect.getByTestId("capability-reasons")).toContainText(
-      // No model key in CI, and agents are not run yet (LEKA-395).
-      "Aucun modèle de langage ne peut l'exécuter ici · En attente de l'exécution des agents (LEKA-395)",
+      "Aucun modèle de langage ne peut l'exécuter ici",
     );
+    await expect(architect.getByTestId("capability-reasons")).not.toContainText("agents");
 
     // Its words find it.
     await page.getByTestId("catalogue-search").fill("architecte");
@@ -41,6 +43,12 @@ test.describe("Capabilities", () => {
     await expect(sheet.getByTestId("capability-inputs")).toContainText("parcours");
     await expect(sheet.getByTestId("capability-formats")).toContainText("PDF");
     await expect(sheet.getByTestId("capability-versions")).toContainText("v18.0.0");
+    // Run from its sheet (LEKA-395) — not here, without a model.
+    await expect(sheet.getByTestId("agent-run-form")).toContainText(
+      "Il ne peut pas s'exécuter ici pour l'instant.",
+    );
+    await expect(sheet.getByRole("button", { name: "Lancer" })).toBeDisabled();
+    await expect(sheet).toContainText("Aucune exécution pour l'instant.");
 
     // Turned off, saying why — then on again.
     await page.goto("/capabilities?tab=configuration");

@@ -39,6 +39,15 @@ An agent in `proposes_action` mode **proposes**. It never executes.
 Execution goes through `api/leka/intentions/`, after approval. `mode:
 proposes_action` is not permission to act — it is permission to suggest.
 
+### How it runs
+
+The agent runtime (LEKA-395) gives it the context of what it is asked —
+only the things of its `entity_types` — and read-only tools, offered by the
+permissions of whoever asked; its rules come before the agent's
+instructions, and the context and what tools return reach the model as data,
+never as instructions. Every run and every step is kept. See
+[docs/agent-runtime.md](../docs/agent-runtime.md).
+
 ---
 
 ## The format

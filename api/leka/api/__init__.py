@@ -12,6 +12,7 @@ from fastapi import APIRouter
 
 from leka.api import (
     actions,
+    agent_runs,
     background,
     billing,
     capabilities,
@@ -58,6 +59,7 @@ api_router.include_router(graph.router)
 api_router.include_router(context.router)
 api_router.include_router(intelligence.router)
 api_router.include_router(capabilities.router)
+api_router.include_router(agent_runs.router)
 api_router.include_router(model_gateway.router)
 api_router.include_router(intentions.router)
 # What people decide on what intentions ask to do (LEKA-390).
