@@ -45,6 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import Event, enqueue_job
 from leka.background.runner import RQ_JOB_TIMEOUT
+from leka.capabilities import Gateway, Needs, NoModelError
 from leka.context import ContextRepository
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.intelligence.analysis import (
@@ -52,11 +53,14 @@ from leka.intelligence.analysis import (
     Authority,
     ContextStanding,
     Material,
+    Method,
+    ModelWork,
     QualityMove,
     Reads,
     catalogue_hash,
     execute,
 )
+from leka.intelligence.curation import proposal_of
 from leka.intelligence.evolution import quality_move
 from leka.intelligence.measures import HISTORY_DAYS as QUALITY_DAYS
 from leka.intelligence.repository import (
@@ -220,7 +224,8 @@ async def analyse_workspace(
             quality_moves=course[1] if course else (),
         )
         for analyzer in chosen:
-            outcome = await execute(analyzer, material)
+            work = await _work(workspace_id, analyzer) if analyzer.method is Method.MODEL else None
+            outcome = await execute(analyzer, material, work=work)
             at = clock or datetime.now(UTC)
             async with session_factory() as session:
                 try:
@@ -249,6 +254,35 @@ async def analyse_workspace(
         # Facts the policy accepted (LEKA-380): the model applies them.
         await queue_model_build(workspace_id)
     return {"run": str(run_id), "status": finished.status, **finished.counts}
+
+
+async def _work(workspace_id: uuid.UUID, analyzer: Analyzer) -> ModelWork | None:
+    """What an analysis a model helps with is given (LEKA-394) — none when
+    no model this workspace can reach does what it needs: it is skipped,
+    said `no_model`. Each call to the model in a session of its own,
+    committed: kept, answered or not."""
+    async with session_factory() as session:
+        if not await Gateway(session, workspace_id).ready(analyzer.needs or Needs()):
+            return None
+        kept = await IntelligenceRepository(session, workspace_id).candidates_of(analyzer.name)
+        standing = {key: proposal_of(c) for key, c in kept.items() if c.status == "proposed"}
+        decided = frozenset(k for k, c in kept.items() if c.status in ("accepted", "rejected"))
+
+    async def ask(request: object, shape: object, needs: object) -> object:
+        async with session_factory() as session:
+            try:
+                return await Gateway(session, workspace_id).structured(
+                    request,  # type: ignore[arg-type]
+                    shape,  # type: ignore[arg-type]
+                    needs,  # type: ignore[arg-type]
+                )
+            except NoModelError:
+                logger.info("intelligence_model_unanswered", analyzer=analyzer.name)
+                raise
+            finally:
+                await session.commit()
+
+    return ModelWork(ask=ask, kept=standing, decided=decided)
 
 
 async def _model(

@@ -45,9 +45,10 @@ import enum
 import hashlib
 import time
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from leka.knowledge import (
     ArchitectureRead,
@@ -311,6 +312,19 @@ class Material:
 
 
 @dataclass(frozen=True)
+class ModelWork:
+    """What an analysis a model helps with is given (LEKA-394): a way to
+    ask the gateway — `ask(request, shape, needs)`, a checked structured
+    answer, every call kept — and what it already proposed: what still
+    stands (`kept`, by key), proposed again as it was, never asked twice;
+    what a person or the policy decided (`decided`), never asked again."""
+
+    ask: Callable[..., Awaitable[Any]]
+    kept: Mapping[str, Proposal] = field(default_factory=dict)
+    decided: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True)
 class Analyzer:
     """A named, versioned analysis. Raise `version` whenever what it
     concludes changes: the sweep runs every workspace again."""
@@ -327,6 +341,16 @@ class Analyzer:
     # Parts read when they can be, which only weigh what it concludes —
     # unread, it still runs (LEKA-379: a gap on what a change just touched).
     heeds: frozenset[Reads] = frozenset()
+    # A model helps it (method MODEL, LEKA-394): what it asks of the model —
+    # a gateway Needs — and how it runs, given the model.
+    needs: Any = None
+    write: (
+        Callable[
+            [Material, ModelWork],
+            Awaitable[Sequence[Draft | Proposal | ConflictDraft | QualityScore]],
+        ]
+        | None
+    ) = None
 
     @property
     def wants(self) -> frozenset[Reads]:
@@ -347,27 +371,34 @@ class Outcome:
     reason: str | None = None
 
 
-def skip_reason(analyzer: Analyzer, material: Material) -> str | None:
+def skip_reason(
+    analyzer: Analyzer, material: Material, *, work: ModelWork | None = None
+) -> str | None:
     """Why an analysis cannot run on this material, if it cannot."""
-    if analyzer.method is Method.MODEL:
-        # No model gateway yet (leka.capabilities, architecture rule 7).
+    if analyzer.method is Method.MODEL and (work is None or analyzer.write is None):
+        # No model this workspace can reach does what it needs (LEKA-394).
         return "no_model"
     if any(not material.has(reads) for reads in analyzer.reads):
         return "no_material"
     return None
 
 
-async def execute(analyzer: Analyzer, material: Material) -> Outcome:
+async def execute(
+    analyzer: Analyzer, material: Material, *, work: ModelWork | None = None
+) -> Outcome:
     """Run one analysis, isolated: never raises. Its drafts and its
     proposals deduplicated by key — the last one said wins."""
-    reason = skip_reason(analyzer, material)
+    reason = skip_reason(analyzer, material, work=work)
     if reason is not None:
         return Outcome(status="skipped", reason=reason)
     started = time.monotonic()
     try:
-        said = await asyncio.wait_for(
-            asyncio.to_thread(analyzer.run, material), timeout=analyzer.budget
-        )
+        if analyzer.method is Method.MODEL and analyzer.write is not None and work is not None:
+            said = await asyncio.wait_for(analyzer.write(material, work), timeout=analyzer.budget)
+        else:
+            said = await asyncio.wait_for(
+                asyncio.to_thread(analyzer.run, material), timeout=analyzer.budget
+            )
     except TimeoutError:
         return Outcome(status="timed_out", duration_ms=_since(started), error="TimeoutError")
     except Exception as error:

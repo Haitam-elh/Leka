@@ -118,7 +118,7 @@ What can go wrong, and what is done:
 | The analysis raises | `failed`, `error` = the exception's type | partial (or failed) | its own **untouched** — not seeing them is not knowing they are gone |
 | It exceeds its budget | `timed_out` | partial | untouched. Its thread is left to end on its own: Python cannot stop it |
 | Its findings cannot be written (a database error) | rolled back alone, recorded `failed` in a fresh session | partial | untouched |
-| It needs a model | `skipped`, `reason = no_model` | unaffected | — |
+| It needs a model, and none this workspace can reach does what it needs | `skipped`, `reason = no_model` | unaffected | — |
 | It needs material that could not be read | `skipped`, `reason = no_material` | unaffected | — |
 | The run cannot even start | — | none | — : the background loop retries the job (ADR 013) |
 
@@ -190,7 +190,7 @@ and the file and line that state it, and the context with its version.
 | `gaps_staleness` | gaps | model (heeds changes) | A source failing or not read for 3 days; a dormant thing others still rely on | by priority |
 | `gaps_coverage` | gaps | model | A whole family of sources not connected, once, with all it leaves unknown | by priority |
 | `enrich_code`, `enrich_runtime`, `enrich_owner`, `enrich_application`, `enrich_criticality`, `enrich_description` (LEKA-380) | enrichment | model | Proposals, not findings: what the model lacks that the evidence around it says (§ 13) | — a confidence instead |
-| `enrich_summary` | enrichment | model | What a service does, in words — model-assisted: skipped until the gateway exists | — |
+| `enrich_summary` | enrichment | model | What a thing is and does, in words — written by a language model from what LEKA knows of it, each description citing its facts (LEKA-394) | — |
 | `conflicts` (LEKA-382) | conflicts | conflicts | Conflicts, not findings: what the model's sources disagree on, each side weighed, one recommended (§ 14) | — a recommendation instead |
 | `quality` (LEKA-381) | quality | model (heeds conflicts) | A score for each thing and each area — completeness, freshness, consistency, confidence — and, as findings, what is known weakly (§ 15) | a thing: **high** when 3+ rely on it or it is critical, **medium** for a service or what something relies on, **low** otherwise · an area: **medium**, the workspace **high** |
 
@@ -255,10 +255,17 @@ All of it is done by the sweep:
 4. When what it concludes changes, raise its **version**. The catalogue hash
    changes, and the sweep analyses every workspace again within the hour.
 
-A model-assisted analysis is declared with `method=Method.MODEL`. It is
-skipped (`no_model`) until `leka.capabilities` calls a model (architecture
-rule 7). The frame does not change the day one runs: `intelligence` sits above
-`capabilities` for that reason (`tests/test_module_boundaries.py`).
+A model-assisted analysis is declared with `method=Method.MODEL`, what it
+needs of a model (`needs`, a gateway `Needs`) and how it runs given one
+(`write(material, work)`). The run gives it a `ModelWork` when a model this
+workspace can reach does what it needs ([model-gateway.md](model-gateway.md)),
+else it is skipped (`no_model`): `ask(request, shape, needs)` — a checked
+structured answer through the gateway, every call kept — what it proposed that
+still stands (`kept`: proposed again as it was, **never asked twice**), and
+what was decided (`decided`: **never asked again**). What a model proposes is
+**never the policy's**: `by_policy` takes only what rules propose — a person
+validates it in À valider. `intelligence` sits above `capabilities` for that
+reason (`tests/test_module_boundaries.py`).
 
 ## 10. Operating it
 
@@ -471,7 +478,7 @@ and reaches the model only once validated.
 | business | `enrich_application` | for a service no application holds: the application its neighbours are part of — two at least, two thirds of them — or whose name it carries (`part_of`) | 0.5 + 0.3 × the share; 0.7 |
 | semantic | `enrich_criticality` | how critical a thing is: the level of the application holding it, when high or critical; `high` when five or more rely on it — where nothing is said, or above what is | 0.75; 0.65 |
 | | `enrich_description` | a service's description, from the repository that is its code — and its alone | 0.7 |
-| | `enrich_summary` | what a service does, in words — model-assisted, skipped until the gateway exists (`no_model`) | — |
+| | `enrich_summary` | what a service, a repository or a database is and does, in words: written by a language model (LEKA-394) for each that lacks a description — a dozen a run — from its facts as LEKA knows them (its kind, technology, code and its description, what runs it, its parts and files, what it uses and what uses it, its team), each fact with an id the description must cite; a citation of nothing LEKA gave is dropped, a description resting on nothing is not proposed; capped at 0.6 — **a person validates it**; the attribute `description` | — |
 
 A name says what it is without what kind of thing it is: `payment-api`,
 `acme/payments` and `payments-service` are one name (`words`, the kind words
@@ -926,8 +933,8 @@ workspace sees nothing.
 
 ## Not yet
 
-- **Model-assisted analyses.** The model gateway is empty (LEKA-329); they
-  are declared and skipped.
+- **More model-assisted analyses**: `enrich_summary` is the first; an owner
+  read from documents, the application a service serves, from their text.
 - **Dismissing a finding** ("known, accepted"). That is a decision, and it
   belongs to LEKA-389/390 (findings, human decision).
 - **Evolution's own weights** (LEKA-383): its thresholds are constants

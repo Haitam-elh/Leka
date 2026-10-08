@@ -38,7 +38,7 @@ from collections import Counter
 from collections.abc import Sequence
 from datetime import datetime
 
-from leka.intelligence.analysis import Analyzer, Material, Method, Proposal
+from leka.intelligence.analysis import Analyzer, Evidence, Material, Method, Proposal, Subject
 from leka.intelligence.models import EnrichmentCandidate
 from leka.intelligence.repository import IntelligenceRepository
 from leka.intelligence.schemas import (
@@ -80,6 +80,52 @@ def by_policy(analyzer: Analyzer, proposal: Proposal) -> bool:
         analyzer.method is Method.RULES
         and not proposal.overrides
         and proposal.confidence >= POLICY_CONFIDENCE
+    )
+
+
+def proposal_of(candidate: EnrichmentCandidate) -> Proposal:
+    """A candidate still proposed, as the proposal it was: what an analysis
+    a model helps with proposes again rather than ask the model twice
+    (LEKA-394)."""
+
+    def subject(kind: str | None, ident: uuid.UUID | None, name: str | None) -> Subject:
+        return Subject(type="entity", id=ident, name=name or "", kind=kind)
+
+    sources = candidate.provenance.get("sources") if candidate.provenance else None
+    return Proposal(
+        key=candidate.key,
+        family=candidate.family,
+        code=candidate.code,
+        subject=subject(candidate.subject_kind, candidate.subject_id, candidate.subject_name),
+        statement=candidate.statement,
+        confidence=candidate.confidence,
+        relationship=candidate.relationship,
+        start=(
+            subject(candidate.start_kind, candidate.start_id, candidate.start_name)
+            if candidate.start_id
+            else None
+        ),
+        end=(
+            subject(candidate.end_kind, candidate.end_id, candidate.end_name)
+            if candidate.end_id
+            else None
+        ),
+        attribute=candidate.attribute,
+        value=candidate.value,
+        current=candidate.current,
+        overrides=candidate.overrides,
+        params=dict(candidate.params or {}),
+        evidence=tuple(
+            Evidence(
+                kind=str(item.get("kind") or ""),
+                id=str(item["id"]) if item.get("id") is not None else None,
+                name=str(item.get("name") or ""),
+                detail=str(item.get("detail") or ""),
+            )
+            for item in (candidate.evidence or [])
+            if isinstance(item, dict)
+        ),
+        sources=tuple(str(s) for s in sources) if isinstance(sources, list) else (),
     )
 
 
