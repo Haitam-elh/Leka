@@ -5,8 +5,9 @@
  * stands in words and when it last moved, leading to its page; the tabs by
  * phase counted by the API and asking it again; an empty list said so;
  * an intention's page says what was asked, its scope, what it is linked
- * to, what LEKA has not concluded yet; its history in words — LEKA's moves
- * and a person's, the context's version, the reason given; cancelling asks
+ * to, what LEKA has not concluded yet; its whole story in words, in order
+ * (LEKA-392) — LEKA's moves and a person's, by name, the context's
+ * version, the reason given, its analysis — filtered; cancelling asks
  * first, with a reason, and is sent with it; archiving once done with; a
  * missing intention said so, its tabs kept.
  */
@@ -18,7 +19,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/components/interactions/confirm";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
-import type { IntentionDetail, IntentionEvent } from "@/lib/intentions/api";
+import type { IntentionDetail } from "@/lib/intentions/api";
+import type { TimelineItem } from "@/lib/outcomes";
 import { makeQueryClient } from "@/lib/query";
 
 const ID = "0c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
@@ -49,6 +51,11 @@ const api = vi.hoisted(() => ({
 vi.mock("@/lib/intentions/api", async (original) => ({
   ...(await original<typeof import("@/lib/intentions/api")>()),
   intentions: api,
+}));
+const told = vi.hoisted(() => ({ timeline: vi.fn() }));
+vi.mock("@/lib/outcomes", async (original) => ({
+  ...(await original<typeof import("@/lib/outcomes")>()),
+  outcomes: told,
 }));
 
 const { IntentionsList } = await import("@/components/intentions/intentions-list");
@@ -100,19 +107,19 @@ function intention(overrides: Partial<IntentionDetail> = {}): IntentionDetail {
   };
 }
 
-function event(overrides: Partial<IntentionEvent>): IntentionEvent {
+function item(overrides: Partial<TimelineItem>): TimelineItem {
   return {
-    id: crypto.randomUUID(),
-    sequence: 1,
+    id: `event:${crypto.randomUUID()}`,
+    intention_id: ID,
+    title: null,
+    category: "intention",
     kind: "created",
-    name: null,
-    from_status: null,
-    to_status: null,
+    at: ago(3),
     actor: "person",
     by: ME,
-    at: ago(3),
+    by_name: "Nora Diallo",
     reason: null,
-    detail: {},
+    detail: { event: "created" },
     ...overrides,
   };
 }
@@ -192,35 +199,53 @@ describe("an intention's page", () => {
     expect(screen.getByText(/par vous/)).toBeInTheDocument();
   });
 
-  it("tells its history: LEKA's moves and a person's, with the reason given", async () => {
+  it("tells its whole story, in order, and filters it", async () => {
+    const user = userEvent.setup();
     route.pathname = `/intentions/${ID}/history`;
-    api.history.mockResolvedValue([
-      event({}),
-      event({
-        sequence: 2,
-        kind: "linked",
-        actor: "system",
-        by: null,
-        detail: { kind: "context", label: "Billing API", ref_id: "c1" },
-      }),
-      event({
-        sequence: 3,
-        kind: "moved",
-        name: "analysis_started",
-        from_status: "submitted",
-        to_status: "analysing",
-        actor: "system",
-        by: null,
-        detail: { version: 1 },
-      }),
-      event({
-        sequence: 4,
-        kind: "moved",
-        name: "cancelled",
-        from_status: "analysing",
-        to_status: "cancelled",
+    // As the API says it: the latest first.
+    told.timeline.mockResolvedValue([
+      item({
+        kind: "cancelled",
+        at: ago(1),
         reason: "asked twice",
+        detail: { event: "moved", from_status: "analysing", to_status: "cancelled" },
       }),
+      item({
+        id: "vote:v1",
+        category: "decision",
+        kind: "vote_request_changes",
+        at: ago(1.5),
+        by: "8c3bc5ff-a12e-5e92-a5ae-ad6da2029a41",
+        by_name: "Sara Martin",
+        detail: { revision: 1 },
+      }),
+      item({
+        id: "analysis:a1:started",
+        category: "analysis",
+        kind: "analysis_started",
+        at: ago(2),
+        actor: "system",
+        by: null,
+        by_name: null,
+        detail: { number: 1 },
+      }),
+      item({
+        kind: "analysis_started",
+        at: ago(2.5),
+        actor: "system",
+        by: null,
+        by_name: null,
+        detail: { event: "moved", version: 1, from_status: "submitted", to_status: "analysing" },
+      }),
+      item({
+        kind: "linked",
+        at: ago(2.8),
+        actor: "system",
+        by: null,
+        by_name: null,
+        detail: { event: "linked", kind: "context", label: "Billing API" },
+      }),
+      item({}),
     ]);
     show(<IntentionScreen />);
 
@@ -229,12 +254,34 @@ describe("an intention's page", () => {
       "Intention créée",
       "Liée : Contexte « Billing API »",
       "LEKA a rassemblé le contexte et commence l'analyse",
+      "Analyse lancée",
+      "Modifications demandées",
       "Annulée",
     ]);
     expect(events[2]).toHaveTextContent("par LEKA");
     expect(events[2]).toHaveTextContent("Contexte, version 1");
-    expect(events[3]).toHaveTextContent("par vous");
-    expect(events[3]).toHaveTextContent("Raison : asked twice");
+    expect(events[3]).toHaveTextContent("Analyse n° 1");
+    expect(events[4]).toHaveTextContent("par Sara Martin");
+    expect(events[4]).toHaveTextContent("Décision");
+    expect(events[5]).toHaveTextContent("par vous");
+    expect(events[5]).toHaveTextContent("Raison : asked twice");
+    expect(told.timeline).toHaveBeenLastCalledWith(ID, { categories: [], actor: null });
+
+    // Filtered: by kind of thing, by who.
+    await user.click(screen.getByTestId("timeline-category-decision"));
+    await waitFor(() =>
+      expect(told.timeline).toHaveBeenLastCalledWith(ID, { categories: ["decision"], actor: null }),
+    );
+    await user.click(screen.getByTestId("timeline-actor-person"));
+    await waitFor(() =>
+      expect(told.timeline).toHaveBeenLastCalledWith(ID, {
+        categories: ["decision"],
+        actor: "person",
+      }),
+    );
+    told.timeline.mockResolvedValue([]);
+    await user.click(screen.getByTestId("timeline-actor-system"));
+    expect(await screen.findByText("Rien ne correspond à ces filtres.")).toBeInTheDocument();
   });
 
   it("is cancelled once asked, with the reason given", async () => {
@@ -254,6 +301,29 @@ describe("an intention's page", () => {
     expect(api.cancel).toHaveBeenCalledWith(ID, "asked twice");
     expect(await screen.findByTestId("intention-archive")).toBeInTheDocument();
     expect(screen.queryByTestId("intention-cancel")).not.toBeInTheDocument();
+  });
+
+  it("tells its story again once it moved", async () => {
+    route.pathname = `/intentions/${ID}/history`;
+    told.timeline.mockResolvedValue([item({})]);
+    api.cancel.mockResolvedValue(intention({ status: "cancelled", phase: "finished", moves: [] }));
+    const user = userEvent.setup();
+    show(<IntentionScreen />);
+    expect(await screen.findAllByTestId("intention-event")).toHaveLength(1);
+
+    told.timeline.mockResolvedValue([
+      item({
+        kind: "cancelled",
+        at: ago(0),
+        detail: { event: "moved", from_status: "analysing", to_status: "cancelled" },
+      }),
+      item({}),
+    ]);
+    await user.click(await screen.findByTestId("intention-cancel"));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Annuler l'intention" }));
+    await waitFor(() => expect(screen.getAllByTestId("intention-event")).toHaveLength(2));
+    expect(screen.getAllByTestId("intention-event")[1]).toHaveTextContent("Annulée");
   });
 
   it("says what LEKA understood, each part with its words", async () => {

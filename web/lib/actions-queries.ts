@@ -71,6 +71,8 @@ export function usePlanAction(intentionId: string) {
       void client.invalidateQueries({ queryKey: planKeys.of(intentionId) });
       void client.invalidateQueries({ queryKey: intentionKeys.all });
       void client.invalidateQueries({ queryKey: decisionKeys.all });
+      // A plan done opens the verification of its outcome (LEKA-392).
+      void client.invalidateQueries({ queryKey: ["outcomes"] });
     },
   });
 }

@@ -43,6 +43,8 @@ test.describe("Intentions", () => {
     // Its history: asked, its context linked, LEKA analysing.
     await page.getByTestId("tab-history").click();
     await expect(page).toHaveURL(/\/history$/);
+    // What happened to the intention itself (its whole story: LEKA-392).
+    await page.getByTestId("timeline-category-intention").click();
     const events = page.getByTestId("intention-event");
     await expect(events).toHaveCount(3);
     await expect(events.nth(0)).toContainText("Intention créée");
@@ -103,6 +105,8 @@ test.describe("Intentions", () => {
     await page.getByTestId("intention-follow").click();
     await expect(page.getByTestId("intention-status")).toContainText("En analyse");
     await page.getByTestId("tab-history").click();
+    // What happened to the intention itself (its whole story: LEKA-392).
+    await page.getByTestId("timeline-category-intention").click();
     await expect(page.getByTestId("intention-event").last()).toContainText("Précisée");
   });
 });

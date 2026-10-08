@@ -759,6 +759,22 @@ class IntentionPlanEventRead(BaseModel):
     detail: dict[str, JsonValue]
 
 
+class ExpectationRead(BaseModel):
+    """What should be true once it ran (LEKA-392)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(max_length=200)
+    kind: Literal["healthy", "incident_resolved", "metric", "confirmed"]
+    target: dict[str, str] | None = None
+    name: str | None = Field(default=None, max_length=100)
+    comparator: Literal["lt", "lte", "eq", "gte", "gt"] | None = None
+    value: JsonValue = None
+    source: Literal["model", "system"] = "model"
+    said: str | None = Field(default=None, max_length=500)
+    incidents: list[str] = Field(default_factory=list)
+
+
 class IntentionPlanRead(BaseModel):
     """What an approved decision became, and how it is going."""
 
@@ -783,6 +799,9 @@ class IntentionPlanRead(BaseModel):
     finished_at: datetime | None
     created_at: datetime
     checks: list[PlanCheckRead]
+    expectations: list[ExpectationRead] = Field(
+        description="What should be true once it ran (LEKA-392)."
+    )
     error: str | None
     steps: list[IntentionPlanStepRead]
     events: list[IntentionPlanEventRead]
@@ -811,3 +830,82 @@ class StepReportRequest(BaseModel):
     outcome: Literal["succeeded", "failed"]
     note: str = Field(min_length=1, max_length=2000)
     link: HttpUrl | None = Field(default=None, description="http or https only.")
+
+
+# ── outcomes (LEKA-392) ──────────────────────────────────────────────────────
+
+
+class ObservedResultRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    expectation_id: str
+    seen: Literal["met", "not_met", "unknown", "awaiting"]
+    value: JsonValue = None
+    detail: str | None = None
+    reported: dict[str, JsonValue] | None = None
+
+
+class IntentionVerificationRead(BaseModel):
+    """Whether what ran achieved what was expected."""
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    intention_id: uuid.UUID
+    plan_id: uuid.UUID
+    status: Literal["verifying", "succeeded", "partial", "failed"]
+    expectations: list[ExpectationRead]
+    results: list[ObservedResultRead]
+    observe_after: datetime
+    deadline: datetime
+    observed_at: datetime | None
+    concluded_at: datetime | None
+    concluded_by: uuid.UUID | None
+    context_update: dict[str, JsonValue]
+    # A person's note, when a person concluded it.
+    detail: dict[str, JsonValue]
+    created_at: datetime
+
+
+class ExpectationsUpdate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    expectations: list[ExpectationRead] = Field(max_length=30)
+
+
+class ExpectationReport(BaseModel):
+    """A person's word on one expectation, and what shows it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    met: bool
+    note: str = Field(min_length=1, max_length=2000)
+    link: HttpUrl | None = Field(default=None, description="http or https only.")
+
+
+class VerificationConclude(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    note: str = Field(min_length=1, max_length=2000)
+
+
+class TimelineItem(BaseModel):
+    """One moment of an intention's story: what happened, of which kind —
+    the intention, its analysis, its decision, its action, its outcome — by
+    whom, when."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    intention_id: uuid.UUID
+    title: str | None = Field(default=None, description="The intention's — across intentions.")
+    category: Literal["intention", "analysis", "decision", "action", "outcome"]
+    kind: str
+    at: datetime
+    actor: Literal["person", "system"]
+    by: uuid.UUID | None = None
+    by_name: str | None = Field(
+        default=None, description="Their name — their address when they gave none."
+    )
+    reason: str | None = None
+    detail: dict[str, JsonValue] = Field(default_factory=dict)

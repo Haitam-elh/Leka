@@ -30,7 +30,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
-from typing import cast
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 ANY = "*"
@@ -316,6 +316,8 @@ class Outcome:
     reason: str | None = None
     detail: str | None = None
     ref: str | None = None
+    # What the system measured once it acted (LEKA-392): name → value.
+    metrics: Mapping[str, object] = field(default_factory=dict)
 
 
 def outcome_of(status_code: int, body: bytes) -> Outcome:
@@ -332,9 +334,20 @@ def outcome_of(status_code: int, body: bytes) -> Outcome:
     state = str(said.get("status", "")).casefold()
     detail = said.get("detail")
     ref = said.get("ref")
-    extra = {
+    measured = said.get("metrics")
+    metrics = (
+        {
+            str(name)[:100]: value
+            for name, value in list(measured.items())[:50]
+            if isinstance(value, int | float | str) and not isinstance(value, bool)
+        }
+        if isinstance(measured, Mapping)
+        else {}
+    )
+    extra: dict[str, Any] = {
         "detail": str(detail)[:500] if detail is not None else None,
         "ref": str(ref)[:200] if ref is not None else None,
+        "metrics": metrics,
     }
     if not 200 <= status_code < 300:
         return Outcome("failed", reason=f"http_{status_code}", **extra)

@@ -9,6 +9,14 @@
  * saying why; done, its evidence and log in words; failed, what went wrong
  * said and retried; anyone else follows it, and a link that is not http(s)
  * is never one.
+ *
+ * Its outcome (LEKA-392): what is expected said before it runs, changed by
+ * who may approve — removed, added, nothing incomplete sent; once it ran,
+ * each expectation as it was read — met, not met and why, unknown, awaiting
+ * a person — a person's word only with what shows it, read again now,
+ * concluded only saying why; achieved, the company's context rebuilt and
+ * where to see it, the stages final; not achieved, said; its whole story
+ * one click away.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -18,6 +26,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/components/interactions/confirm";
 import type { Plan, PlanStep } from "@/lib/actions";
+import type { Verification } from "@/lib/outcomes";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import type { IntentionDetail } from "@/lib/intentions/api";
 import { makeQueryClient } from "@/lib/query";
@@ -33,11 +42,23 @@ const api = vi.hoisted(() => ({
   cancel: vi.fn(),
   report: vi.fn(),
 }));
+const outcomesApi = vi.hoisted(() => ({
+  expect: vi.fn(),
+  verifications: vi.fn(),
+  check: vi.fn(),
+  report: vi.fn(),
+  conclude: vi.fn(),
+  timeline: vi.fn(),
+}));
 const notices = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 
 vi.mock("@/lib/actions", async (original) => ({
   ...(await original<typeof import("@/lib/actions")>()),
   plans: api,
+}));
+vi.mock("@/lib/outcomes", async (original) => ({
+  ...(await original<typeof import("@/lib/outcomes")>()),
+  outcomes: outcomesApi,
 }));
 vi.mock("@/lib/notify", () => ({ notify: notices }));
 vi.mock("@/components/shell/shell-provider", () => ({
@@ -115,6 +136,46 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     error: null,
     steps: [step()],
     events: [],
+    expectations: [],
+    ...overrides,
+  };
+}
+
+const HEALTHY = {
+  id: `healthy:${BILLING}`,
+  kind: "healthy" as const,
+  target: { id: BILLING, name: "Billing API", type: "service" },
+  name: null,
+  comparator: null,
+  value: null,
+  source: "model" as const,
+  said: null,
+  incidents: [],
+};
+const CHECKOUT = {
+  ...HEALTHY,
+  id: "confirmed:1",
+  kind: "confirmed" as const,
+  target: null,
+  said: "Le paiement passe de bout en bout",
+};
+
+function verification(overrides: Partial<Verification> = {}): Verification {
+  return {
+    id: "v1",
+    intention_id: ID,
+    plan_id: "p1",
+    status: "verifying",
+    expectations: [HEALTHY, CHECKOUT],
+    results: [],
+    observe_after: ago(-5),
+    deadline: ago(-24 * 60),
+    observed_at: null,
+    concluded_at: null,
+    concluded_by: null,
+    context_update: {},
+    detail: {},
+    created_at: ago(5),
     ...overrides,
   };
 }
@@ -139,6 +200,11 @@ beforeEach(() => {
   api.start.mockResolvedValue(plan({ status: "running" }));
   api.cancel.mockResolvedValue(plan({ status: "cancelled" }));
   api.report.mockResolvedValue(plan({ status: "succeeded" }));
+  outcomesApi.verifications.mockResolvedValue([]);
+  outcomesApi.expect.mockResolvedValue([]);
+  outcomesApi.check.mockResolvedValue(verification());
+  outcomesApi.report.mockResolvedValue(verification());
+  outcomesApi.conclude.mockResolvedValue(verification({ status: "failed" }));
 });
 
 describe("an intention's actions", () => {
@@ -325,6 +391,211 @@ describe("an intention's actions", () => {
     );
     expect(screen.queryByTestId("plan-cancel")).not.toBeInTheDocument();
     expect(screen.getByTestId("step-evidence")).toHaveTextContent("Confirmé : « Fait. »");
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Voir" })).not.toBeInTheDocument();
+  });
+});
+
+describe("what came of it", () => {
+  it("says what is expected before it runs, and who may approve changes it", async () => {
+    const user = userEvent.setup();
+    api.of.mockResolvedValue([plan({ expectations: [HEALTHY] })]);
+    show();
+    const expected = await screen.findByTestId("expectations");
+    expect(expected).toHaveTextContent(
+      "Billing API en bonne santé : aucun incident ouvert, en service",
+    );
+
+    await user.click(screen.getByTestId("expectations-edit"));
+    await user.click(within(expected).getByTestId("expectation-remove"));
+    expect(expected).toHaveTextContent("Rien d'attendu");
+    // Incomplete: nothing added.
+    await user.click(screen.getByTestId("expectation-add-button"));
+    expect(notices.error).toHaveBeenCalledWith({
+      title: "Complétez ce résultat attendu : tout ce qu'il faut pour le vérifier.",
+    });
+    await user.type(screen.getByTestId("expectation-metric"), "p95_ms");
+    await user.type(screen.getByTestId("expectation-value"), "300");
+    await user.click(screen.getByTestId("expectation-add-button"));
+    expect(expected).toHaveTextContent("p95_ms ≤ 300, selon le système qui a agi");
+    await user.selectOptions(screen.getByTestId("expectation-kind"), "confirmed");
+    await user.type(screen.getByTestId("expectation-said"), "Le paiement passe");
+    await user.click(screen.getByTestId("expectation-add-button"));
+    await user.click(screen.getByTestId("expectations-save"));
+    await waitFor(() =>
+      expect(outcomesApi.expect).toHaveBeenCalledWith(ID, [
+        {
+          id: "metric:system:p95_ms",
+          kind: "metric",
+          target: null,
+          name: "p95_ms",
+          comparator: "lte",
+          value: 300,
+          source: "system",
+          said: null,
+          incidents: [],
+        },
+        {
+          id: "confirmed:1",
+          kind: "confirmed",
+          target: null,
+          name: null,
+          comparator: null,
+          value: null,
+          source: "model",
+          said: "Le paiement passe",
+          incidents: [],
+        },
+      ]),
+    );
+  });
+
+  it("is fixed once it runs", async () => {
+    api.of.mockResolvedValue([
+      plan({ status: "running", expectations: [HEALTHY], steps: [step({ status: "awaiting" })] }),
+    ]);
+    show(intention({ status: "executing" }));
+    expect(await screen.findByTestId("expectations")).toHaveTextContent(
+      "Fixé au lancement de l'exécution.",
+    );
+    expect(screen.queryByTestId("expectations-edit")).not.toBeInTheDocument();
+  });
+
+  it("verifies it: each expectation as read, a person's word, read now, concluded", async () => {
+    const user = userEvent.setup();
+    api.of.mockResolvedValue([
+      plan({ status: "succeeded", expectations: [HEALTHY, CHECKOUT], steps: [step({ status: "succeeded" })] }),
+    ]);
+    outcomesApi.verifications.mockResolvedValue([
+      verification({
+        observe_after: ago(1),
+        observed_at: ago(1),
+        results: [
+          { expectation_id: HEALTHY.id, seen: "not_met", value: 1, detail: "incidents", reported: null },
+          { expectation_id: CHECKOUT.id, seen: "awaiting", value: null, detail: null, reported: null },
+        ],
+      }),
+    ]);
+    show(intention({ status: "verifying" }));
+    const card = await screen.findByTestId("verification");
+    expect(screen.getByTestId("verification-status")).toHaveTextContent("En vérification");
+    expect(card).toHaveTextContent("Relu toutes les 5 minutes jusqu'au");
+    expect(within(screen.getByTestId("plan-stages")).getByText("En vérification")).toBeInTheDocument();
+    const [healthy, checkout] = within(card).getAllByTestId("verification-result");
+    expect(healthy).toHaveAttribute("data-seen", "not_met");
+    expect(healthy).toHaveTextContent("1 incident(s) ouvert(s) dessus");
+    expect(checkout).toHaveTextContent("Une personne confirme : « Le paiement passe de bout en bout »");
+    expect(within(checkout).getByTestId("verification-seen")).toHaveTextContent("À confirmer");
+
+    await user.click(within(checkout).getByTestId("expectation-report"));
+    await user.click(within(checkout).getByTestId("expectation-met"));
+    expect(outcomesApi.report).not.toHaveBeenCalled();
+    expect(notices.error).toHaveBeenCalledWith({ title: "Dites ce qui le montre." });
+    await user.type(within(checkout).getByTestId("expectation-report-note"), "Commande payée.");
+    await user.type(
+      within(checkout).getByTestId("expectation-report-link"),
+      "https://shop.acme.example/orders/42",
+    );
+    await user.click(within(checkout).getByTestId("expectation-met"));
+    await waitFor(() =>
+      expect(outcomesApi.report).toHaveBeenCalledWith(ID, "confirmed:1", {
+        met: true,
+        note: "Commande payée.",
+        link: "https://shop.acme.example/orders/42",
+      }),
+    );
+
+    await user.click(screen.getByTestId("verification-check"));
+    await waitFor(() => expect(outcomesApi.check).toHaveBeenCalledWith(ID));
+
+    await user.click(screen.getByTestId("verification-conclude"));
+    let dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Conclure" }));
+    expect(outcomesApi.conclude).not.toHaveBeenCalled();
+    expect(notices.error).toHaveBeenCalledWith({ title: "Dites pourquoi." });
+    await user.click(screen.getByTestId("verification-conclude"));
+    dialog = await screen.findByRole("alertdialog");
+    await user.type(within(dialog).getByRole("textbox"), "Restauré à la main.");
+    await user.click(within(dialog).getByRole("button", { name: "Conclure" }));
+    await waitFor(() => expect(outcomesApi.conclude).toHaveBeenCalledWith(ID, "Restauré à la main."));
+  });
+
+  it("says what came of it, the context rebuilt, and its whole story one click away", async () => {
+    api.of.mockResolvedValue([
+      plan({ status: "succeeded", expectations: [HEALTHY], steps: [step({ status: "succeeded" })] }),
+    ]);
+    outcomesApi.verifications.mockResolvedValue([
+      verification({
+        status: "succeeded",
+        expectations: [HEALTHY],
+        concluded_at: ago(1),
+        results: [
+          { expectation_id: HEALTHY.id, seen: "met", value: "active", detail: "state", reported: null },
+        ],
+        context_update: { operation_id: "o1", kind: "rebuild", at: ago(1) },
+      }),
+    ]);
+    show(intention({ status: "completed" }));
+    const card = await screen.findByTestId("verification");
+    expect(card).toHaveTextContent("Ce qui était attendu est là : l'intention est terminée.");
+    expect(card).toHaveTextContent("État : active");
+    expect(screen.getByTestId("verification-context")).toHaveTextContent(
+      "Contexte de l'entreprise mis à jour",
+    );
+    expect(within(screen.getByTestId("verification-context")).getByRole("link")).toHaveAttribute(
+      "href",
+      "/activity",
+    );
+    expect(screen.queryByTestId("verification-controls")).not.toBeInTheDocument();
+    const stages = within(screen.getByTestId("plan-stages")).getAllByRole("listitem");
+    expect(stages[3]).toHaveTextContent("Finalisation");
+    expect(screen.getByTestId("impact-history")).toHaveAttribute("href", `/intentions/${ID}/history`);
+  });
+
+  it("says what did not come, and who concluded it, why", async () => {
+    api.of.mockResolvedValue([plan({ status: "succeeded", steps: [step({ status: "succeeded" })] })]);
+    outcomesApi.verifications.mockResolvedValue([
+      verification({
+        status: "partial",
+        concluded_by: ME,
+        detail: { note: "Restauré à la main." },
+        results: [
+          { expectation_id: HEALTHY.id, seen: "unknown", value: null, detail: "not_seen_since", reported: null },
+          {
+            expectation_id: CHECKOUT.id,
+            seen: "met",
+            value: null,
+            detail: null,
+            reported: { by: ME, note: "Commande payée.", link: "javascript:alert(1)" },
+          },
+        ],
+      }),
+    ]);
+    show(intention({ status: "failed" }));
+    const card = await screen.findByTestId("verification");
+    expect(screen.getByTestId("verification-status")).toHaveTextContent("Atteint en partie");
+    expect(card).toHaveTextContent("Une partie seulement de ce qui était attendu est là");
+    expect(card).toHaveTextContent("Pas encore relu depuis l'exécution");
+    expect(screen.getByTestId("verification-reported")).toHaveTextContent(
+      "Atteint selon vous : « Commande payée. »",
+    );
+    expect(within(card).queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByTestId("verification-concluded")).toHaveTextContent(
+      "Conclu par vous : « Restauré à la main. »",
+    );
+    expect(within(screen.getByTestId("plan-stages")).getByText("Atteint en partie")).toHaveClass(
+      "text-state-danger",
+    );
+  });
+
+  it("lets anyone else follow it", async () => {
+    permissions.value = ["intention:read"];
+    api.of.mockResolvedValue([plan({ status: "succeeded", steps: [step({ status: "succeeded" })] })]);
+    outcomesApi.verifications.mockResolvedValue([verification()]);
+    show(intention({ status: "verifying" }));
+    expect(await screen.findByTestId("verification")).toHaveTextContent(
+      "Seules les personnes qui peuvent valider confirment un résultat ou concluent.",
+    );
+    expect(screen.queryByTestId("expectation-report")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("verification-controls")).not.toBeInTheDocument();
   });
 });

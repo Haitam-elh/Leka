@@ -107,6 +107,9 @@ events go with it, a workspace's with the workspace.
 | `linked`, `unlinked` | what kind, which, its label |
 | `archived`, `restored` | by whom |
 
+With its analyses, its decision, its plan and its outcome, this history is
+its whole story, told as one timeline (§ 15).
+
 ## 4. Asking — one transaction
 
 `POST /intentions` takes what the new intention's form sends — the words
@@ -172,6 +175,8 @@ Another workspace's intention is 404: the workspace is the session's
 | `GET /intentions/{id}/analysis` · `/analyses` · `POST …/analyse` | its analysis, the latest and every one; analysed again (§ 12) |
 | `GET /intentions/{id}/decisions` · `POST …/decision/{verdict}` | its decisions; a vote (§ 13) — and `GET /decisions`, `/decisions/summary`, `GET` · `PUT /decisions/policy` |
 | `GET /intentions/{id}/plans` · `POST …/plan`, `/plan/start`, `/plan/cancel`, `/plan/steps/{step_id}/report` | carrying it out (§ 14) — and `/action-endpoints` |
+| `PUT /intentions/{id}/plan/expectations` · `GET …/verifications` · `POST …/verification/check`, `/verification/expectations/{expectation_id}/report`, `/verification/conclude` | what came of it (§ 15) |
+| `GET /intentions/{id}/timeline?category&actor&since&until&limit` · `GET /intention-history?…&by` | its whole story; every intention's (§ 15) |
 
 **In code**, for the tickets that move it: `IntentionService.move(id, to,
 actor=…, by=…, reason=…, detail=…, summary=…)` and `link(id, kind, ref_id,
@@ -191,8 +196,8 @@ actor=…, label=…)`.
 - **An intention's page** (`/intentions/{id}`, its tabs in the URL):
   *Vue d'ensemble* — what was asked, its kind, the scope chosen, what LEKA
   concluded (or that it has not yet), what it is linked to, where it may go
-  next; *Historique* — every event in words, by LEKA or by a person, with
-  the context's version and the reason given; *Analyse* and *Preuves* —
+  next; *Historique* — its whole story in words, in order, by LEKA or by a
+  person, filtered (§ 15); *Analyse* and *Preuves* —
   its analysis, how it went and on what (§ 12); *Actions* says it comes
   with the decision and its execution. Its asker, or who may
   approve, cancels it — asked first, with a reason — archives it once done
@@ -721,10 +726,10 @@ minutes, starts what is due). Step by step:
   | no answer within 20 s | failed (`no_answer`: it may have acted — a person checks) |
   | a private address | failed (`blocked_address`) |
 
-All succeeded: the plan `succeeded`, the intention `verifying` (LEKA-392
-verifies). One failed: the steps after it not run (`skipped`), the plan
-`failed`, the intention `failed` — planned again, a new plan of what did not
-succeed. A step is never said done that was not.
+All succeeded: the plan `succeeded`, the intention `verifying` — its outcome
+verified (§ 15). One failed: the steps after it not run (`skipped`), the
+plan `failed`, the intention `failed` — planned again, a new plan of what did
+not succeed. A step is never said done that was not.
 
 **Stopping** — `POST …/plan/cancel {reason}`: planned or scheduled, the plan
 cancelled and the intention `approved` again; running, what has not
@@ -748,7 +753,9 @@ X-Leka-Delivery: <step id>   (one per step: an endpoint may refuse one it alread
 
 Recompute the signature over the raw body, compare in constant time,
 refuse a `t` older than five minutes (`execution.verify` does it). Answer
-`{"status": "succeeded" | "accepted" | "failed", "detail"?, "ref"?}`.
+`{"status": "succeeded" | "accepted" | "failed", "detail"?, "ref"?,
+"metrics"?}` — `metrics`, what it measured (`{"p95_ms": 180}`, at most 50
+numbers or words), read when its outcome is verified (§ 15).
 
 **Evidence kept**: each step's `evidence` — what was sent (the URL, the
 payload, its SHA-256, when signed), what answered (status, duration, the
@@ -787,7 +794,98 @@ workspace. Web: `actions-tab.test.tsx`, `action-endpoints.test.tsx`; e2e
 `intention-actions.spec.ts`, on the demo: prepared, run, a person's step
 confirmed; scheduled and called off.
 
-## 15. Tested
+## 15. What came of it, and its whole story (LEKA-392)
+
+Whether what ran achieved what was expected — read, never assumed — and
+everything that happened to the intention, in one timeline. Code:
+`api/leka/intentions/outcome.py` (pure: what is expected, what is read, the
+verdict), `verification.py` (`VerificationService`, the sweep),
+`timeline.py`, the routes in `api/leka/api/outcomes.py`.
+
+**Expected** — each plan carries what should be true once it ran
+(`intention_plans.expectations`), LEKA's defaults set when it is prepared:
+
+| Kind | Met when | By default |
+| --- | --- | --- |
+| `healthy` | no incident open on the thing acted on (an `affects` from an incident `open` or `in_progress`) and, when the model holds its state, a healthy one — a resource's normalised `running`, a service's as its tool says it (PagerDuty `active`, a status page `operational`); `failed`, `stopped`, `critical`, `warning`, `disabled`, an outage are not | on each thing acted on by an action that heals (restart, rollback, deploy, fix, scale, update) |
+| `incident_resolved` | the incidents open on it when it was planned no longer open | when incidents are open on what it acts on |
+| `metric` | `{name, comparator: lt·lte·eq·gte·gt, value, source}` — read in the model (the thing's attribute) or from what the system that acted reported (`metrics` in its answer, § 14) | — |
+| `confirmed` | a person says so, with what shows it | — |
+
+Who may approve changes them until it runs — `PUT /intentions/{id}/plan/expectations`;
+refused once it started (409 `not_planned`) or for one that cannot be checked
+as said (422 `invalid_expectation`); the plan's log says so (`expectations_set`).
+
+**Verified** — every step succeeded, a verification opens
+(`intention_verifications`, one per plan), the intention `verifying`. LEKA
+lets it settle ten minutes, then reads it again every five
+(`intention-verifications-due`) until all is met or its deadline, 24 hours
+after it ran. Each expectation is `met`; `not_met`, said why (incidents still
+open, its state); `unknown` — the model does not say, or no source has shown
+the thing since it ran: what the model held before says nothing of what came
+of it; or `awaiting` a person. Nothing is said met that was not read or
+confirmed.
+
+- `POST …/verification/check` — read again now;
+- `POST …/verification/expectations/{expectation_id}/report {met, note,
+  link?}` — a person's word on one, the link http(s) only; kept when read
+  again;
+- `POST …/verification/conclude {note}` — concluded now: what is not met
+  counts so.
+
+**Concluded** — all met: `succeeded`, the intention `completed`
+(« verified »). At the deadline, or by a person: `partial` (some met) or
+`failed`, the intention `failed`, why said. Linked to the intention (kind
+`outcome`). Tried again from the tab *Actions*: a new plan of all of it —
+everything ran, what was expected did not come.
+
+**The company's context told** — a success asks the model to be built again
+from its sources: an operation of the model's course (LEKA-383, in
+*Activité*) whose reason names the intention (« After « … »: its outcome
+verified »), a rebuild already queued being the one; its id kept with the
+verification (`context_update`), the build queued once committed.
+
+**Its whole story** — `GET /intentions/{id}/timeline` reads each record
+where it is kept, append-only or written once: its history (§ 3, category
+`intention`), its analyses (`analysis`: started, finished), its decision
+and every vote (`decision`), its plan's events (`action`) and its
+outcome's (`outcome`: expected, verification started, a person's word, the
+verdict) — each by LEKA or a person (by name), when, why. The latest first;
+at the same instant, the cause before what it moved. Filtered by `category`
+(repeated), `actor`, `since`, `until`, `limit` (≤ 500).
+`GET /intention-history` — every intention's, each with its title; by `by`
+too.
+
+**In the app** — the tab *Actions*: *Résultat attendu*, changed until it
+runs (*Modifier*: removed; a metric, a thing healthy or a person's
+confirmation added); once it ran, *Vérification du résultat* — each
+expectation met or not and why, *Dire si c'est atteint* with what shows it,
+*Vérifier maintenant*, *Conclure* (why), the verdict, the context rebuilt
+(→ *Activité*); Vérification and Finalisation in each action's progress;
+« De l'intention à l'impact » → *Voir l'historique complet*. The tab
+*Historique*: the whole story told in order, the latest last, each in words
+with its kind, filtered by kind and by who. Read again every 30 s while it
+is verified. Anyone else follows it.
+
+**Tested** — `tests/test_intention_outcome.py`, pure: an expectation kept
+only when it can be checked; the defaults; healthy from the incidents open
+on it and its state; met only when shown since it ran; an incident resolved,
+a metric from the model or the system, a confirmation; a person's word
+kept; the verdict; a system's measures read from its answer.
+`tests/test_intention_outcomes_api.py`, on Acme's model, an incident coming
+from PagerDuty as in production: a system's reported latency met — the
+intention completed, the model rebuilt by an operation naming it, the
+outcome linked; healthy not met while the incident is open, met once it is
+resolved and both synced; partial at the deadline, a person's word kept; a
+person concluding — failed, tried again whole; expectations set only before
+it runs, by who may approve, checked; nothing expected, the outcome once
+settled; the timeline — every kind, by who, in order, filtered, the
+workspace's, another workspace's 404. Web: `actions-tab.test.tsx`,
+`intentions.test.tsx`; e2e `intention-outcomes.spec.ts`, on the demo:
+expected, confirmed by a person, achieved, its story told and filtered;
+concluded short of it, failed.
+
+## 16. Tested
 
 - `tests/test_intention_lifecycle.py`, pure: the way from asking to
   verified, each step's actor; a decision a person's, never LEKA's; what
@@ -795,7 +893,8 @@ confirmed; scheduled and called off.
   before approved; cancelling until actions run; cancelled final, the rest
   asked again; every state in one phase.
 - `web/components/intentions/intentions.test.tsx`: the list and its tabs,
-  the page, its history in words, cancelling with a reason, a missing one;
+  the page, its whole story in words, filtered, cancelling with a reason, a
+  missing one;
   `e2e/intentions.spec.ts`, in a browser: asked from the composer, followed,
   its history told, cancelled, found among the finished.
 - `tests/test_intentions_api.py`, on Acme's model: asked and kept with its
@@ -816,8 +915,11 @@ confirmed; scheduled and called off.
 - **Agents** (`agents/*.md`) as capabilities: selected, said `no_model`
   until the model gateway (LEKA-394).
 - **A model-assisted understanding** (LEKA-394): the same contract.
-- **Outcomes** (LEKA-392): verifying what was done; a plan says what ran
-  and what shows it (§ 14).
+- **Metrics read from monitoring**: a metric is read in the model or from
+  what the system that acted reported (§ 15); reading a monitoring source's
+  series when verifying comes with metrics in the model.
+- **Every intention's history on a screen**: `GET /intention-history`
+  answers it (§ 15); each intention's is its tab *Historique*.
 - **A system's own report**: an endpoint that accepted the work (202) is
   confirmed by a person today; a signed callback can say it instead.
 - **The approval policy's screen**: set through the API (§ 13); its place

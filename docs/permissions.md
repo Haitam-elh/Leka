@@ -73,7 +73,10 @@ modify, ask for changes. The workspace's approval policy may want more than one 
 risky action, and not the person who asked ([intentions.md](intentions.md) § 13); changing
 that policy takes `workspace:update`. Carrying out what was approved — planning, starting,
 scheduling, stopping a run, confirming a person's step — takes `intention:approve`; the
-systems LEKA may act through are authorized with `workspace:update` (LEKA-391).
+systems LEKA may act through are authorized with `workspace:update` (LEKA-391). What its
+outcome should be, a person's word on it, reading it again and concluding take
+`intention:approve`; its verification and its whole story are read with `intention:read`
+(LEKA-392).
 
 **`context:manage` is admin and above.** A member makes contexts, makes them again,
 widens and narrows them, and archives or stops following the ones they made. Archiving
