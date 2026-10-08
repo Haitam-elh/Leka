@@ -5,6 +5,7 @@
 
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import type { Candidate } from "@/lib/enrichment";
+import { modelTitle } from "@/lib/models";
 
 export interface Worded {
   /** What it proposes: "acme/user-service est le code de user-service". */
@@ -70,6 +71,15 @@ export function wordCandidate(t: Dictionary, candidate: Candidate): Worded {
       return {
         title: fill(w.description, { name }),
         why: fill(w.descriptionWhy, { repository: text(p.repository) }),
+      };
+    case "enrichment.summary":
+      // Written by a language model from what LEKA knows of it (LEKA-394).
+      return {
+        title: fill(w.description, { name }),
+        why: fill(w.summaryWhy, {
+          model: modelTitle(text(p.model) || "model"),
+          facts: text(p.facts),
+        }),
       };
     default:
       return { title: candidate.statement, why: null };

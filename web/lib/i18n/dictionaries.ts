@@ -1413,6 +1413,7 @@ const fr = {
       criticalityReliance: "{count} éléments en dépendent",
       description: "Description de {name}",
       descriptionWhy: "D'après le dépôt {repository}",
+      summaryWhy: "Rédigée par {model} d'après {facts} fait(s) que LEKA connaît : à vérifier",
       levels: { critical: "critique", high: "élevée", medium: "moyenne", low: "faible" },
     },
     panel: {
@@ -6193,6 +6194,7 @@ const en: Dictionary = {
       criticalityReliance: "{count} things rely on it",
       description: "Description of {name}",
       descriptionWhy: "From the repository {repository}",
+      summaryWhy: "Written by {model} from {facts} fact(s) LEKA knows: to be checked",
       levels: { critical: "critical", high: "high", medium: "medium", low: "low" },
     },
     panel: {

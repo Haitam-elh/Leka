@@ -612,7 +612,14 @@ describe("a proposal's words", () => {
     expect(
       said({ code: "enrichment.description", params: { name: "auth-service", repository: "acme/auth" } }),
     ).toEqual({ title: "Description de auth-service", why: "D'après le dépôt acme/auth" });
-    expect(said({ code: "enrichment.summary", statement: "What auth-service does." })).toEqual({
+    // Written by a model (LEKA-394): who wrote it, from how much, to check.
+    expect(
+      said({ code: "enrichment.summary", params: { name: "auth-service", model: "gemini-3.8-flash", facts: 3 } }),
+    ).toEqual({
+      title: "Description de auth-service",
+      why: "Rédigée par Gemini 3.8 Flash d'après 3 fait(s) que LEKA connaît : à vérifier",
+    });
+    expect(said({ code: "enrichment.unknown", statement: "What auth-service does." })).toEqual({
       title: "What auth-service does.",
       why: null,
     });
