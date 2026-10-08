@@ -68,6 +68,11 @@ workspace: which job, how many attempts, when. That is how the system talks to i
 member has no use for it. It shows no error text — an exception message names hosts, paths and
 queries — and it never shows the system's own runs, which belong to no workspace.
 
+**`intention:approve` decides what intentions ask to do** (LEKA-390): approve, reject,
+modify, ask for changes. The workspace's approval policy may want more than one person for a
+risky action, and not the person who asked ([intentions.md](intentions.md) § 13); changing
+that policy takes `workspace:update`.
+
 **`context:manage` is admin and above.** A member makes contexts, makes them again,
 widens and narrows them, and archives or stops following the ones they made. Archiving
 or stopping someone else's — which changes what everyone reads of it — takes an admin

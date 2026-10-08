@@ -7,8 +7,8 @@ production system must be answerable months later: who asked, what LEKA
 concluded, who approved, what ran.
 
 This is the frame of the Intentions epic. LEKA-384 keeps the intention, its
-lifecycle, its history and its links; LEKA-385 understands it (§ 9), LEKA-386 scopes it (§ 10), LEKA-387 grounds it in its context (§ 11), LEKA-388 analyses it (§ 12);
-389 concludes; 390 decides; 391 acts; 392 verifies — each moving it along
+lifecycle, its history and its links; LEKA-385 understands it (§ 9), LEKA-386 scopes it (§ 10), LEKA-387 grounds it in its context (§ 11), LEKA-388 analyses it (§ 12),
+LEKA-390 puts what it asks to do to people's decision (§ 13); 389 concludes; 391 acts; 392 verifies — each moving it along
 this lifecycle and linking what it makes.
 
 Code: `api/leka/intentions/` — `lifecycle.py` (the states and moves, pure),
@@ -147,7 +147,8 @@ context, a finding or an entity — what LEKA was asked about a service.
 | read intentions, their history | `intention:read` — every member |
 | ask; ask again, cancel, archive, restore, link — **one's own** | `intention:create` |
 | the same on **another's** intention | its asker, or who may approve (`intention:approve`) — else 403 |
-| approve, reject | LEKA-390 |
+| approve, reject, modify, ask for changes | who may approve (`intention:approve`) — and not the asker when the policy keeps them apart (§ 13) |
+| change the approval policy | `workspace:update` (§ 13) |
 
 Another workspace's intention is 404: the workspace is the session's
 (architecture rule 3).
@@ -166,6 +167,7 @@ Another workspace's intention is 404: the workspace is the session's
 | `POST /intentions/{id}/cancel` `{reason?}`, `/archive`, `/restore` | the intention |
 | `POST /intentions/{id}/links` `{kind, ref_id}` · `DELETE …/links/{link_id}` | context, finding, entity |
 | `GET /intentions/{id}/analysis` · `/analyses` · `POST …/analyse` | its analysis, the latest and every one; analysed again (§ 12) |
+| `GET /intentions/{id}/decisions` · `POST …/decision/{verdict}` | its decisions; a vote (§ 13) — and `GET /decisions`, `/decisions/summary`, `GET` · `PUT /decisions/policy` |
 
 **In code**, for the tickets that move it: `IntentionService.move(id, to,
 actor=…, by=…, reason=…, detail=…, summary=…)` and `link(id, kind, ref_id,
@@ -549,7 +551,109 @@ what waits; another workspace's 404. `web/lib/intention-analysis.test.ts`,
 `e2e/intention-analysis.spec.ts`, on the demo: asked, analysed, followed,
 its evidence and history; a restart waiting for a person.
 
-## 13. Tested
+## 13. Its decision (LEKA-390)
+
+What it asks to do is never LEKA's to decide: once analysed (§ 12), an
+intention that asks to act on systems waits for people — under a policy
+its workspace sets, every vote kept. Code: `api/leka/intentions/decisions.py`
+(pure: the policy, the risk, the proposals, the tally), `approval.py`
+(`DecisionService`: opening, voting, the queue, the policy), the routes in
+`api/leka/api/decisions.py`.
+
+**Opened by the analysis.** When it moves an intention to
+`awaiting_decision`, the analysis opens a decision (`intention_decisions`)
+and links it (`intention_links`, kind `decision`, `#1`):
+
+| | |
+| --- | --- |
+| the proposals | one per action that changes systems (LEKA-385): the action, what it is on, where (`environment`), the hard constraints (no downtime, a window…), whether it can be undone (`reversible`: a restart, a rollback, a deployment yes; a migration no; else not said) |
+| the risk | the analysis's (§ 12) — `medium` when it cannot say — at least `medium` in production when the policy says so |
+| what it needs | `required_approvals` and `separate_asker` (four eyes: the asker may not be one of them), read from the policy in force — kept with it (`policy`), so a later change does not move it |
+| what it rests on | the analysis, the context's version, the asker |
+
+An earlier decision still waiting on the same intention is superseded.
+
+**The policy** — `workspace.settings.approval_policy`, LEKA's default for
+what it does not say:
+
+| Risk | Approvals | The asker may approve |
+| --- | --- | --- |
+| low | 1 | yes |
+| medium | 1 | yes |
+| high | 2 | no |
+
+plus `production_raises` (true): an action in production is at least
+medium. `GET /decisions/policy` says it; `PUT /decisions/policy` changes it
+(`workspace:update`) — 1 to 5 per risk, a riskier action never needing
+fewer than a safer one, else 422.
+
+**Voting** — `POST /intentions/{id}/decision/{verdict}`, `intention:approve`:
+
+| Verdict | | Says why |
+| --- | --- | --- |
+| `approve` | one approval of the current revision | may |
+| `reject` | one is enough: rejected, the intention `rejected` — nothing runs | must |
+| `modify` | a new revision: where it runs (`environment`), which actions are kept (`keep`) — its risk read again under the policy it was opened with, the earlier approvals void, the modifier's own counting | must |
+| `request-changes` | sent back: `changes_requested`, the intention still awaiting a decision until its asker asks again — the next analysis opens a new one | must |
+
+Enough distinct approvers of the current revision — the asker not among
+them when `separate_asker` — approve it: `approved`, the intention
+`approved` by the person whose vote decided it, its history saying the
+decision, its revision, risk and approvers. Refused, with the refusal's code
+in `details` (`field: "refusal"`): `asker_may_not_approve` (403),
+`already_approved` (409), `reason_required`, `invalid_change`,
+`nothing_changed` (422); nothing open — decided, or its intention moved —
+409.
+
+**Every vote kept** (`intention_decision_votes`): who, when, why, on which
+revision, what a modification changed (`changes`: from, to) and the context
+it was cast in (`context`: the risk, the proposals, how many were required,
+the analysis, the context's version, where the intention stood). Append-only:
+the database refuses to change one — only who cast it is forgotten, with
+the user.
+
+**Its intention moved meanwhile** — cancelled, asked again, archived — a
+decision still proposed is read as `superseded` and leaves the queue: it is
+no longer the one.
+
+**The API**: `GET /decisions?status=proposed|approved|rejected|withdrawn`
+— À valider's queue, each with its intention; `GET /decisions/summary`;
+`GET /intentions/{id}/decisions` — every one, the latest first, each with
+its votes. `intention:read`; another workspace's is 404.
+
+**In the app**:
+
+- *À valider* (mockup 09): the actions to decide join the queue — type
+  *Action*, their impact (the risk), their state; opened, the panel says
+  what was asked and by whom, the actions proposed, how many must approve
+  and how many have, « Vous gardez le contrôle », then *Valider* (asked
+  first, with what it opens the way to), *Refuser*, *Modifier* (where it
+  runs, which actions are kept, why), *Demander des modifications* — the
+  asker kept apart by the policy, and a member who may not approve, told
+  why they cannot — and every vote. Counted in the sidebar's badge and on
+  Mon Dashboard.
+- *An intention's page*: its latest decision, the same, on its overview.
+
+The composer's step 4 (mockup 05, `DecisionStep`) still shows its example:
+LEKA-389's recommendations fill it, and it calls these routes.
+
+**Tested** — `tests/test_intention_decisions.py`, pure: the policy kept or
+refused; the risk decided at; what is proposed; the tally — a rejection,
+changes asked, distinct approvers, the asker and an earlier revision not
+counting; who may vote; a modification. `tests/test_intention_decisions_api.py`,
+on Acme's model: « Redémarre Billing API en production » proposed — restart,
+production, reversible, medium, one approval — linked, approved by an admin
+not a member, its history and vote with their context; a question, no
+decision; rejected saying why; modified to staging, the earlier approval
+void, the same person refused twice, a second admin deciding; the asker
+kept apart; the policy an admin's, kept, refused, an open decision keeping
+its own; changes asked then superseded; a cancelled intention's decision
+left behind; the queue, its counts, a vote the database refuses to change,
+another workspace. Web: `approvals-page.test.tsx` (the decisions in À
+valider), `intention-decision.test.tsx`; e2e `intention-decisions.spec.ts`,
+on the demo: approved in À valider, refused from the intention's page.
+
+## 14. Tested
 
 - `tests/test_intention_lifecycle.py`, pure: the way from asking to
   verified, each step's actor; a decision a person's, never LEKA's; what
@@ -578,7 +682,9 @@ its evidence and history; a restart waiting for a person.
 - **Agents** (`agents/*.md`) as capabilities: selected, said `no_model`
   until the model gateway (LEKA-394).
 - **A model-assisted understanding** (LEKA-394): the same contract.
-- **Decisions, actions, outcomes** (LEKA-390 to 392): their tables, routes
-  and screens; the lifecycle and the links are ready for them.
+- **Actions, outcomes** (LEKA-391, 392): what runs once approved, and what
+  came of it; a decision says what is approved (§ 13).
+- **The approval policy's screen**: set through the API (§ 13); its place
+  in Sécurité & gouvernance comes with its settings.
 - **Mes intentions**' impact and sources columns (mockup 07): from the
   analysis.
