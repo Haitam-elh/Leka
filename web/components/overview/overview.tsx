@@ -37,6 +37,7 @@ import { ConnectedSources } from "@/components/sources/connected-sources";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useConflicts } from "@/lib/conflicts-queries";
+import { useDecisionQueue } from "@/lib/decisions-queries";
 import { useCandidates } from "@/lib/enrichment-queries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import {
@@ -418,14 +419,15 @@ function ActivityCard({ load }: { load: Load }) {
   );
 }
 
-/** What waits on someone: the conflicts between sources to settle
- * (LEKA-382), then the enrichments LEKA proposes (LEKA-380) — three, each
- * leading to itself in À valider. */
+/** What waits on someone: the actions intentions ask to do (LEKA-390), the
+ * conflicts between sources to settle (LEKA-382), then the enrichments
+ * LEKA proposes (LEKA-380) — three, each leading to itself in À valider. */
 function ApprovalsCard() {
   const t = useDictionary();
   const proposed = useCandidates("proposed");
   const open = useConflicts("open");
-  const all = items(proposed.data?.data ?? [], open.data?.data ?? []);
+  const waiting = useDecisionQueue("proposed");
+  const all = items(proposed.data?.data ?? [], open.data?.data ?? [], waiting.data?.data ?? []);
   const shown = all.slice(0, 3);
   return (
     <Card
@@ -455,9 +457,9 @@ function ApprovalsCard() {
                 <li key={`${item.kind}:${item.id}`}>
                   <Link
                     href={
-                      item.kind === "conflict"
-                        ? `${routes.approval(item.id)}?kind=conflict`
-                        : routes.approval(item.id)
+                      item.kind === "candidate"
+                        ? routes.approval(item.id)
+                        : `${routes.approval(item.id)}?kind=${item.kind}`
                     }
                     className="-mx-1.5 flex items-start gap-3 rounded-lg px-1.5 py-2.5 outline-none hover:bg-shell-canvas focus-visible:ring-3 focus-visible:ring-brand-violet/40"
                   >
@@ -478,7 +480,9 @@ function ApprovalsCard() {
                     <span className="mt-0.5 rounded-md bg-state-warning-soft px-2 py-0.5 text-xs font-medium whitespace-nowrap text-state-warning">
                       {item.kind === "conflict"
                         ? t.approvals.conflict.status.open
-                        : t.approvals.status.proposed}
+                        : item.kind === "decision"
+                          ? t.decisions.statuses.proposed
+                          : t.approvals.status.proposed}
                     </span>
                   </Link>
                 </li>

@@ -7,14 +7,17 @@ import { useState } from "react";
 import { cn } from "cn";
 import { CandidatePanel } from "@/components/approvals/candidate-panel";
 import { ConflictPanel } from "@/components/approvals/conflict-panel";
+import { DecisionPanel } from "@/components/approvals/decision-panel";
 import {
   CONFLICT_STATUS,
+  DECISION_STATUS,
   dateOf,
   type Item,
   items as itemsOf,
   wordItem,
 } from "@/components/approvals/items";
 import { FAMILY_ICON, ItemBadge } from "@/components/approvals/parts";
+import { Pill } from "@/components/intelligence/pill";
 import { SearchInput } from "@/components/forms/search-input";
 import { type KnowledgeColumn, KnowledgeTable } from "@/components/knowledge/knowledge-table";
 import { timeAgo } from "@/components/knowledge/time";
@@ -23,6 +26,8 @@ import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { StatePanel } from "@/components/states/state-panel";
 import { useConflicts, useConflictSummary } from "@/lib/conflicts-queries";
+import type { DecisionSummary } from "@/lib/decisions";
+import { useDecisionQueue, useDecisionSummary } from "@/lib/decisions-queries";
 import { type CandidateStatus, FAMILIES, STATUSES } from "@/lib/enrichment";
 import { useCandidates, useEnrichmentSummary } from "@/lib/enrichment-queries";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
@@ -30,9 +35,12 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 
 type Kind = Item["kind"];
+const RISK_RANK = { low: 1, medium: 2, high: 3 } as const;
+const RISK_TONE = { low: "success", medium: "warning", high: "danger" } as const;
 type Selected = { kind: Kind; id: string } | null;
-/** The type chips: a proposal's families, then the conflicts. */
-const TYPES = [...FAMILIES, "conflict"] as const;
+/** The type chips: the actions to decide, a proposal's families, then the
+ * conflicts. */
+const TYPES = ["action", ...FAMILIES, "conflict"] as const;
 type Type = (typeof TYPES)[number];
 
 /**
@@ -64,16 +72,32 @@ export function ApprovalsPage({
   );
   const proposals = useEnrichmentSummary();
   const disputes = useConflictSummary();
+  const choices = useDecisionSummary();
   const candidates = useCandidates(status);
   const conflicts = useConflicts(CONFLICT_STATUS[status]);
+  const decisions = useDecisionQueue(DECISION_STATUS[status]);
 
-  const all = itemsOf(candidates.data?.data ?? [], conflicts.data?.data ?? []);
+  const all = itemsOf(
+    candidates.data?.data ?? [],
+    conflicts.data?.data ?? [],
+    decisions.data?.data ?? [],
+  );
   const shown = all.filter(
     (item) => (type === "all" || item.family === type) && matches(t, item, search),
   );
-  const figures = figuresOf(proposals.data, disputes.data);
-  const pending = proposals.isPending || disputes.isPending;
-  const failed = proposals.isError ? proposals : disputes.isError ? disputes : null;
+  const figures = figuresOf(proposals.data, disputes.data, choices.data);
+  const pending = proposals.isPending || disputes.isPending || choices.isPending;
+  const failed = proposals.isError
+    ? proposals
+    : disputes.isError
+      ? disputes
+      : choices.isError
+        ? choices
+        : null;
+  const opened =
+    selected?.kind === "decision"
+      ? (decisions.data?.data ?? []).find((item) => item.decision.id === selected.id)
+      : undefined;
 
   return (
     <PageContainer>
@@ -104,12 +128,14 @@ export function ApprovalsPage({
             onSearch={setSearch}
           />
           <div className={cn("grid gap-4", selected && "xl:grid-cols-[minmax(0,1fr)_22rem]")}>
-            {candidates.isPending || conflicts.isPending ? (
+            {candidates.isPending || conflicts.isPending || decisions.isPending ? (
               <LoadingState />
             ) : candidates.isError ? (
               <ErrorState error={candidates.error} onRetry={() => void candidates.refetch()} />
             ) : conflicts.isError ? (
               <ErrorState error={conflicts.error} onRetry={() => void conflicts.refetch()} />
+            ) : decisions.isError ? (
+              <ErrorState error={decisions.error} onRetry={() => void decisions.refetch()} />
             ) : (
               <ItemsTable
                 items={shown}
@@ -127,6 +153,8 @@ export function ApprovalsPage({
               <CandidatePanel id={selected.id} onClose={() => setSelected(null)} />
             ) : selected?.kind === "conflict" ? (
               <ConflictPanel id={selected.id} onClose={() => setSelected(null)} />
+            ) : opened ? (
+              <DecisionPanel item={opened} onClose={() => setSelected(null)} />
             ) : null}
           </div>
         </div>
@@ -142,7 +170,9 @@ function matches(t: Dictionary, item: Item, search: string) {
   const names =
     item.kind === "candidate"
       ? [item.data.subject.name, item.data.start?.name ?? "", item.data.end?.name ?? ""]
-      : [item.data.subject.name, item.data.about];
+      : item.kind === "decision"
+        ? [item.data.intention.title]
+        : [item.data.subject.name, item.data.about];
   return [title, ...names].some((said) => said.toLowerCase().includes(needle));
 }
 
@@ -160,11 +190,16 @@ interface Figures {
 function figuresOf(
   proposals: { proposed: number; accepted: number; rejected: number; withdrawn: number; by_policy: number } | undefined,
   conflicts: { open: number; resolved: number; dismissed: number; gone: number } | undefined,
+  decisions?: DecisionSummary,
 ): Figures {
-  const waiting = (proposals?.proposed ?? 0) + (conflicts?.open ?? 0);
-  const decided = (proposals?.accepted ?? 0) + (conflicts?.resolved ?? 0);
-  const refused = (proposals?.rejected ?? 0) + (conflicts?.dismissed ?? 0);
-  const withdrawn = (proposals?.withdrawn ?? 0) + (conflicts?.gone ?? 0);
+  const waiting = (proposals?.proposed ?? 0) + (conflicts?.open ?? 0) + (decisions?.proposed ?? 0);
+  const decided = (proposals?.accepted ?? 0) + (conflicts?.resolved ?? 0) + (decisions?.approved ?? 0);
+  const refused = (proposals?.rejected ?? 0) + (conflicts?.dismissed ?? 0) + (decisions?.rejected ?? 0);
+  const withdrawn =
+    (proposals?.withdrawn ?? 0) +
+    (conflicts?.gone ?? 0) +
+    (decisions?.changes_requested ?? 0) +
+    (decisions?.superseded ?? 0);
   return {
     waiting,
     decided,
@@ -336,6 +371,7 @@ function Chip({
 /** How sure: a proposal's confidence; for a conflict, how clearly LEKA
  * recommends a side — sorted by that side's score, among the proposals. */
 function sureness(t: Dictionary, item: Item): { value: number; said: string } {
+  if (item.kind === "decision") return { value: 0, said: "—" };
   if (item.kind === "candidate") {
     return { value: item.data.confidence, said: `${Math.round(item.data.confidence * 100)} %` };
   }
@@ -395,6 +431,19 @@ function ItemsTable({
       ),
     },
     {
+      id: "impact",
+      header: c.impact,
+      sortValue: (item) => (item.kind === "decision" ? RISK_RANK[item.data.decision.risk] : 0),
+      cell: (item) =>
+        item.kind === "decision" ? (
+          <Pill tone={RISK_TONE[item.data.decision.risk]}>
+            {t.decisions.impact[item.data.decision.risk]}
+          </Pill>
+        ) : (
+          "—"
+        ),
+    },
+    {
       id: "confidence",
       header: c.confidence,
       align: "end",
@@ -413,9 +462,13 @@ function ItemsTable({
       cell: (item) => <ItemBadge item={item} />,
     },
   ];
-  const shownColumns = compact
-    ? columns.filter((column) => column.id !== "type" && column.id !== "date")
-    : columns;
+  // Impact is a decision's risk (mockup 09): shown when one is listed.
+  const deciding = items.some((item) => item.kind === "decision");
+  const shownColumns = columns.filter(
+    (column) =>
+      (deciding || column.id !== "impact") &&
+      !(compact && (column.id === "type" || column.id === "date")),
+  );
 
   return (
     <KnowledgeTable

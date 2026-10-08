@@ -1,9 +1,6 @@
-import { execFileSync } from "node:child_process";
-import path from "node:path";
+import { expect, test } from "@playwright/test";
 
-import { expect, type Page, test } from "@playwright/test";
-
-import { pythonExecutable, repositoryRoot } from "./python";
+import { analyse, ask } from "./intention-helpers";
 import { signIn } from "./sign-in";
 
 /**
@@ -19,44 +16,6 @@ import { signIn } from "./sign-in";
  * There is no worker here: the analysis the API queues is run as the job
  * runner would, for this intention only.
  */
-
-/** Its analysis, run now — the job the API queued. */
-function analyse(intentionId: string): void {
-  execFileSync(
-    pythonExecutable(),
-    [
-      "-c",
-      [
-        "import asyncio, sys, uuid",
-        "from sqlalchemy import select",
-        "from leka.db import session_factory, system_scope",
-        "from leka.intentions import Intention",
-        "from leka.intentions.processing import analyse_intention",
-        "async def main(intention_id):",
-        "    with system_scope():",
-        "        async with session_factory() as session:",
-        "            workspace = await session.scalar(",
-        "                select(Intention.workspace_id).where(Intention.id == intention_id))",
-        "    print(await analyse_intention(workspace, intention_id, trigger='created'))",
-        "asyncio.run(main(uuid.UUID(sys.argv[1])))",
-      ].join("\n"),
-      intentionId,
-    ],
-    { cwd: path.join(repositoryRoot(), "api"), stdio: "inherit" },
-  );
-}
-
-/** Asked from the composer, followed to its page: its id. */
-async function ask(page: Page, words: string): Promise<string> {
-  await page.goto("/intentions/new");
-  await expect(page.getByRole("checkbox", { name: "acme/backend" })).toBeChecked();
-  await page.getByTestId("intention-input").fill(words);
-  await page.getByTestId("intention-submit").click();
-  await expect(page.getByTestId("intention-step-2")).toBeVisible();
-  await page.getByTestId("intention-follow").click();
-  await expect(page).toHaveURL(/\/intentions\/[0-9a-f-]{36}$/);
-  return page.url().split("/").pop() ?? "";
-}
 
 test.describe("Intention analysis", () => {
   test("asked, analysed, how it went and what it found, its evidence", async ({ page }) => {
@@ -125,5 +84,10 @@ test.describe("Intention analysis", () => {
     await expect(page.getByTestId("analysis")).toContainText("payment-api");
     // Never LEKA's to decide.
     await expect(page.getByTestId("intention-status")).toContainText("À décider");
+
+    // Left as found: nothing waits in À valider after this test.
+    await page.getByTestId("intention-cancel").click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Annuler l'intention" }).click();
+    await expect(page.getByTestId("intention-status")).toContainText("Annulée");
   });
 });
