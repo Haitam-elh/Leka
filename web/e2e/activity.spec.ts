@@ -104,6 +104,12 @@ test.describe("a thing's Historique", () => {
     await expect(applied).toContainText("Restauration de la version 3");
     await expect(applied).toContainText("2.8.4 → 2.8.3");
 
+    // The restore's toast sits bottom right, five seconds. With CI's fonts it
+    // can cover « Annuler » — and a toast under the pointer pauses and stays:
+    // the click waited for it until the test timed out. Let it go first.
+    await expect(
+      page.getByText("Restauration enregistrée : le modèle l'appliquera à sa prochaine construction."),
+    ).toBeHidden();
     await applied.getByRole("button", { name: "Annuler" }).click();
     await expect(page.getByTestId("history-operation-applied")).toHaveCount(0);
     await expect(page.getByTestId("history-operation-undone")).toHaveCount(before + 1);
