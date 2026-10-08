@@ -203,6 +203,8 @@ async def test_without_an_authorized_system_a_person_does_it_and_says_so(
         "awaiting_person",
         "step_succeeded",
         "succeeded",
+        # Its outcome checked next (LEKA-392).
+        "verification_started",
     ]
     assert await _status(client, intention) == "verifying"
     history = (await client.get(f"{API}/intentions/{intention['id']}/history")).json()
@@ -256,6 +258,7 @@ async def test_an_authorized_system_is_called_signed_its_answer_kept(
         "reason": None,
         "detail": None,
         "ref": "run-42",
+        "metrics": {},
     }
     assert await _status(client, intention) == "verifying"
 

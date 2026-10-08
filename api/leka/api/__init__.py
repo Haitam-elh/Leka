@@ -26,6 +26,7 @@ from leka.api import (
     intelligence,
     intentions,
     knowledge,
+    outcomes,
     platform,
     resolution,
     webhooks,
@@ -60,5 +61,7 @@ api_router.include_router(intentions.router)
 api_router.include_router(decisions.router)
 # What was approved, carried out through the systems authorized (LEKA-391).
 api_router.include_router(actions.router)
+# What came of it, and every intention's whole story (LEKA-392).
+api_router.include_router(outcomes.router)
 
 __all__ = ["api_router"]

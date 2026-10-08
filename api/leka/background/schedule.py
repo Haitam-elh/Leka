@@ -112,6 +112,13 @@ SCHEDULE: tuple[Scheduled, ...] = (
         "leka.intentions.actions.run_due_plans",
         cron="*/5 * * * *",
     ),
+    # What ran, read again until what was expected came — or its deadline
+    # (LEKA-392).
+    Scheduled(
+        "intention-verifications-due",
+        "leka.intentions.verification.run_due_verifications",
+        cron="2,7,12,17,22,27,32,37,42,47,52,57 * * * *",
+    ),
 )
 
 

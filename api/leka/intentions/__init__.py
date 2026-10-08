@@ -72,6 +72,9 @@ from leka.intentions.schemas import (
     DecisionRead,
     DecisionSummary,
     DecisionVoteRequest,
+    ExpectationRead,
+    ExpectationReport,
+    ExpectationsUpdate,
     GoalRead,
     IntentionAnalysisRead,
     IntentionAnalysisRequested,
@@ -85,13 +88,16 @@ from leka.intentions.schemas import (
     IntentionLinkRead,
     IntentionPlanRead,
     IntentionRead,
+    IntentionVerificationRead,
     PlanCancelRequest,
     PlanStartRequest,
     ProposedAction,
     ReadinessIssue,
     StepReportRequest,
+    TimelineItem,
     Understanding,
     UnderstoodEntity,
+    VerificationConclude,
     Withdrawal,
 )
 from leka.intentions.service import (
@@ -103,9 +109,12 @@ from leka.intentions.service import (
     analysis_read,
     intention_read,
 )
+from leka.intentions.timeline import CATEGORIES, Filters, categories_of, timeline
 from leka.intentions.understanding import UNDERSTANDING_VERSION, understand
+from leka.intentions.verification import VerificationRefusedError, VerificationService
 
 __all__ = [
+    "CATEGORIES",
     "CLOSED",
     "PHASES",
     "TRANSITIONS",
@@ -132,6 +141,10 @@ __all__ = [
     "DecisionSummary",
     "DecisionVoteRequest",
     "EndpointService",
+    "ExpectationRead",
+    "ExpectationReport",
+    "ExpectationsUpdate",
+    "Filters",
     "GoalRead",
     "IllegalTransitionError",
     "Intention",
@@ -157,6 +170,7 @@ __all__ = [
     "IntentionRepository",
     "IntentionService",
     "IntentionStatus",
+    "IntentionVerificationRead",
     "LinkRefusedError",
     "Move",
     "NotYoursError",
@@ -168,11 +182,16 @@ __all__ = [
     "ProposedAction",
     "ReadinessIssue",
     "StepReportRequest",
+    "TimelineItem",
     "Understanding",
     "UnderstoodEntity",
     "Verdict",
+    "VerificationConclude",
+    "VerificationRefusedError",
+    "VerificationService",
     "Withdrawal",
     "analysis_read",
+    "categories_of",
     "endpoint_read",
     "intention_read",
     "moves",
@@ -182,5 +201,6 @@ __all__ = [
     "queue_plan",
     "readiness",
     "refined",
+    "timeline",
     "understand",
 ]

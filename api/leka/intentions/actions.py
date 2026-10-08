@@ -68,12 +68,14 @@ from leka.intentions.models import (
 from leka.intentions.repository import IntentionRepository
 from leka.intentions.schemas import (
     ActionEndpointRead,
+    ExpectationRead,
     IntentionPlanEventRead,
     IntentionPlanRead,
     IntentionPlanStepRead,
     PlanCheckRead,
 )
 from leka.intentions.service import IntentionService
+from leka.intentions.verification import VerificationService, expected
 from leka.knowledge import Entity
 from leka.platform import Membership, Role, secret_box
 
@@ -170,6 +172,7 @@ def plan_read(
         finished_at=plan.finished_at,
         created_at=plan.created_at,
         checks=[PlanCheckRead.model_validate(c) for c in plan.checks],
+        expectations=[ExpectationRead.model_validate(e) for e in plan.expectations],
         error=plan.error,
         steps=[IntentionPlanStepRead.model_validate(s) for s in steps],
         events=[IntentionPlanEventRead.model_validate(e) for e in events],
@@ -361,8 +364,13 @@ class ActionService:
         if intention.status == S.FAILED.value:
             if latest is None:
                 raise PlanRefusedError("not_approved", "Its analysis failed: analyse it again.")
-            done = {s.proposal_id for s in await self._steps(latest.id) if s.status == "succeeded"}
-            proposals = [p for p in proposals if str(p["id"]) not in done]
+            # What did not succeed, run again — all of it when everything
+            # ran but what was expected did not come (LEKA-392).
+            if latest.status != "succeeded":
+                done = {
+                    s.proposal_id for s in await self._steps(latest.id) if s.status == "succeeded"
+                }
+                proposals = [p for p in proposals if str(p["id"]) not in done]
         steps = plan_of(proposals, await self._endpoints())
         names = {e.id: e.name for e in await self._endpoints()}
         number = (
@@ -388,6 +396,10 @@ class ActionService:
             if intention.status == S.FAILED.value and latest
             else {},
             created_at=moment,
+        )
+        # What should be true once it ran, by default (LEKA-392).
+        plan.expectations = await expected(
+            self._session, self._workspace_id, [(s.action, s.targets) for s in steps]
         )
         self._session.add(plan)
         await self._session.flush()
@@ -686,6 +698,7 @@ class ActionService:
                 "reason": outcome.reason,
                 "detail": outcome.detail,
                 "ref": outcome.ref,
+                "metrics": dict(outcome.metrics),
             },
         }
         if outcome.status == "succeeded":
@@ -728,6 +741,8 @@ class ActionService:
             await service.move(
                 plan.intention_id, S.VERIFYING, actor=Actor.SYSTEM, detail=detail, now=now
             )
+            # Whether it achieved what was expected (LEKA-392).
+            await VerificationService(self._session, self._workspace_id).open(plan, now=now)
             await self._session.flush()
             return "succeeded"
         plan.status = "cancelled" if cancelled else "failed"

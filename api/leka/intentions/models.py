@@ -406,6 +406,10 @@ class IntentionPlan(Base, WorkspaceScopedMixin):
     )
     error: Mapped[str | None] = mapped_column(String(200), nullable=True)
     detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # What should be true once it ran (LEKA-392): set before it runs.
+    expectations: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
 
 
 class IntentionPlanStep(Base, WorkspaceScopedMixin):
@@ -472,4 +476,56 @@ class IntentionPlanEvent(Base, WorkspaceScopedMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+VERIFICATION_STATUSES = ("verifying", "succeeded", "partial", "failed")
+
+
+class IntentionVerification(Base, WorkspaceScopedMixin):
+    """Whether what ran achieved what was expected (LEKA-392): the
+    expectations as they stood, what was observed of each — read again until
+    met or the deadline — the verdict, who concluded it, and what the
+    company's context was told."""
+
+    __tablename__ = "intention_verifications"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "intention_id"],
+            ["intentions.workspace_id", "intentions.id"],
+            ondelete="CASCADE",
+            name="fk_intention_verifications_intention",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "plan_id"],
+            ["intention_plans.workspace_id", "intention_plans.id"],
+            ondelete="CASCADE",
+            name="fk_intention_verifications_plan",
+        ),
+        UniqueConstraint("plan_id", name="uq_intention_verifications_plan"),
+        CheckConstraint(_in("status", VERIFICATION_STATUSES), name="status"),
+        Index("ix_intention_verifications_due", "status", "observe_after"),
+    )
+
+    intention_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    plan_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    expectations: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    # Each expectation: met, not met, unknown, awaiting — what was read.
+    results: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    observe_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    concluded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    concluded_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # What the company's context was told of it: the model operation queued.
+    context_update: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
     detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
