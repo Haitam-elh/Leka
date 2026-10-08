@@ -31,15 +31,18 @@ Four families, one analysis or more each:
                                     nothing is
                   enrich_description  a service's description, from the
                                     repository that is its code alone
-                  enrich_summary    what a service does, in words, from its
-                                    documents and code — model-assisted:
-                                    skipped until the model gateway exists
+                  enrich_summary    what a thing does, in words, written by
+                                    a language model from what LEKA knows of
+                                    it — model-assisted (LEKA-394): each
+                                    sentence citing the facts it rests on
 
 Each proposes only where the family of sources that would say it is
 connected, where one answer stands out — two repositories named alike say
 nothing — and nothing a thing already has.
 
-Pure: the material in, proposals out.
+Pure: the material in, proposals out — enrich_summary aside, which asks a
+model through the gateway (ModelWork) and is a person's to validate, always:
+the policy accepts only what rules propose (curation.by_policy).
 """
 
 from __future__ import annotations
@@ -50,11 +53,15 @@ import re
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Sequence
 
+from pydantic import BaseModel, Field
+
+from leka.capabilities import Message, Needs, Request, Tier
 from leka.intelligence.analysis import (
     Analyzer,
     Evidence,
     Material,
     Method,
+    ModelWork,
     Proposal,
     Reads,
     Subject,
@@ -611,9 +618,187 @@ def enrich_description(material: Material) -> list[Proposal]:
     return proposals
 
 
-def enrich_summary(material: Material) -> list[Proposal]:
-    """Model-assisted: declared, skipped until the model gateway exists —
-    the frame does not change the day one runs."""
+# ── model-assisted (LEKA-394) ───────────────────────────────────────────────
+
+# What a description asks of a model: a structured answer, good analysis.
+SUMMARY_NEEDS = Needs(structured=True, quality=2)
+# How sure a description a model wrote is, at most: a person validates it.
+SUMMARY = 0.6
+# Things described in one run, at most — the others the next run.
+SUMMARY_MOST = 12
+SUMMARY_KINDS = {"service": 0, "repository": 1, "database": 2}
+
+SUMMARY_SYSTEM = """You describe the systems of a company's IT for its \
+architecture map. For each thing given, write what it is and what it does, \
+in one or two plain sentences, from ITS FACTS ONLY — never a name, a purpose, \
+a user or a technology the facts do not say. Write in French unless the \
+facts are clearly in another language. Say how sure you are, 0 to 1: low \
+when the facts say little. Cite the ids of the facts each description rests \
+on. A thing the facts say too little about: leave it out."""
+
+
+class Described(BaseModel):
+    id: str
+    description: str = Field(max_length=400)
+    confidence: float = Field(ge=0, le=1)
+    uses: list[str] = Field(max_length=12)
+
+
+class Descriptions(BaseModel):
+    """What the model is asked to give back."""
+
+    things: list[Described] = Field(max_length=SUMMARY_MOST)
+
+
+def summary_key(card: ArchitectureCardRead) -> str:
+    """One proposal per thing, whatever the words: a model words it anew
+    each time — the thing is what is proposed for."""
+    return _key("enrichment.summary", card.entity_id, "description")
+
+
+def facts_of(
+    card: ArchitectureCardRead,
+    cards: dict[str, ArchitectureCardRead],
+    links: Sequence[tuple[str, str, str]],
+) -> list[tuple[str, str]]:
+    """What LEKA knows of a thing, each fact with an id to cite."""
+    found: list[tuple[str, str]] = [
+        (f"{card.id}:what", f"A {card.type} ({card.kind}), from {card.group}.")
+    ]
+    if card.technology:
+        found.append((f"{card.id}:technology", "Technology: " + ", ".join(card.technology[:8])))
+    if card.environment:
+        found.append((f"{card.id}:environment", f"Environment: {card.environment}"))
+    if card.url:
+        found.append((f"{card.id}:url", f"Reached at: {card.url}"))
+    if card.team:
+        found.append((f"{card.id}:team", f"Owned by the team {card.team.name}"))
+    repository = cards.get(card.repository_id) if card.repository_id else None
+    if repository is not None:
+        said = f"Its code is the repository {repository.name}"
+        if repository.description:
+            said += f", described as: {repository.description[:300]}"
+        found.append((f"{card.id}:code", said))
+    host = cards.get(card.host_id) if card.host_id else None
+    if host is not None:
+        found.append((f"{card.id}:host", f"Runs on {host.name} ({host.kind})"))
+    parts = [str(p.get("name") or p.get("path") or "") for p in card.parts[:12]]
+    if any(parts):
+        found.append((f"{card.id}:parts", "Its parts: " + ", ".join(p for p in parts if p)))
+    if card.files:
+        found.append((f"{card.id}:files", "Its files: " + ", ".join(card.files[:15])))
+    if card.evidence:
+        found.append(
+            (f"{card.id}:evidence", "What says what it is: " + "; ".join(card.evidence[:5]))
+        )
+    for key, value in list(card.facts.items())[:6]:
+        found.append((f"{card.id}:fact:{key}", f"{key}: {str(value)[:200]}"))
+    outgoing = sorted(
+        {f"{role} {cards[to].name}" for frm, to, role in links if frm == card.id and to in cards}
+    )
+    if outgoing:
+        found.append((f"{card.id}:uses", "It " + "; ".join(outgoing[:10])))
+    incoming = sorted(
+        {
+            f"{cards[frm].name} {role} it"
+            for frm, to, role in links
+            if to == card.id and frm in cards
+        }
+    )
+    if incoming:
+        found.append((f"{card.id}:used_by", "; ".join(incoming[:10])))
+    return found
+
+
+async def enrich_summary(material: Material, work: ModelWork) -> list[Proposal]:
+    """What a thing is and does, in words — written by a model from what
+    LEKA knows of it, each description citing its facts; for the things
+    without a description, a dozen a run. What it already proposed stands
+    as it was, never asked twice; what was decided is never asked again."""
+    cards = _by_id(material)
+    architecture = material.architecture
+    links = (
+        [(link.from_id, link.to_id, link.role) for link in architecture.links]
+        if architecture
+        else []
+    )
+    wanting = sorted(
+        (
+            c
+            for c in cards.values()
+            if c.entity_id and not (c.description or "").strip() and c.type in SUMMARY_KINDS
+        ),
+        key=lambda c: (SUMMARY_KINDS[c.type], c.name.lower()),
+    )
+    proposals: list[Proposal] = []
+    asking: list[ArchitectureCardRead] = []
+    for card in wanting:
+        key = summary_key(card)
+        if key in work.decided:
+            continue
+        if key in work.kept:
+            proposals.append(work.kept[key])
+            continue
+        if len(asking) < SUMMARY_MOST:
+            asking.append(card)
+    if not asking:
+        return proposals
+    facts = {card.id: facts_of(card, cards, links) for card in asking}
+    said = [
+        {
+            "id": card.id,
+            "name": card.name,
+            "facts": [{"id": f, "text": t} for f, t in facts[card.id]],
+        }
+        for card in asking
+    ]
+    request = Request(
+        purpose="enrichment.summary",
+        tier=Tier.STANDARD,
+        max_tokens=3000,
+        messages=[
+            Message.system(SUMMARY_SYSTEM),
+            Message.user(json.dumps({"things": said}, ensure_ascii=False)),
+        ],
+    )
+    read = await work.ask(request, Descriptions, SUMMARY_NEEDS)
+    written: Descriptions = read.value
+    model = str(read.completion.model)
+    by_id = {card.id: card for card in asking}
+    for described in written.things:
+        found = by_id.get(described.id)
+        text = described.description.strip()[:MAX_DESCRIPTION]
+        if found is None or not text:
+            continue
+        card = found
+        known = dict(facts[card.id])
+        uses = [f for f in dict.fromkeys(described.uses) if f in known]
+        if not uses:
+            # Resting on nothing LEKA knows of it: not proposed.
+            continue
+        proposals.append(
+            Proposal(
+                key=summary_key(card),
+                family="semantic",
+                code="enrichment.summary",
+                subject=_subject(card),
+                statement=f"{card.name} may be described as: “{text}”.",
+                confidence=round(min(described.confidence, SUMMARY), 3),
+                attribute="description",
+                value=text,
+                params={"name": card.name, "model": model, "facts": len(uses)},
+                evidence=tuple(
+                    Evidence(kind="fact", id=fact, name=card.name, detail=known[fact][:300])
+                    for fact in uses
+                ),
+                sources=_sources(card),
+            )
+        )
+    return proposals
+
+
+def _no_rules(material: Material) -> list[Proposal]:
+    """A model-assisted analysis has no rules of its own."""
     return []
 
 
@@ -623,15 +808,18 @@ def _analyzer(
     run: Callable[[Material], Sequence[Proposal]],
     *,
     method: Method = Method.RULES,
+    version: int = 1,
+    **more: object,
 ) -> Analyzer:
     return Analyzer(
         name=name,
-        version=1,
+        version=version,
         category="enrichment",
         method=method,
         reads=frozenset({Reads.MODEL}),
         summary=summary,
         run=run,
+        **more,  # type: ignore[arg-type]
     )
 
 
@@ -668,8 +856,13 @@ ANALYZERS: tuple[Analyzer, ...] = (
     ),
     _analyzer(
         "enrich_summary",
-        "What a service does, in words, from its documents and its code.",
-        enrich_summary,
+        "What a thing is and does, in words, written by a model from what LEKA knows of it.",
+        _no_rules,
         method=Method.MODEL,
+        # 2: written by a model through the gateway (LEKA-394).
+        version=2,
+        needs=SUMMARY_NEEDS,
+        write=enrich_summary,
+        budget=120.0,
     ),
 )

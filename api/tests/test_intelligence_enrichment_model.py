@@ -41,17 +41,23 @@ What these protect:
 # ruff: noqa: F811 — the fixtures of test_sources_api are imported to be requested by name.
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import httpx
 import pytest
 from httpx import AsyncClient
+from pydantic import SecretStr
 from sqlalchemy import select
 
 from leka.api import intelligence as intelligence_api
+from leka.capabilities import Gateway
+from leka.capabilities.gateway import service as gateway_service
 from leka.connectors.models import Source, SourceKind, SourceStatus
+from leka.core.config import settings
 from leka.db import session_factory, workspace_scope
 from leka.intelligence import (
     ANALYZERS,
@@ -635,3 +641,96 @@ async def test_a_failed_build_changes_nothing_and_the_next_applies_the_fact(
     queued.clear()
     await sweep_models()
     assert str(workspace) not in queued
+
+
+# ── written by a model (LEKA-394) ──────────────────────────────────────────
+
+
+@pytest.fixture
+def gemini(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    """LEKA holds a Gemini key; Gemini, scripted, describes each thing from
+    its first fact — and cites one more it was never given."""
+    asked: list[dict[str, Any]] = []
+    configured = settings.model_copy(
+        update={
+            "google_api_key": SecretStr("g-key"),
+            "mistral_api_key": None,
+            "anthropic_api_key": None,
+            "llm_fallbacks": "",
+        }
+    )
+    monkeypatch.setattr(gateway_service, "settings", configured)
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        things = json.loads(body["contents"][0]["parts"][0]["text"])["things"]
+        asked.append({"names": [t["name"] for t in things]})
+        written = {
+            "things": [
+                {
+                    "id": t["id"],
+                    "description": f"{t['name']} : rédigé d'après ses faits.",
+                    "confidence": 0.95,
+                    "uses": [t["facts"][0]["id"], "made-up"],
+                }
+                for t in things
+            ]
+        }
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [{"content": {"parts": [{"text": json.dumps(written)}]}}],
+                "usageMetadata": {"promptTokenCount": 2000, "candidatesTokenCount": 400},
+                "modelVersion": "gemini-3.8-flash-001",
+            },
+        )
+
+    monkeypatch.setattr(
+        Gateway,
+        "_client",
+        lambda self, endpoint, tier: httpx.AsyncClient(transport=httpx.MockTransport(answer)),
+    )
+    return asked
+
+
+async def test_a_model_describes_what_lacks_a_description_for_a_person_to_validate(
+    client: AsyncClient,
+    acme: dict[str, uuid.UUID],
+    company: dict[str, uuid.UUID],
+    builds: list[uuid.UUID],
+    gemini: list[dict[str, Any]],
+) -> None:
+    await analyse_workspace(acme["acme"], trigger="model", analyzers=ANALYZERS)
+    found = await _candidates(acme["acme"])
+    written = {name: c for (code, name), c in found.items() if code == "enrichment.summary"}
+    # Every service and repository without a description, asked once.
+    assert set(written) == {
+        "payment-api",
+        "auth-service",
+        "user-service",
+        "checkout-worker",
+        "cart",
+        "acme/payments",
+    }
+    assert len(gemini) == 1
+    pay = written["payment-api"]
+    assert (pay.status, pay.method, pay.attribute) == ("proposed", "model", "description")
+    assert pay.value == "payment-api : rédigé d'après ses faits."
+    # Never sure enough for the policy: a person validates what a model wrote.
+    assert pay.confidence == 0.6
+    assert pay.decided_via is None
+    # What it rests on, what LEKA gave it — never what it made up.
+    assert [e["kind"] for e in pay.evidence] == ["fact"]
+    assert pay.params["model"] == "gemini-3.8-flash"
+
+    # Rejected by a person: never asked again; the others stand, unasked.
+    rejected = await client.post(
+        f"{API}/candidates/{written['cart'].id}/reject", json={"reason": "Not what it does."}
+    )
+    assert rejected.status_code == 200, rejected.text
+    await analyse_workspace(acme["acme"], trigger="model", analyzers=ANALYZERS)
+    again = await _candidates(acme["acme"])
+    assert len(gemini) == 1
+    assert again[("enrichment.summary", "cart")].status == "rejected"
+    assert again[("enrichment.summary", "payment-api")].status == "proposed"
+    assert again[("enrichment.summary", "payment-api")].occurrences == 2

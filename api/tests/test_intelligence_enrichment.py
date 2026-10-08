@@ -16,15 +16,23 @@ from what relies on it — proposed where nothing is said, above what is,
 replacing a source's word only as an override; a service gets its
 repository's description when that repository is its alone; nothing is
 proposed of what a thing already has; the model-assisted analysis is
-skipped; the policy takes only what is sure, rules-made and adds.
+skipped without a model — given one (LEKA-394), it describes what lacks a
+description from what LEKA knows of it, each description citing its facts,
+never twice, never what was decided; the policy takes only what is sure,
+rules-made and adds.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import json
 import uuid
+from collections.abc import Callable
+from types import SimpleNamespace
+from typing import Any
 
-from leka.intelligence import ANALYZERS, Material, Method, Proposal, execute
+from leka.intelligence import ANALYZERS, Material, Method, Proposal, Subject, execute
+from leka.intelligence.analysis import ModelWork
 from leka.intelligence.curation import by_policy
 from leka.intelligence.enrichment import (
     ANALYZERS as ENRICHMENT,
@@ -36,7 +44,9 @@ from leka.intelligence.enrichment import (
     enrich_description,
     enrich_owner,
     enrich_runtime,
+    enrich_summary,
     likeness,
+    summary_key,
     words,
 )
 from leka.knowledge import ArchitectureCardRead, EntityBrief, EntityStanding, EntityType, Lifecycle
@@ -380,3 +390,99 @@ def test_every_proposal_keeps_what_shows_it_and_where_it_was_read() -> None:
     for proposal in proposals:
         assert proposal.evidence and proposal.sources == ("github",)
         assert 0 < proposal.confidence <= 1
+
+
+# ── written by a model (LEKA-394) ──────────────────────────────────────────
+
+
+class Scripted:
+    """A model that answers what it is told to, and keeps what it was asked."""
+
+    def __init__(self, answer: Callable[[dict[str, Any]], dict[str, Any]]) -> None:
+        self.answer = answer
+        self.asked: list[dict[str, Any]] = []
+
+    async def __call__(self, request: Any, shape: Any, needs: Any) -> Any:
+        said = json.loads(request.messages[-1].content)
+        self.asked.append(said)
+        return SimpleNamespace(
+            value=shape.model_validate(self.answer(said)),
+            completion=SimpleNamespace(model="gemini-3.8-flash"),
+        )
+
+
+def first_fact(said: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "things": [
+            {
+                "id": t["id"],
+                "description": f"{t['name']} handles card payments.",
+                "confidence": 0.9,
+                "uses": [t["facts"][0]["id"], "invented"],
+            }
+            for t in said["things"]
+        ]
+    }
+
+
+async def test_a_model_describes_from_what_leka_knows_each_sentence_citing_it() -> None:
+    code = repository("acme/payments", description="Card payments and refunds")
+    pay = known("payment-api").model_copy(
+        update={"repository_id": code.id, "technology": ["python", "fastapi"]}
+    )
+    auth = known("auth-service").model_copy(update={"description": "Signs people in"})
+    model = Scripted(first_fact)
+    proposals = await enrich_summary(world([pay, auth, code], tie(pay, auth)), ModelWork(ask=model))
+
+    # Only what lacks a description is asked of — once, with its facts.
+    [asked] = model.asked
+    assert [t["name"] for t in asked["things"]] == ["payment-api"]
+    facts = [f["text"] for f in asked["things"][0]["facts"]]
+    assert "Technology: python, fastapi" in facts
+    assert (
+        "Its code is the repository acme/payments, described as: Card payments and refunds" in facts
+    )
+    assert any(fact.startswith("It depends auth-service") for fact in facts)
+
+    (proposal,) = proposals
+    assert (proposal.code, proposal.attribute, proposal.value) == (
+        "enrichment.summary",
+        "description",
+        "payment-api handles card payments.",
+    )
+    assert proposal.key == summary_key(pay)
+    # Capped: never what the policy takes.
+    assert proposal.confidence == 0.6
+    assert not by_policy(next(a for a in ENRICHMENT if a.name == "enrich_summary"), proposal)
+    # What it cited that LEKA never gave it: not evidence.
+    assert [e.id for e in proposal.evidence] == [f"{pay.id}:what"]
+
+
+async def test_what_was_proposed_or_decided_is_never_asked_again() -> None:
+    pay = known("payment-api")
+    cart = known("cart")
+    kept = Proposal(
+        key=summary_key(pay),
+        family="semantic",
+        code="enrichment.summary",
+        subject=Subject(type="entity", id=of(pay), name="payment-api"),
+        statement="kept",
+        confidence=0.6,
+        attribute="description",
+        value="Kept as it was.",
+    )
+    model = Scripted(first_fact)
+    work = ModelWork(ask=model, kept={kept.key: kept}, decided=frozenset({summary_key(cart)}))
+    assert await enrich_summary(world([pay, cart]), work) == [kept]
+    assert model.asked == []
+
+    # A description resting on nothing LEKA gave: not proposed.
+    vague = Scripted(
+        lambda said: {
+            "things": [
+                {"id": t["id"], "description": "Something.", "confidence": 0.9, "uses": ["x"]}
+                for t in said["things"]
+            ]
+        }
+    )
+    assert await enrich_summary(world([pay]), ModelWork(ask=vague)) == []
