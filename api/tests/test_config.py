@@ -175,22 +175,32 @@ def test_no_model_is_configured_by_default(monkeypatch: pytest.MonkeyPatch) -> N
     """The platform boots and serves without a model. Rule 7 says only
     leka.capabilities may care."""
     monkeypatch.setitem(Settings.model_config, "env_file", None)
-    for name in ("LEKA_LLM_PROVIDER", "LEKA_ANTHROPIC_API_KEY", "LEKA_MISTRAL_API_KEY"):
+    for name in (
+        "LEKA_LLM_PROVIDER",
+        "LEKA_LLM_MODEL",
+        "LEKA_GOOGLE_API_KEY",
+        "LEKA_ANTHROPIC_API_KEY",
+        "LEKA_MISTRAL_API_KEY",
+    ):
         monkeypatch.delenv(name, raising=False)
 
     config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
 
-    # Mistral by default: the commercial argument is "your data stays in
-    # Europe", and that only holds if the European path is the one exercised
-    # every day rather than an option nobody runs.
-    assert config.llm_provider == "mistral"
+    # Gemini 3.8 Flash by default — the MVP's choice (LEKA-394) — configured,
+    # never written where it is used. A company that wants its data on its
+    # own contract brings its own model (Paramètres > Modèle de langage).
+    assert (config.llm_provider, config.llm_model) == ("google", "gemini-3.8-flash")
     assert config.has_model_access is False
     assert config.llm_api_key is None
 
 
 @pytest.mark.parametrize(
     ("provider", "variable"),
-    [("anthropic", "LEKA_ANTHROPIC_API_KEY"), ("mistral", "LEKA_MISTRAL_API_KEY")],
+    [
+        ("google", "LEKA_GOOGLE_API_KEY"),
+        ("anthropic", "LEKA_ANTHROPIC_API_KEY"),
+        ("mistral", "LEKA_MISTRAL_API_KEY"),
+    ],
 )
 def test_the_selected_provider_key_is_the_one_returned(
     monkeypatch: pytest.MonkeyPatch, provider: str, variable: str
@@ -213,11 +223,13 @@ def test_an_empty_key_counts_as_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
     an absent variable. Without this, a key nobody filled in reads as
     configured and the failure moves to the first model call."""
     monkeypatch.setitem(Settings.model_config, "env_file", None)
+    monkeypatch.setenv("LEKA_GOOGLE_API_KEY", "")
     monkeypatch.setenv("LEKA_ANTHROPIC_API_KEY", "")
     monkeypatch.setenv("LEKA_MISTRAL_API_KEY", "   ")
 
     config = Settings(_env_file=None, **VALID)  # type: ignore[arg-type]
 
+    assert config.google_api_key is None
     assert config.anthropic_api_key is None
     assert config.mistral_api_key is None
     assert config.has_model_access is False

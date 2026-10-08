@@ -39,10 +39,12 @@ class DefinitionError(ValueError):
 
 
 class Kind(enum.StrEnum):
-    """How it runs: LEKA's own rules, or an agent — instructions a model
-    follows (LEKA-394, LEKA-395)."""
+    """How it runs: LEKA's own rules; LEKA's own, written by a language
+    model through the gateway (LEKA-394); or an agent — instructions a model
+    follows (LEKA-395)."""
 
     RULES = "rules"
+    MODEL = "model"
     AGENT = "agent"
 
 
@@ -124,6 +126,20 @@ class Contract:
 
 
 @dataclass(frozen=True)
+class ModelNeed:
+    """What the model that runs it must be able to do (LEKA-394): the
+    router matches it against the models a workspace can reach."""
+
+    structured: bool = False
+    tools: bool = False
+    # Tokens it takes in, at most: instructions, context, question.
+    context: int = 0
+    # The least quality it accepts: 1 enough to classify, 2 good analysis,
+    # 3 the best.
+    quality: int = 1
+
+
+@dataclass(frozen=True)
 class Definition:
     """One capability, one version."""
 
@@ -140,6 +156,7 @@ class Definition:
     # alternatives ("confluence|microsoft_365").
     sources: tuple[tuple[str, ...], ...] = ()
     model: bool = False
+    model_needs: ModelNeed = field(default_factory=ModelNeed)
     permission: str = "intention:create"
     mode: str = "read_only"
     risk: str = "low"
@@ -161,6 +178,10 @@ class Definition:
         said = asdict(self)
         said.pop("lifecycle")
         said.pop("path")
+        # Added after capabilities were registered (LEKA-394): at its default
+        # it says nothing new — what was registered stays what it is.
+        if self.model_needs == ModelNeed():
+            said.pop("model_needs")
         said["goals"] = sorted(self.goals)
         said["kinds"] = sorted(self.kinds)
         canonical = json.dumps(said, sort_keys=True, ensure_ascii=False, default=str)
@@ -221,8 +242,8 @@ def validated(
         if not WORD.match(word):
             msg = f"{d.key}: {word!r} is not a goal or a kind"
             raise DefinitionError(msg)
-    if d.kind is Kind.AGENT and not d.model:
-        msg = f"{d.key}: an agent is run by a model"
+    if d.kind in (Kind.AGENT, Kind.MODEL) and not d.model:
+        msg = f"{d.key}: an agent, or a capability a model writes, is run by a model"
         raise DefinitionError(msg)
     known_types = set(entity_types)
     for kind in (*d.entity_types, *(t for i in d.contract.inputs for t in i.entity_types)):
@@ -250,14 +271,17 @@ class Situation:
 
     enabled: bool = True
     connected: frozenset[str] = frozenset()
+    # A model that can do what it needs can be reached here (LEKA-394).
     model: bool = False
+    # An agent can be run: not before its runtime (LEKA-395).
+    runtime: bool = False
     permissions: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
 class Reason:
-    # lifecycle, refused, disabled, missing_source, no_model, not_permitted ·
-    # deprecated
+    # lifecycle, refused, disabled, missing_source, no_model, no_runtime,
+    # not_permitted · deprecated
     code: str
     detail: Mapping[str, object] = field(default_factory=dict)
 
@@ -296,6 +320,8 @@ def availability(
             reasons.append(Reason("missing_source", {"any_of": list(group)}))
     if d.model and not situation.model:
         reasons.append(Reason("no_model"))
+    if d.kind is Kind.AGENT and not situation.runtime:
+        reasons.append(Reason("no_runtime"))
     if d.permission not in situation.permissions:
         reasons.append(Reason("not_permitted", {"permission": d.permission}))
     return Availability(not reasons, tuple(reasons), tuple(notes))

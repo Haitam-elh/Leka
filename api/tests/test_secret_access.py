@@ -58,6 +58,7 @@ SECRET_OWNERS: dict[str, frozenset[str]] = {
     # reader of secret_values.
     "sentry_dsn": frozenset({"leka.platform.monitoring"}),
     # Architecture rule 7: one place calls a model.
+    "google_api_key": frozenset({"leka.capabilities"}),
     "anthropic_api_key": frozenset({"leka.capabilities"}),
     "mistral_api_key": frozenset({"leka.capabilities"}),
     "llm_api_key": frozenset({"leka.capabilities"}),
@@ -77,10 +78,8 @@ SECRET_OWNERS: dict[str, frozenset[str]] = {
 
 # Grants nobody exercises yet, on purpose. Any other unused grant is stale:
 # a permission handed out for nothing.
-RESERVED: dict[tuple[str, str], str] = {
-    (name, "leka.capabilities"): "the model gateway (LEKA-394) is not written yet"
-    for name in ("anthropic_api_key", "mistral_api_key", "llm_api_key")
-}
+# (None since the model gateway, LEKA-394, read the model keys.)
+RESERVED: dict[tuple[str, str], str] = {}
 
 # (directory scanned, the directory its module names start from)
 SCANNED = (

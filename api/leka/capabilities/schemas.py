@@ -14,7 +14,9 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, SecretStr, field_validator
+
+from leka.connectors import PublicHttpsUrl
 
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
@@ -173,6 +175,27 @@ class CapabilityUsageRead(BaseModel):
     average_ms: int | None
 
 
+class CapabilityModelRead(BaseModel):
+    """The model that would run a capability here, chosen by what it needs
+    (LEKA-394)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    provider: str
+    model: str
+    title: str
+    owner: Literal["leka", "workspace"]
+
+
+class CapabilityModelNeeds(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    structured: bool
+    tools: bool
+    context: int
+    quality: int
+
+
 class CapabilityRead(BaseModel):
     """One capability, for this workspace and this person. An agent's
     instructions are never sent."""
@@ -183,7 +206,7 @@ class CapabilityRead(BaseModel):
     title: str
     summary: str = Field(description="When to use it")
     category: str
-    kind: Literal["rules", "agent"]
+    kind: Literal["rules", "model", "agent"]
     version: str
     lifecycle: Literal["draft", "review", "active", "deprecated", "retired"]
     origin: str
@@ -194,7 +217,13 @@ class CapabilityRead(BaseModel):
     output: str
     formats: list[str] = Field(description="What it delivers: json, pptx, pdf…")
     sources: list[CapabilitySourceNeed]
-    model: bool = Field(description="Run by a model (an agent)")
+    model: bool = Field(description="Run by a model: written by one, or an agent")
+    model_needs: CapabilityModelNeeds | None = Field(
+        description="What that model must be able to do; none when no model runs it."
+    )
+    answering: CapabilityModelRead | None = Field(
+        description="The model that would run it here; none when none can."
+    )
     goals: list[str]
     kinds: list[str]
     entity_types: list[str]
@@ -325,3 +354,187 @@ class CapabilityMatch(BaseModel):
     capability: CapabilityRead
     score: float
     reasons: list[str] = Field(description="goal, kind, entity:<type>, words, always")
+
+
+# ── language models (LEKA-394) ───────────────────────────────────────────────
+
+
+class ModelPriceRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    since: str = Field(description="The day this price applies from (ISO).")
+    per_million_in: float
+    per_million_out: float
+
+
+class ModelProfileRead(BaseModel):
+    """A model LEKA knows: what it takes, what it can do, what it costs."""
+
+    model_config = ConfigDict(frozen=True)
+
+    provider: str
+    model: str
+    title: str
+    context: int
+    output: int
+    structured: bool
+    tools: bool
+    quality: int = Field(description="1 enough to classify · 2 good analysis · 3 the best")
+    speed: int = Field(description="1 slow · 3 fast")
+    price: ModelPriceRead | None = Field(description="Today's list price; none: not published.")
+    next_price: ModelPriceRead | None = Field(description="A published change to come.")
+    known: bool = Field(description="False: a model the table does not know, assumed.")
+
+
+class ModelProviderRead(BaseModel):
+    """A provider a workspace may bring its own model from."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    title: str
+    needs: list[str] = Field(description="What it takes: key, url, model.")
+    default_model: str | None
+    leka_holds: bool = Field(description="LEKA holds a key for it.")
+    models: list[ModelProfileRead]
+
+
+class WorkspaceModelRead(BaseModel):
+    """The workspace's own model — its key never shown, its last four
+    characters are."""
+
+    model_config = ConfigDict(frozen=True)
+
+    provider: str
+    model: str | None
+    base_url: str | None
+    api_version: str | None
+    key_hint: str | None
+    enabled: bool
+    exclusive: bool = Field(description="This model only, never LEKA's.")
+    status: Literal["untested", "ok", "failed"]
+    status_detail: str | None
+    tested_at: datetime | None
+    changed_at: datetime
+
+
+class ModelRouteRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    provider: str
+    model: str
+    title: str
+    owner: Literal["leka", "workspace"]
+    why: Literal["own", "default", "fallback", "alternative"]
+
+
+class ModelGatewayRead(BaseModel):
+    """What answers in this workspace, and what it could bring."""
+
+    model_config = ConfigDict(frozen=True)
+
+    default: ModelProfileRead
+    default_ready: bool = Field(description="LEKA holds a key for its default model.")
+    fallbacks: list[ModelProfileRead]
+    providers: list[ModelProviderRead]
+    own: WorkspaceModelRead | None
+    answering: list[ModelRouteRead] = Field(description="Who would answer now, in order.")
+    ready: bool = Field(description="A model can answer here.")
+
+
+class WorkspaceModelUpdate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    provider: Literal["google", "mistral", "openai", "azure_openai", "anthropic"]
+    model: str | None = Field(default=None, max_length=120)
+    base_url: PublicHttpsUrl | None = None
+    api_version: str | None = Field(default=None, max_length=30, pattern=r"^[0-9A-Za-z.\-]+$")
+    api_key: SecretStr | None = Field(default=None, description="Kept when left out.")
+    enabled: bool = True
+    exclusive: bool = False
+
+
+class ModelTestRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ok: bool
+    detail: str | None
+    latency_ms: int | None
+    model: str | None
+    version: str | None
+
+
+class ModelTallyRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    calls: int
+    failed: int
+    tokens_in: int
+    tokens_out: int
+    cost_usd: float
+    unpriced: int = Field(description="Calls to a model without a published price.")
+    average_latency_ms: int
+
+
+class ModelDayRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    day: str
+    calls: int
+    failed: int
+    tokens: int
+    cost_usd: float
+
+
+class ModelBreakdownRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    provider: str
+    model: str
+    title: str
+    tally: ModelTallyRead
+
+
+class ModelPurposeRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    purpose: str
+    tally: ModelTallyRead
+
+
+class ModelCallRead(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    at: datetime
+    purpose: str
+    ref: str | None
+    provider: str
+    model: str
+    version: str | None
+    owner: str
+    route: str
+    attempt: int
+    status: Literal["ok", "failed", "invalid"]
+    error: str | None
+    tokens_in: int
+    tokens_out: int
+    cost_usd: float | None
+    latency_ms: int
+
+
+class ModelUsageRead(BaseModel):
+    """What this workspace asked of models: LEKA's and its own apart."""
+
+    model_config = ConfigDict(frozen=True)
+
+    days: int
+    total: ModelTallyRead
+    previous: ModelTallyRead
+    leka: ModelTallyRead
+    own: ModelTallyRead
+    fallbacks: int = Field(description="Answers that came from another model than the first.")
+    by_day: list[ModelDayRead]
+    by_model: list[ModelBreakdownRead]
+    by_purpose: list[ModelPurposeRead]
+    latest: list[ModelCallRead]

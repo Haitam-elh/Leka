@@ -1,7 +1,9 @@
-"""Which model provider LEKA talks to, and with what key.
+"""Which language model LEKA talks to by default, what it falls back on,
+and with what keys (LEKA-394).
 
-Consumed by leka.capabilities and nowhere else (architecture rule 7). Both
-keys are optional: the platform boots and serves without a model configured.
+Consumed by leka.capabilities and nowhere else (architecture rule 7). Every
+key is optional: the platform boots and serves without a model — what needs
+one says so, and what does not works the same.
 """
 
 from __future__ import annotations
@@ -13,25 +15,35 @@ from pydantic import SecretStr, field_validator
 from leka.core.settings._blank import blank_is_none
 from leka.core.settings._rotation import RotateEvery
 
+Provider = Literal["google", "mistral", "anthropic"]
+
 
 class ModelAccessSettings:
-    """Provider selection and the two API keys.
+    """The default model, the fallbacks, and one key per provider.
 
-    Two providers from the start, on purpose. An abstraction validated
-    against a single implementation is an abstraction that fits one
-    implementation; the second provider is what proves the gateway holds.
-
-    Mistral is the default, not Anthropic. The commercial argument is "your
-    data stays in Europe", which only holds if the European path is the one
-    exercised every day rather than an option discovered broken in front of
-    a customer's security officer.
+    The default is Google's Gemini 3.8 Flash (the MVP's choice, LEKA-394):
+    configured here, never written into what uses it — a capability asks for
+    what it needs (structured output, tools, a long context), the router
+    picks the model. Two providers at least, on purpose: an abstraction
+    validated against one implementation only fits that one; the second is
+    what proves the gateway holds, and what answers when the first does not.
     """
 
-    llm_provider: Literal["mistral", "anthropic"] = "mistral"
-    anthropic_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
-    mistral_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
+    llm_provider: Provider = "google"
+    llm_model: str = "gemini-3.8-flash"
+    # Tried in order when the default fails or cannot do what is asked:
+    # "provider:model", comma-separated. Empty: every other provider a key
+    # is set for, with its own default.
+    llm_fallbacks: str = ""
+    # Each failure a provider says is temporary (busy, rate-limited, down)
+    # is tried again this many times, then the next model is.
+    llm_retries: int = 1
 
-    @field_validator("anthropic_api_key", "mistral_api_key", mode="before")
+    google_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
+    mistral_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
+    anthropic_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
+
+    @field_validator("google_api_key", "anthropic_api_key", "mistral_api_key", mode="before")
     @classmethod
     def _blank_model_key_is_not_configured(cls, value: object) -> object:
         """A blank key is no key. See core/settings/_blank.py."""
@@ -39,21 +51,25 @@ class ModelAccessSettings:
 
     @property
     def llm_api_key(self) -> SecretStr | None:
-        """The key for the selected provider, if it is configured.
+        """The key for the default provider, if it is configured.
 
-        None means no model is reachable. leka.capabilities is the only
-        module that reads this, and the only one entitled to fail on it —
-        the rest of the platform works without a model.
+        None means the default model is not reachable. leka.capabilities is
+        the only module that reads this, and the only one entitled to fail on
+        it — the rest of the platform works without a model.
         """
         keys: dict[str, SecretStr | None] = {
-            "anthropic": self.anthropic_api_key,
+            "google": self.google_api_key,
             "mistral": self.mistral_api_key,
+            "anthropic": self.anthropic_api_key,
         }
         return keys[self.llm_provider]
 
     @property
     def has_model_access(self) -> bool:
-        return self.llm_api_key is not None
+        return any(
+            key is not None
+            for key in (self.google_api_key, self.mistral_api_key, self.anthropic_api_key)
+        )
 
 
-__all__ = ["ModelAccessSettings"]
+__all__ = ["ModelAccessSettings", "Provider"]

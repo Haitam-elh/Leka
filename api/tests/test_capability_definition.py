@@ -24,6 +24,7 @@ from leka.capabilities import (
     Input,
     Kind,
     Lifecycle,
+    ModelNeed,
     Query,
     Situation,
     availability,
@@ -115,6 +116,10 @@ def test_what_it_does_is_fingerprinted_where_it_stands_is_not() -> None:
     assert replace(ARCHITECTURE, path="/elsewhere").fingerprint() == print_
     assert replace(ARCHITECTURE, instructions="Autre chose").fingerprint() != print_
     assert replace(ARCHITECTURE, summary=ARCHITECTURE.summary + "!").fingerprint() != print_
+    # What it needs of a model: said, it is a change; at its default — every
+    # capability registered before LEKA-394 — the same fingerprint as before.
+    assert replace(ARCHITECTURE, model_needs=ModelNeed(quality=3)).fingerprint() != print_
+    assert replace(ARCHITECTURE, model_needs=ModelNeed()).fingerprint() == print_
     # What the catalogue keeps of it never holds its instructions.
     assert ARCHITECTURE.described()["instructions"] is None
 
@@ -123,13 +128,18 @@ def test_whether_it_can_be_used_here_every_reason() -> None:
     nothing = Situation(permissions=EVERYONE)
     able = availability(ARCHITECTURE, nothing)
     assert not able.available
-    assert able.codes == ("missing_source", "no_model")
+    # An agent waits for a model (LEKA-394) and for its runtime (LEKA-395).
+    assert able.codes == ("missing_source", "no_model", "no_runtime")
     assert able.reasons[0].detail == {"any_of": ["confluence", "microsoft_365"]}
 
-    ready = Situation(connected=frozenset({"microsoft_365"}), model=True, permissions=EVERYONE)
+    ready = Situation(
+        connected=frozenset({"microsoft_365"}), model=True, runtime=True, permissions=EVERYONE
+    )
     assert availability(ARCHITECTURE, ready).available
+    without_runtime = replace(ready, runtime=False)
+    assert availability(ARCHITECTURE, without_runtime).codes == ("no_runtime",)
 
-    off = Situation(enabled=False, model=True, permissions=frozenset())
+    off = Situation(enabled=False, model=True, runtime=True, permissions=frozenset())
     assert availability(ARCHITECTURE, off).codes == (
         "disabled",
         "missing_source",

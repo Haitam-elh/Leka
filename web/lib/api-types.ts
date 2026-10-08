@@ -3912,6 +3912,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gateway */
+        get: operations["gateway_api_v1_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/models/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save */
+        put: operations["save_api_v1_models_settings_put"];
+        post?: never;
+        /** Remove */
+        delete: operations["remove_api_v1_models_settings_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/models/settings/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test */
+        post: operations["test_api_v1_models_settings_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/models/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage */
+        get: operations["usage_api_v1_models_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/intentions": {
         parameters: {
             query?: never;
@@ -4955,6 +5024,25 @@ export interface components {
             options?: string[];
         };
         /**
+         * AnalysisAnswer
+         * @description The analysis answered in words by a language model (LEKA-394): only
+         *     what the analysis holds, each point citing what it rests on.
+         */
+        AnalysisAnswer: {
+            /** Text */
+            text: string;
+            /** Points */
+            points: components["schemas"]["AnalysisPoint"][];
+            /** Caveats */
+            caveats: string[];
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Version */
+            version: string;
+        };
+        /**
          * AnalysisCause
          * @description A hypothesis: what may explain it, and how sure.
          */
@@ -5079,6 +5167,16 @@ export interface components {
             params?: {
                 [key: string]: components["schemas"]["JsonValue"];
             };
+        };
+        /** AnalysisPoint */
+        AnalysisPoint: {
+            /** Text */
+            text: string;
+            /**
+             * Cites
+             * @description The findings, causes and evidence it rests on (ids).
+             */
+            cites: string[];
         };
         /**
          * AnalysisRequest
@@ -6219,7 +6317,7 @@ export interface components {
             chosen: boolean;
             /**
              * Reason
-             * @description always, goal, kind, acting — or no_model (it waits for LEKA-394), disabled (turned off in the workspace's catalogue, LEKA-393), not_called.
+             * @description always, goal, kind, acting — or no_model (no model can run it here), disabled (turned off in the workspace's catalogue, LEKA-393), not_called.
              */
             reason: string;
         };
@@ -6255,7 +6353,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "rules" | "agent";
+            kind: "rules" | "model" | "agent";
             /** Version */
             version: string;
             /**
@@ -6284,9 +6382,13 @@ export interface components {
             sources: components["schemas"]["CapabilitySourceNeed"][];
             /**
              * Model
-             * @description Run by a model (an agent)
+             * @description Run by a model: written by one, or an agent
              */
             model: boolean;
+            /** @description What that model must be able to do; none when no model runs it. */
+            model_needs: components["schemas"]["CapabilityModelNeeds"] | null;
+            /** @description The model that would run it here; none when none can. */
+            answering: components["schemas"]["CapabilityModelRead"] | null;
             /** Goals */
             goals: string[];
             /** Kinds */
@@ -6415,6 +6517,35 @@ export interface components {
              */
             reasons: string[];
         };
+        /** CapabilityModelNeeds */
+        CapabilityModelNeeds: {
+            /** Structured */
+            structured: boolean;
+            /** Tools */
+            tools: boolean;
+            /** Context */
+            context: number;
+            /** Quality */
+            quality: number;
+        };
+        /**
+         * CapabilityModelRead
+         * @description The model that would run a capability here, chosen by what it needs
+         *     (LEKA-394).
+         */
+        CapabilityModelRead: {
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Title */
+            title: string;
+            /**
+             * Owner
+             * @enum {string}
+             */
+            owner: "leka" | "workspace";
+        };
         /**
          * CapabilityRead
          * @description One capability, for this workspace and this person. An agent's
@@ -6436,7 +6567,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "rules" | "agent";
+            kind: "rules" | "model" | "agent";
             /** Version */
             version: string;
             /**
@@ -6465,9 +6596,13 @@ export interface components {
             sources: components["schemas"]["CapabilitySourceNeed"][];
             /**
              * Model
-             * @description Run by a model (an agent)
+             * @description Run by a model: written by one, or an agent
              */
             model: boolean;
+            /** @description What that model must be able to do; none when no model runs it. */
+            model_needs: components["schemas"]["CapabilityModelNeeds"] | null;
+            /** @description The model that would run it here; none when none can. */
+            answering: components["schemas"]["CapabilityModelRead"] | null;
             /** Goals */
             goals: string[];
             /** Kinds */
@@ -11851,6 +11986,8 @@ export interface components {
             support: components["schemas"]["AnalysisNote"][];
             /** Evidence */
             evidence: components["schemas"]["AnalysisEvidence"][];
+            /** @description Written by a model from the above, when one can (LEKA-394). */
+            answer?: components["schemas"]["AnalysisAnswer"] | null;
         };
         /**
          * IntentionAsked
@@ -13192,6 +13329,200 @@ export interface components {
         MemberRoleUpdate: {
             role: components["schemas"]["Role"];
         };
+        /** ModelBreakdownRead */
+        ModelBreakdownRead: {
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Title */
+            title: string;
+            tally: components["schemas"]["ModelTallyRead"];
+        };
+        /** ModelCallRead */
+        ModelCallRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Purpose */
+            purpose: string;
+            /** Ref */
+            ref: string | null;
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Version */
+            version: string | null;
+            /** Owner */
+            owner: string;
+            /** Route */
+            route: string;
+            /** Attempt */
+            attempt: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "failed" | "invalid";
+            /** Error */
+            error: string | null;
+            /** Tokens In */
+            tokens_in: number;
+            /** Tokens Out */
+            tokens_out: number;
+            /** Cost Usd */
+            cost_usd: number | null;
+            /** Latency Ms */
+            latency_ms: number;
+        };
+        /** ModelDayRead */
+        ModelDayRead: {
+            /** Day */
+            day: string;
+            /** Calls */
+            calls: number;
+            /** Failed */
+            failed: number;
+            /** Tokens */
+            tokens: number;
+            /** Cost Usd */
+            cost_usd: number;
+        };
+        /**
+         * ModelGatewayRead
+         * @description What answers in this workspace, and what it could bring.
+         */
+        ModelGatewayRead: {
+            default: components["schemas"]["ModelProfileRead"];
+            /**
+             * Default Ready
+             * @description LEKA holds a key for its default model.
+             */
+            default_ready: boolean;
+            /** Fallbacks */
+            fallbacks: components["schemas"]["ModelProfileRead"][];
+            /** Providers */
+            providers: components["schemas"]["ModelProviderRead"][];
+            own: components["schemas"]["WorkspaceModelRead"] | null;
+            /**
+             * Answering
+             * @description Who would answer now, in order.
+             */
+            answering: components["schemas"]["ModelRouteRead"][];
+            /**
+             * Ready
+             * @description A model can answer here.
+             */
+            ready: boolean;
+        };
+        /** ModelPriceRead */
+        ModelPriceRead: {
+            /**
+             * Since
+             * @description The day this price applies from (ISO).
+             */
+            since: string;
+            /** Per Million In */
+            per_million_in: number;
+            /** Per Million Out */
+            per_million_out: number;
+        };
+        /**
+         * ModelProfileRead
+         * @description A model LEKA knows: what it takes, what it can do, what it costs.
+         */
+        ModelProfileRead: {
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Title */
+            title: string;
+            /** Context */
+            context: number;
+            /** Output */
+            output: number;
+            /** Structured */
+            structured: boolean;
+            /** Tools */
+            tools: boolean;
+            /**
+             * Quality
+             * @description 1 enough to classify · 2 good analysis · 3 the best
+             */
+            quality: number;
+            /**
+             * Speed
+             * @description 1 slow · 3 fast
+             */
+            speed: number;
+            /** @description Today's list price; none: not published. */
+            price: components["schemas"]["ModelPriceRead"] | null;
+            /** @description A published change to come. */
+            next_price: components["schemas"]["ModelPriceRead"] | null;
+            /**
+             * Known
+             * @description False: a model the table does not know, assumed.
+             */
+            known: boolean;
+        };
+        /**
+         * ModelProviderRead
+         * @description A provider a workspace may bring its own model from.
+         */
+        ModelProviderRead: {
+            /** Name */
+            name: string;
+            /** Title */
+            title: string;
+            /**
+             * Needs
+             * @description What it takes: key, url, model.
+             */
+            needs: string[];
+            /** Default Model */
+            default_model: string | null;
+            /**
+             * Leka Holds
+             * @description LEKA holds a key for it.
+             */
+            leka_holds: boolean;
+            /** Models */
+            models: components["schemas"]["ModelProfileRead"][];
+        };
+        /** ModelPurposeRead */
+        ModelPurposeRead: {
+            /** Purpose */
+            purpose: string;
+            tally: components["schemas"]["ModelTallyRead"];
+        };
+        /** ModelRouteRead */
+        ModelRouteRead: {
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string;
+            /** Title */
+            title: string;
+            /**
+             * Owner
+             * @enum {string}
+             */
+            owner: "leka" | "workspace";
+            /**
+             * Why
+             * @enum {string}
+             */
+            why: "own" | "default" | "fallback" | "alternative";
+        };
         /** ModelRunRead */
         ModelRunRead: {
             /** Status */
@@ -13240,6 +13571,64 @@ export interface components {
             relationships: {
                 [key: string]: number;
             };
+        };
+        /** ModelTallyRead */
+        ModelTallyRead: {
+            /** Calls */
+            calls: number;
+            /** Failed */
+            failed: number;
+            /** Tokens In */
+            tokens_in: number;
+            /** Tokens Out */
+            tokens_out: number;
+            /** Cost Usd */
+            cost_usd: number;
+            /**
+             * Unpriced
+             * @description Calls to a model without a published price.
+             */
+            unpriced: number;
+            /** Average Latency Ms */
+            average_latency_ms: number;
+        };
+        /** ModelTestRead */
+        ModelTestRead: {
+            /** Ok */
+            ok: boolean;
+            /** Detail */
+            detail: string | null;
+            /** Latency Ms */
+            latency_ms: number | null;
+            /** Model */
+            model: string | null;
+            /** Version */
+            version: string | null;
+        };
+        /**
+         * ModelUsageRead
+         * @description What this workspace asked of models: LEKA's and its own apart.
+         */
+        ModelUsageRead: {
+            /** Days */
+            days: number;
+            total: components["schemas"]["ModelTallyRead"];
+            previous: components["schemas"]["ModelTallyRead"];
+            leka: components["schemas"]["ModelTallyRead"];
+            own: components["schemas"]["ModelTallyRead"];
+            /**
+             * Fallbacks
+             * @description Answers that came from another model than the first.
+             */
+            fallbacks: number;
+            /** By Day */
+            by_day: components["schemas"]["ModelDayRead"][];
+            /** By Model */
+            by_model: components["schemas"]["ModelBreakdownRead"][];
+            /** By Purpose */
+            by_purpose: components["schemas"]["ModelPurposeRead"][];
+            /** Latest */
+            latest: components["schemas"]["ModelCallRead"][];
         };
         /**
          * Neighbourhood
@@ -16699,6 +17088,35 @@ export interface components {
             clear: boolean;
             /** @description Its scope and constraints (LEKA-386, version 2 on). */
             scope?: components["schemas"]["IntentScope"] | null;
+            /**
+             * Restated
+             * @description What is asked, in a sentence, as a model read it (LEKA-394).
+             */
+            restated?: string | null;
+            /** @description Who read it; none: LEKA's rules, before LEKA-394. */
+            read_by?: components["schemas"]["UnderstoodBy"] | null;
+        };
+        /**
+         * UnderstoodBy
+         * @description Who read it (LEKA-394): LEKA's rules, or a language model with them.
+         */
+        UnderstoodBy: {
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "rules" | "model";
+            /** Provider */
+            provider?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Version */
+            version?: string | null;
+            /**
+             * Confidence
+             * @description The model's, of its goal.
+             */
+            confidence?: number | null;
         };
         /**
          * UnderstoodEntity
@@ -16950,6 +17368,73 @@ export interface components {
             slug: string;
             /** Role */
             role: string;
+        };
+        /**
+         * WorkspaceModelRead
+         * @description The workspace's own model — its key never shown, its last four
+         *     characters are.
+         */
+        WorkspaceModelRead: {
+            /** Provider */
+            provider: string;
+            /** Model */
+            model: string | null;
+            /** Base Url */
+            base_url: string | null;
+            /** Api Version */
+            api_version: string | null;
+            /** Key Hint */
+            key_hint: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Exclusive
+             * @description This model only, never LEKA's.
+             */
+            exclusive: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "untested" | "ok" | "failed";
+            /** Status Detail */
+            status_detail: string | null;
+            /** Tested At */
+            tested_at: string | null;
+            /**
+             * Changed At
+             * Format: date-time
+             */
+            changed_at: string;
+        };
+        /** WorkspaceModelUpdate */
+        WorkspaceModelUpdate: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "google" | "mistral" | "openai" | "azure_openai" | "anthropic";
+            /** Model */
+            model?: string | null;
+            /** Base Url */
+            base_url?: string | null;
+            /** Api Version */
+            api_version?: string | null;
+            /**
+             * Api Key
+             * @description Kept when left out.
+             */
+            api_key?: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Exclusive
+             * @default false
+             */
+            exclusive: boolean;
         };
         /** WorkspaceRead */
         WorkspaceRead: {
@@ -35338,7 +35823,7 @@ export interface operations {
             query?: {
                 view?: "all" | "mine";
                 category?: string[] | null;
-                kind?: ("rules" | "agent") | null;
+                kind?: ("rules" | "model" | "agent") | null;
                 lifecycle?: ("draft" | "review" | "active" | "deprecated" | "retired")[] | null;
                 available?: boolean | null;
                 q?: string | null;
@@ -35922,6 +36407,470 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    gateway_api_v1_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelGatewayRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    save_api_v1_models_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceModelUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelGatewayRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    remove_api_v1_models_settings_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    test_api_v1_models_settings_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelTestRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    usage_api_v1_models_usage_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelUsageRead"];
+                };
             };
             /** @description The request could not be understood. */
             400: {

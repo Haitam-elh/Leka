@@ -273,9 +273,16 @@ mean; « Préciser ma demande » opens the composer on the same intention
 (`/intentions/new?intention=<id>`), its words to say better. The status
 « À préciser » in Mes intentions.
 
-**Deliberately words, not a model**: the model gateway does not exist yet
-(LEKA-394). A model-assisted understanding will fill the same contract —
-the reason it says every part's words.
+**Read with a model, since LEKA-394** (`reading.py`): when a model can
+answer, it reads the same words — the goal, a question or a request, what is
+asked in a sentence — in twelve seconds at most. It **settles a goal the
+rules could not tell** (« Billing API, c'est à qui de voir ça ? »: the
+blocking « unclear goal » gone, the intention analysed), or one it is surer
+of; it never changes the things named, the actions asked, nor a request to
+act — those stay the rules', read from the words. Kept beside the rules'
+reading: `restated`, `read_by` (provider, model, version, confidence) —
+« Lu par Gemini 3.8 Flash, avec les règles de LEKA ». No model, or none in
+time: the rules alone, as before.
 
 **Tested** — `tests/test_intention_understanding.py`, pure: seven questions,
 each its goal; a procedure needing no thing named; restart, rollback asked
@@ -538,7 +545,21 @@ asker or an approver; another workspace's 404.
   Its earlier analyses listed.
 - *Preuves*: every piece of evidence collected — where it came from, its
   record, its origin and confidence, which capability cites it.
-- *Vue d'ensemble*: its summary, in the reader's words.
+- *Vue d'ensemble*: its summary, in the reader's words — the written answer
+  when there is one.
+
+**Answered in words, since LEKA-394** (`writing.py`): the **synthesis**
+capability (`method: model`) runs after the rules, when a model that gives
+a structured answer can be reached — the question, what the rules found
+(facts, causes, what it reaches, what is unknown, each with its id) and the
+evidence, sent to it; it answers in the asker's language, a few sentences
+and the points they rest on, **each citing ids**. A citation the result does
+not hold is dropped, a point citing nothing goes, an answer resting on
+nothing — when there was something — is not kept (`ungrounded`). The result
+stays the rules': its status, confidence and evidence are theirs. The answer
+leads *Analyse* (« Réponse — rédigée par Gemini 3.8 Flash à partir de
+l'analyse de LEKA »), and is the intention's summary. No model: the step is
+skipped, said (`no_model`).
 
 Every sentence is worded from its code and values (`lib/intention-analysis.ts`),
 a finding LEKA already concluded as Insights words it — the API's English
@@ -555,7 +576,10 @@ high; « Redémarre Billing API » awaiting a person's decision; a diagnosis
 no source can ground not analysed; a failing and a slow capability said,
 the others going on; nothing that ran failed, then analysed again; a late
 analysis superseded; queued when asked and asked again, the sweep running
-what waits; another workspace's 404. `web/lib/intention-analysis.test.ts`,
+what waits; another workspace's 404. `tests/test_intention_model.py`, Gemini
+scripted: words the rules cannot read, read by the model and analysed; a
+request to act staying the rules'; the answer written, a made-up citation
+dropped; an answer resting on nothing not kept. `web/lib/intention-analysis.test.ts`,
 `web/components/intentions/analysis-tab.test.tsx`;
 `e2e/intention-analysis.spec.ts`, on the demo: asked, analysed, followed,
 its evidence and history; a restart waiting for a person.
@@ -912,9 +936,8 @@ concluded short of it, failed.
 - **Findings presented for a decision, recommendations** (LEKA-389): the
   analysis's result (§ 12) is their input; its *Analyse* tab draws it
   without proposals.
-- **Agents** (`agents/*.md`) as capabilities: selected, said `no_model`
-  until the model gateway (LEKA-394).
-- **A model-assisted understanding** (LEKA-394): the same contract.
+- **Agents** (`agents/*.md`) as capabilities: run with their runtime
+  (LEKA-395).
 - **Metrics read from monitoring**: a metric is read in the model or from
   what the system that acted reported (§ 15); reading a monitoring source's
   series when verifying comes with metrics in the model.

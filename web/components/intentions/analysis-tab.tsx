@@ -13,6 +13,7 @@ import {
   RotateCw,
   ScanSearch,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
@@ -44,13 +45,17 @@ import {
 } from "@/lib/intention-analysis";
 import type { Finding } from "@/lib/insights";
 import type { IntentionDetail } from "@/lib/intentions/api";
+import type { components } from "@/lib/api-types";
 import {
   intentionKeys,
   useAnalyseAgain,
   useIntentionAnalyses,
   useIntentionAnalysis,
 } from "@/lib/intentions/queries";
+import { modelTitle } from "@/lib/models";
 import { notify } from "@/lib/notify";
+
+type AnalysisAnswer = components["schemas"]["AnalysisAnswer"];
 
 /**
  * An intention's analysis (LEKA-388), its tabs Analyse and Preuves.
@@ -362,7 +367,8 @@ export function SummarySaid({ intention, none }: { intention: IntentionDetail; n
     () => (data?.result ? intentionAnalysis(t, data, links).summary : null),
     [data, t, links],
   );
-  const summary = said ?? intention.summary;
+  // Written by a model from the analysis (LEKA-394), when one could.
+  const summary = data?.result?.answer?.text ?? said ?? intention.summary;
   return (
     <p
       className={
@@ -372,6 +378,44 @@ export function SummarySaid({ intention, none }: { intention: IntentionDetail; n
     >
       {summary ?? none}
     </p>
+  );
+}
+
+/** The analysis answered in words by a model (LEKA-394): what it says,
+ * each point and how much it rests on, who wrote it. */
+function AnswerCard({ answer }: { answer: AnalysisAnswer }) {
+  const t = useDictionary();
+  const w = t.intentions.analysis.answer;
+  return (
+    <Card
+      title={w.title}
+      icon={<Sparkles className="size-4 text-shell-nav-active" aria-hidden="true" />}
+    >
+      <div className="flex flex-col gap-2" data-testid="analysis-answer">
+        <p className="text-[0.9375rem] text-brand-navy">{answer.text}</p>
+        {answer.points.length ? (
+          <ul className="flex flex-col gap-1.5 text-[0.8125rem] text-brand-navy">
+            {answer.points.map((point) => (
+              <li key={point.text} className="flex flex-wrap items-baseline gap-2" data-testid="answer-point">
+                <span className="min-w-0 flex-1">{point.text}</span>
+                <Pill tone="neutral">{fill(w.rests, { count: String(point.cites.length) })}</Pill>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {answer.caveats.length ? (
+          <div className="text-[0.8125rem]">
+            <p className="font-semibold text-brand-navy">{w.caveats}</p>
+            <ul className="list-disc pl-5 text-shell-muted">
+              {answer.caveats.map((caveat) => (
+                <li key={caveat}>{caveat}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <p className="text-xs text-shell-muted">{fill(w.by, { model: modelTitle(answer.model) })}</p>
+      </div>
+    </Card>
   );
 }
 
@@ -425,6 +469,7 @@ export function AnalysisTab({ intention }: { intention: IntentionDetail }) {
         </>
       ) : data ? (
         <>
+          {data.result?.answer ? <AnswerCard answer={data.result.answer} /> : null}
           <StepsCard analysis={data} />
           {data.status === "running" ? (
             <AnalysisState status="running" />

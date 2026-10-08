@@ -45,12 +45,6 @@ def provide(name: str, provider: Provider) -> None:
     catalogue.cache_clear()
 
 
-def model_ready() -> bool:
-    """Whether an agent can be run by a model now. Not before the model
-    gateway (LEKA-394): an agent is registered, described, never run."""
-    return False
-
-
 def agent_definition(agent: Agent, lifecycle: Lifecycle) -> Definition:
     head = agent.front_matter
     return Definition(

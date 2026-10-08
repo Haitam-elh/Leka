@@ -1,0 +1,495 @@
+"""The model gateway (LEKA-394): the only place LEKA calls a language model
+(architecture rule 7) — for Intentions, Mon environnement, Capacités, the
+agents, the skills and the workflows alike.
+
+    a feature asks (Request) and says what it needs (Needs)
+      ──▶ routing.py: the models that can answer, in order
+      ──▶ each tried: a temporary failure tried again (LEKA_LLM_RETRIES),
+          then the next model — never more than three
+      ──▶ a structured answer read and checked against its model: one that
+          does not match is tried again, then the next model
+      ──▶ every attempt kept (model_calls): for what, about what, which
+          provider, model and version, its tokens, its estimated cost, how
+          long — or why it failed
+
+A workspace's model is its company's: its account, its contract, its data
+residency, and what it costs LEKA nothing. A failed one falls back to
+LEKA's, said in the record — unless the workspace said "ours only". One
+refusing its key is marked failed, for its admin to see. What no model can
+answer raises NoModelError: nothing is made up, and the caller says so or
+does without.
+
+A workspace's address (its Azure resource, its own endpoint) is reached
+through the connectors' transport — public https only, pinned against DNS
+rebinding — as any customer-given address is.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import re
+import uuid
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
+from typing import Any
+
+import httpx
+import structlog
+from pydantic import BaseModel, ValidationError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from leka.capabilities.gateway.contract import (
+    Call,
+    Completion,
+    Endpoint,
+    Message,
+    Output,
+    ProviderError,
+    Request,
+    Role,
+    Structured,
+    Tier,
+    ToolChoice,
+    provider,
+)
+from leka.capabilities.gateway.profiles import DEFAULTS
+from leka.capabilities.gateway.routing import Needs, Own, Passed, Route, Routing, fallbacks_of
+from leka.capabilities.gateway.routing import route as route_of
+from leka.capabilities.models import ModelCall, WorkspaceModel
+from leka.connectors import BlockedAddressError, PublicTransport
+from leka.core.config import settings
+from leka.platform import DecryptionError, secret_box
+
+logger = structlog.get_logger(__name__)
+
+TIMEOUTS = {Tier.FAST: 30.0, Tier.STANDARD: 90.0, Tier.DEEP: 300.0}
+# Models tried for one request, at most: past three, the failure is not
+# the model's.
+MOST_MODELS = 3
+LONGEST_WAIT = 10.0
+
+Sleep = Callable[[float], Awaitable[None]]
+ToolHandler = Callable[[Mapping[str, Any]], Awaitable[str]]
+
+
+class NoModelError(Exception):
+    """No model is configured that can do it, or none answered — said why."""
+
+    def __init__(
+        self,
+        message: str,
+        attempts: Sequence[Attempt] = (),
+        passed: Sequence[Passed] = (),
+    ) -> None:
+        super().__init__(message)
+        self.attempts = list(attempts)
+        self.passed = list(passed)
+
+
+class InvalidOutputError(Exception):
+    """A structured answer that does not match what was asked."""
+
+
+@dataclass(frozen=True)
+class Attempt:
+    provider: str
+    model: str
+    owner: str
+    route: str
+    attempt: int
+    error: str
+
+
+@dataclass(frozen=True)
+class Tested:
+    ok: bool
+    detail: str | None
+    latency_ms: int | None
+    model: str | None
+    version: str | None
+
+
+def leka_keys() -> dict[str, str | None]:
+    """The keys LEKA holds, by provider."""
+    keys = {
+        "google": settings.google_api_key,
+        "mistral": settings.mistral_api_key,
+        "anthropic": settings.anthropic_api_key,
+    }
+    return {name: key.get_secret_value() if key else None for name, key in keys.items()}
+
+
+def leka_default() -> tuple[str, str]:
+    """LEKA's default model: configured, never written where it is used."""
+    return settings.llm_provider, settings.llm_model
+
+
+def default_ready() -> bool:
+    """Whether LEKA's default model can be reached at all."""
+    return settings.llm_api_key is not None
+
+
+def own_of(row: WorkspaceModel) -> Own | None:
+    """A workspace's model as routing sees it — none when it is off, or its
+    key cannot be read."""
+    if not row.enabled:
+        return None
+    key: str | None = None
+    if row.key_ciphertext:
+        try:
+            key = secret_box.decrypt(row.key_ciphertext)
+        except DecryptionError:
+            logger.error("workspace_model_key_unreadable", workspace=str(row.workspace_id))
+            return None
+    model = row.model or DEFAULTS.get(row.provider)
+    if not model:
+        return None
+    endpoint = Endpoint(
+        provider=row.provider,
+        api_key=key,
+        base_url=row.base_url,
+        api_version=row.api_version,
+        owner="workspace",
+    )
+    return Own(endpoint, model, exclusive=row.exclusive)
+
+
+def json_of(text: str) -> str:
+    """The JSON in an answer — some models fence it all the same."""
+    fenced = re.fullmatch(r"\s*```(?:json)?\s*(.*?)\s*```\s*", text, re.DOTALL)
+    return fenced.group(1) if fenced else text.strip()
+
+
+class Gateway:
+    def __init__(
+        self,
+        session: AsyncSession,
+        workspace_id: uuid.UUID,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+        keys: dict[str, str | None] | None = None,
+        default: tuple[str, str] | None = None,
+        fallbacks: Sequence[tuple[str, str]] | None = None,
+        retries: int | None = None,
+        sleep: Sleep = asyncio.sleep,
+    ) -> None:
+        self._session = session
+        self._workspace_id = workspace_id
+        self._transport = transport
+        self._keys = keys if keys is not None else leka_keys()
+        self._default = default or leka_default()
+        self._fallbacks = (
+            list(fallbacks) if fallbacks is not None else fallbacks_of(settings.llm_fallbacks)
+        )
+        self._retries = max(0, settings.llm_retries if retries is None else retries)
+        self._sleep = sleep
+
+    # ── which model ─────────────────────────────────────────────────────────
+
+    async def setting(self) -> WorkspaceModel | None:
+        found: WorkspaceModel | None = await self._session.scalar(
+            select(WorkspaceModel).where(WorkspaceModel.workspace_id == self._workspace_id)
+        )
+        return found
+
+    async def routing(self, needs: Needs = Needs()) -> Routing:
+        row = await self.setting()
+        return route_of(
+            needs,
+            own=own_of(row) if row is not None else None,
+            keys=self._keys,
+            default=self._default,
+            fallbacks=self._fallbacks,
+        )
+
+    async def ready(self, needs: Needs = Needs()) -> bool:
+        """Whether a model can answer what is needed, here."""
+        return bool((await self.routing(needs)).routes)
+
+    def _client(self, endpoint: Endpoint, tier: Tier) -> httpx.AsyncClient:
+        transport = self._transport
+        if transport is None and endpoint.owner == "workspace":
+            # A customer-given address: public https only.
+            transport = PublicTransport()
+        return httpx.AsyncClient(transport=transport, timeout=TIMEOUTS[tier])
+
+    # ── asking ──────────────────────────────────────────────────────────────
+
+    async def complete(
+        self,
+        request: Request,
+        needs: Needs = Needs(),
+        *,
+        budget: float | None = None,
+        check: Callable[[Completion], None] | None = None,
+    ) -> Completion:
+        """The first model that answers what is asked — every attempt kept.
+        `budget`: seconds for all of it, after which NoModelError."""
+        if request.output is not None:
+            needs = replace(needs, structured=True)
+        if request.tools:
+            needs = replace(needs, tools=True)
+        routing = await self.routing(needs)
+        if not routing.routes:
+            reason = (
+                "No language model is configured."
+                if not any(self._keys.values()) and (await self.setting()) is None
+                else "No configured model can do what is asked."
+            )
+            raise NoModelError(reason, passed=routing.passed)
+        work = self._through(request, routing, check)
+        if budget is None:
+            return await work
+        try:
+            return await asyncio.wait_for(work, timeout=budget)
+        except TimeoutError as error:
+            await self._session.flush()
+            raise NoModelError("No answer in time.", passed=routing.passed) from error
+
+    async def _through(
+        self,
+        request: Request,
+        routing: Routing,
+        check: Callable[[Completion], None] | None,
+    ) -> Completion:
+        attempts: list[Attempt] = []
+        for route in routing.routes[:MOST_MODELS]:
+            done = await self._one(request, route, check, attempts)
+            if done is not None:
+                await self._session.flush()
+                return done
+        await self._session.flush()
+        raise NoModelError("No language model answered.", attempts, routing.passed)
+
+    async def _one(
+        self,
+        request: Request,
+        route: Route,
+        check: Callable[[Completion], None] | None,
+        attempts: list[Attempt],
+    ) -> Completion | None:
+        """One model, tried again while it says its failure is temporary."""
+        vendor = provider(route.endpoint.provider)
+        model = route.profile.model
+        if vendor is None:
+            attempts.append(self._attempt(route, 1, "unknown provider"))
+            return None
+        call = Call(
+            route.endpoint,
+            model,
+            request,
+            thinking=route.profile.thinking,
+            sends_temperature=route.profile.sends_temperature,
+        )
+        for attempt in range(1, self._retries + 2):
+            try:
+                async with self._client(route.endpoint, request.tier) as client:
+                    done = await vendor.complete(call, client)
+                if not done.text.strip() and not done.tool_calls:
+                    raise ProviderError("An empty answer.", retryable=True)
+            except (ProviderError, httpx.HTTPError) as raised:
+                error = _said(raised)
+                self._record(request, route, attempt, error=str(error), status="failed")
+                attempts.append(self._attempt(route, attempt, str(error)))
+                logger.warning(
+                    "model_call_failed",
+                    purpose=request.purpose,
+                    provider=route.endpoint.provider,
+                    model=model,
+                    owner=route.endpoint.owner,
+                    status=error.status,
+                    attempt=attempt,
+                )
+                if error.retryable and attempt <= self._retries:
+                    await self._sleep(min(error.retry_after or 2.0 ** (attempt - 1), LONGEST_WAIT))
+                    continue
+                if route.endpoint.owner == "workspace" and not error.retryable:
+                    await self._mark(failed=str(error))
+                return None
+            if check is not None:
+                try:
+                    check(done)
+                except InvalidOutputError as invalid:
+                    # Answered, and billed: kept with its tokens.
+                    self._record(
+                        request, route, attempt, done=done, error=str(invalid), status="invalid"
+                    )
+                    attempts.append(self._attempt(route, attempt, str(invalid)))
+                    if attempt <= self._retries:
+                        continue
+                    return None
+            self._record(request, route, attempt, done=done, status="ok")
+            return done
+        return None
+
+    @staticmethod
+    def _attempt(route: Route, attempt: int, error: str) -> Attempt:
+        return Attempt(
+            route.endpoint.provider,
+            route.profile.model,
+            route.endpoint.owner,
+            route.why,
+            attempt,
+            error,
+        )
+
+    async def structured[T: BaseModel](
+        self,
+        request: Request,
+        model: type[T],
+        needs: Needs = Needs(),
+        *,
+        budget: float | None = None,
+    ) -> Structured[T]:
+        """An answer in the shape of `model`, checked: one that does not
+        match is asked again, then of the next model."""
+        read: dict[str, T] = {}
+
+        def check(done: Completion) -> None:
+            try:
+                read["value"] = model.model_validate_json(json_of(done.text))
+            except ValidationError as error:
+                errors = error.errors()
+                where = ".".join(str(p) for p in errors[0]["loc"]) if errors else ""
+                said = errors[0]["msg"] if errors else "invalid"
+                raise InvalidOutputError(
+                    f"Not the shape asked ({where or 'answer'}: {said})."
+                ) from error
+
+        done = await self.complete(
+            replace(request, output=Output.of(model)), needs, budget=budget, check=check
+        )
+        return Structured(read["value"], done)
+
+    async def run_tools(
+        self,
+        request: Request,
+        handlers: Mapping[str, ToolHandler],
+        needs: Needs = Needs(),
+        *,
+        rounds: int = 6,
+    ) -> Completion:
+        """Asks, calls the tools the model asks for, gives it what they
+        returned, until it answers — `rounds` at most. A tool that fails
+        says so to the model; one it made up is said unknown."""
+        messages = list(request.messages)
+        asking = request
+        for _ in range(rounds):
+            done = await self.complete(replace(asking, messages=messages), needs)
+            if not done.tool_calls:
+                return done
+            messages.append(Message(Role.ASSISTANT, done.text, tool_calls=done.tool_calls))
+            for tool_call in done.tool_calls:
+                handler = handlers.get(tool_call.name)
+                if handler is None:
+                    result = json.dumps({"error": f"no tool named {tool_call.name}"})
+                else:
+                    try:
+                        result = await handler(tool_call.arguments)
+                    except Exception as error:
+                        logger.warning("model_tool_failed", tool=tool_call.name, exc_info=True)
+                        result = json.dumps({"error": type(error).__name__})
+                messages.append(
+                    Message(Role.TOOL, result, tool_call_id=tool_call.id, name=tool_call.name)
+                )
+            # Its first move may be forced; after it, it may answer.
+            asking = replace(request, tool_choice=ToolChoice.AUTO)
+        raise NoModelError(f"No answer after {rounds} rounds of tools.")
+
+    # ── keeping it ──────────────────────────────────────────────────────────
+
+    def _record(
+        self,
+        request: Request,
+        route: Route,
+        attempt: int,
+        *,
+        status: str,
+        done: Completion | None = None,
+        error: str | None = None,
+    ) -> None:
+        at = datetime.now(UTC)
+        usage = done.usage if done is not None else None
+        self._session.add(
+            ModelCall(
+                workspace_id=self._workspace_id,
+                id=uuid.uuid4(),
+                purpose=request.purpose[:100],
+                ref=request.ref[:100] if request.ref else None,
+                tier=request.tier.value,
+                provider=route.endpoint.provider,
+                model=route.profile.model[:120],
+                version=done.version[:120] if done is not None else None,
+                route=route.why,
+                attempt=attempt,
+                owner=route.endpoint.owner,
+                status=status,
+                error=error[:1000] if error else None,
+                tokens_in=usage.tokens_in if usage else 0,
+                tokens_out=usage.tokens_out if usage else 0,
+                tokens_thinking=usage.tokens_thinking if usage else 0,
+                tool_calls=len(done.tool_calls) if done is not None else 0,
+                cost_usd=(
+                    route.profile.cost(usage.tokens_in, usage.tokens_out, at) if usage else None
+                ),
+                latency_ms=done.latency_ms if done is not None else 0,
+                request_id=done.request_id[:200] if done is not None and done.request_id else None,
+                at=at,
+            )
+        )
+
+    async def _mark(self, *, failed: str | None) -> None:
+        row = await self.setting()
+        if row is None:
+            return
+        row.status = "failed" if failed else "ok"
+        row.status_detail = failed[:500] if failed else None
+        row.tested_at = datetime.now(UTC)
+
+    async def test(self) -> Tested:
+        """The workspace's own model, asked a few words: whether it
+        answered, why not, how fast. LEKA's is never tried in its place."""
+        row = await self.setting()
+        own = own_of(row) if row is not None else None
+        if own is None:
+            return Tested(
+                False, "No model of the workspace's own is set, or it is off.", None, None, None
+            )
+        routing = route_of(Needs(), own=replace(own, exclusive=True), keys={}, default=("", ""))
+        if not routing.routes:
+            return Tested(False, "This model cannot be used.", None, own.model, None)
+        request = Request(
+            purpose="model.test",
+            tier=Tier.FAST,
+            max_tokens=16,
+            messages=[Message.user("Reply with the word OK.")],
+        )
+        attempts: list[Attempt] = []
+        retries, self._retries = self._retries, 0
+        try:
+            done = await self._one(request, routing.routes[0], None, attempts)
+        finally:
+            self._retries = retries
+        if done is None:
+            detail = attempts[-1].error if attempts else "No answer."
+            await self._mark(failed=detail)
+            await self._session.flush()
+            return Tested(False, detail, None, own.model, None)
+        await self._mark(failed=None)
+        await self._session.flush()
+        return Tested(True, None, done.latency_ms, own.model, done.version)
+
+
+def _said(raised: Exception) -> ProviderError:
+    """A transport failure as a provider error: a refused address is not
+    temporary, a timeout or a dropped connection is."""
+    if isinstance(raised, ProviderError):
+        return raised
+    if isinstance(raised, BlockedAddressError):
+        return ProviderError(f"Refused address: {raised}", retryable=False)
+    if isinstance(raised, httpx.TimeoutException):
+        return ProviderError("No answer in time.", retryable=True)
+    return ProviderError(f"Unreachable: {type(raised).__name__}", retryable=True)

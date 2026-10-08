@@ -38,11 +38,15 @@ test.describe("Intention analysis", () => {
       "Analyse n° 1 · à la création",
     );
     const steps = page.getByTestId("analysis-step");
-    await expect(steps).toHaveCount(2);
+    await expect(steps).toHaveCount(3);
     await expect(steps.nth(0)).toHaveAttribute("data-name", "standing");
     await expect(steps.nth(1)).toHaveAttribute("data-name", "ownership");
     await expect(steps.nth(1)).toHaveAttribute("data-status", "succeeded");
     await expect(steps.nth(1)).toContainText("Responsabilités · pour son objectif");
+    // No model key in CI: the synthesis (LEKA-394) waits for one, said.
+    await expect(steps.nth(2)).toHaveAttribute("data-name", "synthesis");
+    await expect(steps.nth(2)).toHaveAttribute("data-status", "skipped");
+    await expect(steps.nth(2)).toContainText("aucun modèle ne peut la rédiger ici");
     // What it found, worded — no proposal.
     await expect(page.getByTestId("analysis-summary")).toContainText(
       "auth-service appartient à Thomas Berger.",

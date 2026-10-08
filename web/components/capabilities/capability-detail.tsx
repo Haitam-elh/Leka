@@ -17,6 +17,8 @@ import {
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 
+import { cn } from "cn";
+
 import {
   CATEGORY_ICON,
   CATEGORY_TONE,
@@ -218,13 +220,42 @@ export function CapabilityScreen() {
                   </li>
                 ))}
                 {data.model ? (
-                  <li className="flex items-center gap-2">
-                    <Sparkles className="size-4 text-state-warning" aria-hidden="true" />
+                  <li className="flex flex-wrap items-center gap-2" data-testid="capability-model">
+                    <Sparkles
+                      className={cn(
+                        "size-4",
+                        data.answering ? "text-state-success" : "text-state-warning",
+                      )}
+                      aria-hidden="true"
+                    />
                     <span className="text-brand-navy">{w.model}</span>
                     <span className="text-shell-muted">
                       {" · "}
-                      {data.reasons.some((r) => r.code === "no_model") ? w.modelWaiting : w.connected}
+                      {data.answering
+                        ? fill(w.modelChosen, {
+                            model: data.answering.title,
+                            owner: t.languageModel.owners[data.answering.owner],
+                          })
+                        : w.modelWaiting}
                     </span>
+                    {data.model_needs ? (
+                      <span className="w-full pl-6 text-xs text-shell-muted">
+                        {[
+                          data.model_needs.structured ? w.modelNeeds.structured : null,
+                          data.model_needs.tools ? w.modelNeeds.tools : null,
+                          data.model_needs.context
+                            ? fill(w.modelNeeds.context, {
+                                tokens: String(data.model_needs.context),
+                              })
+                            : null,
+                          (w.modelNeeds.quality as Record<string, string>)[
+                            String(data.model_needs.quality)
+                          ],
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    ) : null}
                   </li>
                 ) : null}
               </ul>

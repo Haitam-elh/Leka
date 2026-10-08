@@ -19,6 +19,8 @@ intention's context, one for each thing an intention may need answered.
     action          an action asked on systems: what it would reach, the
                     constraints it must hold to, the last deployment — and
                     that a person decides, never LEKA
+    synthesis       the analysis answered in words, by a language model,
+                    from what the others found (LEKA-394, writing.py)
 
 Each says what it found as facts — every one with the evidence it rests
 on — what it suspects as causes, what it reaches, what it does not know,
@@ -32,7 +34,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import timedelta
 
-from leka.capabilities import Contract, Definition, Kind, Lifecycle, provide
+from leka.capabilities import Contract, Definition, Kind, Lifecycle, ModelNeed, provide
 from leka.context import ContextElementRead
 from leka.intentions.analysis import (
     Capability,
@@ -48,6 +50,7 @@ from leka.intentions.analysis import (
     Subject,
     names,
 )
+from leka.intentions.writing import NEEDS as WRITING
 from leka.knowledge import EntityBrief, EntityType, IncidentDetail
 
 VERSION = 1
@@ -1073,6 +1076,17 @@ CAPABILITIES: Sequence[Capability] = (
         reads=frozenset({Part.UPSTREAM, Part.CHANGES}),
         run=action,
     ),
+    # Written by a language model, from what the ones above found
+    # (writing.py, LEKA-394): run after them, when a model can.
+    Capability(
+        "synthesis",
+        VERSION,
+        "The analysis answered in words, each point citing what it rests on — written by a "
+        "language model from what LEKA's rules found, and nothing else.",
+        goals=frozenset(),
+        method="model",
+        always=True,
+    ),
 )
 
 
@@ -1084,6 +1098,7 @@ def capability_named(name: str) -> Capability | None:
 
 # What each is about, what it is called, how people ask for it.
 CATALOGUE: dict[str, tuple[str, str, tuple[str, ...]]] = {
+    "synthesis": ("knowledge", "Synthesis", ("Pourquoi payment-api est lent depuis ce matin ?",)),
     "standing": ("knowledge", "Standing", ("Où en est Billing API ?",)),
     "ownership": ("knowledge", "Ownership", ("Qui est responsable de payment-api ?",)),
     "dependencies": ("architecture", "Dependencies", ("De quoi dépend Billing API ?",)),
@@ -1102,16 +1117,24 @@ def definitions() -> list[Definition]:
     found: list[Definition] = []
     for capability in CAPABILITIES:
         category, title, examples = CATALOGUE[capability.name]
+        written = capability.method == "model"
         found.append(
             Definition(
                 key=capability.name,
                 title=title,
                 summary=capability.summary,
                 category=category,
-                kind=Kind.RULES,
+                kind=Kind.MODEL if written else Kind.RULES,
                 version=f"{capability.version}.0.0",
                 lifecycle=Lifecycle.ACTIVE,
                 contract=Contract(output="analysis", formats=("json",)),
+                model=written,
+                # What it asks of the model that writes it: the router picks.
+                model_needs=(
+                    ModelNeed(structured=WRITING.structured, quality=WRITING.quality)
+                    if written
+                    else ModelNeed()
+                ),
                 permission="intention:create",
                 goals=capability.goals,
                 kinds=capability.kinds,

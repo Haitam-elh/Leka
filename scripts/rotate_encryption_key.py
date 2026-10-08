@@ -1,6 +1,7 @@
 """Re-encrypt every stored secret under the first key of LEKA_ENCRYPTION_KEYS:
 the sources' credentials, then the signing secrets of the systems a workspace
-authorized LEKA to act through (LEKA-391).
+authorized LEKA to act through (LEKA-391), then the keys of the workspaces'
+own language models (LEKA-394).
 
     api/.venv/bin/python scripts/rotate_encryption_key.py --dry-run
     api/.venv/bin/python scripts/rotate_encryption_key.py
@@ -17,7 +18,8 @@ Removing the old key before step 3 has finished leaves rows nobody can read.
 Skipping step 2 means the API keeps writing under the old key while this
 runs. Interrupting step 3 costs nothing: run it again. Why, and what happens
 to a credential saved meanwhile, is in leka/connectors/tasks.py (and
-leka/intentions/tasks.py for the signing secrets).
+leka/intentions/tasks.py for the signing secrets, leka/capabilities/tasks.py
+for the model keys).
 
 Unlike seed.py, this runs against production, by hand.
 
@@ -31,6 +33,7 @@ import argparse
 import asyncio
 import sys
 
+from leka.capabilities.tasks import rotate_model_keys
 from leka.connectors import RotationRefusedError, RotationReport, rotate_source_credentials
 from leka.core.config import settings
 from leka.core.logging import configure_logging
@@ -61,13 +64,15 @@ def main() -> int:
             rotate_source_credentials(secret_box, batch=batch, dry_run=dry_run)
         )
         signing = asyncio.run(rotate_endpoint_secrets(secret_box, batch=batch, dry_run=dry_run))
+        models = asyncio.run(rotate_model_keys(secret_box, batch=batch, dry_run=dry_run))
     except RotationRefusedError as refusal:
         print(f"refused: {refusal}", file=sys.stderr)
         return 2
 
     print(_said("credentials", credentials, dry_run=dry_run))
     print(_said("signing secrets", signing, dry_run=dry_run))
-    return 1 if credentials.unreadable or signing.unreadable else 0
+    print(_said("model keys", models, dry_run=dry_run))
+    return 1 if credentials.unreadable or signing.unreadable or models.unreadable else 0
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Brain, Info, PencilLine } from "lucide-react";
+import { AlertTriangle, Brain, Info, PencilLine, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 import { Card, entityHref } from "@/components/environment/parts";
@@ -11,6 +11,7 @@ import { exactDate } from "@/components/knowledge/time";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { IntentionDetail } from "@/lib/intentions/api";
+import { modelTitle } from "@/lib/models";
 
 /**
  * What LEKA understood of an intention (LEKA-385): a question or a request,
@@ -77,6 +78,18 @@ export function UnderstandingPanel({
                 <PencilLine className="size-3.5" aria-hidden="true" />
                 {w.clarify}
               </Link>
+            ) : null}
+          </div>
+        ) : null}
+
+        {understanding.restated ? (
+          <div data-testid="understanding-restated">
+            <p className="text-[0.875rem] text-brand-navy">« {understanding.restated} »</p>
+            {understanding.read_by?.method === "model" && understanding.read_by.model ? (
+              <p className="flex items-center gap-1.5 text-xs text-shell-muted">
+                <Sparkles className="size-3.5" aria-hidden="true" />
+                {fill(w.readBy, { model: modelTitle(understanding.read_by.model) })}
+              </p>
             ) : null}
           </div>
         ) : null}

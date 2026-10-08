@@ -18,8 +18,11 @@ from datetime import datetime
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
+    Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -105,3 +108,64 @@ class CapabilityFavourite(Base, WorkspaceScopedMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     key: Mapped[str] = mapped_column(String(100), nullable=False)
+
+
+class WorkspaceModel(Base, WorkspaceScopedMixin):
+    """A workspace's own language model (LEKA-394) — its Google, Mistral,
+    OpenAI, Anthropic account, or its company's Azure OpenAI — used before
+    LEKA's: its key encrypted (secret_box), never shown again; whether it
+    answered when last tested. `exclusive`: this model only, never LEKA's —
+    the company's data goes to its own contract or nowhere."""
+
+    __tablename__ = "workspace_models"
+    __table_args__ = (UniqueConstraint("workspace_id", name="uq_workspace_models_workspace"),)
+
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    # The model, or the Azure deployment; none: the provider's default.
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    api_version: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    key_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    key_hint: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    exclusive: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # untested, ok, failed
+    status: Mapped[str] = mapped_column(String(10), nullable=False, server_default="untested")
+    status_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    changed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ModelCall(Base, WorkspaceScopedMixin):
+    """One call to a language model: for what, about what, to whom — the
+    provider, the model, the version it said — what it cost, how long; or
+    why it failed. What answers « why did LEKA say that? » and « what does
+    it spend? »."""
+
+    __tablename__ = "model_calls"
+    __table_args__ = (Index("ix_model_calls_workspace_at", "workspace_id", "at"),)
+
+    purpose: Mapped[str] = mapped_column(String(100), nullable=False)
+    ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    tier: Mapped[str] = mapped_column(String(10), nullable=False)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    model: Mapped[str] = mapped_column(String(120), nullable=False)
+    version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # own, default, fallback, alternative — and which try of it.
+    route: Mapped[str] = mapped_column(String(12), nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    # The workspace's own model, or LEKA's.
+    owner: Mapped[str] = mapped_column(String(10), nullable=False)
+    status: Mapped[str] = mapped_column(String(10), nullable=False)  # ok, failed, invalid
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tokens_in: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    tokens_out: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    tokens_thinking: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    tool_calls: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    request_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
