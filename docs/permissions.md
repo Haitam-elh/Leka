@@ -71,7 +71,9 @@ queries — and it never shows the system's own runs, which belong to no workspa
 **`intention:approve` decides what intentions ask to do** (LEKA-390): approve, reject,
 modify, ask for changes. The workspace's approval policy may want more than one person for a
 risky action, and not the person who asked ([intentions.md](intentions.md) § 13); changing
-that policy takes `workspace:update`.
+that policy takes `workspace:update`. Carrying out what was approved — planning, starting,
+scheduling, stopping a run, confirming a person's step — takes `intention:approve`; the
+systems LEKA may act through are authorized with `workspace:update` (LEKA-391).
 
 **`context:manage` is admin and above.** A member makes contexts, makes them again,
 widens and narrows them, and archives or stops following the ones they made. Archiving
