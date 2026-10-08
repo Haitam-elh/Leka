@@ -1,7 +1,7 @@
 "use client";
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page";
+import { BillingScreen } from "@/components/billing/billing-page";
 
 export default function Page() {
-  return <PlaceholderPage />;
+  return <BillingScreen />;
 }

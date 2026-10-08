@@ -8,6 +8,7 @@ import { environment, isEntityId } from "@/lib/environment";
 export const environmentKeys = {
   all: ["environment"] as const,
   sheet: (id: string) => [...environmentKeys.all, "sheet", id] as const,
+  activity: (id: string, days: number) => [...environmentKeys.all, "activity", id, days] as const,
 };
 
 export function useEnvironment() {
@@ -19,6 +20,16 @@ export function useEntitySheet(id: string) {
   return useQuery({
     queryKey: environmentKeys.sheet(id),
     queryFn: () => environment.sheet(id),
+    enabled: isEntityId(id),
+  });
+}
+
+/** Everything that moved around an entity over `days` (its tabs Métriques,
+ * Déploiements, Logs). */
+export function useEntityActivity(id: string, days: number) {
+  return useQuery({
+    queryKey: environmentKeys.activity(id, days),
+    queryFn: () => environment.activity(id, days),
     enabled: isEntityId(id),
   });
 }

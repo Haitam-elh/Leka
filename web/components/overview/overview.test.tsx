@@ -4,8 +4,10 @@
  * What these protect is the decision of 2026-09-25 — real data, or an
  * honest empty state, never the mockup's numbers. The mockup's "98 %",
  * "47 / 48 services" and "3 incidents" must not reach a customer; the
- * sources LEKA actually reads must — and what LEKA proposes, waiting on
- * someone, is listed where the mockup says "À valider" (LEKA-380).
+ * sources LEKA actually reads must — the environment's services, its
+ * attention points and open incidents, as enrichment made them; this
+ * week's events and the open contradictions — and what LEKA proposes,
+ * waiting on someone, is listed where the mockup says "À valider" (LEKA-380).
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -27,6 +29,16 @@ vi.mock("@/lib/enrichment", async (original) => ({
 vi.mock("@/lib/conflicts", async (original) => ({
   ...(await original<typeof import("@/lib/conflicts")>()),
   conflicts: { list: async () => ({ data: [], next_cursor: null }) },
+}));
+
+const environment = vi.hoisted(() => ({ get: vi.fn() }));
+vi.mock("@/lib/environment", async (original) => ({
+  ...(await original<typeof import("@/lib/environment")>()),
+  environment,
+}));
+vi.mock("@/lib/activity", async (original) => ({
+  ...(await original<typeof import("@/lib/activity")>()),
+  activity: { read: async () => ({ stats: { events: { value: 42, previous: 30 } } }) },
 }));
 
 vi.mock("@/lib/sources", async (original) => ({
@@ -149,6 +161,16 @@ function candidate(overrides: Partial<Candidate>): Candidate {
 }
 
 beforeEach(() => {
+  environment.get.mockReset().mockResolvedValue({
+    services: 4,
+    services_operational: 3,
+    incidents_open: 1,
+    services_impacted: 1,
+    attention: [
+      { kind: "open_incident", level: "high", count: 1, entity: null, detail: "Billing API" },
+      { kind: "unmonitored_services", level: "info", count: 2, entity: null, detail: null },
+    ],
+  });
   proposed.mockReset().mockResolvedValue({ data: [], next_cursor: null });
   list.mockReset().mockResolvedValue({ data: [BACKEND, RUNBOOKS, PLATFORM] });
   events.mockReset().mockImplementation(async (id: string) => ({
@@ -229,9 +251,34 @@ describe("the overview", () => {
     for (const mocked of ["98 %", "47 / 48 services", "Payment API", "Rollback", "Confiance élevée"]) {
       expect(screen.queryByText(new RegExp(mocked))).not.toBeInTheDocument();
     }
-    // Service health and incidents are not measured: said, not invented.
-    expect(screen.getAllByText("Aucune supervision connectée")).toHaveLength(3);
     expect(screen.getByText("Rien à valider pour le moment.")).toBeVisible();
+  });
+
+  it("says the environment's state as enrichment made it", async () => {
+    mount();
+    expect(await screen.findByTestId("kpi-services")).toHaveTextContent("3");
+    const [services, attention, incidents] = screen.getAllByTestId("kpi-tile");
+    expect(services).toHaveTextContent("sur 4 service(s) · 2 sans supervision, état déduit");
+    expect(within(attention).getByTestId("kpi-attention")).toHaveTextContent("3");
+    expect(within(incidents).getByTestId("kpi-incidents")).toHaveTextContent("1");
+    expect(incidents).toHaveTextContent("1 service(s) touché(s)");
+    // This week's events, and no open contradiction.
+    expect(await screen.findByText("42")).toBeVisible();
+  });
+
+  it("says a workspace with no service, and nothing open", async () => {
+    environment.get.mockResolvedValue({
+      services: 0,
+      services_operational: 0,
+      incidents_open: 0,
+      services_impacted: 0,
+      attention: [],
+    });
+    mount();
+    const [services, attention, incidents] = await screen.findAllByTestId("kpi-tile");
+    expect(services).toHaveTextContent("Aucun service déclaré par vos sources");
+    expect(attention).toHaveTextContent("Rien à signaler");
+    expect(incidents).toHaveTextContent("Aucun incident ouvert");
   });
 
   it("says so when the sources cannot be read", async () => {
