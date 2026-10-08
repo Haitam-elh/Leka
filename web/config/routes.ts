@@ -186,8 +186,8 @@ export const ROUTES: readonly RouteEntry[] = [
     labelKey: "capabilities",
     requiredPermission: "workspace:read",
     views: CAPABILITY_VIEWS,
-    // The catalogue is LEKA-393 and after. Shown, labelled, and honest.
-    availability: "soon",
+    // The catalogue (LEKA-393): what LEKA can do, and whether it can here.
+    availability: "available",
   },
   {
     id: "capability-detail",
@@ -195,7 +195,7 @@ export const ROUTES: readonly RouteEntry[] = [
     labelKey: "capabilityDetail",
     parentId: "capabilities",
     requiredPermission: "workspace:read",
-    availability: "soon",
+    availability: "available",
   },
   {
     id: "sources",

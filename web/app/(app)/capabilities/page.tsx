@@ -1,7 +1,7 @@
 "use client";
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page";
+import { CatalogueScreen } from "@/components/capabilities/catalogue";
 
 export default function Page() {
-  return <PlaceholderPage />;
+  return <CatalogueScreen />;
 }
