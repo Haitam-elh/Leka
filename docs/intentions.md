@@ -8,7 +8,8 @@ concluded, who approved, what ran.
 
 This is the frame of the Intentions epic. LEKA-384 keeps the intention, its
 lifecycle, its history and its links; LEKA-385 understands it (§ 9), LEKA-386 scopes it (§ 10), LEKA-387 grounds it in its context (§ 11), LEKA-388 analyses it (§ 12),
-LEKA-390 puts what it asks to do to people's decision (§ 13); 389 concludes; 391 acts; 392 verifies — each moving it along
+LEKA-390 puts what it asks to do to people's decision (§ 13), LEKA-391 carries it out (§ 14);
+389 concludes; 392 verifies — each moving it along
 this lifecycle and linking what it makes.
 
 Code: `api/leka/intentions/` — `lifecycle.py` (the states and moves, pure),
@@ -149,6 +150,8 @@ context, a finding or an entity — what LEKA was asked about a service.
 | the same on **another's** intention | its asker, or who may approve (`intention:approve`) — else 403 |
 | approve, reject, modify, ask for changes | who may approve (`intention:approve`) — and not the asker when the policy keeps them apart (§ 13) |
 | change the approval policy | `workspace:update` (§ 13) |
+| plan, start, schedule, stop a run; confirm a person's step | `intention:approve` (§ 14) |
+| authorize a system LEKA acts through | `workspace:update` (§ 14) |
 
 Another workspace's intention is 404: the workspace is the session's
 (architecture rule 3).
@@ -168,6 +171,7 @@ Another workspace's intention is 404: the workspace is the session's
 | `POST /intentions/{id}/links` `{kind, ref_id}` · `DELETE …/links/{link_id}` | context, finding, entity |
 | `GET /intentions/{id}/analysis` · `/analyses` · `POST …/analyse` | its analysis, the latest and every one; analysed again (§ 12) |
 | `GET /intentions/{id}/decisions` · `POST …/decision/{verdict}` | its decisions; a vote (§ 13) — and `GET /decisions`, `/decisions/summary`, `GET` · `PUT /decisions/policy` |
+| `GET /intentions/{id}/plans` · `POST …/plan`, `/plan/start`, `/plan/cancel`, `/plan/steps/{step_id}/report` | carrying it out (§ 14) — and `/action-endpoints` |
 
 **In code**, for the tickets that move it: `IntentionService.move(id, to,
 actor=…, by=…, reason=…, detail=…, summary=…)` and `link(id, kind, ref_id,
@@ -653,7 +657,137 @@ another workspace. Web: `approvals-page.test.tsx` (the decisions in À
 valider), `intention-decision.test.tsx`; e2e `intention-decisions.spec.ts`,
 on the demo: approved in À valider, refused from the intention's page.
 
-## 14. Tested
+## 14. Carrying it out (LEKA-391)
+
+What an approved decision becomes: a plan, checked before it runs, each
+action run by a system the workspace authorized — or by a person — what
+came of each kept, said as it is, the intention moved as it goes. Code:
+`api/leka/intentions/execution.py` (pure: the plan, the checks, windows
+and deadlines, the signature, what an answer means), `actions.py`
+(`EndpointService`, `ActionService`, the job and the sweep), the routes in
+`api/leka/api/actions.py`.
+
+**Authorized systems** (`action_endpoints`). LEKA holds no write access to
+a customer's systems: it calls only the endpoints an admin registered
+(`workspace:update`) — their own automation, a CI job, a runbook — each
+saying which actions (LEKA-385's codes, or `*`), in which environments (or
+`*`), and optionally on which things it accepts. https, a public address:
+refused at once otherwise, and refused again when called — the call goes
+through the connectors' transport (`connectors/network.py`: public
+addresses only, pinned against DNS rebinding). Its signing secret is made by
+LEKA, shown once, kept encrypted (`secret_box`) — and re-encrypted with the
+sources' credentials when the key rotates (`intentions/tasks.py`,
+`scripts/rotate_encryption_key.py`, the runbook). Paramètres → *Actions
+autorisées*.
+
+**The plan** — `POST /intentions/{id}/plan`, `intention:approve`, on an
+intention `approved` (or `failed`: a retry):
+
+| | |
+| --- | --- |
+| its steps | one per action the decision approved — of what did not succeed, on a retry — each run by the first endpoint authorized for that action, environment and target, else by a person (`manual`) |
+| when | now, or at a moment chosen; asked in a window (« cette nuit », « hors heures ouvrées », « ce week-end », LEKA-386), its next opening is suggested (`suggested_for`), in the plan's time zone |
+| linked | to the intention (`intention_links`, kind `action`) |
+
+**Checked before anything runs** — when started, again when a scheduled
+plan's time comes, and again before each system is called; each check
+kept with the plan (`checks`), one failing and nothing runs (409, the
+failing ones in `details`):
+
+| Check | |
+| --- | --- |
+| `decision_approved` | the decision still approved, at the plan's revision |
+| `approvers_allowed` | enough of its approvers may still approve (their role today) |
+| `endpoint_allows` | the endpoint still enabled, still authorizing that action there |
+| `targets_present` | the thing acted on still in the company model (not removed, not archived) |
+| `in_window` · `before_deadline` | inside the window asked; before the deadline (the end of its day) |
+
+**Running** — `POST …/plan/start {scheduled_for?, timezone}`: the intention
+`executing` (or `scheduled`; the sweep `intention-plans-due`, every five
+minutes, starts what is due). Step by step:
+
+- **a person's step** waits (`awaiting`) for who may approve to say it is
+  done or failed — `POST …/plan/steps/{step_id}/report {outcome, note,
+  link?}`, the note required, the link http(s) only;
+- **a system's step** is called by the job (`leka.intentions.actions.run_plan`),
+  once the route has committed: `POST` to its URL, signed. What it
+  answered decides, never assumed:
+
+  | Answer | The step |
+  | --- | --- |
+  | 2xx, or `{"status": "succeeded"}` | succeeded |
+  | 202, or `{"status": "accepted"}` | awaiting a person's confirmation — accepted is not done |
+  | `{"status": "failed"}`, anything but 2xx | failed (`reported_failed`, `http_<code>`) |
+  | no answer within 20 s | failed (`no_answer`: it may have acted — a person checks) |
+  | a private address | failed (`blocked_address`) |
+
+All succeeded: the plan `succeeded`, the intention `verifying` (LEKA-392
+verifies). One failed: the steps after it not run (`skipped`), the plan
+`failed`, the intention `failed` — planned again, a new plan of what did not
+succeed. A step is never said done that was not.
+
+**Stopping** — `POST …/plan/cancel {reason}`: planned or scheduled, the plan
+cancelled and the intention `approved` again; running, what has not
+started is cancelled — what is running ends and is said — the intention
+`failed`.
+
+**The call**, for who builds an endpoint:
+
+```
+POST <url>
+Content-Type: application/json
+X-Leka-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>" with the secret>
+X-Leka-Delivery: <step id>   (one per step: an endpoint may refuse one it already ran)
+
+{"event": "leka.action", "delivery": "<step id>", "workspace": "…",
+ "intention": {"id", "title"}, "decision": {"id", "revision"},
+ "plan": {"id", "number"}, "action": "restart",
+ "targets": [{"id", "name", "type"}], "environment": "production",
+ "constraints": [{"kind": "no_downtime", "value": true}], "requested_at": "…"}
+```
+
+Recompute the signature over the raw body, compare in constant time,
+refuse a `t` older than five minutes (`execution.verify` does it). Answer
+`{"status": "succeeded" | "accepted" | "failed", "detail"?, "ref"?}`.
+
+**Evidence kept**: each step's `evidence` — what was sent (the URL, the
+payload, its SHA-256, when signed), what answered (status, duration, the
+first 2 000 characters), the outcome and its reference, a person's note and
+link — and every event of the plan (`intention_plan_events`: planned,
+checks failed, scheduled, started, a step started, awaiting, succeeded,
+failed, cancel requested, cancelled), who, when, append-only — the
+database refuses to change one.
+
+**The API**: `GET /intentions/{id}/plans` — every plan, the latest first,
+with its steps, checks and events; `GET /action-endpoints`
+(`intention:read`), `POST` · `PATCH` · `DELETE` (`workspace:update`).
+
+**In the app** — the intention's tab *Actions* (mockup 06): *Préparer
+l'exécution*; the plan — each action, who runs it (an authorized system,
+signed; or a person), the window asked and its next opening; *Lancer
+maintenant* (asked first, what it runs said) or *Planifier*; the checks,
+passed or not; each action's progress — Préparation, Exécution,
+Vérification (LEKA-392), Finalisation — its evidence; *Marquer comme fait* /
+*Signaler un échec* with what shows it; *Interrompre l'exécution* (why);
+*Relancer ce qui n'a pas réussi*; the *Journal d'exécution*. Read again
+every 4 s while it runs. Anyone else follows it.
+
+**Tested** — `tests/test_intention_execution.py`, pure: what an endpoint
+is authorized for; a step to a system or a person; windows in a time zone
+and their next opening; a deadline; every check, one failing; the signature
+made and verified — tampered, another secret, too old refused; an answer
+taken as it is. `tests/test_intention_actions_api.py`, on Acme's model with
+a stand-in system behind the real transport: a person's step confirmed,
+the intention verifying; a system called signed, its answer kept; accepted
+waiting for a person; a 500 failing it, retried; no answer, a private
+address; an endpoint disabled since, an approver demoted — refused; scheduled
+and run by the sweep; cancelled before and while running; admins'
+systems, a link that is not http(s) refused, the log append-only, another
+workspace. Web: `actions-tab.test.tsx`, `action-endpoints.test.tsx`; e2e
+`intention-actions.spec.ts`, on the demo: prepared, run, a person's step
+confirmed; scheduled and called off.
+
+## 15. Tested
 
 - `tests/test_intention_lifecycle.py`, pure: the way from asking to
   verified, each step's actor; a decision a person's, never LEKA's; what
@@ -682,8 +816,10 @@ on the demo: approved in À valider, refused from the intention's page.
 - **Agents** (`agents/*.md`) as capabilities: selected, said `no_model`
   until the model gateway (LEKA-394).
 - **A model-assisted understanding** (LEKA-394): the same contract.
-- **Actions, outcomes** (LEKA-391, 392): what runs once approved, and what
-  came of it; a decision says what is approved (§ 13).
+- **Outcomes** (LEKA-392): verifying what was done; a plan says what ran
+  and what shows it (§ 14).
+- **A system's own report**: an endpoint that accepted the work (202) is
+  confirmed by a person today; a signed callback can say it instead.
 - **The approval policy's screen**: set through the API (§ 13); its place
   in Sécurité & gouvernance comes with its settings.
 - **Mes intentions**' impact and sources columns (mockup 07): from the

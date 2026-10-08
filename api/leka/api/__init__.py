@@ -11,6 +11,7 @@ They hold no business logic and no database queries.
 from fastapi import APIRouter
 
 from leka.api import (
+    actions,
     background,
     capabilities,
     connectors,
@@ -57,5 +58,7 @@ api_router.include_router(capabilities.router)
 api_router.include_router(intentions.router)
 # What people decide on what intentions ask to do (LEKA-390).
 api_router.include_router(decisions.router)
+# What was approved, carried out through the systems authorized (LEKA-391).
+api_router.include_router(actions.router)
 
 __all__ = ["api_router"]

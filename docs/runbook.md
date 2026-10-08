@@ -449,8 +449,10 @@ each should be rotated, is in `docs/configuration.md`.
 
 ### LEKA_ENCRYPTION_KEYS — five steps, and the order is the procedure
 
-These keys encrypt customers' credentials at rest. Rotating them means
-re-encrypting rows, and getting the order wrong makes data unreadable.
+These keys encrypt customers' credentials at rest — and the signing
+secrets of the systems a workspace authorized LEKA to act through
+(LEKA-391). Rotating them means re-encrypting rows, and getting the order
+wrong makes data unreadable. The script below does both, and reports each.
 
 ```bash
 # 1. Generate the new key

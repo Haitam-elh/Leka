@@ -68,6 +68,7 @@ from leka.connectors.models import (
     SourceStatus,
     SyncStatus,
 )
+from leka.connectors.network import BlockedAddressError, PublicHttpsUrl, PublicTransport
 from leka.connectors.receiving import Received, Receiver, Refusal, RefusedDeliveryError
 from leka.connectors.registry import (
     UnknownConnectorError,
@@ -125,6 +126,7 @@ from leka.connectors.tasks import (
 __all__ = [
     "ROTATED_COLUMNS",
     "ActivationRefusedError",
+    "BlockedAddressError",
     "Capability",
     "CatalogEntry",
     "ConnectionTestResult",
@@ -148,6 +150,8 @@ __all__ = [
     "LifecycleEvent",
     "Mapping",
     "NoScopeError",
+    "PublicHttpsUrl",
+    "PublicTransport",
     "RawRecord",
     "Received",
     "Receiver",

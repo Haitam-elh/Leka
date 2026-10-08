@@ -487,9 +487,4 @@ describe("an intention's page", () => {
     );
   });
 
-  it("asks the actions tab to wait for the decision and its execution", async () => {
-    route.pathname = `/intentions/${ID}/actions`;
-    show(<IntentionScreen />);
-    expect(await screen.findByText(/arrivera avec la décision et l'exécution/)).toBeInTheDocument();
-  });
 });

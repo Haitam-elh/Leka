@@ -31,6 +31,9 @@ from leka.connectors import (
     rotate_source_credentials,
 )
 from leka.db import Base, session_factory, system_scope
+from leka.intentions import ActionEndpoint
+from leka.intentions.tasks import ROTATED_COLUMNS as ENDPOINT_SECRETS
+from leka.intentions.tasks import rotate_endpoint_secrets
 from leka.platform import DecryptionError, SecretBox, Workspace
 
 pytestmark = pytest.mark.integration
@@ -280,8 +283,9 @@ def test_every_encrypted_column_is_rotated() -> None:
     assert NOT_ENCRYPTED.keys() <= binary, sorted(NOT_ENCRYPTED.keys() - binary)
     encrypted = binary - NOT_ENCRYPTED.keys()
     assert encrypted, "no encrypted column found at all: are the models imported?"
-    assert encrypted <= ROTATED_COLUMNS, (
-        f"encrypted but never rotated: {sorted(encrypted - ROTATED_COLUMNS)}. "
+    rotated = ROTATED_COLUMNS | ENDPOINT_SECRETS
+    assert encrypted <= rotated, (
+        f"encrypted but never rotated: {sorted(encrypted - rotated)}. "
         "Rotate it in its module's tasks.py and call that from "
         "scripts/rotate_encryption_key.py."
     )
@@ -305,3 +309,49 @@ async def test_a_rotated_credential_records_the_key_that_wrote_it(
                 ).scalars()
             )
     assert versions == {ROTATING.key_version}
+
+
+async def test_the_signing_secrets_of_authorized_systems_are_rotated_too() -> None:
+    """LEKA-391's endpoints hold a secret under the same key: rotated with
+    the credentials, by the same rules — counted in a dry run, rewritten,
+    then already current."""
+    old = SecretBox((OLD,))
+    with system_scope():
+        async with session_factory() as session:
+            workspace = Workspace(name="gamma", slug=f"gamma-{uuid.uuid4().hex[:10]}")
+            session.add(workspace)
+            await session.flush()
+            endpoint = ActionEndpoint(
+                workspace_id=workspace.id,
+                id=uuid.uuid4(),
+                name="Ops runbooks",
+                url="https://ops.example.com/leka",
+                secret_ciphertext=old.encrypt("lks_secret"),
+                actions=["restart"],
+                environments=["production"],
+                targets=[],
+            )
+            session.add(endpoint)
+            await session.commit()
+            workspace_id, endpoint_id = workspace.id, endpoint.id
+    try:
+        dry = await rotate_endpoint_secrets(ROTATING, dry_run=True)
+        assert (dry.rotated, dry.unreadable) >= (1, 0)
+        await rotate_endpoint_secrets(ROTATING)
+        with system_scope():
+            async with session_factory() as session:
+                stored = await session.scalar(
+                    select(ActionEndpoint.secret_ciphertext).where(ActionEndpoint.id == endpoint_id)
+                )
+        assert stored is not None
+        # Read by the new key alone: the old one can go.
+        assert SecretBox((NEW,)).decrypt(stored) == "lks_secret"
+        again = await rotate_endpoint_secrets(ROTATING)
+        assert again.rotated == 0
+    finally:
+        with system_scope():
+            async with session_factory() as session:
+                leftover = await session.get(Workspace, workspace_id)
+                if leftover is not None:
+                    await session.delete(leftover)
+                await session.commit()

@@ -4,6 +4,7 @@ import { Archive, ArchiveRestore, History, Link2, SearchX, XCircle } from "lucid
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 
+import { ActionsTab } from "@/components/actions/actions-tab";
 import { IntentionDecision } from "@/components/decisions/intention-decision";
 import { Card, entityHref } from "@/components/environment/parts";
 import { AnalysisTab, EvidenceTab, SummarySaid } from "@/components/intentions/analysis-tab";
@@ -39,8 +40,8 @@ import { notify } from "@/lib/notify";
  * is linked to, and — tab Historique — everything that happened to it, as
  * its history keeps it (GET /intentions/{id}/history): who, LEKA or a
  * person, when, from where to where, why. Tabs Analyse and Preuves: its
- * analysis, how it went and on what (LEKA-388). Actions comes with the
- * decision and its execution (LEKA-390, 391) and says so.
+ * analysis, how it went and on what (LEKA-388). Actions: what its approved
+ * decision became, how it runs, its evidence (LEKA-391).
  *
  * Its asker, or who may approve, cancels it while it can be, archives it
  * once done with, restores it. Nothing is shown that the API did not say.
@@ -88,6 +89,8 @@ export function IntentionScreen() {
     body = <AnalysisTab intention={data} />;
   } else if (tab === "evidence") {
     body = <EvidenceTab intention={data} />;
+  } else if (tab === "actions") {
+    body = <ActionsTab intention={data} />;
   } else if (tab === "overview") {
     body = <Overview intention={data} />;
   } else {

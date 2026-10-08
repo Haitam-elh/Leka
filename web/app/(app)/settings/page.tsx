@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
+import { ActionEndpoints } from "@/components/settings/action-endpoints";
 import { WorkspaceGeneralForm } from "@/components/settings/workspace-general-form";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -15,7 +16,11 @@ function Settings() {
   return (
     <PageContainer>
       <PageHeader title={t.nav.settings} subtitle={t.settings.generalTitle} />
-      <WorkspaceGeneralForm failOnce={failOnce} />
+      <div className="flex flex-col gap-6">
+        <WorkspaceGeneralForm failOnce={failOnce} />
+        {/* The systems LEKA may act through (LEKA-391). */}
+        <ActionEndpoints />
+      </div>
     </PageContainer>
   );
 }
