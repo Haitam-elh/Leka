@@ -64,7 +64,9 @@ from leka.intentions.analysis import (
 from leka.intentions.analysis import (
     select as choose,
 )
+from leka.intentions.approval import DecisionService
 from leka.intentions.capabilities import CAPABILITIES
+from leka.intentions.decisions import Target
 from leka.intentions.grounding import side
 from leka.intentions.lifecycle import Actor
 from leka.intentions.lifecycle import IntentionStatus as S
@@ -686,6 +688,8 @@ async def _finish(
                 summary=summary,
                 now=moment,
             )
+            if asked.acting:
+                await _decide(session, workspace_id, service, intention, asked, row, result, moment)
         await session.commit()
     logger.info(
         "intention_analysed",
@@ -695,3 +699,44 @@ async def _finish(
         causes=len(result.causes),
     )
     return {"status": result.status, "analysis": str(analysis_id)}
+
+
+async def _decide(
+    session: AsyncSession,
+    workspace_id: uuid.UUID,
+    service: IntentionService,
+    intention: Intention,
+    asked: Asked,
+    row: IntentionAnalysis,
+    result: Result,
+    moment: datetime,
+) -> None:
+    """What it asks to do, put to a person's decision (LEKA-390) — linked to
+    it, so its history says so."""
+    opened = await DecisionService(session, workspace_id).open(
+        intention,
+        actions=asked.actions,
+        targets=[Target(s.id, s.name, s.type) for s in asked.subjects],
+        environment=asked.environment,
+        constraints=asked.constraints,
+        analysis_id=row.id,
+        context_version=row.context_version,
+        analysis_risk=result.risk,
+        now=moment,
+    )
+    if opened is None:
+        return
+    decision = opened.decision
+    await service.link(
+        intention.id,
+        "decision",
+        decision.id,
+        actor=Actor.SYSTEM,
+        label=f"#{decision.number}",
+        detail={
+            "risk": decision.risk,
+            "required_approvals": decision.required_approvals,
+            "actions": [p["action"] for p in decision.proposals],
+        },
+        now=moment,
+    )

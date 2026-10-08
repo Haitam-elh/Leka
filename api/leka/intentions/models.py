@@ -28,6 +28,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -222,3 +223,99 @@ class IntentionAnalysis(Base, WorkspaceScopedMixin):
     # error's type.
     error: Mapped[str | None] = mapped_column(String(200), nullable=True)
     detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+DECISION_STATUSES = (
+    "proposed",
+    "approved",
+    "rejected",
+    "changes_requested",
+    "superseded",
+)
+VERDICTS = ("approve", "reject", "modify", "request_changes")
+RISK_LEVELS = ("low", "medium", "high")
+
+
+class IntentionDecision(Base, WorkspaceScopedMixin):
+    """A person's decision on what an intention asks to do (LEKA-390): the
+    actions proposed, how risky, how many must approve under the policy in
+    force, and where it stands. One per proposal: analysed again, a new one
+    is opened and the earlier superseded."""
+
+    __tablename__ = "intention_decisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "intention_id"],
+            ["intentions.workspace_id", "intentions.id"],
+            ondelete="CASCADE",
+            name="fk_intention_decisions_intention",
+        ),
+        # Target for the composite foreign key of its votes.
+        UniqueConstraint("workspace_id", "id", name="uq_intention_decisions_workspace_id_id"),
+        UniqueConstraint("intention_id", "number", name="uq_intention_decisions_number"),
+        CheckConstraint(_in("status", DECISION_STATUSES), name="status"),
+        CheckConstraint(_in("risk", RISK_LEVELS), name="risk"),
+        CheckConstraint("required_approvals BETWEEN 1 AND 5", name="required_approvals"),
+        Index("ix_intention_decisions_intention", "intention_id", "number"),
+        Index("ix_intention_decisions_queue", "workspace_id", "status", "created_at"),
+    )
+
+    intention_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # Its place among the intention's decisions: 1, 2, 3…
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    # The analysis that proposed it — no foreign key: the decision must say
+    # what it rested on.
+    analysis_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    context_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Who asked: the intention's asker, kept for the four-eyes rule.
+    asked_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # The analysis's risk, and the one decided at — raised in production.
+    analysis_risk: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    risk: Mapped[str] = mapped_column(String(10), nullable=False)
+    # Modified: 2, 3… — the approvals of an earlier revision do not count.
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    required_approvals: Mapped[int] = mapped_column(Integer, nullable=False)
+    separate_asker: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # The policy in force when it was opened, as kept in the settings.
+    policy: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # The actions proposed, as of its revision.
+    proposals: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+class IntentionDecisionVote(Base, WorkspaceScopedMixin):
+    """One person's vote on a decision: approve, reject, modify, ask for
+    changes — who, when, why, and the context it was cast in. Append-only:
+    the database refuses to change one."""
+
+    __tablename__ = "intention_decision_votes"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "decision_id"],
+            ["intention_decisions.workspace_id", "intention_decisions.id"],
+            ondelete="CASCADE",
+            name="fk_intention_decision_votes_decision",
+        ),
+        CheckConstraint(_in("verdict", VERDICTS), name="verdict"),
+        Index("ix_intention_decision_votes_decision", "decision_id", "at"),
+    )
+
+    decision_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    verdict: Mapped[str] = mapped_column(String(20), nullable=False)
+    by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # A modification: what changed, from what to what.
+    changes: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # What it was cast on: the risk, the revision's proposals, the analysis
+    # and context version, how many approvals were required.
+    context: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")

@@ -4,6 +4,7 @@ import { Archive, ArchiveRestore, History, Link2, SearchX, XCircle } from "lucid
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 
+import { IntentionDecision } from "@/components/decisions/intention-decision";
 import { Card, entityHref } from "@/components/environment/parts";
 import { AnalysisTab, EvidenceTab, SummarySaid } from "@/components/intentions/analysis-tab";
 import { kindOf, StatusPill } from "@/components/intentions/intentions-list";
@@ -259,6 +260,8 @@ function Overview({ intention }: { intention: IntentionDetail }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
       <div className="flex flex-col gap-4">
+        {/* What it asks to do, put to a decision (LEKA-390). */}
+        <IntentionDecision intentionId={intention.id} />
         {intention.understanding ? (
           <UnderstandingPanel
             understanding={intention.understanding}

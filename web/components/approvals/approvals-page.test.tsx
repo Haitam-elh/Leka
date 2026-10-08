@@ -18,6 +18,12 @@
  * much each is believed, when it said it — the side recommended; who may
  * approve keeps a side, remembering its source if they say so, says it is
  * no contradiction, reopens what was decided.
+ *
+ * And the decisions on what intentions ask to do (LEKA-390): listed with
+ * their impact; opened, the actions proposed, how many must approve, every
+ * vote; who may approve approves — asked first — rejects saying why,
+ * modifies where it runs; the asker kept apart by the policy, and anyone
+ * who may not approve, are told why they cannot.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -58,8 +64,24 @@ vi.mock("@/lib/enrichment", async (original) => ({
   ...(await original<typeof import("@/lib/enrichment")>()),
   enrichment: api,
 }));
+const choices = vi.hoisted(() => ({
+  queue: vi.fn(),
+  summary: vi.fn(),
+  policy: vi.fn(),
+  of: vi.fn(),
+  vote: vi.fn(),
+}));
+const me = vi.hoisted(() => ({ id: "9c3bc5ff-a12e-5e92-a5ae-ad6da2029a41" }));
+const notices = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
+
+vi.mock("@/lib/decisions", async (original) => ({
+  ...(await original<typeof import("@/lib/decisions")>()),
+  decisions: choices,
+}));
+vi.mock("@/lib/notify", () => ({ notify: notices }));
 vi.mock("@/components/shell/shell-provider", () => ({
   usePermissions: () => permissions.value,
+  useCurrentUser: () => me,
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/approvals" }));
 
@@ -245,7 +267,84 @@ beforeEach(() => {
   disputes.resolve.mockImplementation(async () => ({ ...SLA, status: "resolved" }));
   disputes.dismiss.mockImplementation(async () => ({ ...SLA, status: "dismissed" }));
   disputes.reopen.mockImplementation(async () => SLA);
+  choices.summary.mockResolvedValue({
+    proposed: 0,
+    approved: 0,
+    rejected: 0,
+    changes_requested: 0,
+    superseded: 0,
+  });
+  choices.queue.mockResolvedValue({ data: [] });
+  choices.vote.mockImplementation(async () => ({ ...RESTART.decision, status: "approved" }));
 });
+
+const INTENTION = "5c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+const BILLING = "6c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+const ASKER = "7c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
+
+function decisionItem(overrides: Record<string, unknown> = {}) {
+  return {
+    intention: {
+      id: INTENTION,
+      title: "Redémarre Billing API en production",
+      status: "awaiting_decision",
+      kind: "change",
+      created_by: ASKER,
+      summary: null,
+    },
+    decision: {
+      id: "8c3bc5ff-a12e-5e92-a5ae-ad6da2029a41",
+      intention_id: INTENTION,
+      number: 1,
+      status: "proposed" as const,
+      open: true,
+      risk: "medium" as const,
+      analysis_risk: "medium",
+      revision: 1,
+      required_approvals: 1,
+      separate_asker: false,
+      approvers: [],
+      proposals: [
+        {
+          id: "restart",
+          action: "restart",
+          targets: [{ id: BILLING, name: "Billing API", type: "service" }],
+          environment: "production",
+          constraints: [{ kind: "no_downtime", value: true }],
+          reversible: true,
+        },
+      ],
+      analysis_id: null,
+      context_version: 2,
+      asked_by: ASKER,
+      created_at: minutesAgo(30),
+      decided_at: null,
+      votes: [],
+      ...overrides,
+    },
+  };
+}
+const RESTART = decisionItem();
+
+function withDecision(item = RESTART) {
+  choices.summary.mockResolvedValue({
+    proposed: 1,
+    approved: 0,
+    rejected: 0,
+    changes_requested: 0,
+    superseded: 0,
+  });
+  choices.queue.mockImplementation(async (status: string) => ({
+    data: status === "proposed" ? [item] : [],
+  }));
+}
+
+async function openDecision() {
+  const user = userEvent.setup();
+  const table = await screen.findByRole("table");
+  await user.click(within(table).getByText(/Redémarrer Billing API · production/));
+  return { user, panel: await screen.findByTestId("decision-panel") };
+}
 
 function withConflict() {
   disputes.summary.mockResolvedValue({ open: 1, resolved: 0, dismissed: 0, gone: 0 });
@@ -517,5 +616,100 @@ describe("a proposal's words", () => {
       title: "What auth-service does.",
       why: null,
     });
+  });
+});
+
+describe("À valider — decisions (LEKA-390)", () => {
+  it("lists an action asked among what waits, with its impact, and opens it", async () => {
+    withDecision();
+    mount();
+    const table = await screen.findByRole("table");
+    const row = within(table).getByText(/Redémarrer Billing API · production/).closest("tr");
+    expect(row).toHaveTextContent("Risque moyen · 1 validation(s) requise(s)");
+    expect(row).toHaveTextContent("Moyen");
+    expect(row).toHaveTextContent("À valider");
+
+    const { panel } = await openDecision();
+    expect(panel).toHaveTextContent("Redémarre Billing API en production");
+    expect(within(panel).getByTestId("decision-requirement")).toHaveTextContent(
+      "1 validation(s) requise(s) · 0 sur 1",
+    );
+    const [proposal] = within(panel).getAllByTestId("decision-proposal");
+    expect(proposal).toHaveTextContent("Redémarrer");
+    expect(proposal).toHaveTextContent("Billing API");
+    expect(proposal).toHaveTextContent("en production");
+    expect(proposal).toHaveTextContent("Réversible");
+    expect(proposal).toHaveTextContent("À respecter : Sans interruption");
+    expect(panel).toHaveTextContent("Vous gardez le contrôle");
+    expect(panel).toHaveTextContent("Aucun vote pour l'instant.");
+  });
+
+  it("approves once asked, saying what it opens the way to", async () => {
+    withDecision();
+    mount();
+    const { user, panel } = await openDecision();
+    await user.click(within(panel).getByTestId("decision-approve"));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("Redémarrer · Billing API · production");
+    await user.click(within(dialog).getByRole("button", { name: "Valider" }));
+    await waitFor(() => expect(choices.vote).toHaveBeenCalledWith(INTENTION, "approve", {}));
+    expect(notices.success).toHaveBeenCalledWith({ title: "Votre validation est enregistrée." });
+  });
+
+  it("rejects saying why — not without", async () => {
+    withDecision();
+    mount();
+    const { user, panel } = await openDecision();
+    await user.click(within(panel).getByTestId("decision-reject"));
+    let dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Refuser" }));
+    expect(choices.vote).not.toHaveBeenCalled();
+    expect(notices.error).toHaveBeenCalledWith({
+      title: "Dites pourquoi : c'est gardé avec la décision.",
+    });
+
+    await user.click(within(panel).getByTestId("decision-reject"));
+    dialog = await screen.findByRole("alertdialog");
+    await user.type(within(dialog).getByRole("textbox"), "Pas pendant les soldes.");
+    await user.click(within(dialog).getByRole("button", { name: "Refuser" }));
+    await waitFor(() =>
+      expect(choices.vote).toHaveBeenCalledWith(INTENTION, "reject", {
+        reason: "Pas pendant les soldes.",
+      }),
+    );
+  });
+
+  it("modifies where it runs, then approves", async () => {
+    withDecision();
+    mount();
+    const { user, panel } = await openDecision();
+    await user.click(within(panel).getByTestId("decision-modify-open"));
+    const environment = within(panel).getByTestId("decision-modify-environment");
+    await user.clear(environment);
+    await user.type(environment, "staging");
+    await user.type(within(panel).getByTestId("decision-modify-reason"), "D'abord en staging.");
+    await user.click(within(panel).getByTestId("decision-modify-submit"));
+    await waitFor(() =>
+      expect(choices.vote).toHaveBeenCalledWith(INTENTION, "modify", {
+        environment: "staging",
+        keep: ["restart"],
+        reason: "D'abord en staging.",
+      }),
+    );
+  });
+
+  it("tells the asker the policy wants someone else, and a member they cannot decide", async () => {
+    withDecision(
+      decisionItem({ separate_asker: true, asked_by: me.id, risk: "high", required_approvals: 2 }),
+    );
+    mount();
+    const { panel } = await openDecision();
+    expect(within(panel).queryByTestId("decision-approve")).not.toBeInTheDocument();
+    expect(panel).toHaveTextContent(
+      "La politique demande qu'une autre personne que vous valide cette action.",
+    );
+    expect(within(panel).getByTestId("decision-requirement")).toHaveTextContent(
+      "2 validation(s) requise(s) par une autre personne que le demandeur · 0 sur 2",
+    );
   });
 });

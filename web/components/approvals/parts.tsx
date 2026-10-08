@@ -1,9 +1,10 @@
 "use client";
 
-import { Briefcase, type LucideIcon, Network, Scale, Sparkles, UsersRound } from "lucide-react";
+import { Briefcase, type LucideIcon, Network, Scale, Sparkles, UsersRound, Zap } from "lucide-react";
 
 import { cn } from "cn";
 import type { Item } from "@/components/approvals/items";
+import { DecisionStatusPill } from "@/components/decisions/decision-card";
 import type { Conflict, ConflictStatus } from "@/lib/conflicts";
 import type { Candidate, CandidateStatus } from "@/lib/enrichment";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -16,6 +17,7 @@ export const FAMILY_ICON: Record<string, LucideIcon> = {
   business: Briefcase,
   semantic: Sparkles,
   conflict: Scale,
+  action: Zap,
 };
 
 const BADGE: Record<CandidateStatus, string> = {
@@ -61,6 +63,7 @@ export function ConflictBadge({ conflict }: { conflict: Conflict }) {
 }
 
 export function ItemBadge({ item }: { item: Item }) {
+  if (item.kind === "decision") return <DecisionStatusPill decision={item.data.decision} />;
   return item.kind === "conflict" ? (
     <ConflictBadge conflict={item.data} />
   ) : (
