@@ -328,6 +328,7 @@ A **workspace** stage, after resolution
 | `GET /ingestion/enrichment/relationships` | paginated, the surest first — `type=`, `origin=stated\|inferred`, `rule=`, `cross_source=true`, `entity_id=` |
 | `GET /ingestion/enrichment/environment` | the "Mon environnement" screen (§ 12) |
 | `GET /ingestion/enrichment/environment/{id}` | one entity's sheet (§ 12) |
+| `GET /ingestion/enrichment/environment/{id}/activity?days=` | everything that moved around one entity over 1 to 180 days, and the period before counted (§ 12) |
 
 ## 12. The "Mon environnement" screens
 
@@ -389,12 +390,32 @@ services, databases, resources, projects related to it, each way, with the
 relationship's origin, confidence and whether it joins two tools; the
 documents that name it or describe it (LEKA-366); what needs attention.
 
+**Its activity** (`GET …/environment/{id}/activity?days=30`), what fills
+the sheet's tiles and its tabs Métriques, Déploiements and Logs: everything
+that moved around it over the period — what is part of it or affects it,
+its incidents included, for a service what is part of its repositories —
+each as its source says it (state, link, version, environment); counted
+day by day as changes (commits, pull requests), deployments (deployments,
+releases), incidents, work (issues) and other; the same counts over the
+period before; the connected monitoring sources; and the documents that
+name it without being linked to it yet. LEKA reads no runtime logs nor
+metrics: latency, errors and availability need a monitoring tool, and the
+sheet says so with the way to connect one — what it shows instead is what
+the sources show of its life.
+
+**Its configuration** (tab Configuration): what its sources say of it (its
+attributes, its key, the tools that show it) and what LEKA deduces of it,
+each deduction with its evidence and how sure.
+
 In their place, and saying what they wait for: the users (no source
 describes them yet; the business domains are the Domaines tab's since
-LEKA-369, from the capabilities and processes declared), the metrics — latency, errors,
-requests, availability — and their chart (a metrics source's metrics read),
-the deployments, logs and configuration tabs, LEKA's insights and analysis
-(its analysis engine, sprint 4).
+LEKA-369, from the capabilities and processes declared) and the runtime
+metrics — latency, errors, requests, availability — a monitoring source's.
+
+**Mon Dashboard** reads this screen's figures: services and how many are
+operational (said deduced when no monitoring source shows them), the
+points of attention, the open incidents and the services they affect; this
+week's events (Activité, LEKA-383) and the open contradictions (LEKA-382).
 
 ## Not yet
 
