@@ -227,7 +227,7 @@ describe("an intention's analysis", () => {
       "Billing API appartient à Payments.",
     );
     expect(view).toHaveTextContent("1 source(s) derrière son contexte");
-    // Proposals are LEKA-389's, decided by a person: none drawn.
+    // Nothing proposed (LEKA-389): no proposals' section, no empty promise.
     expect(screen.queryByText("Recommandations de LEKA")).not.toBeInTheDocument();
     // Completed: nothing to run again.
     expect(screen.queryByTestId("analysis-again")).not.toBeInTheDocument();
@@ -443,6 +443,130 @@ describe("its evidence", () => {
     show();
     expect(await screen.findByTestId("intention-evidence")).toHaveTextContent(
       "Les preuves apparaissent une fois l'intention analysée.",
+    );
+  });
+});
+
+const ROLLBACK = {
+  id: "rollback:d1",
+  code: "recommend.rollback",
+  text: "Undo payment-api v2.8.4: it is said to have caused p99 above 2s.",
+  params: { change: "payment-api v2.8.4", incident: "p99 above 2s" },
+  action: "rollback" as const,
+  changes_systems: true,
+  priority: "high" as const,
+  risk: "medium" as const,
+  reversible: true,
+  confidence: 0.83,
+  why: {
+    code: "recommend.why.cause",
+    text: "Its source says p99 above 2s was caused by it.",
+    params: { cause: "payment-api v2.8.4", basis: "stated", incident: "p99 above 2s" },
+  },
+  basis: ["cause:d1"],
+  evidence: [`tie:${BILLING}:owned_by:${PAYMENTS}`],
+  target: { ref_type: "deployment", ref_id: "d1", name: "payment-api v2.8.4" },
+};
+const OWNER = {
+  id: "assign_owner:x",
+  code: "recommend.assign_owner",
+  text: "Name an owner for Billing API: no source names one.",
+  params: { name: "Billing API" },
+  action: "change" as const,
+  changes_systems: false,
+  priority: "medium" as const,
+  risk: "low" as const,
+  reversible: true,
+  confidence: null,
+  why: {
+    code: "recommend.why.uncertain",
+    text: "No source names an owner for Billing API.",
+    params: { name: "Billing API", of: "ownership.unknown" },
+  },
+  basis: [],
+  evidence: [],
+  target: null,
+};
+
+describe("what LEKA recommends (LEKA-389)", () => {
+  it("proposes apart from what it found, each with why, risk, and its evidence", async () => {
+    const found = analysis();
+    api.analysis.mockResolvedValue({
+      ...found,
+      result: { ...found.result!, recommendations: [ROLLBACK, OWNER] },
+    });
+    const user = userEvent.setup();
+    show();
+
+    const proposals = await screen.findByRole("region", { name: "Recommandations de LEKA" });
+    const cards = within(proposals).getAllByTestId("recommendation");
+    expect(cards).toHaveLength(2);
+    // Said as proposals, apart from the facts.
+    const facts = screen.getByTestId("analysis-summary");
+    expect(facts).not.toHaveTextContent("Revenir sur");
+    const [undo, owner] = cards;
+    expect(undo).toHaveTextContent("Revenir sur payment-api v2.8.4");
+    expect(undo).toHaveTextContent("Cause indiquée par sa source de p99 above 2s.");
+    expect(undo).toHaveTextContent("Modifie vos systèmes : soumis à validation");
+    expect(undo).toHaveTextContent("Réversible");
+    expect(within(undo).getByTestId("priority")).toHaveTextContent("Priorité haute");
+    expect(owner).toHaveTextContent("Nommer un responsable pour Billing API");
+    // Its why is the uncertainty it follows from, as the analysis says it.
+    expect(owner).toHaveTextContent("Aucune source ne nomme de responsable pour Billing API.");
+    expect(owner).not.toHaveTextContent("soumis à validation");
+
+    // The evidence it rests on, inspectable from it.
+    await user.click(within(undo).getByRole("button", { name: /Voir ce qui justifie/ }));
+    expect(undo).toHaveTextContent("Catalogue");
+  });
+
+  it("says plainly when it could not conclude, and what to do then", async () => {
+    const found = analysis();
+    api.analysis.mockResolvedValue({
+      ...found,
+      status: "inconclusive",
+      result: {
+        ...found.result!,
+        status: "inconclusive",
+        findings: [],
+        summary: [],
+        recommendations: [
+          {
+            ...OWNER,
+            id: "ask_differently",
+            code: "recommend.ask_differently",
+            text: "Ask differently.",
+            params: {},
+            priority: "medium",
+            why: {
+              code: "recommend.why.inconclusive",
+              text: "The analysis could not conclude.",
+              params: {},
+            },
+          },
+        ],
+      },
+    });
+    show();
+
+    expect(await screen.findByTestId("analysis")).toHaveAttribute("data-status", "inconclusive");
+    expect(screen.getByTestId("analysis-state")).toHaveTextContent("Analyse non concluante");
+    const [card] = within(
+      screen.getByRole("region", { name: "Recommandations de LEKA" }),
+    ).getAllByTestId("recommendation");
+    expect(card).toHaveTextContent(
+      "Reformuler la demande, ou connecter ce qui permettrait de répondre",
+    );
+    expect(card).toHaveTextContent("L'analyse n'a pas pu conclure.");
+  });
+
+  it("says what is missing when the evidence is incomplete", async () => {
+    show();
+    // A capability failed: the analysis is partial, what is missing said.
+    expect(await screen.findByTestId("analysis")).toHaveAttribute("data-status", "partial");
+    expect(screen.getByTestId("analysis-state")).toHaveTextContent("Analyse partielle");
+    expect(screen.getByTestId("analysis-state")).toHaveTextContent(
+      "Changements n'a pas abouti : en échec.",
     );
   });
 });

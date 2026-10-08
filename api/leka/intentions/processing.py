@@ -74,6 +74,7 @@ from leka.intentions.grounding import side
 from leka.intentions.lifecycle import Actor
 from leka.intentions.lifecycle import IntentionStatus as S
 from leka.intentions.models import Intention, IntentionAnalysis
+from leka.intentions.recommend import as_mapping, recommend
 from leka.intentions.repository import IntentionRepository
 from leka.intentions.schemas import (
     ContextReadiness,
@@ -293,6 +294,7 @@ def result_of(result: Result) -> dict[str, object]:
                 }
                 for e in result.evidence
             ],
+            "recommendations": [as_mapping(r) for r in result.recommendations],
             "answer": (
                 {
                     "text": result.answer.text,
@@ -423,6 +425,8 @@ async def analyse_intention(
             ),
             background=frozenset(c.name for c in rules if c.always),
         )
+        # What LEKA proposes, apart from what it found (LEKA-389).
+        result = replace(result, recommendations=recommend(result, asked))
         for capability in writers:
             outcome, answer = await _write(workspace_id, capability, asked, result)
             outcomes.append(outcome)

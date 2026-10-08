@@ -539,7 +539,7 @@ asker or an approver; another workspace's 404.
   (its error), timed out, not run; then what it found, laid out as every
   analysis is (`AnalysisView`, LEKA-341): the synthesis and its confidence
   and support, the facts, the probable causes, the evidence, what it
-  reaches — without proposals (LEKA-389). On its way: « LEKA analyse votre
+  reaches — and, apart, what LEKA recommends (below). On its way: « LEKA analyse votre
   demande », read again every 4 s, the intention read again once done;
   blocked: what its context lacks (§ 11); failed: « Relancer l'analyse ».
   Its earlier analyses listed.
@@ -583,6 +583,66 @@ dropped; an answer resting on nothing not kept. `web/lib/intention-analysis.test
 `web/components/intentions/analysis-tab.test.tsx`;
 `e2e/intention-analysis.spec.ts`, on the demo: asked, analysed, followed,
 its evidence and history; a restart waiting for a person.
+
+### What LEKA recommends (LEKA-389)
+
+What to do next, from what the analysis found — **a proposal, never a
+fact**, and never done by LEKA. Code: `api/leka/intentions/recommend.py`
+(pure), run after `assemble()`; kept in the result
+(`IntentionAnalysisResult.recommendations`), apart from its findings,
+causes and uncertainties.
+
+**Each recommendation** (`AnalysisRecommendation`):
+
+| Field | |
+| --- | --- |
+| `code`, `params`, `text` | what to do — worded by the interface from its code (`recommend.*`), in English for what reads it without one |
+| `why` | why — the cause, the finding or the uncertainty it follows from (`params.of` names it, so the interface says it as the analysis does) |
+| `basis`, `evidence` | **traceable**: the ids of the findings and causes it follows from, and of the evidence they rest on — all in the same result |
+| `action` | rollback, change, monitor, other |
+| `changes_systems` | it would change a customer's systems: shown « soumis à validation » — only once a person approves (§ 13) |
+| `priority`, `risk`, `reversible` | how urgent, how risky, whether it can be undone |
+| `confidence` | **never surer than what it follows from**: a cause's confidence, × 0.8 when only suspected; none when it is not a bet |
+| `target` | what it is about, when it is one thing |
+
+**The rules:**
+
+| From | Recommends | Changes systems |
+| --- | --- | --- |
+| a change (deployment, change, release, pull request, commit) said to have caused an incident, or suspected at 0.8 or more | `recommend.rollback` — high priority, reversible, at the analysis's risk | yes |
+| the same, only suspected (under 0.8) | `recommend.confirm_cause` first (high), then the rollback at medium priority | no, then yes |
+| an incident nothing says or suggests caused (`incident.no_cause`) | `recommend.investigate` | no |
+| nobody named owner (`ownership.unknown`) | `recommend.assign_owner` | no |
+| several owners (`ownership.several`) | `recommend.settle_owner`, from the owner findings and their evidence | no |
+| no document, or none current (`documentation.none`, `.stale`) | `recommend.document`, `recommend.update_documentation` | no |
+| a compliance check failed | its remedy: assign an owner, update the documentation, say the criticality, deal with what is open, improve the knowledge | no |
+| a thing known poorly (`standing.known_poorly`) | `recommend.improve_knowledge` — connect its sources | no |
+| applications reached, at high or medium risk | `recommend.notify` their teams | no |
+| an inconclusive analysis with nothing else to propose | `recommend.ask_differently` | no |
+| a failed analysis | nothing | — |
+
+Each once (by what it is about), the most urgent and surest first. What is
+known proposes nothing: an owner said is not proposed again.
+
+**In the app** — tab *Analyse*: « Recommandations de LEKA » apart from the
+facts, causes and impact (`AnalysisView`, LEKA-341), drawn when LEKA
+proposes something: each worded, its why, « Modifie vos systèmes : soumis à
+validation » when it would, its priority, reversibility, risk and
+confidence, and on opening the evidence it rests on — the same evidence the
+*Preuves* tab lists. Inconclusive: « Analyse non concluante » and what to
+do; partial: what is missing (a capability that did not finish).
+
+**Tested** — `tests/test_intention_recommend.py`, pure, on LEKA-388's own
+capabilities: a stated cause proposed undone, as sure as it; a suspected
+one confirmed first; an incident nothing explains investigated; nobody
+owning, several owners, a stale document, a failed check — each its
+remedy; a wide reach of high risk, its people told; inconclusive and
+failed; never a finding; every one traceable to the result's findings,
+causes and evidence. `tests/test_intention_recommend_api.py`, on Acme's
+model: « Qu'est-ce qui dépend de Billing API ? » proposes telling Billing
+platform's and Shop's teams; a known owner proposes no owner.
+`web/components/intentions/analysis-tab.test.tsx`: proposals apart, worded,
+their why, approval said, evidence opened; inconclusive; partial.
 
 ## 13. Its decision (LEKA-390)
 
@@ -933,9 +993,10 @@ concluded short of it, failed.
 
 ## Not yet
 
-- **Findings presented for a decision, recommendations** (LEKA-389): the
-  analysis's result (§ 12) is their input; its *Analyse* tab draws it
-  without proposals.
+- **Acting on a recommendation** (LEKA-389, 390): a recommendation that
+  changes systems is proposed; turning it into the actions a decision
+  approves — the composer's step 4 (`DecisionStep`) still shows its
+  example — comes with that.
 - **Agents** (`agents/*.md`) as capabilities: run with their runtime
   (LEKA-395).
 - **Metrics read from monitoring**: a metric is read in the model or from

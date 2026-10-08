@@ -5179,6 +5179,69 @@ export interface components {
             cites: string[];
         };
         /**
+         * AnalysisRecommendation
+         * @description What LEKA proposes to do (LEKA-389) — a proposal, never a fact: from
+         *     the findings and causes it names (`basis`), on the evidence they rest
+         *     on; a person decides.
+         */
+        AnalysisRecommendation: {
+            /** Id */
+            id: string;
+            /**
+             * Code
+             * @description recommend.rollback, recommend.assign_owner… — worded by the interface.
+             */
+            code: string;
+            /**
+             * Text
+             * @description In English, for what reads it without a dictionary.
+             */
+            text: string;
+            /** Params */
+            params: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "rollback" | "change" | "monitor" | "other";
+            /**
+             * Changes Systems
+             * @description It would change a customer's systems: only once a person approves (LEKA-390).
+             */
+            changes_systems: boolean;
+            /**
+             * Priority
+             * @enum {string}
+             */
+            priority: "high" | "medium" | "low";
+            /**
+             * Risk
+             * @enum {string}
+             */
+            risk: "high" | "medium" | "low" | "unknown";
+            /** Reversible */
+            reversible: boolean | null;
+            /**
+             * Confidence
+             * @description Never surer than what it follows from; none when it is not a bet.
+             */
+            confidence: number | null;
+            why: components["schemas"]["AnalysisNote"];
+            /**
+             * Basis
+             * @description The ids of the findings and causes it follows from.
+             */
+            basis: string[];
+            /**
+             * Evidence
+             * @description The ids of the evidence they rest on.
+             */
+            evidence: string[];
+            target: components["schemas"]["RecommendationTarget"] | null;
+        };
+        /**
          * AnalysisRequest
          * @description Analyse now. Every analysis, or those named.
          */
@@ -11988,6 +12051,11 @@ export interface components {
             evidence: components["schemas"]["AnalysisEvidence"][];
             /** @description Written by a model from the above, when one can (LEKA-394). */
             answer?: components["schemas"]["AnalysisAnswer"] | null;
+            /**
+             * Recommendations
+             * @description What LEKA proposes, apart from what it found (LEKA-389).
+             */
+            recommendations?: components["schemas"]["AnalysisRecommendation"][];
         };
         /**
          * IntentionAsked
@@ -15009,6 +15077,18 @@ export interface components {
             reasons: string[];
             /** Margin */
             margin: number;
+        };
+        /** RecommendationTarget */
+        RecommendationTarget: {
+            /** Ref Type */
+            ref_type: string;
+            /**
+             * Ref Id
+             * Format: uuid
+             */
+            ref_id: string;
+            /** Name */
+            name: string;
         };
         /**
          * RecoveryAccepted

@@ -474,7 +474,13 @@ export function AnalysisTab({ intention }: { intention: IntentionDetail }) {
           {data.status === "running" ? (
             <AnalysisState status="running" />
           ) : shown ? (
-            <AnalysisView analysis={shown} proposals={false} level={2} />
+            <AnalysisView
+              analysis={shown}
+              // What LEKA proposes (LEKA-389), apart from what it found —
+              // drawn when it proposes something.
+              proposals={shown.recommendations.length > 0}
+              level={2}
+            />
           ) : null}
         </>
       ) : null}

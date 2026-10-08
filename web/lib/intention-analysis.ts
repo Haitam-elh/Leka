@@ -16,7 +16,11 @@
  *     support       what the confidence rests on: its context's sources,
  *                   their contradictions, its readiness
  *
- * No recommendation: they are LEKA-389's, decided by a person (LEKA-390).
+ *     recommendations what LEKA proposes (LEKA-389) — apart from what it
+ *                   found, each worded from its code, why (the finding it
+ *                   follows from), how risky, reversible, urgent, sure, and
+ *                   the evidence it rests on; one that changes systems
+ *                   says it needs approval (LEKA-390)
  *
  * WORDS. The API says each sentence in English, with its code and values;
  * the interface words it in its own language from those, and falls back
@@ -33,12 +37,14 @@ import type {
   Finding,
   Impact,
   ProbableCause,
+  Recommendation,
   RiskLevel,
 } from "@/lib/intelligence";
 
 export type IntentionAnalysis = components["schemas"]["IntentionAnalysisRead"];
 export type AnalysisResult = components["schemas"]["IntentionAnalysisResult"];
 export type AnalysisEvidence = components["schemas"]["AnalysisEvidence"];
+export type AnalysisRecommendation = components["schemas"]["AnalysisRecommendation"];
 type Note = components["schemas"]["AnalysisNote"];
 type Params = Record<string, unknown>;
 
@@ -106,6 +112,15 @@ function values(t: Dictionary, code: string, params: Params, links: Links) {
       said.severity = p.severity ? `, ${text(p.severity)}` : "";
       said.state = p.state ? `, ${text(p.state)}` : "";
       break;
+    case "recommend.why.cause":
+      said.basis = words(w.recommendBasis, p.basis);
+      break;
+    case "recommend.why.suspected":
+      said.confidence = percent(p.confidence);
+      break;
+    case "recommend.why.impact":
+      said.risk = words(w.recommendRisks, p.risk);
+      break;
     case "incident.summary":
       said.cause = p.cause ? fill(w.parts.likeliest, { cause: text(p.cause) }) : "";
       break;
@@ -172,6 +187,20 @@ export function noteSaid(
   if (code === "migration.summary" && !params.target) code = "migration.summary_missing";
   const template = templates[code];
   return template ? fill(template, values(t, code, params, links)) : note.text;
+}
+
+/** Why LEKA recommends it, in words: the finding or the uncertainty it
+ * follows from, said as the analysis says it — or its own why. */
+function recommendationWhy(
+  t: Dictionary,
+  item: AnalysisRecommendation,
+  links: Links,
+): string {
+  const params = (item.why.params ?? {}) as Params;
+  const of = typeof params.of === "string" ? params.of : null;
+  const templates = t.intentions.analysis.said as Record<string, string>;
+  if (of && templates[of]) return noteSaid(t, { code: of, text: item.why.text, params }, links);
+  return noteSaid(t, item.why, links);
 }
 
 /** Why a cause is one, in words: its source said so, or LEKA's rule. */
@@ -351,6 +380,20 @@ export function intentionAnalysis(
           riskBasis: result.risk_basis ? say(result.risk_basis) : "",
         }
       : null;
+  const recommendations = (result.recommendations ?? []).map(
+    (item): Recommendation => ({
+      id: item.id,
+      title: noteSaid(t, item, links),
+      rationale: recommendationWhy(t, item, links),
+      effect: item.changes_systems ? t.intentions.analysis.systems : null,
+      risk: item.risk as RiskLevel,
+      reversible: item.reversible,
+      priority: item.priority,
+      action: item.action,
+      confidence: item.confidence,
+      evidence: refs(item.evidence),
+    }),
+  );
   return {
     status: STATUSES[result.status],
     summary: result.summary.length ? result.summary.map(say).join(" ") : null,
@@ -358,7 +401,7 @@ export function intentionAnalysis(
     findings,
     causes,
     impact,
-    recommendations: [],
+    recommendations,
     uncertainties: result.uncertainties.map(say),
     confidence: result.confidence,
     support: result.support.map((note) => ({
