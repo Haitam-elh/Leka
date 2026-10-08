@@ -106,6 +106,12 @@ SCHEDULE: tuple[Scheduled, ...] = (
         "leka.intentions.processing.run_pending_analyses",
         cron="7,22,37,52 * * * *",
     ),
+    # Plans scheduled for a window run when it opens (LEKA-391).
+    Scheduled(
+        "intention-plans-due",
+        "leka.intentions.actions.run_due_plans",
+        cron="*/5 * * * *",
+    ),
 )
 
 

@@ -10,8 +10,9 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, JsonValue
 
+from leka.connectors import PublicHttpsUrl
 from leka.context import AssembledContext
 from leka.intentions.lifecycle import IntentionStatus
 
@@ -664,3 +665,149 @@ class DecisionVoteRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=2000)
     environment: str | None = Field(default=None, min_length=1, max_length=60)
     keep: list[str] | None = Field(default=None, max_length=20)
+
+
+# ── execution (LEKA-391) ──────────────────────────────────────────────────────
+
+
+class ActionEndpointRead(BaseModel):
+    """A system the workspace authorized LEKA to act through — never its
+    secret."""
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    url: str
+    actions: list[str]
+    environments: list[str]
+    targets: list[uuid.UUID]
+    enabled: bool
+    created_by: uuid.UUID | None
+    created_at: datetime
+    last_called_at: datetime | None
+
+
+class ActionEndpointCreated(BaseModel):
+    """Made: its signing secret, shown this once."""
+
+    model_config = ConfigDict(frozen=True)
+
+    endpoint: ActionEndpointRead
+    secret: str = Field(description="Verifies X-Leka-Signature. Shown once; kept encrypted.")
+
+
+class ActionEndpointCreate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str = Field(min_length=1, max_length=120)
+    url: PublicHttpsUrl
+    actions: list[str] = Field(min_length=1, max_length=30)
+    environments: list[str] = Field(min_length=1, max_length=20)
+    targets: list[uuid.UUID] = Field(default_factory=list, max_length=200)
+
+
+class ActionEndpointUpdate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    actions: list[str] | None = Field(default=None, min_length=1, max_length=30)
+    environments: list[str] | None = Field(default=None, min_length=1, max_length=20)
+    targets: list[uuid.UUID] | None = Field(default=None, max_length=200)
+    enabled: bool | None = None
+
+
+class PlanCheckRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    code: str
+    passed: bool
+    detail: dict[str, JsonValue]
+
+
+class IntentionPlanStepRead(BaseModel):
+    """One action of a plan, how it went, and its evidence."""
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    position: int
+    proposal_id: str
+    action: str
+    targets: list[dict[str, JsonValue]]
+    environment: str | None
+    constraints: list[dict[str, JsonValue]]
+    executor: Literal["webhook", "manual"]
+    endpoint_id: uuid.UUID | None
+    endpoint_name: str | None
+    status: Literal["pending", "running", "awaiting", "succeeded", "failed", "cancelled", "skipped"]
+    started_at: datetime | None
+    finished_at: datetime | None
+    error: str | None
+    evidence: dict[str, JsonValue]
+
+
+class IntentionPlanEventRead(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    step_id: uuid.UUID | None
+    kind: str
+    actor: Literal["person", "system"]
+    by: uuid.UUID | None
+    at: datetime
+    detail: dict[str, JsonValue]
+
+
+class IntentionPlanRead(BaseModel):
+    """What an approved decision became, and how it is going."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    intention_id: uuid.UUID
+    decision_id: uuid.UUID
+    number: int
+    revision: int
+    status: Literal[
+        "planned", "scheduled", "running", "succeeded", "failed", "cancelled", "blocked"
+    ]
+    created_by: uuid.UUID | None
+    started_by: uuid.UUID | None
+    timezone: str
+    scheduled_for: datetime | None
+    suggested_for: datetime | None = Field(
+        description="When its window next opens, when it was asked in one."
+    )
+    started_at: datetime | None
+    finished_at: datetime | None
+    created_at: datetime
+    checks: list[PlanCheckRead]
+    error: str | None
+    steps: list[IntentionPlanStepRead]
+    events: list[IntentionPlanEventRead]
+
+
+class PlanStartRequest(BaseModel):
+    """Run now — or at a moment, when given."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    scheduled_for: datetime | None = None
+    timezone: str = Field(default="UTC", max_length=64)
+
+
+class PlanCancelRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class StepReportRequest(BaseModel):
+    """A person says how a step went: done, or failed — and what shows it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    outcome: Literal["succeeded", "failed"]
+    note: str = Field(min_length=1, max_length=2000)
+    link: HttpUrl | None = Field(default=None, description="http or https only.")

@@ -1,4 +1,6 @@
-"""Re-encrypt every stored credential under the first key of LEKA_ENCRYPTION_KEYS.
+"""Re-encrypt every stored secret under the first key of LEKA_ENCRYPTION_KEYS:
+the sources' credentials, then the signing secrets of the systems a workspace
+authorized LEKA to act through (LEKA-391).
 
     api/.venv/bin/python scripts/rotate_encryption_key.py --dry-run
     api/.venv/bin/python scripts/rotate_encryption_key.py
@@ -14,12 +16,13 @@ Step three of five, and the order is the procedure:
 Removing the old key before step 3 has finished leaves rows nobody can read.
 Skipping step 2 means the API keeps writing under the old key while this
 runs. Interrupting step 3 costs nothing: run it again. Why, and what happens
-to a credential saved meanwhile, is in leka/connectors/tasks.py.
+to a credential saved meanwhile, is in leka/connectors/tasks.py (and
+leka/intentions/tasks.py for the signing secrets).
 
 Unlike seed.py, this runs against production, by hand.
 
-Exit status: 0 done; 1 some credentials no configured key can read (each is
-logged with its source id, and nothing else was held back); 2 refused.
+Exit status: 0 done; 1 some secrets no configured key can read (each is
+logged with its id, and nothing else was held back); 2 refused.
 """
 
 from __future__ import annotations
@@ -28,10 +31,21 @@ import argparse
 import asyncio
 import sys
 
-from leka.connectors import RotationRefusedError, rotate_source_credentials
+from leka.connectors import RotationRefusedError, RotationReport, rotate_source_credentials
 from leka.core.config import settings
 from leka.core.logging import configure_logging
+from leka.intentions.tasks import rotate_endpoint_secrets
 from leka.platform import secret_box
+
+
+def _said(what: str, report: RotationReport, *, dry_run: bool) -> str:
+    verb = "would be rotated" if dry_run else "rotated"
+    return (
+        f"{what}: {report.examined} examined: {report.rotated} {verb}, "
+        f"{report.current} already under the new key, "
+        f"{report.changed} changed during the run and left alone, "
+        f"{report.unreadable} unreadable"
+    )
 
 
 def main() -> int:
@@ -41,24 +55,19 @@ def main() -> int:
     arguments = parser.parse_args()
 
     configure_logging(settings)
+    batch, dry_run = arguments.batch_size, arguments.dry_run
     try:
-        report = asyncio.run(
-            rotate_source_credentials(
-                secret_box, batch=arguments.batch_size, dry_run=arguments.dry_run
-            )
+        credentials = asyncio.run(
+            rotate_source_credentials(secret_box, batch=batch, dry_run=dry_run)
         )
+        signing = asyncio.run(rotate_endpoint_secrets(secret_box, batch=batch, dry_run=dry_run))
     except RotationRefusedError as refusal:
         print(f"refused: {refusal}", file=sys.stderr)
         return 2
 
-    verb = "would be rotated" if arguments.dry_run else "rotated"
-    print(
-        f"{report.examined} examined: {report.rotated} {verb}, "
-        f"{report.current} already under the new key, "
-        f"{report.changed} changed during the run and left alone, "
-        f"{report.unreadable} unreadable"
-    )
-    return 1 if report.unreadable else 0
+    print(_said("credentials", credentials, dry_run=dry_run))
+    print(_said("signing secrets", signing, dry_run=dry_run))
+    return 1 if credentials.unreadable or signing.unreadable else 0
 
 
 if __name__ == "__main__":

@@ -137,6 +137,25 @@ def decision_read(
     )
 
 
+async def approvers_of(session: AsyncSession, decision: IntentionDecision) -> tuple[uuid.UUID, ...]:
+    """Who approved its current revision, in order (LEKA-391 checks they
+    still may)."""
+    rows = (
+        await session.scalars(
+            select(IntentionDecisionVote)
+            .where(IntentionDecisionVote.decision_id == decision.id)
+            .order_by(IntentionDecisionVote.at, IntentionDecisionVote.created_at)
+        )
+    ).all()
+    _, approvers = tally(
+        _requirement(decision),
+        asker=decision.asked_by,
+        votes=_votes(rows),
+        revision=decision.revision,
+    )
+    return approvers
+
+
 def policy_read(said: object) -> ApprovalPolicyRead:
     policy = ApprovalPolicy.from_settings(said)
     kept = policy.to_settings()

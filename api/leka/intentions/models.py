@@ -35,6 +35,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -319,3 +320,156 @@ class IntentionDecisionVote(Base, WorkspaceScopedMixin):
     # What it was cast on: the risk, the revision's proposals, the analysis
     # and context version, how many approvals were required.
     context: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+# ── execution (LEKA-391) ─────────────────────────────────────────────────────
+
+PLAN_STATUSES = ("planned", "scheduled", "running", "succeeded", "failed", "cancelled", "blocked")
+STEP_STATUSES = ("pending", "running", "awaiting", "succeeded", "failed", "cancelled", "skipped")
+EXECUTORS = ("webhook", "manual")
+
+
+class ActionEndpoint(Base, WorkspaceScopedMixin):
+    """A system the workspace authorized LEKA to act through (LEKA-391): its
+    own automation behind an https endpoint, the actions and environments
+    it accepts — LEKA calls nothing else. Its signing secret is encrypted;
+    it is shown once, when made."""
+
+    __tablename__ = "action_endpoints"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "id", name="uq_action_endpoints_workspace_id_id"),
+        UniqueConstraint("workspace_id", "name", name="uq_action_endpoints_name"),
+    )
+
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    url: Mapped[str] = mapped_column(String(2000), nullable=False)
+    secret_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    # The action codes it accepts (LEKA-385's), or "*".
+    actions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    # The environments it acts in, or "*".
+    environments: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    # The things it may act on — none: any.
+    targets: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    last_called_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class IntentionPlan(Base, WorkspaceScopedMixin):
+    """What an approved decision became (LEKA-391): its steps, when it runs,
+    what was checked before, how it went. A failed one is retried by a new
+    plan of what did not succeed."""
+
+    __tablename__ = "intention_plans"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "intention_id"],
+            ["intentions.workspace_id", "intentions.id"],
+            ondelete="CASCADE",
+            name="fk_intention_plans_intention",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "decision_id"],
+            ["intention_decisions.workspace_id", "intention_decisions.id"],
+            ondelete="CASCADE",
+            name="fk_intention_plans_decision",
+        ),
+        UniqueConstraint("workspace_id", "id", name="uq_intention_plans_workspace_id_id"),
+        UniqueConstraint("intention_id", "number", name="uq_intention_plans_number"),
+        CheckConstraint(_in("status", PLAN_STATUSES), name="status"),
+        Index("ix_intention_plans_intention", "intention_id", "number"),
+        Index("ix_intention_plans_due", "status", "scheduled_for"),
+    )
+
+    intention_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    decision_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The decision's revision it carries out.
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    started_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Its windows and deadlines are read in this zone.
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, server_default="UTC")
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The checks before it ran — each code, passed or not, what it read.
+    checks: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    error: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+class IntentionPlanStep(Base, WorkspaceScopedMixin):
+    """One action of a plan: what, on what, where, who runs it, how it
+    went — and the evidence of it: what was sent, what answered, who
+    confirmed."""
+
+    __tablename__ = "intention_plan_steps"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "plan_id"],
+            ["intention_plans.workspace_id", "intention_plans.id"],
+            ondelete="CASCADE",
+            name="fk_intention_plan_steps_plan",
+        ),
+        UniqueConstraint("plan_id", "position", name="uq_intention_plan_steps_position"),
+        CheckConstraint(_in("status", STEP_STATUSES), name="status"),
+        CheckConstraint(_in("executor", EXECUTORS), name="executor"),
+    )
+
+    plan_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    proposal_id: Mapped[str] = mapped_column(String(60), nullable=False)
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    targets: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    environment: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    constraints: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    executor: Mapped[str] = mapped_column(String(20), nullable=False)
+    # No foreign key: an endpoint removed, the step must still say it.
+    endpoint_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    endpoint_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # What was sent, what answered, who confirmed — the execution's evidence.
+    evidence: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+class IntentionPlanEvent(Base, WorkspaceScopedMixin):
+    """One thing that happened to a plan: made, checked, started, a step
+    run, confirmed, failed, cancelled — who, when, what. Append-only."""
+
+    __tablename__ = "intention_plan_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "plan_id"],
+            ["intention_plans.workspace_id", "intention_plans.id"],
+            ondelete="CASCADE",
+            name="fk_intention_plan_events_plan",
+        ),
+        Index("ix_intention_plan_events_plan", "plan_id", "at"),
+    )
+
+    plan_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    step_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    actor: Mapped[str] = mapped_column(String(10), nullable=False)
+    by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
