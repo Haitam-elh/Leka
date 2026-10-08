@@ -1,7 +1,7 @@
 "use client";
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page";
+import { CapabilityScreen } from "@/components/capabilities/capability-detail";
 
 export default function Page() {
-  return <PlaceholderPage />;
+  return <CapabilityScreen />;
 }

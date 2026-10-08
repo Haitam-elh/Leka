@@ -1,33 +1,155 @@
-"""Capabilities: the model gateway and the agent loader.
+"""Capabilities: what LEKA can do — its catalogue (LEKA-393), the agent
+loader, and the model gateway to come (LEKA-394).
 
-Two responsibilities, one module because they are the same boundary: this is
-where LEKA talks to a language model, and where the instructions it sends are
-loaded from.
+Three responsibilities, one module because they are the same boundary: this
+is where what LEKA can do is defined and registered, where the instructions
+an agent sends are loaded from, and where LEKA will talk to a language model.
 
 The agents themselves live in agents/, as content (architecture rule 8).
 """
 
+from leka.capabilities.catalogue import (
+    CatalogueService,
+    Entry,
+    Standing,
+    run_catalogue_sync,
+    standings,
+    sync,
+    sync_catalogue,
+)
+from leka.capabilities.definition import (
+    CATEGORIES,
+    Availability,
+    Contract,
+    Definition,
+    DefinitionError,
+    Input,
+    InputError,
+    Kind,
+    Lifecycle,
+    Match,
+    Query,
+    Reason,
+    Situation,
+    availability,
+    check_input,
+    may_move,
+    mentions,
+    validated,
+)
+from leka.capabilities.definition import discover as discover_capabilities
 from leka.capabilities.loader import (
     AgentLoadError,
     AgentRegistry,
     discover,
     load_all,
     parse_agent,
+    read_index,
+)
+from leka.capabilities.models import (
+    CapabilityEvent,
+    CapabilityFavourite,
+    CapabilityRegistration,
+    WorkspaceCapability,
+)
+from leka.capabilities.registry import (
+    agent_definition,
+    catalogue,
+    definitions,
+    find,
+    model_ready,
+    provide,
 )
 from leka.capabilities.repository import CapabilityRunRepository
-from leka.capabilities.schemas import Agent, AgentFrontMatter, AgentMode, AgentRisk
+from leka.capabilities.schemas import (
+    Agent,
+    AgentFrontMatter,
+    AgentInput,
+    AgentMode,
+    AgentRisk,
+    CapabilityDayUse,
+    CapabilityDetail,
+    CapabilityDiscovery,
+    CapabilityEventRead,
+    CapabilityInputRead,
+    CapabilityLatest,
+    CapabilityMatch,
+    CapabilityRead,
+    CapabilityReason,
+    CapabilitySettingUpdate,
+    CapabilitySourceNeed,
+    CapabilityTop,
+    CapabilityUsageRead,
+    CapabilityVersionRead,
+    CatalogueSummary,
+    CategoryCount,
+)
 from leka.capabilities.service import CapabilityService
 
 __all__ = [
+    "CATEGORIES",
     "Agent",
     "AgentFrontMatter",
+    "AgentInput",
     "AgentLoadError",
     "AgentMode",
     "AgentRegistry",
     "AgentRisk",
+    "Availability",
+    "CapabilityDayUse",
+    "CapabilityDetail",
+    "CapabilityDiscovery",
+    "CapabilityEvent",
+    "CapabilityEventRead",
+    "CapabilityFavourite",
+    "CapabilityInputRead",
+    "CapabilityLatest",
+    "CapabilityMatch",
+    "CapabilityRead",
+    "CapabilityReason",
+    "CapabilityRegistration",
     "CapabilityRunRepository",
     "CapabilityService",
+    "CapabilitySettingUpdate",
+    "CapabilitySourceNeed",
+    "CapabilityTop",
+    "CapabilityUsageRead",
+    "CapabilityVersionRead",
+    "CatalogueService",
+    "CatalogueSummary",
+    "CategoryCount",
+    "Contract",
+    "Definition",
+    "DefinitionError",
+    "Entry",
+    "Input",
+    "InputError",
+    "Kind",
+    "Lifecycle",
+    "Match",
+    "Query",
+    "Reason",
+    "Situation",
+    "Standing",
+    "WorkspaceCapability",
+    "agent_definition",
+    "availability",
+    "catalogue",
+    "check_input",
+    "definitions",
     "discover",
+    "discover_capabilities",
+    "find",
     "load_all",
+    "may_move",
+    "mentions",
+    "model_ready",
     "parse_agent",
+    "provide",
+    "read_index",
+    "run_catalogue_sync",
+    "standings",
+    "sync",
+    "sync_catalogue",
+    "validated",
 ]

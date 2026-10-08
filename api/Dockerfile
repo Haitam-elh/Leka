@@ -64,6 +64,13 @@ COPY --from=builder --chown=leka:leka /opt/venv /opt/venv
 WORKDIR /app
 COPY --chown=leka:leka alembic ./alembic
 COPY --chown=leka:leka alembic.ini ./
+# The agents: content, not code (ADR 004), kept at the repository's root —
+# outside this build's context — and given to it by name: cd.yml passes
+# `build-contexts: agents=agents`; by hand,
+#   docker buildx build --build-context agents=agents api
+# Without them the capability catalogue (LEKA-393) would hold no agent.
+COPY --from=agents --chown=leka:leka . ./agents
+ENV LEKA_AGENTS_DIR=/app/agents
 
 USER leka
 EXPOSE 8000

@@ -117,6 +117,7 @@ recorded as a run, and is not started again while the previous one is still acti
 | `intelligence-sweep` | `leka.intelligence.job.run_intelligence_sweep` — a run for each workspace whose analysis is behind: never analysed, a newer build, a new catalogue, a day old; dead runs closed, old ones forgotten, see [intelligence.md](intelligence.md) § 2, § 8 | hourly, :56 | low |
 | `intention-analysis-sweep` | `leka.intentions.processing.run_pending_analyses` — the intentions analysing whose context has no analysis yet, analysed: what no worker took, see [intentions.md](intentions.md) § 12 | :07 :22 :37 :52 | low |
 | `intention-plans-due` | `leka.intentions.actions.run_due_plans` — the plans scheduled for now or before, checked again and run, see [intentions.md](intentions.md) § 14 | every 5 minutes | low |
+| `capability-registry-sync` | `leka.capabilities.catalogue.run_catalogue_sync` — the capability catalogue registered — every version, every lifecycle move — as the API does when it starts, see [capabilities.md](capabilities.md) § 3 | hourly (at 23) | low |
 | `intention-verifications-due` | `leka.intentions.verification.run_due_verifications` — the outcomes being verified, settled, read again; concluded when all is met or at their deadline, see [intentions.md](intentions.md) § 15 | every 5 minutes (at 2, 7, 12…) | low |
 
 ---

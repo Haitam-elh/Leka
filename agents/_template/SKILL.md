@@ -8,6 +8,16 @@ mode: read_only
 risk: low
 outputs: finding
 origin: internal
+category: knowledge
+# Optional — what the catalogue says of it and what routes to it (LEKA-393):
+# title: How people call it
+# inputs:
+#   - {name: subject, type: text, required: true, description: What it is about}
+# deliverables: [markdown]
+# goals: [explain_cause]
+# kinds: [diagnose]
+# examples: ["How someone would ask for it"]
+# permission: intention:create
 ---
 
 # <Agent name>

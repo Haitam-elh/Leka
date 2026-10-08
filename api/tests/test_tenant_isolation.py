@@ -61,8 +61,22 @@ pytestmark = pytest.mark.integration
 #                  explicitly and never return the NULL rows: a system run is
 #                  operating data, not a customer's. JobRunRepository.
 #                  list_for_workspace is that filter; see ADR 013.
+#   capability_registrations, capability_events
+#                  LEKA's capability catalogue and its history (LEKA-393):
+#                  what LEKA can do, every version, every lifecycle move —
+#                  the product's, no customer's. What a workspace says of
+#                  them is workspace_capabilities, which is scoped.
 TENANT_FREE_TABLES = frozenset(
-    {"workspaces", "users", "sessions", "email_tokens", "job_runs", "alembic_version"}
+    {
+        "workspaces",
+        "users",
+        "sessions",
+        "email_tokens",
+        "job_runs",
+        "alembic_version",
+        "capability_registrations",
+        "capability_events",
+    }
 )
 
 PUBLIC_PATHS = frozenset({"/api/v1/health"})

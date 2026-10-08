@@ -76,7 +76,9 @@ scheduling, stopping a run, confirming a person's step — takes `intention:appr
 systems LEKA may act through are authorized with `workspace:update` (LEKA-391). What its
 outcome should be, a person's word on it, reading it again and concluding take
 `intention:approve`; its verification and its whole story are read with `intention:read`
-(LEKA-392).
+(LEKA-392). The capability catalogue is read with `workspace:read` — kept at hand
+too; turning a capability on or off for the workspace takes `workspace:update`
+(LEKA-393).
 
 **`context:manage` is admin and above.** A member makes contexts, makes them again,
 widens and narrows them, and archives or stops following the ones they made. Archiving

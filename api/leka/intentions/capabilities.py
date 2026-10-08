@@ -32,6 +32,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import timedelta
 
+from leka.capabilities import Contract, Definition, Kind, Lifecycle, provide
 from leka.context import ContextElementRead
 from leka.intentions.analysis import (
     Capability,
@@ -1077,3 +1078,48 @@ CAPABILITIES: Sequence[Capability] = (
 
 def capability_named(name: str) -> Capability | None:
     return next((c for c in CAPABILITIES if c.name == name), None)
+
+
+# ── in the catalogue (LEKA-393) ──────────────────────────────────────────────
+
+# What each is about, what it is called, how people ask for it.
+CATALOGUE: dict[str, tuple[str, str, tuple[str, ...]]] = {
+    "standing": ("knowledge", "Standing", ("Où en est Billing API ?",)),
+    "ownership": ("knowledge", "Ownership", ("Qui est responsable de payment-api ?",)),
+    "dependencies": ("architecture", "Dependencies", ("De quoi dépend Billing API ?",)),
+    "incidents": ("operations", "Incidents", ("Pourquoi Billing API est lente depuis hier ?",)),
+    "changes": ("operations", "Changes", ("Qu'est-ce qui a changé sur checkout cette semaine ?",)),
+    "documentation": ("documentation", "Documentation", ("Où est documenté auth-service ?",)),
+    "compliance": ("compliance", "Compliance", ("auth-service est-il conforme ?",)),
+    "migration": ("architecture", "Migration", ("Migrer Billing API vers Kubernetes",)),
+    "action": ("operations", "Action reach", ("Redémarre auth-service en production",)),
+}
+
+
+def definitions() -> list[Definition]:
+    """LEKA's own analyses, as the catalogue holds them: rules, active,
+    run on an intention's context — asking is what uses them."""
+    found: list[Definition] = []
+    for capability in CAPABILITIES:
+        category, title, examples = CATALOGUE[capability.name]
+        found.append(
+            Definition(
+                key=capability.name,
+                title=title,
+                summary=capability.summary,
+                category=category,
+                kind=Kind.RULES,
+                version=f"{capability.version}.0.0",
+                lifecycle=Lifecycle.ACTIVE,
+                contract=Contract(output="analysis", formats=("json",)),
+                permission="intention:create",
+                goals=capability.goals,
+                kinds=capability.kinds,
+                examples=examples,
+                always=capability.always,
+            )
+        )
+    return found
+
+
+provide("intentions.analysis", definitions)

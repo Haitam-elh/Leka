@@ -21,6 +21,7 @@ logger = structlog.get_logger(__name__)
 
 FRONT_MATTER_DELIMITER = "---"
 SKILL_FILENAME = "SKILL.md"
+INDEX_FILENAME = "registry.yaml"
 
 
 class AgentLoadError(Exception):
@@ -117,6 +118,26 @@ class AgentRegistry:
 
     def __len__(self) -> int:
         return len(self._agents)
+
+
+def read_index(agents_dir: Path) -> dict[str, tuple[str, str]]:
+    """registry.yaml: each agent's path, relative to agents/, with the
+    version and the status (LEKA-393: its lifecycle) recorded there."""
+    path = agents_dir / INDEX_FILENAME
+    if not path.exists():
+        return {}
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        msg = f"{INDEX_FILENAME} is not valid YAML: {exc}"
+        raise AgentLoadError(msg) from exc
+    found: dict[str, tuple[str, str]] = {}
+    for entry in raw.get("agents") or []:
+        if not isinstance(entry, dict) or "path" not in entry:
+            msg = f"{INDEX_FILENAME}: an entry without its path"
+            raise AgentLoadError(msg)
+        found[str(entry["path"])] = (str(entry.get("version", "")), str(entry.get("status", "")))
+    return found
 
 
 def load_all(agents_dir: Path, *, strict: bool = True) -> AgentRegistry:

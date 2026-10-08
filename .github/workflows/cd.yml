@@ -118,6 +118,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: api
+          # The agents, from the repository's root (api/Dockerfile).
+          build-contexts: agents=agents
           push: true
           # The sha and nothing else. No `latest`: a moving tag means
           # "what is running?" has no answer and rollback has no target.

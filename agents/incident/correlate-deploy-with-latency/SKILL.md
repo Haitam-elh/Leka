@@ -8,6 +8,7 @@ mode: read_only
 risk: low
 outputs: finding
 origin: internal
+category: operations
 ---
 
 Placeholder. The instructions for this agent are product work, not

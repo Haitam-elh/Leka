@@ -294,7 +294,7 @@ class Choice:
     version: int
     method: str
     chosen: bool
-    reason: str  # always, goal, kind, acting · no_model, not_called
+    reason: str  # always, goal, kind, acting · no_model, disabled, not_called
 
 
 @dataclass(frozen=True)
@@ -336,11 +336,18 @@ def select(
     capabilities: Sequence[Capability],
     *,
     model: bool = False,
+    disabled: frozenset[str] = frozenset(),
 ) -> list[Choice]:
     """The capabilities its goal and kind call for — and every other one,
-    said not called. An agent waits for a model (LEKA-394)."""
+    said not called. An agent waits for a model (LEKA-394); one the
+    workspace turned off (LEKA-393) is not run, said so."""
     chosen: list[Choice] = []
     for capability in capabilities:
+        if capability.name in disabled:
+            chosen.append(
+                Choice(capability.name, capability.version, capability.method, False, "disabled")
+            )
+            continue
         reason: str | None = None
         if capability.always:
             reason = "always"
