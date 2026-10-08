@@ -15,7 +15,7 @@ from html import escape
 
 from leka.core.config import settings
 from leka.identity.email import EmailMessage
-from leka.identity.links import reset_link, verification_link
+from leka.identity.links import invitation_link, reset_link, verification_link
 
 SIGNATURE = "L'équipe LEKA"
 
@@ -77,6 +77,29 @@ def password_reset(to: str, token: str) -> EmailMessage:
         html=_html(
             "Réinitialisez votre mot de passe", [intro, note], "Choisir un mot de passe", link
         ),
+    )
+
+
+ROLES = {"owner": "propriétaire", "admin": "administrateur", "member": "membre"}
+
+
+def invitation(to: str, token: str, *, workspace: str, inviter: str, role: str) -> EmailMessage:
+    """An invitation to a workspace: who invites, where, as what."""
+    link = invitation_link(token)
+    intro = (
+        f"{inviter} vous invite à rejoindre l'espace « {workspace} » sur LEKA, "
+        f"en tant que {ROLES.get(role, role)}."
+    )
+    note = (
+        "Ce lien est valable 7 jours et ne fonctionne qu'une fois. Connectez-vous, ou "
+        "créez votre compte avec cette adresse, pour rejoindre l'espace. Si vous ne "
+        "vous attendiez pas à cette invitation, ignorez ce message."
+    )
+    return EmailMessage(
+        to=to,
+        subject=f"{inviter} vous invite sur LEKA",
+        body=f"{intro}\n\n{link}\n\n{note}\n\n{SIGNATURE}\n",
+        html=_html(f"Rejoignez « {workspace} »", [intro, note], "Rejoindre l'espace", link),
     )
 
 

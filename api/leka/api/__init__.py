@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from leka.api import (
     actions,
     background,
+    billing,
     capabilities,
     connectors,
     context,
@@ -63,5 +64,7 @@ api_router.include_router(decisions.router)
 api_router.include_router(actions.router)
 # What came of it, and every intention's whole story (LEKA-392).
 api_router.include_router(outcomes.router)
+# What the workspace holds and did this month (Facturation).
+api_router.include_router(billing.router)
 
 __all__ = ["api_router"]

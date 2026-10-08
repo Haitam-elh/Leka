@@ -32,6 +32,14 @@ from leka.governance.service import (
     check_permission,
     check_role,
 )
+from leka.governance.team import (
+    PendingInvitationRead,
+    TeamMemberRead,
+    inviter_name,
+)
+from leka.governance.team import members as team_members
+from leka.governance.team import pending as pending_invitations
+from leka.governance.team import revoke as revoke_invitation
 
 __all__ = [
     "ROLE_PERMISSIONS",
@@ -40,9 +48,11 @@ __all__ = [
     "AuditRepository",
     "AuthorisationError",
     "GovernanceService",
+    "PendingInvitationRead",
     "Permission",
     "Principal",
     "PrincipalDep",
+    "TeamMemberRead",
     "WorkspaceSuspendedError",
     "WorkspaceUnavailableError",
     "check_lifecycle",
@@ -50,6 +60,10 @@ __all__ = [
     "check_role",
     "get_current_principal",
     "get_governance_service",
+    "inviter_name",
+    "pending_invitations",
     "require_permission",
     "require_role",
+    "revoke_invitation",
+    "team_members",
 ]

@@ -19,6 +19,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 
+from leka.api import governance as governance_api
 from leka.db import session_factory, system_scope
 from leka.platform import Role, Workspace, WorkspaceStatus
 from tests.conftest import FakeIdentity, error_message, next_cursor, page_items
@@ -283,6 +284,56 @@ async def test_a_workspace_awaiting_deletion_refuses_everything(
 
 
 # ── Invitations ──────────────────────────────────────────────────────────────
+
+
+async def test_the_team_its_invitations_and_the_email_that_carries_one(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    people: dict[str, uuid.UUID],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Équipe & accès: who is in, who is invited — the invitation emailed with
+    its link, who invites, where, as what — revoked, its link dead."""
+    sent: list[Any] = []
+
+    class Capture:
+        async def send(self, message: Any) -> None:
+            sent.append(message)
+
+    monkeypatch.setattr(governance_api, "build_email_sender", lambda: Capture())
+    workspace = await _create_workspace(client, identity, people["owner"], "Acme Corp")
+    invited = await client.post(
+        f"{API}/members/invite", json={"email": "nora@acme.example", "role": "admin"}
+    )
+    assert invited.status_code == 201, invited.text
+    token = invited.json()["token"]
+    [message] = sent
+    assert message.to == "nora@acme.example"
+    assert f"/invitations/{token}" in message.body
+    assert "« Acme Corp »" in message.body and "administrateur" in message.body
+
+    pending = (await client.get(f"{API}/invitations")).json()
+    assert [(p["email"], p["role"], p["expired"]) for p in pending] == [
+        ("nora@acme.example", "admin", False)
+    ]
+    assert pending[0]["invited_by"]
+    team = (await client.get(f"{API}/team/members")).json()
+    assert [m["role"] for m in team] == ["owner"]
+    assert team[0]["email"] and team[0]["user_id"] == str(people["owner"])
+
+    # Revoked: its link no longer works.
+    assert (await client.delete(f"{API}/invitations/{pending[0]['id']}")).status_code == 204
+    assert (await client.get(f"{API}/invitations")).json() == []
+    assert (await client.delete(f"{API}/invitations/{pending[0]['id']}")).status_code == 404
+    identity.sign_in(people["admin"], uuid.UUID(workspace["id"]))
+    assert (await client.post(f"{API}/invitations/{token}/accept")).status_code >= 400
+
+    # A member sees the team, not the invitations.
+    seat = await _invite_and_accept(client, identity, people, Role.MEMBER, workspace)
+    assert seat["role"] == "member"
+    identity.sign_in(people["admin"], uuid.UUID(workspace["id"]))
+    assert len((await client.get(f"{API}/team/members")).json()) == 2
+    assert (await client.get(f"{API}/invitations")).status_code == 403
 
 
 async def test_an_invitation_token_works_once(

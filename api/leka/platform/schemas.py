@@ -76,6 +76,7 @@ class MemberRead(BaseModel):
     model_config = ConfigDict(frozen=True, from_attributes=True)
 
     id: uuid.UUID
+    workspace_id: uuid.UUID
     user_id: uuid.UUID
     role: Role
     created_at: datetime
