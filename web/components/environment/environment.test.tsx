@@ -20,13 +20,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ARCHITECTURE, NOTHING } from "@/components/environment/architecture.test-data";
 import { ApiError } from "@/lib/api";
-import type { EntitySheet, Environment } from "@/lib/environment";
+import type { EntityActivity, EntitySheet, Environment } from "@/lib/environment";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import type { LandscapeView, ViewName } from "@/lib/knowledge-graph";
 import { makeQueryClient } from "@/lib/query";
 import type { Source } from "@/lib/sources";
 
-const api = { get: vi.fn(), sheet: vi.fn() };
+const api = { get: vi.fn(), sheet: vi.fn(), activity: vi.fn() };
 const sourcesApi = { list: vi.fn() };
 // A thing's course (LEKA-383): what a sheet the sources no longer fill reads.
 const courseApi = { history: vi.fn(), at: vi.fn() };
@@ -317,6 +317,67 @@ function sheet(overrides: Partial<EntitySheet> = {}): EntitySheet {
   };
 }
 
+const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+function activityOf(days = 30): EntityActivity {
+  return {
+    days,
+    since: `${day(days)}T00:00:00Z`,
+    events: [
+      {
+        entity: ref("r1", "release", "v2.4.0"),
+        at: `${day(1)}T09:00:00Z`,
+        kind: "change",
+        where: ref(REPO_ID, "repository", "acme/payment-api"),
+        source_kinds: ["github"],
+        state: "published",
+        url: "https://github.com/acme/payment-api/releases/v2.4.0",
+        version: "v2.4.0",
+        environment: null,
+      },
+      {
+        entity: ref("pr1", "pull_request", "Retry on timeout"),
+        at: `${day(2)}T10:00:00Z`,
+        kind: "change",
+        where: ref(REPO_ID, "repository", "acme/payment-api"),
+        source_kinds: ["github"],
+        state: "merged",
+        url: "javascript:alert(1)",
+        version: null,
+        environment: null,
+      },
+      {
+        entity: ref("i1", "issue", "Payments time out"),
+        at: `${day(3)}T10:00:00Z`,
+        kind: "information",
+        where: null,
+        source_kinds: ["jira"],
+        state: "open",
+        url: null,
+        version: null,
+        environment: null,
+      },
+    ],
+    by_day: Array.from({ length: days }, (_, n) => ({
+      day: day(days - n - 1),
+      changes: n === days - 3 ? 1 : 0,
+      deployments: n === days - 2 ? 1 : 0,
+      incidents: 0,
+      work: n === days - 4 ? 1 : 0,
+      other: 0,
+    })),
+    changes: 1,
+    deployments: 1,
+    incidents: 0,
+    incidents_open: 0,
+    work: 1,
+    work_open: 1,
+    last_activity: `${day(1)}T09:00:00Z`,
+    previous: { changes: 2, deployments: 0, incidents: 1, work: 0 },
+    log_sources: [],
+    mentions: [ref("d9", "document", "Architecture des paiements")],
+  };
+}
+
 function mount(node: React.ReactNode) {
   return render(
     <QueryClientProvider client={makeQueryClient()}>
@@ -332,6 +393,7 @@ beforeEach(() => {
   query.set("");
   api.get.mockResolvedValue(ENVIRONMENT);
   api.sheet.mockResolvedValue(sheet());
+  api.activity.mockImplementation(async (_id: string, days: number) => activityOf(days));
   courseApi.history.mockRejectedValue(new ApiError(404, "/x", "No such entity."));
   sourcesApi.list.mockResolvedValue({ data: SOURCES });
   graphApi.view.mockImplementation(async (name: ViewName) => LANDSCAPES[name]);
@@ -533,9 +595,12 @@ describe("an entity's sheet", () => {
       `/environment/graph?entity=${SERVICE_ID}`,
     );
     expect(dependency).toHaveTextContent("En fait partie · déduit · 80 % · entre outils");
-    // No metrics source: the four tiles say so, with no number.
-    const latency = within(screen.getByTestId("metric-latency"));
-    expect(latency.getByText("Aucune source de métriques")).toBeInTheDocument();
+    // Its activity, as its sources show it — against the period before.
+    expect(await screen.findByTestId("activity-changes")).toHaveTextContent("1");
+    expect(screen.getByTestId("activity-changes")).toHaveTextContent("-50 %");
+    expect(screen.getByTestId("activity-deployments")).toHaveTextContent("+1");
+    expect(screen.getByTestId("activity-work")).toHaveTextContent("1 ouvert(s)");
+    expect(screen.getByTestId("activity-chart")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Runbook Payment API" })).toBeInTheDocument();
     // The trail names the entity, not its identifier.
     const trail = screen.getByRole("navigation", { name: "Fil d'Ariane" });
@@ -617,14 +682,66 @@ describe("an entity's sheet", () => {
     expect(screen.queryByRole("button", { name: "Restaurer" })).not.toBeInTheDocument();
   });
 
-  it("shows a tab the sources cannot fill as what it waits for", async () => {
-    pathname.value = `/environment/services/${SERVICE_ID}/metrics`;
-    params.value = { entityType: "services", entityId: SERVICE_ID, tab: "metrics" };
-    mount(<EntitySheetScreen />);
+  it("fills each tab with what its sources show", async () => {
+    const user = userEvent.setup();
+    const open = (tab: string) => {
+      pathname.value = `/environment/services/${SERVICE_ID}/${tab}`;
+      params.value = { entityType: "services", entityId: SERVICE_ID, tab };
+    };
 
-    expect(
-      await screen.findByText(/latence, erreurs et disponibilité apparaîtront ici/),
-    ).toBeInTheDocument();
+    open("metrics");
+    const { unmount } = mount(<EntitySheetScreen />);
+    const metrics = await screen.findByTestId("metrics-tab");
     expect(screen.getByTestId("tab-metrics")).toHaveAttribute("aria-current", "page");
+    expect(within(metrics).getByTestId("runtime-note")).toHaveTextContent(
+      "Latence, erreurs et disponibilité viennent d'un outil de supervision",
+    );
+    await user.click(within(metrics).getByRole("button", { name: "90 jours" }));
+    expect(api.activity).toHaveBeenLastCalledWith(SERVICE_ID, 90);
+    unmount();
+
+    open("deployments");
+    const deployments = mount(<EntitySheetScreen />);
+    const [release] = await screen.findAllByTestId("activity-event");
+    expect(release).toHaveTextContent("v2.4.0");
+    expect(within(release).getByRole("link", { name: "Ouvrir" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/payment-api/releases/v2.4.0",
+    );
+    deployments.unmount();
+
+    open("logs");
+    const logs = mount(<EntitySheetScreen />);
+    expect(await screen.findAllByTestId("activity-event")).toHaveLength(3);
+    // A link that is not http(s) is never one.
+    expect(screen.queryAllByRole("link", { name: "Ouvrir" })).toHaveLength(1);
+    await user.click(screen.getByTestId("logs-filter-work"));
+    expect(screen.getAllByTestId("activity-event")).toHaveLength(1);
+    expect(screen.getByTestId("logs")).toHaveTextContent("Payments time out");
+    logs.unmount();
+
+    open("configuration");
+    api.sheet.mockResolvedValue(
+      sheet({
+        entity: {
+          ...sheet().entity,
+          attributes: { runtime: "python3.12", replicas: 3, url: "https://x" },
+        },
+      }),
+    );
+    const configuration = mount(<EntitySheetScreen />);
+    const stated = await screen.findAllByTestId("configuration-stated");
+    expect(stated.map((row) => row.textContent)).toEqual(["replicas3", "runtimepython3.12"]);
+    expect(screen.getByTestId("configuration-deduced")).toHaveTextContent("lifecycle");
+    configuration.unmount();
+
+    open("incidents");
+    const incidents = mount(<EntitySheetScreen />);
+    expect(await screen.findByTestId("open-work")).toHaveTextContent("Payments time out");
+    incidents.unmount();
+
+    open("documentation");
+    mount(<EntitySheetScreen />);
+    expect(await screen.findByTestId("mentions")).toHaveTextContent("Architecture des paiements");
   });
 });

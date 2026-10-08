@@ -8,6 +8,7 @@ now checks each link against the page files in web/app.
 
     verification  web/app/(auth)/verify/[token]/page.tsx   → /verify/<token>
     reset         web/app/(auth)/reset-password/page.tsx   → /reset-password?token=<token>
+    invitation    web/app/(auth)/invitations/[token]/page.tsx → /invitations/<token>
 
 "(auth)" is a Next.js route group: it organises files and never appears in
 the URL.
@@ -22,6 +23,10 @@ from leka.core.config import settings
 
 def verification_link(token: str) -> str:
     return f"{settings.web_url}/verify/{quote(token, safe='')}"
+
+
+def invitation_link(token: str) -> str:
+    return f"{settings.web_url}/invitations/{quote(token, safe='')}"
 
 
 def reset_link(token: str) -> str:

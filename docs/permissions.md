@@ -149,3 +149,16 @@ is refused there rather than in whichever service remembered to look.
 Per-resource permissions, groups, custom roles and SSO-mapped roles. All are
 plausible one day; none is needed by any screen that exists. See
 [adr/007-tenant-isolation-strategy.md](adr/007-tenant-isolation-strategy.md).
+
+## Équipe & accès, Facturation
+
+`GET /team/members` — everyone with a seat, with their name, address, role,
+when they joined and last signed in — any member. `GET /invitations` (the
+pending, the expired said so) and `DELETE /invitations/{id}` (revoked, its
+link dead) take `member:invite`. An invitation is emailed when it is made —
+its link, who invites, to which workspace, as what — and accepted at
+`/invitations/<token>` by someone signed in (or signing in, then back),
+the workspace entered at once. `GET /billing/usage` — what the workspace
+holds and did this month, counted — any member; no plan, payment nor
+invoice is held by LEKA yet.
+

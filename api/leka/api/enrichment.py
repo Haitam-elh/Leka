@@ -43,11 +43,13 @@ from leka.ingestion import (
     EnrichmentRepository,
     EnrichmentRunRead,
     EnrichmentStatus,
+    EntityActivityRead,
     EntityRef,
     EntitySheetRead,
     EnvironmentRead,
     ResolvedEntity,
     ResolvedEntityRead,
+    entity_activity,
     entity_sheet,
     environment_screen,
 )
@@ -117,6 +119,21 @@ async def environment_entity(
     entity = await _entity(repository, entity_id)
     enriched = await _enriched(repository, entity)
     return await entity_sheet(repository, entity, enriched, now=datetime.now(UTC))
+
+
+@router.get("/environment/{entity_id}/activity", response_model=EntityActivityRead)
+async def environment_entity_activity(
+    entity_id: uuid.UUID,
+    session: SessionDep,
+    principal: Reader,
+    days: Annotated[int, Query(ge=1, le=180)] = 30,
+) -> EntityActivityRead:
+    """Everything that moved around one entity over `days` — and the
+    `days` before, counted: its changes, deployments, incidents, work; day
+    by day; its log, as its sources say it."""
+    repository = EnrichmentRepository(session, principal.workspace_id)
+    entity = await _entity(repository, entity_id)
+    return await entity_activity(repository, entity, now=datetime.now(UTC), days=days)
 
 
 async def _entity(repository: EnrichmentRepository, entity_id: uuid.UUID) -> ResolvedEntity:

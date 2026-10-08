@@ -33,12 +33,15 @@ import { CompactIntentionComposer } from "@/components/intentions/compact-compos
 import { PageContainer } from "@/components/shell/page-container";
 import { useCurrentUser } from "@/components/shell/shell-provider";
 import { exactDate, shortWhen } from "@/components/knowledge/time";
+import { attentionRows } from "@/components/environment/parts";
 import { ConnectedSources } from "@/components/sources/connected-sources";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useConflicts } from "@/lib/conflicts-queries";
 import { useDecisionQueue } from "@/lib/decisions-queries";
 import { useCandidates } from "@/lib/enrichment-queries";
+import { useEnvironment } from "@/lib/environment-queries";
+import { useActivity } from "@/lib/evolution-queries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import {
   isConnected,
@@ -258,27 +261,58 @@ function Greeting({ load }: { load: Load }) {
 
 function StateCard({ load, className }: { load: Load; className?: string }) {
   const t = useDictionary();
+  const w = t.overview;
   const list = load.status === "ready" ? load.sources : [];
   const connected = list.filter(isConnected).length;
-
-  // Three tiles LEKA cannot fill yet: no monitoring source reports service
-  // health or incidents. Laid out as the mockup; valued "—", and saying why.
-  const unmeasured = [
+  // The environment as enrichment made it (LEKA-359, LEKA-369): services
+  // and their state — a monitoring tool's word, or deduced from what runs
+  // them — open incidents, what needs attention.
+  const environment = useEnvironment();
+  const env = environment.data;
+  const attention = env ? attentionRows(t, env.attention) : [];
+  const points = env ? env.attention.reduce((sum, point) => sum + point.count, 0) : null;
+  const unmonitored =
+    env?.attention.find((point) => point.kind === "unmonitored_services")?.count ?? 0;
+  const tiles = [
     {
+      key: "services",
       icon: CircleCheck,
       tone: "success" as const,
-      label: t.overview.servicesUp,
+      label: w.servicesUp,
       filled: true,
+      value: env ? String(env.services_operational) : null,
+      foot: !env
+        ? null
+        : env.services === 0
+          ? w.noServices
+          : [
+              fill(w.servicesOf, { total: env.services }),
+              unmonitored ? fill(w.unmonitored, { count: unmonitored }) : null,
+            ]
+              .filter(Boolean)
+              .join(" · "),
     },
     {
+      key: "attention",
       icon: CircleAlert,
       tone: "warning" as const,
-      label: t.overview.attentionPoints,
+      label: w.attentionPoints,
+      value: points === null ? null : String(points),
+      foot: !env ? null : attention[0] ? attention[0].detail || attention[0].title : w.noAttention,
     },
     {
+      key: "incidents",
       icon: TriangleAlert,
       tone: "danger" as const,
-      label: t.overview.activeIncidents,
+      label: w.activeIncidents,
+      value: env ? String(env.incidents_open) : null,
+      foot: !env
+        ? null
+        : env.services_impacted
+          ? fill(w.impacted, { count: env.services_impacted })
+          : env.incidents_open
+            ? null
+            : w.noIncident,
     },
   ];
 
@@ -289,11 +323,12 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
       className={className}
     >
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        {unmeasured.map(({ icon, tone, label, filled }) => (
+        {tiles.map(({ key, icon, tone, label, filled, value, foot }) => (
           <div
-            key={label}
+            key={key}
             className="rounded-lg border border-shell-line px-3 py-3.5"
             data-testid="kpi-tile"
+            data-kpi={key}
           >
             <div className="flex items-start gap-3">
               <IconTile
@@ -302,13 +337,20 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
                 iconClassName={filled ? "fill-current [&>path]:stroke-white" : undefined}
               />
               <div className="min-w-0">
-                <p className="text-[1.375rem] leading-7 font-bold text-brand-navy">—</p>
+                <p
+                  className="text-[1.375rem] leading-7 font-bold text-brand-navy"
+                  data-testid={`kpi-${key}`}
+                >
+                  {value ?? "—"}
+                </p>
                 <p className="text-[0.78rem] leading-4 tracking-[-0.01em] text-shell-muted">
                   {label}
                 </p>
               </div>
             </div>
-            <p className="mt-4 text-xs text-shell-muted">{t.overview.noMonitoring}</p>
+            <p className="mt-4 line-clamp-2 text-xs text-shell-muted">
+              {environment.isError ? w.notRead : foot}
+            </p>
           </div>
         ))}
         <div className="rounded-lg border border-shell-line px-3 py-3.5" data-testid="kpi-tile">
@@ -530,15 +572,28 @@ function SourcesCard({ load }: { load: Load }) {
 function Banner({ load }: { load: Load }) {
   const t = useDictionary();
   const connected = load.status === "ready" ? load.sources.filter(isConnected).length : null;
+  // What happened this week, as Activité counts it (LEKA-383); what the
+  // sources disagree on, open (LEKA-382).
+  const week = useActivity(7);
+  const disagreements = useConflicts("open");
+  const events = week.data?.stats.events.value;
+  const open = disagreements.data?.data.length;
   const stats: { icon: LucideIcon; value: string; label: string }[] = [
     {
       icon: ChartColumn,
       value: connected === null ? "—" : String(connected),
       label: t.overview.statSources,
     },
-    // Correlation and contradiction are the analysis pipeline's (LEKA-384).
-    { icon: ScanSearch, value: "—", label: t.overview.statEvents },
-    { icon: Sparkles, value: "—", label: t.overview.statContradictions },
+    {
+      icon: ScanSearch,
+      value: events === undefined ? "—" : String(events),
+      label: t.overview.statEvents,
+    },
+    {
+      icon: Sparkles,
+      value: open === undefined ? "—" : String(open),
+      label: t.overview.statContradictions,
+    },
   ];
 
   return (

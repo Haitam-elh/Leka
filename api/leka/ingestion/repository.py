@@ -19,6 +19,7 @@ from sqlalchemy import (
     Float,
     Result,
     Select,
+    Text,
     and_,
     column,
     delete,
@@ -31,6 +32,7 @@ from sqlalchemy import (
     true,
     update,
 )
+from sqlalchemy import cast as as_type
 from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1949,6 +1951,31 @@ class EnrichmentRepository(WorkspaceScopedRepository):
         rows = await self._session.execute(statement)
         return [tuple(row) for row in rows.all()]
 
+    async def mentioning(
+        self, name: str, *, types: Sequence[str], limit: int = 20
+    ) -> Sequence[tuple[uuid.UUID, str, str, str, dict[str, object]]]:
+        """Entities of these types whose name or what their source said of
+        them names `name` — case aside: (id, type, key, name, attributes)."""
+        pattern = f"%{name.replace('%', r'\%').replace('_', r'\_')}%"
+        rows = await self._session.execute(
+            select(
+                ResolvedEntity.id,
+                ResolvedEntity.type,
+                ResolvedEntity.key,
+                ResolvedEntity.name,
+                ResolvedEntity.attributes,
+            )
+            .where(
+                ResolvedEntity.workspace_id == self.workspace_id,
+                ResolvedEntity.type.in_(list(types)),
+                ResolvedEntity.name.ilike(pattern)
+                | as_type(ResolvedEntity.attributes, Text).ilike(pattern),
+            )
+            .order_by(ResolvedEntity.name)
+            .limit(limit)
+        )
+        return [tuple(row) for row in rows.all()]
+
     async def facts_of(
         self, entity_ids: Sequence[uuid.UUID], attributes: Sequence[str]
     ) -> dict[uuid.UUID, dict[str, object]]:
@@ -1968,6 +1995,17 @@ class EnrichmentRepository(WorkspaceScopedRepository):
         for entity_id, attribute, value in rows.all():
             found[entity_id][attribute] = value
         return dict(found)
+
+    async def connected_kinds(self) -> set[str]:
+        """The kinds of the workspace's sources LEKA reads from: active, or
+        degraded but still answering."""
+        rows = await self._session.scalars(
+            select(Source.kind).where(
+                Source.workspace_id == self.workspace_id,
+                Source.status.in_(["active", "degraded"]),
+            )
+        )
+        return {str(kind.value if hasattr(kind, "value") else kind) for kind in rows}
 
     async def kinds_of(self, entity_ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, set[str]]:
         """The kinds of the sources that show each entity: github, jira…"""

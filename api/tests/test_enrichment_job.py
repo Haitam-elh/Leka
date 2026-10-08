@@ -732,6 +732,41 @@ async def test_an_entity_s_sheet_says_its_state_team_incidents_and_dependencies(
     assert repository_sheet["team"]["origin"] == "inferred"
 
 
+async def test_an_entity_s_activity_is_everything_that_moved_around_it(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    workspace = acme["acme"]
+    await _live(workspace)
+    ids = await _resolved(workspace)
+    _as(identity, acme, "member")
+
+    # Long enough to hold the test's moment, whatever today is.
+    response = await client.get(f"{API}/environment/{ids[SERVICE]}/activity", params={"days": 180})
+    assert response.status_code == 200
+    activity = response.json()
+    assert activity["days"] == 180 and len(activity["by_day"]) == 180
+    keys = {e["entity"]["key"]: e for e in activity["events"]}
+    # Its incident, and its repository's pull request — each as its source says it.
+    assert {"incident:pagerduty:Q1", PR} <= set(keys)
+    assert keys["incident:pagerduty:Q1"]["kind"] == "incident"
+    assert (activity["incidents"], activity["incidents_open"]) == (1, 1)
+    assert activity["changes"] >= 1
+    assert sum(d["changes"] + d["incidents"] for d in activity["by_day"]) == (
+        activity["changes"] + activity["incidents"]
+    )
+    assert activity["last_activity"] == activity["events"][0]["at"]
+    assert set(activity["previous"]) == {"changes", "deployments", "incidents", "work"}
+    assert activity["log_sources"] == []  # the test's sources are all one kind
+    assert isinstance(activity["mentions"], list)
+
+    assert (
+        await client.get(f"{API}/environment/{ids[SERVICE]}/activity", params={"days": 0})
+    ).status_code == 422
+    _as(identity, acme, "other_admin")
+    missing = await client.get(f"{API}/environment/{ids[SERVICE]}/activity")
+    assert missing.status_code == 404
+
+
 async def test_an_empty_workspace_has_an_empty_environment_and_no_one_else_s(
     client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
 ) -> None:

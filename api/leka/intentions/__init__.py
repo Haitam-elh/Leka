@@ -111,7 +111,13 @@ from leka.intentions.service import (
 )
 from leka.intentions.timeline import CATEGORIES, Filters, categories_of, timeline
 from leka.intentions.understanding import UNDERSTANDING_VERSION, understand
-from leka.intentions.usage import Usage, Use, capability_usage
+from leka.intentions.usage import (
+    Usage,
+    Use,
+    WorkspaceUsageRead,
+    capability_usage,
+    workspace_usage,
+)
 from leka.intentions.verification import VerificationRefusedError, VerificationService
 
 __all__ = [
@@ -193,6 +199,7 @@ __all__ = [
     "VerificationRefusedError",
     "VerificationService",
     "Withdrawal",
+    "WorkspaceUsageRead",
     "analysis_read",
     "capability_usage",
     "categories_of",
@@ -207,4 +214,5 @@ __all__ = [
     "refined",
     "timeline",
     "understand",
+    "workspace_usage",
 ]

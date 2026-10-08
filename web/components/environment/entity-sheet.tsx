@@ -1,24 +1,18 @@
 "use client";
 
 import {
-  Activity,
-  ArrowDown,
   ArrowRight,
-  ArrowUp,
   CalendarDays,
   ChartLine,
   ChevronRight,
   CircleCheck,
-  Clock,
   Copy,
   Ellipsis,
   FileText,
-  Gauge,
   type LucideIcon,
   SearchX,
   ShieldCheck,
   Sparkles,
-  TriangleAlert,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -31,7 +25,6 @@ import { EntityContext } from "@/components/environment/entity-context";
 import { EntityHistory, RemovedEntity } from "@/components/environment/entity-history";
 import { IncidentAnalysis } from "@/components/environment/incident-analysis";
 import { EntityQuality } from "@/components/environment/knowledge-quality";
-import { Sparkline } from "@/components/knowledge/entity-detail-panel";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { timeAgo } from "@/components/knowledge/time";
 import {
@@ -50,6 +43,16 @@ import {
   typeLabel,
 } from "@/components/environment/parts";
 import { PageContainer } from "@/components/shell/page-container";
+import {
+  ActivityCard,
+  ConfigurationTab,
+  DeploymentsTab,
+  LogsTab,
+  Mentions,
+  MetricsTab,
+  OpenWork,
+  OverviewTiles,
+} from "@/components/environment/entity-tabs";
 import { RouteTabs } from "@/components/shell/route-tabs";
 import { ErrorState } from "@/components/states/error-state";
 import { StatePanel } from "@/components/states/state-panel";
@@ -97,24 +100,6 @@ type Period = keyof typeof PERIODS;
 const HOUR = 3_600_000;
 
 
-const METRICS: { id: string; icon: LucideIcon }[] = [
-  { id: "latency", icon: Clock },
-  { id: "errors", icon: TriangleAlert },
-  { id: "requests", icon: Activity },
-  { id: "availability", icon: Gauge },
-];
-
-interface Metric {
-  id: string;
-  icon: LucideIcon;
-  label: string;
-  value?: string;
-  delta?: { text: string; up: boolean };
-  /** Whether where it goes is good news: sets the colours. */
-  good?: boolean;
-  series?: readonly number[];
-}
-
 interface Dependency {
   key: string;
   name: string;
@@ -137,7 +122,6 @@ interface SheetModel {
   description?: string;
   owner: { name: string; subtitle: string; href?: string } | null;
   team: { name: string; subtitle: string; href?: string } | null;
-  metrics: Metric[];
   incident: { title: string; since: string; href: string } | null;
   attention: AttentionRow[];
   events: EventRow[];
@@ -205,7 +189,7 @@ export function EntitySheetScreen() {
       ) : sheet.isError ? (
         <ErrorState error={sheet.error} onRetry={() => void sheet.refetch()} />
       ) : model ? (
-        <Sheet model={model} tab={tab} />
+        <Sheet model={model} data={sheet.data as EntitySheet} tab={tab} />
       ) : (
         <div className="h-96 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />
       )}
@@ -260,10 +244,6 @@ function realModel(t: ReturnType<typeof useDictionary>, sheet: EntitySheet): She
           href: entityHref(sheet.team.entity),
         }
       : null,
-    metrics: METRICS.map((metric) => ({
-      ...metric,
-      label: (w.metrics as Record<string, string>)[metric.id],
-    })),
     incident: open
       ? { title: open.entity.name, since: open.at, href: entityHref(open.entity) }
       : null,
@@ -346,7 +326,7 @@ function realModel(t: ReturnType<typeof useDictionary>, sheet: EntitySheet): She
   };
 }
 
-function Sheet({ model, tab }: { model: SheetModel; tab: string }) {
+function Sheet({ model, data, tab }: { model: SheetModel; data: EntitySheet; tab: string }) {
   const t = useDictionary();
   const w = t.environment.sheet;
   const [period, setPeriod] = useState<Period>("7d");
@@ -366,16 +346,30 @@ function Sheet({ model, tab }: { model: SheetModel; tab: string }) {
     );
   } else if (tab === "incidents") {
     body = (
-      <Card title={t.tabs.incidents}>
-        <EventList rows={model.incidents} empty={w.incidentsEmpty} detailed />
-      </Card>
+      <div className="flex flex-col gap-4">
+        <Card title={t.tabs.incidents}>
+          <EventList rows={model.incidents} empty={w.incidentsEmpty} detailed />
+        </Card>
+        <OpenWork entityId={model.id} />
+      </div>
     );
   } else if (tab === "documentation") {
     body = (
-      <Card title={t.tabs.documentation}>
-        <Documents rows={model.documents} />
-      </Card>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card title={t.tabs.documentation}>
+          <Documents rows={model.documents} />
+        </Card>
+        <Mentions entityId={model.id} />
+      </div>
     );
+  } else if (tab === "metrics") {
+    body = <MetricsTab entityId={model.id} />;
+  } else if (tab === "deployments") {
+    body = <DeploymentsTab entityId={model.id} />;
+  } else if (tab === "logs") {
+    body = <LogsTab entityId={model.id} />;
+  } else if (tab === "configuration") {
+    body = <ConfigurationTab sheet={data} />;
   } else if (tab === "context") {
     body = <EntityContext entityId={model.id} entityName={model.name} />;
   } else if (tab === "history") {
@@ -557,93 +551,18 @@ function Person({
   );
 }
 
-function MetricTiles({ model }: { model: SheetModel }) {
-  const t = useDictionary();
-  const w = t.environment.sheet;
-  return (
-    <>
-      {model.metrics.map((metric) => (
-        <div
-          key={metric.id}
-          className="rounded-xl border border-shell-line bg-white p-4"
-          data-testid={`metric-${metric.id}`}
-        >
-          <p className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
-            <metric.icon className="size-4 text-shell-muted" aria-hidden="true" />
-            {metric.label}
-          </p>
-          {metric.value ? (
-            <>
-              <p
-                className={cn(
-                  "mt-2 text-[1.75rem] leading-8 font-bold",
-                  metric.good ? "text-brand-navy" : "text-state-danger",
-                )}
-              >
-                {metric.value}
-              </p>
-              <div className="mt-1 flex items-end justify-between gap-2">
-                {metric.delta ? (
-                  <span
-                    className={cn(
-                      "flex items-center gap-1 text-[0.8125rem] font-medium",
-                      metric.good ? "text-state-success" : "text-state-danger",
-                    )}
-                  >
-                    {metric.delta.text}
-                    {metric.delta.up ? (
-                      <ArrowUp className="size-3.5" aria-hidden="true" />
-                    ) : (
-                      <ArrowDown className="size-3.5" aria-hidden="true" />
-                    )}
-                  </span>
-                ) : null}
-                {metric.series ? (
-                  <Sparkline
-                    values={metric.series}
-                    tone={metric.good ? "success" : "danger"}
-                    className="h-8 w-28"
-                  />
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="mt-2 text-[1.75rem] leading-8 font-bold text-shell-muted">—</p>
-              <p className="mt-1 text-xs text-shell-muted">{w.metrics.notMeasured}</p>
-            </>
-          )}
-        </div>
-      ))}
-    </>
-  );
-}
-
-function PerformanceCard() {
-  const t = useDictionary();
-  const w = t.environment.sheet;
-  return (
-    <Card
-      title={w.performance.title}
-      icon={<IconTile icon={ChartLine} tone="violet" className="size-9" />}
-    >
-      <p className="py-10 text-center text-[0.8125rem] text-shell-muted">{w.performance.empty}</p>
-    </Card>
-  );
-}
-
 function Overview({ model, events }: { model: SheetModel; events: EventRow[] }) {
   const t = useDictionary();
   const w = t.environment.sheet;
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,1.4fr)]">
-        <MetricTiles model={model} />
+        <OverviewTiles entityId={model.id} />
         <ActiveIncident model={model} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <PerformanceCard />
+        <ActivityCard entityId={model.id} />
         <Card
           title={
             model.attention.length

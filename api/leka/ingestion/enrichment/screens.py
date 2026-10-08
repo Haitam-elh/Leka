@@ -13,8 +13,9 @@ resolved entities, their enrichment and their relationships.
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from leka.connectors import ConnectorCategory, manifests
 from leka.ingestion.enrichment import view
@@ -24,6 +25,9 @@ from leka.ingestion.repository import EnrichmentRepository
 from leka.ingestion.schemas import (
     AttentionPointRead,
     EnrichedEntity,
+    EntityActivityDay,
+    EntityActivityEvent,
+    EntityActivityRead,
     EntityRef,
     EntitySheetRead,
     EnvironmentEdgeRead,
@@ -292,6 +296,22 @@ async def _attention(
 # ── one entity ───────────────────────────────────────────────────────────────
 
 
+async def _around(
+    repository: EnrichmentRepository, this: Thing, others: dict[uuid.UUID, Thing]
+) -> list[uuid.UUID]:
+    """What is part of a thing or affects it — and, for a service, what is
+    part of its repositories: where its activity is."""
+    around = [other_id for other_id, other in others.items() if other.type not in NOT_EVENTS]
+    if this.type == "service":
+        repositories = [o.id for o in others.values() if o.type == "repository"]
+        around += [
+            a
+            for a, b, _ in await repository.links_of(repositories, ["part_of"])
+            if b in repositories
+        ]
+    return around
+
+
 async def sheet(
     repository: EnrichmentRepository,
     entity: ResolvedEntity,
@@ -356,14 +376,7 @@ async def sheet(
 
     # What moved around it: what is part of it or affects it — and, for a
     # service, what is part of its repositories.
-    around = [other_id for other_id, other in others.items() if other.type not in NOT_EVENTS]
-    if this.type == "service":
-        repositories = [o.id for o in others.values() if o.type == "repository"]
-        around += [
-            a
-            for a, b, _ in await repository.links_of(repositories, ["part_of"])
-            if b in repositories
-        ]
+    around = await _around(repository, this, others)
     moved = await repository.moved_since("", among=around, exclude=NOT_EVENTS, limit=SHEET_EVENTS)
     incidents_moved = await repository.moved_since("", among=incident_ids, limit=SHEET_EVENTS)
     incidents = await _events(repository, incidents_moved)
@@ -404,3 +417,124 @@ async def sheet(
         attention=attention,
         source_kinds=sorted(this.kinds),
     )
+
+
+# ── one thing's activity ─────────────────────────────────────────────────────
+
+ACTIVITY_LIMIT = 1000
+CHANGE_TYPES = frozenset({"commit", "pull_request"})
+DEPLOY_TYPES = frozenset({"deployment", "release"})
+WORK_TYPES = frozenset({"issue"})
+
+
+def _bucket(event: EntityActivityEvent) -> str:
+    kind = event.entity.type
+    if kind in CHANGE_TYPES:
+        return "changes"
+    if kind in DEPLOY_TYPES:
+        return "deployments"
+    if kind == "incident":
+        return "incidents"
+    if kind in WORK_TYPES:
+        return "work"
+    return "other"
+
+
+def _said(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+async def activity(
+    repository: EnrichmentRepository, entity: ResolvedEntity, *, now: datetime, days: int
+) -> EntityActivityRead:
+    """Everything that moved around one thing over `days` — and over the
+    `days` before, counted — its incidents included; each as its source
+    says it: its state, its link, its version, its environment."""
+    this = (await _things(repository, ids=[entity.id]))[entity.id]
+    links = [
+        (a, b, kind)
+        for a, b, kind in await repository.links_of([entity.id], SHEET_LINKS)
+        if entity.id in (a, b)
+    ]
+    others = await _things(repository, ids=[b if a == entity.id else a for a, b, _ in links])
+    around = await _around(repository, this, others)
+    around += [o.id for o in others.values() if o.type == "incident"]
+    start = now - timedelta(days=days)
+    before = now - timedelta(days=2 * days)
+    moved = await repository.moved_since(
+        _iso(before), among=around, exclude=NOT_EVENTS, limit=ACTIVITY_LIMIT
+    )
+    things = await _things(repository, ids=[entity_id for entity_id, _ in moved])
+    events: list[EntityActivityEvent] = []
+    earlier: dict[str, int] = defaultdict(int)
+    for event in await _events(repository, moved):
+        thing = things.get(event.entity.id)
+        attributes = thing.attributes if thing else {}
+        full = EntityActivityEvent(
+            **event.model_dump(),
+            state=_said(attributes.get("state")),
+            url=_said(attributes.get("url")),
+            version=_said(attributes.get("version")) or _said(attributes.get("tag")),
+            environment=_said(attributes.get("environment")),
+        )
+        if event.at >= _iso(start):
+            events.append(full)
+        else:
+            earlier[_bucket(full)] += 1
+    counts: dict[str, dict[str, int]] = {
+        (start + timedelta(days=n + 1)).date().isoformat(): defaultdict(int) for n in range(days)
+    }
+    for event in events:
+        day = counts.get(event.at[:10])
+        if day is not None:
+            day[_bucket(event)] += 1
+    total: dict[str, int] = defaultdict(int)
+    for event in events:
+        total[_bucket(event)] += 1
+    observability = monitoring_kinds()
+    return EntityActivityRead(
+        days=days,
+        since=_iso(start),
+        events=events,
+        by_day=[
+            EntityActivityDay(
+                day=day,
+                changes=c["changes"],
+                deployments=c["deployments"],
+                incidents=c["incidents"],
+                work=c["work"],
+                other=c["other"],
+            )
+            for day, c in counts.items()
+        ],
+        changes=total["changes"],
+        deployments=total["deployments"],
+        incidents=total["incidents"],
+        incidents_open=sum(1 for e in events if e.kind == "incident"),
+        work=total["work"],
+        work_open=sum(
+            1
+            for e in events
+            if e.entity.type in WORK_TYPES and (e.state or "") in ("open", "in_progress")
+        ),
+        last_activity=events[0].at if events else None,
+        previous={k: earlier[k] for k in ("changes", "deployments", "incidents", "work")},
+        log_sources=sorted(await repository.connected_kinds() & observability),
+        mentions=await _mentions(repository, this, linked=set(others)),
+    )
+
+
+async def _mentions(
+    repository: EnrichmentRepository, this: Thing, *, linked: set[uuid.UUID]
+) -> list[EntityRef]:
+    """The documents that name it — a name too short to search says
+    nothing — not those already linked as its documentation."""
+    if len(this.name.strip()) < 4:
+        return []
+    return [
+        EntityRef(id=entity_id, type=kind, key=key, name=name)
+        for entity_id, kind, key, name, _ in await repository.mentioning(
+            this.name.strip(), types=["document"]
+        )
+        if entity_id not in linked and entity_id != this.id
+    ]

@@ -14,10 +14,16 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.intentions.models import IntentionAnalysis
+from leka.connectors import Source, SourceStatus
+from leka.intentions.models import Intention, IntentionAnalysis, IntentionPlan
+from leka.knowledge import Entity
+from leka.platform import Membership
+
+CONNECTED = (SourceStatus.ACTIVE, SourceStatus.DEGRADED)
 
 # A step that ran: it succeeded, or it did not.
 RAN = frozenset({"succeeded", "failed", "timed_out"})
@@ -90,3 +96,87 @@ async def capability_usage(
                 use.previous += 1
     days = [(start + timedelta(days=n + 1)).date().isoformat() for n in range(7)]
     return Usage(dict(by_key), days, _mean(durations[True]), _mean(durations[False]))
+
+
+# ── the workspace's consumption (Facturation) ───────────────────────────────
+
+
+class WorkspaceUsageRead(BaseModel):
+    """What the workspace holds and did this month — Facturation's figures,
+    every one counted, none estimated."""
+
+    model_config = ConfigDict(frozen=True)
+
+    month_start: datetime
+    members: int
+    sources: int
+    sources_connected: int
+    entities: int
+    intentions: int = Field(description="Asked this month")
+    analyses: int = Field(description="Run this month")
+    capability_runs: int = Field(description="Capabilities run this month, by the analyses")
+    plans: int = Field(description="Plans of action run this month")
+    previous: dict[str, int] = Field(description="Last month: intentions, analyses, runs")
+
+
+async def workspace_usage(
+    session: AsyncSession, workspace_id: uuid.UUID, *, now: datetime
+) -> WorkspaceUsageRead:
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    before = (start - timedelta(days=1)).replace(day=1)
+
+    async def count(statement: Select[tuple[int]]) -> int:
+        return int(await session.scalar(statement) or 0)
+
+    analyses = select(IntentionAnalysis.started_at, IntentionAnalysis.steps).where(
+        IntentionAnalysis.workspace_id == workspace_id,
+        IntentionAnalysis.started_at >= before,
+    )
+    runs: Counter[str] = Counter()
+    ran: Counter[str] = Counter()
+    for started, steps in (await session.execute(analyses)).tuples():
+        month = "now" if started >= start else "before"
+        ran[month] += 1
+        runs[month] += sum(1 for s in steps or [] if isinstance(s, dict) and s.get("status") in RAN)
+    intentions_now = await count(
+        select(func.count()).where(
+            Intention.workspace_id == workspace_id, Intention.created_at >= start
+        )
+    )
+    intentions_before = await count(
+        select(func.count()).where(
+            Intention.workspace_id == workspace_id,
+            Intention.created_at >= before,
+            Intention.created_at < start,
+        )
+    )
+    return WorkspaceUsageRead(
+        month_start=start,
+        members=await count(select(func.count()).where(Membership.workspace_id == workspace_id)),
+        sources=await count(select(func.count()).where(Source.workspace_id == workspace_id)),
+        sources_connected=await count(
+            select(func.count()).where(
+                Source.workspace_id == workspace_id, Source.status.in_(CONNECTED)
+            )
+        ),
+        entities=await count(
+            select(func.count()).where(
+                Entity.workspace_id == workspace_id, Entity.lifecycle != "removed"
+            )
+        ),
+        intentions=intentions_now,
+        analyses=ran["now"],
+        capability_runs=runs["now"],
+        plans=await count(
+            select(func.count()).where(
+                IntentionPlan.workspace_id == workspace_id,
+                IntentionPlan.started_at.is_not(None),
+                IntentionPlan.started_at >= start,
+            )
+        ),
+        previous={
+            "intentions": intentions_before,
+            "analyses": ran["before"],
+            "capability_runs": runs["before"],
+        },
+    )

@@ -15,6 +15,8 @@ export type EnvironmentEvent = components["schemas"]["EnvironmentEventRead"];
 export type AttentionPoint = components["schemas"]["AttentionPointRead"];
 export type EntitySheet = components["schemas"]["EntitySheetRead"];
 export type EntityRef = components["schemas"]["EntityRef"];
+export type EntityActivity = components["schemas"]["EntityActivityRead"];
+export type EntityActivityEvent = components["schemas"]["EntityActivityEvent"];
 
 /** mockup 10's legend, and a thing with no state of its own. */
 export type EnvironmentStatus = "operational" | "attention" | "incident" | "unmonitored";
@@ -23,6 +25,8 @@ export const environment = {
   get: () => apiFetch<Environment>("/ingestion/enrichment/environment"),
   sheet: (entityId: string) =>
     apiFetch<EntitySheet>(`/ingestion/enrichment/environment/${entityId}`),
+  activity: (entityId: string, days: number) =>
+    apiFetch<EntityActivity>(`/ingestion/enrichment/environment/${entityId}/activity?days=${days}`),
 };
 
 /**

@@ -536,6 +536,51 @@ class EnvironmentRead(BaseModel):
     events: list[EnvironmentEventRead]
 
 
+class EntityActivityEvent(EnvironmentEventRead):
+    """Something that moved around a thing, with what it says of itself."""
+
+    state: str | None = None
+    url: str | None = None
+    version: str | None = None
+    environment: str | None = None
+
+
+class EntityActivityDay(BaseModel):
+    day: str
+    changes: int = Field(description="Commits and pull requests")
+    deployments: int = Field(description="Deployments and releases")
+    incidents: int
+    work: int = Field(description="Issues and tickets")
+    other: int
+
+
+class EntityActivityRead(BaseModel):
+    """Everything that moved around one thing over a period — its
+    activity, its deployments, its log (LEKA's view of it, from its
+    sources), and how much, day by day."""
+
+    days: int
+    since: str
+    events: list[EntityActivityEvent]
+    by_day: list[EntityActivityDay]
+    changes: int
+    deployments: int
+    incidents: int
+    incidents_open: int
+    work: int
+    work_open: int
+    last_activity: str | None
+    previous: dict[str, int] = Field(
+        description="The same counts over the period before: changes, deployments, incidents, work."
+    )
+    log_sources: list[str] = Field(
+        description="The connected sources that keep logs or metrics (datadog, splunk…)."
+    )
+    mentions: list[EntityRef] = Field(
+        description="Documents that name it, not yet linked to it as its documentation."
+    )
+
+
 class SheetPersonRead(BaseModel):
     entity: EntityRef
     confidence: float

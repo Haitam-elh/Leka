@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 
 from leka.api.dependencies import (
     InvitationAcceptanceDep,
@@ -22,7 +22,18 @@ from leka.api.dependencies import (
 )
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.db import SortableField
-from leka.governance import Permission, Principal, require_permission
+from leka.governance import (
+    PendingInvitationRead,
+    Permission,
+    Principal,
+    TeamMemberRead,
+    inviter_name,
+    pending_invitations,
+    require_permission,
+    revoke_invitation,
+    team_members,
+)
+from leka.identity import DeferredEmailSender, build_email_sender, invitation_message
 from leka.platform import (
     InvitationCreate,
     InvitationCreated,
@@ -31,6 +42,7 @@ from leka.platform import (
     MemberRoleUpdate,
     Membership,
     Role,
+    Workspace,
 )
 
 router = APIRouter(tags=["members"])
@@ -94,16 +106,58 @@ async def invite_member(
     payload: InvitationCreate,
     principal: Annotated[Principal, Depends(require_permission(Permission.MEMBER_INVITE))],
     members: MembershipServiceDep,
+    db: SessionDep,
+    background: BackgroundTasks,
 ) -> InvitationCreated:
     """Invite someone by email. Admin or above.
 
-    The response carries the clear token exactly once, so it can be emailed.
-    It is never stored and no other route will return it again.
+    The invitation is emailed once the request has committed — its link,
+    who invites, to which workspace, as what. The response carries the
+    clear token exactly once too, for whoever must pass it on by hand; it
+    is never stored and no other route will return it again.
     """
     invitation, token = await members.invite(
         payload.email, payload.role, invited_by=principal.user_id
     )
+    workspace = await db.get(Workspace, principal.workspace_id)
+    await DeferredEmailSender(build_email_sender(), background.add_task).send(
+        invitation_message(
+            invitation.email,
+            token,
+            workspace=workspace.name if workspace else "LEKA",
+            inviter=await inviter_name(db, principal.user_id),
+            role=invitation.role.value,
+        )
+    )
     return InvitationCreated(invitation=InvitationRead.model_validate(invitation), token=token)
+
+
+@router.get("/team/members", response_model=list[TeamMemberRead])
+async def team(principal: PrincipalDep, db: SessionDep) -> list[TeamMemberRead]:
+    """Everyone with a seat, as Équipe & accès shows them: name, address,
+    role, when they joined and last signed in."""
+    return await team_members(db, principal.workspace_id)
+
+
+@router.get("/invitations", response_model=list[PendingInvitationRead])
+async def invitations(
+    principal: Annotated[Principal, Depends(require_permission(Permission.MEMBER_INVITE))],
+    db: SessionDep,
+) -> list[PendingInvitationRead]:
+    """The invitations still waiting — the expired said so."""
+    return await pending_invitations(db, principal.workspace_id)
+
+
+@router.delete("/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke(
+    invitation_id: uuid.UUID,
+    principal: Annotated[Principal, Depends(require_permission(Permission.MEMBER_INVITE))],
+    db: SessionDep,
+) -> Response:
+    """Revoked: its link no longer works."""
+    if not await revoke_invitation(db, principal.workspace_id, invitation_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such pending invitation.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch("/members/{membership_id}", response_model=MemberRead)
