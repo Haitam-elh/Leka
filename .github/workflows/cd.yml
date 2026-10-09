@@ -110,8 +110,16 @@ jobs:
             fi
           done
 
+      # On the self-hosted runner (CI_RUNS_ON set: a VM on an ARM Mac), Docker's
+      # own builder, which runs x86 through Rosetta. buildx's default, a
+      # builder in a container, brings its own QEMU instead, and Next.js's
+      # build crashes under it (SIGSEGV, 2026-10-09). Docker's builder sends
+      # no cache to GitHub (its layers stay on that machine between runs) and
+      # is asked for no provenance, which not every Docker store can hold.
       - uses: docker/setup-buildx-action@v3
         if: steps.existing.outputs.api != 'true' || steps.existing.outputs.web != 'true'
+        with:
+          driver: ${{ vars.CI_RUNS_ON && 'docker' || 'docker-container' }}
 
       - name: Build and push the API
         if: steps.existing.outputs.api != 'true'
@@ -132,8 +140,9 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ steps.what.outputs.release }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
+          cache-from: ${{ !vars.CI_RUNS_ON && 'type=gha,scope=api' || '' }}
+          cache-to: ${{ !vars.CI_RUNS_ON && 'type=gha,mode=max,scope=api' || '' }}
+          provenance: ${{ vars.CI_RUNS_ON && 'false' || '' }}
 
       - name: Build and push the web app
         if: steps.existing.outputs.web != 'true'
@@ -148,8 +157,9 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ steps.what.outputs.release }}
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
+          cache-from: ${{ !vars.CI_RUNS_ON && 'type=gha,scope=web' || '' }}
+          cache-to: ${{ !vars.CI_RUNS_ON && 'type=gha,mode=max,scope=web' || '' }}
+          provenance: ${{ vars.CI_RUNS_ON && 'false' || '' }}
 
   deploy:
     name: deploy to production, and undo it if it does not come up
