@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import timedelta
 
 from leka.capabilities import Contract, Definition, Kind, Lifecycle, ModelNeed, provide
@@ -57,6 +58,10 @@ from leka.intentions.writing import NEEDS as WRITING
 from leka.knowledge import EntityBrief, EntityType, IncidentDetail
 
 VERSION = 1
+# A capability whose definition changes takes a new version: the catalogue
+# refuses the same version said otherwise (changed_without_version, LEKA-393).
+# `incidents` 2: it answers find_change and the change kind (2026-10-09).
+INCIDENTS_VERSION = 2
 # How sure a fact a source states is; an inference, its own confidence.
 STATED = 0.9
 # A change this close before an incident is a probable cause; further, one
@@ -558,6 +563,15 @@ def incidents(material: Material) -> Output:
                 areas.setdefault(code, {}).setdefault(
                     thing.id, ImpactItem(_kind(thing), thing.id, thing.name)
                 )
+    # What `changes` found, handed (LEKA-399): a change whose reach — what
+    # depends on what it touched — holds what an incident affects is a cause
+    # its incident's own record does not tie to it.
+    seen = {f.params.get("name") for f in findings}
+    for cause in material.handed["changes"].causes if "changes" in material.handed else ():
+        if cause.params.get("incident") in seen and cause.id not in causes:
+            causes[cause.id] = replace(
+                cause, why=f"{cause.why} (found with the changes of the period)"
+            )
     ordered = sorted(causes.values(), key=lambda c: (c.basis != "stated", -(c.confidence or 0)))
     if not findings:
         where = _where(material)
@@ -970,6 +984,33 @@ def action(material: Material) -> Output:
                     evidence=(proofs.event(last.change, at=last.at, detail=last.kind),),
                 )
             )
+    # Handed (LEKA-399): who answers for what it acts on — whom the person
+    # deciding should hear — and what depends on it, beyond its own read.
+    owning = material.handed.get("ownership")
+    told = sorted(
+        {
+            str(name)
+            for f in (owning.findings if owning else ())
+            if f.code == "ownership.owner"
+            for name in f.params.get("owners") or []  # type: ignore[attr-defined]
+        }
+    )
+    if told:
+        findings.append(
+            Statement(
+                id="action:inform",
+                code="action.inform",
+                text=f"Before it is done, {', '.join(told)} should be told: they own it.",
+                params={"owners": told},
+                evidence=tuple(e for f in owning.findings for e in f.evidence)[:5]
+                if owning
+                else (),
+            )
+        )
+    relying = material.handed.get("dependencies")
+    for area in relying.impact if relying else ():
+        for item in area.items:
+            reach.setdefault(item.ref_id, item)
     if reach:
         findings.append(
             Statement(
@@ -1110,13 +1151,15 @@ CAPABILITIES: Sequence[Capability] = (
     ),
     Capability(
         "incidents",
-        VERSION,
+        INCIDENTS_VERSION,
         "Its incidents in the period, their causes said or suspected, what changed before.",
         goals=frozenset({"explain_cause", "investigate", "find_change"}),
         kinds=frozenset({"diagnose", "change"}),
         sides=frozenset({"temporal", "technical"}),
         reads=frozenset({Part.INCIDENTS}),
         run=incidents,
+        # The causes the changes of the period reach (LEKA-399).
+        uses=frozenset({"changes"}),
     ),
     Capability(
         "changes",
@@ -1173,6 +1216,8 @@ CAPABILITIES: Sequence[Capability] = (
         goals=frozenset({"act"}),
         reads=frozenset({Part.UPSTREAM, Part.CHANGES}),
         run=action,
+        # Who to tell, what it reaches (LEKA-399).
+        uses=frozenset({"ownership", "dependencies"}),
     ),
     # Written by a language model, from what the ones above found
     # (writing.py, LEKA-394): run after them, when a model can.

@@ -173,6 +173,9 @@ class Material:
     changes: tuple[ChangeFootprint, ...] = ()
     findings: tuple[FindingBrief, ...] = ()
     evolution: tuple[Learned, ...] = ()
+    # What the capabilities it waits on produced (LEKA-399, orchestration.py):
+    # those it names only, by name — frozen, as they produced them.
+    handed: Mapping[str, Output] = field(default_factory=dict)
     quality: Mapping[uuid.UUID, KnowledgeQualityRead] = field(default_factory=dict)
     # Each thing's sources, for evidence the context does not hold.
     sources: Mapping[uuid.UUID, tuple[SourceRef, ...]] = field(default_factory=dict)
@@ -300,6 +303,11 @@ class Capability:
     budget: float = 15.0
     # Run whatever the goal: what any answer starts from.
     always: bool = False
+    # Its place among the others (LEKA-399): what must have succeeded before
+    # it; what it reads when it did; what runs in its place when it fails.
+    after: frozenset[str] = frozenset()
+    uses: frozenset[str] = frozenset()
+    fallback: str | None = None
 
 
 @dataclass(frozen=True)
@@ -324,6 +332,14 @@ class StepOutcome:
     error: str | None = None
     reason: str | None = None
     output: Output | None = None
+    # Where it ran in the plan (LEKA-399): its level, when it started (ms
+    # after the analysis did), what it was handed, what it ran without, and
+    # what it stood in for.
+    level: int = 0
+    started_ms: int = 0
+    handed: tuple[str, ...] = ()
+    degraded: tuple[str, ...] = ()
+    fallback_of: str | None = None
 
 
 @dataclass(frozen=True)
@@ -528,6 +544,24 @@ def assemble(
                     f"capability.{outcome.status}",
                     f"{outcome.name} did not finish: {outcome.status.replace('_', ' ')}.",
                     {"capability": outcome.name, "error": outcome.error},
+                )
+            )
+        elif outcome.degraded:
+            missing.append(
+                Note(
+                    "capability.degraded",
+                    f"{outcome.name} ran without what {', '.join(outcome.degraded)} would "
+                    "have handed it.",
+                    {"capability": outcome.name, "without": list(outcome.degraded)},
+                )
+            )
+    for outcome in outcomes:
+        if outcome.status == "skipped" and outcome.reason == "upstream":
+            missing.append(
+                Note(
+                    "capability.upstream",
+                    f"{outcome.name} did not run: {outcome.error} did not finish first.",
+                    {"capability": outcome.name, "waited_on": outcome.error},
                 )
             )
     sure = [out.confidence for _, out in outputs if out.confidence is not None]
