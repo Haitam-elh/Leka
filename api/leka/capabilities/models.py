@@ -323,3 +323,97 @@ class CapabilityRouting(Base, WorkspaceScopedMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class WorkflowRun(Base, WorkspaceScopedMixin):
+    """One run of a workflow (LEKA-397): which, which version, asked by whom
+    with what, for which intention — where it stands, how it ended, which
+    step stopped it, how many times it was retried. Its steps are
+    workflow_run_steps; what happened, workflow_run_events."""
+
+    __tablename__ = "workflow_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')", name="status"
+        ),
+        Index("ix_workflow_runs_workspace_queued", "workspace_id", "queued_at"),
+        UniqueConstraint("workspace_id", "id", name="uq_workflow_runs_workspace_id_id"),
+    )
+
+    key: Mapped[str] = mapped_column(String(100), nullable=False)
+    version: Mapped[str] = mapped_column(String(20), nullable=False)
+    # Its steps as they were when it was asked: what it runs, whatever the
+    # file says since.
+    spec: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    status: Mapped[str] = mapped_column(String(10), nullable=False)
+    inputs: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    intention_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # Why it failed: a step's failure (`failed_step`), not permitted, gone,
+    # abandoned, error.
+    error: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    failed_step: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    retries: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    queued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class WorkflowRunStep(Base, WorkspaceScopedMixin):
+    """One step of a workflow run: where it stands — pending, running,
+    succeeded, failed, skipped, not reached — how many attempts, what it
+    found, why it was skipped or failed."""
+
+    __tablename__ = "workflow_run_steps"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "run_id"],
+            ["workflow_runs.workspace_id", "workflow_runs.id"],
+            ondelete="CASCADE",
+            name="fk_workflow_run_steps_run",
+        ),
+        UniqueConstraint("run_id", "step", name="uq_workflow_run_steps_step"),
+        CheckConstraint(
+            "status IN ('pending', 'running', 'succeeded', 'failed', 'skipped', 'not_reached')",
+            name="status",
+        ),
+    )
+
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    step: Mapped[str] = mapped_column(String(60), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    uses: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # skipped: condition_false · not_reached: stopped · failed: the error.
+    reason: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    # What it found: codes, a summary, what it refers to (an agent run).
+    output: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class WorkflowRunEvent(Base, WorkspaceScopedMixin):
+    """What happened in a workflow run, in order: queued, started, a step
+    started, retried, ended, skipped — the run ended, retried, cancelled.
+    Append-only: the database refuses to change one."""
+
+    __tablename__ = "workflow_run_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "run_id"],
+            ["workflow_runs.workspace_id", "workflow_runs.id"],
+            ondelete="CASCADE",
+            name="fk_workflow_run_events_run",
+        ),
+        Index("ix_workflow_run_events_run", "run_id", "at", "seq"),
+    )
+
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    step: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")

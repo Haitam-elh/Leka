@@ -121,6 +121,7 @@ from leka.intentions.usage import (
     workspace_usage,
 )
 from leka.intentions.verification import VerificationRefusedError, VerificationService
+from leka.intentions.workflow_steps import rules_step
 
 __all__ = [
     "CATEGORIES",
@@ -217,6 +218,7 @@ __all__ = [
     "readiness",
     "refined",
     "route_intention",
+    "rules_step",
     "timeline",
     "understand",
     "workspace_usage",

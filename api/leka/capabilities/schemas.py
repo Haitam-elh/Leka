@@ -206,7 +206,7 @@ class CapabilityRead(BaseModel):
     title: str
     summary: str = Field(description="When to use it")
     category: str
-    kind: Literal["rules", "model", "agent"]
+    kind: Literal["rules", "model", "agent", "workflow"]
     version: str
     lifecycle: Literal["draft", "review", "active", "deprecated", "retired"]
     origin: str
@@ -691,7 +691,7 @@ class RoutedCandidateRead(BaseModel):
 
     key: str
     title: str
-    kind: Literal["rules", "model", "agent"]
+    kind: Literal["rules", "model", "agent", "workflow"]
     category: str
     score: float
     eligible: bool = Field(description="Scores enough on what is asked to be routed to.")
@@ -737,3 +737,110 @@ class RouteAsk(BaseModel):
     kind: str | None = Field(default=None, max_length=40)
     mode: Literal["question", "request"] = "question"
     entity_types: list[str] = Field(default_factory=list, max_length=20)
+
+
+# ── workflows (LEKA-397) ────────────────────────────────────────────────────
+
+WorkflowRunStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
+WorkflowStepStatus = Literal["pending", "running", "succeeded", "failed", "skipped", "not_reached"]
+
+
+class WorkflowStepRead(BaseModel):
+    """One step of a workflow, as defined."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    title: str | None
+    uses: str = Field(description="The capability it runs.")
+    uses_title: str | None
+    uses_kind: str | None
+    after: list[str]
+    when: dict[str, object] | None = Field(description="Its condition, structured; none: always.")
+    given: dict[str, object] = Field(description="What it is given: {input: …} or {value: …}.")
+    attempts: int
+    on_failure: Literal["stop", "continue"]
+
+
+class WorkflowRead(BaseModel):
+    """A workflow — its steps in order, whether it can run here and why
+    not. Its versions and history: GET /capabilities/{key}."""
+
+    model_config = ConfigDict(frozen=True)
+
+    key: str
+    title: str
+    summary: str
+    category: str
+    version: str
+    lifecycle: str
+    inputs: list[CapabilityInputRead]
+    steps: list[WorkflowStepRead]
+    available: bool
+    reasons: list[CapabilityReason]
+    notes: list[CapabilityReason]
+
+
+class WorkflowRunCreate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    key: str = Field(min_length=1, max_length=100)
+    inputs: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+    intention_id: uuid.UUID | None = Field(
+        default=None, description="The intention it works on: LEKA's own steps read its context."
+    )
+
+
+class WorkflowRunStepRead(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    step: str
+    position: int
+    uses: str
+    status: WorkflowStepStatus
+    attempts: int
+    reason: str | None = Field(
+        description="skipped: condition_false · not_reached: stopped, cancelled, abandoned · "
+        "failed: its error."
+    )
+    output: dict[str, object] = Field(description="What it found: codes, summary, ref.")
+    started_at: datetime | None
+    finished_at: datetime | None
+
+
+class WorkflowRunEventRead(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    seq: int
+    kind: str
+    step: str | None
+    at: datetime
+    detail: dict[str, object]
+
+
+class WorkflowRunRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    title: str | None
+    version: str
+    status: WorkflowRunStatus
+    inputs: dict[str, object]
+    requested_by: uuid.UUID | None
+    mine: bool
+    intention_id: uuid.UUID | None
+    error: str | None = Field(
+        description="step_failed (failed_step says which), not_permitted, abandoned, or an error."
+    )
+    failed_step: str | None
+    retries: int
+    retryable: bool = Field(description="Failed, and trying again may mend it.")
+    queued_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+
+
+class WorkflowRunDetail(WorkflowRunRead):
+    steps: list[WorkflowRunStepRead]
+    events: list[WorkflowRunEventRead]

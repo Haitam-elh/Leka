@@ -181,7 +181,7 @@ async def capabilities(
     session: SessionDep,
     view: Literal["all", "mine"] = "all",
     category: Annotated[list[str] | None, Query()] = None,
-    kind: Literal["rules", "model", "agent"] | None = None,
+    kind: Literal["rules", "model", "agent", "workflow"] | None = None,
     lifecycle: Annotated[list[LifecycleWord] | None, Query()] = None,
     available: bool | None = None,
     q: Annotated[str | None, Query(max_length=200)] = None,

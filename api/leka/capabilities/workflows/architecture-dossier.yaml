@@ -1,0 +1,43 @@
+# An architecture dossier (LEKA-397): where a thing stands, what it relies on
+# and what relies on it, what is documented — and, when the documentation is
+# there to read, the application architect's deck of its journey.
+key: architecture-dossier
+title: Dossier d'architecture
+summary: Use when someone wants the full architecture dossier of a journey — its standing, dependencies, documentation, then the application architect's deck when documentation exists.
+category: architecture
+version: 1.0.0
+lifecycle: active
+goals: [map_dependencies]
+kinds: [dependency]
+entity_types: [business_process, application, service]
+inputs:
+  - {name: parcours, type: text, required: true, description: Le parcours à documenter, ex. « Paiement CB ».}
+  - {name: perimetre, type: text, required: true, description: Le périmètre et ses canaux.}
+  - {name: deck, type: boolean, required: false, description: Construire le deck de l'architecte.}
+examples:
+  - Monte le dossier d'architecture du parcours Paiement CB
+steps:
+  - id: standing
+    title: Où il en est
+    uses: standing
+  - id: dependencies
+    title: Ses dépendances
+    uses: dependencies
+    after: [standing]
+  - id: documentation
+    title: Sa documentation
+    uses: documentation
+    after: [standing]
+  # The deck, only when asked and when there is documentation to build it from.
+  - id: deck
+    title: Le deck de l'architecte
+    uses: application-architecture
+    after: [dependencies, documentation]
+    with:
+      parcours: {input: parcours}
+      perimetre: {input: perimetre}
+    when:
+      all:
+        - {input: deck, equals: true}
+        - {step: documentation, status: succeeded}
+        - not: {step: documentation, found: documentation.none}
