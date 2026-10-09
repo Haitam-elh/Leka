@@ -50,6 +50,11 @@ vi.mock("@/lib/intentions/api", async (original) => ({
   ...(await original<typeof import("@/lib/intentions/api")>()),
   intentions: api,
 }));
+const skillApi = vi.hoisted(() => ({ runs: vi.fn() }));
+vi.mock("@/lib/skills", async (original) => ({
+  ...(await original<typeof import("@/lib/skills")>()),
+  skills: skillApi,
+}));
 
 const { IntentionScreen } = await import("@/components/intentions/intention-screen");
 const { ApiError } = await import("@/lib/api");
@@ -203,6 +208,7 @@ beforeEach(() => {
     analysis({ id: "a0", number: 1, status: "failed" }),
   ]);
   api.analyse.mockResolvedValue({ queued: true });
+  skillApi.runs.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -491,6 +497,73 @@ describe("its answer, written by a model (LEKA-394)", () => {
     show();
     await screen.findByTestId("intention-analysis");
     expect(screen.queryByTestId("analysis-answer")).not.toBeInTheDocument();
+  });
+});
+
+describe("what LEKA read to answer (LEKA-396)", () => {
+  type SkillRun = import("@/lib/skills").SkillRun;
+
+  function read(key: string, afterMs: number, more: Partial<SkillRun> = {}): SkillRun {
+    const started = new Date(analysis().started_at).getTime();
+    return {
+      id: `${key}-${afterMs}`,
+      key,
+      version: "1.0.0",
+      status: "succeeded",
+      reason: null,
+      message: null,
+      errors: [],
+      caller: "analyst",
+      ref: `intention:${ID}`,
+      run_by: ME,
+      mine: true,
+      inputs: {},
+      output: {},
+      cited: 0,
+      deprecated: false,
+      latency_ms: 12,
+      at: new Date(started + afterMs).toISOString(),
+      ...more,
+    };
+  }
+
+  it("says each read in the order it read, what it was about, how much it found", async () => {
+    skillApi.runs.mockResolvedValue([
+      read("describe", 600, { inputs: { id: `entity:${BILLING}` }, output: { name: "Billing API" }, cited: 3 }),
+      read("happened", 400, {
+        status: "refused",
+        reason: "invalid_input",
+        inputs: { since: "yesterday" },
+        output: null,
+      }),
+      read("find", 100, { inputs: { query: "billing" }, output: { found: [] }, cited: 2 }),
+      read("dependencies", 300, {
+        output: { of: "Billing API", direction: "upstream", environment: "production" },
+        cited: 1,
+      }),
+      // Read for an analysis before this one: not this one's.
+      read("overview", -600_000),
+    ]);
+    show();
+    const card = await screen.findByTestId("analysis-reads");
+    expect(skillApi.runs).toHaveBeenCalledWith(`intention:${ID}`);
+    const reads = within(card).getAllByTestId("analysis-read");
+    expect(reads.map((r) => r.dataset.key)).toEqual(["find", "dependencies", "happened", "describe"]);
+    expect(reads[0]).toHaveTextContent("Recherche · « billing »2 élément(s) lu(s)12 ms");
+    expect(reads[1]).toHaveTextContent("Dépendances · Billing API · ce qui en dépend · production");
+    expect(reads[2]).toHaveTextContent("Événements");
+    expect(reads[2]).toHaveTextContent("demande mal formée : le modèle l'a reformulée");
+    expect(reads[2]).toHaveTextContent("Refusée");
+    // A date the model wrote that LEKA could not read: not said, nothing breaks.
+    expect(reads[2]).not.toHaveTextContent("depuis");
+    expect(reads[3]).toHaveTextContent("Fiche · Billing API3 élément(s) lu(s)");
+  });
+
+  it("is not shown when LEKA read nothing: the rules alone answered", async () => {
+    show();
+    await screen.findByTestId("intention-analysis");
+    await waitFor(() => expect(skillApi.runs).toHaveBeenCalled());
+    expect(screen.queryByTestId("analysis-reads")).not.toBeInTheDocument();
   });
 });
 

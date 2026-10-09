@@ -28,6 +28,7 @@ import {
 } from "@/components/environment/parts";
 import { word } from "@/components/insights/leka-insights";
 import { ReadinessPanel } from "@/components/intentions/readiness";
+import { ReadsCard } from "@/components/intentions/reads-card";
 import { AnalysisState, AnalysisView, EvidenceList, Pill } from "@/components/intelligence";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
 import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
@@ -61,7 +62,8 @@ type AnalysisAnswer = components["schemas"]["AnalysisAnswer"];
  * An intention's analysis (LEKA-388), its tabs Analyse and Preuves.
  *
  *     Analyse   how it went — which analysis, why it ran, when, how long,
- *               on which version of its context — then each capability
+ *               on which version of its context — its answer and what
+ *               LEKA read for it (LEKA-396) — then each capability
  *               LEKA mobilised, why, and how it went: done, failed, timed
  *               out, not run; then what it found, laid out as every
  *               analysis is (mockup 04, LEKA-341) — without proposals,
@@ -523,6 +525,7 @@ export function AnalysisTab({ intention }: { intention: IntentionDetail }) {
       ) : data ? (
         <>
           {data.result?.answer ? <AnswerCard answer={data.result.answer} /> : null}
+          <ReadsCard intentionId={intention.id} analysis={data} />
           <StepsCard analysis={data} />
           {data.status === "running" ? (
             <AnalysisState status="running" />
