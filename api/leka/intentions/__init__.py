@@ -111,6 +111,9 @@ from leka.intentions.service import (
     analysis_read,
     intention_read,
 )
+
+# LEKA's reads, registered as skills (LEKA-396) when this is imported.
+from leka.intentions.skills import SKILLS
 from leka.intentions.timeline import CATEGORIES, Filters, categories_of, timeline
 from leka.intentions.understanding import UNDERSTANDING_VERSION, understand
 from leka.intentions.usage import (
@@ -127,6 +130,7 @@ __all__ = [
     "CATEGORIES",
     "CLOSED",
     "PHASES",
+    "SKILLS",
     "TRANSITIONS",
     "UNDERSTANDING_VERSION",
     "ActionEndpoint",

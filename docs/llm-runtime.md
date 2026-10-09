@@ -53,6 +53,9 @@ A model reads; it never acts.
 
 - A tool given to a model is a `RuntimeTool` whose `effect` is `read`. One that
   would change something raises `SensitiveToolError`: it cannot be offered.
+  A skill (LEKA-396, [skills.md](skills.md)) becomes one through
+  `SkillRuntime.tool`: each call checked against its contract and kept, its
+  transaction read only.
 - LEKA's rules, said to every model: use only what is given, cite it, never
   invent; never act on anyone's systems — propose, a person decides.
 - What a model says should be done is, at most, said. Only LEKA's intention

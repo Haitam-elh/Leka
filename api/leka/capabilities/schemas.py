@@ -848,3 +848,85 @@ class WorkflowRunRead(BaseModel):
 class WorkflowRunDetail(WorkflowRunRead):
     steps: list[WorkflowRunStepRead]
     events: list[WorkflowRunEventRead]
+
+
+# ── skills (LEKA-396) ────────────────────────────────────────────────────────
+
+
+class SkillVersionRead(BaseModel):
+    """One version of a skill: where it stands, what its contract is."""
+
+    model_config = ConfigDict(frozen=True)
+
+    version: str
+    lifecycle: str
+    fingerprint: str = Field(description="Its contract and promise, hashed.")
+
+
+class SkillRead(BaseModel):
+    """A skill, as a caller gets it: what it does, what it takes and gives,
+    who may run it, where it stands — and every version of it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    key: str
+    version: str
+    title: str
+    summary: str = Field(description="What it does, when to use it.")
+    category: str
+    effect: str = Field(description="read: a skill never changes anything.")
+    permission: str
+    usable: bool = Field(description="This person may run it, and it runs.")
+    lifecycle: str
+    timeout: float
+    origin: str
+    limitations: list[str]
+    fingerprint: str
+    input_schema: dict[str, JsonValue]
+    output_schema: dict[str, JsonValue]
+    versions: list[SkillVersionRead]
+
+
+class SkillRunCreate(BaseModel):
+    """What a skill is run with."""
+
+    inputs: dict[str, JsonValue] = Field(default_factory=dict)
+    version: str | None = Field(
+        default=None,
+        max_length=20,
+        pattern=r"^\d+(\.\d+){0,2}$",
+        description="1.2.0, or 1, 1.2 — the latest of them. None: the latest that runs.",
+    )
+
+
+class SkillRunError(BaseModel):
+    field: str
+    code: str
+    message: str
+
+
+class SkillRunRead(BaseModel):
+    """One run of a skill: which, called by what about what, for whom,
+    given what — what it gave, or why not."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    key: str
+    version: str | None
+    status: Literal["succeeded", "refused", "failed", "timed_out"]
+    reason: str | None
+    message: str | None
+    errors: list[SkillRunError]
+    caller: str
+    ref: str | None
+    run_by: uuid.UUID | None
+    mine: bool
+    inputs: dict[str, JsonValue]
+    output: dict[str, JsonValue] | None = Field(
+        description="What it gave — none when refused, failed, or too large to keep."
+    )
+    cited: int = Field(description="How many things it read, citable.")
+    deprecated: bool
+    latency_ms: int
+    at: datetime

@@ -4,7 +4,8 @@ The catalogue's history (LEKA-393), LEKA's and no customer's: every version
 of every capability ever registered — what it was (its fingerprint), where
 it stood in its lifecycle — and every event of that history, append-only.
 And each workspace's say on them: enabled or not, and its people's
-favourites. And every run of an agent, with its steps (LEKA-395).
+favourites. And every run of an agent, with its steps (LEKA-395); every run
+of a skill (LEKA-396).
 
 Agents themselves are never stored here. They are files in agents/
 (architecture rule 8); what is kept is that they were registered, as what.
@@ -417,3 +418,39 @@ class WorkflowRunEvent(Base, WorkspaceScopedMixin):
     step: Mapped[str | None] = mapped_column(String(60), nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+class SkillRun(Base, WorkspaceScopedMixin):
+    """One run of a skill (LEKA-396), whatever came of it: which skill, which
+    version and contract (its fingerprint), called by what (the analyst, the
+    API, an agent) about what (`intention:<id>`…), for whom, given what —
+    what it gave, or why not, and how long it took."""
+
+    __tablename__ = "skill_runs"
+    __table_args__ = (
+        CheckConstraint("status IN ('succeeded', 'refused', 'failed', 'timed_out')", name="status"),
+        Index("ix_skill_runs_workspace_at", "workspace_id", "at"),
+        Index("ix_skill_runs_workspace_ref", "workspace_id", "ref", "at"),
+    )
+
+    key: Mapped[str] = mapped_column(String(100), nullable=False)
+    # None: no such skill, or no such version.
+    version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(10), nullable=False)
+    # Refused: not_found, not_runnable, not_permitted, invalid_input,
+    # unknown. Failed: invalid_output, error.
+    reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    caller: Mapped[str] = mapped_column(String(100), nullable=False)
+    ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    run_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    inputs: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # What it gave, but what it cited; none past OUTPUT_KEPT (detail.size).
+    output: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    # Its errors, its message, how many things it read, its size; that the
+    # version run is deprecated.
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
