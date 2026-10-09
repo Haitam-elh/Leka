@@ -289,8 +289,12 @@ jobs:
         # starts before. Oracle Database Free, packaged for containers by
         # Gerald Venzl — the image Testcontainers uses; a third party's, so
         # pinned by digest, as MinIO below. Same as docker-compose.yml.
+        #
+        # A self-hosted runner keeps containers from one job to the next: one
+        # a cancelled run left behind holds the name and the ports.
         working-directory: .
         run: |
+          docker rm -f oracle > /dev/null 2>&1 || true
           docker run -d --name oracle -p 1521:1521 -p 2484:2484 \
             -e ORACLE_PASSWORD=Leka-local-1 \
             -v "$PWD/api/tests/oracle:/container-entrypoint-startdb.d:ro" \
@@ -325,6 +329,7 @@ jobs:
         # or none. Tests only; nothing in production uses it.
         working-directory: .
         run: |
+          docker rm -f minio > /dev/null 2>&1 || true
           docker run -d --name minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
@@ -342,6 +347,14 @@ jobs:
         # report 79% for a suite that really covers 87%; at that reading a
         # 60% floor protected nothing. See concurrency in pyproject.toml.
         run: pytest --cov-fail-under=80
+
+      - name: Stop Oracle and MinIO
+        # Service containers are removed with the job; these two, started by
+        # hand, are not. On a self-hosted runner they would keep their memory
+        # and ports through the next jobs.
+        if: always()
+        working-directory: .
+        run: docker rm -f oracle minio > /dev/null 2>&1 || true
 
   web:
     name: web — lint, types, build
