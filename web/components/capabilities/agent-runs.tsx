@@ -58,7 +58,14 @@ export function inputsOf(fields: Field[], values: Values): RunInputs {
   return said;
 }
 
-export function RunAgent({ capability }: { capability: CapabilityDetail }) {
+export function RunAgent({
+  capability,
+  intentionId,
+}: {
+  capability: CapabilityDetail;
+  /** Run for an intention: its context is the agent's (LEKA-398). */
+  intentionId?: string;
+}) {
   const t = useDictionary();
   const w = t.agentRuns;
   const { start } = useAgentRunChange();
@@ -69,7 +76,11 @@ export function RunAgent({ capability }: { capability: CapabilityDetail }) {
     event.preventDefault();
     setErrors({});
     try {
-      await start.mutateAsync({ key: capability.key, inputs: inputsOf(capability.inputs, values) });
+      await start.mutateAsync({
+        key: capability.key,
+        inputs: inputsOf(capability.inputs, values),
+        intention_id: intentionId ?? null,
+      });
       notify.success({ title: w.queued, description: w.queuedHint });
       setValues({});
     } catch (error) {

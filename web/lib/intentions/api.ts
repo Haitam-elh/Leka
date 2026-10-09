@@ -68,6 +68,8 @@ export type IntentionLink = components["schemas"]["IntentionLinkRead"];
 export type IntentionCounts = components["schemas"]["IntentionCounts"];
 export type IntentionAnalysisRead = components["schemas"]["IntentionAnalysisRead"];
 export type IntentionStatus = Intention["status"];
+export type Routing = components["schemas"]["RoutingRead"];
+export type RoutedCandidate = components["schemas"]["RoutedCandidateRead"];
 export type IntentionPhase = "active" | "scheduled" | "finished" | "archived";
 
 export interface IntentionPage {
@@ -119,6 +121,10 @@ export const intentions = {
   analysis: (id: string) => apiFetch<IntentionAnalysisRead>(`${BASE}/${id}/analysis`),
   /** Every analysis of it, the latest first. */
   analyses: (id: string) => apiFetch<IntentionAnalysisRead[]>(`${BASE}/${id}/analyses`),
+  /** Where it was routed, and why (LEKA-398) — routed on first read. */
+  routing: (id: string) => apiFetch<Routing>(`${BASE}/${id}/routing`),
+  /** Routed again, as it and the catalogue now stand. */
+  route: (id: string) => apiFetch<Routing>(`${BASE}/${id}/routing`, { method: "POST" }),
   /** Analysed again: queued — false when one is already on its way. */
   analyse: (id: string) =>
     apiFetch<{ queued: boolean }>(`${BASE}/${id}/analyse`, { method: "POST" }),

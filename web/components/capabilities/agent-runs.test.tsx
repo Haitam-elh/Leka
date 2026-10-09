@@ -129,6 +129,7 @@ describe("running an agent", () => {
       expect(api.start).toHaveBeenCalledWith({
         key: "application-architecture",
         inputs: { parcours: "Paiement CB", perimetre: "Digital", vue_applicative: true },
+        intention_id: null,
       }),
     );
     expect(notices.success).toHaveBeenCalledWith(expect.objectContaining({ title: "Agent lancé" }));
