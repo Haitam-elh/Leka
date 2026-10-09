@@ -62,6 +62,9 @@ evidence.
 | `intention:approve` | no | yes | yes |
 | `context:manage` | no | yes | yes |
 | `job:read` | no | yes | yes |
+| `entity:restrict` | no | yes | yes |
+| `entity:read_restricted` | no | yes | yes |
+| `access:read` | no | yes | yes |
 
 **`job:read` is admin and above.** It reads the history of the background jobs run for the
 workspace: which job, how many attempts, when. That is how the system talks to itself, and a
@@ -144,10 +147,86 @@ until a customer reads another customer's data.
 `require_permission` also runs the lifecycle check, so a suspended workspace
 is refused there rather than in whichever service remembered to look.
 
+## The authorisation model (LEKA-402)
+
+One function decides, everywhere — `evaluate(subject, permission, resource,
+anyones=…)` in `api/leka/governance/policy.py`, pure — and says its rule and
+its reason. In order, the first that refuses decides:
+
+| Rule | Refuses when | Reason |
+| --- | --- | --- |
+| `workspace` | it awaits deletion (everything), or is suspended (a write) | `workspace_unavailable`, `workspace_suspended` |
+| `role` | the role lacks the permission | `role_lacks_permission` |
+| `owner` | the resource is someone else's, and the role lacks the permission that reaches anyone's (`anyones`: `intention:approve` for another's run, `context:manage` for another's context) | `not_owner` |
+| `restriction` | the resource is a restricted entity, and the role may not read restricted entities | `restricted` |
+
+Allowed, it says why too: `role_grants`, `owner`, `read_restricted`.
+`require_permission` is this function, for the routes; services deciding an
+execution call `authorize(…)`, which decides and keeps the decision.
+
+### Restricted entities
+
+An admin restricts an entity of the company model, saying why
+(`PUT /governance/restrictions/{entity}`, `entity:restrict`); lifting it
+gives it back to everyone (`DELETE`). **Only a role holding
+`entity:read_restricted` — admin, owner — sees it.** For everyone else it is
+not hidden by each route remembering to: **the database guard leaves it out
+of every read** (`hidden_entities`, `api/leka/db/repository.py`) — the entity,
+and every row that refers to it: its relationships, versions and assertions,
+a context's elements and feedback, a finding, a conflict, a quality score,
+an intention's link. Each such table declares the columns that refer to an
+entity (`__entity_refs__`); a new one must too.
+
+- Resolved on every request, from the role read then: restricting takes
+  effect at the next request, as removing a member does.
+- **Work done for a person sees what they may** — an agent run, a workflow,
+  an intention's analysis are run inside the asker's `hidden_entities`, read
+  when they run.
+- Asked for directly (`GET /knowledge/entities/{id}`), a restricted entity
+  answers 404 — **the same answer as an entity of another workspace** — and
+  the refusal is kept.
+- The system's own work (building the model, enriching it, the sweeps) sees
+  everything: hiding is for people.
+- **Limit**: what was computed and stored as text before a restriction — an
+  analysis's result, a context's intent plan — keeps the names it held then;
+  a new analysis does not.
+
+### Every decision that matters, kept
+
+`access_decisions` — append-only (the database refuses to change one; who
+asked is forgotten with their account): who asked, as which role, to do
+what (a permission, or an action under one: `agent:run`, `workflow:run`), on
+what resource, allowed or refused, by which rule and why, the route, the
+request id. **Kept: every refusal** — written on its own, so the request's
+rollback never takes it — **and every write and execution allowed**; reads
+allowed are not, they would bury the rest. `GET /governance/decisions` reads
+them (`access:read`), filtered by decision, person, action.
+
+### Capabilities and actions, before they run
+
+Running an agent or a workflow is decided by `authorize` against the
+capability's own permission **before anything is kept or queued** — 403,
+kept, when refused; allowed, kept with the run. Its steps and tools are then
+checked again, for the same person, when they run (LEKA-395, 397).
+
+### Across workspaces
+
+A person's principal has exactly one workspace, from the server-side
+session; every query is scoped to it by the guard, fail-closed
+(ADR 007). Another workspace's intention, run, context, entity or decision is
+**not found** — never "forbidden", which would say it exists.
+
+### In the app
+
+**Gouvernance**: the permissions of each role (the reader's own marked), the
+restricted entities — restricted, said why, and lifted, by an admin — and the
+trail of decisions, refusals first to hand.
+
 ## What is deliberately absent
 
-Per-resource permissions, groups, custom roles and SSO-mapped roles. All are
-plausible one day; none is needed by any screen that exists. See
+Groups, custom roles, SSO-mapped roles, and grants to one person on one
+entity: a restriction is by role. All are plausible one day; none is needed
+by any screen that exists. See
 [adr/007-tenant-isolation-strategy.md](adr/007-tenant-isolation-strategy.md).
 
 ## Équipe & accès, Facturation
