@@ -260,7 +260,8 @@ async def test_the_architect_runs_end_to_end(
     # What the model was given: LEKA's rules, then the agent's.
     system = script.asked[0]["systemInstruction"]["parts"][0]["text"]
     assert system.index("read-only") < system.index("PRINCIPE ABSOLU")
-    assert script.declared() == ["search_entities", "read_entity"]
+    # It declares none: every read-only tool (LEKA-400).
+    assert script.declared() == ["search_entities", "read_entity", "dependencies", "what_happened"]
     given = json.loads(script.asked[0]["contents"][0]["parts"][0]["text"])
     assert given["inputs"] == ASKED
     assert all(e["type"] != "business_capability" for e in given["context"])
@@ -366,13 +367,16 @@ async def test_its_tools_follow_who_asked_and_never_act(
         {"name": "restart_service", "why": "acts"},
         {"name": "read_sources", "why": "not_permitted"},
     ]
-    assert script.declared() == ["search_entities", "read_entity"]
+    assert script.declared() == ["search_entities", "read_entity", "dependencies", "what_happened"]
 
     _as(identity, acme, "admin")
     script = leka_gemini(gemini("# Rien à dire."))
     asked = await _start(client)
     await _run(acme, asked["id"], tools=tools)
-    assert script.declared() == ["search_entities", "read_entity", "read_sources"]
+    assert script.declared() == [
+        *["search_entities", "read_entity", "dependencies", "what_happened"],
+        "read_sources",
+    ]
 
 
 # ── as things stand when it runs ───────────────────────────────────────────

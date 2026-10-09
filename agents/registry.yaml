@@ -27,10 +27,45 @@ agents:
     version: 18.0.0
     status: active
 
+  - path: architecture/architecture-analysis/SKILL.md
+    name: architecture-analysis
+    version: 1.0.0
+    status: active
+
   - path: codebase/map-service-ownership/SKILL.md
     name: map-service-ownership
     version: 0.1.0
     status: draft
+
+  - path: data/data-analysis/SKILL.md
+    name: data-analysis
+    version: 1.0.0
+    status: active
+
+  - path: development/build-fixer/SKILL.md
+    name: build-fixer
+    version: 1.0.0
+    status: active
+
+  - path: development/code-review/SKILL.md
+    name: code-review
+    version: 1.0.0
+    status: active
+
+  - path: development/release-analysis/SKILL.md
+    name: release-analysis
+    version: 1.0.0
+    status: active
+
+  - path: development/test-analysis/SKILL.md
+    name: test-analysis
+    version: 1.0.0
+    status: active
+
+  - path: documentation/documentation-assistant/SKILL.md
+    name: documentation-assistant
+    version: 1.0.0
+    status: active
 
   - path: drift/detect-undocumented-dependency/SKILL.md
     name: detect-undocumented-dependency
@@ -41,3 +76,23 @@ agents:
     name: correlate-deploy-with-latency
     version: 0.1.0
     status: draft
+
+  - path: incident/incident-investigation/SKILL.md
+    name: incident-investigation
+    version: 1.0.0
+    status: active
+
+  - path: infrastructure/infrastructure-analysis/SKILL.md
+    name: infrastructure-analysis
+    version: 1.0.0
+    status: active
+
+  - path: operations/debug-assistant/SKILL.md
+    name: debug-assistant
+    version: 1.0.0
+    status: active
+
+  - path: security/security-review/SKILL.md
+    name: security-review
+    version: 1.0.0
+    status: active

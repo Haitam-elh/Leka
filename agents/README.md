@@ -86,6 +86,7 @@ The agent's instructions, in markdown.
 | `goals`, `kinds` | no | the intentions it answers (LEKA-385, LEKA-373) — what routes to it |
 | `examples` | no | how people ask for it |
 | `permission` | no | what a person needs to use it — `intention:create` by default |
+| `tools` | no | the runtime's tools it may be offered — `search_entities`, `read_entity`, `dependencies`, `what_happened` (LEKA-400); every read-only one when it declares none. Least privilege: declare what it needs |
 
 `requires` names source kinds; alternatives in one entry, `"confluence|microsoft_365"`.
 
@@ -119,8 +120,10 @@ decides how an agent may behave must not pass silently.
 4. Add the row to [`registry.yaml`](registry.yaml).
 5. Open a pull request. An agent is reviewed like code, because it is.
 
-Categories today: `incident/`, `drift/`, `codebase/`. Add one when a fourth
-theme genuinely appears — not for a single file.
+Categories today: `architecture/`, `codebase/`, `data/`, `development/`,
+`documentation/`, `drift/`, `incident/`, `infrastructure/`, `operations/`,
+`security/` — the library of LEKA-400 ([docs/agent-library.md](../docs/agent-library.md)).
+Add one when a new theme genuinely appears — not for a single file.
 
 ---
 

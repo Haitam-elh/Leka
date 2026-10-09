@@ -118,7 +118,9 @@ async def test_the_architect_is_left_out_until_it_can_run_then_routed_to(
     asked = {"text": ARCHITECTURE, "goal": "map_dependencies", "kind": "dependency"}
     without = await _route(client, **asked)
     assert without["subject_type"] == "request"
-    assert without["selected"] == ["dependencies"]
+    # LEKA's own takes its place: the library's architecture analysis
+    # (LEKA-400), which needs no source.
+    assert "architecture-analysis" in without["selected"]
     [architect] = [c for c in without["excluded"] if c["key"] == "application-architecture"]
     assert architect["eligible"] is True and architect["available"] is False
     assert [r["code"] for r in architect["reasons"]] == ["missing_source"]

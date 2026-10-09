@@ -171,6 +171,9 @@ class Definition:
     # An agent's instructions: kept here, never sent to a browser.
     instructions: str | None = None
     path: str | None = None
+    # An agent's: the tools it may be offered — every read-only one when it
+    # declares none (LEKA-400).
+    tools: tuple[str, ...] = ()
 
     def fingerprint(self) -> str:
         """What it is and does, hashed: everything but where it stands in
@@ -182,6 +185,9 @@ class Definition:
         # it says nothing new — what was registered stays what it is.
         if self.model_needs == ModelNeed():
             said.pop("model_needs")
+        # Added with the agent library (LEKA-400): none, it says nothing new.
+        if not self.tools:
+            said.pop("tools")
         said["goals"] = sorted(self.goals)
         said["kinds"] = sorted(self.kinds)
         canonical = json.dumps(said, sort_keys=True, ensure_ascii=False, default=str)

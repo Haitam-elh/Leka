@@ -70,7 +70,7 @@ from leka.context import AssembledContext, ContextRepository, ContextService, In
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.governance import ROLE_PERMISSIONS
 from leka.ingestion import ContentRepository, ResolutionRepository
-from leka.knowledge import GraphRepository, GraphService
+from leka.knowledge import EntityRepository, GraphRepository, GraphService, KnowledgeService
 from leka.platform import MembershipRepository, Role
 
 logger = structlog.get_logger(__name__)
@@ -339,13 +339,18 @@ async def _run(
         out_of_scope=injected.out_of_scope,
         beyond=injected.beyond,
     )
-    # Its tools: what it may use, by who asked.
-    given, withheld = offered(tools, permissions)
+    # Its tools: those it declares (LEKA-400), what it may use, by who asked.
+    declared = [t for t in tools if not definition.tools or t.name in definition.tools]
+    given, withheld = offered(declared, permissions)
     for kept in withheld:
         steps.add("tool_withheld", name=kept.tool, why=kept.why)
     await session.commit()
 
-    bound = handlers(definition, GraphService(GraphRepository(session, workspace_id)))
+    bound = handlers(
+        definition,
+        GraphService(GraphRepository(session, workspace_id)),
+        KnowledgeService(EntityRepository(session, workspace_id)),
+    )
     request = Request(
         purpose=f"agent:{definition.key}"[:100],
         messages=messages(definition, run.inputs, injected, tools=given),
