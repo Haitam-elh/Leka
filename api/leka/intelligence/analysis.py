@@ -45,7 +45,7 @@ import enum
 import hashlib
 import time
 import uuid
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -323,6 +323,10 @@ class ModelWork:
     run: Callable[..., Awaitable[Any]]
     kept: Mapping[str, Proposal] = field(default_factory=dict)
     decided: frozenset[str] = frozenset()
+    # What a model was already asked, on which facts (model_asks): asked
+    # again only once they changed — and remembering what it was asked.
+    asked: Callable[[str, Sequence[str]], Awaitable[dict[str, str]]] | None = None
+    remember: Callable[[str, Mapping[str, str], Collection[str]], Awaitable[None]] | None = None
 
 
 @dataclass(frozen=True)
