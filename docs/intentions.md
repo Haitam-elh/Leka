@@ -503,6 +503,51 @@ exception's type kept, not its text), one over its budget `timed_out`, one
 missing what it reads `skipped` (`no_material`) — the others go on. A part
 of the material that cannot be read is logged and skips what needs it.
 
+**Orchestrated, as one plan (LEKA-399, `orchestration.py`).** The
+capabilities chosen for an intention are planned as a graph and run as one:
+
+- **Planned.** Each capability says where it stands among the others:
+  what must have succeeded before it (`after`), what it reads when it did
+  (`uses`), what runs in its place when it fails (`fallback`). `plan()`
+  orders them in **levels**: each level after the one before, its
+  capabilities together, in parallel. One a model runs (the synthesis,
+  LEKA's analyst) reads all the others: it is last, the **conclusion**. A
+  capability named that was not chosen is no prerequisite; a cycle is
+  refused, said which (`OrchestrationError`).
+- **Run.** Level by level, each capability isolated as before, a level's
+  together (`asyncio.gather`; the rules run in threads: two slow ones take
+  the time of one). Each is **handed** what the capabilities it names
+  produced — those only, frozen, as they produced them (`Material.handed`).
+- **Handoffs, today**:
+  - `incidents` uses `changes`: a change whose reach (what depends on what
+    it touched) holds what an incident affects is a cause the incident's
+    own record does not tie to it;
+  - `action` uses `ownership` and `dependencies`: who should be told
+    before it is done (`action.inform`), and what depends on what it acts
+    on beyond its own read;
+  - the conclusion reads them all.
+- **Failures coordinated.**
+
+  | What happened | What follows |
+  | --- | --- |
+  | a prerequisite (`after`) did not succeed | not run: `skipped`, `upstream`, which one said (`capability.upstream`) |
+  | something it uses did not succeed | run with the rest, said `degraded` (`capability.degraded`) |
+  | it failed, and it has a `fallback` | its fallback runs in its place, said (`fallback_of`), and what follows reads the fallback's word |
+
+  A partial failure stays what it was: the analysis is `partial`, each
+  failure said.
+- **Traced.** The plan is kept with the analysis
+  (`detail.orchestration`: its levels, each step's level, method,
+  prerequisites, uses, fallback). Each step keeps its `level`, when it
+  started (`started_ms`, after the analysis did), how long, what it was
+  `handed`, what it ran without (`degraded`), what it stood in for
+  (`fallback_of`), how it ended and why.
+- **In the app.** *Analyse* lists the capabilities level by level —
+  « Étape 1 · en parallèle », « Étape 2 », « Conclusion » — each with what
+  it received (« reçoit : Changements »), ran without (« sans :
+  Responsabilités »), stood in for (« à la place de … ») or waited on in
+  vain (« attendait : … »).
+
 **The result** (`IntentionAnalysisResult`):
 
 | | |
@@ -632,7 +677,12 @@ thing up, answering on it — what it cites the analysis's evidence, the
 analysis complete; an answer resting on nothing it read not kept, the
 rules' said instead. `tests/test_intention_analysis.py`: what happened
 everywhere, in production, said where; what LEKA learned; « prod » is
-production. `web/lib/intention-analysis.test.ts`,
+production. `tests/test_intention_orchestration.py`, pure (LEKA-399): a
+plan in levels, the conclusion last, a cycle refused; a level run together;
+each handed what it names and only that; a prerequisite failed skips, a use
+failed degrades, a fallback stands in and what follows reads it; the
+incidents read the causes the changes reach; an action reads who owns what
+it acts on. `web/lib/intention-analysis.test.ts`,
 `web/components/intentions/analysis-tab.test.tsx`;
 `e2e/intention-analysis.spec.ts`, on the demo: asked, analysed, followed,
 its evidence and history; a restart waiting for a person.
