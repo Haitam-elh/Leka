@@ -535,8 +535,8 @@ export function IncidentsList({ sheet, empty }: { sheet: EntitySheet; empty: str
 }
 
 /** The overview's four tiles: the last 30 days of its activity. */
-export function OverviewTiles({ entityId }: { entityId: string }) {
-  const query = useActivity(entityId, 30);
+export function OverviewTiles({ entityId, days }: { entityId: string; days: PeriodDays }) {
+  const query = useActivity(entityId, days);
   if (!query.data) {
     return (
       <>
@@ -551,10 +551,10 @@ export function OverviewTiles({ entityId }: { entityId: string }) {
 
 /** The overview's chart: its activity day by day — what monitoring would
  * add, said, with the way to connect it. */
-export function ActivityCard({ entityId }: { entityId: string }) {
+export function ActivityCard({ entityId, days }: { entityId: string; days: PeriodDays }) {
   const t = useDictionary();
   const w = t.environment.sheet.activity;
-  const query = useActivity(entityId, 30);
+  const query = useActivity(entityId, days);
   return (
     <Card title={w.chart}>
       {query.data ? (

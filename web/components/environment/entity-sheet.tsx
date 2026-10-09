@@ -52,6 +52,7 @@ import {
   MetricsTab,
   OpenWork,
   OverviewTiles,
+  type PeriodDays,
 } from "@/components/environment/entity-tabs";
 import { RouteTabs } from "@/components/shell/route-tabs";
 import { ErrorState } from "@/components/states/error-state";
@@ -94,7 +95,10 @@ import { notify } from "@/lib/notify";
  * banner.
  */
 
-const PERIODS = { "24h": 24, "7d": 24 * 7, "30d": 24 * 30 } as const;
+// One period for the whole page: its events, its figures, its chart. (The
+// figures and chart were 30 days whatever was chosen — « 618 changements »
+// under « 7 derniers jours », 2026-10-09.)
+const PERIODS = { "7d": 7, "30d": 30, "90d": 90 } as const;
 type Period = keyof typeof PERIODS;
 
 const HOUR = 3_600_000;
@@ -118,6 +122,8 @@ interface SheetModel {
   name: string;
   typeLine: string;
   status: EnvironmentStatus | null;
+  // Its state deduced from what runs it, no tool measuring it.
+  deduced: boolean;
   version?: string;
   description?: string;
   owner: { name: string; subtitle: string; href?: string } | null;
@@ -224,6 +230,7 @@ function realModel(t: ReturnType<typeof useDictionary>, sheet: EntitySheet): She
     name: entity.name,
     typeLine: [typeLabel(t, entity.type), sheet.environment].filter(Boolean).join(" · "),
     status: sheet.status as EnvironmentStatus | null,
+    deduced: sheet.deduced ?? false,
     version: typeof version === "string" ? version : undefined,
     description: typeof description === "string" && description ? description : undefined,
     owner: sheet.owner
@@ -329,15 +336,15 @@ function realModel(t: ReturnType<typeof useDictionary>, sheet: EntitySheet): She
 function Sheet({ model, data, tab }: { model: SheetModel; data: EntitySheet; tab: string }) {
   const t = useDictionary();
   const w = t.environment.sheet;
-  const [period, setPeriod] = useState<Period>("7d");
+  const [period, setPeriod] = useState<Period>("30d");
   const events = useMemo(() => {
-    const since = Date.now() - PERIODS[period] * HOUR;
+    const since = Date.now() - PERIODS[period] * 24 * HOUR;
     return model.events.filter((event) => Date.parse(event.at) >= since);
   }, [model.events, period]);
 
   let body: React.ReactNode;
   if (tab === "overview") {
-    body = <Overview model={model} events={events} />;
+    body = <Overview model={model} events={events} days={PERIODS[period]} />;
   } else if (tab === "dependencies") {
     body = (
       <Card title={fill(w.dependencies.title, { count: model.dependencies.length })}>
@@ -437,6 +444,15 @@ function Header({
           <div className="mt-1 flex flex-wrap items-center gap-2 text-[0.875rem] text-shell-muted">
             <span>{model.typeLine}</span>
             {model.status ? <StatusBadge variant={`entity.${model.status}`} dot /> : null}
+            {model.deduced ? (
+              <span
+                className="rounded-md bg-state-warning/10 px-2 py-0.5 text-xs text-state-warning"
+                title={w.deducedWhy}
+                data-testid="sheet-deduced"
+              >
+                {w.deduced}
+              </span>
+            ) : null}
             {model.version ? (
               <span className="rounded-md border border-shell-line px-2 py-0.5 text-xs text-brand-navy">
                 {model.version}
@@ -454,7 +470,7 @@ function Header({
         <div className="flex flex-wrap items-center gap-2 xl:justify-end">
           <Select
             value={period}
-            onValueChange={(value) => onPeriod((value as Period | null) ?? "7d")}
+            onValueChange={(value) => onPeriod((value as Period | null) ?? "30d")}
             items={periods}
           >
             <SelectTrigger className="min-w-44" aria-label={w.period}>
@@ -551,35 +567,51 @@ function Person({
   );
 }
 
-function Overview({ model, events }: { model: SheetModel; events: EventRow[] }) {
+function Overview({
+  model,
+  events,
+  days,
+}: {
+  model: SheetModel;
+  events: EventRow[];
+  days: PeriodDays;
+}) {
   const t = useDictionary();
   const w = t.environment.sheet;
+  // What needs someone, apart from what is only worth knowing.
+  const pressing = model.attention.filter((row) => row.level !== "info");
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,1.4fr)]">
-        <OverviewTiles entityId={model.id} />
+        <OverviewTiles entityId={model.id} days={days} />
         <ActiveIncident model={model} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <ActivityCard entityId={model.id} />
+        <ActivityCard entityId={model.id} days={days} />
         <Card
           title={
-            model.attention.length
-              ? fill(w.attention, { count: model.attention.length })
-              : w.attentionNone
+            pressing.length
+              ? fill(w.attention, { count: pressing.length })
+              : model.attention.length
+                ? w.attentionKnown
+                : w.attentionNone
           }
           icon={
             <span
               aria-hidden="true"
               className={cn(
                 "size-2.5 rounded-full",
-                model.attention.length ? "bg-state-danger" : "bg-state-success",
+                pressing.length
+                  ? "bg-state-danger"
+                  : model.attention.length
+                    ? "bg-state-info"
+                    : "bg-state-success",
               )}
             />
           }
           action={
-            model.attention.length ? (
+            pressing.length ? (
               <CardLink href={routes.approvals()}>{t.environment.kpi.seeAll}</CardLink>
             ) : null
           }

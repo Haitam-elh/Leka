@@ -17,7 +17,12 @@ test.describe("Platform pages", () => {
     await page.goto("/overview");
     for (const kpi of ["kpi-services", "kpi-attention", "kpi-incidents"]) {
       await expect(page.getByTestId(kpi)).not.toHaveText("—");
-      await expect(page.getByTestId(kpi)).toHaveText(/^\d+$/);
+      // A figure — or, for the services, « ? » when nothing says how any is,
+      // and the tile says so.
+      await expect(page.getByTestId(kpi)).toHaveText(kpi === "kpi-services" ? /^(\d+|\?)$/ : /^\d+$/);
+    }
+    if ((await page.getByTestId("kpi-services").textContent()) === "?") {
+      await expect(page.locator('[data-kpi="services"]')).toContainText("d'état inconnu");
     }
   });
 

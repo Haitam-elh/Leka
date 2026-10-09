@@ -164,6 +164,9 @@ beforeEach(() => {
   environment.get.mockReset().mockResolvedValue({
     services: 4,
     services_operational: 3,
+    services_deduced: 2,
+    services_external: 1,
+    services_unknown: 0,
     incidents_open: 1,
     services_impacted: 1,
     attention: [
@@ -258,18 +261,66 @@ describe("the overview", () => {
     mount();
     expect(await screen.findByTestId("kpi-services")).toHaveTextContent("3");
     const [services, attention, incidents] = screen.getAllByTestId("kpi-tile");
-    expect(services).toHaveTextContent("sur 4 service(s) · 2 sans supervision, état déduit");
-    expect(within(attention).getByTestId("kpi-attention")).toHaveTextContent("3");
+    // Deduced from what runs them, said so; the external ones apart — as
+    // the architecture counts them.
+    expect(services).toHaveTextContent(
+      "sur 4 service(s) · état déduit de leur hébergement, non mesuré · 1 externe(s) à part",
+    );
+    // An incident is a point; services nothing measures are worth knowing,
+    // not an alarm.
+    expect(within(attention).getByTestId("kpi-attention")).toHaveTextContent("1");
+    expect(attention).toHaveTextContent("Billing API");
     expect(within(incidents).getByTestId("kpi-incidents")).toHaveTextContent("1");
     expect(incidents).toHaveTextContent("1 service(s) touché(s)");
     // This week's events, and no open contradiction.
     expect(await screen.findByText("42")).toBeVisible();
   });
 
+  it("says what is only worth knowing apart from what needs someone", async () => {
+    environment.get.mockResolvedValue({
+      services: 6,
+      services_operational: 6,
+      services_deduced: 6,
+      services_external: 1,
+      services_unknown: 0,
+      incidents_open: 0,
+      services_impacted: 0,
+      attention: [
+        { kind: "unmonitored_services", level: "info", count: 6, entity: null, detail: null },
+      ],
+    });
+    mount();
+    const [services, attention] = await screen.findAllByTestId("kpi-tile");
+    expect(within(services).getByTestId("kpi-services")).toHaveTextContent("6");
+    expect(within(attention).getByTestId("kpi-attention")).toHaveTextContent("0");
+    expect(attention).toHaveTextContent("Rien d'urgent · 6 service(s) sans monitoring");
+  });
+
+  it("says a state nothing tells as unknown, never as zero", async () => {
+    environment.get.mockResolvedValue({
+      services: 3,
+      services_operational: 0,
+      services_deduced: 0,
+      services_external: 0,
+      services_unknown: 3,
+      incidents_open: 0,
+      services_impacted: 0,
+      attention: [],
+    });
+    mount();
+    const [services] = await screen.findAllByTestId("kpi-tile");
+    // Not « — »: that is « not loaded yet ».
+    expect(within(services).getByTestId("kpi-services")).toHaveTextContent("?");
+    expect(services).toHaveTextContent("sur 3 service(s) · 3 d'état inconnu");
+  });
+
   it("says a workspace with no service, and nothing open", async () => {
     environment.get.mockResolvedValue({
       services: 0,
       services_operational: 0,
+      services_deduced: 0,
+      services_external: 0,
+      services_unknown: 0,
       incidents_open: 0,
       services_impacted: 0,
       attention: [],

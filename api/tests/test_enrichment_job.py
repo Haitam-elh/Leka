@@ -732,6 +732,61 @@ async def test_an_entity_s_sheet_says_its_state_team_incidents_and_dependencies(
     assert repository_sheet["team"]["origin"] == "inferred"
 
 
+async def test_a_service_nothing_measures_is_said_as_what_runs_it_says_deduced(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    """« 0 services opérationnels, 7 points d'attention » on the dashboard,
+    « en bonne santé, déduit » on the architecture, « non surveillé » on its
+    sheet — one service, three words (2026-10-09): the screens never read
+    the health enrichment deduces from what runs it. Read now, and counted as
+    the architecture counts: the company's services, the external apart."""
+    workspace = acme["acme"]
+    await _live(workspace)
+    github = await _source(workspace, "GitHub 2")
+    await _normalised(workspace, github, entity("service:api", "API", type="service"))
+    await _normalised(
+        workspace,
+        github,
+        entity("service:mail", "OVH (e-mail)", type="service", hosting="external"),
+    )
+    await resolve_workspace(workspace)
+    await enrich_workspace(workspace, now=datetime.now(UTC))
+    ids = await _resolved(workspace)
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            # What enrichment's `architecture` deduces of a service from its
+            # host — as it writes it.
+            session.add(
+                EntityEnrichment(
+                    workspace_id=workspace,
+                    entity_id=ids["service:api"],
+                    attribute="deduced_health",
+                    value="operational",
+                    confidence=0.7,
+                    rule="host",
+                    evidence="api-1 is running; its last deployment succeeded",
+                    inputs=[],
+                    enriched_at=datetime.now(UTC),
+                )
+            )
+            await session.commit()
+    _as(identity, acme, "member")
+
+    screen = (await client.get(f"{API}/environment")).json()
+    # Billing (an incident open on it) and the API — the mail provider apart.
+    assert (screen["services"], screen["services_external"]) == (2, 1)
+    assert (screen["services_operational"], screen["services_deduced"]) == (1, 1)
+    assert screen["services_unknown"] == 0  # billing: its incident says it
+    known = [p for p in screen["attention"] if p["kind"] == "unmonitored_services"]
+    assert [(p["level"], p["count"]) for p in known] == [("info", 1)]
+
+    sheet = (await client.get(f"{API}/environment/{ids['service:api']}")).json()
+    assert (sheet["status"], sheet["deduced"]) == ("operational", True)
+    assert [(p["kind"], p["level"]) for p in sheet["attention"]] == [
+        ("unmonitored_services", "info")
+    ]
+
+
 async def test_an_entity_s_activity_is_everything_that_moved_around_it(
     client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
 ) -> None:

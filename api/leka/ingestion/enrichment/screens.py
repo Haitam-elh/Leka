@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from datetime import UTC, datetime, timedelta
 
 from leka.connectors import ConnectorCategory, manifests
@@ -43,7 +43,18 @@ EVENTS = 6
 SHEET_EVENTS = 8
 OPEN_INCIDENTS_LISTED = 3
 # What the view reads of enrichment.
-FACTS = ("open_incidents", "lifecycle", "last_activity_at", "stale")
+# What a thing's state is read from — its health deduced from what runs it
+# (`deduced_health`, enrichment's `architecture`) included: without it, a
+# service nothing monitors was « non surveillé » here and « en bonne santé,
+# déduit » on the architecture, the same service (2026-10-09).
+FACTS = (
+    "open_incidents",
+    "lifecycle",
+    "last_activity_at",
+    "stale",
+    "deduced_health",
+    "last_deployment",
+)
 # The links the map draws, and the links a sheet lists.
 MAP_LINKS = ("part_of", "depends_on", "owned_by", "in_network")
 SHEET_LINKS = (
@@ -136,13 +147,35 @@ async def _hit_recently(
 async def _statuses(
     repository: EnrichmentRepository, things: dict[uuid.UUID, Thing], now: datetime
 ) -> dict[uuid.UUID, str | None]:
+    statuses, _ = await _states(repository, things, now)
+    return statuses
+
+
+async def _states(
+    repository: EnrichmentRepository, things: dict[uuid.UUID, Thing], now: datetime
+) -> tuple[dict[uuid.UUID, str | None], set[uuid.UUID]]:
+    """Each thing's state — and those whose state is deduced from what runs
+    them, no tool measuring it."""
     monitoring = monitoring_kinds()
     services = [t.id for t in things.values() if t.type == "service"]
     hit = await _hit_recently(repository, now, services)
-    return {
-        thing.id: view.status(thing, monitoring=monitoring, recently_hit=thing.id in hit)
-        for thing in things.values()
-    }
+    return (
+        {
+            thing.id: view.status(thing, monitoring=monitoring, recently_hit=thing.id in hit)
+            for thing in things.values()
+        },
+        {
+            thing.id
+            for thing in things.values()
+            if view.deduced(thing, monitoring=monitoring, recently_hit=thing.id in hit)
+        },
+    )
+
+
+def external(thing: Thing) -> bool:
+    """A service the company uses and does not run — an e-mail provider, a
+    payment API: on the architecture's « Dépendances externes »."""
+    return thing.type == "service" and thing.attributes.get("hosting") == "external"
 
 
 async def _events(
@@ -185,14 +218,17 @@ async def _events(
 
 async def environment(repository: EnrichmentRepository, *, now: datetime) -> EnvironmentRead:
     things = await _things(repository, types=view.MAP_TYPES)
-    statuses = await _statuses(repository, things, now)
+    statuses, deduced = await _states(repository, things, now)
     links = [
         Link(a, b, kind) for a, b, kind in await repository.links_among(view.MAP_TYPES, MAP_LINKS)
     ]
     nodes, edges, layers = view.layout(things.values(), links, statuses)
     teams = {t.id: t for t in things.values() if t.type == "team"}
 
-    services = [t for t in things.values() if t.type == "service"]
+    # Counted as the architecture counts them: the company's own, the
+    # external ones apart.
+    services = [t for t in things.values() if t.type == "service" and not external(t)]
+    outside = [t for t in things.values() if external(t)]
     open_incidents = list(await repository.open_incidents())
     impacted = {
         to_id
@@ -230,10 +266,13 @@ async def environment(repository: EnrichmentRepository, *, now: datetime) -> Env
         environments=sorted({n.environment for n in nodes if n.environment}),
         services=len(services),
         services_operational=sum(1 for s in services if statuses.get(s.id) == "operational"),
+        services_deduced=sum(1 for s in services if s.id in deduced),
+        services_unknown=sum(1 for s in services if statuses.get(s.id) == "unmonitored"),
+        services_external=len(outside),
         incidents_open=len(open_incidents),
         services_impacted=len(impacted),
         changes_24h=len(changes),
-        attention=await _attention(repository, things, statuses, open_incidents),
+        attention=await _attention(repository, things, statuses, open_incidents, deduced),
         events=await _events(repository, moved),
     )
 
@@ -243,6 +282,7 @@ async def _attention(
     things: dict[uuid.UUID, Thing],
     statuses: dict[uuid.UUID, str | None],
     open_incidents: Sequence[uuid.UUID],
+    deduced: Collection[uuid.UUID] = (),
 ) -> list[AttentionPointRead]:
     """What needs attention, the most urgent first: the open incidents,
     resources failed or stopped, work left waiting, services nothing
@@ -270,10 +310,18 @@ async def _attention(
         ("failed_resources", "high", sum(1 for r in resources if statuses[r.id] == "incident")),
         ("stopped_resources", "medium", sum(1 for r in resources if statuses[r.id] == "attention")),
         ("stale_work", "medium", await repository.count_where("stale", True)),
+        # What no tool measures — its state deduced from what runs it, or
+        # not known at all: worth knowing, not alarming.
         (
             "unmonitored_services",
             "info",
-            sum(1 for t in things.values() if statuses.get(t.id) == "unmonitored"),
+            sum(
+                1
+                for t in things.values()
+                if t.type == "service"
+                and not external(t)
+                and (statuses.get(t.id) == "unmonitored" or t.id in deduced)
+            ),
         ),
         (
             "dormant_repositories",
@@ -326,7 +374,7 @@ async def sheet(
         if entity.id in (a, b)
     ]
     others = await _things(repository, ids=[b if a == entity.id else a for a, b, _ in links])
-    statuses = await _statuses(repository, {**others, this.id: this}, now)
+    statuses, deduced = await _states(repository, {**others, this.id: this}, now)
     edges = {(e.from_entity.id, e.to_entity.id, e.type): e for e in enriched.outgoing}
     edges |= {(e.from_entity.id, e.to_entity.id, e.type): e for e in enriched.incoming}
 
@@ -396,7 +444,7 @@ async def sheet(
                 kind="stale_work", level="medium", count=stale, entity=None, detail=None
             )
         )
-    if statuses.get(this.id) == "unmonitored":
+    if statuses.get(this.id) == "unmonitored" or this.id in deduced:
         attention.append(
             AttentionPointRead(
                 kind="unmonitored_services", level="info", count=1, entity=None, detail=None
@@ -407,6 +455,7 @@ async def sheet(
     return EntitySheetRead(
         entity=enriched,
         status=statuses.get(this.id),
+        deduced=this.id in deduced,
         environment=environment if isinstance(environment, str) else None,
         owner=owner,
         team=team,

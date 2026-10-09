@@ -575,7 +575,13 @@ class IntentionService:
             actor=actor,
             by=by,
             at=at,
-            detail={"kind": kind, "ref_id": str(ref_id), "label": link.label},
+            detail={
+                "kind": kind,
+                "ref_id": str(ref_id),
+                "label": link.label,
+                # A finding's code and values, for the history to word it.
+                **{k: link.detail[k] for k in ("code", "params") if k in link.detail},
+            },
         )
         return link
 
@@ -590,7 +596,13 @@ class IntentionService:
         elif kind == "finding" and self._findings is not None:
             finding = await self._findings.finding(ref_id)
             if finding is not None:
-                return finding.statement, {"code": finding.code, "analyzer": finding.analyzer}
+                # Its code and values: the interface words it, as Insights
+                # does — its statement is English.
+                return finding.statement, {
+                    "code": finding.code,
+                    "analyzer": finding.analyzer,
+                    "params": dict(finding.params or {}),
+                }
         elif kind == "entity" and self._entities is not None:
             entity = (await self._entities.by_ids([ref_id])).get(ref_id)
             if entity is not None:

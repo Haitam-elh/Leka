@@ -8,6 +8,7 @@ import { cn } from "cn";
 import { Card, type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { exactDate } from "@/components/knowledge/time";
+import { linkedLabel } from "@/components/intentions/link-words";
 import { useCurrentUser } from "@/components/shell/shell-provider";
 import { ErrorState } from "@/components/states/error-state";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
@@ -49,7 +50,7 @@ export function eventSaid(
     case "unlinked":
       return fill(w[event.kind], {
         kind: kinds[String(detail.kind)] ?? String(detail.kind),
-        label: String(detail.label ?? ""),
+        label: linkedLabel(t, String(detail.kind), String(detail.label ?? ""), detail),
       });
     case "archived":
     case "restored":

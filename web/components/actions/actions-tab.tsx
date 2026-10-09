@@ -727,6 +727,25 @@ export function ActionsTab({ intention }: { intention: IntentionDetail }) {
       </section>
     );
   }
+  // A question asks nothing to be done: LEKA answers it — not « once the
+  // decision is approved », there is none to wait for.
+  const understood = intention.understanding;
+  const asking =
+    understood !== null &&
+    understood !== undefined &&
+    understood.goal.code !== "act" &&
+    !understood.actions.some((action) => action.changes_systems);
+  if (asking) {
+    return (
+      <div
+        className="rounded-xl border border-shell-line bg-white px-5 py-6 text-[0.875rem]"
+        data-testid="plan-question"
+      >
+        <p className="font-semibold text-brand-navy">{w.questionTitle}</p>
+        <p className="text-shell-muted">{w.questionBody}</p>
+      </div>
+    );
+  }
   return (
     <div
       className="rounded-xl border border-shell-line bg-white px-5 py-6 text-[0.875rem]"

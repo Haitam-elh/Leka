@@ -27,6 +27,13 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
 import type { Finding } from "@/lib/insights";
 import { useInsights } from "@/lib/insights-queries";
 
+/** How long, said short: « 45 s », « 2 min 05 s ». */
+export function duration(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds} s`;
+  return `${Math.floor(seconds / 60)} min ${String(seconds % 60).padStart(2, "0")} s`;
+}
+
 /** The findings a card names, unless told fewer; the rest are counted. */
 const SHOWN = 3;
 
@@ -366,7 +373,9 @@ export function LekaInsights({
   const t = useDictionary();
   const w = t.insights;
   const permissions = usePermissions();
-  const { summary, analyse, waiting } = useInsights();
+  const { summary, analyse, waiting, since } = useInsights();
+  // How long it has been at it: read again with every poll.
+  const took = waiting && since !== null ? Math.max(0, Date.now() - since) : 0;
   const mayAsk = permissions?.includes("intention:create") ?? false;
   const data = summary.data;
   const open = data ? data.open.high + data.open.medium + data.open.low : 0;
@@ -413,13 +422,29 @@ export function LekaInsights({
     );
   }
 
-  const finished = data?.latest?.finished_at;
+  const latest = data?.latest;
+  const finished = latest?.finished_at;
   return (
     <div className={cn("flex flex-1 flex-col", className)}>
       <div className="flex-1">{body}</div>
       {finished && !waiting ? (
         <p className="mt-3 text-xs text-shell-muted">
           {fill(w.analysed, { when: timeAgo(t, finished) })}
+        </p>
+      ) : null}
+      {latest && !waiting && (latest.status === "failed" || latest.status === "abandoned") ? (
+        <p className="mt-1 text-xs text-state-danger" data-testid="insights-run-failed">
+          {w.runFailed}
+        </p>
+      ) : null}
+      {latest && !waiting && latest.status === "partial" ? (
+        <p className="mt-1 text-xs text-state-warning" data-testid="insights-run-partial">
+          {w.runPartial}
+        </p>
+      ) : null}
+      {waiting && took >= 60_000 ? (
+        <p className="mt-2 text-xs text-shell-muted" role="status" data-testid="insights-background">
+          {w.background}
         </p>
       ) : null}
       {analyse.data?.queued === false ? (
@@ -438,7 +463,7 @@ export function LekaInsights({
           {waiting ? (
             <>
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              {w.analysing}
+              {took >= 10_000 ? fill(w.analysingFor, { took: duration(took) }) : w.analysing}
             </>
           ) : (
             <>

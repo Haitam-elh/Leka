@@ -34,7 +34,7 @@ vi.mock("@/components/shell/shell-provider", () => ({
   usePermissions: () => permissions.value,
 }));
 
-const { LekaInsights, word } = await import("@/components/insights/leka-insights");
+const { LekaInsights, duration, word } = await import("@/components/insights/leka-insights");
 const { DICTIONARIES } = await import("@/lib/i18n/dictionaries");
 
 const DATABASE = "0c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
@@ -544,11 +544,27 @@ describe("waiting for a run asked for", () => {
     latest: { ...RUN, started_at: started, status },
   });
 
-  it("waits until a run started after the ask has finished, two minutes at most", () => {
+  it("waits until a run started after the ask has finished, fifteen minutes at most", () => {
     expect(waiting(run("2026-10-05T11:00:00Z", "succeeded"), asked, asked + 5_000)).toBe(true);
     expect(waiting(run("2026-10-05T12:00:03Z", "running"), asked, asked + 9_000)).toBe(true);
     expect(waiting(run("2026-10-05T12:00:03Z", "succeeded"), asked, asked + 9_000)).toBe(false);
-    expect(waiting(run("2026-10-05T11:00:00Z", "succeeded"), asked, asked + 180_000)).toBe(false);
+    // Past two minutes, still followed: an analysis can take longer.
+    expect(waiting(run("2026-10-05T12:00:03Z", "running"), asked, asked + 180_000)).toBe(true);
+    expect(waiting(run("2026-10-05T11:00:00Z", "succeeded"), asked, asked + 16 * 60_000)).toBe(
+      false,
+    );
     expect(waiting(summary(), null)).toBe(false);
+  });
+
+  it("follows a run under way, asked by someone else, until it ends", () => {
+    const now = Date.parse("2026-10-05T12:01:00Z");
+    expect(waiting(run("2026-10-05T12:00:00Z", "running"), null, now)).toBe(true);
+    // One left running an hour ago is not waited for.
+    expect(waiting(run("2026-10-05T11:00:00Z", "running"), null, now)).toBe(false);
+  });
+
+  it("says how long, short", () => {
+    expect(duration(45_000)).toBe("45 s");
+    expect(duration(125_000)).toBe("2 min 05 s");
   });
 });

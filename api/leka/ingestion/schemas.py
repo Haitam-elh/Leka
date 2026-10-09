@@ -527,8 +527,16 @@ class EnvironmentRead(BaseModel):
     edges: list[EnvironmentEdgeRead]
     layers: dict[str, int] = Field(description="How many things each layer holds.")
     environments: list[str] = Field(description="The environments its things say they are in.")
-    services: int
-    services_operational: int
+    services: int = Field(description="The company's own services; the external ones apart.")
+    services_operational: int = Field(description="Measured, or deduced from what runs them.")
+    services_deduced: int = Field(
+        default=0, description="Whose state is deduced from what runs them, no tool measuring it."
+    )
+    services_external: int = Field(default=0, description="Services it uses and does not run.")
+    services_unknown: int = Field(
+        default=0,
+        description="Whose state nothing says: no tool measures it, nothing known runs it.",
+    )
     incidents_open: int
     services_impacted: int
     changes_24h: int
@@ -611,6 +619,9 @@ class EntitySheetRead(BaseModel):
 
     entity: EnrichedEntity
     status: str | None
+    deduced: bool = Field(
+        default=False, description="Its state is deduced from what runs it, no tool measuring it."
+    )
     environment: str | None
     owner: SheetPersonRead | None
     team: SheetTeamRead | None
