@@ -11,7 +11,8 @@ routes in `api/leka/api/capabilities.py`; the model gateway and router in
 `runtime.py`, `tools.py`, `runs.py` ([agent-runtime.md](agent-runtime.md));
 the router that sends an intention to them in `router.py`
 ([capability-router.md](capability-router.md)); workflows, composing them,
-in `workflow.py`, `workflow_runs.py` ([workflows.md](workflows.md)).
+in `workflow.py`, `workflow_runs.py` ([workflows.md](workflows.md)); the skills
+capabilities are made of in `skills.py` ([skills.md](skills.md), LEKA-396).
 
 ## 1. A capability
 

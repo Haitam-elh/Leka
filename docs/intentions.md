@@ -620,10 +620,14 @@ asker or an approver; another workspace's 404.
 **LEKA's analyst** (`analyst.py`, 2026-10-09): the **synthesis**
 capability (`method: model`) runs after the rules — and is no longer a
 model rewording what they found. It is a language model that knows what
-LEKA is and reads what the question needs through LEKA's own tools, read
-only, as a colleague with access to everything LEKA knows would:
+LEKA is and reads what the question needs through LEKA's own reads, read
+only, as a colleague with access to everything LEKA knows would. Each read
+is a skill (LEKA-396, [skills.md](skills.md)): what the model asks is checked
+against what it takes, run with what the person who asked may read (their
+role now), the database holding it read only, and kept about the intention
+(`GET /skills/runs?ref=intention:<id>`).
 
-| Tool | What it reads |
+| Skill | What it reads |
 | --- | --- |
 | `find` | things by name or words — services, applications, repositories, databases, resources, teams, people, documents |
 | `describe` | one thing: what it is, its state, what its sources say of it, who answers for it (owners, maintainers, leads, experts — LEKA-365), what it is tied to |
@@ -646,7 +650,7 @@ It starts from what the rules found (the same input the synthesis always
 had) and a part of the context; at most six rounds of tools, the last one
 made to answer (`Task.conclude`); low thinking, 120 s.
 
-Its answer is checked: each point cites what a tool returned (`entity:…`,
+Its answer is checked: each point cites what a read returned (`entity:…`,
 `event:…`, `source:…`, `finding:…`), what the rules found, or the context;
 a citation of nothing it read or was given is dropped, a point citing
 nothing goes, an answer resting on nothing — when there was something — is
@@ -683,9 +687,9 @@ what waits; another workspace's 404. `tests/test_intention_model.py`, Gemini
 scripted: words the rules cannot read, read by the model and analysed; a
 request to act staying the rules'; the answer written, a made-up citation
 dropped; an answer resting on nothing not kept. `tests/test_intention_analyst.py`:
-the analyst told what LEKA is, given its nine tools, read only, looking a
+the analyst told what LEKA is, given its nine reads, read only, looking a
 thing up, answering on it — what it cites the analysis's evidence, the
-analysis complete; an answer resting on nothing it read not kept, the
+analysis complete, each read kept about the intention for whoever asked; an answer resting on nothing it read not kept, the
 rules' said instead. `tests/test_intention_analysis.py`: what happened
 everywhere, in production, said where; what LEKA learned; « prod » is
 production. `tests/test_intention_orchestration.py`, pure (LEKA-399): a
