@@ -10,6 +10,11 @@ name: CI
 # On main, after a merge, the pull request's run has tested the change
 # whole: `main` below only checks that the merge itself holds — lint, types,
 # migrations, minutes rather than half an hour — and CD deploys after it.
+#
+# WHERE IT RUNS: GitHub's runners, unless the repository variable
+# CI_RUNS_ON names a self-hosted runner's label (`leka`: a Linux VM on a
+# developer's Mac, docs/deployment.md) — what keeps CI going, free, once the
+# month's minutes are spent. Unset it to come back to GitHub's runners.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -34,7 +39,7 @@ jobs:
     # After a merge: what two branches each green can break together shows
     # in the types and the migrations; the tests ran on the pull request.
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
 
     services:
       postgres:
@@ -100,7 +105,7 @@ jobs:
     name: api — lint, types, migrations, tests
     # A pull request ready for review: the whole suite. Not a draft, not main.
     if: github.event_name == 'pull_request' && !github.event.pull_request.draft
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
 
     services:
       postgres:
@@ -341,7 +346,7 @@ jobs:
   web:
     name: web — lint, types, build
     if: github.event_name == 'pull_request' && !github.event.pull_request.draft
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
 
     defaults:
       run:
@@ -373,7 +378,7 @@ jobs:
 
   e2e:
     name: e2e — the sign-in journey in a real browser
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     # Runs after the other two: if the unit tests or the build are broken,
     # a browser failure tells you nothing you do not already know, and this
     # job is the slow one.
