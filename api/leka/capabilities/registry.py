@@ -154,13 +154,16 @@ def definitions(
     """Every capability, checked — a duplicate key, or one that names what
     LEKA does not know, refuses them all: a catalogue with a capability
     silently missing is worse than one that does not load. The workflows
-    last: they compose the others."""
+    last: they compose the others — LEKA's own, unless the agents are read
+    from elsewhere (a test's): then only the workflows given."""
     found = agents(agents_dir or settings.agents_dir)
     for name in sorted(_providers):
         found.extend(_providers[name]())
     _checked(found)
     known = {d.key: d for d in found}
-    found.extend(w.definition() for w in load_workflows(workflows_dir or WORKFLOWS_DIR, known))
+    flows = workflows_dir or (WORKFLOWS_DIR if agents_dir is None else None)
+    if flows is not None:
+        found.extend(w.definition() for w in load_workflows(flows, known))
     _checked(found)
     return sorted(found, key=lambda d: d.key)
 

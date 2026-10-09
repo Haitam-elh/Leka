@@ -15,7 +15,7 @@ inputs:
   - {name: perimetre, type: text, required: true, description: Le périmètre et ses canaux.}
   - {name: deck, type: boolean, required: false, description: Construire le deck de l'architecte.}
 examples:
-  - Monte le dossier d'architecture du parcours Paiement CB
+  - Monte le dossier complet de Billing API
 steps:
   - id: standing
     title: Où il en est
