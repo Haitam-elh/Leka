@@ -17,7 +17,7 @@ what it needs, and a capability's needs come with its definition.
 from __future__ import annotations
 
 import enum
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from leka.capabilities.gateway.contract import Endpoint
@@ -122,6 +122,7 @@ def route(
     keys: dict[str, str | None],
     default: tuple[str, str],
     fallbacks: Sequence[tuple[str, str]] = (),
+    urls: Mapping[str, str] | None = None,
 ) -> Routing:
     """The models to try, in order, for what is needed."""
     routes: list[Route] = []
@@ -154,7 +155,13 @@ def route(
         if key is None:
             passed.append(Passed(provider, model, "no_key"))
             return
-        offer(Endpoint(provider=provider, api_key=key, owner="leka"), model, why)
+        offer(
+            Endpoint(
+                provider=provider, api_key=key, base_url=(urls or {}).get(provider), owner="leka"
+            ),
+            model,
+            why,
+        )
 
     leka(*default, "default")
     for provider, model in fallbacks:
@@ -173,7 +180,12 @@ def route(
             continue
         tried.add((other.provider, other.model))
         offer(
-            Endpoint(provider=other.provider, api_key=keys[other.provider], owner="leka"),
+            Endpoint(
+                provider=other.provider,
+                api_key=keys[other.provider],
+                base_url=(urls or {}).get(other.provider),
+                owner="leka",
+            ),
             other.model,
             "alternative",
         )

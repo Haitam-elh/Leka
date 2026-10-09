@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import enum
 import json
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -118,6 +119,8 @@ class Request:
     tool_choice: ToolChoice = ToolChoice.AUTO
     # What it is about — an intention, a capability run: kept with each call.
     ref: str | None = None
+    # The runtime's execution it is part of (LEKA-429): its calls, together.
+    run_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)

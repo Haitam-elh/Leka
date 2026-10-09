@@ -109,6 +109,7 @@ says so, the rules answer in its place.
 | `LEKA_LLM_MODEL` | `gemini-3.8-flash` | The default model — Gemini 3.8 Flash for the MVP. Configured here, never written where it is used |
 | `LEKA_LLM_FALLBACKS` | — | Tried in order when the default fails or cannot do what is asked: `provider:model`, comma-separated (`mistral:mistral-large-latest`). Empty: every other provider a key is set for, with its default |
 | `LEKA_LLM_RETRIES` | `1` | How many more times a temporary failure (busy, rate-limited, down) is tried before the next model |
+| `LEKA_LLM_API_URL` | — | Where LEKA's default model is reached when not at its provider's own address: a proxy, a regional endpoint — the browser tests point it at a local stand-in. https in production |
 | `LEKA_GOOGLE_API_KEY` | — | Google AI Studio key (paid tier: free-tier prompts may be used by Google) |
 | `LEKA_MISTRAL_API_KEY` | — | |
 | `LEKA_ANTHROPIC_API_KEY` | — | |

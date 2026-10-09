@@ -90,6 +90,8 @@ function usage(overrides: Partial<ModelUsage> = {}): ModelUsage {
     by_day: [],
     by_model: [{ provider: "google", model: "gemini-3.8-flash", title: "Gemini 3.8 Flash", tally: { ...TALLY, calls: 10, cost_usd: 0.0181 } }],
     by_purpose: [{ purpose: "intention.understanding", tally: { ...TALLY, calls: 7 } }],
+    runs: { succeeded: 9, timed_out: 1 },
+    latest_runs: [],
     latest: [
       {
         id: "c1",
@@ -154,6 +156,10 @@ describe("the language model", () => {
     expect(used).toHaveTextContent("Comprendre une demande");
     expect(screen.getByTestId("model-call")).toHaveTextContent("Rédiger une réponse");
     expect(screen.getByTestId("model-call")).toHaveTextContent("gemini-3.8-flash-001");
+    // What the runtime had models do, by how it ended (LEKA-429).
+    expect(screen.getByTestId("model-runs")).toHaveTextContent(
+      "Exécutions : 9 réussie(s) · 1 hors délai",
+    );
   });
 
   it("says when no model can answer", async () => {

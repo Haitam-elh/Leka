@@ -43,10 +43,11 @@ test.describe("Intention analysis", () => {
     await expect(steps.nth(1)).toHaveAttribute("data-name", "ownership");
     await expect(steps.nth(1)).toHaveAttribute("data-status", "succeeded");
     await expect(steps.nth(1)).toContainText("Responsabilités · pour son objectif");
-    // No model key in CI: the synthesis (LEKA-394) waits for one, said.
+    // Written by the model (the stand-in, LEKA-394/429), after the rules.
     await expect(steps.nth(2)).toHaveAttribute("data-name", "synthesis");
-    await expect(steps.nth(2)).toHaveAttribute("data-status", "skipped");
-    await expect(steps.nth(2)).toContainText("aucun modèle ne peut la rédiger ici");
+    await expect(steps.nth(2)).toHaveAttribute("data-status", "succeeded");
+    await expect(steps.nth(2)).toContainText("Synthèse · toujours");
+    await expect(page.getByTestId("analysis-answer")).toContainText("Rédigée par Gemini 3.8 Flash");
     // What it found, worded — no proposal.
     await expect(page.getByTestId("analysis-summary")).toContainText(
       "auth-service appartient à Thomas Berger.",
@@ -66,9 +67,8 @@ test.describe("Intention analysis", () => {
 
     // Its overview and history say it too.
     await page.getByTestId("tab-overview").click();
-    await expect(page.getByTestId("intention-summary")).toHaveText(
-      "auth-service appartient à Thomas Berger.",
-    );
+    // What it came to: the answer the model wrote from it (LEKA-394).
+    await expect(page.getByTestId("intention-summary")).toContainText("D'après l'analyse");
     await page.getByTestId("tab-history").click();
     // What happened to the intention itself (its whole story: LEKA-392).
     await page.getByTestId("timeline-category-intention").click();

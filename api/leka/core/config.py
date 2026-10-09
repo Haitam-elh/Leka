@@ -133,6 +133,19 @@ class Settings(
         return self
 
     @model_validator(mode="after")
+    def _refuse_a_plain_model_address_in_production(self) -> Self:
+        """LEKA_LLM_API_URL carries every prompt — the company's context —
+        and the model key: in production, over https only (LEKA-429)."""
+        if (
+            self.environment == "production"
+            and self.llm_api_url
+            and not self.llm_api_url.startswith("https://")
+        ):
+            msg = "LEKA_LLM_API_URL must be https in production: it carries the model key."
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
     def _refuse_silent_email_online(self) -> Self:
         """Online, an API that cannot send email must not start.
 

@@ -13377,6 +13377,51 @@ export interface components {
             maintainers: components["schemas"]["EntityBrief"][];
         };
         /**
+         * LLMRunRead
+         * @description One piece of work a model did for LEKA (LEKA-429), and how it ended.
+         */
+        LLMRunRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Purpose */
+            purpose: string;
+            /** Ref */
+            ref: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "succeeded" | "invalid" | "no_model" | "timed_out" | "failed";
+            /** Provider */
+            provider: string | null;
+            /** Model */
+            model: string | null;
+            /** Version */
+            version: string | null;
+            /** Calls */
+            calls: number;
+            /** Tokens In */
+            tokens_in: number;
+            /** Tokens Out */
+            tokens_out: number;
+            /** Cost Usd */
+            cost_usd: number | null;
+            /** Latency Ms */
+            latency_ms: number;
+            /** Context Items */
+            context_items: number;
+            /** Error */
+            error: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+        };
+        /**
          * LandscapeDetail
          * @description One service or application: everything above, what it is made of,
          *     what it depends on and what depends on it, where each piece came from.
@@ -14000,6 +14045,15 @@ export interface components {
             by_purpose: components["schemas"]["ModelPurposeRead"][];
             /** Latest */
             latest: components["schemas"]["ModelCallRead"][];
+            /**
+             * Runs
+             * @description The work models did (LEKA-429), by how it ended: succeeded, invalid, no_model, timed_out, failed.
+             */
+            runs: {
+                [key: string]: number;
+            };
+            /** Latest Runs */
+            latest_runs: components["schemas"]["LLMRunRead"][];
         };
         /**
          * Neighbourhood

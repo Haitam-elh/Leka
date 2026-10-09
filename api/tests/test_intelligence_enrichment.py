@@ -25,12 +25,12 @@ rules-made and adds.
 from __future__ import annotations
 
 import dataclasses
-import json
 import uuid
 from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any
 
+from leka.capabilities import Task
 from leka.intelligence import ANALYZERS, Material, Method, Proposal, Subject, execute
 from leka.intelligence.analysis import ModelWork
 from leka.intelligence.curation import by_policy
@@ -396,18 +396,20 @@ def test_every_proposal_keeps_what_shows_it_and_where_it_was_read() -> None:
 
 
 class Scripted:
-    """A model that answers what it is told to, and keeps what it was asked."""
+    """The LLM runtime, scripted: answers what it is told to, and keeps the
+    tasks it was given."""
 
     def __init__(self, answer: Callable[[dict[str, Any]], dict[str, Any]]) -> None:
         self.answer = answer
-        self.asked: list[dict[str, Any]] = []
+        self.asked: list[Task] = []
 
-    async def __call__(self, request: Any, shape: Any, needs: Any) -> Any:
-        said = json.loads(request.messages[-1].content)
-        self.asked.append(said)
+    async def __call__(self, task: Task) -> Any:
+        self.asked.append(task)
+        assert task.output is not None
         return SimpleNamespace(
-            value=shape.model_validate(self.answer(said)),
-            completion=SimpleNamespace(model="gemini-3.8-flash"),
+            ok=True,
+            value=task.output.model_validate(self.answer(dict(task.input))),  # type: ignore[arg-type]
+            model="gemini-3.8-flash",
         )
 
 
@@ -418,7 +420,7 @@ def first_fact(said: dict[str, Any]) -> dict[str, Any]:
                 "id": t["id"],
                 "description": f"{t['name']} handles card payments.",
                 "confidence": 0.9,
-                "uses": [t["facts"][0]["id"], "invented"],
+                "uses": [t["facts"][0], "invented"],
             }
             for t in said["things"]
         ]
@@ -432,12 +434,14 @@ async def test_a_model_describes_from_what_leka_knows_each_sentence_citing_it() 
     )
     auth = known("auth-service").model_copy(update={"description": "Signs people in"})
     model = Scripted(first_fact)
-    proposals = await enrich_summary(world([pay, auth, code], tie(pay, auth)), ModelWork(ask=model))
+    proposals = await enrich_summary(world([pay, auth, code], tie(pay, auth)), ModelWork(run=model))
 
-    # Only what lacks a description is asked of — once, with its facts.
+    # Only what lacks a description is asked of — once; its facts are the
+    # task's LEKA context, each with its id (LEKA-429).
     [asked] = model.asked
-    assert [t["name"] for t in asked["things"]] == ["payment-api"]
-    facts = [f["text"] for f in asked["things"][0]["facts"]]
+    assert [t["name"] for t in asked.input["things"]] == ["payment-api"]  # type: ignore[index]
+    assert asked.purpose == "enrichment.summary"
+    facts = [item.text for item in asked.context.items]
     assert "Technology: python, fastapi" in facts
     assert (
         "Its code is the repository acme/payments, described as: Card payments and refunds" in facts
@@ -472,7 +476,7 @@ async def test_what_was_proposed_or_decided_is_never_asked_again() -> None:
         value="Kept as it was.",
     )
     model = Scripted(first_fact)
-    work = ModelWork(ask=model, kept={kept.key: kept}, decided=frozenset({summary_key(cart)}))
+    work = ModelWork(run=model, kept={kept.key: kept}, decided=frozenset({summary_key(cart)}))
     assert await enrich_summary(world([pay, cart]), work) == [kept]
     assert model.asked == []
 
@@ -485,4 +489,4 @@ async def test_what_was_proposed_or_decided_is_never_asked_again() -> None:
             ]
         }
     )
-    assert await enrich_summary(world([pay]), ModelWork(ask=vague)) == []
+    assert await enrich_summary(world([pay]), ModelWork(run=vague)) == []

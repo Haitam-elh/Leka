@@ -523,6 +523,28 @@ class ModelCallRead(BaseModel):
     latency_ms: int
 
 
+class LLMRunRead(BaseModel):
+    """One piece of work a model did for LEKA (LEKA-429), and how it ended."""
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    purpose: str
+    ref: str | None
+    status: Literal["succeeded", "invalid", "no_model", "timed_out", "failed"]
+    provider: str | None
+    model: str | None
+    version: str | None
+    calls: int
+    tokens_in: int
+    tokens_out: int
+    cost_usd: float | None
+    latency_ms: int
+    context_items: int
+    error: str | None
+    started_at: datetime
+
+
 class ModelUsageRead(BaseModel):
     """What this workspace asked of models: LEKA's and its own apart."""
 
@@ -538,6 +560,11 @@ class ModelUsageRead(BaseModel):
     by_model: list[ModelBreakdownRead]
     by_purpose: list[ModelPurposeRead]
     latest: list[ModelCallRead]
+    runs: dict[str, int] = Field(
+        description="The work models did (LEKA-429), by how it ended: succeeded, invalid, "
+        "no_model, timed_out, failed."
+    )
+    latest_runs: list[LLMRunRead]
 
 
 # ── agent runs (LEKA-395) ───────────────────────────────────────────────────

@@ -313,13 +313,14 @@ class Material:
 
 @dataclass(frozen=True)
 class ModelWork:
-    """What an analysis a model helps with is given (LEKA-394): a way to
-    ask the gateway — `ask(request, shape, needs)`, a checked structured
-    answer, every call kept — and what it already proposed: what still
-    stands (`kept`, by key), proposed again as it was, never asked twice;
-    what a person or the policy decided (`decided`), never asked again."""
+    """What an analysis a model helps with is given (LEKA-394, 429): a way
+    to have the LLM runtime do a task — `run(task)`, an Execution: the
+    answer checked, or why not, every call kept — and what it already
+    proposed: what still stands (`kept`, by key), proposed again as it was,
+    never asked twice; what a person or the policy decided (`decided`),
+    never asked again."""
 
-    ask: Callable[..., Awaitable[Any]]
+    run: Callable[..., Awaitable[Any]]
     kept: Mapping[str, Proposal] = field(default_factory=dict)
     decided: frozenset[str] = frozenset()
 

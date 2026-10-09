@@ -1,4 +1,4 @@
-"""What a workspace asked of language models (LEKA-394): how many calls,
+"""What a workspace asked of language models (LEKA-394, 429): how many calls,
 how many failed, the tokens, what they cost at list price, how long they
 took — by day, by model, by purpose; LEKA's model and the workspace's own
 apart. Read from model_calls: what was recorded, nothing estimated twice.
@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.capabilities.models import ModelCall
+from leka.capabilities.models import LLMRun, ModelCall
 
 
 @dataclass
@@ -53,6 +53,10 @@ class ModelUsage:
     by_purpose: dict[str, Tally] = field(default_factory=lambda: defaultdict(Tally))
     fallbacks: int = 0
     latest: list[ModelCall] = field(default_factory=list)
+    # The work the LLM runtime had models do (LEKA-429), by how it ended,
+    # and the latest.
+    runs: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    latest_runs: list[LLMRun] = field(default_factory=list)
 
 
 async def model_usage(
@@ -81,4 +85,14 @@ async def model_usage(
             usage.fallbacks += 1
         if len(usage.latest) < 20:
             usage.latest.append(call)
+    runs = (
+        await session.scalars(
+            select(LLMRun)
+            .where(LLMRun.workspace_id == workspace_id, LLMRun.started_at >= since)
+            .order_by(LLMRun.started_at.desc())
+        )
+    ).all()
+    for run in runs:
+        usage.runs[run.status] += 1
+    usage.latest_runs = list(runs[:10])
     return usage

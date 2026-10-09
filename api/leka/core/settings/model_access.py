@@ -38,12 +38,18 @@ class ModelAccessSettings:
     # Each failure a provider says is temporary (busy, rate-limited, down)
     # is tried again this many times, then the next model is.
     llm_retries: int = 1
+    # Where LEKA's default model is reached when not at its provider's own
+    # address: a proxy, a regional endpoint — the browser tests point it at
+    # a local stand-in. https in production (config.py).
+    llm_api_url: str | None = None
 
     google_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
     mistral_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
     anthropic_api_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
 
-    @field_validator("google_api_key", "anthropic_api_key", "mistral_api_key", mode="before")
+    @field_validator(
+        "google_api_key", "anthropic_api_key", "mistral_api_key", "llm_api_url", mode="before"
+    )
     @classmethod
     def _blank_model_key_is_not_configured(cls, value: object) -> object:
         """A blank key is no key. See core/settings/_blank.py."""

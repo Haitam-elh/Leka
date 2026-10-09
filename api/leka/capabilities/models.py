@@ -152,6 +152,8 @@ class ModelCall(Base, WorkspaceScopedMixin):
 
     purpose: Mapped[str] = mapped_column(String(100), nullable=False)
     ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # The runtime's execution it was part of (LEKA-429).
+    run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     tier: Mapped[str] = mapped_column(String(10), nullable=False)
     provider: Mapped[str] = mapped_column(String(20), nullable=False)
     model: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -242,3 +244,32 @@ class AgentRunEvent(Base, WorkspaceScopedMixin):
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+class LLMRun(Base, WorkspaceScopedMixin):
+    """One piece of work a language model did for LEKA (LEKA-429): for what,
+    about what, how it ended — succeeded, invalid, no_model, timed_out,
+    failed — who answered (provider, model, version), the calls it took and
+    their tokens and cost, how long, the LEKA context it was given. Its
+    calls: model_calls.run_id."""
+
+    __tablename__ = "llm_runs"
+    __table_args__ = (Index("ix_llm_runs_workspace_started", "workspace_id", "started_at"),)
+
+    purpose: Mapped[str] = mapped_column(String(100), nullable=False)
+    ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    provider: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    calls: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    tokens_in: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    tokens_out: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # The LEKA context it was given: where it was read, how many items.
+    context_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    context_items: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { expect, type Page } from "@playwright/test";
 
+import { MODEL_ENV } from "./model-env";
 import { pythonExecutable, repositoryRoot } from "./python";
 
 /**
@@ -34,7 +35,8 @@ export function analyse(intentionId: string): void {
       ].join("\n"),
       intentionId,
     ],
-    { cwd: path.join(repositoryRoot(), "api"), stdio: "inherit" },
+    // The same model as the API (LEKA-429): the stand-in, never a real key.
+    { cwd: path.join(repositoryRoot(), "api"), stdio: "inherit", env: { ...process.env, ...MODEL_ENV } },
   );
 }
 

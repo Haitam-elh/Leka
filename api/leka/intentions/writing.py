@@ -13,6 +13,10 @@ found, and from nothing else.
                                   nothing, when there was something, is not
                                   kept
 
+Through the LLM runtime (LEKA-429): the context the Context Engine assembled
+for the intention goes with it — its elements, what an answer may also
+cite — and the answer is checked before it is used.
+
 The rules stay what the analysis is: its status, its confidence, its
 evidence are theirs. The answer only says it — and says who wrote it. No
 model, or none answering: no answer, said, and the analysis is what it was.
@@ -20,12 +24,11 @@ model, or none answering: no answer, said, and the analysis is what it was.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from leka.capabilities import Gateway, Message, Needs, Request, Tier
+from leka.capabilities import ContextPack, Execution, LLMRuntime, Needs, Task, Tier
 from leka.intentions.analysis import Answer, Asked, Point, Result
 
 # What the synthesis asks of a model: a structured answer, good analysis.
@@ -37,17 +40,18 @@ MOST = {"findings": 40, "causes": 15, "evidence": 60, "notes": 15}
 LONGEST = 400
 
 SYSTEM = """You are LEKA, the assistant of an IT department. You answer a \
-question asked about the company's systems, using ONLY the analysis given: \
-its findings (facts), its probable causes, what it reaches, what is \
-uncertain or missing, and the evidence behind them.
+question asked about the company's systems, using ONLY the analysis given \
+(the task: its findings — facts — its probable causes, what it reaches, \
+what is uncertain or missing, the evidence behind them) and the LEKA context \
+it was made from.
 
 Rules:
 - Never state anything the analysis does not hold: no name, date, figure, \
 cause or owner of your own. If the analysis does not answer, say what is \
 missing to answer it.
 - A probable cause is said as probable, with its confidence.
-- Each point cites the ids (findings, causes, evidence) it rests on, as \
-given. A point you cannot cite is not written.
+- Each point cites the ids (findings, causes, evidence, context elements) \
+it rests on, as given. A point you cannot cite is not written.
 - Answer in the language of the question. Be brief: the answer in two to \
 five sentences, at most six points, each one sentence.
 - Never recommend doing something to production systems: people decide."""
@@ -120,14 +124,24 @@ def material(asked: Asked, result: Result) -> dict[str, Any]:
     }
 
 
-def grounded(written: Written, result: Result) -> tuple[tuple[Point, ...], bool]:
-    """The points that cite what the result holds — and whether the answer
-    rests on anything, when the result held something to rest on."""
-    known = (
+def known_ids(result: Result, context: ContextPack) -> frozenset[str]:
+    """What an answer may cite: the result's findings, causes, evidence —
+    and the context's elements."""
+    return frozenset(
         {s.id for _, s in result.findings}
         | {c.id for _, c in result.causes}
         | {e.id for e in result.evidence}
+        | context.ids
     )
+
+
+def grounded(
+    written: Written, result: Result, context: ContextPack = ContextPack()
+) -> tuple[tuple[Point, ...], bool]:
+    """The points that cite what the result or its context holds — and
+    whether the answer rests on anything, when the result held something to
+    rest on."""
+    known = known_ids(result, context)
     points = tuple(
         Point(text=p.text.strip(), cites=cites)
         for p in written.points
@@ -137,29 +151,50 @@ def grounded(written: Written, result: Result) -> tuple[tuple[Point, ...], bool]
     return points, bool(points) or not held
 
 
-async def write(gateway: Gateway, asked: Asked, result: Result) -> Answer | None:
-    """The answer, written and checked — None when it rests on nothing.
-    NoModelError when no model can write it."""
-    request = Request(
+def task_of(asked: Asked, result: Result, context: ContextPack) -> Task:
+    """The synthesis, as the LLM runtime is given it: the analysis to say,
+    the context it was made from to rest on, the shape — and the check that
+    it rests on what they hold."""
+
+    def check(written: Any, given: ContextPack) -> list[str]:
+        if not isinstance(written, Written) or not written.answer.strip():
+            return ["no answer"]
+        _, rests = grounded(written, result, given)
+        return [] if rests else ["it cites nothing the analysis or its context holds"]
+
+    return Task(
         purpose="capability.synthesis",
-        ref=f"intention:{asked.id}",
+        instructions=SYSTEM,
+        input=material(asked, result),
+        context=context,
+        output=Written,
+        check=check,
+        needs=NEEDS,
         tier=Tier.STANDARD,
         max_tokens=1500,
-        messages=[
-            Message.system(SYSTEM),
-            Message.user(json.dumps(material(asked, result), ensure_ascii=False, default=str)),
-        ],
+        budget=BUDGET,
+        ref=f"intention:{asked.id}",
     )
-    read = await gateway.structured(request, Written, NEEDS, budget=BUDGET)
-    points, rests = grounded(read.value, result)
-    if not rests or not read.value.answer.strip():
-        return None
-    done = read.completion
-    return Answer(
-        text=read.value.answer.strip(),
+
+
+async def write(
+    runtime: LLMRuntime,
+    asked: Asked,
+    result: Result,
+    context: ContextPack = ContextPack(),
+) -> tuple[Execution, Answer | None]:
+    """The answer, written and checked by the runtime — none, said why, when
+    no model wrote one it could keep."""
+    done = await runtime.run(task_of(asked, result, context))
+    if not done.ok:
+        return done, None
+    written: Written = done.value
+    points, _ = grounded(written, result, context)
+    return done, Answer(
+        text=written.answer.strip(),
         points=points,
-        caveats=tuple(c.strip() for c in read.value.caveats if c.strip()),
-        provider=done.provider,
-        model=done.model,
-        version=done.version,
+        caveats=tuple(c.strip() for c in written.caveats if c.strip()),
+        provider=done.provider or "",
+        model=done.model or "",
+        version=done.version or "",
     )

@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.capabilities import (
+    LLMRunRead,
     ModelBreakdownRead,
     ModelCallRead,
     ModelDayRead,
@@ -252,4 +253,6 @@ async def usage(
             for purpose, tally in sorted(found.by_purpose.items(), key=lambda item: -item[1].calls)
         ],
         latest=[ModelCallRead.model_validate(call) for call in found.latest],
+        runs=dict(found.runs),
+        latest_runs=[LLMRunRead.model_validate(run) for run in found.latest_runs],
     )
