@@ -33,6 +33,7 @@ from leka.api import (
     platform,
     resolution,
     webhooks,
+    workflows,
 )
 
 api_router = APIRouter()
@@ -60,6 +61,7 @@ api_router.include_router(context.router)
 api_router.include_router(intelligence.router)
 api_router.include_router(capabilities.router)
 api_router.include_router(agent_runs.router)
+api_router.include_router(workflows.router)
 api_router.include_router(model_gateway.router)
 api_router.include_router(intentions.router)
 # What people decide on what intentions ask to do (LEKA-390).

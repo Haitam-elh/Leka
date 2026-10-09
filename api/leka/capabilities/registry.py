@@ -5,7 +5,9 @@ entity types, its source kinds, its permissions.
 
     agents/**/SKILL.md ─┐
     registry.yaml ──────┤  (an agent's status: its lifecycle)
-    provide(…) ─────────┴─▶ definitions() ─▶ the catalogue's history (catalogue.py)
+    provide(…) ─────────┤
+    workflows/*.yaml ───┴─▶ definitions() ─▶ the catalogue's history (catalogue.py)
+                            (LEKA-397: composing the others, checked last)
 
 A module above this one declares its capabilities with `provide`, when it
 is imported — as leka/schema.py imports every module for its tables, every
@@ -15,9 +17,11 @@ imports them: capabilities sits below them (tests/test_module_boundaries.py).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from functools import cache
 from pathlib import Path
+
+import yaml
 
 from leka.capabilities.definition import (
     Contract,
@@ -30,6 +34,8 @@ from leka.capabilities.definition import (
 )
 from leka.capabilities.loader import AgentLoadError, load_all, read_index
 from leka.capabilities.schemas import Agent
+from leka.capabilities.workflow import Workflow, WorkflowError, build
+from leka.capabilities.workflow import validated as validate_workflow
 from leka.connectors import SourceKind
 from leka.core.config import settings
 from leka.governance import Permission
@@ -43,6 +49,7 @@ def provide(name: str, provider: Provider) -> None:
     """A module's own capabilities, declared once by name."""
     _providers[name] = provider
     catalogue.cache_clear()
+    workflow_catalogue.cache_clear()
 
 
 def agent_definition(agent: Agent, lifecycle: Lifecycle) -> Definition:
@@ -106,13 +113,27 @@ def agents(agents_dir: Path) -> list[Definition]:
     return found
 
 
-def definitions(agents_dir: Path | None = None) -> list[Definition]:
-    """Every capability, checked — a duplicate key, or one that names what
-    LEKA does not know, refuses them all: a catalogue with a capability
-    silently missing is worse than one that does not load."""
-    found = agents(agents_dir or settings.agents_dir)
-    for name in sorted(_providers):
-        found.extend(_providers[name]())
+# The workflows (LEKA-397): content, like the agents, kept beside the code
+# that reads them — shipped with the package.
+WORKFLOWS_DIR = Path(__file__).resolve().parent / "workflows"
+
+
+def load_workflows(directory: Path, known: Mapping[str, Definition]) -> list[Workflow]:
+    """Every workflow under `directory`, built and checked against the
+    capabilities LEKA has — one that cannot be refuses them all."""
+    found: list[Workflow] = []
+    if not directory.is_dir():
+        return found
+    for path in sorted(directory.glob("*.yaml")):
+        said = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(said, dict):
+            msg = f"{path.name}: a workflow is a mapping"
+            raise WorkflowError(msg)
+        found.append(validate_workflow(build(said, path=path.name), known))
+    return found
+
+
+def _checked(found: list[Definition]) -> None:
     keys: set[str] = set()
     for definition in found:
         if definition.key in keys:
@@ -125,6 +146,25 @@ def definitions(agents_dir: Path | None = None) -> list[Definition]:
             source_kinds=[k.value for k in SourceKind],
             permissions=[p.value for p in Permission],
         )
+
+
+def definitions(
+    agents_dir: Path | None = None, workflows_dir: Path | None = None
+) -> list[Definition]:
+    """Every capability, checked — a duplicate key, or one that names what
+    LEKA does not know, refuses them all: a catalogue with a capability
+    silently missing is worse than one that does not load. The workflows
+    last: they compose the others — LEKA's own, unless the agents are read
+    from elsewhere (a test's): then only the workflows given."""
+    found = agents(agents_dir or settings.agents_dir)
+    for name in sorted(_providers):
+        found.extend(_providers[name]())
+    _checked(found)
+    known = {d.key: d for d in found}
+    flows = workflows_dir or (WORKFLOWS_DIR if agents_dir is None else None)
+    if flows is not None:
+        found.extend(w.definition() for w in load_workflows(flows, known))
+    _checked(found)
     return sorted(found, key=lambda d: d.key)
 
 
@@ -134,5 +174,16 @@ def catalogue() -> tuple[Definition, ...]:
     return tuple(definitions())
 
 
+@cache
+def workflow_catalogue() -> dict[str, Workflow]:
+    """The process's workflows, by key — what runs them reads their steps."""
+    known = {d.key: d for d in catalogue() if d.kind is not Kind.WORKFLOW}
+    return {w.key: w for w in load_workflows(WORKFLOWS_DIR, known)}
+
+
 def find(key: str) -> Definition | None:
     return next((d for d in catalogue() if d.key == key), None)
+
+
+def find_workflow(key: str) -> Workflow | None:
+    return workflow_catalogue().get(key)

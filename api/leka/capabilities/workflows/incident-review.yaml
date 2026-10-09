@@ -1,0 +1,38 @@
+# An incident reviewed end to end (LEKA-397): what happened and why, what
+# changed before it when nothing explains it, who owns what it reached, and
+# whether it is documented. docs/workflows.md says how a workflow is read.
+key: incident-review
+title: Revue d'incident
+summary: Use when an incident must be reviewed end to end — what happened and why, what changed before it, who owns it, whether it is documented.
+category: operations
+version: 1.0.0
+lifecycle: active
+goals: [explain_cause, investigate]
+kinds: [diagnose]
+entity_types: [service, application, incident]
+examples:
+  - Fais la revue de l'incident de payment-api d'hier
+steps:
+  - id: incidents
+    title: Ce qui s'est passé
+    uses: incidents
+    retry: {attempts: 2}
+  # Nothing explains it: what changed before it.
+  - id: changes
+    title: Ce qui a changé avant
+    uses: changes
+    after: [incidents]
+    when:
+      any:
+        - {step: incidents, found: incident.no_cause}
+        - {step: incidents, status: failed}
+  - id: ownership
+    title: Qui en est responsable
+    uses: ownership
+    after: [incidents]
+  # Whether it is documented never stops the review.
+  - id: documentation
+    title: Ce qui en est documenté
+    uses: documentation
+    after: [ownership]
+    on_failure: continue

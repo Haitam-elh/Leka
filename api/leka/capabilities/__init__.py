@@ -87,6 +87,9 @@ from leka.capabilities.models import (
     CapabilityRouting,
     LLMRun,
     ModelCall,
+    WorkflowRun,
+    WorkflowRunEvent,
+    WorkflowRunStep,
     WorkspaceCapability,
     WorkspaceModel,
 )
@@ -95,7 +98,9 @@ from leka.capabilities.registry import (
     catalogue,
     definitions,
     find,
+    find_workflow,
     provide,
+    workflow_catalogue,
 )
 from leka.capabilities.repository import CapabilityRunRepository
 from leka.capabilities.router import ROUTING_VERSION, RouteQuery, Routing, route
@@ -157,6 +162,13 @@ from leka.capabilities.schemas import (
     RoutedCandidateRead,
     RoutingRead,
     RoutingSignalRead,
+    WorkflowRead,
+    WorkflowRunCreate,
+    WorkflowRunDetail,
+    WorkflowRunEventRead,
+    WorkflowRunRead,
+    WorkflowRunStepRead,
+    WorkflowStepRead,
     WorkspaceModelRead,
     WorkspaceModelUpdate,
 )
@@ -169,6 +181,16 @@ from leka.capabilities.service import (
     routing_read,
 )
 from leka.capabilities.tools import TOOLS as AGENT_TOOLS
+from leka.capabilities.workflow import Workflow, WorkflowError
+from leka.capabilities.workflow_runs import (
+    StepCall,
+    StepResult,
+    WorkflowService,
+    execute_workflow,
+    queue_workflow,
+    register_step,
+    sweep_workflows,
+)
 
 __all__ = [
     "AGENT_TOOLS",
@@ -270,6 +292,8 @@ __all__ = [
     "SensitiveToolError",
     "Situation",
     "Standing",
+    "StepCall",
+    "StepResult",
     "Structured",
     "Task",
     "Tier",
@@ -277,6 +301,19 @@ __all__ = [
     "ToolCall",
     "ToolChoice",
     "Withheld",
+    "Workflow",
+    "WorkflowError",
+    "WorkflowRead",
+    "WorkflowRun",
+    "WorkflowRunCreate",
+    "WorkflowRunDetail",
+    "WorkflowRunEvent",
+    "WorkflowRunEventRead",
+    "WorkflowRunRead",
+    "WorkflowRunStep",
+    "WorkflowRunStepRead",
+    "WorkflowService",
+    "WorkflowStepRead",
     "WorkspaceCapability",
     "WorkspaceModel",
     "WorkspaceModelRead",
@@ -292,7 +329,9 @@ __all__ = [
     "discover",
     "discover_capabilities",
     "execute_run",
+    "execute_workflow",
     "find",
+    "find_workflow",
     "inject",
     "leka_default",
     "load_all",
@@ -305,14 +344,18 @@ __all__ = [
     "parse_agent",
     "provide",
     "queue_run",
+    "queue_workflow",
     "read_index",
+    "register_step",
     "route",
     "routing_read",
     "run_catalogue_sync",
     "runnable",
     "standings",
     "sweep_runs",
+    "sweep_workflows",
     "sync",
     "sync_catalogue",
     "validated",
+    "workflow_catalogue",
 ]

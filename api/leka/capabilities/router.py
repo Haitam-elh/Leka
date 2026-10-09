@@ -157,9 +157,9 @@ def signals_of(definition: Definition, query: RouteQuery) -> tuple[Signal, ...]:
 
 
 def needs_inputs(definition: Definition) -> tuple[str, ...]:
-    """What an agent must be given that an intention does not say: its
-    required inputs — asked of the person before it runs."""
-    if definition.kind is not Kind.AGENT:
+    """What an agent or a workflow must be given that an intention does not
+    say: its required inputs — asked of the person before it runs."""
+    if definition.kind not in (Kind.AGENT, Kind.WORKFLOW):
         return ()
     return tuple(i.name for i in definition.contract.inputs if i.required)
 

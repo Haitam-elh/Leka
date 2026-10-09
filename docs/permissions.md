@@ -172,6 +172,14 @@ when it was asked: someone who left the workspace meanwhile, their run
 fails. Reading runs takes `intention:read`; cancelling one, being who asked
 it or holding `intention:approve`. [agent-runtime.md](agent-runtime.md).
 
+## Workflows (LEKA-397)
+
+Running a workflow (`POST /workflow-runs`) takes `intention:create` and the
+workflow's own permission; **each step's capability is checked for the
+person when the step runs** — one their role may not use fails the step.
+Reading takes `intention:read`; cancelling or retrying a run, being who
+asked it or holding `intention:approve`. [workflows.md](workflows.md).
+
 ## Routage (LEKA-398)
 
 An intention's routing (`GET /intentions/{id}/routing`) takes

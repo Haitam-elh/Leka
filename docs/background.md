@@ -119,6 +119,7 @@ recorded as a run, and is not started again while the previous one is still acti
 | `intention-plans-due` | `leka.intentions.actions.run_due_plans` — the plans scheduled for now or before, checked again and run, see [intentions.md](intentions.md) § 14 | every 5 minutes | low |
 | `capability-registry-sync` | `leka.capabilities.catalogue.run_catalogue_sync` — the capability catalogue registered — every version, every lifecycle move — as the API does when it starts, see [capabilities.md](capabilities.md) § 3 | hourly (at 23) | low |
 | `agent-runs-sweep` | `leka.capabilities.runs.run_runs_sweep` — the agent runs no worker will finish (running past 30 minutes, queued past 6 hours), failed `abandoned`, see [agent-runtime.md](agent-runtime.md) § 8 | hourly, :41 | low |
+| `workflow-runs-sweep` | `leka.capabilities.workflow_runs.run_workflows_sweep` — the workflow runs no worker will finish (running past an hour, queued past six), failed `abandoned` — retryable, see [workflows.md](workflows.md) § 3 | hourly, :44 | low |
 | `intention-verifications-due` | `leka.intentions.verification.run_due_verifications` — the outcomes being verified, settled, read again; concluded when all is met or at their deadline, see [intentions.md](intentions.md) § 15 | every 5 minutes (at 2, 7, 12…) | low |
 
 ---
