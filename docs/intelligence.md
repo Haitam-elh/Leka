@@ -226,7 +226,13 @@ findings about given entities or contexts. An intention looking at a service
 starts from what LEKA already concluded about it.
 
 **In the app.** The *Insights LEKA* card on *Vue d'ensemble* and on *Mon
-environnement* shows the summary.
+environnement* shows the summary. « Analyser maintenant » queues a run and
+**follows it until it ends** — a run under way too, asked by someone else —
+fifteen minutes at most, the time taken said (« Analyse en cours · 1 min
+20 s »), and past a minute that LEKA carries on in the background; a run
+that failed or only partly finished is said. (It followed a run two
+minutes, then said nothing more — the run still going: « analyse en cours,
+sans jamais s'arrêter », 2026-10-09.)
 
 ## 8. Retention and housekeeping
 
