@@ -471,6 +471,9 @@ class ModelTallyRead(BaseModel):
     failed: int
     tokens_in: int
     tokens_out: int
+    tokens_cached: int = Field(
+        default=0, description="Of tokens_in, those read from the provider's cache: billed less."
+    )
     cost_usd: float
     unpriced: int = Field(description="Calls to a model without a published price.")
     average_latency_ms: int
@@ -519,6 +522,7 @@ class ModelCallRead(BaseModel):
     error: str | None
     tokens_in: int
     tokens_out: int
+    tokens_cached: int = 0
     cost_usd: float | None
     latency_ms: int
 
@@ -565,6 +569,14 @@ class ModelUsageRead(BaseModel):
         "no_model, timed_out, failed."
     )
     latest_runs: list[LLMRunRead]
+    intentions: int = Field(
+        default=0, description="The intentions of the period a model worked for."
+    )
+    per_intention_usd: float | None = Field(
+        default=None,
+        description="What one of them cost, on average: every call made for it, "
+        "understanding and answer, at list price.",
+    )
 
 
 # ── agent runs (LEKA-395) ───────────────────────────────────────────────────

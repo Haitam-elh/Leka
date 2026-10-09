@@ -33,8 +33,8 @@ import asyncio
 import json
 import time
 import uuid
-from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -49,13 +49,14 @@ from leka.capabilities.gateway import (
     Message,
     Needs,
     NoModelError,
+    Output,
     Request,
     Tier,
     Tool,
     ToolChoice,
 )
 from leka.capabilities.gateway.service import InvalidOutputError, ToolRoundsError, json_of
-from leka.capabilities.models import LLMRun, ModelCall
+from leka.capabilities.models import LLMRun, ModelAsk, ModelCall
 
 logger = structlog.get_logger(__name__)
 
@@ -201,6 +202,10 @@ class Task:
     # Seconds for all of it, then timed_out.
     budget: float = 60.0
     tools: Sequence[RuntimeTool] = ()
+    # Rounds of tools at most; `conclude`: the last one must answer — the
+    # model is not offered its tools again — rather than end in failure.
+    rounds: int = 6
+    conclude: bool = False
     # What it is about — an intention, a capability's run.
     ref: str | None = None
     # The conversation, when the caller writes it (an agent's own rules and
@@ -269,6 +274,64 @@ class LLMRuntime:
         """Whether a model this workspace can reach does what is needed."""
         return await self._gateway.ready(needs)
 
+    # What a model was already asked (model_asks) ─────────────────────────────
+
+    async def asked(self, purpose: str, keys: Sequence[str]) -> dict[str, str]:
+        """For each key a model was already asked about for this purpose,
+        the digest of the facts it was asked on."""
+        if not keys:
+            return {}
+        rows = await self._session.execute(
+            select(ModelAsk.key, ModelAsk.digest).where(
+                ModelAsk.workspace_id == self._workspace_id,
+                ModelAsk.purpose == purpose[:100],
+                ModelAsk.key.in_([k[:300] for k in keys]),
+            )
+        )
+        return dict(rows.tuples().all())
+
+    async def remember(
+        self,
+        purpose: str,
+        digests: Mapping[str, str],
+        *,
+        answered: Collection[str] = (),
+        at: datetime | None = None,
+    ) -> None:
+        """That a model was asked about these keys on these facts — and
+        which it said something of. Asked again only once the facts change."""
+        if not digests:
+            return
+        moment = at or datetime.now(UTC)
+        held = {
+            row.key: row
+            for row in (
+                await self._session.execute(
+                    select(ModelAsk).where(
+                        ModelAsk.workspace_id == self._workspace_id,
+                        ModelAsk.purpose == purpose[:100],
+                        ModelAsk.key.in_([k[:300] for k in digests]),
+                    )
+                )
+            ).scalars()
+        }
+        for key, digest in digests.items():
+            row = held.get(key[:300])
+            if row is None:
+                row = ModelAsk(
+                    workspace_id=self._workspace_id,
+                    id=uuid.uuid4(),
+                    purpose=purpose[:100],
+                    key=key[:300],
+                    digest=digest[:64],
+                    asked_at=moment,
+                )
+                self._session.add(row)
+            row.digest = digest[:64]
+            row.answered = key in answered
+            row.asked_at = moment
+        await self._session.flush()
+
     def _messages(self, task: Task) -> list[Message]:
         if task.messages is not None:
             return list(task.messages)
@@ -312,9 +375,21 @@ class LLMRuntime:
                 )
                 value, done = read.value, read.completion
             elif task.tools:
+                # Its answer, once it stops calling tools, in the shape asked:
+                # Gemini 3 and the OpenAI-shaped APIs take a schema beside
+                # their tools.
+                asking = (
+                    replace(request, output=Output.of(task.output))
+                    if task.output is not None
+                    else request
+                )
                 done = await asyncio.wait_for(
                     self._gateway.run_tools(
-                        request, {t.name: t.handler for t in task.tools}, task.needs
+                        asking,
+                        {t.name: t.handler for t in task.tools},
+                        task.needs,
+                        rounds=task.rounds,
+                        conclude=task.conclude,
                     ),
                     timeout=task.budget,
                 )

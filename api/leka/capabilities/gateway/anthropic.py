@@ -142,9 +142,12 @@ class Anthropic:
             provider=self.name,
             model=call.model,
             version=str(said.get("model") or call.model),
+            # What it read from its cache comes apart from input_tokens.
             usage=Usage(
-                tokens_in=int(usage.get("input_tokens") or 0),
+                tokens_in=int(usage.get("input_tokens") or 0)
+                + int(usage.get("cache_read_input_tokens") or 0),
                 tokens_out=int(usage.get("output_tokens") or 0),
+                tokens_cached=int(usage.get("cache_read_input_tokens") or 0),
             ),
             latency_ms=latency_ms,
             finish=said.get("stop_reason"),

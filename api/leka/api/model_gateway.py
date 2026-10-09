@@ -201,6 +201,7 @@ def _tally(tally: Tally) -> ModelTallyRead:
         failed=tally.failed,
         tokens_in=tally.tokens_in,
         tokens_out=tally.tokens_out,
+        tokens_cached=tally.tokens_cached,
         cost_usd=round(tally.cost_usd, 6),
         unpriced=tally.unpriced,
         average_latency_ms=round(tally.latency_ms / tally.calls) if tally.calls else 0,
@@ -255,4 +256,8 @@ async def usage(
         latest=[ModelCallRead.model_validate(call) for call in found.latest],
         runs=dict(found.runs),
         latest_runs=[LLMRunRead.model_validate(run) for run in found.latest_runs],
+        intentions=len(found.intentions),
+        per_intention_usd=(
+            round(found.per_intention, 6) if found.per_intention is not None else None
+        ),
     )

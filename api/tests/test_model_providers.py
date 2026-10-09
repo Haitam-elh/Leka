@@ -227,9 +227,15 @@ async def test_mistral_and_azure_speak_chat_completions_each_in_their_words() ->
                 "finish_reason": "tool_calls",
             }
         ],
-        "usage": {"prompt_tokens": 40, "completion_tokens": 12},
+        "usage": {
+            "prompt_tokens": 40,
+            "completion_tokens": 12,
+            "prompt_tokens_details": {"cached_tokens": 32},
+        },
     }
     done, sent = await _ask(MISTRAL, _call("mistral", "mistral-large-latest", request), answer)
+    # What it read from its cache, said apart: billed less.
+    assert (done.usage.tokens_in, done.usage.tokens_cached) == (40, 32)
     assert str(sent.url) == "https://api.mistral.ai/v1/chat/completions"
     assert sent.headers["authorization"] == "Bearer key-1"
     body = json.loads(sent.content)
@@ -282,9 +288,11 @@ async def test_anthropic_gives_a_structured_answer_as_the_tool_it_must_call() ->
             }
         ],
         "stop_reason": "tool_use",
-        "usage": {"input_tokens": 30, "output_tokens": 9},
+        "usage": {"input_tokens": 30, "output_tokens": 9, "cache_read_input_tokens": 70},
     }
     done, sent = await _ask(Anthropic(), _call("anthropic", "claude-sonnet-5", request), answer)
+    # Its cache reads come apart from input_tokens: counted in, said cached.
+    assert (done.usage.tokens_in, done.usage.tokens_cached) == (100, 70)
     body = json.loads(sent.content)
     assert body["system"] == "Be brief."
     assert body["tool_choice"] == {"type": "tool", "name": "Verdict"}
