@@ -259,8 +259,9 @@ A model-assisted analysis is declared with `method=Method.MODEL`, what it
 needs of a model (`needs`, a gateway `Needs`) and how it runs given one
 (`write(material, work)`). The run gives it a `ModelWork` when a model this
 workspace can reach does what it needs ([model-gateway.md](model-gateway.md)),
-else it is skipped (`no_model`): `ask(request, shape, needs)` — a checked
-structured answer through the gateway, every call kept — what it proposed that
+else it is skipped (`no_model`): `run(task)` — a task done by the LLM runtime
+(LEKA-429, [llm-runtime.md](llm-runtime.md)), its answer checked, every
+execution kept — what it proposed that
 still stands (`kept`: proposed again as it was, **never asked twice**), and
 what was decided (`decided`: **never asked again**). What a model proposes is
 **never the policy's**: `by_policy` takes only what rules propose — a person

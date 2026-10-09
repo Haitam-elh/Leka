@@ -273,13 +273,15 @@ mean; « Préciser ma demande » opens the composer on the same intention
 (`/intentions/new?intention=<id>`), its words to say better. The status
 « À préciser » in Mes intentions.
 
-**Read with a model, since LEKA-394** (`reading.py`): when a model can
+**Read with a model, since LEKA-394** (`reading.py`, through the LLM runtime
+since LEKA-429 — [llm-runtime.md](llm-runtime.md)): when a model can
 answer, it reads the same words — the goal, a question or a request, what is
 asked in a sentence — in twelve seconds at most. It **settles a goal the
 rules could not tell** (« Billing API, c'est à qui de voir ça ? »: the
 blocking « unclear goal » gone, the intention analysed), or one it is surer
 of; it never changes the things named, the actions asked, nor a request to
-act — those stay the rules', read from the words. Kept beside the rules'
+act — those stay the rules', read from the words; a polite request it may
+read as the question it is, never a question as a request. Kept beside the rules'
 reading: `restated`, `read_by` (provider, model, version, confidence) —
 « Lu par Gemini 3.8 Flash, avec les règles de LEKA ». No model, or none in
 time: the rules alone, as before.
@@ -548,7 +550,9 @@ asker or an approver; another workspace's 404.
 - *Vue d'ensemble*: its summary, in the reader's words — the written answer
   when there is one.
 
-**Answered in words, since LEKA-394** (`writing.py`): the **synthesis**
+**Answered in words, since LEKA-394** (`writing.py`, through the LLM runtime
+since LEKA-429, given the context the Context Engine assembled for the
+intention — its elements are what an answer may also cite): the **synthesis**
 capability (`method: model`) runs after the rules, when a model that gives
 a structured answer can be reached — the question, what the rules found
 (facts, causes, what it reaches, what is unknown, each with its id) and the

@@ -140,6 +140,10 @@ In the app: **Paramètres › Modèle de langage**.
 
 ## 7. Who uses it
 
+Through the LLM runtime (LEKA-429, [llm-runtime.md](llm-runtime.md)): a
+feature gives it a task — its context, the shape of its answer, its check —
+and gets an execution back; it never imports the gateway.
+
 - **An intention, read** (`leka/intentions/reading.py`): the model reads the
   words with the rules — the goal, a question or a request, what is asked in
   a sentence. It settles a goal the rules could not tell (what stopped an
