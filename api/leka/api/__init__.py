@@ -11,6 +11,7 @@ They hold no business logic and no database queries.
 from fastapi import APIRouter
 
 from leka.api import (
+    access,
     actions,
     agent_runs,
     background,
@@ -47,6 +48,7 @@ api_router.include_router(background.router)
 api_router.include_router(identity.router)
 api_router.include_router(platform.router)
 api_router.include_router(governance.router)
+api_router.include_router(access.router)
 api_router.include_router(connectors.router)
 api_router.include_router(ingestion.router)
 # What the workspace's sources resolve to (LEKA-357), and what enrichment

@@ -53,7 +53,8 @@ from leka.capabilities import (
 )
 from leka.connectors import Source, SourceRepository
 from leka.context import AssembledContext, ContextRepository, ContextService
-from leka.db import session_factory, system_scope, workspace_scope
+from leka.db import hidden_entities, session_factory, system_scope, workspace_scope
+from leka.governance import hidden_on_behalf
 from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.intelligence import IntelligenceRepository, QualityRepository, QualityService
 from leka.intentions.analysis import (
@@ -358,7 +359,34 @@ async def analyse_intention(
     now: datetime | None = None,
     capabilities: Sequence[Capability] = CAPABILITIES,
 ) -> dict[str, object]:
-    """One analysis, end to end."""
+    """One analysis, end to end — seeing only what the person who asked may
+    (LEKA-402): what their role may not see of the company model is left out
+    of everything it reads."""
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            intention = await IntentionRepository(session, workspace_id).intention(intention_id)
+            asker = intention.created_by if intention is not None else None
+            hidden = await hidden_on_behalf(session, workspace_id, asker)
+    with hidden_entities(hidden):
+        return await _analyse_intention(
+            workspace_id,
+            intention_id,
+            trigger=trigger,
+            by=by,
+            now=now,
+            capabilities=capabilities,
+        )
+
+
+async def _analyse_intention(
+    workspace_id: uuid.UUID,
+    intention_id: uuid.UUID,
+    *,
+    trigger: str,
+    by: uuid.UUID | None,
+    now: datetime | None,
+    capabilities: Sequence[Capability],
+) -> dict[str, object]:
     moment = now or datetime.now(UTC)
     with workspace_scope(workspace_id):
         async with session_factory() as session:

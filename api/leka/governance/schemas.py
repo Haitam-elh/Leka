@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import enum
 import uuid
+from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from leka.platform import Role, WorkspaceStatus
 
@@ -49,6 +51,12 @@ class Permission(enum.StrEnum):
 
     JOB_READ = "job:read"
 
+    # Entity-level access (LEKA-402): mark an entity restricted, see one,
+    # and read the trail of access decisions.
+    ENTITY_RESTRICT = "entity:restrict"
+    ENTITY_READ_RESTRICTED = "entity:read_restricted"
+    ACCESS_READ = "access:read"
+
 
 # Roles are a chain: an owner can do everything an admin can, an admin
 # everything a member can. Expressed as ranks so that require_role(ADMIN)
@@ -79,6 +87,9 @@ _ADMIN_PERMISSIONS = _MEMBER_PERMISSIONS | {
     Permission.INTENTION_APPROVE,
     Permission.CONTEXT_MANAGE,
     Permission.JOB_READ,
+    Permission.ENTITY_RESTRICT,
+    Permission.ENTITY_READ_RESTRICTED,
+    Permission.ACCESS_READ,
 }
 
 # Only an owner deletes the workspace or hands it over. An admin managing
@@ -108,6 +119,7 @@ WRITE_PERMISSIONS: frozenset[Permission] = frozenset(
         Permission.INTENTION_CREATE,
         Permission.INTENTION_APPROVE,
         Permission.CONTEXT_MANAGE,
+        Permission.ENTITY_RESTRICT,
     }
 )
 
@@ -140,3 +152,64 @@ class Principal(BaseModel):
 
     def outranks_or_equals(self, role: Role) -> bool:
         return ROLE_RANK[self.role] >= ROLE_RANK[role]
+
+
+# ── LEKA-402: the model, restrictions, decisions ───────────────────────────
+
+
+class RolePermissionsRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    role: Role
+    permissions: list[Permission]
+
+
+class AccessModelRead(BaseModel):
+    """Who may do what here: every role's permissions, and the reader's."""
+
+    model_config = ConfigDict(frozen=True)
+
+    roles: list[RolePermissionsRead]
+    permissions: list[Permission]
+    writes: list[Permission] = Field(description="Refused while the workspace is suspended.")
+    mine: list[Permission]
+    role: Role
+
+
+class RestrictionUpdate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    reason: str = Field(min_length=3, max_length=500, description="Why it is restricted.")
+
+
+class RestrictionRead(BaseModel):
+    """An entity only the workspace's administrators see."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity_id: uuid.UUID
+    name: str | None = Field(description="Its name; none when it left the model.")
+    type: str | None
+    reason: str
+    restricted_by: uuid.UUID | None
+    restricted_at: datetime
+
+
+class AccessDecisionRead(BaseModel):
+    """One access decision kept."""
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    at: datetime
+    user_id: uuid.UUID | None
+    role: str
+    action: str
+    permission: str
+    resource_type: str | None
+    resource_id: str | None
+    decision: Literal["allow", "deny"]
+    rule: str = Field(description="workspace, role, owner, restriction")
+    reason: str
+    route: str | None
+    request_id: str | None

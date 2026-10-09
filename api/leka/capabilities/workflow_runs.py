@@ -72,7 +72,14 @@ from leka.capabilities.workflow import (
     order,
     outcome,
 )
-from leka.db import load_schema, session_factory, system_scope, workspace_scope
+from leka.db import (
+    hidden_entities,
+    load_schema,
+    session_factory,
+    system_scope,
+    workspace_scope,
+)
+from leka.governance import hidden_on_behalf
 from leka.platform import MembershipRepository
 
 logger = structlog.get_logger(__name__)
@@ -555,8 +562,11 @@ async def execute_workflow(workspace_id: uuid.UUID, run_id: uuid.UUID) -> dict[s
             events.add("started", retry=run.retries)
             await session.commit()
             steps = {s.step: s for s in await repo.steps(run_id)}
+            # Its steps see only what the person who asked may (LEKA-402).
+            hidden = await hidden_on_behalf(session, workspace_id, run.requested_by)
             try:
-                return await _drive(session, run, steps, events)
+                with hidden_entities(hidden):
+                    return await _drive(session, run, steps, events)
             except Exception as error:
                 logger.exception("workflow_run_failed", run=str(run_id), key=run.key)
                 await session.rollback()

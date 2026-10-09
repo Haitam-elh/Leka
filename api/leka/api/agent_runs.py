@@ -38,7 +38,7 @@ from leka.capabilities import (
     queue_run,
 )
 from leka.core.errors import ErrorCode, FieldError
-from leka.governance import Permission, Principal, require_permission
+from leka.governance import Permission, Principal, Resource, authorize, require_permission
 from leka.intentions import IntentionRepository
 
 router = APIRouter(prefix="/agent-runs", tags=["capabilities"])
@@ -46,6 +46,7 @@ router = APIRouter(prefix="/agent-runs", tags=["capabilities"])
 Reader = Annotated[Principal, Depends(require_permission(Permission.INTENTION_READ))]
 Runner = Annotated[Principal, Depends(require_permission(Permission.INTENTION_CREATE))]
 StatusWord = Literal["queued", "running", "succeeded", "failed", "cancelled"]
+ACTION = "agent:run"
 
 REFUSED = {
     "not_found": (status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such agent."),
@@ -142,6 +143,19 @@ async def start_run(body: AgentRunCreate, session: SessionDep, principal: Runner
         if intention is None:
             raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such intention.")
         context_id = context_id or intention.context_id
+    # The capability's own permission, decided and kept before it runs
+    # (LEKA-402).
+    capability = find(body.key)
+    if capability is not None:
+        decided = await authorize(
+            session,
+            principal,
+            Permission(capability.permission),
+            action=ACTION,
+            resource=Resource("capability", capability.key),
+        )
+        if not decided.allowed:
+            raise ApiError(status.HTTP_403_FORBIDDEN, ErrorCode.PERMISSION_DENIED, decided.message)
     runtime = AgentRuntime(session, principal.workspace_id)
     try:
         run = await runtime.start(

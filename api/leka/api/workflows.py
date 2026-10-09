@@ -50,7 +50,7 @@ from leka.capabilities import (
     workflow_catalogue,
 )
 from leka.core.errors import ErrorCode, FieldError
-from leka.governance import Permission, Principal, require_permission
+from leka.governance import Permission, Principal, Resource, authorize, require_permission
 from leka.intentions import IntentionRepository
 
 router = APIRouter(tags=["workflows"])
@@ -58,6 +58,7 @@ router = APIRouter(tags=["workflows"])
 Reader = Annotated[Principal, Depends(require_permission(Permission.INTENTION_READ))]
 Runner = Annotated[Principal, Depends(require_permission(Permission.INTENTION_CREATE))]
 StatusWord = Literal["queued", "running", "succeeded", "failed", "cancelled"]
+ACTION = "workflow:run"
 # Failures a retry cannot mend.
 FINAL = frozenset({"not_permitted", "gone"})
 
@@ -220,6 +221,19 @@ async def start_run(
         is None
     ):
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such intention.")
+    # The capability's own permission, decided and kept before it runs
+    # (LEKA-402).
+    capability = find(body.key)
+    if capability is not None:
+        decided = await authorize(
+            session,
+            principal,
+            Permission(capability.permission),
+            action=ACTION,
+            resource=Resource("capability", capability.key),
+        )
+        if not decided.allowed:
+            raise ApiError(status.HTTP_403_FORBIDDEN, ErrorCode.PERMISSION_DENIED, decided.message)
     try:
         run = await WorkflowService(session, principal.workspace_id).start(
             body.key,

@@ -17,15 +17,18 @@ from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Request, status
 
-from leka.db import DatabaseSession, workspace_scope
+from leka.db import DatabaseSession, hidden_entities, workspace_scope
+from leka.governance.policy import Subject, evaluate
 from leka.governance.repository import AuditRepository
 from leka.governance.schemas import Permission, Principal
 from leka.governance.service import (
     AuthorisationError,
     GovernanceService,
-    check_lifecycle,
-    check_permission,
     check_role,
+    hidden_for,
+    record,
+    record_apart,
+    worth_keeping,
 )
 from leka.platform import (
     MembershipResolver,
@@ -69,7 +72,9 @@ async def get_current_principal(
     3. The workspace's lifecycle state is attached, so the route-level checks
        can refuse writes on a suspended workspace without querying again.
     4. The request body runs inside `workspace_scope`, so every query it
-       makes is filtered by the scope guard.
+       makes is filtered by the scope guard — and inside `hidden_entities`
+       (LEKA-402): what this person's role may not see of the company model
+       is left out of every query, whichever route serves it.
 
     A dependency with `yield`, because step 4 has to wrap the handler. When
     the response is done the scope is released — it never leaks onto the next
@@ -108,7 +113,9 @@ async def get_current_principal(
     )
 
     with workspace_scope(workspace_id):
-        yield principal
+        hidden = await hidden_for(session, workspace_id, membership.role)
+        with hidden_entities(hidden):
+            yield principal
 
 
 # Ends with the handler, like the database session it depends on — FastAPI
@@ -150,7 +157,7 @@ def require_role(
 
 def require_permission(
     permission: Permission,
-) -> Callable[[Principal], Coroutine[Any, Any, Principal]]:
+) -> Callable[..., Coroutine[Any, Any, Principal]]:
     """Require one named permission, and a workspace able to serve it.
 
     Preferred over require_role for anything that writes: it also runs the
@@ -158,12 +165,26 @@ def require_permission(
     than in whichever service remembered to look.
     """
 
-    async def dependency(principal: PrincipalDep) -> Principal:
-        try:
-            check_lifecycle(principal, permission)
-            check_permission(principal, permission)
-        except AuthorisationError as error:
-            raise _refuse(error) from error
+    async def dependency(
+        request: Request, principal: PrincipalDep, session: SessionDep
+    ) -> Principal:
+        decided = evaluate(Subject.of(principal), permission)
+        route = f"{request.method} {request.url.path}"
+        if not decided.allowed:
+            # Kept apart: the refusal rolls the request back, not the trail.
+            await record_apart(
+                principal.workspace_id, principal.user_id, principal.role, decided, route=route
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=decided.message)
+        if worth_keeping(decided):
+            record(
+                session,
+                principal.workspace_id,
+                principal.user_id,
+                principal.role,
+                decided,
+                route=route,
+            )
         return principal
 
     return dependency

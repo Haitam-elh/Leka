@@ -197,6 +197,8 @@ class ContextElement(Base, WorkspaceScopedMixin):
     said it then: what it is, where it came from, why it is there."""
 
     __tablename__ = "context_elements"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("ref_id",)
     __table_args__ = (
         ForeignKeyConstraint(
             ["workspace_id", "version_id"],
@@ -286,6 +288,8 @@ class ContextFeedback(Base, WorkspaceScopedMixin):
     found it — so that what people say can be counted by what found it."""
 
     __tablename__ = "context_feedback"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("ref_id",)
     __table_args__ = (
         ForeignKeyConstraint(
             ["workspace_id", "context_id"],
