@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import Sequence
+from collections.abc import Collection, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -278,7 +278,16 @@ async def _work(workspace_id: uuid.UUID, analyzer: Analyzer) -> ModelWork | None
             logger.info("intelligence_model_unanswered", analyzer=analyzer.name, status=done.status)
         return done
 
-    return ModelWork(run=run, kept=standing, decided=decided)
+    async def asked(purpose: str, keys: Sequence[str]) -> dict[str, str]:
+        async with session_factory() as session:
+            return await LLMRuntime(session, workspace_id).asked(purpose, keys)
+
+    async def remember(purpose: str, digests: Mapping[str, str], answered: Collection[str]) -> None:
+        async with session_factory() as session:
+            await LLMRuntime(session, workspace_id).remember(purpose, digests, answered=answered)
+            await session.commit()
+
+    return ModelWork(run=run, kept=standing, decided=decided, asked=asked, remember=remember)
 
 
 async def _model(

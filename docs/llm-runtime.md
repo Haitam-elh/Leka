@@ -78,7 +78,8 @@ A model reads; it never acts.
 | Feature | Purpose | Context | Output | Check |
 | --- | --- | --- | --- | --- |
 | An intention, read (`intentions/reading.py`) | `intention.understanding` | the things it names | `Reading`: goal, question or request, what is asked in a sentence | its shape; the merge keeps the rules' things, actions and requests |
-| An analysis, answered — the **synthesis** capability (`intentions/writing.py`) | `capability.synthesis` | **the context the Context Engine assembled for the intention** | `Written`: the answer, its points and what each cites | it rests on something the analysis or its context holds |
+| An intention, answered — **LEKA's analyst** (`intentions/analyst.py`), the synthesis capability | `capability.synthesis` | what the rules found, a part of the context the Context Engine assembled, the sources — and what it reads through LEKA's nine tools | `Written`: the answer, its points and what each cites | it rests on something it read or was given; what it cites, the analysis's evidence |
+| …or, when it cannot, the analysis said in words (`intentions/writing.py`) | `capability.synthesis` | **the context the Context Engine assembled for the intention** | `Written` | it rests on something the analysis or its context holds |
 | A description proposed for À valider (`intelligence/enrichment.py`) | `enrichment.summary` | **the company model's facts** about each thing | `Descriptions` | one at least cites a fact it was given |
 | An agent (LEKA-395, `capabilities/runs.py`) | `agent:<key>` | the agent's own conversation (ADR 004) | its deliverable | — |
 
@@ -92,14 +93,37 @@ call the gateway from `capabilities/runs.py`; moving them onto
 fails a vendor's address or SDK outside `capabilities/gateway/`, and an import
 of the gateway outside `leka.capabilities` (and the API of its settings).
 
+## Tools, and a last round that answers
+
+A task with tools (`Task.tools`, read only) may say how many rounds
+(`rounds`, 6) and that the last one answers with what was read
+(`conclude`) — LEKA's analyst does (intentions.md § 12) — rather than end
+`failed`, `tool_rounds`. Its shape (`output`) is asked beside the tools:
+once it stops calling them, its answer comes back in it, then checked.
+
+## Never paid for twice
+
+`model_asks`: what a model was already asked about one thing, for one
+purpose, and the digest of the facts it was asked on —
+`LLMRuntime.asked(purpose, keys)`, `.remember(purpose, digests,
+answered=…)`. A background task asks again only once a thing's facts
+changed: the descriptions proposed for À valider were asked every hour, the
+same things left out for saying too little asked again each time, and paid
+for; no longer (intelligence.md § 13).
+
 ## What is kept
 
 `llm_runs`: purpose, ref (`intention:<id>`…), status, provider, model,
 version, calls, tokens in and out, cost at list price, latency, the context's
 reference and how many items it held, the error, when. `model_calls.run_id`
 ties each call to it. `GET /models/usage` counts them by status and lists the
-latest; Paramètres › Modèle de langage says « Exécutions : 9 réussie(s) ·
-1 hors délai ».
+latest — and what an intention costs, measured: every call made for it
+(`ref` `intention:<id>`), understanding and answer, summed, averaged
+(`per_intention_usd`, `intentions`); the share of tokens read from the
+provider's cache. Paramètres › Modèle de langage says « Exécutions : 9
+réussie(s) · 1 hors délai », « Une intention coûte en moyenne 1,1 ¢, mesuré
+sur 12 intention(s) : environ 900 intentions pour 10 $ », and what each use
+cost.
 
 ## Tested
 

@@ -135,10 +135,13 @@ def test_nothing_in_the_way_is_ready_with_what_it_holds_by_side() -> None:
     assert ready.elements == 4
 
 
-def test_a_critical_gap_or_conflict_blocks() -> None:
-    blocked = readiness(
-        context(gaps=[gap("model_not_built", "critical"), gap("unwatched", "info")])
-    )
+def test_a_critical_gap_or_conflict_blocks_an_action_and_limits_a_question() -> None:
+    held = context(gaps=[gap("model_not_built", "critical"), gap("unwatched", "info")])
+    # A question is answered anyway, what is in the way said with it.
+    asked = readiness(held)
+    assert asked.status == "limited"
+    assert [i.kind for i in asked.critical] == ["model_not_built"]
+    blocked = readiness(held, acts=True)
     assert blocked.status == "blocked"
     assert [(i.origin, i.kind, i.gap_origin) for i in blocked.critical] == [
         ("gap", "model_not_built", "quality")
@@ -152,15 +155,18 @@ def test_a_critical_gap_or_conflict_blocks() -> None:
         label="Checkout",
         about="owner",
     )
-    owners = readiness(context(conflicts=[conflict]))
+    owners = readiness(context(conflicts=[conflict]), acts=True)
     assert owners.status == "blocked"
+    assert readiness(context(conflicts=[conflict])).status == "limited"
     assert [(i.origin, i.kind, i.refs, i.label, i.about) for i in owners.critical] == [
         ("conflict", "competing", [CHECKOUT], "Checkout", "owner")
     ]
 
 
-def test_a_context_holding_nothing_blocks() -> None:
-    assert readiness(context(elements=[])).status == "blocked"
+def test_a_context_holding_nothing_blocks_an_action_only() -> None:
+    assert readiness(context(elements=[]), acts=True).status == "blocked"
+    # LEKA's analyst looks for itself: the question goes on.
+    assert readiness(context(elements=[])).status == "limited"
 
 
 def test_warnings_or_a_low_level_limit() -> None:

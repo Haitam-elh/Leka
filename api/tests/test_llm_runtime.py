@@ -329,6 +329,87 @@ async def test_a_model_reads_never_acts(workspace: uuid.UUID) -> None:
     assert (endless.status, endless.error) == ("failed", "tool_rounds")
 
 
+async def test_tools_then_a_shape_the_last_round_answers_with_what_it_read(
+    workspace: uuid.UUID,
+) -> None:
+    """LEKA's analyst: tools, an answer in its shape — and, its rounds spent,
+    made to answer rather than fail."""
+
+    async def lookup(arguments: Any) -> str:
+        return json.dumps({"id": "entity:payment-api", "owner": "Payments"})
+
+    tool = RuntimeTool(
+        "lookup",
+        "Look a service up.",
+        {"type": "object", "properties": {"name": {"type": "string"}}},
+        lookup,
+    )
+    script = Script(
+        calling("lookup", {"name": "payment-api"}),
+        calling("lookup", {"name": "payment-api"}),
+        gemini({"owner": "Payments", "cites": ["relationship:owned"]}),
+    )
+    done = await _run(
+        workspace,
+        script,
+        owner_task(tools=[tool], needs=Needs(structured=True, tools=True), rounds=3, conclude=True),
+    )
+    assert done.ok and done.value == Owner(owner="Payments", cites=["relationship:owned"])
+    assert done.calls == 3
+    # The shape asked every round, beside the tools; the last round may not
+    # call one.
+    assert all("responseJsonSchema" in body["generationConfig"] for body in script.asked)
+    modes = [body["toolConfig"]["functionCallingConfig"]["mode"] for body in script.asked]
+    assert modes == ["AUTO", "AUTO", "NONE"]
+
+
+async def test_what_a_model_was_asked_is_remembered_on_its_facts(workspace: uuid.UUID) -> None:
+    with workspace_scope(workspace):
+        async with session_factory() as session:
+            runtime = LLMRuntime(session, workspace)
+            assert await runtime.asked("enrichment.summary", ["a", "b"]) == {}
+            await runtime.remember("enrichment.summary", {"a": "d1", "b": "d2"}, answered={"a"})
+            await session.commit()
+        async with session_factory() as session:
+            runtime = LLMRuntime(session, workspace)
+            assert await runtime.asked("enrichment.summary", ["a", "b", "c"]) == {
+                "a": "d1",
+                "b": "d2",
+            }
+            # Another purpose knows nothing of it.
+            assert await runtime.asked("other", ["a"]) == {}
+            # Asked again on new facts: what is remembered follows.
+            await runtime.remember("enrichment.summary", {"b": "d3"}, answered={"b"})
+            await session.commit()
+            assert (await runtime.asked("enrichment.summary", ["b"])) == {"b": "d3"}
+
+
+async def test_tokens_read_from_the_cache_are_billed_at_their_price(workspace: uuid.UUID) -> None:
+    cached = httpx.Response(
+        200,
+        json={
+            "candidates": [
+                {"content": {"role": "model", "parts": [{"text": json.dumps({"owner": "P"})}]}}
+            ],
+            "usageMetadata": {
+                "promptTokenCount": 1000,
+                "cachedContentTokenCount": 800,
+                "candidatesTokenCount": 40,
+                "thoughtsTokenCount": 60,
+            },
+            "modelVersion": "gemini-3.8-flash-001",
+        },
+    )
+    done = await _run(workspace, Script(cached), owner_task(check=None))
+    assert done.ok
+    _, calls = await _kept(workspace)
+    (call,) = calls
+    assert (call.tokens_in, call.tokens_cached, call.tokens_out) == (1000, 800, 100)
+    # 200 at 0.75, 800 cached at 0.075, 100 out (thinking included) at 3.75,
+    # dollars a million.
+    assert call.cost_usd == round((200 * 0.75 + 800 * 0.075 + 100 * 3.75) / 1_000_000, 6)
+
+
 def test_a_context_assembled_is_given_as_ranked_and_cut_to_size() -> None:
     def element(position: int, text: str) -> Any:
         return SimpleNamespace(

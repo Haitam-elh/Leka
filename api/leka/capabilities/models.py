@@ -168,6 +168,8 @@ class ModelCall(Base, WorkspaceScopedMixin):
     tokens_in: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     tokens_out: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     tokens_thinking: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # Of tokens_in, those read from the provider's cache — billed less.
+    tokens_cached: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     tool_calls: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
@@ -273,3 +275,22 @@ class LLMRun(Base, WorkspaceScopedMixin):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ModelAsk(Base, WorkspaceScopedMixin):
+    """What LEKA already asked a model about one thing, for one purpose,
+    and on which facts (their digest) — asked again only once they changed:
+    a background task never pays twice for the same question, answered or
+    left out."""
+
+    __tablename__ = "model_asks"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "purpose", "key", name="uq_model_asks_purpose_key"),
+    )
+
+    purpose: Mapped[str] = mapped_column(String(100), nullable=False)
+    key: Mapped[str] = mapped_column(String(300), nullable=False)
+    digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    # The model said something of it; else it left it out.
+    answered: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    asked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

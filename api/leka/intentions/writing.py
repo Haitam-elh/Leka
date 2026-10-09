@@ -58,15 +58,15 @@ five sentences, at most six points, each one sentence.
 
 
 class WrittenPoint(BaseModel):
-    text: str = Field(max_length=600)
+    text: str = Field(max_length=800)
     cites: list[str] = Field(max_length=12)
 
 
 class Written(BaseModel):
     """What the model is asked to give back."""
 
-    answer: str = Field(max_length=2000)
-    points: list[WrittenPoint] = Field(max_length=8)
+    answer: str = Field(max_length=3000)
+    points: list[WrittenPoint] = Field(max_length=10)
     caveats: list[str] = Field(default_factory=list, max_length=5)
 
 
@@ -170,8 +170,11 @@ def task_of(asked: Asked, result: Result, context: ContextPack) -> Task:
         output=Written,
         check=check,
         needs=NEEDS,
-        tier=Tier.STANDARD,
-        max_tokens=1500,
+        # Little thinking — the rules did the analysis — and room for it:
+        # Gemini counts its thinking in the tokens it may write, and an
+        # answer cut short is no answer, paid for.
+        tier=Tier.FAST,
+        max_tokens=6000,
         budget=BUDGET,
         ref=f"intention:{asked.id}",
     )

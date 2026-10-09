@@ -28,6 +28,8 @@ class Price:
     since: date
     per_million_in: float
     per_million_out: float
+    # A token read from the provider's cache; unknown: as any token in.
+    per_million_cached: float | None = None
 
 
 @dataclass(frozen=True)
@@ -53,13 +55,31 @@ class Profile:
         current = [p for p in self.prices if p.since <= day]
         return max(current, key=lambda p: p.since) if current else None
 
-    def cost(self, tokens_in: int, tokens_out: int, at: datetime | None = None) -> float | None:
-        """What a call cost at list price; None when the price is not known."""
+    def cost(
+        self,
+        tokens_in: int,
+        tokens_out: int,
+        at: datetime | None = None,
+        *,
+        cached: int = 0,
+    ) -> float | None:
+        """What a call cost at list price — the tokens read from the
+        provider's cache at their own price; None when the price is not
+        known."""
         price = self.price(at)
         if price is None:
             return None
+        cached = max(0, min(cached, tokens_in))
+        cache = (
+            price.per_million_in if price.per_million_cached is None else price.per_million_cached
+        )
         return round(
-            (tokens_in * price.per_million_in + tokens_out * price.per_million_out) / 1_000_000,
+            (
+                (tokens_in - cached) * price.per_million_in
+                + cached * cache
+                + tokens_out * price.per_million_out
+            )
+            / 1_000_000,
             6,
         )
 
@@ -77,7 +97,12 @@ PROFILES: tuple[Profile, ...] = (
         thinking=("low", "medium", "high"),
         quality=3,
         speed=3,
-        prices=(Price(_LONG_AGO, 0.75, 3.75), Price(date(2027, 1, 1), 1.50, 7.50)),
+        # ai.google.dev/gemini-api/docs/pricing, read 2026-10-09: thinking
+        # billed as output; a token from the implicit cache a tenth of one in.
+        prices=(
+            Price(_LONG_AGO, 0.75, 3.75, 0.075),
+            Price(date(2027, 1, 1), 1.50, 7.50, 0.15),
+        ),
         sends_temperature=False,
     ),
     Profile(

@@ -13794,6 +13794,11 @@ export interface components {
             tokens_in: number;
             /** Tokens Out */
             tokens_out: number;
+            /**
+             * Tokens Cached
+             * @default 0
+             */
+            tokens_cached: number;
             /** Cost Usd */
             cost_usd: number | null;
             /** Latency Ms */
@@ -13998,6 +14003,12 @@ export interface components {
             tokens_in: number;
             /** Tokens Out */
             tokens_out: number;
+            /**
+             * Tokens Cached
+             * @description Of tokens_in, those read from the provider's cache: billed less.
+             * @default 0
+             */
+            tokens_cached: number;
             /** Cost Usd */
             cost_usd: number;
             /**
@@ -14054,6 +14065,17 @@ export interface components {
             };
             /** Latest Runs */
             latest_runs: components["schemas"]["LLMRunRead"][];
+            /**
+             * Intentions
+             * @description The intentions of the period a model worked for.
+             * @default 0
+             */
+            intentions: number;
+            /**
+             * Per Intention Usd
+             * @description What one of them cost, on average: every call made for it, understanding and answer, at list price.
+             */
+            per_intention_usd?: number | null;
         };
         /**
          * Neighbourhood

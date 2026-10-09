@@ -1310,8 +1310,11 @@ const fr = {
     calls: "Appels",
     failed: "Échecs",
     tokens: "Tokens",
-    cost: "Coût estimé",
+    cost: "Coût (prix public)",
     costNote: "Au prix public ; {unpriced} appel(s) à un modèle sans prix publié non comptés.",
+    perIntention:
+      "Une intention coûte en moyenne {cost}, mesuré sur {count} intention(s) : environ {many} intentions pour 10 $.",
+    cached: "{share} % des tokens envoyés relus depuis le cache du fournisseur, facturés moins cher.",
     split: "LEKA : {leka} appels · votre modèle : {own} appels",
     fallbacksUsed: "{count} réponse(s) venues d'un modèle de repli",
     byModel: "Par modèle",
@@ -1321,6 +1324,7 @@ const fr = {
     purposes: {
       "intention.understanding": "Comprendre une demande",
       "capability.synthesis": "Rédiger une réponse",
+      "enrichment.summary": "Proposer une description (À valider)",
       "model.test": "Test du modèle",
     },
     callStatuses: { ok: "OK", failed: "Échec", invalid: "Réponse invalide" },
@@ -6183,8 +6187,11 @@ const en: Dictionary = {
     calls: "Calls",
     failed: "Failures",
     tokens: "Tokens",
-    cost: "Estimated cost",
+    cost: "Cost (list price)",
     costNote: "At list price; {unpriced} call(s) to a model without a published price not counted.",
+    perIntention:
+      "An intention costs {cost} on average, measured over {count} intention(s): about {many} intentions for $10.",
+    cached: "{share}% of the tokens sent read from the provider's cache, billed less.",
     split: "LEKA: {leka} calls · your model: {own} calls",
     fallbacksUsed: "{count} answer(s) from a fallback model",
     byModel: "By model",
@@ -6194,6 +6201,7 @@ const en: Dictionary = {
     purposes: {
       "intention.understanding": "Understanding a request",
       "capability.synthesis": "Writing an answer",
+      "enrichment.summary": "Proposing a description (To review)",
       "model.test": "Model test",
     },
     callStatuses: { ok: "OK", failed: "Failed", invalid: "Invalid answer" },

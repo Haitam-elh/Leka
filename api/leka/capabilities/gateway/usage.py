@@ -1,7 +1,10 @@
 """What a workspace asked of language models (LEKA-394, 429): how many calls,
-how many failed, the tokens, what they cost at list price, how long they
-took — by day, by model, by purpose; LEKA's model and the workspace's own
-apart. Read from model_calls: what was recorded, nothing estimated twice.
+how many failed, the tokens — those read from the provider's cache apart —
+what they cost at list price, how long they took — by day, by model, by
+purpose; LEKA's model and the workspace's own apart; and what one intention
+costs, measured: every call made for it, understanding and answer, summed
+per intention, averaged. Read from model_calls: what was recorded, nothing
+estimated twice.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ class Tally:
     failed: int = 0
     tokens_in: int = 0
     tokens_out: int = 0
+    tokens_cached: int = 0
     cost_usd: float = 0.0
     # Calls whose cost is not known (a model without a published price).
     unpriced: int = 0
@@ -34,6 +38,7 @@ class Tally:
             self.failed += 1
         self.tokens_in += call.tokens_in
         self.tokens_out += call.tokens_out
+        self.tokens_cached += call.tokens_cached
         if call.cost_usd is None:
             if call.status == "ok":
                 self.unpriced += 1
@@ -57,6 +62,15 @@ class ModelUsage:
     # and the latest.
     runs: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     latest_runs: list[LLMRun] = field(default_factory=list)
+    # What each intention of the period cost, every call made for it.
+    intentions: dict[str, float] = field(default_factory=lambda: defaultdict(float))
+
+    @property
+    def per_intention(self) -> float | None:
+        """What one intention costs, on average — none before the first."""
+        if not self.intentions:
+            return None
+        return sum(self.intentions.values()) / len(self.intentions)
 
 
 async def model_usage(
@@ -81,6 +95,8 @@ async def model_usage(
         usage.by_day[call.at.date().isoformat()].add(call)
         usage.by_model[(call.provider, call.model)].add(call)
         usage.by_purpose[call.purpose].add(call)
+        if call.ref and call.ref.startswith("intention:") and call.cost_usd is not None:
+            usage.intentions[call.ref] += call.cost_usd
         if call.route not in ("own", "default") and call.status == "ok":
             usage.fallbacks += 1
         if len(usage.latest) < 20:

@@ -150,7 +150,8 @@ class ModelReading:
             output=Reading,
             needs=NEEDS,
             tier=Tier.FAST,
-            max_tokens=400,
+            # Its thinking counts in it: room enough never to be cut short.
+            max_tokens=2000,
             budget=BUDGET,
         )
         done = await self._runtime.run(task)

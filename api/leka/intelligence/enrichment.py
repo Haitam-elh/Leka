@@ -626,6 +626,7 @@ SUMMARY_NEEDS = Needs(structured=True, quality=2)
 SUMMARY = 0.6
 # Things described in one run, at most — the others the next run.
 SUMMARY_MOST = 12
+SUMMARY_PURPOSE = "enrichment.summary"
 SUMMARY_KINDS = {"service": 0, "repository": 1, "database": 2}
 
 SUMMARY_SYSTEM = """You describe the systems of a company's IT for its \
@@ -648,6 +649,17 @@ class Descriptions(BaseModel):
     """What the model is asked to give back."""
 
     things: list[Described] = Field(max_length=SUMMARY_MOST)
+
+
+def digest_of(facts: Sequence[tuple[str, str]]) -> str:
+    """What a thing's facts are, in 16 characters: the same facts, the same
+    digest — whatever order they come in."""
+    said = "\n".join(sorted(f"{fact}={text}" for fact, text in facts))
+    return hashlib.sha256(said.encode()).hexdigest()[:16]
+
+
+def _card_of(cards: Sequence[ArchitectureCardRead], ident: str) -> ArchitectureCardRead | None:
+    return next((card for card in cards if card.id == ident), None)
 
 
 def summary_key(card: ArchitectureCardRead) -> str:
@@ -731,7 +743,7 @@ async def enrich_summary(material: Material, work: ModelWork) -> list[Proposal]:
         key=lambda c: (SUMMARY_KINDS[c.type], c.name.lower()),
     )
     proposals: list[Proposal] = []
-    asking: list[ArchitectureCardRead] = []
+    open_: list[ArchitectureCardRead] = []
     for card in wanting:
         key = summary_key(card)
         if key in work.decided:
@@ -739,11 +751,21 @@ async def enrich_summary(material: Material, work: ModelWork) -> list[Proposal]:
         if key in work.kept:
             proposals.append(work.kept[key])
             continue
-        if len(asking) < SUMMARY_MOST:
-            asking.append(card)
+        open_.append(card)
+    if not open_:
+        return proposals
+    # Asked already on the very same facts — described, or left out for
+    # saying too little: not asked again, never paid for twice. A thing
+    # whose facts changed is.
+    every = {card.id: facts_of(card, cards, links) for card in open_}
+    digests = {summary_key(card): digest_of(every[card.id]) for card in open_}
+    before = await work.asked(SUMMARY_PURPOSE, list(digests)) if work.asked else {}
+    asking = [
+        card for card in open_ if before.get(summary_key(card)) != digests[summary_key(card)]
+    ][:SUMMARY_MOST]
     if not asking:
         return proposals
-    facts = {card.id: facts_of(card, cards, links) for card in asking}
+    facts = {card.id: every[card.id] for card in asking}
     # What LEKA knows of them, from the company model: the context it rests
     # on, each fact with the id it cites.
     context = ContextPack.of(
@@ -753,7 +775,7 @@ async def enrich_summary(material: Material, work: ModelWork) -> list[Proposal]:
     )
     done = await work.run(
         Task(
-            purpose="enrichment.summary",
+            purpose=SUMMARY_PURPOSE,
             instructions=SUMMARY_SYSTEM,
             input={
                 "things": [
@@ -765,11 +787,24 @@ async def enrich_summary(material: Material, work: ModelWork) -> list[Proposal]:
             output=Descriptions,
             check=_rests,
             needs=SUMMARY_NEEDS,
-            tier=Tier.STANDARD,
-            max_tokens=3000,
+            # Describing is no deep work; its thinking counts in its tokens.
+            tier=Tier.FAST,
+            max_tokens=6000,
             budget=100.0,
         )
     )
+    if done.status in ("succeeded", "invalid") and work.remember is not None:
+        # A model answered — usably or not: what it was asked, kept.
+        said_of = (
+            {summary_key(by) for d in done.value.things if (by := _card_of(asking, d.id))}
+            if done.ok
+            else set()
+        )
+        await work.remember(
+            SUMMARY_PURPOSE,
+            {summary_key(card): digests[summary_key(card)] for card in asking},
+            said_of,
+        )
     if not done.ok:
         # No model, none in time, nothing usable: what stands, nothing new.
         return proposals

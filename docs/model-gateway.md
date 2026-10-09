@@ -48,9 +48,13 @@ as `invalid`, with what it cost.
 **Tools**: function declarations (Gemini), functions (chat completions),
 tools (Anthropic). `run_tools(request, handlers)` calls the ones asked, gives
 the model what they returned — a tool that fails says so to it, one it made
-up is said unknown — until it answers, six rounds at most. **Gemini 3 signs
-the calls it makes**: the signature goes back with the call, or it refuses
-the conversation.
+up is said unknown — until it answers, six rounds at most (`rounds`);
+`conclude` makes the last round answer — the tools not offered again —
+rather than end in `ToolRoundsError`. A shape asked beside the tools
+(`request.output`) is how the answer comes back once it stops calling them:
+Gemini 3 and the chat-completions APIs take both. **Gemini 3 signs the
+calls it makes**: the signature goes back with the call, or it refuses the
+conversation.
 
 ## 2. The models
 
@@ -61,7 +65,7 @@ tokens, with the date a published change applies**.
 
 | Provider | Model | Context | Quality | Price in / out ($ per M tokens) |
 | --- | --- | --- | --- | --- |
-| Google | **Gemini 3.8 Flash** (`gemini-3.8-flash`) — **LEKA's default** | 1 048 576 | 3 | 0.75 / 3.75 until 2026-12-31, then 1.50 / 7.50 |
+| Google | **Gemini 3.8 Flash** (`gemini-3.8-flash`) — **LEKA's default** | 1 048 576 | 3 | 0.75 / 3.75 until 2026-12-31, then 1.50 / 7.50; read from its cache 0.075, then 0.15 |
 | Mistral | Mistral Large (`mistral-large-latest`) | 256 000 | 3 | 0.50 / 1.50 |
 | Mistral | Mistral Medium, Small | 128 000 | 2, 1 | not published: not estimated |
 | Anthropic | Claude Sonnet 5, Haiku 4.5 | 1 000 000, 200 000 | 3, 2 | 2 / 10, 1 / 5 |
@@ -70,7 +74,19 @@ A model the table does not know — a company's Azure deployment, its own
 model — is taken cautiously: 128k tokens in, structured output and tools as
 its provider's API offers them, quality 2, **no price: its cost is not
 guessed**. Gemini 3 is left at its own temperature; how long it thinks is the
-tier (`thinkingLevel` low, medium, high), its thinking billed as output.
+tier (`thinkingLevel` low, medium, high), its thinking billed as output —
+and counted in `max_tokens`: a task gives it room, or its answer is cut
+short, paid for, and useless.
+
+**What a provider read from its cache** is billed less: Gemini caches the
+start of a conversation it was sent before — every round of tools sends the
+instructions and what was read again — and bills those tokens a tenth
+(ai.google.dev/gemini-api/docs/pricing, read 2026-10-09). Read per call —
+Gemini's `cachedContentTokenCount`, the chat-completions APIs'
+`prompt_tokens_details.cached_tokens`, Anthropic's `cache_read_input_tokens`
+— kept (`model_calls.tokens_cached`) and priced at the model's cached price
+when it is published, else as any token in: what a call cost is what was
+billed.
 
 ## 3. Routing
 

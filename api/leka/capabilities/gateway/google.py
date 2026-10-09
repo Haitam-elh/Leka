@@ -151,6 +151,7 @@ def read(said: dict[str, Any], call: Call, latency_ms: int) -> Completion:
             # Thinking is billed as output.
             tokens_out=int(usage.get("candidatesTokenCount") or 0) + thinking,
             tokens_thinking=thinking,
+            tokens_cached=int(usage.get("cachedContentTokenCount") or 0),
         ),
         latency_ms=latency_ms,
         finish=candidate.get("finishReason"),

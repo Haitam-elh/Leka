@@ -79,6 +79,8 @@ class Part(enum.StrEnum):
     CHANGES = "changes"
     FINDINGS = "findings"
     QUALITY = "quality"
+    # What LEKA learned in the period: things that appeared, changed, went.
+    EVOLUTION = "evolution"
 
 
 # ── what a capability reads ──────────────────────────────────────────────────
@@ -139,6 +141,18 @@ class SourceRef:
 
 
 @dataclass(frozen=True)
+class Learned:
+    """A thing LEKA's model gained, changed or lost in the period — read
+    from its versions (LEKA-383)."""
+
+    thing: EntityBrief
+    # appeared, changed, went, came_back
+    change: str
+    fields: tuple[str, ...]
+    at: datetime
+
+
+@dataclass(frozen=True)
 class Material:
     """What an analysis read, once, for all its capabilities. A part not
     read is absent: the capabilities that need it are skipped."""
@@ -158,6 +172,7 @@ class Material:
     incidents: tuple[IncidentDetail, ...] = ()
     changes: tuple[ChangeFootprint, ...] = ()
     findings: tuple[FindingBrief, ...] = ()
+    evolution: tuple[Learned, ...] = ()
     quality: Mapping[uuid.UUID, KnowledgeQualityRead] = field(default_factory=dict)
     # Each thing's sources, for evidence the context does not hold.
     sources: Mapping[uuid.UUID, tuple[SourceRef, ...]] = field(default_factory=dict)

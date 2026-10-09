@@ -129,6 +129,9 @@ class Usage:
     tokens_out: int = 0
     # Thinking a provider bills as output, said apart where it says it.
     tokens_thinking: int = 0
+    # Of the tokens in, those the provider read from its cache — billed far
+    # less (Gemini's implicit caching: a conversation's repeated start).
+    tokens_cached: int = 0
 
 
 @dataclass(frozen=True)

@@ -30,6 +30,7 @@ from leka.intentions.analysis import (
     Asked,
     Capability,
     FindingBrief,
+    Learned,
     Material,
     Output,
     Part,
@@ -47,12 +48,14 @@ from leka.intentions.capabilities import (
     compliance,
     dependencies,
     documentation,
+    evolution,
     incidents,
     migration,
     ownership,
     standing,
 )
 from leka.intentions.grounding import side
+from leka.intentions.reads import in_environment, same_environment
 from leka.knowledge import (
     BusinessTie,
     ChangeFootprint,
@@ -522,6 +525,59 @@ def test_a_change_and_the_incident_that_followed() -> None:
     assert [n.code for n in changes(material("find_change")).uncertainties] == ["change.none"]
 
 
+def test_what_happened_everywhere_says_where_it_looked() -> None:
+    """« Quoi de neuf depuis hier en prod » names nothing: what changed, what
+    broke, in production — not « nothing named, nothing read »."""
+    everywhere = asked("find_change", "change", subjects=(), environment="production")
+    out = changes(material(asked=everywhere, changes=(_footprint(),)))
+    assert [f.code for f in out.findings] == ["change.made"]
+    assert out.summary is not None and out.summary.params["where"] == "in production"
+    nothing = changes(material(asked=everywhere))
+    assert nothing.summary is not None
+    assert nothing.summary.text == "Nothing changed in production in the period."
+    broke = incidents(material(asked=everywhere, incidents=(_incident(),)))
+    assert [f.code for f in broke.findings] == ["incident.seen"]
+    # Naming nothing is missing nothing, for a question about everything.
+    assert not standing(material(asked=everywhere)).missing
+    assert chosen("find_change", "change", subjects=()) == {
+        "standing",
+        "changes",
+        "incidents",
+        "evolution",
+    }
+
+
+def test_what_leka_learned_in_the_period() -> None:
+    cache = brief("redis-cache", "infra_resource")
+    learned = (
+        Learned(thing=cache, change="appeared", fields=(), at=NOW - timedelta(hours=3)),
+        Learned(
+            thing=PAYMENT, change="changed", fields=("attributes.version",), at=NOW - timedelta(1)
+        ),
+    )
+    out = evolution(material("find_change", evolution=learned))
+    assert [(f.code, f.params["name"]) for f in out.findings] == [
+        ("learned.appeared", "redis-cache"),
+        ("learned.changed", "payment-api"),
+    ]
+    assert out.findings[1].params["fields"] == ["attributes.version"]
+    assert out.summary is not None and out.summary.params["count"] == 2
+    assert out.evidence and {e.kind for e in out.evidence} == {"entity"}
+    quiet = evolution(material("find_change"))
+    assert not quiet.findings and quiet.summary is not None
+    assert quiet.summary.code == "learned.none"
+
+
+def test_a_change_is_in_the_environment_asked() -> None:
+    assert same_environment("prod", "production")
+    assert same_environment("Production", "PRD")
+    assert not same_environment("staging", "production")
+    # Asked nowhere in particular, or said nowhere — a merge: kept.
+    assert in_environment("staging", None)
+    assert in_environment(None, "production")
+    assert not in_environment("staging", "prod")
+
+
 def test_the_documents_describing_it_and_a_stale_one_said() -> None:
     doc = element(
         "entity",
@@ -660,6 +716,9 @@ def test_standing_says_the_state_and_what_leka_already_concluded() -> None:
         "code": "ownership.no_owner",
         "params": {"name": "payment-api", "dependents": 3},
     }
-    assert standing(material(asked=asked("investigate", subjects=()))).missing[0].code == (
+    # A question about everything names nothing, and misses nothing; one
+    # about a thing it does not name does.
+    assert not standing(material(asked=asked("investigate", subjects=()))).missing
+    assert standing(material(asked=asked("find_owner", subjects=()))).missing[0].code == (
         "analysis.no_subject"
     )

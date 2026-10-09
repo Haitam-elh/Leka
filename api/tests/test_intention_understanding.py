@@ -195,7 +195,9 @@ def test_too_short_or_without_a_goal_cannot_go_on() -> None:
     assert "explain_cause" in said.options
 
 
-def test_naming_nothing_known_is_asked_what_with_what_it_may_mean() -> None:
+def test_a_question_naming_nothing_known_goes_on_with_what_it_may_mean() -> None:
+    """LEKA's analyst looks for itself — what was slow since yesterday —
+    and says what it may be about: the question is not stopped."""
     text = "Pourquoi c'est lent depuis hier ?"
     understood = understand(
         text,
@@ -207,7 +209,9 @@ def test_naming_nothing_known_is_asked_what_with_what_it_may_mean() -> None:
             gaps=[gap("no_subject", maybe=["Billing API"])],
         ),
     )
-    assert blocking(understood) == {"no_subject"}
+    assert not blocking(understood)
+    assert warnings(understood) == {"no_subject"}
+    assert understood.clear
     [said] = understood.ambiguities
     assert said.options == ["Billing API"]
 

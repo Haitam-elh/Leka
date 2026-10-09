@@ -36,6 +36,7 @@ from leka.api import intentions as intentions_api
 from leka.db import session_factory, workspace_scope
 from leka.intentions import (
     Actor,
+    Intention,
     IntentionRepository,
     IntentionService,
     IntentionStatus,
@@ -188,15 +189,54 @@ async def test_a_restart_waits_for_a_person_what_it_reaches_said(
     assert "approved" in after["moves"]
 
 
-async def test_a_context_that_cannot_ground_it_is_not_analysed(
+async def test_a_question_its_context_cannot_ground_is_answered_what_is_missing_said(
     client: AsyncClient,
     model: dict[str, uuid.UUID],
     acme: dict[str, uuid.UUID],
     queued: list[tuple[uuid.UUID, str]],
 ) -> None:
-    # A diagnosis no source can ground (LEKA-387): blocked by no_source_for.
+    # A diagnosis no source can ground (LEKA-387): no_source_for — said with
+    # it, and the question answered anyway: never left analysing.
     intention = await _ask(client, "Pourquoi Billing API est lente depuis hier ?")
     assert intention["status"] == "analysing"
+    ready = intention["readiness"]
+    assert ready["status"] == "limited"
+    assert ready["critical"][0]["kind"] == "no_source_for"
+    outcome = await _analysed(acme, intention)
+
+    assert outcome["status"] != "blocked"
+    analysis = await _get(client, f"/{intention['id']}/analysis")
+    assert analysis["readiness"] == "limited"
+    assert analysis["steps"]
+    assert (await _get(client, f"/{intention['id']}"))["status"] == "completed"
+
+
+async def test_an_action_its_context_cannot_ground_is_asked_to_be_clarified(
+    client: AsyncClient,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+) -> None:
+    intention = await _ask(client, "Redémarre Billing API en production")
+    # Its context judged unable to ground it — two owners of what it acts on.
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            row = await session.get(Intention, uuid.UUID(intention["id"]))
+            assert row is not None and row.readiness is not None
+            row.readiness = {
+                **row.readiness,
+                "status": "blocked",
+                "critical": [
+                    {
+                        "origin": "conflict",
+                        "kind": "competing",
+                        "severity": "critical",
+                        "said": "Two teams own Billing API.",
+                        "refs": [],
+                    }
+                ],
+            }
+            await session.commit()
     outcome = await _analysed(acme, intention)
 
     assert outcome["status"] == "blocked"
@@ -206,8 +246,9 @@ async def test_a_context_that_cannot_ground_it_is_not_analysed(
         "context_blocked",
         [],
     )
-    assert analysis["detail"]["critical"][0]["kind"] == "no_source_for"
-    assert (await _get(client, f"/{intention['id']}"))["status"] == "analysing"
+    assert analysis["detail"]["critical"][0]["kind"] == "competing"
+    # Never left analysing: the person is asked to clarify, told why.
+    assert (await _get(client, f"/{intention['id']}"))["status"] == "needs_clarification"
 
 
 # ── failures ─────────────────────────────────────────────────────────────────

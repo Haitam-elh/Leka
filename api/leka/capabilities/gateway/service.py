@@ -398,13 +398,18 @@ class Gateway:
         needs: Needs = Needs(),
         *,
         rounds: int = 6,
+        conclude: bool = False,
     ) -> Completion:
         """Asks, calls the tools the model asks for, gives it what they
         returned, until it answers — `rounds` at most. A tool that fails
-        says so to the model; one it made up is said unknown."""
+        says so to the model; one it made up is said unknown. `conclude`:
+        the last round is not offered the tools — it answers with what it
+        read — rather than end in ToolRoundsError."""
         messages = list(request.messages)
         asking = request
-        for _ in range(rounds):
+        for round_ in range(rounds):
+            if conclude and round_ == rounds - 1:
+                asking = replace(asking, tool_choice=ToolChoice.NONE)
             done = await self.complete(replace(asking, messages=messages), needs)
             if not done.tool_calls:
                 return done
@@ -459,9 +464,14 @@ class Gateway:
                 tokens_in=usage.tokens_in if usage else 0,
                 tokens_out=usage.tokens_out if usage else 0,
                 tokens_thinking=usage.tokens_thinking if usage else 0,
+                tokens_cached=usage.tokens_cached if usage else 0,
                 tool_calls=len(done.tool_calls) if done is not None else 0,
                 cost_usd=(
-                    route.profile.cost(usage.tokens_in, usage.tokens_out, at) if usage else None
+                    route.profile.cost(
+                        usage.tokens_in, usage.tokens_out, at, cached=usage.tokens_cached
+                    )
+                    if usage
+                    else None
                 ),
                 latency_ms=done.latency_ms if done is not None else 0,
                 request_id=done.request_id[:200] if done is not None and done.request_id else None,

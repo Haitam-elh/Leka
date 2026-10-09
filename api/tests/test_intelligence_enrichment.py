@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import dataclasses
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from types import SimpleNamespace
 from typing import Any
 
@@ -408,6 +408,7 @@ class Scripted:
         assert task.output is not None
         return SimpleNamespace(
             ok=True,
+            status="succeeded",
             value=task.output.model_validate(self.answer(dict(task.input))),  # type: ignore[arg-type]
             model="gemini-3.8-flash",
         )
@@ -460,6 +461,31 @@ async def test_a_model_describes_from_what_leka_knows_each_sentence_citing_it() 
     assert not by_policy(next(a for a in ENRICHMENT if a.name == "enrich_summary"), proposal)
     # What it cited that LEKA never gave it: not evidence.
     assert [e.id for e in proposal.evidence] == [f"{pay.id}:what"]
+
+
+async def test_a_thing_asked_on_the_same_facts_is_never_asked_again() -> None:
+    """Every hour, the same things a model left out for saying too little
+    were asked again, and paid for: no longer, until what LEKA knows of
+    them changes."""
+    pay = known("payment-api")
+    model = Scripted(lambda said: {"things": []})
+    memory: dict[str, str] = {}
+
+    async def asked(purpose: str, keys: Sequence[str]) -> dict[str, str]:
+        assert purpose == "enrichment.summary"
+        return {key: memory[key] for key in keys if key in memory}
+
+    async def remember(purpose: str, digests: Mapping[str, str], answered: Any) -> None:
+        memory.update(digests)
+
+    work = ModelWork(run=model, asked=asked, remember=remember)
+    assert await enrich_summary(world([pay]), work) == []
+    assert await enrich_summary(world([pay]), work) == []
+    assert len(model.asked) == 1
+    # What it is known by changed: asked again.
+    grown = pay.model_copy(update={"technology": ["go"]})
+    await enrich_summary(world([grown]), work)
+    assert len(model.asked) == 2
 
 
 async def test_what_was_proposed_or_decided_is_never_asked_again() -> None:

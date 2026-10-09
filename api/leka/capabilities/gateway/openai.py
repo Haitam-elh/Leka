@@ -149,6 +149,8 @@ class ChatCompletions:
         usage = mapping(said.get("usage"))
         details = usage.get("completion_tokens_details")
         thinking = int(details.get("reasoning_tokens") or 0) if isinstance(details, dict) else 0
+        prompt = usage.get("prompt_tokens_details")
+        cached = int(prompt.get("cached_tokens") or 0) if isinstance(prompt, dict) else 0
         return Completion(
             text=text,
             tool_calls=calls,
@@ -159,6 +161,7 @@ class ChatCompletions:
                 tokens_in=int(usage.get("prompt_tokens") or 0),
                 tokens_out=int(usage.get("completion_tokens") or 0),
                 tokens_thinking=thinking,
+                tokens_cached=cached,
             ),
             latency_ms=latency_ms,
             finish=choice.get("finish_reason"),
