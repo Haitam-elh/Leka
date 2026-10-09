@@ -65,6 +65,12 @@ LEKA's catalogue, no customer's (`capability_registrations`,
 - every event (registered, lifecycle changed, superseded, refused) is kept —
   **the database refuses to change one**.
 
+LEKA's own capabilities are locked before production:
+`tests/test_capability_versions.py` holds each one's version and fingerprint
+as registered, and fails on a change without a new version. On 2026-10-09,
+`incidents` gained a goal (`find_change`) and a kind (`change`) as 1.0.0, and
+production refused it (« Refusée » in Capacités). It is 2.0.0 since.
+
 Synced when the API starts, and every hour (`capability-registry-sync`), one
 process at a time (an advisory lock).
 

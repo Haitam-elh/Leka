@@ -58,6 +58,10 @@ from leka.intentions.writing import NEEDS as WRITING
 from leka.knowledge import EntityBrief, EntityType, IncidentDetail
 
 VERSION = 1
+# A capability whose definition changes takes a new version: the catalogue
+# refuses the same version said otherwise (changed_without_version, LEKA-393).
+# `incidents` 2: it answers find_change and the change kind (2026-10-09).
+INCIDENTS_VERSION = 2
 # How sure a fact a source states is; an inference, its own confidence.
 STATED = 0.9
 # A change this close before an incident is a probable cause; further, one
@@ -1147,7 +1151,7 @@ CAPABILITIES: Sequence[Capability] = (
     ),
     Capability(
         "incidents",
-        VERSION,
+        INCIDENTS_VERSION,
         "Its incidents in the period, their causes said or suspected, what changed before.",
         goals=frozenset({"explain_cause", "investigate", "find_change"}),
         kinds=frozenset({"diagnose", "change"}),
