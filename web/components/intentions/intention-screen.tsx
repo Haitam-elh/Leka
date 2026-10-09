@@ -10,6 +10,7 @@ import { Card, entityHref } from "@/components/environment/parts";
 import { AnalysisTab, EvidenceTab, SummarySaid } from "@/components/intentions/analysis-tab";
 import { kindOf, StatusPill } from "@/components/intentions/intentions-list";
 import { ReadinessPanel } from "@/components/intentions/readiness";
+import { linkedLabel } from "@/components/intentions/link-words";
 import { TimelineTab } from "@/components/intentions/timeline-tab";
 import { UnderstandingPanel } from "@/components/intentions/understanding";
 import { useConfirm } from "@/components/interactions/confirm";
@@ -232,7 +233,7 @@ function LinkLine({ link }: { link: IntentionLink }) {
   const label =
     link.kind === "context" && version !== null
       ? `${link.label} · v${version}`
-      : link.label;
+      : linkedLabel(t, link.kind, link.label, link.detail);
   return (
     <li className="flex items-start gap-2 text-[0.8125rem]" data-testid="intention-link">
       <Pill tone="neutral">{kind}</Pill>

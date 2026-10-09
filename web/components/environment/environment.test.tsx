@@ -150,6 +150,9 @@ const ENVIRONMENT: Environment = {
   environments: [],
   services: 5,
   services_operational: 3,
+  services_deduced: 0,
+  services_external: 0,
+  services_unknown: 0,
   incidents_open: 1,
   services_impacted: 1,
   changes_24h: 7,
@@ -285,6 +288,7 @@ function sheet(overrides: Partial<EntitySheet> = {}): EntitySheet {
       incoming_total: 0,
     },
     status: "incident",
+    deduced: false,
     environment: "production",
     owner: {
       entity: ref("p1", "person", "Sara Martin"),
@@ -548,6 +552,9 @@ describe("Mon environnement", () => {
       layers: {},
       services: 0,
       services_operational: 0,
+      services_deduced: 0,
+      services_external: 0,
+      services_unknown: 0,
       incidents_open: 0,
       services_impacted: 0,
       changes_24h: 0,
@@ -619,6 +626,42 @@ describe("an entity's sheet", () => {
     expect(await screen.findByText("Aucun incident actif")).toBeInTheDocument();
     expect(screen.getByText("Rien ne demande votre attention")).toBeInTheDocument();
     expect(screen.getByText("Non identifié")).toBeInTheDocument();
+  });
+
+  it("says a deduced state as such, and what is only worth knowing apart", async () => {
+    pathname.value = `/environment/services/${SERVICE_ID}`;
+    params.value = { entityType: "services", entityId: SERVICE_ID };
+    api.sheet.mockResolvedValue(
+      sheet({
+        incidents: [],
+        status: "operational",
+        deduced: true,
+        attention: [
+          { kind: "unmonitored_services", level: "info", count: 1, entity: null, detail: null },
+        ],
+      }),
+    );
+    mount(<EntitySheetScreen />);
+
+    // « En bonne santé », deduced from what runs it — as its card says it.
+    expect(await screen.findByTestId("sheet-deduced")).toHaveTextContent("Déduit");
+    // Nothing needs anyone: not « 1 point nécessite votre attention ».
+    expect(screen.getByText("Rien d'urgent, à savoir")).toBeInTheDocument();
+    expect(screen.queryByText(/nécessitent votre attention/)).not.toBeInTheDocument();
+  });
+
+  it("reads its figures and its chart over the period chosen, the events too", async () => {
+    pathname.value = `/environment/services/${SERVICE_ID}`;
+    params.value = { entityType: "services", entityId: SERVICE_ID };
+    mount(<EntitySheetScreen />);
+
+    await screen.findByTestId("activity-changes");
+    expect(api.activity).toHaveBeenLastCalledWith(SERVICE_ID, 30);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: "Période" }));
+    await user.click(await screen.findByRole("option", { name: "7 derniers jours" }));
+    // The figures follow — not 30 days under « 7 derniers jours ».
+    expect(api.activity).toHaveBeenLastCalledWith(SERVICE_ID, 7);
   });
 
   it("says an address names nothing, and asks the API nothing for it", async () => {

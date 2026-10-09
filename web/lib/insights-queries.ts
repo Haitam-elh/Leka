@@ -9,21 +9,35 @@ export const insightKeys = {
   summary: ["intelligence", "summary"] as const,
 };
 
-/** How long a run asked for is waited for, read again every POLL_MS. */
-const WAIT_MS = 2 * 60_000;
+/** How long a run is followed, read again every POLL_MS: until it ends —
+ * an analysis of a large workspace takes minutes — fifteen at most. (Two,
+ * before 2026-10-09: past them the button said nothing more, the run
+ * still going — « analyse en cours, sans jamais s'arrêter ».) */
+export const WAIT_MS = 15 * 60_000;
 const POLL_MS = 4_000;
 
-/** Whether the summary still waits for the run asked at `askedAt`: none
- * started since, or the one that did is still running. */
+/** Whether the summary still waits: a run under way — asked here or not —
+ * until it ends; or the run asked at `askedAt`, not started yet. */
 export function waiting(
   summary: IntelligenceSummary | undefined,
   askedAt: number | null,
   now = Date.now(),
 ): boolean {
-  if (askedAt === null || now - askedAt > WAIT_MS) return false;
   const latest = summary?.latest;
+  if (latest?.status === "running" && now - Date.parse(latest.started_at) < WAIT_MS) return true;
+  if (askedAt === null || now - askedAt > WAIT_MS) return false;
   if (!latest) return true;
-  return latest.status === "running" || new Date(latest.started_at).getTime() < askedAt - 1_000;
+  return Date.parse(latest.started_at) < askedAt - 1_000;
+}
+
+/** Since when it waits: the run under way's start, else the ask. */
+export function waitingSince(
+  summary: IntelligenceSummary | undefined,
+  askedAt: number | null,
+): number | null {
+  const latest = summary?.latest;
+  if (latest?.status === "running") return Date.parse(latest.started_at);
+  return askedAt;
 }
 
 /** The summary, and the way to ask for a run — read again until the run
@@ -47,5 +61,6 @@ export function useInsights() {
     summary,
     analyse,
     waiting: waiting(summary.data, askedAt) || analyse.isPending,
+    since: waitingSince(summary.data, askedAt),
   };
 }

@@ -208,6 +208,23 @@ beforeEach(() => {
 });
 
 describe("an intention's actions", () => {
+  it("says a question calls for no action — not « once the decision is approved »", async () => {
+    show(
+      intention({
+        status: "completed",
+        goal: "find_change",
+        understanding: {
+          goal: { code: "find_change" },
+          actions: [],
+        } as unknown as IntentionDetail["understanding"],
+      }),
+    );
+    const said = await screen.findByTestId("plan-question");
+    expect(said).toHaveTextContent("Une question n'appelle aucune action.");
+    expect(said).toHaveTextContent("LEKA propose, une personne décide");
+    expect(screen.queryByText(/une fois la décision validée/)).not.toBeInTheDocument();
+  });
+
   it("prepares the plan of what was approved", async () => {
     const user = userEvent.setup();
     show();
