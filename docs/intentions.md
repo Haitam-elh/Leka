@@ -403,9 +403,16 @@ context's own quality, never judged again:
 
 | Status | When |
 | --- | --- |
-| `blocked` | a critical gap — nothing named, a model never built, no source able to read what happened when that is the question, nothing happened… — or a critical conflict — two owners of what was asked, its tier disputed…; or it holds nothing |
-| `limited` | warnings — stale evidence, a source failing, mostly inferred ties… — or its quality is low |
+| `blocked` | **an action** (it asks to change systems), and a critical gap — nothing named, a model never built… — or a critical conflict — two owners of what it acts on, its tier disputed…; or it holds nothing |
+| `limited` | **a question** with something critical in the way — said, and answered anyway: LEKA's analyst (§ 12) looks for itself and says what its sources disagree on; or warnings — stale evidence, a source failing, mostly inferred ties… — or its quality is low |
 | `ready` | nothing in the way |
+
+Only an action is ever blocked. A question about everything — « quoi de
+neuf depuis hier en prod », « quels services n'ont pas de responsable » —
+names nothing, and a disagreement between two sources on an attribute
+(payment-api's SLA) has nothing to do with who owns it: before 2026-10-09
+both stopped the question, and an intention stopped this way stayed
+analysing for ever.
 
 with `level` and `score` (LEKA-375), `elements`, `facets` — how many
 things it holds on each side: technical, business, organizational,
@@ -418,8 +425,9 @@ about.
 **Surfaced before analysis.** Kept with the intention (`readiness`, in
 `GET /intentions/{id}`), said in the move to `analysing` or
 `needs_clarification` (`detail.readiness`, `detail.critical`), shown on
-step 2 and the intention's page. A blocked intention is not analysed: the
-analysis (LEKA-388) starts from `ready` or `limited`. Readiness is not a
+step 2 and the intention's page. A blocked action is not analysed — the
+person is asked to clarify (`needs_clarification`, what is in the way
+said); the analysis (LEKA-388) starts from `ready` or `limited`. Readiness is not a
 state of the lifecycle — what blocks it is not always the asker's to fix
 (a model to build, a source to connect) — but what the analysis reads
 first.
@@ -434,16 +442,17 @@ workspace's is 404.
 
 **Tested** — `tests/test_intention_grounding.py`, pure: the ask its scope
 settled — exclusions, an environment held to, the form's word standing;
-ready with what it holds by side; blocked by a critical gap, a critical
-conflict, nothing held; limited by warnings or a low level.
+ready with what it holds by side; an action blocked by a critical gap, a
+critical conflict, nothing held — a question limited by them; limited by
+warnings or a low level.
 `tests/test_context_ranking.py`: what a request excludes is never held,
 however relevant, and said so. `tests/test_intentions_api.py`, on Acme's
 model: « sauf Checkout » keeps Checkout out of the context — and in it
 without; an ownership question ready, its sides and sources counted,
 provenance on every element, a version read again; a diagnosis no source
-can ground blocked by `no_source_for`, still understood; « tout est si
-lent » blocked by `no_subject` and asked to clarify; another workspace's
-context 404.
+can ground limited by `no_source_for`, and analysed; « tout est si lent »
+limited by `no_subject`, analysed; « Redémarre tout en production » asked
+what it acts on; another workspace's context 404.
 
 ## 12. Its analysis (LEKA-388)
 
@@ -459,7 +468,7 @@ keep, move — the job and the sweep).
 
 ```
 queued when asked, asked again, or analysed again (job intention-analysis:<id>, one at a time)
-   ──▶ its readiness blocked?        not run: an analysis `blocked`, what is in the way kept; it stays analysing
+   ──▶ an action, its readiness blocked?   not run: an analysis `blocked`, what is in the way kept; the person asked to clarify
    ──▶ asked_of()                    what it wants, about what, when, where, within which constraints
    ──▶ select()                      the capabilities its goal, kind and actions call for — and why
    ──▶ the material                  its context (that version) + the company model, each part read alone
@@ -480,8 +489,9 @@ model gateway (LEKA-394) and is said `skipped`, `no_model`.
 | `standing` | always | each thing it is about: its state, lifecycle, criticality, how well LEKA knows it, what LEKA already concluded on it (LEKA-377 to 383) — the scene, not an answer |
 | `ownership` | find_owner, act; kind ownership | who owns it, maintains it, leads its teams, knows it, its escalation — several owners an uncertainty, none said |
 | `dependencies` | map_dependencies, assess_impact, plan_migration | what it depends on, what depends on it and what that reaches — applications, business capabilities, processes; the risk: high when the business or something critical relies on it |
-| `incidents` | explain_cause, investigate; kind diagnose | its incidents in the period, their causes — a source's word first, then what is suspected, then what changed just before (0.7 within 6 h, 0.55 within a day, 0.4 after) — what they reached; the risk from the severity declared |
-| `changes` | find_change, explain_cause, act | what changed on it or around it in the period (72 h after for what followed), what each reached, the incidents that followed |
+| `incidents` | explain_cause, investigate, find_change; kinds diagnose, change | its incidents in the period — every one in the workspace when it names nothing — their causes — a source's word first, then what is suspected, then what changed just before (0.7 within 6 h, 0.55 within a day, 0.4 after) — what they reached; the risk from the severity declared |
+| `changes` | find_change, explain_cause, act | what changed on it or around it in the period (72 h after for what followed), what each reached, the incidents that followed — everywhere in the environment it says (« prod » is production) when it names nothing |
+| `evolution` | find_change, investigate; kind change | what LEKA learned in the period: the things that appeared in what its sources say, changed (which fields), went, came back — services, repositories, databases, resources, teams, documents; the events are the two above's |
 | `documentation` | find_knowledge, check_compliance | what describes it, and whether it is current |
 | `compliance` | check_compliance | an owner, current documentation, a criticality, nothing serious open, well known — each a check |
 | `migration` | plan_migration | where to — missing when not said — and its ties both ways |
@@ -550,20 +560,52 @@ asker or an approver; another workspace's 404.
 - *Vue d'ensemble*: its summary, in the reader's words — the written answer
   when there is one.
 
-**Answered in words, since LEKA-394** (`writing.py`, through the LLM runtime
-since LEKA-429, given the context the Context Engine assembled for the
-intention — its elements are what an answer may also cite): the **synthesis**
-capability (`method: model`) runs after the rules, when a model that gives
-a structured answer can be reached — the question, what the rules found
-(facts, causes, what it reaches, what is unknown, each with its id) and the
-evidence, sent to it; it answers in the asker's language, a few sentences
-and the points they rest on, **each citing ids**. A citation the result does
-not hold is dropped, a point citing nothing goes, an answer resting on
-nothing — when there was something — is not kept (`ungrounded`). The result
-stays the rules': its status, confidence and evidence are theirs. The answer
-leads *Analyse* (« Réponse — rédigée par Gemini 3.8 Flash à partir de
-l'analyse de LEKA »), and is the intention's summary. No model: the step is
-skipped, said (`no_model`).
+**LEKA's analyst** (`analyst.py`, 2026-10-09): the **synthesis**
+capability (`method: model`) runs after the rules — and is no longer a
+model rewording what they found. It is a language model that knows what
+LEKA is and reads what the question needs through LEKA's own tools, read
+only, as a colleague with access to everything LEKA knows would:
+
+| Tool | What it reads |
+| --- | --- |
+| `find` | things by name or words — services, applications, repositories, databases, resources, teams, people, documents |
+| `describe` | one thing: what it is, its state, what its sources say of it, who answers for it (owners, maintainers, leads, experts — LEKA-365), what it is tied to |
+| `dependencies` | what it depends on, or what depends on it, two steps |
+| `happened` | what happened in a period — deployments, merged pull requests, releases, change requests, incidents opened or resolved — everywhere, in one environment, or around one thing |
+| `incident` | one incident: severity, state, what it affected, what is said or suspected to have caused it, what changed in the 72 hours before |
+| `learned` | what LEKA's model gained, changed, lost in a period |
+| `sources` | what LEKA reads, each source's state, when it was last read |
+| `insights` | what LEKA already concluded and is still open |
+| `overview` | what the model holds: how many of each kind, the environments, its last build |
+
+It is told what LEKA is (things, events, relationships, sources, stated or
+inferred, a state measured only when monitoring is connected) and how to
+answer: the answer first, plainly, then names, versions, counts, dates in
+the asker's zone (« hier à 15h57 »); facts and inferences apart; when
+nothing is found, what was checked — which sources, which period, when last
+read — so « nothing changed » can be trusted; never an invented name, date
+or cause; no internal words; in the question's language; never an action.
+It starts from what the rules found (the same input the synthesis always
+had) and a part of the context; at most six rounds of tools, the last one
+made to answer (`Task.conclude`); low thinking, 120 s.
+
+Its answer is checked: each point cites what a tool returned (`entity:…`,
+`event:…`, `source:…`, `finding:…`), what the rules found, or the context;
+a citation of nothing it read or was given is dropped, a point citing
+nothing goes, an answer resting on nothing — when there was something — is
+not kept. **What it cites becomes the analysis's evidence** (the Preuves
+tab), and an analysis the rules alone found inconclusive is `complete` on
+it. Not kept, or no model with tools reachable: the synthesis as it was
+(`writing.py`) — what the rules found, said in words, low thinking, room
+for its answer (before 2026-10-09 an answer was cut short by its own
+thinking, judged invalid and asked again: paid for twice, for nothing).
+No model: skipped, said (`no_model`).
+
+What it costs, measured on the demo with Gemini 3.8 Flash: a question the
+rules already answered, one call, about 1 cent; one it looks into, two to
+six calls, 1.3 to 2 cents — the start of each round read from Google's
+cache, billed a tenth (model-gateway.md). The intention's cost, average,
+is in Paramètres › Modèle de langage.
 
 Every sentence is worded from its code and values (`lib/intention-analysis.ts`),
 a finding LEKA already concluded as Insights words it — the API's English
@@ -583,7 +625,13 @@ analysis superseded; queued when asked and asked again, the sweep running
 what waits; another workspace's 404. `tests/test_intention_model.py`, Gemini
 scripted: words the rules cannot read, read by the model and analysed; a
 request to act staying the rules'; the answer written, a made-up citation
-dropped; an answer resting on nothing not kept. `web/lib/intention-analysis.test.ts`,
+dropped; an answer resting on nothing not kept. `tests/test_intention_analyst.py`:
+the analyst told what LEKA is, given its nine tools, read only, looking a
+thing up, answering on it — what it cites the analysis's evidence, the
+analysis complete; an answer resting on nothing it read not kept, the
+rules' said instead. `tests/test_intention_analysis.py`: what happened
+everywhere, in production, said where; what LEKA learned; « prod » is
+production. `web/lib/intention-analysis.test.ts`,
 `web/components/intentions/analysis-tab.test.tsx`;
 `e2e/intention-analysis.spec.ts`, on the demo: asked, analysed, followed,
 its evidence and history; a restart waiting for a person.
