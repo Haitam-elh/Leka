@@ -77,21 +77,44 @@ function gateway(overrides: Partial<ModelGateway> = {}): ModelGateway {
   };
 }
 
-const TALLY = { calls: 0, failed: 0, tokens_in: 0, tokens_out: 0, cost_usd: 0, unpriced: 0, average_latency_ms: 0 };
+const TALLY = {
+  calls: 0,
+  failed: 0,
+  tokens_in: 0,
+  tokens_out: 0,
+  tokens_cached: 0,
+  cost_usd: 0,
+  unpriced: 0,
+  average_latency_ms: 0,
+};
 
 function usage(overrides: Partial<ModelUsage> = {}): ModelUsage {
   return {
     days: 30,
-    total: { ...TALLY, calls: 12, failed: 1, tokens_in: 9000, tokens_out: 3000, cost_usd: 0.0181, unpriced: 2 },
+    total: {
+      ...TALLY,
+      calls: 12,
+      failed: 1,
+      tokens_in: 9000,
+      tokens_out: 3000,
+      tokens_cached: 4500,
+      cost_usd: 0.0181,
+      unpriced: 2,
+    },
     previous: TALLY,
     leka: { ...TALLY, calls: 10 },
     own: { ...TALLY, calls: 2, unpriced: 2 },
     fallbacks: 1,
     by_day: [],
     by_model: [{ provider: "google", model: "gemini-3.8-flash", title: "Gemini 3.8 Flash", tally: { ...TALLY, calls: 10, cost_usd: 0.0181 } }],
-    by_purpose: [{ purpose: "intention.understanding", tally: { ...TALLY, calls: 7 } }],
+    by_purpose: [
+      { purpose: "intention.understanding", tally: { ...TALLY, calls: 7, cost_usd: 0.003 } },
+      { purpose: "enrichment.summary", tally: { ...TALLY, calls: 2, cost_usd: 0.0126 } },
+    ],
     runs: { succeeded: 9, timed_out: 1 },
     latest_runs: [],
+    intentions: 4,
+    per_intention_usd: 0.0112,
     latest: [
       {
         id: "c1",
@@ -108,6 +131,7 @@ function usage(overrides: Partial<ModelUsage> = {}): ModelUsage {
         error: null,
         tokens_in: 900,
         tokens_out: 200,
+        tokens_cached: 0,
         cost_usd: 0.0014,
         latency_ms: 1200,
       },
@@ -160,6 +184,14 @@ describe("the language model", () => {
     expect(screen.getByTestId("model-runs")).toHaveTextContent(
       "Exécutions : 9 réussie(s) · 1 hors délai",
     );
+    // What one intention costs, measured — and what a budget buys.
+    expect(screen.getByTestId("model-per-intention")).toHaveTextContent(
+      "Une intention coûte en moyenne 1,1 ¢, mesuré sur 4 intention(s) : environ 892 intentions pour 10 $.",
+    );
+    expect(screen.getByTestId("model-cached")).toHaveTextContent("50 % des tokens envoyés relus");
+    // Where the money goes, by use.
+    expect(used).toHaveTextContent("Proposer une description (À valider)");
+    expect(used).toHaveTextContent("Proposer une description (À valider)2 · 0,01 $US");
   });
 
   it("says when no model can answer", async () => {

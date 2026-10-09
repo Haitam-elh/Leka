@@ -14,6 +14,7 @@ import { ApiError } from "@/lib/api";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import {
+  cents,
   dollars,
   type ModelGateway,
   type ModelProfile,
@@ -402,6 +403,22 @@ function Usage({ usage }: { usage: ModelUsage }) {
             })}
             {usage.fallbacks ? ` · ${fill(w.fallbacksUsed, { count: String(usage.fallbacks) })}` : ""}
           </p>
+          {usage.per_intention_usd ? (
+            <p className="text-xs text-brand-navy" data-testid="model-per-intention">
+              {fill(w.perIntention, {
+                cost: cents(usage.per_intention_usd, where),
+                count: number(usage.intentions ?? 0, locale),
+                many: number(Math.floor(10 / usage.per_intention_usd), locale),
+              })}
+            </p>
+          ) : null}
+          {total.tokens_cached ? (
+            <p className="text-xs text-shell-muted" data-testid="model-cached">
+              {fill(w.cached, {
+                share: String(Math.round((total.tokens_cached / Math.max(total.tokens_in, 1)) * 100)),
+              })}
+            </p>
+          ) : null}
           {total.unpriced ? (
             <p className="text-xs text-shell-muted">
               {fill(w.costNote, { unpriced: String(total.unpriced) })}
@@ -428,7 +445,7 @@ function Usage({ usage }: { usage: ModelUsage }) {
                   <li key={p.purpose} className="flex justify-between gap-2">
                     <span>{purposes[p.purpose] ?? p.purpose}</span>
                     <span className="text-shell-muted tabular-nums">
-                      {number(p.tally.calls, locale)}
+                      {number(p.tally.calls, locale)} · {dollars(p.tally.cost_usd, where)}
                     </span>
                   </li>
                 ))}

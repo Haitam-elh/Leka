@@ -36,6 +36,11 @@ export function dollars(value: number, locale: string): string {
   }).format(value);
 }
 
+/** A cost under a dollar as people say it, in cents: « 1,1 ¢ ». */
+export function cents(value: number, locale: string): string {
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value * 100)} ¢`;
+}
+
 /** A model's name as people say it: « gemini-3.8-flash » → « Gemini 3.8 Flash ». */
 export function modelTitle(model: string): string {
   return model
