@@ -1,7 +1,7 @@
 "use client";
 
-import { PlaceholderPage } from "@/components/shell/placeholder-page";
+import { GovernanceScreen } from "@/components/governance/governance-screen";
 
 export default function Page() {
-  return <PlaceholderPage />;
+  return <GovernanceScreen />;
 }

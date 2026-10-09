@@ -10,6 +10,7 @@ import { activeNav, hrefOf, navLeaves, visibleNavigation } from "@/lib/navigatio
 const OWNER = [
   "workspace:read", "workspace:update", "member:read", "member:invite",
   "source:read", "source:manage", "intention:read", "intention:create", "intention:approve",
+  "access:read",
 ];
 const MEMBER = ["workspace:read", "member:read", "source:read", "intention:read", "intention:create"];
 
