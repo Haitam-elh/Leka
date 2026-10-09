@@ -44,7 +44,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import enqueue_job
-from leka.capabilities import CatalogueService, ContextPack, LLMRuntime
+from leka.capabilities import (
+    CatalogueService,
+    ContextPack,
+    LLMRuntime,
+    SkillRuntime,
+    permitted,
+)
 from leka.connectors import Source, SourceRepository
 from leka.context import AssembledContext, ContextRepository, ContextService
 from leka.db import session_factory, system_scope, workspace_scope
@@ -372,6 +378,8 @@ async def analyse_intention(
                 else None
             )
             asked = asked_of(intention, understood, moment)
+            # Whose question it is: LEKA reads for them, with what they may read.
+            asker = intention.created_by
             context_id = intention.context_id
             version = ready.version if ready is not None else None
             row = IntentionAnalysis(
@@ -465,7 +473,7 @@ async def analyse_intention(
         for capability in writers:
             at = max(0, round((time.monotonic() - started) * 1000))
             outcome, answer, read = await _write(
-                workspace_id, capability, asked, result, context, moment
+                workspace_id, capability, asked, result, context, moment, by=asker
             )
             # The conclusion: it reads what every capability before it said.
             outcomes.append(
@@ -521,12 +529,16 @@ async def _write(
     result: Result,
     context: AssembledContext | None,
     now: datetime,
+    *,
+    by: uuid.UUID | None = None,
 ) -> tuple[StepOutcome, Answer | None, tuple[Evidence, ...]]:
     """The question answered by LEKA's analyst — a model reading what it
-    needs through LEKA's tools (analyst.py); when no model this workspace
-    reaches can use tools, or it gives nothing usable, the analysis said in
-    words from what the rules found (writing.py). Or said why not. Every
-    execution and its calls are kept, answered or not."""
+    needs through LEKA's reads (analyst.py, skills.py), with what the person
+    who asked (`by`) may read, as their role is now; when no model this
+    workspace reaches can use tools, or it gives nothing usable, the
+    analysis said in words from what the rules found (writing.py). Or said
+    why not. Every execution, its calls and its reads are kept, answered or
+    not."""
     started = time.monotonic()
 
     def took() -> int:
@@ -541,8 +553,17 @@ async def _write(
                 try:
                     answer: Answer | None = None
                     if await runtime.ready(ANALYST):
+                        skills = SkillRuntime(
+                            session,
+                            workspace_id,
+                            permissions=await permitted(session, workspace_id, by),
+                            by=by,
+                            caller="analyst",
+                            ref=f"intention:{asked.id}",
+                            now=now,
+                        )
                         done, answer, read = await analyst_answer(
-                            runtime, workspace_id, asked, result, pack, now=now
+                            runtime, skills, asked, result, pack, now=now
                         )
                     if answer is None:
                         done, answer = await write(runtime, asked, result, pack)

@@ -32,6 +32,7 @@ from leka.api import (
     outcomes,
     platform,
     resolution,
+    skills,
     webhooks,
     workflows,
 )
@@ -62,6 +63,8 @@ api_router.include_router(intelligence.router)
 api_router.include_router(capabilities.router)
 api_router.include_router(agent_runs.router)
 api_router.include_router(workflows.router)
+# The operations capabilities are made of, each with its contract (LEKA-396).
+api_router.include_router(skills.router)
 api_router.include_router(model_gateway.router)
 api_router.include_router(intentions.router)
 # What people decide on what intentions ask to do (LEKA-390).

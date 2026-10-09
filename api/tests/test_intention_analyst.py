@@ -20,19 +20,21 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Callable
-from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.capabilities import Gateway
+from leka.capabilities import Gateway, SkillRuntime, find_skill
 from leka.capabilities.gateway import service
+from leka.capabilities.skills import LEKA
 from leka.core.config import settings
 from leka.intentions.analysis import Asked
-from leka.intentions.analyst import PLATFORM, Tools
+from leka.intentions.analyst import PLATFORM, Reading, tools
+from leka.intentions.skills import READS
 from tests.conftest import FakeIdentity
 from tests.test_context_engine import model
 from tests.test_intention_analysis_api import _analysed, _ask, _get, queued  # noqa: F401
@@ -191,6 +193,14 @@ async def test_the_analyst_reads_through_leka_s_tools_and_its_answer_rests_on_wh
     assert held[cited]["kind"] == "entity"
     assert result["status"] == "complete"
     assert (await _get(client, f"/{intention['id']}"))["summary"] == answer["text"]
+    # Every read through the skill runtime (LEKA-396): checked, for the person
+    # who asked, kept about the intention.
+    reads = await client.get("/api/v1/skills/runs", params={"ref": f"intention:{intention['id']}"})
+    assert [(r["key"], r["status"], r["caller"]) for r in reads.json()] == [
+        ("describe", "succeeded", "analyst"),
+        ("sources", "succeeded", "analyst"),
+    ]
+    assert {r["run_by"] for r in reads.json()} == {str(acme["member"])}
 
 
 async def test_an_answer_resting_on_nothing_it_read_is_not_kept(
@@ -212,7 +222,7 @@ async def test_an_answer_resting_on_nothing_it_read_is_not_kept(
     assert analysis["result"]["answer"]["text"] == "D'après LEKA : Payments."
 
 
-def test_every_tool_the_analyst_is_given_reads() -> None:
+def test_every_tool_the_analyst_is_given_is_one_of_leka_s_reads() -> None:
     asked = Asked(
         id=uuid.uuid4(),
         text="Quoi de neuf ?",
@@ -220,6 +230,10 @@ def test_every_tool_the_analyst_is_given_reads() -> None:
         kind="change",
         goal="find_change",
     )
-    tools = Tools(uuid.uuid4(), asked, datetime.now(UTC)).tools()
-    assert len(tools) == 9
-    assert {tool.effect for tool in tools} == {"read"}
+    skills = SkillRuntime(
+        cast(AsyncSession, None), uuid.uuid4(), permissions=LEKA, by=None, caller="analyst"
+    )
+    given = tools(skills, asked, Reading())
+    assert [tool.name for tool in given] == list(READS)
+    assert {tool.effect for tool in given} == {"read"}
+    assert {find_skill(key).effect for key in READS} == {"read"}  # type: ignore[union-attr]
