@@ -8,10 +8,14 @@
               ──▶ one understanding: the model's goal where the rules could
                   not tell or were less sure — and what the rules hold, kept
 
+Through the LLM runtime (LEKA-429): the things named are its context, its
+answer is checked against its shape before it is used, the execution kept.
+
 What the model may not change, on purpose: the things named (the company
 model's, not a guess), the actions asked (a verb that changes systems is
 what puts a person in the loop — read from the words, never guessed), a
-request to act (only the rules' verbs make one). What it settles: a goal
+request (only the rules' verbs make one: a model may read a polite request
+as the question it is, never a question as a request). What it settles: a goal
 the rules could not tell, which was the ambiguity that stopped an intention
 — « what is wanted cannot be told » — and which of two goals is meant.
 
@@ -21,7 +25,6 @@ No model, or none in time: the rules' reading, as before. Every call kept
 
 from __future__ import annotations
 
-import json
 import uuid
 from typing import Literal, get_args
 
@@ -29,7 +32,7 @@ import structlog
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.capabilities import Gateway, Message, Needs, NoModelError, Request, Tier
+from leka.capabilities import ContextItem, ContextPack, LLMRuntime, Needs, Task, Tier
 from leka.intentions.schemas import Goal, GoalRead, Understanding, UnderstoodBy
 
 logger = structlog.get_logger(__name__)
@@ -101,8 +104,10 @@ def merged(understood: Understanding, reading: Reading, by: UnderstoodBy) -> Und
     return understood.model_copy(
         update={
             "goal": goal,
-            # A request to act is the rules' to say: their verbs.
-            "mode": understood.mode if acting else reading.mode,
+            # A request is the rules' to say, from their verbs: a model may
+            # read one as a question — the safe way — never a question as a
+            # request (LEKA-429).
+            "mode": "question" if not acting and reading.mode == "question" else understood.mode,
             "ambiguities": ambiguities,
             "clear": not any(a.blocking for a in ambiguities),
             "restated": reading.restated.strip() or None,
@@ -112,45 +117,57 @@ def merged(understood: Understanding, reading: Reading, by: UnderstoodBy) -> Und
 
 
 class ModelReading:
-    """Reads an intention with a model, for IntentionService."""
+    """Reads an intention with a model, through the LLM runtime (LEKA-429),
+    for IntentionService. The things the company model matched are its
+    context: what it may refer to, by id."""
 
     def __init__(self, session: AsyncSession, workspace_id: uuid.UUID) -> None:
-        self._gateway = Gateway(session, workspace_id)
+        self._runtime = LLMRuntime(session, workspace_id)
 
     async def __call__(self, text: str, understood: Understanding) -> Understanding:
-        said = {
-            "text": text,
-            "things_named": [{"name": e.name, "type": e.type} for e in understood.entities],
-            "rules_read": {
-                "goal": understood.goal.code,
-                "mode": understood.mode,
-                "actions": [a.code for a in understood.actions],
-            },
-        }
-        request = Request(
+        task = Task(
             purpose="intention.understanding",
+            instructions=SYSTEM,
+            input={
+                "text": text,
+                "rules_read": {
+                    "goal": understood.goal.code,
+                    "mode": understood.mode,
+                    "actions": [a.code for a in understood.actions],
+                },
+            },
+            context=ContextPack.of(
+                [
+                    ContextItem(
+                        id=f"entity:{e.entity_id}",
+                        kind=e.type,
+                        text=f"{e.name} ({e.type}), named in the request",
+                    )
+                    for e in understood.entities
+                ],
+                ref="intention.understanding",
+            ),
+            output=Reading,
+            needs=NEEDS,
             tier=Tier.FAST,
             max_tokens=400,
-            messages=[
-                Message.system(SYSTEM),
-                Message.user(json.dumps(said, ensure_ascii=False)),
-            ],
+            budget=BUDGET,
         )
-        try:
-            read = await self._gateway.structured(request, Reading, NEEDS, budget=BUDGET)
-        except NoModelError as error:
-            logger.info("intention_read_by_rules", why=str(error))
+        done = await self._runtime.run(task)
+        if not done.ok:
+            # No model, none in time, nothing usable: the rules' reading.
+            logger.info("intention_read_by_rules", status=done.status, why=done.error)
             return understood
-        done = read.completion
+        reading: Reading = done.value
         return merged(
             understood,
-            read.value,
+            reading,
             UnderstoodBy(
                 method="model",
                 provider=done.provider,
                 model=done.model,
                 version=done.version,
-                confidence=read.value.confidence,
+                confidence=reading.confidence,
             ),
         )
 

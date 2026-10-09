@@ -44,7 +44,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import enqueue_job
-from leka.capabilities import CatalogueService, Gateway, NoModelError
+from leka.capabilities import CatalogueService, ContextPack, LLMRuntime
 from leka.connectors import Source, SourceRepository
 from leka.context import AssembledContext, ContextRepository, ContextService
 from leka.db import session_factory, system_scope, workspace_scope
@@ -394,7 +394,7 @@ async def analyse_intention(
             # What the workspace turned off in its catalogue (LEKA-393).
             disabled = await CatalogueService(session, workspace_id).disabled()
             # Whether a model can write its answer here (LEKA-394).
-            writes = await Gateway(session, workspace_id).ready(WRITING)
+            writes = await LLMRuntime(session, workspace_id).ready(WRITING)
             choices = choose(asked, capabilities, disabled=disabled, model=writes)
             row.selection = [asdict(choice) for choice in choices]
             session.add(row)
@@ -428,7 +428,7 @@ async def analyse_intention(
         # What LEKA proposes, apart from what it found (LEKA-389).
         result = replace(result, recommendations=recommend(result, asked))
         for capability in writers:
-            outcome, answer = await _write(workspace_id, capability, asked, result)
+            outcome, answer = await _write(workspace_id, capability, asked, result, context)
             outcomes.append(outcome)
             if answer is not None:
                 result = replace(result, answer=answer)
@@ -437,37 +437,48 @@ async def analyse_intention(
         )
 
 
+# What became of the synthesis, by how its execution ended (LEKA-429).
+WRITTEN_AS = {
+    "invalid": ("failed", "ungrounded"),
+    "no_model": ("failed", "no_model"),
+    "timed_out": ("timed_out", "TimeoutError"),
+    "failed": ("failed", "model_failed"),
+}
+
+
 async def _write(
-    workspace_id: uuid.UUID, capability: Capability, asked: Asked, result: Result
+    workspace_id: uuid.UUID,
+    capability: Capability,
+    asked: Asked,
+    result: Result,
+    context: AssembledContext | None,
 ) -> tuple[StepOutcome, Answer | None]:
-    """The analysis answered in words, by a model — or said why not. Every
-    call to a model is kept, answered or not."""
+    """The analysis answered in words, by a model through the LLM runtime,
+    with the context it was made from — or said why not. Every execution
+    and its calls are kept, answered or not."""
     started = time.monotonic()
 
     def took() -> int:
         return max(0, round((time.monotonic() - started) * 1000))
 
+    pack = ContextPack.of_context(context) if context is not None else ContextPack()
     try:
         with workspace_scope(workspace_id):
             async with session_factory() as session:
                 try:
-                    answer = await write(Gateway(session, workspace_id), asked, result)
+                    done, answer = await write(
+                        LLMRuntime(session, workspace_id), asked, result, pack
+                    )
                 finally:
                     await session.commit()
-    except NoModelError:
-        return StepOutcome(
-            capability.name, capability.version, "failed", took(), error="no_model_answered"
-        ), None
     except Exception:
         logger.exception("analysis_answer_failed", intention_id=str(asked.id))
         return StepOutcome(
             capability.name, capability.version, "failed", took(), error="error"
         ), None
     if answer is None:
-        # Written, but resting on nothing the analysis holds: not kept.
-        return StepOutcome(
-            capability.name, capability.version, "failed", took(), error="ungrounded"
-        ), None
+        status, error = WRITTEN_AS.get(done.status, ("failed", done.status))
+        return StepOutcome(capability.name, capability.version, status, took(), error=error), None
     return StepOutcome(capability.name, capability.version, "succeeded", took()), answer
 
 

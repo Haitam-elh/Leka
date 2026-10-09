@@ -45,7 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import Event, enqueue_job
 from leka.background.runner import RQ_JOB_TIMEOUT
-from leka.capabilities import Gateway, Needs, NoModelError
+from leka.capabilities import Execution, LLMRuntime, Needs, Task
 from leka.context import ContextRepository
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.intelligence.analysis import (
@@ -257,32 +257,28 @@ async def analyse_workspace(
 
 
 async def _work(workspace_id: uuid.UUID, analyzer: Analyzer) -> ModelWork | None:
-    """What an analysis a model helps with is given (LEKA-394) — none when
-    no model this workspace can reach does what it needs: it is skipped,
-    said `no_model`. Each call to the model in a session of its own,
-    committed: kept, answered or not."""
+    """What an analysis a model helps with is given (LEKA-394, 429) — none
+    when no model this workspace can reach does what it needs: it is
+    skipped, said `no_model`. Each task through the LLM runtime, in a
+    session of its own, committed: kept, answered or not."""
     async with session_factory() as session:
-        if not await Gateway(session, workspace_id).ready(analyzer.needs or Needs()):
+        if not await LLMRuntime(session, workspace_id).ready(analyzer.needs or Needs()):
             return None
         kept = await IntelligenceRepository(session, workspace_id).candidates_of(analyzer.name)
         standing = {key: proposal_of(c) for key, c in kept.items() if c.status == "proposed"}
         decided = frozenset(k for k, c in kept.items() if c.status in ("accepted", "rejected"))
 
-    async def ask(request: object, shape: object, needs: object) -> object:
+    async def run(task: Task) -> Execution:
         async with session_factory() as session:
             try:
-                return await Gateway(session, workspace_id).structured(
-                    request,  # type: ignore[arg-type]
-                    shape,  # type: ignore[arg-type]
-                    needs,  # type: ignore[arg-type]
-                )
-            except NoModelError:
-                logger.info("intelligence_model_unanswered", analyzer=analyzer.name)
-                raise
+                done = await LLMRuntime(session, workspace_id).run(task)
             finally:
                 await session.commit()
+        if not done.ok:
+            logger.info("intelligence_model_unanswered", analyzer=analyzer.name, status=done.status)
+        return done
 
-    return ModelWork(ask=ask, kept=standing, decided=decided)
+    return ModelWork(run=run, kept=standing, decided=decided)
 
 
 async def _model(

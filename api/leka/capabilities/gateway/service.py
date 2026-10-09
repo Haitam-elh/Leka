@@ -76,17 +76,22 @@ ToolHandler = Callable[[Mapping[str, Any]], Awaitable[str]]
 
 
 class NoModelError(Exception):
-    """No model is configured that can do it, or none answered — said why."""
+    """No model is configured that can do it, or none answered — said why:
+    `reason` none (no model can), unanswered (every one tried failed),
+    timeout (the budget was spent), tools (too many rounds of tools)."""
 
     def __init__(
         self,
         message: str,
         attempts: Sequence[Attempt] = (),
         passed: Sequence[Passed] = (),
+        *,
+        reason: str = "unanswered",
     ) -> None:
         super().__init__(message)
         self.attempts = list(attempts)
         self.passed = list(passed)
+        self.reason = reason
 
 
 class ToolRoundsError(NoModelError):
@@ -124,6 +129,13 @@ def leka_keys() -> dict[str, str | None]:
         "anthropic": settings.anthropic_api_key,
     }
     return {name: key.get_secret_value() if key else None for name, key in keys.items()}
+
+
+def leka_urls() -> dict[str, str]:
+    """Where LEKA's default model is reached, when not its provider's own
+    address: a proxy, a regional endpoint — or, in the browser tests, a
+    local stand-in (LEKA_LLM_API_URL)."""
+    return {settings.llm_provider: settings.llm_api_url} if settings.llm_api_url else {}
 
 
 def leka_default() -> tuple[str, str]:
@@ -179,6 +191,7 @@ class Gateway:
         fallbacks: Sequence[tuple[str, str]] | None = None,
         retries: int | None = None,
         sleep: Sleep = asyncio.sleep,
+        urls: dict[str, str] | None = None,
     ) -> None:
         self._session = session
         self._workspace_id = workspace_id
@@ -190,6 +203,7 @@ class Gateway:
         )
         self._retries = max(0, settings.llm_retries if retries is None else retries)
         self._sleep = sleep
+        self._urls = urls if urls is not None else (leka_urls() if keys is None else {})
 
     # ── which model ─────────────────────────────────────────────────────────
 
@@ -207,6 +221,7 @@ class Gateway:
             keys=self._keys,
             default=self._default,
             fallbacks=self._fallbacks,
+            urls=self._urls,
         )
 
     async def ready(self, needs: Needs = Needs()) -> bool:
@@ -243,7 +258,7 @@ class Gateway:
                 if not any(self._keys.values()) and (await self.setting()) is None
                 else "No configured model can do what is asked."
             )
-            raise NoModelError(reason, passed=routing.passed)
+            raise NoModelError(reason, passed=routing.passed, reason="none")
         work = self._through(request, routing, check)
         if budget is None:
             return await work
@@ -251,7 +266,9 @@ class Gateway:
             return await asyncio.wait_for(work, timeout=budget)
         except TimeoutError as error:
             await self._session.flush()
-            raise NoModelError("No answer in time.", passed=routing.passed) from error
+            raise NoModelError(
+                "No answer in time.", passed=routing.passed, reason="timeout"
+            ) from error
 
     async def _through(
         self,
@@ -347,14 +364,16 @@ class Gateway:
         needs: Needs = Needs(),
         *,
         budget: float | None = None,
+        verify: Callable[[T], Sequence[str]] | None = None,
     ) -> Structured[T]:
-        """An answer in the shape of `model`, checked: one that does not
-        match is asked again, then of the next model."""
+        """An answer in the shape of `model`, checked — and, given `verify`,
+        held to what the caller expects of it (what it cites is known…): one
+        that does not match is asked again, then of the next model."""
         read: dict[str, T] = {}
 
         def check(done: Completion) -> None:
             try:
-                read["value"] = model.model_validate_json(json_of(done.text))
+                value = model.model_validate_json(json_of(done.text))
             except ValidationError as error:
                 errors = error.errors()
                 where = ".".join(str(p) for p in errors[0]["loc"]) if errors else ""
@@ -362,6 +381,10 @@ class Gateway:
                 raise InvalidOutputError(
                     f"Not the shape asked ({where or 'answer'}: {said})."
                 ) from error
+            problems = list(verify(value)) if verify is not None else []
+            if problems:
+                raise InvalidOutputError(f"Not what was asked: {'; '.join(problems)[:300]}")
+            read["value"] = value
 
         done = await self.complete(
             replace(request, output=Output.of(model)), needs, budget=budget, check=check
@@ -423,6 +446,7 @@ class Gateway:
                 id=uuid.uuid4(),
                 purpose=request.purpose[:100],
                 ref=request.ref[:100] if request.ref else None,
+                run_id=request.run_id,
                 tier=request.tier.value,
                 provider=route.endpoint.provider,
                 model=route.profile.model[:120],

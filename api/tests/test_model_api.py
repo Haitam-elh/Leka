@@ -27,7 +27,7 @@ import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
 
-from leka.capabilities import ModelCall, sync_catalogue
+from leka.capabilities import LLMRun, ModelCall, sync_catalogue
 from leka.capabilities.gateway import service, workspace
 from leka.core.config import settings
 from leka.db import session_factory, workspace_scope
@@ -282,3 +282,53 @@ async def test_the_catalogue_says_which_model_runs_what_by_what_it_needs(
     assert "no_runtime" not in [r["code"] for r in architect["reasons"]]
     # LEKA's own rules need no model.
     assert (found["ownership"]["answering"], found["ownership"]["model_needs"]) == (None, None)
+
+
+async def test_the_work_models_did_is_said_by_how_it_ended(
+    client: AsyncClient, identity: FakeIdentity, acme: dict[str, uuid.UUID]
+) -> None:
+    """LEKA-429: each task the runtime had a model do, by its status — what
+    an admin reads to see what failed, what had no model, what timed out."""
+    now = datetime.now(UTC)
+
+    def run(status: str, **more: Any) -> LLMRun:
+        base: dict[str, Any] = {
+            "workspace_id": acme["acme"],
+            "id": uuid.uuid4(),
+            "purpose": "capability.synthesis",
+            "ref": "intention:1",
+            "status": status,
+            "provider": "google",
+            "model": "gemini-3.8-flash",
+            "version": "gemini-3.8-flash-001",
+            "calls": 1,
+            "tokens_in": 900,
+            "tokens_out": 120,
+            "cost_usd": 0.0011,
+            "latency_ms": 1400,
+            "context_items": 12,
+            "started_at": now - timedelta(minutes=5),
+            "finished_at": now - timedelta(minutes=5),
+        }
+        return LLMRun(**{**base, **more})
+
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            session.add_all(
+                [
+                    run("succeeded"),
+                    run("succeeded", purpose="intention.understanding"),
+                    run("timed_out", provider=None, model=None, version=None, calls=0),
+                    run("invalid", error="it cites nothing the analysis holds"),
+                ]
+            )
+            await session.commit()
+    _as(identity, acme, "member")
+    usage = (await client.get(f"{API}/usage")).json()
+    assert usage["runs"] == {"succeeded": 2, "timed_out": 1, "invalid": 1}
+    assert len(usage["latest_runs"]) == 4
+    invalid = next(r for r in usage["latest_runs"] if r["status"] == "invalid")
+    assert (invalid["context_items"], invalid["error"]) == (
+        12,
+        "it cites nothing the analysis holds",
+    )

@@ -663,7 +663,7 @@ def gemini(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
     def answer(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
-        things = json.loads(body["contents"][0]["parts"][0]["text"])["things"]
+        things = json.loads(body["contents"][0]["parts"][0]["text"])["task"]["things"]
         asked.append({"names": [t["name"] for t in things]})
         written = {
             "things": [
@@ -671,7 +671,7 @@ def gemini(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
                     "id": t["id"],
                     "description": f"{t['name']} : rédigé d'après ses faits.",
                     "confidence": 0.95,
-                    "uses": [t["facts"][0]["id"], "made-up"],
+                    "uses": [t["facts"][0], "made-up"],
                 }
                 for t in things
             ]

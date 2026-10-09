@@ -37,6 +37,7 @@ from leka.capabilities import Gateway, ModelCall
 from leka.capabilities.gateway import service
 from leka.core.config import settings
 from leka.db import session_factory, workspace_scope
+from leka.intentions.models import IntentionDecision, IntentionPlan
 from tests.conftest import FakeIdentity
 from tests.test_context_engine import model
 from tests.test_intention_analysis_api import _analysed, _ask, _get, queued  # noqa: F401
@@ -80,6 +81,7 @@ class Gemini:
         self.reading = reading
         self.writing = writing
         self.asked: list[str] = []
+        self.contexts: list[list[dict[str, Any]]] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
@@ -88,8 +90,10 @@ class Gemini:
             self.asked.append("reading")
             return _gemini(self.reading)
         self.asked.append("writing")
-        material = json.loads(body["contents"][0]["parts"][0]["text"])
-        return _gemini(self.writing(material))
+        # The runtime says the task and its LEKA context apart (LEKA-429).
+        said = json.loads(body["contents"][0]["parts"][0]["text"])
+        self.contexts.append(said.get("context", []))
+        return _gemini(self.writing(said["task"]))
 
 
 @pytest.fixture
@@ -212,3 +216,54 @@ async def test_an_answer_resting_on_nothing_is_not_kept(
     assert analysis["result"]["answer"] is None
     # The rules' analysis stands, whole.
     assert analysis["status"] == "complete"
+
+
+async def test_a_model_saying_to_act_sets_nothing_in_motion(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+) -> None:
+    """LEKA-429: an LLM's output never triggers a sensitive action. The model
+    reads a question as a request to act, then writes « restart it in
+    production »: the question stays a question — no action, no decision,
+    no plan — answered, and only said."""
+    gemini(
+        {
+            "mode": "request",
+            "goal": "act",
+            "confidence": 0.99,
+            "restated": "Redémarrer Billing API",
+        },
+        lambda material: {
+            "answer": "Il faut redémarrer Billing API en production.",
+            "points": [
+                {"text": "Redémarrez-le maintenant.", "cites": [material["findings"][0]["id"]]}
+            ],
+            "caveats": [],
+        },
+    )
+    _as(identity, acme, "member")
+    intention = await _ask(client, "Qui est responsable de Billing API ?")
+    understood = intention["understanding"]
+    assert (understood["mode"], understood["goal"]["code"], understood["actions"]) == (
+        "question",
+        "find_owner",
+        [],
+    )
+    await _analysed(acme, intention)
+    seen = await _get(client, f"/{intention['id']}")
+    # A question answered: completed, nobody asked to decide anything.
+    assert seen["status"] == "completed"
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            ident = uuid.UUID(intention["id"])
+            decisions = await session.scalars(
+                select(IntentionDecision).where(IntentionDecision.intention_id == ident)
+            )
+            plans = await session.scalars(
+                select(IntentionPlan).where(IntentionPlan.intention_id == ident)
+            )
+            assert (list(decisions), list(plans)) == ([], [])

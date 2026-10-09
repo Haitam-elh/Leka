@@ -55,7 +55,7 @@ from collections.abc import Callable, Iterable, Sequence
 
 from pydantic import BaseModel, Field
 
-from leka.capabilities import Message, Needs, Request, Tier
+from leka.capabilities import ContextItem, ContextPack, Needs, Task, Tier
 from leka.intelligence.analysis import (
     Analyzer,
     Evidence,
@@ -744,26 +744,37 @@ async def enrich_summary(material: Material, work: ModelWork) -> list[Proposal]:
     if not asking:
         return proposals
     facts = {card.id: facts_of(card, cards, links) for card in asking}
-    said = [
-        {
-            "id": card.id,
-            "name": card.name,
-            "facts": [{"id": f, "text": t} for f, t in facts[card.id]],
-        }
-        for card in asking
-    ]
-    request = Request(
-        purpose="enrichment.summary",
-        tier=Tier.STANDARD,
-        max_tokens=3000,
-        messages=[
-            Message.system(SUMMARY_SYSTEM),
-            Message.user(json.dumps({"things": said}, ensure_ascii=False)),
-        ],
+    # What LEKA knows of them, from the company model: the context it rests
+    # on, each fact with the id it cites.
+    context = ContextPack.of(
+        [ContextItem(id=f, kind="fact", text=t) for card in asking for f, t in facts[card.id]],
+        ref="company-model",
+        characters=40_000,
     )
-    read = await work.ask(request, Descriptions, SUMMARY_NEEDS)
-    written: Descriptions = read.value
-    model = str(read.completion.model)
+    done = await work.run(
+        Task(
+            purpose="enrichment.summary",
+            instructions=SUMMARY_SYSTEM,
+            input={
+                "things": [
+                    {"id": card.id, "name": card.name, "facts": [f for f, _ in facts[card.id]]}
+                    for card in asking
+                ]
+            },
+            context=context,
+            output=Descriptions,
+            check=_rests,
+            needs=SUMMARY_NEEDS,
+            tier=Tier.STANDARD,
+            max_tokens=3000,
+            budget=100.0,
+        )
+    )
+    if not done.ok:
+        # No model, none in time, nothing usable: what stands, nothing new.
+        return proposals
+    written: Descriptions = done.value
+    model = str(done.model or "")
     by_id = {card.id: card for card in asking}
     for described in written.things:
         found = by_id.get(described.id)
@@ -771,7 +782,7 @@ async def enrich_summary(material: Material, work: ModelWork) -> list[Proposal]:
         if found is None or not text:
             continue
         card = found
-        known = dict(facts[card.id])
+        known = {f: t for f, t in facts[card.id] if f in context.ids}
         uses = [f for f in dict.fromkeys(described.uses) if f in known]
         if not uses:
             # Resting on nothing LEKA knows of it: not proposed.
@@ -795,6 +806,16 @@ async def enrich_summary(material: Material, work: ModelWork) -> list[Proposal]:
             )
         )
     return proposals
+
+
+def _rests(written: object, context: ContextPack) -> list[str]:
+    """A model's descriptions are used only if one at least rests on a fact
+    it was given."""
+    if not isinstance(written, Descriptions):
+        return ["not descriptions"]
+    if any(set(d.uses) & context.ids for d in written.things):
+        return []
+    return ["no description cites a fact it was given"]
 
 
 def _no_rules(material: Material) -> list[Proposal]:
