@@ -63,7 +63,6 @@ from leka.intentions.analysis import (
     StepOutcome,
     Subject,
     assemble,
-    execute,
 )
 from leka.intentions.analysis import (
     select as choose,
@@ -77,6 +76,8 @@ from leka.intentions.grounding import side
 from leka.intentions.lifecycle import Actor
 from leka.intentions.lifecycle import IntentionStatus as S
 from leka.intentions.models import Intention, IntentionAnalysis
+from leka.intentions.orchestration import plan as orchestrate
+from leka.intentions.orchestration import run as run_plan
 from leka.intentions.reads import in_environment, learned_between
 from leka.intentions.recommend import as_mapping, recommend
 from leka.intentions.repository import IntentionRepository
@@ -430,12 +431,20 @@ async def analyse_intention(
         rules = [c for c in chosen if c.method == "rules"]
         # What a model writes, from what the rules found: after them.
         writers = [c for c in chosen if c.method == "model"]
+        # One plan for all of them (LEKA-399): who waits on whom, in levels.
+        the_plan = orchestrate(chosen)
         wants = frozenset(part for c in rules for part in c.reads)
         context = await _context(workspace_id, context_id, version)
         material = await _material(workspace_id, asked, context, wants, ready, moment)
-        outcomes: list[StepOutcome] = []
-        for capability in rules:
-            outcomes.append(await execute(capability, material.on(capability.sides, side)))
+        started = time.monotonic()
+        outcomes: list[StepOutcome] = await run_plan(
+            the_plan,
+            {c.name: c for c in capabilities},
+            material,
+            side=side,
+            started=started,
+            fallbacks={c.name: c for c in capabilities},
+        )
         for choice in choices:
             if not choice.chosen and choice.reason == "no_model":
                 outcomes.append(
@@ -454,14 +463,31 @@ async def analyse_intention(
         # What LEKA proposes, apart from what it found (LEKA-389).
         result = replace(result, recommendations=recommend(result, asked))
         for capability in writers:
+            at = max(0, round((time.monotonic() - started) * 1000))
             outcome, answer, read = await _write(
                 workspace_id, capability, asked, result, context, moment
             )
-            outcomes.append(outcome)
+            # The conclusion: it reads what every capability before it said.
+            outcomes.append(
+                replace(
+                    outcome,
+                    level=the_plan.step(capability.name).level,
+                    started_ms=at,
+                    handed=tuple(o.name for o in outcomes if o.status == "succeeded"),
+                )
+            )
             if answer is not None:
                 result = answered(result, answer, read)
         return await _finish(
-            workspace_id, intention_id, analysis_id, asked, result, outcomes, context_id, moment
+            workspace_id,
+            intention_id,
+            analysis_id,
+            asked,
+            result,
+            outcomes,
+            context_id,
+            moment,
+            orchestrated=the_plan.said(),
         )
 
 
@@ -779,9 +805,12 @@ async def _finish(
     outcomes: Sequence[StepOutcome],
     context_id: uuid.UUID | None,
     moment: datetime,
+    *,
+    orchestrated: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    """The result kept; the findings it rests on linked; the intention
-    moved — unless it moved on meanwhile."""
+    """The result kept, with how its capabilities were orchestrated; the
+    findings it rests on linked; the intention moved — unless it moved on
+    meanwhile."""
     async with session_factory() as session:
         repository = IntentionRepository(session, workspace_id)
         row = await session.get(IntentionAnalysis, analysis_id)
@@ -796,9 +825,16 @@ async def _finish(
                 "duration_ms": o.duration_ms,
                 "error": o.error,
                 "reason": o.reason,
+                "level": o.level,
+                "started_ms": o.started_ms,
+                "handed": list(o.handed),
+                "degraded": list(o.degraded),
+                "fallback_of": o.fallback_of,
             }
             for o in outcomes
         ]
+        if orchestrated is not None:
+            row.detail = {**row.detail, "orchestration": dict(orchestrated)}
         row.result = result_of(result)
         row.status = result.status
         row.finished_at = datetime.now(UTC)
