@@ -1,5 +1,6 @@
-"""Agents run for one workspace (LEKA-395): asked, read, cancelled — what
-the API calls. How a run runs is runs.py; what a run is, runtime.py.
+"""What the API calls: agents run for one workspace (LEKA-395) — asked,
+read, cancelled; how a run runs is runs.py, what a run is, runtime.py — and
+intentions routed to a capability (LEKA-398), how router.py decides.
 """
 
 from __future__ import annotations
@@ -11,10 +12,12 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.catalogue import CatalogueService
-from leka.capabilities.models import AgentRun, AgentRunEvent
-from leka.capabilities.repository import CapabilityRunRepository
+from leka.capabilities.models import AgentRun, AgentRunEvent, CapabilityRouting
+from leka.capabilities.repository import CapabilityRunRepository, RoutingRepository
+from leka.capabilities.router import RouteQuery, decision_said, query_said, route
 from leka.capabilities.runs import Steps, now_or, refusal_of
 from leka.capabilities.runtime import Refusal, RunStatus, delivered
+from leka.capabilities.schemas import RoutingRead
 from leka.context import ContextRepository
 
 
@@ -130,3 +133,73 @@ class AgentRuntime:
         Steps(self._session, run, await self._runs.last_seq(run.id)).add("cancelled", by=str(by))
         await self._session.flush()
         return run
+
+
+class CapabilityRouter:
+    """Intentions routed to capabilities, for one workspace and one person —
+    each decision kept (LEKA-398)."""
+
+    def __init__(
+        self,
+        session: AsyncSession,
+        workspace_id: uuid.UUID,
+        *,
+        catalogue: CatalogueService | None = None,
+    ) -> None:
+        self._session = session
+        self._workspace_id = workspace_id
+        self._routings = RoutingRepository(session, workspace_id)
+        self._catalogue = catalogue or CatalogueService(session, workspace_id)
+
+    async def route(
+        self,
+        query: RouteQuery,
+        *,
+        permissions: frozenset[str],
+        by: uuid.UUID | None,
+        subject_id: uuid.UUID | None = None,
+        now: datetime | None = None,
+    ) -> CapabilityRouting:
+        """Routed, as the catalogue stands for this person now — kept."""
+        entries = await self._catalogue.entries(permissions=permissions)
+        decided = route(
+            query,
+            [e.definition for e in entries],
+            {e.definition.key: e.availability for e in entries},
+        )
+        row = CapabilityRouting(
+            workspace_id=self._workspace_id,
+            id=uuid.uuid4(),
+            subject_type="intention" if subject_id is not None else "request",
+            subject_id=subject_id,
+            version=decided.version,
+            outcome=decided.outcome,
+            selected=[c.key for c in decided.selected],
+            query=query_said(query),
+            decision=decision_said(decided),
+            routed_by=by,
+            at=now_or(now),
+        )
+        self._routings.add(row)
+        await self._session.flush()
+        return row
+
+    async def latest(self, subject_id: uuid.UUID) -> CapabilityRouting | None:
+        return await self._routings.latest(subject_id)
+
+
+def routing_read(row: CapabilityRouting) -> RoutingRead:
+    """A routing, as kept, for the API."""
+    return RoutingRead.model_validate(
+        {
+            **row.decision,
+            "id": row.id,
+            "subject_type": row.subject_type,
+            "subject_id": row.subject_id,
+            "version": row.version,
+            "outcome": row.outcome,
+            "selected": row.selected,
+            "query": row.query,
+            "at": row.at,
+        }
+    )

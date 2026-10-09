@@ -58,6 +58,7 @@ from leka.intentions.models import (
 from leka.intentions.processing import queue_analysis
 from leka.intentions.reading import ModelReading
 from leka.intentions.repository import IntentionFilters, IntentionRepository
+from leka.intentions.routing import query_of, route_intention
 from leka.intentions.schemas import (
     ActionEndpointCreate,
     ActionEndpointCreated,
@@ -210,10 +211,12 @@ __all__ = [
     "moves",
     "phase",
     "policy_read",
+    "query_of",
     "queue_analysis",
     "queue_plan",
     "readiness",
     "refined",
+    "route_intention",
     "timeline",
     "understand",
     "workspace_usage",

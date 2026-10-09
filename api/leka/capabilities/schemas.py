@@ -668,3 +668,72 @@ class AgentRunDetail(AgentRunRead):
     output: str | None
     events: list[AgentRunEventRead]
     usage: AgentRunUsage
+
+
+# ── routing (LEKA-398) ──────────────────────────────────────────────────────
+
+
+class RoutingSignalRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    code: str = Field(
+        description="goal, kind, entity, words, context_types, context_sources, mode, deprecated"
+    )
+    points: float
+    detail: str | None
+
+
+class RoutedCandidateRead(BaseModel):
+    """A capability the router considered: its score, the signals behind it,
+    whether it can be used here — and why not."""
+
+    model_config = ConfigDict(frozen=True)
+
+    key: str
+    title: str
+    kind: Literal["rules", "model", "agent"]
+    category: str
+    score: float
+    eligible: bool = Field(description="Scores enough on what is asked to be routed to.")
+    selected: bool
+    available: bool
+    reasons: list[dict[str, object]] = Field(description="Why it cannot be used here.")
+    signals: list[RoutingSignalRead]
+    needs_inputs: list[str] = Field(description="An agent's inputs to ask before it runs.")
+
+
+class RoutingRead(BaseModel):
+    """Where an intention was routed, and why."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    subject_type: Literal["intention", "request"]
+    subject_id: uuid.UUID | None
+    version: int
+    outcome: Literal["routed", "fallback", "clarify"]
+    selected: list[str]
+    candidates: list[RoutedCandidateRead] = Field(description="Ranked, usable here.")
+    excluded: list[RoutedCandidateRead] = Field(
+        description="Matched, but not usable here, not by this person, or against a policy "
+        "(`policy`): never routed to."
+    )
+    background: list[str] = Field(description="Run with every analysis: not routed to.")
+    fallback: str | None = Field(description="analysis: LEKA's own, when nothing fits.")
+    why: str | None = Field(description="Fallback: no_match, excluded · clarify: unclear, no_goal.")
+    questions: list[str] = Field(description="What to ask, to clarify.")
+    suggestions: list[str] = Field(description="What it could mean, to clarify: capability keys.")
+    query: dict[str, object] = Field(description="What the router read of it.")
+    at: datetime
+
+
+class RouteAsk(BaseModel):
+    """Words to route, without an intention — what the catalogue answers."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    text: str = Field(min_length=3, max_length=2000)
+    goal: str | None = Field(default=None, max_length=40)
+    kind: str | None = Field(default=None, max_length=40)
+    mode: Literal["question", "request"] = "question"
+    entity_types: list[str] = Field(default_factory=list, max_length=20)

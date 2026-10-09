@@ -51,6 +51,7 @@ from fastapi import APIRouter, Depends, Query, status
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
+from leka.capabilities import CapabilityRouter, RoutingRead, routing_read
 from leka.connectors import SourceRepository
 from leka.context import (
     ContextArchivedError,
@@ -92,6 +93,7 @@ from leka.intentions import (
     Withdrawal,
     intention_read,
     queue_analysis,
+    route_intention,
 )
 from leka.knowledge import GraphRepository, GraphService
 
@@ -302,6 +304,44 @@ async def context(
         raise _missing()
     assembled, ready = found
     return IntentionContext(context=assembled, readiness=ready)
+
+
+@router.get("/{intention_id}/routing", response_model=RoutingRead)
+async def routing(intention_id: uuid.UUID, session: SessionDep, principal: Reader) -> RoutingRead:
+    """Where it was last routed, and why (LEKA-398): every capability it
+    could go to, ranked by its signals; every one it cannot, said why; or
+    LEKA's own analysis, or what to ask. Never routed yet: routed now, for
+    whoever reads it."""
+    found = await CapabilityRouter(session, principal.workspace_id).latest(intention_id)
+    if found is None:
+        found = await route_intention(
+            session,
+            principal.workspace_id,
+            intention_id,
+            permissions=frozenset(p.value for p in principal.permissions),
+            by=principal.user_id,
+        )
+    if found is None:
+        raise _missing()
+    return routing_read(found)
+
+
+@router.post("/{intention_id}/routing", response_model=RoutingRead)
+async def route_again(
+    intention_id: uuid.UUID, session: SessionDep, principal: Asker
+) -> RoutingRead:
+    """Routed again, as it and the catalogue now stand — a source connected,
+    a capability turned on — for this person; kept beside the earlier."""
+    found = await route_intention(
+        session,
+        principal.workspace_id,
+        intention_id,
+        permissions=frozenset(p.value for p in principal.permissions),
+        by=principal.user_id,
+    )
+    if found is None:
+        raise _missing()
+    return routing_read(found)
 
 
 @router.post("/{intention_id}/ask", response_model=IntentionAsked)
