@@ -10,7 +10,8 @@ routes in `api/leka/api/capabilities.py`; the model gateway and router in
 `gateway/` ([model-gateway.md](model-gateway.md)); what runs the agents in
 `runtime.py`, `tools.py`, `runs.py` ([agent-runtime.md](agent-runtime.md));
 the router that sends an intention to them in `router.py`
-([capability-router.md](capability-router.md)).
+([capability-router.md](capability-router.md)); workflows, composing them,
+in `workflow.py`, `workflow_runs.py` ([workflows.md](workflows.md)).
 
 ## 1. A capability
 
@@ -19,7 +20,7 @@ the router that sends an intention to them in `router.py`
 | `key` | unique, kebab-case — an agent's `name`, an analysis's name |
 | `title`, `summary` | what people call it; **when to use it** — what routing reads first |
 | `category` | architecture, development, infrastructure, operations, security, compliance, data, documentation, project_management, business, knowledge |
-| `kind` | `rules` (LEKA's own, run in the analysis), `model` (LEKA's own, written by a language model through the gateway — the synthesis, LEKA-394) or `agent` (instructions a model follows — LEKA-395) |
+| `kind` | `rules` (LEKA's own, run in the analysis), `model` (LEKA's own, written by a language model through the gateway — the synthesis, LEKA-394), `agent` (instructions a model follows — LEKA-395) or `workflow` (several of the others composed into one controlled run — LEKA-397, [workflows.md](workflows.md)) |
 | `version` | semver |
 | `lifecycle` | `draft` → `review` → `active` ⇄ `deprecated` → `retired`; only active and deprecated run; **retired is final** |
 | contract | `inputs` (name, type text·number·boolean·choice·entity, required, choices), `output` (finding, analysis, document, proposal), `formats` (json, markdown, pptx, pdf, docx, xlsx, csv) |
@@ -66,6 +67,12 @@ LEKA's catalogue, no customer's (`capability_registrations`,
   used;
 - every event (registered, lifecycle changed, superseded, refused) is kept —
   **the database refuses to change one**.
+
+LEKA's own capabilities are locked before production:
+`tests/test_capability_versions.py` holds each one's version and fingerprint
+as registered, and fails on a change without a new version. On 2026-10-09,
+`incidents` gained a goal (`find_change`) and a kind (`change`) as 1.0.0, and
+production refused it (« Refusée » in Capacités). It is 2.0.0 since.
 
 Synced when the API starts, and every hour (`capability-registry-sync`), one
 process at a time (an advisory lock).

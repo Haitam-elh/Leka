@@ -82,7 +82,9 @@ test.describe("Intention analysis", () => {
 
     await page.goto(`/intentions/${id}/analysis`);
     await expect(page.getByTestId("analysis-head")).toHaveAttribute("data-live", "false");
-    const action = page.getByTestId("analysis-step").filter({ hasText: "Action demandée" });
+    // By its name: the conclusion says it received « Action demandée » too.
+    const action = page.locator('[data-testid="analysis-step"][data-name="action"]');
+    await expect(action).toContainText("Action demandée");
     await expect(action).toHaveAttribute("data-status", "succeeded");
     await expect(page.getByTestId("analysis")).toContainText(
       "Demandé : Redémarrer auth-service. Une personne doit l'approuver avant toute exécution.",

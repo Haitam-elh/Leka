@@ -111,6 +111,7 @@ for the intention (**Lancer l'agent**), asking what it needs.
 ## Not yet
 
 - **Running what is routed to on its own**: the analysis runs LEKA's own
-  capabilities by goal and kind; an agent is offered, a person runs it —
-  orchestrating several (LEKA-399).
+  capabilities by goal and kind; an agent or a workflow
+  ([workflows.md](workflows.md)) is offered, a person runs it —
+  orchestrating several without a workflow (LEKA-399).
 - Signals learned from use (what people ran after a routing).

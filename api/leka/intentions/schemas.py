@@ -584,6 +584,16 @@ class AnalysisStepRead(BaseModel):
     duration_ms: int
     error: str | None
     reason: str | None
+    # Where it ran in the plan (LEKA-399). An analysis kept before has none.
+    level: int = Field(default=0, description="Its level: each after the one before.")
+    started_ms: int = Field(default=0, description="When it started, after the analysis did.")
+    handed: list[str] = Field(
+        default_factory=list, description="The capabilities whose output it was handed."
+    )
+    degraded: list[str] = Field(
+        default_factory=list, description="What it reads that did not succeed: run without."
+    )
+    fallback_of: str | None = Field(default=None, description="The one it ran in place of.")
 
 
 class IntentionAnalysisRead(BaseModel):

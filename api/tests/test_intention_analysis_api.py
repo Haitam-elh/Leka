@@ -10,7 +10,8 @@ What these protect:
   Billing API ? » answered — its owner, the record that says so —
   completed; « Qu'est-ce qui dépend de Billing API ? » — Checkout, Shop,
   Invoicing, high; « Redémarre Billing API » awaits a person's decision,
-  what it reaches said.
+  what it reaches said — orchestrated (LEKA-399): it reads who owns it,
+  handed on by the capability that found it, and says whom to tell.
 - Evidence keeps its provenance: the source, its kind and name, the record.
 - A context that cannot ground it is not analysed: the analysis says so,
   it stays analysing.
@@ -183,6 +184,15 @@ async def test_a_restart_waits_for_a_person_what_it_reaches_said(
     assert "action.asked" in codes and "action.reach" in codes
     asked = next(f for f in analysis["result"]["findings"] if f["code"] == "action.asked")
     assert asked["params"]["action"] == "restart"
+    # Orchestrated (LEKA-399): what it reads ran before it, together; it was
+    # handed who owns what it acts on — whom to tell — and the plan is kept.
+    steps = {s["name"]: s for s in analysis["steps"]}
+    assert steps["ownership"]["level"] == 0 and steps["action"]["level"] == 1
+    assert "ownership" in steps["action"]["handed"]
+    inform = next(f for f in analysis["result"]["findings"] if f["code"] == "action.inform")
+    assert inform["params"]["owners"] == ["Payments"]
+    planned = analysis["detail"]["orchestration"]
+    assert planned["levels"][0] and "action" in planned["levels"][1]
     # Never LEKA's to decide: a person does.
     after = await _get(client, f"/{intention['id']}")
     assert after["status"] == "awaiting_decision"

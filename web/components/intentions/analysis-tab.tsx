@@ -211,64 +211,117 @@ const STEP_LOOK: Record<Step["status"], { icon: LucideIcon; tone: TileTone }> = 
   skipped: { icon: CircleDashed, tone: "neutral" },
 };
 
+/** Where each capability stood in the plan (LEKA-399): planned by the
+ * analysis, else read off its step — an analysis kept before has none. */
+function levelOf(analysis: IntentionAnalysis, name: string, step: Step | undefined): number {
+  const planned = (analysis.detail?.orchestration as { steps?: Record<string, { level?: number }> })
+    ?.steps?.[name]?.level;
+  return typeof planned === "number" ? planned : (step?.level ?? 0);
+}
+
 /** Each capability chosen, why, and how it went — those still to run, on
- * their way. */
+ * their way — level by level, as LEKA orchestrated them (LEKA-399): what
+ * ran together, what each was handed, ran without, stood in for. */
 function StepsCard({ analysis }: { analysis: IntentionAnalysis }) {
   const t = useDictionary();
   const w = t.intentions.analysis.steps;
   const ran = new Map(analysis.steps.map((step) => [step.name, step]));
-  const shown = analysis.selection.filter((choice) => choice.chosen || ran.has(choice.name));
+  const chosen = analysis.selection.filter((choice) => choice.chosen || ran.has(choice.name));
+  // A fallback ran in another's place: shown beside it.
+  const standIns = analysis.steps.filter((step) => step.fallback_of);
+  const rows = [
+    ...chosen.map((choice) => ({ name: choice.name, reason: choice.reason, method: choice.method })),
+    ...standIns.map((step) => ({ name: step.name, reason: "fallback", method: "rules" })),
+  ];
+  const levels = new Map<number, typeof rows>();
+  for (const row of rows) {
+    const level = levelOf(analysis, row.name, ran.get(row.name));
+    levels.set(level, [...(levels.get(level) ?? []), row]);
+  }
+  const ordered = [...levels.entries()].sort(([a], [b]) => a - b);
+  const last = ordered.length ? ordered[ordered.length - 1][0] : 0;
+  const names = (list: readonly string[]) => list.map((n) => capabilityName(t, n)).join(", ");
   return (
     <Card title={w.title} icon={<Layers className="size-4 text-shell-muted" aria-hidden="true" />}>
-      <ul className="divide-y divide-shell-line/60" data-testid="analysis-steps">
-        {shown.map((choice) => {
-          const step = ran.get(choice.name);
-          const look = step ? STEP_LOOK[step.status] : null;
-          const Icon = look?.icon ?? LoaderCircle;
-          const reason = step?.reason ?? choice.reason;
-          return (
-            <li
-              key={choice.name}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-[0.8125rem]"
-              data-testid="analysis-step"
-              data-name={choice.name}
-              data-status={step?.status ?? "running"}
-            >
-              <Icon
-                className={cn(
-                  "size-4 shrink-0",
-                  step ? undefined : "text-shell-nav-active motion-safe:animate-spin",
-                  look?.tone === "success" && "text-state-success",
-                  look?.tone === "danger" && "text-state-danger",
-                  look?.tone === "warning" && "text-state-warning",
-                  look?.tone === "neutral" && "text-shell-muted",
-                )}
-                aria-hidden="true"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="font-medium text-brand-navy">
-                  {capabilityName(t, choice.name)}
-                </span>
-                <span className="text-shell-muted">
-                  {" · "}
-                  {(w.reasons as Record<string, string>)[reason] ?? reason}
-                </span>
-                {step?.error ? (
-                  <span className="block text-xs text-state-danger">
-                    {fill(w.error, { error: step.error })}
-                  </span>
-                ) : null}
-              </span>
-              <Pill tone={look?.tone ?? "violet"}>{w.statuses[step?.status ?? "running"]}</Pill>
-              {step && step.status !== "skipped" ? (
-                <span className="w-16 text-right text-xs tabular-nums text-shell-muted">
-                  {step.duration_ms ? fill(w.ms, { ms: step.duration_ms }) : w.instant}
-                </span>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
+      <div className="flex flex-col gap-3" data-testid="analysis-steps">
+        {ordered.map(([level, members]) => (
+          <section key={level} data-testid="analysis-level" data-level={level}>
+            {ordered.length > 1 ? (
+              <p className="text-xs font-semibold tracking-wide text-shell-nav uppercase">
+                {level === last && members.every((m) => m.method === "model")
+                  ? w.conclusion
+                  : fill(w.level, { n: level + 1 }) + (members.length > 1 ? ` · ${w.together}` : "")}
+              </p>
+            ) : null}
+            <ul className="divide-y divide-shell-line/60">
+              {members.map((row) => {
+                const step = ran.get(row.name);
+                const look = step ? STEP_LOOK[step.status] : null;
+                const Icon = look?.icon ?? LoaderCircle;
+                const reason = step?.reason ?? row.reason;
+                const notes = [
+                  step?.fallback_of
+                    ? fill(w.fallbackOf, { name: capabilityName(t, step.fallback_of) })
+                    : null,
+                  step?.handed?.length ? fill(w.handed, { names: names(step.handed) }) : null,
+                  step?.degraded?.length ? fill(w.degraded, { names: names(step.degraded) }) : null,
+                  step?.reason === "upstream" && step.error
+                    ? fill(w.waitedOn, { names: names(step.error.split(", ")) })
+                    : null,
+                ].filter(Boolean);
+                return (
+                  <li
+                    key={row.name}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-[0.8125rem]"
+                    data-testid="analysis-step"
+                    data-name={row.name}
+                    data-status={step?.status ?? "running"}
+                  >
+                    <Icon
+                      className={cn(
+                        "size-4 shrink-0",
+                        step ? undefined : "text-shell-nav-active motion-safe:animate-spin",
+                        look?.tone === "success" && "text-state-success",
+                        look?.tone === "danger" && "text-state-danger",
+                        look?.tone === "warning" && "text-state-warning",
+                        look?.tone === "neutral" && "text-shell-muted",
+                      )}
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium text-brand-navy">
+                        {capabilityName(t, row.name)}
+                      </span>
+                      {reason !== "fallback" ? (
+                        <span className="text-shell-muted">
+                          {" · "}
+                          {(w.reasons as Record<string, string>)[reason] ?? reason}
+                        </span>
+                      ) : null}
+                      {notes.length ? (
+                        <span className="block text-xs text-shell-muted" data-testid="analysis-step-notes">
+                          {notes.join(" · ")}
+                        </span>
+                      ) : null}
+                      {step?.error && step.reason !== "upstream" ? (
+                        <span className="block text-xs text-state-danger">
+                          {fill(w.error, { error: step.error })}
+                        </span>
+                      ) : null}
+                    </span>
+                    <Pill tone={look?.tone ?? "violet"}>{w.statuses[step?.status ?? "running"]}</Pill>
+                    {step && step.status !== "skipped" ? (
+                      <span className="w-16 text-right text-xs tabular-nums text-shell-muted">
+                        {step.duration_ms ? fill(w.ms, { ms: step.duration_ms }) : w.instant}
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
     </Card>
   );
 }

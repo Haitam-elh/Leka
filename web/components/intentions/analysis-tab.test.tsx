@@ -57,6 +57,17 @@ const { notify } = await import("@/lib/notify");
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
+const STEP = {
+  version: 1,
+  error: null,
+  reason: null,
+  level: 0,
+  started_ms: 0,
+  handed: [],
+  degraded: [],
+  fallback_of: null,
+};
+
 function intention(overrides: Partial<IntentionDetail> = {}): IntentionDetail {
   return {
     id: ID,
@@ -100,9 +111,9 @@ function analysis(overrides: Partial<IntentionAnalysisRead> = {}): IntentionAnal
       { name: "changes", version: 1, method: "rules", chosen: true, reason: "acting" },
     ],
     steps: [
-      { name: "standing", version: 1, status: "succeeded", duration_ms: 8, error: null, reason: null },
-      { name: "ownership", version: 1, status: "succeeded", duration_ms: 21, error: null, reason: null },
-      { name: "changes", version: 1, status: "failed", duration_ms: 3, error: "RuntimeError", reason: null },
+      { ...STEP, name: "standing", status: "succeeded", duration_ms: 8 },
+      { ...STEP, name: "ownership", status: "succeeded", duration_ms: 21 },
+      { ...STEP, name: "changes", status: "failed", duration_ms: 3, error: "RuntimeError" },
     ],
     result: {
       status: "partial",
@@ -235,6 +246,67 @@ describe("an intention's analysis", () => {
     const previous = await screen.findByTestId("analysis-previous");
     expect(previous).toHaveTextContent("Analyse n° 2Partielle");
     expect(previous).toHaveTextContent("Analyse n° 1En échec");
+  });
+
+  it("says how LEKA orchestrated it: what ran together, what each was handed (LEKA-399)", async () => {
+    api.analysis.mockResolvedValue(
+      analysis({
+        selection: [
+          { name: "standing", version: 1, method: "rules", chosen: true, reason: "always" },
+          { name: "ownership", version: 1, method: "rules", chosen: true, reason: "acting" },
+          { name: "changes", version: 1, method: "rules", chosen: true, reason: "acting" },
+          { name: "incidents", version: 1, method: "rules", chosen: true, reason: "goal" },
+          { name: "synthesis", version: 1, method: "model", chosen: true, reason: "always" },
+        ],
+        steps: [
+          { ...STEP, name: "standing", status: "succeeded", duration_ms: 8 },
+          { ...STEP, name: "ownership", status: "failed", duration_ms: 3, error: "RuntimeError" },
+          { ...STEP, name: "changes", status: "succeeded", duration_ms: 12 },
+          {
+            ...STEP,
+            name: "incidents",
+            status: "succeeded",
+            duration_ms: 9,
+            level: 1,
+            handed: ["changes"],
+            degraded: ["ownership"],
+          },
+          {
+            ...STEP,
+            name: "synthesis",
+            status: "succeeded",
+            duration_ms: 900,
+            level: 2,
+            handed: ["standing", "changes", "incidents"],
+          },
+        ],
+        detail: {
+          orchestration: {
+            levels: [["standing", "ownership", "changes"], ["incidents"], ["synthesis"]],
+            steps: {
+              standing: { level: 0 },
+              ownership: { level: 0 },
+              changes: { level: 0 },
+              incidents: { level: 1 },
+              synthesis: { level: 2 },
+            },
+          },
+        },
+      }),
+    );
+    show();
+
+    const levels = await screen.findAllByTestId("analysis-level");
+    expect(levels.map((l) => l.querySelector("p")?.textContent)).toEqual([
+      "Étape 1 · en parallèle",
+      "Étape 2",
+      "Conclusion",
+    ]);
+    const incidents = within(levels[1]).getByTestId("analysis-step");
+    expect(incidents).toHaveTextContent(/reçoit : Changements/);
+    // What it reads that failed: run without it, said.
+    expect(incidents).toHaveTextContent(/sans : Responsabilités/);
+    expect(within(levels[2]).getByTestId("analysis-step")).toHaveTextContent(/reçoit :/);
   });
 
   it("says LEKA is analysing while one is on its way, and reads it again until done", async () => {

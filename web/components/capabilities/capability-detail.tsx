@@ -20,6 +20,7 @@ import { useParams, usePathname } from "next/navigation";
 import { cn } from "cn";
 
 import { AgentRuns, RunAgent } from "@/components/capabilities/agent-runs";
+import { WorkflowPanel } from "@/components/capabilities/workflow-runs";
 import {
   CATEGORY_ICON,
   CATEGORY_TONE,
@@ -194,6 +195,7 @@ export function CapabilityScreen() {
                 <AgentRuns agentKey={data.key} />
               </>
             ) : null}
+            {data.kind === "workflow" ? <WorkflowPanel capability={data} /> : null}
             {data.examples.length ? (
               <Card title={w.examples} icon={<MessageSquareQuote className="size-4 text-shell-muted" aria-hidden="true" />}>
                 <ul className="space-y-1 text-[0.8125rem] text-brand-navy">

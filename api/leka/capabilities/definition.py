@@ -46,6 +46,8 @@ class Kind(enum.StrEnum):
     RULES = "rules"
     MODEL = "model"
     AGENT = "agent"
+    # Several of the above composed into one controlled run (LEKA-397).
+    WORKFLOW = "workflow"
 
 
 class Lifecycle(enum.StrEnum):
@@ -168,9 +170,12 @@ class Definition:
     examples: tuple[str, ...] = ()
     # Run whatever the intention: what any answer starts from.
     always: bool = False
-    # An agent's instructions: kept here, never sent to a browser.
+    # An agent's instructions: kept here, never sent to a browser. A
+    # workflow's: its steps, canonical (LEKA-397).
     instructions: str | None = None
     path: str | None = None
+    # A workflow's: the capabilities its steps use (LEKA-397).
+    uses: tuple[str, ...] = ()
     # An agent's: the tools it may be offered — every read-only one when it
     # declares none (LEKA-400).
     tools: tuple[str, ...] = ()
@@ -185,6 +190,9 @@ class Definition:
         # it says nothing new — what was registered stays what it is.
         if self.model_needs == ModelNeed():
             said.pop("model_needs")
+        # Added with workflows (LEKA-397): empty, it says nothing new.
+        if not self.uses:
+            said.pop("uses")
         # Added with the agent library (LEKA-400): none, it says nothing new.
         if not self.tools:
             said.pop("tools")
@@ -250,6 +258,9 @@ def validated(
             raise DefinitionError(msg)
     if d.kind in (Kind.AGENT, Kind.MODEL) and not d.model:
         msg = f"{d.key}: an agent, or a capability a model writes, is run by a model"
+        raise DefinitionError(msg)
+    if (d.kind is Kind.WORKFLOW) != bool(d.uses):
+        msg = f"{d.key}: a workflow uses capabilities, and only a workflow"
         raise DefinitionError(msg)
     known_types = set(entity_types)
     for kind in (*d.entity_types, *(t for i in d.contract.inputs for t in i.entity_types)):
@@ -327,7 +338,7 @@ def availability(
             reasons.append(Reason("missing_source", {"any_of": list(group)}))
     if d.model and not situation.model:
         reasons.append(Reason("no_model"))
-    if d.kind is Kind.AGENT and not situation.runtime:
+    if d.kind in (Kind.AGENT, Kind.WORKFLOW) and not situation.runtime:
         reasons.append(Reason("no_runtime"))
     if d.permission not in situation.permissions:
         reasons.append(Reason("not_permitted", {"permission": d.permission}))

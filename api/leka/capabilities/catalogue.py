@@ -34,9 +34,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.capabilities.definition import (
     Availability,
     Definition,
+    Kind,
     Lifecycle,
     Match,
     Query,
+    Reason,
     Situation,
     availability,
     discover,
@@ -49,7 +51,7 @@ from leka.capabilities.models import (
     CapabilityRegistration,
     WorkspaceCapability,
 )
-from leka.capabilities.registry import catalogue
+from leka.capabilities.registry import catalogue, find_workflow
 from leka.capabilities.repository import CatalogueRepository, WorkspaceCatalogueRepository
 from leka.db import load_schema, session_factory, system_scope
 
@@ -263,6 +265,40 @@ def needs_of(definition: Definition) -> Needs:
     )
 
 
+def composed(entries: list[Entry]) -> list[Entry]:
+    """A workflow (LEKA-397) as usable as the steps it cannot do without:
+    a step that always runs and stops it on failure, its capability not
+    usable here or by this person — the workflow is not either, said which;
+    a step it can do without (conditional, or passed on failure), said."""
+    able = {e.definition.key: e.availability for e in entries}
+    found: list[Entry] = []
+    for entry in entries:
+        workflow = (
+            find_workflow(entry.definition.key) if entry.definition.kind is Kind.WORKFLOW else None
+        )
+        if workflow is None:
+            found.append(entry)
+            continue
+        reasons = list(entry.availability.reasons)
+        notes = list(entry.availability.notes)
+        for step in workflow.steps:
+            used = able.get(step.uses)
+            if used is None or used.available:
+                continue
+            said = Reason(
+                "step_unavailable", {"step": step.id, "uses": step.uses, "why": list(used.codes)}
+            )
+            needed = step.when is None and step.on_failure == "stop"
+            (reasons if needed else notes).append(said)
+        found.append(
+            replace(
+                entry,
+                availability=Availability(not reasons, tuple(reasons), tuple(notes)),
+            )
+        )
+    return found
+
+
 class CatalogueService:
     def __init__(
         self,
@@ -328,7 +364,7 @@ class CatalogueService:
                     model=route,
                 )
             )
-        return found
+        return composed(found)
 
     async def entry(
         self, key: str, *, permissions: frozenset[str], user_id: uuid.UUID | None = None
