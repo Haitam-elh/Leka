@@ -454,6 +454,17 @@ can ground limited by `no_source_for`, and analysed; « tout est si lent »
 limited by `no_subject`, analysed; « Redémarre tout en production » asked
 what it acts on; another workspace's context 404.
 
+### Where it goes (LEKA-398)
+
+Read with its context, an intention is **routed** to the capabilities that
+fit it — LEKA's own analyses, the agents — ranked by defined signals (its
+goal, its kind, what it is about, its words, what its context holds), the
+unavailable, the unauthorized and what a policy forbids left out, said why;
+**LEKA's analysis** when nothing fits better; **what to ask** when it is not
+clear. Every decision kept; `GET`, `POST /intentions/{id}/routing`; on its
+overview, **Capacité choisie**, a chosen agent offered to run for it.
+[capability-router.md](capability-router.md).
+
 ## 12. Its analysis (LEKA-388)
 
 What answers an intention: LEKA's capabilities, run on the context

@@ -172,6 +172,14 @@ when it was asked: someone who left the workspace meanwhile, their run
 fails. Reading runs takes `intention:read`; cancelling one, being who asked
 it or holding `intention:approve`. [agent-runtime.md](agent-runtime.md).
 
+## Routage (LEKA-398)
+
+An intention's routing (`GET /intentions/{id}/routing`) takes
+`intention:read`; routing it again, `intention:create`; words routed alone
+(`POST /capabilities/route`), `workspace:read`. **Routed for whoever asks**:
+a capability their role may not use is excluded from their routing, said
+why. [capability-router.md](capability-router.md).
+
 ## Modèle de langage (LEKA-394)
 
 `GET /models` (what answers here, the providers one may bring) and

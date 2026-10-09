@@ -181,8 +181,9 @@ Followed every three seconds while on its way; one's own cancelled.
 
 - **Its files** — the architect's PPTX and PDF, rendered from what it
   delivered: said `pending` until then.
-- **Routing an intention to an agent** (LEKA-398): asked of `discover`, run
-  here.
+- **Running a routed agent on its own**: the router (LEKA-398,
+  [capability-router.md](capability-router.md)) offers it on the intention;
+  a person runs it — orchestration is LEKA-399.
 - **Acting on what an agent proposes**: a decision (LEKA-390), never the
   agent.
 - More tools — a document's text, a source's records — each read-only, each
