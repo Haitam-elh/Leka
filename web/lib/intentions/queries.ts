@@ -18,6 +18,7 @@ export const intentionKeys = {
   history: (id: string) => ["intentions", "history", id] as const,
   analysis: (id: string) => ["intentions", "analysis", id] as const,
   analyses: (id: string) => ["intentions", "analyses", id] as const,
+  routing: (id: string) => ["intentions", "routing", id] as const,
 };
 
 /** How often an analysis on its way is read again. */
@@ -108,5 +109,23 @@ export function useAnalyseAgain(id: string) {
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: intentionKeys.all });
     },
+  });
+}
+
+/** Where it was routed, and why (LEKA-398). */
+export function useIntentionRouting(id: string) {
+  return useQuery({
+    queryKey: intentionKeys.routing(id),
+    queryFn: () => intentions.routing(id),
+    enabled: Boolean(id),
+  });
+}
+
+/** Routed again: the decision read anew. */
+export function useRouteAgain(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => intentions.route(id),
+    onSuccess: (routing) => client.setQueryData(intentionKeys.routing(id), routing),
   });
 }

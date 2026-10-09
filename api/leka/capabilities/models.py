@@ -294,3 +294,32 @@ class ModelAsk(Base, WorkspaceScopedMixin):
     # The model said something of it; else it left it out.
     answered: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     asked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CapabilityRouting(Base, WorkspaceScopedMixin):
+    """Where an intention was routed (LEKA-398), and why: what the router
+    read of it, the outcome — routed, fallback, clarify — what it selected,
+    every candidate with its signals and score, every one left out with
+    why. Kept as decided: routed again, a new row."""
+
+    __tablename__ = "capability_routings"
+    __table_args__ = (
+        CheckConstraint("outcome IN ('routed', 'fallback', 'clarify')", name="outcome"),
+        CheckConstraint("subject_type IN ('intention', 'request')", name="subject_type"),
+        Index("ix_capability_routings_subject", "workspace_id", "subject_id", "at"),
+    )
+
+    # An intention, or words asked of the router alone.
+    subject_type: Mapped[str] = mapped_column(String(10), nullable=False)
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(10), nullable=False)
+    selected: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    # What the router read: goal, kind, mode, types, words, its context.
+    query: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # Candidates, excluded, background, fallback, why, questions, suggestions.
+    decision: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    routed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -3856,6 +3856,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/capabilities/route": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Route
+         * @description Where these words would be routed, for this person, and why
+         *     (LEKA-398): each capability ranked by its signals, each one they may not
+         *     use or that cannot run here left out, said why — kept, as any routing.
+         */
+        post: operations["route_api_v1_capabilities_route_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/capabilities/{key}": {
         parameters: {
             query?: never;
@@ -4172,6 +4194,34 @@ export interface paths {
         get: operations["context_api_v1_intentions__intention_id__context_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intentions/{intention_id}/routing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Routing
+         * @description Where it was last routed, and why (LEKA-398): every capability it
+         *     could go to, ranked by its signals; every one it cannot, said why; or
+         *     LEKA's own analysis, or what to ask. Never routed yet: routed now, for
+         *     whoever reads it.
+         */
+        get: operations["routing_api_v1_intentions__intention_id__routing_get"];
+        put?: never;
+        /**
+         * Route Again
+         * @description Routed again, as it and the catalogue now stand — a source connected,
+         *     a capability turned on — for this person; kept beside the earlier.
+         */
+        post: operations["route_again_api_v1_intentions__intention_id__routing_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -16178,6 +16228,155 @@ export interface components {
          * @enum {string}
          */
         Role: "owner" | "admin" | "member";
+        /**
+         * RouteAsk
+         * @description Words to route, without an intention — what the catalogue answers.
+         */
+        RouteAsk: {
+            /** Text */
+            text: string;
+            /** Goal */
+            goal?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /**
+             * Mode
+             * @default question
+             * @enum {string}
+             */
+            mode: "question" | "request";
+            /** Entity Types */
+            entity_types?: string[];
+        };
+        /**
+         * RoutedCandidateRead
+         * @description A capability the router considered: its score, the signals behind it,
+         *     whether it can be used here — and why not.
+         */
+        RoutedCandidateRead: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "rules" | "model" | "agent";
+            /** Category */
+            category: string;
+            /** Score */
+            score: number;
+            /**
+             * Eligible
+             * @description Scores enough on what is asked to be routed to.
+             */
+            eligible: boolean;
+            /** Selected */
+            selected: boolean;
+            /** Available */
+            available: boolean;
+            /**
+             * Reasons
+             * @description Why it cannot be used here.
+             */
+            reasons: {
+                [key: string]: unknown;
+            }[];
+            /** Signals */
+            signals: components["schemas"]["RoutingSignalRead"][];
+            /**
+             * Needs Inputs
+             * @description An agent's inputs to ask before it runs.
+             */
+            needs_inputs: string[];
+        };
+        /**
+         * RoutingRead
+         * @description Where an intention was routed, and why.
+         */
+        RoutingRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Subject Type
+             * @enum {string}
+             */
+            subject_type: "intention" | "request";
+            /** Subject Id */
+            subject_id: string | null;
+            /** Version */
+            version: number;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "routed" | "fallback" | "clarify";
+            /** Selected */
+            selected: string[];
+            /**
+             * Candidates
+             * @description Ranked, usable here.
+             */
+            candidates: components["schemas"]["RoutedCandidateRead"][];
+            /**
+             * Excluded
+             * @description Matched, but not usable here, not by this person, or against a policy (`policy`): never routed to.
+             */
+            excluded: components["schemas"]["RoutedCandidateRead"][];
+            /**
+             * Background
+             * @description Run with every analysis: not routed to.
+             */
+            background: string[];
+            /**
+             * Fallback
+             * @description analysis: LEKA's own, when nothing fits.
+             */
+            fallback: string | null;
+            /**
+             * Why
+             * @description Fallback: no_match, excluded · clarify: unclear, no_goal.
+             */
+            why: string | null;
+            /**
+             * Questions
+             * @description What to ask, to clarify.
+             */
+            questions: string[];
+            /**
+             * Suggestions
+             * @description What it could mean, to clarify: capability keys.
+             */
+            suggestions: string[];
+            /**
+             * Query
+             * @description What the router read of it.
+             */
+            query: {
+                [key: string]: unknown;
+            };
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+        };
+        /** RoutingSignalRead */
+        RoutingSignalRead: {
+            /**
+             * Code
+             * @description goal, kind, entity, words, context_types, context_sources, mode, deprecated
+             */
+            code: string;
+            /** Points */
+            points: number;
+            /** Detail */
+            detail: string | null;
+        };
         /** RunDetail */
         RunDetail: {
             /**
@@ -36595,6 +36794,102 @@ export interface operations {
             };
         };
     };
+    route_api_v1_capabilities_route_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RouteAsk"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     capability_api_v1_capabilities__key__get: {
         parameters: {
             query?: never;
@@ -38420,6 +38715,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntentionContext"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    routing_api_v1_intentions__intention_id__routing_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    route_again_api_v1_intentions__intention_id__routing_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingRead"];
                 };
             };
             /** @description The request could not be understood. */

@@ -18,6 +18,7 @@ from leka.capabilities.models import (
     CapabilityEvent,
     CapabilityFavourite,
     CapabilityRegistration,
+    CapabilityRouting,
     ModelCall,
     WorkspaceCapability,
 )
@@ -270,3 +271,26 @@ class WorkspaceCatalogueRepository:
         row.reason = reason
         row.changed_by = by
         row.changed_at = at
+
+
+class RoutingRepository:
+    """Where one workspace's intentions were routed (LEKA-398)."""
+
+    def __init__(self, session: AsyncSession, workspace_id: uuid.UUID) -> None:
+        self._session = session
+        self._workspace_id = workspace_id
+
+    def add(self, row: CapabilityRouting) -> None:
+        self._session.add(row)
+
+    async def latest(self, subject_id: uuid.UUID) -> CapabilityRouting | None:
+        found: CapabilityRouting | None = await self._session.scalar(
+            select(CapabilityRouting)
+            .where(
+                CapabilityRouting.workspace_id == self._workspace_id,
+                CapabilityRouting.subject_id == subject_id,
+            )
+            .order_by(CapabilityRouting.at.desc(), CapabilityRouting.id)
+            .limit(1)
+        )
+        return found

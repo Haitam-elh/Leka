@@ -7,6 +7,9 @@ workspace and this person.
     GET    /capabilities/{key}              one, its history, its week
     PUT    /capabilities/{key}/settings     turned on or off for the workspace
     PUT    /capabilities/{key}/favourite    kept at hand · DELETE: no longer
+    POST   /capabilities/route              where words would be routed, and why
+                                            (LEKA-398) — an intention's:
+                                            /intentions/{id}/routing
 
 Reading takes `workspace:read`; turning one on or off `workspace:update`. An
 agent's instructions are never sent: what it is, is.
@@ -39,6 +42,7 @@ from leka.capabilities import (
     CapabilityModelRead,
     CapabilityRead,
     CapabilityReason,
+    CapabilityRouter,
     CapabilitySettingUpdate,
     CapabilitySourceNeed,
     CapabilityTop,
@@ -48,7 +52,11 @@ from leka.capabilities import (
     CatalogueSummary,
     CategoryCount,
     Entry,
+    RouteAsk,
+    RouteQuery,
+    RoutingRead,
     mentions,
+    routing_read,
 )
 from leka.capabilities import (
     Query as Asked,
@@ -300,6 +308,25 @@ async def discover(
         )
         for m in matches
     ]
+
+
+@router.post("/route", response_model=RoutingRead)
+async def route(payload: RouteAsk, principal: Reader, session: SessionDep) -> RoutingRead:
+    """Where these words would be routed, for this person, and why
+    (LEKA-398): each capability ranked by its signals, each one they may not
+    use or that cannot run here left out, said why — kept, as any routing."""
+    found = await CapabilityRouter(session, principal.workspace_id).route(
+        RouteQuery(
+            text=payload.text,
+            goal=payload.goal,
+            kind=payload.kind,
+            mode=payload.mode,
+            entity_types=frozenset(payload.entity_types),
+        ),
+        permissions=_permissions(principal),
+        by=principal.user_id,
+    )
+    return routing_read(found)
 
 
 @router.get("/{key}", response_model=CapabilityDetail)

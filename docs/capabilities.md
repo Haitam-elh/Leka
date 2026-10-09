@@ -8,7 +8,9 @@ lifecycle, availability, discovery), `registry.py` (where definitions come
 from), `catalogue.py` (their history, and the catalogue for a workspace), the
 routes in `api/leka/api/capabilities.py`; the model gateway and router in
 `gateway/` ([model-gateway.md](model-gateway.md)); what runs the agents in
-`runtime.py`, `tools.py`, `runs.py` ([agent-runtime.md](agent-runtime.md)).
+`runtime.py`, `tools.py`, `runs.py` ([agent-runtime.md](agent-runtime.md));
+the router that sends an intention to them in `router.py`
+([capability-router.md](capability-router.md)).
 
 ## 1. A capability
 
@@ -87,12 +89,14 @@ run it** (`select(…, disabled=…)`: the choice says `disabled`).
 
 ## 5. Discovered
 
-`discover(definitions, query, availabilities)` — for the router (LEKA-398):
-by the intention's goal (3), its kind (2), what it acts on (1 each, at most
+`discover(definitions, query, availabilities)` — what the catalogue answers
+(`POST /capabilities/discover`): by the intention's goal (3), its kind (2), what it acts on (1 each, at most
 2), the words it is asked in (1 each, at most 3); each match with its
 reasons; never retired; the unavailable left out when asked
 (`available_only`). `check_input(contract, given)` says what is wrong with
-what a capability is given — what the runtime refuses (LEKA-395).
+what a capability is given — what the runtime refuses (LEKA-395). Routing
+an intention — its context read, policies applied, a fallback — is the
+router's ([capability-router.md](capability-router.md), LEKA-398).
 
 ## 6. The API
 
@@ -139,8 +143,6 @@ said pending.
 
 ## Not yet
 
-- **Routing an intention to a capability**: the router (LEKA-398) reads
-  `discover`.
 - **What an agent delivers as files** (an architecture deck as PPTX and PDF):
   rendered from what the runtime delivers; each agent declares its own
   (`formats`).

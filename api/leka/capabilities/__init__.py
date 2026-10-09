@@ -84,6 +84,7 @@ from leka.capabilities.models import (
     CapabilityEvent,
     CapabilityFavourite,
     CapabilityRegistration,
+    CapabilityRouting,
     LLMRun,
     ModelCall,
     WorkspaceCapability,
@@ -97,6 +98,7 @@ from leka.capabilities.registry import (
     provide,
 )
 from leka.capabilities.repository import CapabilityRunRepository
+from leka.capabilities.router import ROUTING_VERSION, RouteQuery, Routing, route
 from leka.capabilities.runs import execute_run, queue_run, sweep_runs
 from leka.capabilities.runtime import (
     AgentTool,
@@ -151,20 +153,27 @@ from leka.capabilities.schemas import (
     ModelTallyRead,
     ModelTestRead,
     ModelUsageRead,
+    RouteAsk,
+    RoutedCandidateRead,
+    RoutingRead,
+    RoutingSignalRead,
     WorkspaceModelRead,
     WorkspaceModelUpdate,
 )
 from leka.capabilities.service import (
     AgentRuntime,
+    CapabilityRouter,
     NotYoursError,
     RunFinishedError,
     RunRefusedError,
+    routing_read,
 )
 from leka.capabilities.tools import TOOLS as AGENT_TOOLS
 
 __all__ = [
     "AGENT_TOOLS",
     "CATEGORIES",
+    "ROUTING_VERSION",
     "Agent",
     "AgentFrontMatter",
     "AgentInput",
@@ -196,6 +205,8 @@ __all__ = [
     "CapabilityRead",
     "CapabilityReason",
     "CapabilityRegistration",
+    "CapabilityRouter",
+    "CapabilityRouting",
     "CapabilityRunRepository",
     "CapabilitySettingUpdate",
     "CapabilitySourceNeed",
@@ -246,6 +257,12 @@ __all__ = [
     "Reason",
     "Refusal",
     "Request",
+    "RouteAsk",
+    "RouteQuery",
+    "RoutedCandidateRead",
+    "Routing",
+    "RoutingRead",
+    "RoutingSignalRead",
     "RunFinishedError",
     "RunRefusedError",
     "RunStatus",
@@ -289,6 +306,8 @@ __all__ = [
     "provide",
     "queue_run",
     "read_index",
+    "route",
+    "routing_read",
     "run_catalogue_sync",
     "runnable",
     "standings",

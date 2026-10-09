@@ -4265,6 +4265,38 @@ const fr = {
   /** What someone asked LEKA, kept (LEKA-384): Mes intentions, an
    * intention's page and its history. */
   intentions: {
+    /** Where it goes (LEKA-398). */
+    routing: {
+      title: "Capacité choisie",
+      again: "Router à nouveau",
+      outcomes: { routed: "Routée", fallback: "Analyse LEKA", clarify: "À préciser" },
+      routed: "LEKA la confie à : {titles}",
+      fallbacks: {
+        no_match: "Aucune capacité ne correspond mieux : LEKA répond avec sa propre analyse.",
+        excluded:
+          "La capacité la plus adaptée ne peut pas être utilisée ici : LEKA répond avec sa propre analyse.",
+      },
+      clarifies: {
+        unclear: "La demande doit être précisée avant de choisir une capacité.",
+        no_goal: "LEKA ne sait pas encore ce que vous cherchez à obtenir.",
+      },
+      suggestions: "Elle pourrait concerner : {titles}",
+      score: "score {score}",
+      chosen: "choisie",
+      weak: "trop faible",
+      excluded: "Écartées",
+      policy: "Une question n'est jamais confiée à une capacité qui propose des actions",
+      signals: {
+        goal: "objectif",
+        kind: "type de demande",
+        entity: "porte sur : {detail}",
+        words: "mots : {detail}",
+        context_types: "contexte : {detail}",
+        context_sources: "sources du contexte : {detail}",
+        mode: "demande d'action",
+        deprecated: "dépréciée",
+      },
+    },
     title: "Mes intentions",
     subtitle: "Suivez vos demandes, où elles en sont, et tout ce qui leur est arrivé.",
     new: "Nouvelle intention",
@@ -9047,6 +9079,36 @@ const en: Dictionary = {
     },
   },
   intentions: {
+    routing: {
+      title: "Chosen capability",
+      again: "Route again",
+      outcomes: { routed: "Routed", fallback: "LEKA analysis", clarify: "To clarify" },
+      routed: "LEKA hands it to: {titles}",
+      fallbacks: {
+        no_match: "No capability fits better: LEKA answers with its own analysis.",
+        excluded: "The best-suited capability cannot be used here: LEKA answers with its own analysis.",
+      },
+      clarifies: {
+        unclear: "The request must be clarified before a capability is chosen.",
+        no_goal: "LEKA cannot tell yet what you want to achieve.",
+      },
+      suggestions: "It could be about: {titles}",
+      score: "score {score}",
+      chosen: "chosen",
+      weak: "too weak",
+      excluded: "Left out",
+      policy: "A question is never handed to a capability that proposes actions",
+      signals: {
+        goal: "goal",
+        kind: "kind of request",
+        entity: "about: {detail}",
+        words: "words: {detail}",
+        context_types: "context: {detail}",
+        context_sources: "context sources: {detail}",
+        mode: "request to act",
+        deprecated: "deprecated",
+      },
+    },
     title: "My intentions",
     subtitle: "Follow your requests, where they stand, and everything that happened to them.",
     new: "New intention",

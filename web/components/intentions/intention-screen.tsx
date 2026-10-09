@@ -11,6 +11,7 @@ import { AnalysisTab, EvidenceTab, SummarySaid } from "@/components/intentions/a
 import { kindOf, StatusPill } from "@/components/intentions/intentions-list";
 import { ReadinessPanel } from "@/components/intentions/readiness";
 import { linkedLabel } from "@/components/intentions/link-words";
+import { RoutingPanel } from "@/components/intentions/routing";
 import { TimelineTab } from "@/components/intentions/timeline-tab";
 import { UnderstandingPanel } from "@/components/intentions/understanding";
 import { useConfirm } from "@/components/interactions/confirm";
@@ -288,6 +289,8 @@ function Overview({ intention }: { intention: IntentionDetail }) {
       <div className="flex flex-col gap-4">
         {/* Whether its context can ground its analysis (LEKA-387). */}
         {intention.readiness ? <ReadinessPanel readiness={intention.readiness} /> : null}
+        {/* The capability it goes to, and why (LEKA-398). */}
+        <RoutingPanel intentionId={intention.id} />
         <Card title={w.links} icon={<Link2 className="size-4 text-shell-muted" aria-hidden="true" />}>
           {intention.links.length ? (
             <ul className="space-y-2">
