@@ -347,6 +347,14 @@ async def test_context_findings_entities_linked_and_checked(
     found = await client.post(path, json={"kind": "finding", "ref_id": str(finding)})
     assert found.json()["label"] == "No team or person is named as owner of Billing API."
     assert found.json()["detail"]["code"] == "ownership.no_owner"
+    # Its values too: the interface words it as Insights does — its
+    # statement is English, in a French history.
+    assert "params" in found.json()["detail"]
+    [linked] = [
+        e for e in await _history(client, intention["id"]) if e["detail"].get("kind") == "finding"
+    ]
+    assert linked["detail"]["code"] == "ownership.no_owner"
+    assert "params" in linked["detail"]
     # Linked twice: the same link.
     twice = await client.post(path, json={"kind": "entity", "ref_id": str(billing)})
     assert twice.json()["id"] == entity.json()["id"]

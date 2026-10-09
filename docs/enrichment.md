@@ -345,7 +345,7 @@ what no source says is said missing, never invented.**
 | service | incident | an open incident `affects` it |
 | | attention | an incident affecting it moved in the last 7 days |
 | | operational | a monitoring source — PagerDuty, Datadog, Grafana, Splunk, Kibana (connector category `observability`) — shows it, and nothing above |
-| | its deduced health, **said deduced** | no monitoring source shows it, but what runs it is known (§ 7, Architecture): the machine's state, its last deployment (LEKA-369) |
+| | its deduced health, **said deduced** | no monitoring source shows it, but what runs it is known (§ 7, Architecture): the machine's state, its last deployment (LEKA-369) — read on every screen: the dashboard, the map, the sheet, as on the architecture (before 2026-10-09 only the architecture read it, and one service was « en bonne santé, déduit » there, « non surveillé » on its sheet, not operational on the dashboard) |
 | | unmonitored | no monitoring source shows it, nothing known runs it |
 | database, cloud resource | operational · attention · incident | `running` · `starting`, `stopping`, `stopped`, `deleting` · `failed` — a `terminated` one has none: it is gone |
 | | its deduced health, said deduced | no state of its own — a database the code names — and what serves it is known |
@@ -365,7 +365,10 @@ what no source says is said missing, never invented.**
   tabs from the company model's views, by these same states
   ([company-model.md § 16](company-model.md)); this route still serves
   its events and points of attention;
-- **the figures**: services, and how many are operational; open incidents,
+- **the figures**: services — the company's own; those it uses and does
+  not run (`hosting: external`, an e-mail provider) apart, as the
+  architecture's « Dépendances externes » — how many are operational
+  (measured, or deduced), how many of those deduced; open incidents,
   and how many services they affect; changes (pull requests, commits,
   releases, deployments) in the last 24 hours; the environments things say
   they are in — the "Vue globale" filter. Since LEKA-369 the screen's tiles
@@ -373,7 +376,8 @@ what no source says is said missing, never invented.**
   databases, cloud resources and teams, and their states in shares;
 - **points of attention**, the most urgent first: each open incident and
   what it affects; resources failed; resources stopped; work waiting
-  (`stale`); services nothing watches; dormant repositories;
+  (`stale`) — and, worth knowing rather than alarming (`info`): services no
+  tool measures (their state deduced, or not known); dormant repositories;
 - **recent events**: the six latest things that moved (by
   `last_activity_at`), what each is now — an open incident, a resolved one,
   work waiting, a change, news — and the service, repository or project it
@@ -388,10 +392,14 @@ events around it (what is part of it or affects it — for a service, also
 what is part of its repositories); its dependencies — repositories,
 services, databases, resources, projects related to it, each way, with the
 relationship's origin, confidence and whether it joins two tools; the
-documents that name it or describe it (LEKA-366); what needs attention.
+documents that name it or describe it (LEKA-366); what needs attention —
+apart from what is only worth knowing (« Rien d'urgent, à savoir »); its
+state said deduced (`deduced`) when no tool measures it.
 
 **Its activity** (`GET …/environment/{id}/activity?days=30`), what fills
-the sheet's tiles and its tabs Métriques, Déploiements and Logs: everything
+the sheet's tiles and its tabs Métriques, Déploiements and Logs — over the
+period the sheet's header chooses, 7, 30 or 90 days, its events too (its
+tiles and chart were 30 days whatever was chosen, until 2026-10-09): everything
 that moved around it over the period — what is part of it or affects it,
 its incidents included, for a service what is part of its repositories —
 each as its source says it (state, link, version, environment); counted
@@ -413,8 +421,11 @@ LEKA-369, from the capabilities and processes declared) and the runtime
 metrics — latency, errors, requests, availability — a monitoring source's.
 
 **Mon Dashboard** reads this screen's figures: services and how many are
-operational (said deduced when no monitoring source shows them), the
-points of attention, the open incidents and the services they affect; this
+operational — « sur 6 service(s) · état déduit de leur hébergement, non
+mesuré · 1 externe(s) à part » — the points of attention, **counting what
+needs someone** (incidents, resources failed or stopped, work waiting), what
+is only worth knowing said apart (« Rien d'urgent · 6 service(s) sans
+monitoring »), the open incidents and the services they affect; this
 week's events (Activité, LEKA-383) and the open contradictions (LEKA-382).
 
 ## Not yet

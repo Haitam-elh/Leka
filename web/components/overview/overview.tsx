@@ -270,9 +270,16 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
   const environment = useEnvironment();
   const env = environment.data;
   const attention = env ? attentionRows(t, env.attention) : [];
-  const points = env ? env.attention.reduce((sum, point) => sum + point.count, 0) : null;
-  const unmonitored =
-    env?.attention.find((point) => point.kind === "unmonitored_services")?.count ?? 0;
+  // What needs someone: incidents, resources failed or stopped, work left
+  // waiting. What is only worth knowing — nothing measures a service —
+  // is said, not counted as an alarm.
+  const pressing = attention.filter((row) => row.level !== "info");
+  const points = env
+    ? env.attention
+        .filter((point) => point.level !== "info")
+        .reduce((sum, point) => sum + point.count, 0)
+    : null;
+  const known = attention.find((row) => row.level === "info");
   const tiles = [
     {
       key: "services",
@@ -280,14 +287,24 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
       tone: "success" as const,
       label: w.servicesUp,
       filled: true,
-      value: env ? String(env.services_operational) : null,
+      // Nothing says how any of them is: not « 0 », which reads « all
+      // down », nor « — », which reads « not loaded yet » — unknown.
+      value: !env
+        ? null
+        : env.services > 0 && env.services_unknown === env.services
+          ? "?"
+          : String(env.services_operational),
       foot: !env
         ? null
         : env.services === 0
           ? w.noServices
           : [
               fill(w.servicesOf, { total: env.services }),
-              unmonitored ? fill(w.unmonitored, { count: unmonitored }) : null,
+              env.services_deduced ? w.deduced : null,
+              env.services_unknown ? fill(w.unknown, { count: env.services_unknown }) : null,
+              env.services_external
+                ? fill(w.external, { count: env.services_external })
+                : null,
             ]
               .filter(Boolean)
               .join(" · "),
@@ -298,7 +315,13 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
       tone: "warning" as const,
       label: w.attentionPoints,
       value: points === null ? null : String(points),
-      foot: !env ? null : attention[0] ? attention[0].detail || attention[0].title : w.noAttention,
+      foot: !env
+        ? null
+        : pressing[0]
+          ? pressing[0].detail || pressing[0].title
+          : known
+            ? fill(w.onlyKnown, { detail: known.detail || known.title })
+            : w.noAttention,
     },
     {
       key: "incidents",

@@ -237,6 +237,22 @@ describe("an intention's page", () => {
         by_name: null,
         detail: { event: "moved", version: 1, from_status: "submitted", to_status: "analysing" },
       }),
+      // A finding of LEKA's, worded as Insights words it — its statement is
+      // the API's English.
+      item({
+        kind: "linked",
+        at: ago(2.75),
+        actor: "system",
+        by: null,
+        by_name: null,
+        detail: {
+          event: "linked",
+          kind: "finding",
+          label: "3 things rely on postgres-prod (database); nothing watches it.",
+          code: "dependency.concentration",
+          params: { dependents: 3, name: "postgres-prod", kind: "database" },
+        },
+      }),
       item({
         kind: "linked",
         at: ago(2.8),
@@ -253,18 +269,19 @@ describe("an intention's page", () => {
     expect(events.map((e) => e.querySelector("p")?.textContent)).toEqual([
       "Intention créée",
       "Liée : Contexte « Billing API »",
+      "Liée : Constat « 3 éléments dépendent de postgres-prod »",
       "LEKA a rassemblé le contexte et commence l'analyse",
       "Analyse lancée",
       "Modifications demandées",
       "Annulée",
     ]);
-    expect(events[2]).toHaveTextContent("par LEKA");
-    expect(events[2]).toHaveTextContent("Contexte, version 1");
-    expect(events[3]).toHaveTextContent("Analyse n° 1");
-    expect(events[4]).toHaveTextContent("par Sara Martin");
-    expect(events[4]).toHaveTextContent("Décision");
-    expect(events[5]).toHaveTextContent("par vous");
-    expect(events[5]).toHaveTextContent("Raison : asked twice");
+    expect(events[3]).toHaveTextContent("par LEKA");
+    expect(events[3]).toHaveTextContent("Contexte, version 1");
+    expect(events[4]).toHaveTextContent("Analyse n° 1");
+    expect(events[5]).toHaveTextContent("par Sara Martin");
+    expect(events[5]).toHaveTextContent("Décision");
+    expect(events[6]).toHaveTextContent("par vous");
+    expect(events[6]).toHaveTextContent("Raison : asked twice");
     expect(told.timeline).toHaveBeenLastCalledWith(ID, { categories: [], actor: null });
 
     // Filtered: by kind of thing, by who.

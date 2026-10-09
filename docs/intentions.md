@@ -24,7 +24,7 @@ Code: `api/leka/intentions/` — `lifecycle.py` (the states and moves, pure),
 | --- | --- | --- |
 | **Intention** | What was asked: its words (`text`), a `title` — its first 300 characters unless one is given — the `scope` chosen (environment, period, services, sources), who asked (`created_by`), its `status` and since when, what it asks for as LEKA read it (`kind`: diagnose, change, migration, compliance, dependency, ownership, knowledge, general — LEKA-373), the context it is analysed from (`context_id`), what LEKA concluded in a sentence (`summary`, LEKA-389), whether it is archived | `intentions` |
 | **Event** | One thing that happened to it: created, moved from one state to another, linked or unlinked, archived or restored — numbered (`sequence`), by whom (`actor`: a person and which — `by` — or LEKA itself), when, why (`reason`), and what else it says (`detail`: the scope asked, the context version, what was linked) | `intention_events` |
-| **Link** | What it rests on, or what came of it: its context, a finding, an entity it is about — and its decisions, actions and outcomes (LEKA-390 to 392) — named as it was when linked (`label`, `detail`: a context's version, a finding's code), so the link still says it when the thing is gone | `intention_links` |
+| **Link** | What it rests on, or what came of it: its context, a finding, an entity it is about — and its decisions, actions and outcomes (LEKA-390 to 392) — named as it was when linked (`label`, `detail`: a context's version, a finding's code and values — the interface words a finding from them, as Insights does: its `label` is the API's English), so the link still says it when the thing is gone | `intention_links` |
 
 No foreign key from a link to what it names: findings are resolved and
 pruned, contexts archived, and a link must still say what it was.
@@ -104,7 +104,7 @@ events go with it, a workspace's with the workspace.
 | --- | --- |
 | `created` | by whom, the scope asked |
 | `moved` | from, to, the move's name, by whom, why — asking again: the words and scope before, the context's new version |
-| `linked`, `unlinked` | what kind, which, its label |
+| `linked`, `unlinked` | what kind, which, its label — a finding's code and values with it |
 | `archived`, `restored` | by whom |
 
 With its analyses, its decision, its plan and its outcome, this history is
@@ -199,7 +199,8 @@ actor=…, label=…)`.
   next; *Historique* — its whole story in words, in order, by LEKA or by a
   person, filtered (§ 15); *Analyse* and *Preuves* —
   its analysis, how it went and on what (§ 12); *Actions* says it comes
-  with the decision and its execution. Its asker, or who may
+  with the decision and its execution — and, for a question, that it calls
+  for none: LEKA answers, never acts; to act, ask for it. Its asker, or who may
   approve, cancels it — asked first, with a reason — archives it once done
   with, restores it.
 

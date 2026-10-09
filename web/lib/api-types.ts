@@ -10731,6 +10731,12 @@ export interface components {
             entity: components["schemas"]["EnrichedEntity"];
             /** Status */
             status: string | null;
+            /**
+             * Deduced
+             * @description Its state is deduced from what runs it, no tool measuring it.
+             * @default false
+             */
+            deduced: boolean;
             /** Environment */
             environment: string | null;
             owner: components["schemas"]["SheetPersonRead"] | null;
@@ -10880,10 +10886,34 @@ export interface components {
              * @description The environments its things say they are in.
              */
             environments: string[];
-            /** Services */
+            /**
+             * Services
+             * @description The company's own services; the external ones apart.
+             */
             services: number;
-            /** Services Operational */
+            /**
+             * Services Operational
+             * @description Measured, or deduced from what runs them.
+             */
             services_operational: number;
+            /**
+             * Services Deduced
+             * @description Whose state is deduced from what runs them, no tool measuring it.
+             * @default 0
+             */
+            services_deduced: number;
+            /**
+             * Services External
+             * @description Services it uses and does not run.
+             * @default 0
+             */
+            services_external: number;
+            /**
+             * Services Unknown
+             * @description Whose state nothing says: no tool measures it, nothing known runs it.
+             * @default 0
+             */
+            services_unknown: number;
             /** Incidents Open */
             incidents_open: number;
             /** Services Impacted */
