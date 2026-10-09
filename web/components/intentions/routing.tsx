@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { RunAgent } from "@/components/capabilities/agent-runs";
 import { reasonSaid, titleOf } from "@/components/capabilities/catalogue";
+import { WorkflowPanel } from "@/components/capabilities/workflow-runs";
 import { Card, type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ function excludedSaid(t: Dictionary, candidate: RoutedCandidate): string {
 function SelectedAgent({ candidate, intentionId }: { candidate: RoutedCandidate; intentionId: string }) {
   const { data } = useCapability(candidate.key);
   if (!data) return null;
+  if (data.kind === "workflow") return <WorkflowPanel capability={data} intentionId={intentionId} />;
   return <RunAgent capability={data} intentionId={intentionId} />;
 }
 
@@ -63,7 +65,8 @@ export function RoutingPanel({ intentionId }: { intentionId: string }) {
     [...data.candidates, ...data.excluded].map((c) => [c.key, titleOf(t, c)] as const),
   );
   const selected = data.candidates.filter((c) => c.selected);
-  const agents = selected.filter((c) => c.kind === "agent");
+  // What a person runs for it: an agent, a workflow (LEKA-397).
+  const agents = selected.filter((c) => c.kind === "agent" || c.kind === "workflow");
   const headline =
     data.outcome === "routed"
       ? fill(w.routed, { titles: selected.map((c) => titleOf(t, c)).join(", ") })
