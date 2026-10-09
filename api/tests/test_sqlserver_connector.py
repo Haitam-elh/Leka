@@ -79,6 +79,18 @@ HOW_TO_START = (
     f"no SQL Server at {SERVER.hostname}:{PORT}. Start one with `docker compose up -d "
     "sqlserver`, or point LEKA_SQLSERVER_TEST_URL at another."
 )
+# What a statement may take, here. 15 s is the budget against a customer's
+# server; on the CI's self-hosted runner — an ARM Mac — this SQL Server runs
+# emulated (Rosetta), and a catalogue read on a busy machine took longer
+# (2026-10-09: two tests cut, TIMEOUT, nothing wrong with them). These tests
+# check what LEKA reads, not how fast it reads it: a minute. The two that
+# check a statement cut short set their own.
+PATIENCE_MS = 60_000
+
+
+@pytest.fixture(autouse=True)
+def _patient(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ms, "STATEMENT_TIMEOUT_MS", PATIENCE_MS)
 
 
 @dataclass(frozen=True)
