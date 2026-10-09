@@ -28,7 +28,7 @@ concurrency:
 jobs:
   build:
     name: build and push the two images
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     # Two conditions, and the first one matters most today.
     #
     # PRODUCTION_ENABLED is a repository variable that does not exist until
@@ -120,6 +120,9 @@ jobs:
           context: api
           # The agents, from the repository's root (api/Dockerfile).
           build-contexts: agents=agents
+          # The production box is x86: said, so that a self-hosted runner on
+          # an ARM Mac builds for it too.
+          platforms: linux/amd64
           push: true
           # The sha and nothing else. No `latest`: a moving tag means
           # "what is running?" has no answer and rollback has no target.
@@ -137,6 +140,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: web
+          platforms: linux/amd64
           push: true
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.PROD_API_URL }}
@@ -149,7 +153,7 @@ jobs:
 
   deploy:
     name: deploy to production, and undo it if it does not come up
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     needs: build
     environment: production
     permissions:

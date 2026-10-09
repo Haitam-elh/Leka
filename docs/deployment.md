@@ -93,6 +93,63 @@ docker login ghcr.io -u <github-user>                # a PAT with read:packages
 bash deploy.sh ghcr.io/<owner>/leka <sha>
 ```
 
+### Where CI and CD run
+
+Every job says `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`. With
+the repository variable `CI_RUNS_ON` unset, GitHub's runners. With
+`CI_RUNS_ON = leka`, **the self-hosted runner**. GitHub counts Actions
+minutes on the repository owner's account, everyone's pushes included, and
+past the month's allowance it runs nothing; the self-hosted runner costs no
+minutes.
+
+**What it is:** a Linux VM on a developer's Mac. It is the Colima profile
+`leka-x86`: Ubuntu 24.04, arm64, with Rosetta for the amd64-only images
+(SQL Server), 4 CPUs, 6 GB, 40 GB. The runner is in `~/actions-runner`, as a
+systemd service, named `leka-mac` with the label `leka`. CD builds the
+production images for `linux/amd64` wherever it runs.
+
+**Its limits:**
+- It runs one job at a time.
+- It runs only while the Mac is awake and the VM is up: `colima start leka-x86`
+  after a reboot. A job waits in *Queued* otherwise, and GitHub drops it
+  after 24 hours.
+- Nothing else in that VM may use the CI's ports (5432, 1433, 1521, 9000…)
+  while a job runs.
+
+**Setting it up again**: a token from the repository's *Settings → Actions →
+Runners → New self-hosted runner*, then:
+
+```bash
+colima start leka-x86 --arch aarch64 --vm-type vz --vz-rosetta --cpu 4 --memory 6 --disk 40
+colima ssh -p leka-x86
+# in the VM: download and unpack the runner as that page says, into ~/actions-runner, then
+./config.sh --url https://github.com/<owner>/<repo> --token <token> --name leka-mac --labels leka --unattended
+sudo ./svc.sh install && sudo ./svc.sh start
+```
+
+Two settings, without which the suite fails there and nowhere else:
+
+1. **Python where its builds expect it.** `actions/setup-python`'s builds
+   find `libpython` under `/opt/hostedtoolcache`. Installed anywhere else, a
+   Python started with a clean environment cannot load it: the production
+   checks in `tests/test_api_contract.py` start one.
+
+   ```bash
+   sudo mkdir -p /opt/hostedtoolcache && sudo chown "$USER" /opt/hostedtoolcache
+   printf 'AGENT_TOOLSDIRECTORY=/opt/hostedtoolcache\nRUNNER_TOOL_CACHE=/opt/hostedtoolcache\n' >> ~/actions-runner/.env
+   sudo ./svc.sh stop && sudo ./svc.sh start
+   ```
+
+2. **One clock.** Two things set the VM's clock: Colima's guest agent, from
+   the Mac, and NTP, from the internet. They disagree by about 110 ms, so the
+   clock moves back every 10 to 20 seconds. That fails any test comparing two
+   instants, for example a sync run that "finished before it started". Turn
+   NTP off; the Mac's clock is the one kept:
+
+   ```bash
+   sudo timedatectl set-ntp false
+   ```
+
 ---
 
 ## Rolling back
