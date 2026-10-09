@@ -26,12 +26,9 @@ test.describe("Capabilities", () => {
     await expect(owner).toHaveAttribute("data-available", "true");
     const architect = page.locator('[data-testid="capability-card"][data-key="application-architecture"]');
     await expect(architect).toContainText("Architecte applicatif");
-    await expect(architect).toHaveAttribute("data-available", "false");
-    // No model key in CI; agents run (LEKA-395): that is all in its way.
-    await expect(architect.getByTestId("capability-reasons")).toContainText(
-      "Aucun modèle de langage ne peut l'exécuter ici",
-    );
-    await expect(architect.getByTestId("capability-reasons")).not.toContainText("agents");
+    // A model answers here (the stand-in, LEKA-429) and agents run
+    // (LEKA-395): nothing is in its way.
+    await expect(architect).toHaveAttribute("data-available", "true");
 
     // Its words find it.
     await page.getByTestId("catalogue-search").fill("architecte");
@@ -43,11 +40,10 @@ test.describe("Capabilities", () => {
     await expect(sheet.getByTestId("capability-inputs")).toContainText("parcours");
     await expect(sheet.getByTestId("capability-formats")).toContainText("PDF");
     await expect(sheet.getByTestId("capability-versions")).toContainText("v18.0.0");
-    // Run from its sheet (LEKA-395) — not here, without a model.
-    await expect(sheet.getByTestId("agent-run-form")).toContainText(
+    // Run from its sheet (LEKA-395): here it can — a model answers.
+    await expect(sheet.getByTestId("agent-run-form")).not.toContainText(
       "Il ne peut pas s'exécuter ici pour l'instant.",
     );
-    await expect(sheet.getByRole("button", { name: "Lancer" })).toBeDisabled();
     await expect(sheet).toContainText("Aucune exécution pour l'instant.");
 
     // Turned off, saying why — then on again.

@@ -4,9 +4,8 @@ import { signIn } from "./sign-in";
 
 /**
  * Paramètres → Modèle de langage (LEKA-394), in a real browser, against the
- * real API — with no model key, as CI runs: LEKA's default, Gemini 3.8
- * Flash, said with its price and the key it lacks; nobody to answer, so the
- * rules do. The company's Azure OpenAI plugged in — its key sent once,
+ * real API — LEKA's default, Gemini 3.8 Flash, reached at the tests'
+ * stand-in (LEKA-429): said with its price, ready, first to answer. The company's Azure OpenAI plugged in — its key sent once,
  * never shown again — answering first; then removed. No model is called:
  * saving one calls nothing.
  */
@@ -19,8 +18,8 @@ test.describe("Language model", () => {
     await expect(section).toBeVisible();
     await expect(page.getByTestId("model-default")).toContainText("Gemini 3.8 Flash");
     await expect(page.getByTestId("model-default")).toContainText("par million de tokens");
-    await expect(page.getByTestId("model-default")).toContainText("Clé non configurée");
-    await expect(page.getByTestId("model-nobody")).toBeVisible();
+    await expect(page.getByTestId("model-default")).toContainText("Prêt");
+    await expect(page.getByTestId("model-answering")).toContainText("Gemini 3.8 Flash");
 
     await page.getByTestId("model-bring").click();
     await page.getByTestId("model-provider").selectOption("azure_openai");
@@ -42,6 +41,6 @@ test.describe("Language model", () => {
     await expect(page.getByTestId("model-own")).toContainText(
       "Aucun : c'est le modèle de LEKA qui répond.",
     );
-    await expect(page.getByTestId("model-nobody")).toBeVisible();
+    await expect(page.getByTestId("model-answering")).not.toContainText("Votre entreprise");
   });
 });

@@ -1324,6 +1324,14 @@ const fr = {
       "model.test": "Test du modèle",
     },
     callStatuses: { ok: "OK", failed: "Échec", invalid: "Réponse invalide" },
+    runsTitle: "Exécutions",
+    runStatuses: {
+      succeeded: "réussie(s)",
+      invalid: "réponse(s) écartée(s) à la vérification",
+      no_model: "sans modèle disponible",
+      timed_out: "hors délai",
+      failed: "en échec",
+    },
     failedToLoad: "Le modèle de langage n'a pas pu être lu.",
   },
   decisions: {
@@ -6189,6 +6197,14 @@ const en: Dictionary = {
       "model.test": "Model test",
     },
     callStatuses: { ok: "OK", failed: "Failed", invalid: "Invalid answer" },
+    runsTitle: "Executions",
+    runStatuses: {
+      succeeded: "succeeded",
+      invalid: "answer(s) set aside when checked",
+      no_model: "with no model available",
+      timed_out: "timed out",
+      failed: "failed",
+    },
     failedToLoad: "The language model could not be read.",
   },
   decisions: {

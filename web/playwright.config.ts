@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { MODEL_ENV, MODEL_STUB_PORT } from "./e2e/model-env";
 import { OUTBOX } from "./e2e/outbox";
 import { pythonExecutable } from "./e2e/python";
 
@@ -60,6 +61,15 @@ export default defineConfig({
 
   webServer: [
     {
+      // A stand-in for Gemini (LEKA-429): LEKA's default model, reached
+      // here, so intentions are read and answered by "a model" end to end —
+      // the real gateway, runtime and checks — without a key or a network.
+      command: "node e2e/model-stub.mjs",
+      url: `http://127.0.0.1:${MODEL_STUB_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
+    {
       // The API. Secure cookies are turned off because these tests speak
       // http: a browser refuses to store a Secure cookie over a plain
       // connection, which would make every sign-in silently fail. The
@@ -78,6 +88,8 @@ export default defineConfig({
         LEKA_RESEND_API_KEY: "",
         LEKA_WEB_URL: "http://localhost:3000",
         LEKA_EMAIL_OUTBOX_FILE: OUTBOX,
+        // Its model: the stand-in above, never a developer's real key.
+        ...MODEL_ENV,
       },
       url: "http://localhost:8000/api/v1/health",
       reuseExistingServer: !process.env.CI,

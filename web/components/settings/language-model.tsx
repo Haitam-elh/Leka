@@ -435,6 +435,15 @@ function Usage({ usage }: { usage: ModelUsage }) {
               </ul>
             </div>
           </div>
+          {Object.keys(usage.runs).length ? (
+            <p className="text-xs text-shell-muted" data-testid="model-runs">
+              <span className="font-semibold text-shell-nav">{w.runsTitle} : </span>
+              {(["succeeded", "invalid", "no_model", "timed_out", "failed"] as const)
+                .filter((status) => usage.runs[status])
+                .map((status) => `${usage.runs[status]} ${w.runStatuses[status]}`)
+                .join(" · ")}
+            </p>
+          ) : null}
           <div>
             <p className="mb-1 text-xs font-semibold text-shell-nav">{w.latest}</p>
             <ul className="divide-y divide-shell-line/60 text-[0.8125rem]">
