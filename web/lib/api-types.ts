@@ -5607,6 +5607,33 @@ export interface components {
             error: string | null;
             /** Reason */
             reason: string | null;
+            /**
+             * Level
+             * @description Its level: each after the one before.
+             * @default 0
+             */
+            level: number;
+            /**
+             * Started Ms
+             * @description When it started, after the analysis did.
+             * @default 0
+             */
+            started_ms: number;
+            /**
+             * Handed
+             * @description The capabilities whose output it was handed.
+             */
+            handed?: string[];
+            /**
+             * Degraded
+             * @description What it reads that did not succeed: run without.
+             */
+            degraded?: string[];
+            /**
+             * Fallback Of
+             * @description The one it ran in place of.
+             */
+            fallback_of?: string | null;
         };
         /**
          * AnalyzerRead

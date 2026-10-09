@@ -41,7 +41,19 @@ const links: Links = {
 type Step = IntentionAnalysis["steps"][number];
 
 function step(name: string, status: Step["status"], ms: number): Step {
-  return { name, version: 1, status, duration_ms: ms, error: null, reason: null };
+  return {
+    name,
+    version: 1,
+    status,
+    duration_ms: ms,
+    error: null,
+    reason: null,
+    level: 0,
+    started_ms: 0,
+    handed: [],
+    degraded: [],
+    fallback_of: null,
+  };
 }
 
 function analysisFixture(overrides: Partial<IntentionAnalysis> = {}): IntentionAnalysis {
