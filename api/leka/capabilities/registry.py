@@ -34,6 +34,7 @@ from leka.capabilities.definition import (
 )
 from leka.capabilities.loader import AgentLoadError, load_all, read_index
 from leka.capabilities.schemas import Agent
+from leka.capabilities.tools import NAMES as TOOL_NAMES
 from leka.capabilities.workflow import Workflow, WorkflowError, build
 from leka.capabilities.workflow import validated as validate_workflow
 from leka.connectors import SourceKind
@@ -89,6 +90,7 @@ def agent_definition(agent: Agent, lifecycle: Lifecycle) -> Definition:
         examples=head.examples,
         instructions=agent.body,
         path=agent.path,
+        tools=head.tools,
     )
 
 
@@ -109,6 +111,10 @@ def agents(agents_dir: Path) -> list[Definition]:
         except ValueError as exc:
             msg = f"{relative}: unknown status {status!r} in registry.yaml"
             raise AgentLoadError(msg) from exc
+        unknown = set(agent.front_matter.tools) - TOOL_NAMES
+        if unknown:
+            msg = f"{relative}: no tool {sorted(unknown)} — {sorted(TOOL_NAMES)}"
+            raise AgentLoadError(msg)
         found.append(agent_definition(agent, lifecycle))
     return found
 

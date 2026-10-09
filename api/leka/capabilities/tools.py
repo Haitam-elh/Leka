@@ -5,6 +5,14 @@ is about (runtime.in_scope).
 
     search_entities   things of the company model, by words
     read_entity       one thing, and what it is tied to
+    dependencies      what one thing depends on, or what depends on it
+                      (LEKA-400)
+    what_happened     what happened around one thing in a period — an
+                      incident, a deployment, a change, a release, a merge
+                      (LEKA-400)
+
+An agent is offered only the tools its front matter declares (`tools`),
+when it declares any (LEKA-400): least privilege, said in its file.
 
 A tool answers the model in JSON. What it may not read, it says so —
 `out_of_scope`, `not_found` — and the run keeps it: a refusal is a step like
@@ -17,16 +25,21 @@ import json
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from leka.capabilities.definition import Definition
 from leka.capabilities.runtime import AgentTool, in_scope
-from leka.knowledge import EntityType, GraphService
+from leka.knowledge import EntityType, GraphService, KnowledgeService
 
 # Things a search gives back, at most.
 MOST_HITS = 20
 # Things around one, at most.
 MOST_AROUND = 40
+# How far dependencies are walked; how far back what happened is read.
+MOST_DEPTH = 3
+MOST_DAYS = 30
+MOST_EVENTS = 40
 
 
 @dataclass(frozen=True)
@@ -82,7 +95,44 @@ READ = AgentTool(
     permission="workspace:read",
 )
 
-TOOLS: tuple[AgentTool, ...] = (SEARCH, READ)
+DEPENDENCIES = AgentTool(
+    name="dependencies",
+    description=(
+        "What one thing depends on (depends_on), or what depends on it "
+        "(used_by) — a few steps away — only things of the types you may read."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "id": {"type": "string", "description": "Its id, as given."},
+            "direction": {"type": "string", "enum": ["depends_on", "used_by"]},
+            "depth": {"type": "integer", "description": "Steps away, 1 to 3."},
+        },
+        "required": ["id", "direction"],
+    },
+    permission="workspace:read",
+)
+
+HAPPENED = AgentTool(
+    name="what_happened",
+    description=(
+        "What happened around one thing over the last days — incidents opened "
+        "or resolved, deployments, changes, releases, merges — the latest first, "
+        "only things of the types you may read."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "id": {"type": "string", "description": "Its id, as given."},
+            "days": {"type": "integer", "description": "How far back, 1 to 30."},
+        },
+        "required": ["id"],
+    },
+    permission="workspace:read",
+)
+
+TOOLS: tuple[AgentTool, ...] = (SEARCH, READ, DEPENDENCIES, HAPPENED)
+NAMES = frozenset(t.name for t in TOOLS)
 
 Handler = Callable[[Mapping[str, Any]], Awaitable[Answer]]
 
@@ -100,7 +150,20 @@ def _types(definition: Definition, asked: object) -> list[EntityType] | None:
     return [EntityType(t) for t in mine]
 
 
-def handlers(definition: Definition, graph: GraphService) -> dict[str, Handler]:
+def _bounded(said: object, low: int, high: int, default: int) -> int:
+    try:
+        return min(max(int(str(said)), low), high)
+    except ValueError:
+        return default
+
+
+def handlers(
+    definition: Definition,
+    graph: GraphService,
+    knowledge: KnowledgeService | None = None,
+    *,
+    now: datetime | None = None,
+) -> dict[str, Handler]:
     """Each tool, bound to the agent it serves and the workspace's model."""
 
     async def search(arguments: Mapping[str, Any]) -> Answer:
@@ -173,4 +236,98 @@ def handlers(definition: Definition, graph: GraphService) -> dict[str, Handler]:
             "ok",
         )
 
-    return {SEARCH.name: search, READ.name: read}
+    async def _scoped(arguments: Mapping[str, Any]) -> tuple[uuid.UUID, Answer | None]:
+        try:
+            wanted = uuid.UUID(str(arguments.get("id")))
+        except ValueError:
+            return uuid.UUID(int=0), _refused("not_an_id")
+        brief = (await graph.briefs([wanted])).get(wanted)
+        if brief is None:
+            return wanted, _refused("not_found")
+        if not in_scope(definition, brief.type.value):
+            return wanted, _refused("out_of_scope")
+        return wanted, None
+
+    async def depends(arguments: Mapping[str, Any]) -> Answer:
+        wanted, refused = await _scoped(arguments)
+        if refused is not None:
+            return refused
+        direction = str(arguments.get("direction") or "")
+        if direction not in ("depends_on", "used_by") or knowledge is None:
+            return _refused("direction_unknown")
+        # LEKA's words (knowledge): downstream, what it depends on; upstream,
+        # what depends on it — what a failure of it reaches.
+        found = await knowledge.dependencies(
+            wanted,
+            direction="downstream" if direction == "depends_on" else "upstream",
+            depth=_bounded(arguments.get("depth"), 1, MOST_DEPTH, 1),
+            environment=None,
+        )
+        if found is None:
+            return _refused("not_found")
+        kept = [n for n in found.nodes if in_scope(definition, n.entity.type.value)]
+        return Answer(
+            _said(
+                {
+                    "of": str(wanted),
+                    "direction": direction,
+                    "things": [
+                        {
+                            "id": str(n.entity.id),
+                            "type": n.entity.type.value,
+                            "name": n.entity.name,
+                            "depth": n.depth,
+                            "criticality": n.criticality,
+                        }
+                        for n in kept
+                    ],
+                    # What it reaches that the agent may not read: counted.
+                    "left_out": len(found.nodes) - len(kept),
+                    "truncated": found.truncated,
+                }
+            ),
+            "ok",
+        )
+
+    async def happened(arguments: Mapping[str, Any]) -> Answer:
+        wanted, refused = await _scoped(arguments)
+        if refused is not None:
+            return refused
+        until = now or datetime.now(UTC)
+        days = _bounded(arguments.get("days"), 1, MOST_DAYS, 7)
+        events = await graph.events(
+            [wanted], since=until - timedelta(days=days), until=until, limit=MOST_EVENTS
+        )
+        briefs = await graph.briefs(list({e for e, _, _, _ in events}))
+        kept = [
+            (briefs[e], at, kind)
+            for e, at, kind, _ in events
+            if e in briefs and in_scope(definition, briefs[e].type.value)
+        ]
+        return Answer(
+            _said(
+                {
+                    "around": str(wanted),
+                    "days": days,
+                    "events": [
+                        {
+                            "id": str(b.id),
+                            "type": b.type.value,
+                            "name": b.name,
+                            "what": kind,
+                            "at": at.isoformat(),
+                        }
+                        for b, at, kind in kept
+                    ],
+                    "left_out": len(events) - len(kept),
+                }
+            ),
+            "ok",
+        )
+
+    return {
+        SEARCH.name: search,
+        READ.name: read,
+        DEPENDENCIES.name: depends,
+        HAPPENED.name: happened,
+    }

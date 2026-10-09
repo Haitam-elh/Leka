@@ -148,6 +148,11 @@ the agent runtime (LEKA-395, [agent-runtime.md](agent-runtime.md)) through the
 model gateway (LEKA-394) — its deck delivered as markdown, its PPTX and PDF
 said pending.
 
+## 9. The agent library
+
+Eleven agents of LEKA's own, active, each to the runtime's contract and
+declaring its tools — [agent-library.md](agent-library.md) (LEKA-400).
+
 ## Not yet
 
 - **What an agent delivers as files** (an architecture deck as PPTX and PDF):

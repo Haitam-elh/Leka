@@ -112,7 +112,9 @@ async def test_the_catalogue_for_a_workspace_and_a_person(
         ARCHITECT,
         "dependencies",
     }
-    assert [c["key"] for c in await _list(client, kind="agent")] == [ARCHITECT]
+    # The architect, and the library's agents (LEKA-400).
+    agents = {c["key"] for c in await _list(client, kind="agent")}
+    assert {ARCHITECT, "incident-investigation", "code-review"} <= agents
     assert [c["key"] for c in await _list(client, q="architecte")] == [ARCHITECT]
     assert ARCHITECT not in {c["key"] for c in await _list(client, available="true")}
     names = [c["title"] for c in await _list(client, sort="name")]

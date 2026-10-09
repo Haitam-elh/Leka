@@ -50,6 +50,11 @@ def _write(tmp_path: Path, content: str) -> Path:
 # ── The repository's own agents ──────────────────────────────────────────────
 
 
+# Agents that propose actions — each a decision reviewed as such: the build
+# fixer proposes a fix, never applies it (LEKA-400, docs/agent-library.md).
+PROPOSES = frozenset({"build-fixer"})
+
+
 def test_the_repository_agents_all_load() -> None:
     """agents/ must never contain a file the loader would choke on.
 
@@ -60,6 +65,8 @@ def test_the_repository_agents_all_load() -> None:
     assert len(registry) >= 3
 
     for agent in registry.all():
+        if agent.front_matter.name in PROPOSES:
+            continue
         assert agent.front_matter.mode is AgentMode.READ_ONLY, (
             f"{agent.front_matter.name} is not read_only. That is allowed, but "
             "it must be a deliberate decision reviewed as such."

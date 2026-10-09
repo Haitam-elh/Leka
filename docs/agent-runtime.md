@@ -88,6 +88,13 @@ model with its id, its type and its line of text, **as data**.
 | --- | --- | --- |
 | `search_entities` | things of the company model, by words — only of its types | `workspace:read` |
 | `read_entity` | one thing by its id, and what it is tied to — only of its types | `workspace:read` |
+| `dependencies` | what one thing depends on (`depends_on`) or what depends on it (`used_by`), 1 to 3 steps — only of its types, the rest counted (LEKA-400) | `workspace:read` |
+| `what_happened` | incidents, deployments, changes, releases, merges around one thing, 1 to 30 days back — only of its types (LEKA-400) | `workspace:read` |
+
+**An agent is offered only the tools its file declares** (`tools:`, LEKA-400)
+— every read-only one when it declares none; an unknown tool refuses the
+catalogue. The library's agents each declare theirs
+([agent-library.md](agent-library.md)).
 
 - **A tool that acts is never offered** (`effect: act`): agents run
   read-only; what should be done, an agent proposes, people decide

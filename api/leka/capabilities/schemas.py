@@ -90,6 +90,10 @@ class AgentFrontMatter(BaseModel):
     kinds: tuple[str, ...] = Field(default=(), description="The kinds of intention it answers")
     examples: tuple[str, ...] = Field(default=(), description="How people ask for it")
     permission: str = Field(default="intention:create", description="What a person needs to use it")
+    tools: tuple[str, ...] = Field(
+        default=(),
+        description="The tools it may be offered (LEKA-400); every read-only one when none",
+    )
 
     @field_validator("name")
     @classmethod

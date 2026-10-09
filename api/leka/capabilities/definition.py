@@ -176,6 +176,9 @@ class Definition:
     path: str | None = None
     # A workflow's: the capabilities its steps use (LEKA-397).
     uses: tuple[str, ...] = ()
+    # An agent's: the tools it may be offered — every read-only one when it
+    # declares none (LEKA-400).
+    tools: tuple[str, ...] = ()
 
     def fingerprint(self) -> str:
         """What it is and does, hashed: everything but where it stands in
@@ -190,6 +193,9 @@ class Definition:
         # Added with workflows (LEKA-397): empty, it says nothing new.
         if not self.uses:
             said.pop("uses")
+        # Added with the agent library (LEKA-400): none, it says nothing new.
+        if not self.tools:
+            said.pop("tools")
         said["goals"] = sorted(self.goals)
         said["kinds"] = sorted(self.kinds)
         canonical = json.dumps(said, sort_keys=True, ensure_ascii=False, default=str)
