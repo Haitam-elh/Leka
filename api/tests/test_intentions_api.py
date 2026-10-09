@@ -608,30 +608,40 @@ async def test_its_context_says_whether_it_can_ground_an_analysis(
     assert first["context"]["version"] == 1
 
 
-async def test_a_diagnosis_no_source_can_ground_is_blocked_said_why(
+async def test_a_diagnosis_no_source_can_ground_is_limited_said_why(
     client: AsyncClient, model: dict[str, uuid.UUID]
 ) -> None:
     """Acme's sources read no incident, deployment or metric: why Billing API
-    is slow cannot be grounded — said before any analysis."""
+    is slow cannot be grounded — said before any analysis, and analysed
+    anyway: LEKA's analyst says what it could not see."""
     intention = (await _ask(client))["intention"]
     ready = intention["readiness"]
-    assert ready["status"] == "blocked"
+    assert ready["status"] == "limited"
     assert [issue["kind"] for issue in ready["critical"]] == ["no_source_for"]
-    # Understood — the question is clear — only not groundable.
+    # Understood — the question is clear — only not well groundable.
     assert intention["status"] == "analysing"
 
 
 async def test_a_critical_gap_is_surfaced_before_any_analysis(
     client: AsyncClient, model: dict[str, uuid.UUID]
 ) -> None:
+    """A question about everything — what is slow — names nothing: said,
+    and looked into; never stopped for a question."""
     intention = (await _ask(client, "Pourquoi tout est si lent depuis hier ?"))["intention"]
     ready = intention["readiness"]
-    assert ready["status"] == "blocked"
+    assert ready["status"] == "limited"
     assert "no_subject" in {issue["kind"] for issue in ready["critical"]}
-    assert intention["status"] == "needs_clarification"
+    assert intention["status"] == "analysing"
     moved = (await _history(client, intention["id"]))[-1]
-    assert moved["detail"]["readiness"] == "blocked"
+    assert moved["detail"]["readiness"] == "limited"
     assert "no_subject" in moved["detail"]["critical"]
+
+
+async def test_an_action_naming_nothing_is_asked_what_it_acts_on(
+    client: AsyncClient, model: dict[str, uuid.UUID]
+) -> None:
+    intention = (await _ask(client, "Redémarre tout en production"))["intention"]
+    assert intention["status"] == "needs_clarification"
 
 
 async def test_another_workspace_s_context_is_not_there(

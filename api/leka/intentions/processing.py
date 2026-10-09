@@ -54,6 +54,7 @@ from leka.intentions.analysis import (
     Answer,
     Asked,
     Capability,
+    Evidence,
     FindingBrief,
     Material,
     Part,
@@ -67,6 +68,8 @@ from leka.intentions.analysis import (
 from leka.intentions.analysis import (
     select as choose,
 )
+from leka.intentions.analyst import NEEDS as ANALYST
+from leka.intentions.analyst import answer as analyst_answer
 from leka.intentions.approval import DecisionService
 from leka.intentions.capabilities import CAPABILITIES
 from leka.intentions.decisions import Target
@@ -74,6 +77,7 @@ from leka.intentions.grounding import side
 from leka.intentions.lifecycle import Actor
 from leka.intentions.lifecycle import IntentionStatus as S
 from leka.intentions.models import Intention, IntentionAnalysis
+from leka.intentions.reads import in_environment, learned_between
 from leka.intentions.recommend import as_mapping, recommend
 from leka.intentions.repository import IntentionRepository
 from leka.intentions.schemas import (
@@ -85,10 +89,12 @@ from leka.intentions.service import IntentionService
 from leka.intentions.writing import NEEDS as WRITING
 from leka.intentions.writing import write
 from leka.knowledge import (
+    ChangeFootprint,
     Entity,
     EntityBrief,
     EntityRepository,
     EntityType,
+    EvolutionRepository,
     GraphRepository,
     GraphService,
     IncidentDetail,
@@ -158,11 +164,14 @@ async def analyse_pending(*, limit: int = 100) -> dict[str, int]:
     analysed now. Idempotent."""
     with system_scope():
         async with session_factory() as session:
+            # A blocked analysis is not one: questions judged blocked before
+            # they could be answered anyway are analysed now.
             analysed = (
                 select(IntentionAnalysis.id)
                 .where(
                     IntentionAnalysis.intention_id == Intention.id,
                     IntentionAnalysis.context_id == Intention.context_id,
+                    IntentionAnalysis.status != "blocked",
                 )
                 .exists()
             )
@@ -380,8 +389,14 @@ async def analyse_intention(
                 steps=[],
                 detail={},
             )
+            if ready is not None and ready.status == "blocked" and not asked.acting:
+                # Judged before a question could be answered anyway (kept
+                # as it was): answered now, what was in the way said.
+                ready = ready.model_copy(update={"status": "limited"})
             if ready is not None and ready.status == "blocked":
-                # Not analysed: what is in the way is said, nothing is run.
+                # An action whose context has something critical in the way:
+                # nothing is run, and the person is asked to clarify — never
+                # left analysing.
                 row.status = "blocked"
                 row.finished_at = moment
                 row.error = "context_blocked"
@@ -389,6 +404,17 @@ async def analyse_intention(
                     "critical": [issue.model_dump(mode="json") for issue in ready.critical]
                 }
                 session.add(row)
+                await IntentionService(IntentionRepository(session, workspace_id)).move(
+                    intention.id,
+                    S.NEEDS_CLARIFICATION,
+                    actor=Actor.SYSTEM,
+                    reason="What it acts on must be clear first.",
+                    detail={
+                        "analysis_id": str(row.id),
+                        "critical": [issue.said for issue in ready.critical][:5],
+                    },
+                    now=moment,
+                )
                 await session.commit()
                 return {"status": "blocked", "analysis": str(row.id)}
             # What the workspace turned off in its catalogue (LEKA-393).
@@ -428,10 +454,12 @@ async def analyse_intention(
         # What LEKA proposes, apart from what it found (LEKA-389).
         result = replace(result, recommendations=recommend(result, asked))
         for capability in writers:
-            outcome, answer = await _write(workspace_id, capability, asked, result, context)
+            outcome, answer, read = await _write(
+                workspace_id, capability, asked, result, context, moment
+            )
             outcomes.append(outcome)
             if answer is not None:
-                result = replace(result, answer=answer)
+                result = answered(result, answer, read)
         return await _finish(
             workspace_id, intention_id, analysis_id, asked, result, outcomes, context_id, moment
         )
@@ -446,40 +474,69 @@ WRITTEN_AS = {
 }
 
 
+def answered(result: Result, answer: Answer, read: Sequence[Evidence]) -> Result:
+    """The result with its answer, and what the analyst read that the answer
+    cites, as evidence. An answer resting on what was read is an answer:
+    the analysis is complete, whatever the rules alone made of it."""
+    held = {e.id for e in result.evidence}
+    evidence = (*result.evidence, *(e for e in read if e.id not in held))
+    status = (
+        "complete"
+        if result.status in ("inconclusive", "failed") and answer.points
+        else result.status
+    )
+    return replace(result, answer=answer, evidence=evidence, status=status)
+
+
 async def _write(
     workspace_id: uuid.UUID,
     capability: Capability,
     asked: Asked,
     result: Result,
     context: AssembledContext | None,
-) -> tuple[StepOutcome, Answer | None]:
-    """The analysis answered in words, by a model through the LLM runtime,
-    with the context it was made from — or said why not. Every execution
-    and its calls are kept, answered or not."""
+    now: datetime,
+) -> tuple[StepOutcome, Answer | None, tuple[Evidence, ...]]:
+    """The question answered by LEKA's analyst — a model reading what it
+    needs through LEKA's tools (analyst.py); when no model this workspace
+    reaches can use tools, or it gives nothing usable, the analysis said in
+    words from what the rules found (writing.py). Or said why not. Every
+    execution and its calls are kept, answered or not."""
     started = time.monotonic()
 
     def took() -> int:
         return max(0, round((time.monotonic() - started) * 1000))
 
     pack = ContextPack.of_context(context) if context is not None else ContextPack()
+    read: tuple[Evidence, ...] = ()
     try:
         with workspace_scope(workspace_id):
             async with session_factory() as session:
+                runtime = LLMRuntime(session, workspace_id)
                 try:
-                    done, answer = await write(
-                        LLMRuntime(session, workspace_id), asked, result, pack
-                    )
+                    answer: Answer | None = None
+                    if await runtime.ready(ANALYST):
+                        done, answer, read = await analyst_answer(
+                            runtime, workspace_id, asked, result, pack, now=now
+                        )
+                    if answer is None:
+                        done, answer = await write(runtime, asked, result, pack)
                 finally:
                     await session.commit()
     except Exception:
         logger.exception("analysis_answer_failed", intention_id=str(asked.id))
-        return StepOutcome(
-            capability.name, capability.version, "failed", took(), error="error"
-        ), None
+        return (
+            StepOutcome(capability.name, capability.version, "failed", took(), error="error"),
+            None,
+            (),
+        )
     if answer is None:
         status, error = WRITTEN_AS.get(done.status, ("failed", done.status))
-        return StepOutcome(capability.name, capability.version, status, took(), error=error), None
-    return StepOutcome(capability.name, capability.version, "succeeded", took()), answer
+        return (
+            StepOutcome(capability.name, capability.version, status, took(), error=error),
+            None,
+            (),
+        )
+    return StepOutcome(capability.name, capability.version, "succeeded", took()), answer, read
 
 
 async def _context(
@@ -567,6 +624,16 @@ async def _material(
             await take(Part.INCIDENTS, _incidents(knowledge, repository, entities, asked, now))
         if Part.CHANGES in wants:
             await take(Part.CHANGES, _changes(graph, ids, asked, now))
+        if Part.EVOLUTION in wants:
+            await take(
+                Part.EVOLUTION,
+                learned_between(
+                    EvolutionRepository(session, workspace_id),
+                    set(ids),
+                    since=asked.since or now - DEFAULT_PERIOD,
+                    until=asked.until or now,
+                ),
+            )
     async with session_factory() as session:
         if Part.FINDINGS in wants:
             await take(Part.FINDINGS, _findings(IntelligenceRepository(session, workspace_id), ids))
@@ -595,6 +662,7 @@ async def _material(
         incidents=tuple(got(Part.INCIDENTS, ())),
         changes=tuple(got(Part.CHANGES, ())),
         findings=tuple(got(Part.FINDINGS, ())),
+        evolution=tuple(got(Part.EVOLUTION, ())),
         quality=got(Part.QUALITY, {}),
         sources=sources,
     )
@@ -620,11 +688,13 @@ async def _incidents(
     asked: Asked,
     now: datetime,
 ) -> list[IncidentDetail]:
-    """The incidents on its subjects in its period, each in detail."""
+    """The incidents on its subjects in its period, each in detail — every
+    one in the workspace when it names nothing: « what happened in
+    production since yesterday » is about all of it."""
     seen: list[uuid.UUID] = []
     since = asked.since or now - DEFAULT_PERIOD
     until = asked.until or now
-    for entity in entities.values():
+    for entity in entities.values() if entities else [None]:
         timeline = await knowledge.timeline(
             entity, since=since, until=until, kinds=[EntityType.INCIDENT], limit=MAX_INCIDENTS
         )
@@ -637,11 +707,13 @@ async def _incidents(
 
 async def _changes(
     graph: GraphService, ids: Sequence[uuid.UUID], asked: Asked, now: datetime
-) -> list[object]:
+) -> list[ChangeFootprint]:
     """The changes around its subjects in its period, each with its
-    footprint (LEKA-378)."""
-    seen: dict[uuid.UUID, object] = {}
-    for ident in ids:
+    footprint (LEKA-378) — every one in the workspace when it names
+    nothing, in the environment it says."""
+    seen: dict[uuid.UUID, ChangeFootprint] = {}
+    arounds: list[uuid.UUID | None] = list(ids) or [None]
+    for ident in arounds:
         found, _ = await graph.footprints(
             since=asked.since or now - DEFAULT_PERIOD,
             until=asked.until or now,
@@ -651,7 +723,8 @@ async def _changes(
         )
         for footprint in found:
             seen.setdefault(footprint.change.id, footprint)
-    return list(seen.values())[:MAX_CHANGES]
+    kept = [f for f in seen.values() if ids or in_environment(f.environment, asked.environment)]
+    return list(kept)[:MAX_CHANGES]
 
 
 async def _findings(

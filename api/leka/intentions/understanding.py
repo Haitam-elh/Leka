@@ -267,7 +267,11 @@ def _ambiguities(
             found.append(
                 AmbiguityRead(
                     kind="no_subject",
-                    blocking=True,
+                    # A question about everything — « what changed in
+                    # production », « which services have no owner » — is
+                    # answered by looking (LEKA's analyst); only an action
+                    # needs to know what it acts on.
+                    blocking=goal.code == "act",
                     said="It names nothing LEKA knows: which service, application or data?",
                     options=[str(m) for m in maybe] if isinstance(maybe, list) else [],
                 )
@@ -276,7 +280,8 @@ def _ambiguities(
             found.append(
                 AmbiguityRead(
                     kind="unknown_subject",
-                    blocking=True,
+                    # Asked about: the answer says LEKA does not know it.
+                    blocking=goal.code == "act",
                     said="Something asked for is not in the company model.",
                 )
             )

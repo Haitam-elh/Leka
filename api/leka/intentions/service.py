@@ -40,7 +40,7 @@ from leka.context import (
     IntentPlan,
 )
 from leka.intelligence import IntelligenceRepository
-from leka.intentions.grounding import readiness, refined
+from leka.intentions.grounding import acting, readiness, refined
 from leka.intentions.lifecycle import (
     CLOSED,
     Actor,
@@ -383,7 +383,7 @@ class IntentionService:
         ground an analysis (LEKA-387) — kept with it."""
         intention.understanding = understood.model_dump(mode="json")
         intention.goal = understood.goal.code
-        ready = readiness(context)
+        ready = readiness(context, acts=acting(understood))
         intention.readiness = ready.model_dump(mode="json")
         return ready
 
@@ -402,7 +402,12 @@ class IntentionService:
         found = await self._contexts.assembled(intention.context_id, version=version)
         if found is None:
             return None
-        return found, readiness(found)
+        understood = (
+            Understanding.model_validate(intention.understanding)
+            if intention.understanding
+            else None
+        )
+        return found, readiness(found, acts=acting(understood))
 
     async def _understand(
         self, text: str, plan: IntentPlan | None, *, at: datetime

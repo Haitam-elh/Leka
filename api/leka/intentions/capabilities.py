@@ -10,7 +10,10 @@ intention's context, one for each thing an intention may need answered.
     incidents       its incidents in the period, what is said or suspected
                     to have caused them, what changed just before
     changes         what changed on it, or on what it is made of and depends
-                    on, in the period — and what followed
+                    on, in the period — and what followed; everywhere in the
+                    environment it says when it names nothing
+    evolution       what LEKA learned in the period: things that appeared,
+                    changed, went
     documentation   what describes it, and whether that is current
     compliance      what a thing of its kind should have: an owner, a
                     current document, its criticality said, nothing serious
@@ -80,6 +83,13 @@ def _risk_of(severity: str | None) -> str:
     return "low" if word else "unknown"
 
 
+# The goals that are about one thing or a few, named: without one, nothing
+# answers them.
+ABOUT_ONE = frozenset(
+    {"find_owner", "map_dependencies", "assess_impact", "plan_migration", "check_compliance"}
+)
+
+
 def _none(material: Material) -> Output:
     return Output(
         missing=(
@@ -96,10 +106,12 @@ def _none(material: Material) -> Output:
 
 def standing(material: Material) -> Output:
     """Each thing it is about: its state, its lifecycle, how well LEKA
-    knows it, what LEKA already concluded about it."""
+    knows it, what LEKA already concluded about it. Naming nothing is
+    missing something only for a goal about one thing — « who owns it »;
+    « what changed in production » is about all of it."""
     subjects = material.asked.subjects
     if not subjects:
-        return _none(material)
+        return _none(material) if material.asked.goal in ABOUT_ONE else Output()
     proofs = Proofs(material)
     findings: list[Statement] = []
     uncertainties: list[Note] = []
@@ -548,18 +560,19 @@ def incidents(material: Material) -> Output:
                 )
     ordered = sorted(causes.values(), key=lambda c: (c.basis != "stated", -(c.confidence or 0)))
     if not findings:
+        where = _where(material)
         return Output(
             uncertainties=(
                 Note(
                     "incident.none",
-                    "No incident is known on it in the period.",
-                    {"names": names(asked.subjects)},
+                    f"No incident is known {where} in the period.",
+                    {"names": names(asked.subjects), "where": where},
                 ),
             ),
             summary=Note(
                 "incident.none",
-                "No incident is known on what it asks about in the period.",
-                {"names": names(asked.subjects)},
+                f"No incident is known {where} in the period.",
+                {"names": names(asked.subjects), "where": where},
             ),
             confidence=0.6,
             evidence=proofs.all,
@@ -588,6 +601,17 @@ def incidents(material: Material) -> Output:
         confidence=round(top.confidence or 0.5, 3) if top else 0.5,
         evidence=proofs.all,
     )
+
+
+def _where(material: Material) -> str:
+    """Where it looked, in words: on what it names, or in the environment
+    it says, or everywhere."""
+    asked = material.asked
+    if asked.subjects:
+        return "on " + ", ".join(names(asked.subjects))
+    if asked.environment:
+        return f"in {asked.environment}"
+    return "in the workspace"
 
 
 def _freshness(element: ContextElementRead) -> str | None:
@@ -669,10 +693,15 @@ def changes(material: Material) -> Output:
                     evidence=(evidence, proofs.event(followed.entity, at=followed.opened_at)),
                 )
             )
+    where = _where(material)
     if not findings:
         return Output(
-            uncertainties=(Note("change.none", "No change is known on it in the period.", {}),),
-            summary=Note("change.none", "Nothing changed on it in the period.", {}),
+            uncertainties=(
+                Note("change.none", f"No change is known {where} in the period.", {"where": where}),
+            ),
+            summary=Note(
+                "change.none", f"Nothing changed {where} in the period.", {"where": where}
+            ),
             confidence=0.6,
             evidence=proofs.all,
         )
@@ -683,10 +712,10 @@ def changes(material: Material) -> Output:
         impact=(ImpactArea("dependents", tuple(reached.values())),) if reached else (),
         summary=Note(
             "change.summary",
-            f"{len(findings)} change(s) in the period"
+            f"{len(findings)} change(s) {where} in the period"
             + (f", {len(unique)} followed by an incident" if unique else "")
             + ".",
-            {"count": len(findings), "followed": len(unique)},
+            {"count": len(findings), "followed": len(unique), "where": where},
         ),
         confidence=0.85,
         evidence=proofs.all,
@@ -987,6 +1016,65 @@ def action(material: Material) -> Output:
     )
 
 
+# ── evolution ────────────────────────────────────────────────────────────────
+
+
+def evolution(material: Material) -> Output:
+    """What LEKA learned in the period: the things that appeared in what its
+    sources say, changed, went or came back — services, repositories,
+    databases, resources, teams, documents (LEKA-383)."""
+    proofs = Proofs(material)
+    findings: list[Statement] = []
+    counts: dict[str, int] = {}
+    for item in material.evolution:
+        thing = item.thing
+        counts[item.change] = counts.get(item.change, 0) + 1
+        evidence = proofs.entity(thing, detail=item.change)
+        findings.append(
+            Statement(
+                id=f"learned:{thing.id}",
+                code=f"learned.{item.change}",
+                text=(
+                    f"{thing.name} ({_kind(thing)}) {item.change.replace('_', ' ')}"
+                    f" on {item.at:%Y-%m-%d %H:%M}"
+                    + (f": {', '.join(item.fields[:4])}" if item.fields else "")
+                    + "."
+                ),
+                params={
+                    "name": thing.name,
+                    "type": _kind(thing),
+                    "change": item.change,
+                    "fields": list(item.fields[:6]),
+                    "at": item.at.isoformat(),
+                },
+                evidence=(evidence,),
+            )
+        )
+    where = _where(material)
+    if not findings:
+        return Output(
+            summary=Note(
+                "learned.none",
+                f"LEKA learned nothing new {where} in the period.",
+                {"where": where},
+            ),
+            confidence=0.7,
+            evidence=proofs.all,
+        )
+    return Output(
+        findings=tuple(findings),
+        summary=Note(
+            "learned.summary",
+            f"LEKA learned {len(findings)} thing(s) {where} in the period: "
+            + ", ".join(f"{n} {change.replace('_', ' ')}" for change, n in sorted(counts.items()))
+            + ".",
+            {"count": len(findings), **counts, "where": where},
+        ),
+        confidence=0.85,
+        evidence=proofs.all,
+    )
+
+
 # ── the catalogue ────────────────────────────────────────────────────────────
 
 CAPABILITIES: Sequence[Capability] = (
@@ -1024,8 +1112,8 @@ CAPABILITIES: Sequence[Capability] = (
         "incidents",
         VERSION,
         "Its incidents in the period, their causes said or suspected, what changed before.",
-        goals=frozenset({"explain_cause", "investigate"}),
-        kinds=frozenset({"diagnose"}),
+        goals=frozenset({"explain_cause", "investigate", "find_change"}),
+        kinds=frozenset({"diagnose", "change"}),
         sides=frozenset({"temporal", "technical"}),
         reads=frozenset({Part.INCIDENTS}),
         run=incidents,
@@ -1039,6 +1127,16 @@ CAPABILITIES: Sequence[Capability] = (
         sides=frozenset({"temporal", "technical"}),
         reads=frozenset({Part.CHANGES}),
         run=changes,
+    ),
+    Capability(
+        "evolution",
+        VERSION,
+        "What LEKA learned in the period: the things that appeared, changed, went.",
+        goals=frozenset({"find_change", "investigate"}),
+        kinds=frozenset({"change"}),
+        sides=frozenset({"temporal", "technical", "organizational", "business"}),
+        reads=frozenset({Part.EVOLUTION}),
+        run=evolution,
     ),
     Capability(
         "documentation",
@@ -1104,6 +1202,7 @@ CATALOGUE: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "dependencies": ("architecture", "Dependencies", ("De quoi dépend Billing API ?",)),
     "incidents": ("operations", "Incidents", ("Pourquoi Billing API est lente depuis hier ?",)),
     "changes": ("operations", "Changes", ("Qu'est-ce qui a changé sur checkout cette semaine ?",)),
+    "evolution": ("knowledge", "Evolution", ("Quoi de neuf depuis hier en production ?",)),
     "documentation": ("documentation", "Documentation", ("Où est documenté auth-service ?",)),
     "compliance": ("compliance", "Compliance", ("auth-service est-il conforme ?",)),
     "migration": ("architecture", "Migration", ("Migrer Billing API vers Kubernetes",)),

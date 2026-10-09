@@ -8,11 +8,14 @@ and judged ready — or not — to ground its analysis.
     readiness()  whether the context can ground an analysis — read from the
                  context's own quality (LEKA-375), gaps and conflicts
                  (LEKA-372), never judged again:
-                     blocked  a critical gap or conflict — nothing named,
-                              a model never built, nothing happened when
-                              that is the question, two owners of what was
-                              asked — to resolve before any analysis
-                     limited  it holds something, warnings said
+                     blocked  an action asked, and a critical gap or
+                              conflict — nothing named, two owners of what
+                              it acts on — to resolve before anything is
+                              proposed
+                     limited  a question, and something critical in the
+                              way — said, and answered anyway: LEKA's
+                              analyst looks for itself, and says what its
+                              sources disagree on; or warnings
                      ready    nothing in the way
                  with what it holds by side — technical, business,
                  organizational, temporal — and how many sources say it
@@ -54,8 +57,16 @@ def side(entity_type: str) -> str:
     return "temporal" if entity_type in EVENTS else facet_of(entity_type)
 
 
-def readiness(context: AssembledContext) -> ContextReadiness:
-    """Whether this context can ground an analysis, and why not."""
+def acting(understood: Understanding | None) -> bool:
+    """Whether it asks to change systems — what a person must decide on."""
+    if understood is None:
+        return False
+    return understood.goal.code == "act" or any(a.changes_systems for a in understood.actions)
+
+
+def readiness(context: AssembledContext, *, acts: bool = False) -> ContextReadiness:
+    """Whether this context can ground an analysis, and why not. Only an
+    action is blocked: a question is answered with what is in the way said."""
     quality = context.quality
     issues: list[ReadinessIssue] = []
     if quality is not None:
@@ -87,9 +98,9 @@ def readiness(context: AssembledContext) -> ContextReadiness:
     warnings = [issue for issue in issues if issue.severity == "warning"]
     held = [e for e in context.elements if e.kind == "entity"]
     facets = Counter(side(e.ref_type) for e in held)
-    if critical or not held:
+    if (critical or not held) and acts:
         status = "blocked"
-    elif warnings or (quality is not None and quality.level == "low"):
+    elif critical or not held or warnings or (quality is not None and quality.level == "low"):
         status = "limited"
     else:
         status = "ready"
