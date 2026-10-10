@@ -39,7 +39,7 @@ test.describe("Capabilities", () => {
     const sheet = page.getByTestId("capability");
     await expect(sheet.getByTestId("capability-inputs")).toContainText("parcours");
     await expect(sheet.getByTestId("capability-formats")).toContainText("PDF");
-    await expect(sheet.getByTestId("capability-versions")).toContainText("v18.0.0");
+    await expect(sheet.getByTestId("capability-versions")).toContainText("v18.1.0");
     // Run from its sheet (LEKA-395): here it can — a model answers.
     await expect(sheet.getByTestId("agent-run-form")).not.toContainText(
       "Il ne peut pas s'exécuter ici pour l'instant.",
