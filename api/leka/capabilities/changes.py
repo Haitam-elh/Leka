@@ -97,7 +97,13 @@ def safe_path(path: str) -> str | None:
     reaches into .git, or is not a file's."""
     said = path.strip()
     said = said[2:] if said.startswith("./") else said
-    if not said or said.startswith("/") or len(said) > 400 or not _SEGMENT.match(said):
+    if (
+        not said
+        or said.startswith("/")
+        or said.endswith("/")
+        or len(said) > 400
+        or not _SEGMENT.match(said)
+    ):
         return None
     normal = posixpath.normpath(said)
     parts = normal.split("/")
@@ -219,6 +225,10 @@ async def propose_change(
         return Proposed(None, "no_model")
     except TimeoutError:
         return Proposed(None, "timeout")
+    except Exception:
+        # Whatever else: the run's analysis stands, said why no change is.
+        logger.exception("change_not_written", run=str(run.id))
+        return Proposed(None, "error")
     proposal = answered.value
     done = answered.completion
     usage = {
@@ -262,6 +272,9 @@ async def propose_change(
     except CodeRefusedError as refused:
         logger.warning("change_not_read", run=str(run.id), code=refused.code)
         return Proposed(None, refused.code, usage)
+    except Exception:
+        logger.exception("change_not_read", run=str(run.id))
+        return Proposed(None, "error", usage)
     if not files:
         return Proposed(None, "no_change", usage)
     change = CodeChange(

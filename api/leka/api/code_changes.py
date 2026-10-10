@@ -55,7 +55,7 @@ async def _read(service: ChangeService, change: CodeChange) -> CodeChangeRead:
         base_branch=change.base_branch,
         title=change.title,
         summary=change.summary,
-        status=change.status,  # type: ignore[arg-type]  # the table's check
+        status=change.status,
         files=[CodeChangeFileRead.model_validate(f) for f in files_read(change.files)],
         pull_requests_allowed=await service.allowed(change),
         proposed_by=change.proposed_by,
