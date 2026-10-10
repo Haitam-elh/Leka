@@ -34,3 +34,8 @@ class CreditSettings:
     # Percentages of the month's credits; each told once a month.
     credit_warnings: list[int] = Field(default_factory=lambda: [80, 100])
     credits_enforced: bool = True
+    # Each plan's price a month, in US dollars — list and promotional — for
+    # the margins of the internal reports (python -m leka.metering.cli report
+    # plans). A plan without one has no margin: not known, never 0.
+    plan_prices_usd: dict[str, float] = Field(default_factory=dict)
+    plan_promo_prices_usd: dict[str, float] = Field(default_factory=dict)

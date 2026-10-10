@@ -157,6 +157,8 @@ month — see [metering.md](metering.md) § 5.
 | `LEKA_PLAN_CREDITS` | `{"free": 200, "starter": 2000, "growth": 10000, "business": 40000, "enterprise": 100000}` | Each plan's credits a month (JSON); a workspace's own can be set with its plan |
 | `LEKA_CREDIT_WARNINGS` | `[80, 100]` | The percentages of the month's credits past which owners and admins are emailed, once each |
 | `LEKA_CREDITS_ENFORCED` | `true` | Whether LEKA's models are refused a workspace whose month's credits are spent — never billed past them. `false`: counted, shown and warned of only |
+| `LEKA_PLAN_PRICES_USD` | `{}` | Each plan's list price a month, in US dollars (JSON) — for the margins of the internal reports. A plan without one has no margin |
+| `LEKA_PLAN_PROMO_PRICES_USD` | `{}` | The same, at the promotional price |
 
 ## Monitoring
 

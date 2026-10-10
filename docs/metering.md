@@ -129,3 +129,42 @@ the operator named; each is kept (`workspace_plans`, every plan it was on;
     python -m leka.metering.cli pack <workspace id> 1000 --by bilal --reason "asked by mail"
     python -m leka.metering.cli plans <workspace id>
     python -m leka.metering.cli credits <workspace id>
+
+## 6. LEKA's internal reports
+
+What LEKA's AI costs it, across workspaces — LEKA's to read, **by the server
+command or SQL, never over HTTP**. Every cost is LEKA's, in US dollars, at the
+rates in force; what is not known is said (`cost_not_known`), never averaged
+as 0. They read SQL views over the ledger (migration `0a074280012e`):
+
+| View | What |
+| --- | --- |
+| `metering_executions` | each execution, its workspace, the plan it was on when it ran, its month |
+| `metering_steps` | each execution's steps by purpose |
+| `metering_agents` | by month and agent: runs, succeeded, calls, retries, invalid answers, cost — total, avg, P50, P90, P95 |
+| `metering_intentions` · `metering_intention_months` | each intention's cost end to end; by month, avg, P50, P90, P95 |
+| `metering_workspace_months` | by month and workspace: its plan, executions, LEKA's cost, its own model's |
+| `metering_waste` | by month and purpose: the cost of answers not asked for and of tries past the first, their share |
+| `metering_context` | by month and purpose: tokens in a call — avg, P95 — the share read from the provider's cache, the context items given |
+
+    python -m leka.metering.cli report agents --month 2026-10            # CSV
+    python -m leka.metering.cli report intentions --format json
+    python -m leka.metering.cli report workspaces --month 2026-10
+    python -m leka.metering.cli report plans --month 2026-10
+    python -m leka.metering.cli report waste --month 2026-10
+    python -m leka.metering.cli report context --month 2026-10
+    python -m leka.metering.cli compare --before 2026-10-01:2026-10-15 --after 2026-10-15:2026-11-01
+    python -m leka.metering.cli workspaces
+
+**Margins** (`report plans`): by month and plan, the workspaces on it, what
+they cost LEKA, the credits they used, and — given the plan's price a month
+(`LEKA_PLAN_PRICES_USD`, `LEKA_PLAN_PROMO_PRICES_USD`) — the revenue and the
+margin, `(revenue − cost) / revenue`, at the list and at the promotional
+price. A plan without a price has no margin.
+
+**Before and after** (`compare`): each agent and purpose in two periods
+`[start, end)`: what an execution cost, its calls, tokens in, retry and
+invalid rates — and the change, in parts of one (−0.25: a quarter less).
+
+On the server: `docker compose -f docker-compose.production.yml --env-file
+production.env run --rm migrate python -m leka.metering.cli …`.

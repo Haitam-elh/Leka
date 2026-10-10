@@ -30,12 +30,27 @@ HTTP: what they show crosses every workspace, and LEKA's costs are its own.
 
     python -m leka.metering.cli credits WORKSPACE_ID
         Its plan and its AI credits this month — as JSON.
+
+    python -m leka.metering.cli workspaces
+        Every workspace, its id and its plan now.
+
+    python -m leka.metering.cli report NAME [--month 2026-10] [--format csv|json]
+        LEKA's internal reports, across workspaces (docs/metering.md § 6):
+        agents (runs, cost avg/P50/P90/P95), intentions (by month, the same),
+        workspaces, plans (cost, credits used, margin at list and promo
+        price), waste (invalid answers, retries), context (tokens a call).
+
+    python -m leka.metering.cli compare --before 2026-10-01:2026-10-15
+            --after 2026-10-15:2026-11-01 [--format csv|json]
+        Two periods side by side, by agent and purpose — before and after an
+        optimisation.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import csv
 import json
 import sys
 import uuid
@@ -48,6 +63,7 @@ from sqlalchemy.exc import IntegrityError
 from leka.capabilities import ModelRate
 from leka.db import load_schema, session_factory, system_scope, workspace_scope
 from leka.governance import PlanError, add_pack, plans, set_plan
+from leka.metering import reports
 from leka.metering.credits import credits_now
 from leka.metering.service import Metering, sweep
 
@@ -176,6 +192,49 @@ async def _credits(workspace: str) -> int:
     return 0
 
 
+def _write(rows: list[dict[str, object]], fmt: str) -> None:
+    if fmt == "json":
+        sys.stdout.write(json.dumps(rows, indent=2, default=str) + "\n")
+        return
+    out = csv.DictWriter(sys.stdout, fieldnames=reports.columns(rows) or ["empty"])
+    out.writeheader()
+    out.writerows(rows)
+
+
+def _period(text: str) -> tuple[date, date]:
+    start, _, end = text.partition(":")
+    return date.fromisoformat(start), date.fromisoformat(end)
+
+
+async def _report(name: str, month: str | None, fmt: str) -> int:
+    first = date.fromisoformat(f"{month}-01") if month else None
+    with system_scope():
+        async with session_factory() as session:
+            if name == "plans":
+                rows = await reports.plans(session, month=first)
+            else:
+                rows = await reports.report(session, name, month=first)
+    _write(rows, fmt)
+    return 0
+
+
+async def _compare(before: str, after: str, fmt: str) -> int:
+    with system_scope():
+        async with session_factory() as session:
+            rows = await reports.compare(session, _period(before), _period(after))
+    _write(rows, fmt)
+    return 0
+
+
+async def _workspaces() -> int:
+    with system_scope():
+        async with session_factory() as session:
+            rows = await reports.workspaces(session)
+    for row in rows:
+        sys.stdout.write(f"{row['id']}  {row['plan']:<10}  {row['name']}\n")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m leka.metering.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -209,7 +268,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     pack.add_argument("--reason", required=True)
     held = commands.add_parser("credits")
     held.add_argument("workspace")
+    commands.add_parser("workspaces")
+    reported = commands.add_parser("report")
+    reported.add_argument("name", choices=[*reports.REPORTS, "plans"])
+    reported.add_argument("--month")
+    reported.add_argument("--format", choices=["csv", "json"], default="csv")
+    compared = commands.add_parser("compare")
+    compared.add_argument("--before", required=True)
+    compared.add_argument("--after", required=True)
+    compared.add_argument("--format", choices=["csv", "json"], default="csv")
     given = parser.parse_args(argv)
+    if given.command == "workspaces":
+        return asyncio.run(_workspaces())
+    if given.command == "report":
+        return asyncio.run(_report(given.name, given.month, given.format))
+    if given.command == "compare":
+        return asyncio.run(_compare(given.before, given.after, given.format))
     if given.command == "plan":
         return asyncio.run(_plan(given))
     if given.command == "plans":
