@@ -19,6 +19,8 @@ from collections.abc import Iterable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from leka.core.sensitive import SECRETS, redacted, scan
+
 
 class DiagnosticCode(enum.StrEnum):
     AUTH_INVALID = "AUTH_INVALID"
@@ -159,11 +161,14 @@ MAX_DETAIL = 300
 
 
 def sanitise(text: str, secrets: Iterable[str] = ()) -> str:
-    """`text` with every given secret and every token-shaped string removed."""
+    """`text` with every given secret and every token-shaped string removed
+    — those an HTTP exchange echoes, and every secret LEKA's detector knows
+    (core.sensitive, LEKA-405)."""
     for secret in secrets:
         if secret:
             text = text.replace(secret, REDACTED)
     text = _TOKEN_SHAPES.sub(REDACTED, text)
+    text = redacted(text, scan(text, (SECRETS,)))
     return text[:MAX_DETAIL]
 
 

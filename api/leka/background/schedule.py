@@ -137,6 +137,13 @@ SCHEDULE: tuple[Scheduled, ...] = (
         "leka.capabilities.workflow_runs.run_workflows_sweep",
         cron="44 * * * *",
     ),
+    # The extracted records kept before LEKA-405, or under an older detector:
+    # protected in place, a batch per workspace (ingestion.protection).
+    Scheduled(
+        "data-protection-sweep",
+        "leka.ingestion.protection.run_protection_sweep",
+        cron="9,24,39,54 * * * *",
+    ),
     # The decisions waiting past their policy's hours (LEKA-404): escalated,
     # the asker and the owners told.
     Scheduled(

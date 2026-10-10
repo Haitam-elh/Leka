@@ -169,8 +169,11 @@ class GovernanceEvent(Base, WorkspaceScopedMixin):
 
     __tablename__ = "governance_events"
     __table_args__ = (
+        # ai_control: an AI control (LEKA-406); protection: the workspace's data
+        # protection policy (LEKA-405).
         CheckConstraint(
-            "subject_type IN ('role', 'policy', 'assignment', 'ai_control')", name="subject_type"
+            "subject_type IN ('role', 'policy', 'assignment', 'ai_control', 'protection')",
+            name="subject_type",
         ),
         Index("ix_governance_events_workspace_at", "workspace_id", "at"),
     )

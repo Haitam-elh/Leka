@@ -293,7 +293,16 @@ permission, an action, a resource — **without doing anything**.
 `governance_events` — every role created, changed, deleted; every role
 given or taken back; every policy created, changed (enabled, disabled),
 deleted — who, when, **before and after**; append-only, the database refusing
-to rewrite one (`GET /governance/history`, `access:read`).
+to rewrite one (`GET /governance/history`, `access:read`). The data
+protection policy's changes join it (`subject_type` protection, LEKA-405).
+
+## Data protection (LEKA-405)
+
+`GET /governance/data-protection` — the platform's protections as they
+stand, the policy, per source what was found in its records and taken out,
+in kinds and counts — takes `access:read`; `PUT
+/governance/data-protection/policy`, `policy:manage`. Both decided and kept
+as every permission is. [data-protection.md](data-protection.md).
 
 ## AI governance (LEKA-406)
 
