@@ -112,6 +112,18 @@ Adding a tool: an `AgentTool` — name, description, its parameters as a JSON
 schema, its permission, its effect — and its handler in `tools.py`,
 answering the model in JSON.
 
+**Skills** (LEKA-401, [skills.md](skills.md) § 10). An agent is also offered
+the skills its file names (`skills:`) — none unless named — each under its
+key, beside its tools:
+- only one that reads nothing the agent may not (its `reads` within the
+  agent's `entity_types`): otherwise withheld (`out_of_scope`), as is a
+  skill LEKA does not have (`unknown`) or one the person who asked may not
+  run (`not_permitted`);
+- each call through the skill runtime — its input and output checked, read
+  only — kept twice: a tool step of the run, and a skill run about it
+  (`ref: agent_run:<id>`);
+- a skill named like a tool refuses the catalogue.
+
 ## 5. The model
 
 Through the gateway ([model-gateway.md](model-gateway.md)): `run_tools`,
