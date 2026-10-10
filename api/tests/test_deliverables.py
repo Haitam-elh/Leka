@@ -92,9 +92,7 @@ def deck(*, lines: int = 2, app_view: bool = True, contacts: int = 6) -> Archite
                 Band(
                     title="Ordonnancement",
                     lines=[
-                        Line(
-                            calls=[Call(column="ORDONNANCEUR", label="planifie", missing=True)]
-                        )
+                        Line(calls=[Call(column="ORDONNANCEUR", label="planifie", missing=True)])
                     ],
                 ),
             ],
@@ -193,8 +191,10 @@ def test_the_slides_follow_the_templates_order_and_titles() -> None:
     assert contents[-1] == "7 - Sources consultées et limites"
     # Its subtitles, the template's.
     assert "Traçabilité obligatoire - SharePoint / Confluence" in texts(slides[-1])
-    assert "Interactions entre 3 applications et briques du SI - flux, interfaces et données " \
+    assert (
+        "Interactions entre 3 applications et briques du SI - flux, interfaces et données "
         "échangées" in texts(slides[3])
+    )
 
 
 def test_without_the_application_view_the_contents_has_six_sections() -> None:
@@ -258,8 +258,7 @@ def test_on_a_process_slide_lifelines_are_behind_and_a_red_line_leads_to_the_fro
     reds = [i for i in order if isinstance(i, Stroke) and i.color == RED]
     assert len(reds) == 3 and reds[-1].arrow
     # Arrows between service boxes are horizontal: one line, one chain.
-    assert all(i.y1 == i.y2 for i in order if isinstance(i, Stroke) and i.arrow and i.color
-               != RED)
+    assert all(i.y1 == i.y2 for i in order if isinstance(i, Stroke) and i.arrow and i.color != RED)
 
 
 def test_the_raci_fills_its_slide_before_the_next() -> None:

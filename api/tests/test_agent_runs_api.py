@@ -40,10 +40,10 @@ import importlib
 import json
 import uuid
 from collections.abc import Callable
-from io import BytesIO
-from pathlib import Path
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -55,7 +55,6 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 
 from leka.api import agent_runs as agent_runs_api
-from leka.capabilities.deliverables.layout import deck_slides
 from leka.capabilities import (
     AGENT_TOOLS,
     AgentTool,
@@ -66,6 +65,7 @@ from leka.capabilities import (
     sweep_runs,
     sync_catalogue,
 )
+from leka.capabilities.deliverables.layout import deck_slides
 from leka.capabilities.gateway import service
 from leka.core.config import settings
 from leka.db import session_factory, system_scope, workspace_scope

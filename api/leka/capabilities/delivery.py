@@ -173,6 +173,10 @@ async def draw(
         return Drawn([], "no_model")
     except TimeoutError:
         return Drawn([], "timeout")
+    except Exception:
+        # Whatever else: the run's analysis stands, said why its files are not.
+        logger.exception("deck_not_written", run=str(run.id))
+        return Drawn([], "error")
     deck = answered.value
     try:
         rendered = await asyncio.to_thread(render, deck)
