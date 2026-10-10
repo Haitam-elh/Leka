@@ -125,6 +125,7 @@ says so, the rules answer in its place.
 | `LEKA_S3_REGION` | `auto` | R2 wants `auto`; S3 wants a real region |
 | `LEKA_S3_ACCESS_KEY_ID` | — | An identifier, not a secret — but it names the account the secret below belongs to |
 | `LEKA_S3_SECRET_ACCESS_KEY` | — | |
+| `LEKA_S3_SERVER_SIDE_ENCRYPTION` | — | How each write asks S3 to encrypt (LEKA-405): `AES256`, `aws:kms`, or `none`. Unset: `AES256` on Amazon S3 itself, nothing on another endpoint. Production refuses `none` on Amazon S3 |
 | `LEKA_MAX_OBJECT_BYTES` | `1073741824` | Largest payload stored, in bytes. A ceiling, not a target |
 | `LEKA_RAW_PAYLOAD_RETENTION_DAYS` | `{}` | JSON object overriding retention per source kind, in DAYS, 1–3650. The policy itself is in `leka/ingestion/retention.py` |
 

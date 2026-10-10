@@ -7,6 +7,9 @@ tell a deliberate trade-off from an oversight.
 Authorisation — what a signed-in person may do — is
 [permissions.md](permissions.md). Tenant isolation is
 [adr/007-tenant-isolation-strategy.md](adr/007-tenant-isolation-strategy.md).
+Secrets and sensitive data in what LEKA collects — found, taken out, their
+originals kept briefly — and encryption in transit and at rest, verified as
+the platform runs, are [data-protection.md](data-protection.md) (LEKA-405).
 
 ---
 

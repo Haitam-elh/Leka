@@ -189,6 +189,17 @@ were extracted and failed — `unsupported`, `malformed` — per strategy, when
 last, and the 20 latest failures with their record's vendor id. A vendor
 changing a payload's shape shows here as one strategy failing at once.
 
+## 6. Protected before it is kept (LEKA-405)
+
+Every ExtractedRecord goes through the detector (`core.sensitive`) before it
+is saved: a secret or an identity number in any string of it — keys
+included — is replaced by `[redacted:<what>]`, and `extracted_records.sensitivity`
+keeps what was found, by kind and count, with the detector's version. The
+job's run counts `secrets_taken_out`; a batch something was taken out of is
+kept no longer than the workspace's `found_payload_days`. What was
+extracted before is protected by the sweep.
+[data-protection.md](data-protection.md).
+
 ## Not yet
 
 - **Retention of extracted text**: it follows its record, not the raw
