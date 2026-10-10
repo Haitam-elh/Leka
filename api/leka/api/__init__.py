@@ -32,6 +32,7 @@ from leka.api import (
     intentions,
     knowledge,
     model_gateway,
+    ops,
     outcomes,
     platform,
     protection,
@@ -55,6 +56,7 @@ api_router.include_router(access.router)
 api_router.include_router(ai_governance.router)
 api_router.include_router(audit.router)
 api_router.include_router(protection.router)
+api_router.include_router(ops.router)
 api_router.include_router(connectors.router)
 api_router.include_router(ingestion.router)
 # What the workspace's sources resolve to (LEKA-357), and what enrichment

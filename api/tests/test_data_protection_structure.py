@@ -43,6 +43,7 @@ ALLOWED_IN_RESPONSES: dict[tuple[str, str], str] = {
     ("PostureRead", "overdue_secrets"): "the names of secrets past their lifetime",
     ("SourceFindingsRead", "secrets"): "what was found, by kind and count",
     ("SourceFindingsRead", "with_secrets"): "how many records held one",
+    ("AIControlRead", "max_tokens"): "a usage limit in model tokens: a count (LEKA-406)",
 }
 COUNTS = re.compile(r"^tokens(_|$)")
 # Binary columns that are not a ciphertext, and why each may be.

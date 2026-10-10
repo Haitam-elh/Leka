@@ -148,10 +148,11 @@ this is only what each variable is for. `leka/core/settings/background.py`.
 
 ## Monitoring
 
-Errors, and nothing else. No metrics backend and no dashboard: the SQL in
-docs/background.md is the dashboard, by decision, and a second vendor to
-configure, pay and audit buys nothing on a product with no traffic yet.
-`leka/core/settings/monitoring.py`, wired up in `leka/platform/monitoring.py`.
+Errors to Sentry; LEKA's own metrics, health report and alerts (LEKA-408,
+docs/operations.md) — no metrics backend to run: the metrics speak
+Prometheus for whatever scrapes them one day.
+`leka/core/settings/monitoring.py`, wired up in `leka/platform/monitoring.py`
+and `leka/ops/`.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
@@ -159,6 +160,15 @@ configure, pay and audit buys nothing on a product with no traffic yet.
 | `LEKA_SENTRY_TRACES_SAMPLE_RATE` | `0.0` | Performance tracing, 0.0–1.0. Off: it is billed per span and nobody reads it yet |
 | `LEKA_SENTRY_SEND_DEFAULT_PII` | `false` | Typed so it cannot be turned on. PII here means a customer's e-mail address on a third party's servers |
 | `LEKA_RELEASE` | — | The commit sha this container was built from. Set by the deployment pipeline; it is what makes an error name the commit that caused it |
+| `LEKA_METRICS_TOKEN` | — | Who may read `/api/v1/ops/metrics` and `/api/v1/ops/health`, as a bearer token. Empty: nobody — both answer 404 (LEKA-408) |
+| `LEKA_OPS_ALERT_EMAILS` | — | Where the operational alerts go, comma-separated. Empty: Sentry and the log only |
+| `LEKA_OPS_WATCH_INTERVAL_SECONDS` | `300` | How often the API process judges the alerts too; `0` turns that loop off (the worker's job still runs) |
+| `LEKA_BACKUP_EXPECTED` | `false` | A nightly dump is expected: the alerts say so when the last good one is over 26 hours old |
+| `LEKA_BACKUP_BUCKET` | — | The bucket the dumps go to — in another AWS account. See docs/operations.md § 4 |
+| `LEKA_BACKUP_REGION` | — | Its region |
+| `LEKA_BACKUP_ACCESS_KEY_ID` | — | A key that opens that bucket only |
+| `LEKA_BACKUP_SECRET_ACCESS_KEY` | — | Its secret |
+| `LEKA_PG_TOOLS` | empty | How `pg_dump` and `pg_restore` are run: empty, the machine's own; or a prefix, e.g. `docker exec -i leka-postgres` |
 
 Events are scrubbed before they leave, with the same masker that protects the
 logs — see `leka.core.logging.scrub_secrets` and
@@ -178,8 +188,8 @@ are in `docs/runbook.md`.
 | --- | --- | --- |
 | `LEKA_SECRET_KEY` | `leka.core.signing` | 365 days |
 | `LEKA_ENCRYPTION_KEYS` | `leka.platform.secrets` | 365 days |
-| `LEKA_DATABASE_URL` | `leka.db.session`, `alembic.env`, `leka.background.runner` | 365 days |
-| `LEKA_REDIS_URL` | `leka.core.ratelimit`, `leka.platform.health`, `leka.background.jobs` | 365 days |
+| `LEKA_DATABASE_URL` | `leka.db.session`, `alembic.env`, `leka.background.runner`, `leka.ops.backup` | 365 days |
+| `LEKA_REDIS_URL` | `leka.core.ratelimit`, `leka.platform.health`, `leka.background.jobs`, `leka.core.breaker`, `leka.ops` | 365 days |
 | `LEKA_SMTP_PASSWORD` | `leka.identity.email` | 365 days |
 | `LEKA_RESEND_API_KEY` | `leka.identity.email` | 90 days |
 | `LEKA_GOOGLE_API_KEY` | `leka.capabilities` | 90 days |
@@ -187,6 +197,8 @@ are in `docs/runbook.md`.
 | `LEKA_MISTRAL_API_KEY` | `leka.capabilities` | 90 days |
 | `LEKA_S3_SECRET_ACCESS_KEY` | `leka.platform.storage` | 90 days |
 | `LEKA_SENTRY_DSN` | `leka.platform.monitoring` | 365 days |
+| `LEKA_METRICS_TOKEN` | `leka.api.ops` | 365 days |
+| `LEKA_BACKUP_SECRET_ACCESS_KEY` | `leka.ops.backup` | 90 days |
 
 A connection URL counts as a secret because it carries a password. 90 days
 for keys another company issued and sees used — that is AWS's own figure for

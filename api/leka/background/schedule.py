@@ -154,6 +154,10 @@ SCHEDULE: tuple[Scheduled, ...] = (
     # The audit trail's retention (LEKA-407): what has outlived each
     # workspace's, deleted — and said, in the trail itself.
     Scheduled("audit-sweep", "leka.governance.audit.run_audit_sweep", cron="15 4 * * *"),
+    # The operational alerts (LEKA-408), judged every five minutes. On the low
+    # queue like every sweep — behind one, it is late: the API judges them
+    # too (main.py), every five minutes whatever the queues and the worker do.
+    Scheduled("ops-watch", "leka.ops.alerts.run_watch", cron="*/5 * * * *"),
 )
 
 

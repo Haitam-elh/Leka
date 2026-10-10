@@ -8,6 +8,7 @@ fails immediately if it is incomplete.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -18,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from leka.api import api_router
 from leka.api.errors import ERROR_RESPONSES, register_error_handlers
+from leka.api.ops import metrics_middleware, watch_forever
 from leka.api.ratelimit import rate_limit_middleware
 from leka.api.request_id import REQUEST_ID_HEADER, request_id_middleware
 from leka.capabilities import sync_catalogue
@@ -51,7 +53,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await sync_catalogue()
     except Exception:
         logger.exception("capability_catalogue_sync_failed")
+    # The operational alerts, judged here too (LEKA-408): the worker that
+    # judges them may be what is down.
+    watching = (
+        asyncio.create_task(watch_forever(settings.ops_watch_interval_seconds))
+        if settings.ops_watch_interval_seconds
+        else None
+    )
     yield
+    if watching is not None:
+        watching.cancel()
     await engine.dispose()
     logger.info("leka_stopped")
 
@@ -96,6 +107,11 @@ app.middleware("http")(rate_limit_middleware)
 # limit refusal, an unparseable body — therefore carries an identifier,
 # and those are exactly the refusals somebody will ask about.
 app.middleware("http")(request_id_middleware)
+
+# Every request counted for the metrics (LEKA-408) — outside the request id,
+# the rate limit and CSRF, so their refusals are counted too. CORS, added
+# after, is outside it: a preflight the browser sends is not counted.
+app.middleware("http")(metrics_middleware)
 
 app.add_middleware(
     CORSMiddleware,

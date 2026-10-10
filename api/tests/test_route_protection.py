@@ -50,6 +50,15 @@ from leka.platform.seam import get_current_user_id
 # The reason is not decoration. "Why is this open?" asked in a review is
 # answered here rather than by reading the handler and guessing.
 PUBLIC_ROUTES: dict[tuple[str, str], str] = {
+    ("GET", "/api/v1/ops/metrics"): (
+        "For a scraper, which holds no session: the metrics token, a bearer, "
+        "checked by its own dependency (leka/api/ops.py) — and 404 when none "
+        "is configured. Operating data, never a customer's (LEKA-408)."
+    ),
+    ("GET", "/api/v1/ops/health"): (
+        "For an operator's monitor, which holds no session: the same metrics "
+        "token as /ops/metrics, 404 without one configured (LEKA-408)."
+    ),
     ("GET", "/api/v1/health"): (
         "Liveness and readiness. A probe has no credentials, and requiring "
         "them would make the service look down to whatever watches it."
