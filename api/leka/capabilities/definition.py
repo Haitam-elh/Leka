@@ -181,6 +181,9 @@ class Definition:
     tools: tuple[str, ...] = ()
     # An agent's: the skills it may be offered — none unless named (LEKA-401).
     skills: tuple[str, ...] = ()
+    # An agent's: what LEKA draws of what it delivers — "architecture_deck":
+    # its PowerPoint and PDF (capabilities/deliverables).
+    renders: str | None = None
 
     def fingerprint(self) -> str:
         """What it is and does, hashed: everything but where it stands in
@@ -201,6 +204,9 @@ class Definition:
         # Added with the skill library (LEKA-401): none, it says nothing new.
         if not self.skills:
             said.pop("skills")
+        # Added with the architect's deliverables: none, it says nothing new.
+        if self.renders is None:
+            said.pop("renders")
         said["goals"] = sorted(self.goals)
         said["kinds"] = sorted(self.kinds)
         canonical = json.dumps(said, sort_keys=True, ensure_ascii=False, default=str)

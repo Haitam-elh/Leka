@@ -66,8 +66,9 @@ between asking and running runs, and the version asked is kept with it
 
 **What it delivers**: markdown when it declares a document (`markdown`,
 `pptx`, `pdf`, `docx`), JSON when it declares only `json`. What it declares
-and the runtime does not render yet — the architect's PPTX and PDF — is said
-`pending`.
+and LEKA does not draw is said `pending`. What LEKA draws, the agent says in
+its front matter (`renders`) — today `architecture_deck`, the architect's
+PowerPoint and PDF (§ 6 bis).
 
 ## 3. Its context
 
@@ -136,7 +137,14 @@ tier `deep`, at most 16 000 tokens out, **chosen by what the agent needs**
    that they do not hold; each thing cited by its id; only its types, only
    the tools offered, never credentials; the format it delivers;
 2. then **the agent's instructions**, as its file says them;
-3. what it was given (`inputs`), its context, the names of its tools.
+3. for an agent whose deliverables LEKA draws, **how it runs here**, after
+   its instructions and never instead of them: its sources are the ones
+   connected to LEKA — documentation, code, tickets, databases… — and the
+   company model built from them; a source its instructions name that is not
+   connected (Confluence, SharePoint) is said so in « Sources consultées et
+   limites », its gaps in orange, never filled; its answer is the analysis
+   in the deck's order, LEKA draws the files (`runtime.RENDER_NOTES`);
+4. what it was given (`inputs`), its context, the names of its tools.
 
 Every call is kept by the gateway (`model_calls`) with the run as its ref,
 `agent_run:<id>`, and its purpose, `agent:<key>`.
@@ -160,10 +168,44 @@ change one; erased with its workspace):
 | `tool_withheld` | the tool, why |
 | `tool` | the tool, what it was asked (500 characters), outcome (ok, refused, failed, unknown), why, how long |
 | `answered` | provider, model, version, tokens |
+| `rendered` · `render_failed` | the formats, the slides, the deck's model and tokens · why (`no_model`, `timeout`, `render`, `storage`) |
 | `succeeded` · `failed` · `cancelled` | how many characters · the code and its detail · by whom |
 
 What its calls took — calls, tokens, the cost at list price — is read from
 `model_calls`.
+
+## 6 bis. Its files — the architect's deck
+
+An agent whose front matter says `renders: architecture_deck` (the
+application architect, 18.1.0) delivers its analysis in markdown; then LEKA
+draws its deck (`capabilities/delivery.py`, `capabilities/deliverables/`):
+
+1. **its content, written by the model** — asked again through the gateway,
+   no tools, a structured answer (`ArchitectureDeck`: the business layer and
+   its groupings, the six paragraphs, the rules, the application view when
+   asked, each process's columns, bands and chains of calls, the RACI, the
+   points to confirm, the sources), checked against its schema and asked
+   again when it does not match; from the analysis only — what it lacks is
+   `missing`, drawn orange;
+2. **drawn on the agent's template**, pure Python — `layout.py` places
+   every shape in inches in the template's order (title and contents, the
+   journey in plain words, the rules, the application view, one slide per
+   process — split (1/2), (2/2) when it does not fit, its business layer
+   repeated — the RACI filling its slide, the points to confirm, the
+   sources last), in the template's drawing order (lifelines behind, the
+   service boxes in front); `pptx_writer.py` writes it as **native shapes,
+   connectors and tables** (python-pptx), `pdf_writer.py` as a PDF of the
+   same shapes (reportlab); text measured once, the same in both;
+3. **kept** in the object store under `{workspace}/agent-runs/{run}/deck.pptx`
+   and `deck.pdf` — erased with the workspace; a key the orphan
+   reconciliation never judges (it reads only
+   `{workspace}/{source}/{yyyy}/{mm}/{dd}/…`); the run's detail keeps each
+   file's key, name, size and slides (`deliverables`).
+
+What fails here **never fails the run**: the analysis stands, the run says
+why its files are missing (`deliverables_error`, a `render_failed` step).
+Its model calls are the run's (`agent_run:<id>`, purpose
+`agent:<key>:deck`).
 
 ## 7. The API
 
@@ -172,6 +214,7 @@ What its calls took — calls, tokens, the cost at list price — is read from
 | `POST /agent-runs` `{key, inputs, intention_id?, context_id?}` | 202, queued | `intention:create`, and the agent's own |
 | `GET /agent-runs?key&status&limit` | the workspace's runs, the latest first | `intention:read` |
 | `GET /agent-runs/{id}` | one: what it delivered, every step, what its calls took | `intention:read` |
+| `GET /agent-runs/{id}/deliverables/{pptx\|pdf}` | a file LEKA drew of it, as an attachment; 404 when there is none | `intention:read` |
 | `POST /agent-runs/{id}/cancel` | cancelled: 403 another's (unless one may approve), 409 ended | `intention:create` |
 
 Refused, nothing kept: no such agent, or intention (404); the person's role
@@ -189,17 +232,21 @@ sweep** (`agent-runs-sweep`, hourly at 41) fails what no worker will finish.
 
 ## 9. In the app
 
-On an agent's sheet (**Capacités**): **Lancer l'agent** — what its contract
-takes, a field each; refused, said by field — and **Exécutions**: each run,
-where it stands, failed said why in words; opened, what it delivered (to
-download), its files still to come, every step in words — its context, a
-tool read or refused, one not offered and why — and what its calls took.
-Followed every three seconds while on its way; one's own cancelled.
+On an agent's sheet (**Capacités**), and on the intention it was routed to:
+**Lancer « <agent> »** — what its contract takes, a field each, named in
+words; on an intention, **suggested from what it says** (« le parcours
+Paiement CB sur le périmètre Digital » fills both), still editable; refused,
+said by field — and **Exécutions** (on an intention, its own): each run,
+where it stands, failed said why in words; its files, **Télécharger le PDF**
+first, then the PowerPoint; opened, its analysis (to download), every step
+in words — its context, a tool read or refused, one not offered and why,
+the deck drawn — and what its calls took. Followed every three seconds
+while on its way; one's own cancelled.
 
 ## Not yet
 
-- **Its files** — the architect's PPTX and PDF, rendered from what it
-  delivered: said `pending` until then.
+- **Other agents' files** — a `docx`, a deck on another template: said
+  `pending` until LEKA draws them.
 - **Running a routed agent on its own**: the router (LEKA-398,
   [capability-router.md](capability-router.md)) offers it on the intention;
   a person runs it — orchestration is LEKA-399.

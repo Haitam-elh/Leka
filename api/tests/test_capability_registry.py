@@ -78,7 +78,7 @@ def test_the_repositorys_catalogue_loads_whole() -> None:
     assert (architect.kind, architect.lifecycle, architect.version) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "18.0.0",
+        "18.1.0",
     )
     assert architect.title == "Architecte applicatif"
     assert [(i.name, i.required) for i in architect.contract.inputs] == [
@@ -87,7 +87,11 @@ def test_the_repositorys_catalogue_loads_whole() -> None:
         ("vue_applicative", False),
     ]
     assert (architect.contract.output, architect.contract.formats) == ("document", ("pptx", "pdf"))
-    assert architect.sources == (("confluence", "microsoft_365"),)
+    # Any documentation, code, ticket or database source: what it draws on,
+    # Confluence or not; LEKA draws its deck.
+    [any_of] = architect.sources
+    assert {"confluence", "microsoft_365", "github", "jira", "postgresql"} <= set(any_of)
+    assert architect.renders == "architecture_deck"
     assert architect.model and architect.mode == "read_only"
     # Its instructions, as written — kept here, never in what is sent.
     assert architect.instructions and "PRINCIPE ABSOLU" in architect.instructions

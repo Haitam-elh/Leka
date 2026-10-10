@@ -16,7 +16,9 @@
            with what came of it (tools.py)
         5. the model, through the gateway: run_tools, deep tier, what its
            definition needs choosing the model — within RUN_BUDGET
-        6. succeeded with what it delivered, or failed saying why — unless
+        6. what LEKA draws of it, when the agent says so (`renders`): the
+           architect's PowerPoint and PDF (delivery.py)
+        7. succeeded with what it delivered, or failed saying why — unless
            it was cancelled meanwhile: then that stands
     THE SWEEP (agent-runs-sweep): a run no worker will finish — running past
     ABANDONED, queued past FORGOTTEN — failed, `abandoned`.
@@ -42,6 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
 from leka.capabilities.definition import Definition, check_input
+from leka.capabilities.delivery import draw
 from leka.capabilities.gateway import (
     Completion,
     Gateway,
@@ -455,6 +458,22 @@ async def _run(
     output = output_of(done.text, run.format)
     if output is None:
         return await _fail(session, run, "invalid_output", format=run.format)
+    # What LEKA draws of it — the architect's deck (delivery.py): its files,
+    # or why there are none; the analysis stands either way.
+    detail = dict(run.detail)
+    if definition.renders is not None:
+        await session.commit()
+        drawn = await draw(session, run, definition, output)
+        if drawn.error is None:
+            steps.add(
+                "rendered",
+                formats=[f["format"] for f in drawn.files],
+                slides=drawn.files[0]["slides"] if drawn.files else 0,
+                **(drawn.usage or {}),
+            )
+        else:
+            steps.add("render_failed", code=drawn.error)
+        detail |= drawn.detail()
     runs = CapabilityRunRepository(session, workspace_id)
     ended = await runs.finish(
         run.id,
@@ -465,6 +484,7 @@ async def _run(
         model=done.model[:120],
         model_version=done.version[:120],
         tool_calls=run.tool_calls,
+        detail=detail,
     )
     if ended:
         steps.add("succeeded", chars=len(output))

@@ -4279,6 +4279,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-runs/{run_id}/deliverables/{fmt}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A file an agent run delivered: its PowerPoint or its PDF
+         * @description What LEKA drew of what the run delivered (the architect's deck), as
+         *     an attachment. 404 when the run, or that file, is not there.
+         */
+        get: operations["get_deliverable_api_v1_agent_runs__run_id__deliverables__fmt__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent-runs/{run_id}/cancel": {
         parameters: {
             query?: never;
@@ -6152,6 +6173,11 @@ export interface components {
              */
             pending: string[];
             /**
+             * Deliverables
+             * @description The files LEKA drew of what it delivered (its pptx, its pdf), each to download.
+             */
+            deliverables: components["schemas"]["DeliverableRead"][];
+            /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
              */
@@ -6263,6 +6289,11 @@ export interface components {
              * @description What it declares (pptx, pdf…) and the runtime does not render yet.
              */
             pending: string[];
+            /**
+             * Deliverables
+             * @description The files LEKA drew of what it delivered (its pptx, its pdf), each to download.
+             */
+            deliverables: components["schemas"]["DeliverableRead"][];
             /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
@@ -10524,6 +10555,29 @@ export interface components {
              * Format: date-time
              */
             erasure_due_at: string;
+        };
+        /**
+         * DeliverableRead
+         * @description A file a run delivered: GET /agent-runs/{id}/deliverables/{format}.
+         */
+        DeliverableRead: {
+            /**
+             * Format
+             * @enum {string}
+             */
+            format: "pptx" | "pdf";
+            /**
+             * Name
+             * @description Its file name.
+             */
+            name: string;
+            /**
+             * Size
+             * @description In bytes.
+             */
+            size: number;
+            /** Slides */
+            slides: number;
         };
         /**
          * DeliveryAccepted
@@ -41572,6 +41626,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentRunDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_deliverable_api_v1_agent_runs__run_id__deliverables__fmt__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                fmt: "pptx" | "pdf";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation": unknown;
+                    "application/pdf": unknown;
                 };
             };
             /** @description The request could not be understood. */
