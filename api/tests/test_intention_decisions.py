@@ -1,9 +1,11 @@
 """A person's decision on what LEKA proposes (LEKA-390), pure.
 
 What these protect: the policy — one approval for a low or medium risk,
-two for a high one, never the asker alone on a high one — kept as said,
-refused when it cannot be (an unknown risk, a count out of range, a riskier
-action needing fewer approvals); the risk decided at — the analysis's,
+two for a high or critical one, never the asker alone on those, an owner
+among a critical one's (LEKA-404) — kept as said, a policy kept before
+LEKA-404 read as it said, refused when it cannot be (an unknown risk, a
+count out of range, a riskier action needing fewer approvals, an unknown
+role, hours out of range, a rule that cannot hold); the risk decided at — the analysis's,
 medium when it cannot say, at least medium in production; what is proposed
 — the actions that change systems, once each, on what, where, within the
 hard constraints, whether they can be undone; the tally — one rejection
@@ -45,24 +47,44 @@ D = DecisionStatus
 
 def test_the_default_policy_wants_more_for_more_risk() -> None:
     assert DEFAULT_POLICY.requirement("low") == Requirement(1, separate=False)
-    assert DEFAULT_POLICY.requirement("medium") == Requirement(1, separate=False)
-    assert DEFAULT_POLICY.requirement("high") == Requirement(2, separate=True)
+    assert DEFAULT_POLICY.requirement("medium") == Requirement(1, separate=False, escalate_hours=48)
+    assert DEFAULT_POLICY.requirement("high") == Requirement(
+        2, separate=True, valid_hours=72, escalate_hours=24
+    )
+    assert DEFAULT_POLICY.requirement("critical") == Requirement(
+        2, separate=True, role="owner", valid_hours=24, escalate_hours=4
+    )
     kept = DEFAULT_POLICY.to_settings()
-    assert kept == {
-        "approvals": {"low": 1, "medium": 1, "high": 2},
-        "separate": ["high"],
-        "production_raises": True,
-    }
+    assert kept["approvals"] == {"low": 1, "medium": 1, "high": 2, "critical": 2}
+    assert kept["separate"] == ["high", "critical"]
+    assert kept["roles"] == {"low": None, "medium": None, "high": None, "critical": "owner"}
+    assert [r["name"] for r in kept["rules"]] == [  # type: ignore[attr-defined]
+        "irreversible",
+        "irreversible_in_production",
+        "critical_target_in_production",
+    ]
     assert ApprovalPolicy.from_settings(kept) == DEFAULT_POLICY
     assert ApprovalPolicy.from_settings(None) == DEFAULT_POLICY
+
+
+def test_a_policy_kept_before_critical_reads_as_it_said() -> None:
+    """LEKA-390 kept three risks: critical asks at least what high did."""
+    before = ApprovalPolicy.from_settings(
+        {"approvals": {"low": 1, "medium": 2, "high": 3}, "separate": ["high"]}
+    )
+    assert before.requirement("critical").approvals == 3
+    assert before.requirement("critical").separate
+    assert before.requirement("medium") == Requirement(2, separate=False, escalate_hours=48)
 
 
 def test_a_policy_is_kept_as_said_or_refused() -> None:
     stricter = ApprovalPolicy.from_settings(
         {"approvals": {"medium": 2, "high": 3}, "separate": ["medium", "high"]}
     )
-    assert stricter.requirement("medium") == Requirement(2, separate=True)
+    assert stricter.requirement("medium") == Requirement(2, separate=True, escalate_hours=48)
     assert stricter.requirement("low") == Requirement(1, separate=False)
+    # Critical never needs fewer than high: kept as it said, raised to it.
+    assert stricter.requirement("critical").approvals == 3
     for wrong in (
         {"approvals": {"urgent": 1}},
         {"approvals": {"high": 0}},
@@ -71,6 +93,17 @@ def test_a_policy_is_kept_as_said_or_refused() -> None:
         {"approvals": {"medium": 3}},  # more than high's 2
         {"separate": ["sometimes"]},
         {"production_raises": "yes"},
+        {"approvals": {"critical": 1}},  # fewer than high's 2
+        {"roles": {"critical": "member"}},
+        {"roles": {"urgent": "owner"}},
+        {"valid_hours": {"high": 0}},
+        {"escalate_hours": {"high": 721}},
+        {"escalate_hours": {"high": "soon"}},
+        {"rules": [{"name": "x", "at_least": "urgent"}]},
+        {"rules": [{"at_least": "high"}]},
+        {"rules": [{"name": "x", "at_least": "high", "actions": "restart"}]},
+        {"rules": [{"name": "x", "at_least": "high", "reversible": "no"}]},
+        {"rules": [{"name": "x", "at_least": "high"}, {"name": "x", "at_least": "low"}]},
         ["not", "an", "object"],
     ):
         with pytest.raises(PolicyError):

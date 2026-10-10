@@ -236,7 +236,7 @@ DECISION_STATUSES = (
     "superseded",
 )
 VERDICTS = ("approve", "reject", "modify", "request_changes")
-RISK_LEVELS = ("low", "medium", "high")
+RISK_LEVELS = ("low", "medium", "high", "critical")
 
 
 class IntentionDecision(Base, WorkspaceScopedMixin):
@@ -290,6 +290,16 @@ class IntentionDecision(Base, WorkspaceScopedMixin):
     )
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # What the policy said of it (LEKA-404): its risk's reasons, the role one
+    # approver must hold, the exceptions that froze or waived it.
+    required_role: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    governance: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    # Approved: until when the approval holds — past it, approved again.
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Waiting past its requirement's hours: when it was escalated.
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class IntentionDecisionVote(Base, WorkspaceScopedMixin):
@@ -322,6 +332,108 @@ class IntentionDecisionVote(Base, WorkspaceScopedMixin):
     # What it was cast on: the risk, the revision's proposals, the analysis
     # and context version, how many approvals were required.
     context: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # Cast with another's authority, delegated (LEKA-404): whose it is.
+    on_behalf_of: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # The role of the authority used, when it was cast.
+    role: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+
+# ── governance (LEKA-404) ────────────────────────────────────────────────────
+
+EXCEPTION_KINDS = ("freeze", "waiver")
+DECISION_GOVERNANCE_EVENTS = (
+    "policy_changed",
+    "exception_granted",
+    "exception_revoked",
+    "delegation_granted",
+    "delegation_revoked",
+    "decision_escalated",
+    "decision_waived",
+    "decision_frozen",
+)
+
+
+class GovernanceExceptionRow(Base, WorkspaceScopedMixin):
+    """A freeze or a waiver an admin granted: on what, from when to when,
+    why. Revoked, kept: who revoked it, when."""
+
+    __tablename__ = "governance_exceptions"
+    __table_args__ = (
+        CheckConstraint(_in("kind", EXCEPTION_KINDS), name="kind"),
+        CheckConstraint(_in("max_risk", RISK_LEVELS), name="max_risk"),
+        CheckConstraint("ends_at > starts_at", name="window"),
+        Index("ix_governance_exceptions_live", "workspace_id", "ends_at"),
+    )
+
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)
+    # What it covers — a list empty: any.
+    actions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    environments: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    targets: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    # A waiver's: the riskiest it covers.
+    max_risk: Mapped[str] = mapped_column(String(10), nullable=False, server_default="low")
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    granted_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class ApprovalDelegation(Base, WorkspaceScopedMixin):
+    """An approver's authority lent to another member: from when to when,
+    up to a risk, why. Revoked, kept."""
+
+    __tablename__ = "approval_delegations"
+    __table_args__ = (
+        CheckConstraint(_in("max_risk", RISK_LEVELS), name="max_risk"),
+        CheckConstraint("ends_at > starts_at", name="window"),
+        CheckConstraint("delegated_by <> delegated_to", name="not_oneself"),
+        Index("ix_approval_delegations_to", "workspace_id", "delegated_to", "ends_at"),
+    )
+
+    delegated_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    delegated_to: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    max_risk: Mapped[str] = mapped_column(String(10), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class DecisionGovernanceEvent(Base, WorkspaceScopedMixin):
+    """What happened to the workspace's governance: its policy changed, an
+    exception or a delegation granted or revoked, a decision escalated,
+    waived or frozen — who, when, on what, the detail. Append-only: the
+    database refuses to change one."""
+
+    __tablename__ = "decision_governance_events"
+    __table_args__ = (
+        CheckConstraint(_in("kind", DECISION_GOVERNANCE_EVENTS), name="kind"),
+        Index("ix_decision_governance_events_workspace_at", "workspace_id", "at"),
+    )
+
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # What it is about: an exception, a delegation, a decision.
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
 
 
 # ── execution (LEKA-391) ─────────────────────────────────────────────────────

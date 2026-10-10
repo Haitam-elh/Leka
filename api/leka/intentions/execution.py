@@ -7,9 +7,12 @@ by a person — and what came of each, said as it is.
                          endpoint the workspace authorized for that action,
                          in that environment, on that target; else a person
       ──▶ checks()       before anything runs: still approved, its approvers
-                         still allowed, the endpoint still authorizing it,
-                         inside the window asked, before the deadline, the
-                         target still there — one failing, nothing runs
+                         still allowed, what the workspace's governance says
+                         now (LEKA-404: no freeze, the approval not expired,
+                         the policy still met), the endpoint still
+                         authorizing it, inside the window asked, before the
+                         deadline, the target still there — one failing,
+                         nothing runs
       ──▶ outcome_of()   what the system answered: done, accepted (a person
                          confirms it — never assumed done), or failed
 
@@ -217,6 +220,8 @@ class Situation:
     present: frozenset[uuid.UUID]  # targets still in the company model
     now: datetime
     zone: ZoneInfo
+    # What the workspace's governance says now (LEKA-404, governance.py).
+    policy: Sequence[Check] = ()
 
 
 def checks(steps: Sequence[StepPlan], situation: Situation) -> list[Check]:
@@ -238,6 +243,7 @@ def checks(steps: Sequence[StepPlan], situation: Situation) -> list[Check]:
             {"approvers": len(s.approvers), "still_allowed": len(still), "required": s.required},
         )
     )
+    found.extend(s.policy)
     for step in steps:
         ids = [uuid.UUID(str(t["id"])) for t in step.targets]
         if step.executor == "webhook":
