@@ -45,7 +45,9 @@ LAYERS: dict[str, int] = {
     "capabilities": 8,
     "intelligence": 9,
     "intentions": 10,
-    "api": 11,
+    # Operations (LEKA-408): reads every module's tables as operating data.
+    "ops": 11,
+    "api": 12,
 }
 
 # Files a module keeps to itself. Everything else imports the package.

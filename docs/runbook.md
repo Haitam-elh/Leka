@@ -1,5 +1,9 @@
 # Runbook — backup, restore, and rotating a secret
 
+> The nightly dump with its manifest, `python -m leka.ops.backup verify`,
+> RPO/RTO and critical dependencies: [operations.md § 4](operations.md#4-backup-restore-disaster-recovery)
+> (LEKA-408).
+
 > Losing a **deployment** rather than data? See [deployment.md](deployment.md):
 > shipping, rolling back, and a worker that has stopped consuming.
 

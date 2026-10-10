@@ -65,15 +65,30 @@ SECRET_OWNERS: dict[str, frozenset[str]] = {
     # A managed database or Redis puts its password in the URL, so reading
     # the URL is reading the password.
     "database_url": frozenset(
-        {"leka.db.session", "alembic.env", "leka.background.runner"}
-    ),  # background.runner: its own unpooled engine, one per job (see its docstring)
+        {"leka.db.session", "alembic.env", "leka.background.runner", "leka.ops.backup"}
+    ),  # background.runner: its own unpooled engine, one per job (see its docstring);
+    # ops.backup: pg_dump and pg_restore are given the URL (LEKA-408)
     # Three clients for one server, consolidated by LEKA-334: the job queue
     # moved from leka.platform.jobs to leka.background.jobs, below platform, so
     # that platform itself can enqueue work.
-    "redis_url": frozenset({"leka.core.ratelimit", "leka.platform.health", "leka.background.jobs"}),
+    # LEKA-408: the circuit breakers, and operations — the queues' depth, the
+    # alerts' state, the last backup's date.
+    "redis_url": frozenset(
+        {
+            "leka.core.ratelimit",
+            "leka.platform.health",
+            "leka.background.jobs",
+            "leka.core.breaker",
+            "leka.ops",
+        }
+    ),
     # Every value at once, so the log masking can recognise them anywhere.
     # Holding them all is that module's job, and nobody else's.
     "secret_values": frozenset({"leka.core.logging"}),
+    # Operations (LEKA-408): who may read the metrics — checked by its route;
+    # the backup bucket's key — used by the backup alone.
+    "metrics_token": frozenset({"leka.api.ops"}),
+    "backup_secret_access_key": frozenset({"leka.ops.backup"}),
 }
 
 # Grants nobody exercises yet, on purpose. Any other unused grant is stale:

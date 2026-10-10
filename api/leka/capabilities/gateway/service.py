@@ -66,6 +66,7 @@ from leka.capabilities.gateway.routing import Needs, Own, Passed, Route, Routing
 from leka.capabilities.gateway.routing import route as route_of
 from leka.capabilities.models import ModelCall, WorkspaceModel
 from leka.connectors import BlockedAddressError, PublicTransport
+from leka.core import breaker
 from leka.core.config import settings
 from leka.governance import current_actor
 from leka.platform import DecryptionError, secret_box
@@ -317,6 +318,13 @@ class Gateway:
         if vendor is None:
             attempts.append(self._attempt(route, 1, "unknown provider"))
             return None
+        # A provider failing for everyone is left alone a while: the next
+        # route answers instead (LEKA-408).
+        circuit = self._circuit(route)
+        if not await breaker.allow(circuit):
+            attempts.append(self._attempt(route, 1, "circuit open"))
+            logger.warning("model_route_skipped", provider=route.endpoint.provider, why="circuit")
+            return None
         call = Call(
             route.endpoint,
             model,
@@ -348,6 +356,10 @@ class Gateway:
                     continue
                 if route.endpoint.owner == "workspace" and not error.retryable:
                     await self._mark(failed=str(error))
+                if _down(raised, error):
+                    # Once per request, its retries spent: the provider's
+                    # failure, not the request's (LEKA-408).
+                    await breaker.failure(circuit)
                 return None
             if check is not None:
                 try:
@@ -362,8 +374,16 @@ class Gateway:
                         continue
                     return None
             self._record(request, route, attempt, done=done, status="ok")
+            await breaker.success(circuit)
             return done
         return None
+
+    def _circuit(self, route: Route) -> str:
+        """One breaker per provider and account: LEKA's key is shared by every
+        workspace; a workspace's own, by it alone."""
+        owner = route.endpoint.owner
+        mine = f":{self._workspace_id}" if owner == "workspace" else ""
+        return f"model:{route.endpoint.provider}:{owner}{mine}"
 
     @staticmethod
     def _attempt(route: Route, attempt: int, error: str) -> Attempt:
@@ -550,6 +570,18 @@ class Gateway:
         await self._mark(failed=None)
         await self._session.flush()
         return Tested(True, None, done.latency_ms, own.model, done.version)
+
+
+def _down(raised: Exception, error: ProviderError) -> bool:
+    """Whether the provider itself failed — unreachable, slow, overloaded,
+    erring — as a circuit breaker counts it. An answer that is empty, not the
+    shape asked or refused for the request's own fault says nothing about
+    whether the provider is up."""
+    if isinstance(raised, BlockedAddressError):
+        return False  # our refusal of the address, not the provider's failure
+    if isinstance(raised, httpx.HTTPError):
+        return True
+    return error.status is not None and (error.status >= 500 or error.status == 429)
 
 
 def _said(raised: Exception) -> ProviderError:
