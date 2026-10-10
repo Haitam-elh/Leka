@@ -174,6 +174,18 @@ def test_a_block_wins_redactions_follow_one_another_a_flag_keeps_the_text() -> N
     assert check_output([block], "x", None, "rien ici").outcomes == ()
 
 
+def test_a_redaction_never_hides_from_a_block_what_it_would_find() -> None:
+    # Ordered by name, the redaction comes first: the block still sees the key.
+    first = control_of("A — masquer", "output_check", {"detect": ["secrets"]})
+    then = control_of("B — bloquer", "output_check", {"detect": ["secrets"], "on_finding": "block"})
+    checked = check_output([first, then], "x", None, "clé AKIAIOSFODNN7EXAMPLE")
+    assert checked.blocked_by is then
+    # Two redactions, each of what it looks for, taken out of the answer as given.
+    personal = control_of("C", "output_check", {"detect": ["personal_data"]})
+    both = check_output([first, personal], "x", None, "AKIAIOSFODNN7EXAMPLE et jean@acme.fr")
+    assert both.text == f"{REDACTED} et {REDACTED}"
+
+
 # ── approval ───────────────────────────────────────────────────────────────
 
 

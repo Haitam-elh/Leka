@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.models import LLMRun, ModelCall
@@ -92,7 +92,8 @@ async def model_calls(
     if user_id is not None:
         query = query.where(ModelCall.user_id == user_id)
     if run_id is not None:
-        query = query.where(ModelCall.run_id == run_id)
+        # An agent run's calls are about it by their ref (LEKA-395).
+        query = query.where(or_(ModelCall.run_id == run_id, ModelCall.ref == f"agent_run:{run_id}"))
     return (await session.scalars(query)).all()
 
 

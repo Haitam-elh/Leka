@@ -411,13 +411,15 @@ class Gateway:
         )
         if done.text == read["text"]:
             return Structured(read["value"], done)
-        # Redacted by an AI control (LEKA-406): read again as it now is.
+        # Redacted by an AI control (LEKA-406): read and held to what the
+        # caller expects again, as it now is.
         try:
-            return Structured(model.model_validate_json(json_of(done.text)), done)
-        except ValidationError as error:
+            check(done)
+        except InvalidOutputError as error:
             raise NoModelError(
                 "The answer, redacted, is no longer what was asked.", reason="blocked"
             ) from error
+        return Structured(read["value"], done)
 
     async def run_tools(
         self,

@@ -381,9 +381,12 @@ class Checked:
 def check_output(
     controls: Sequence[Control], purpose: str, actor: Actor | None, text: str
 ) -> Checked:
-    """The answer through every output check that covers it: a block wins;
-    redactions are made one after the other; a flag keeps it as it is."""
+    """The answer through every output check that covers it — each looking
+    at the answer as the model gave it, so that no control hides from
+    another what it would find: a block wins; what the redactions found is
+    taken out, once; a flag keeps it as it is."""
     outcomes: list[tuple[Control, str, tuple[str, ...]]] = []
+    taken: list[Finding] = []
     for control in controls:
         if control.kind != "output_check" or not covers(control, purpose, actor):
             continue
@@ -394,11 +397,11 @@ def check_output(
         if control.on_finding == "block":
             outcomes.append((control, "blocked", what))
         elif control.on_finding == "redact":
-            text = redacted(text, found)
+            taken.extend(found)
             outcomes.append((control, "redacted", what))
         else:
             outcomes.append((control, "flagged", what))
-    return Checked(text, tuple(outcomes))
+    return Checked(redacted(text, taken) if taken else text, tuple(outcomes))
 
 
 # ── approval ───────────────────────────────────────────────────────────────

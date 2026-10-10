@@ -180,6 +180,9 @@ class AgentRuntime:
         steps = Steps(self._session, run, await self._runs.last_seq(run.id))
         if approve:
             run.status = RunStatus.QUEUED.value
+            # Queued now: the sweep counts from here, not from when it was
+            # asked — a run approved hours later is not abandoned.
+            run.queued_at = now_or(now)
             run.detail = {**run.detail, "approved_by": str(by)}
             steps.add("approved", **said)
         else:

@@ -104,6 +104,8 @@ FORGOTTEN = timedelta(hours=6)
 OUTPUT_KEPT = 4000
 # Failures a retry cannot mend: the person, the workflow itself.
 FINAL = frozenset({"not_permitted", "gone"})
+# An AI control's refusals of a model call (LEKA-406): final too.
+CONTROLLED = frozenset({"refused", "limited", "blocked"})
 
 
 def now_or(now: datetime | None = None) -> datetime:
@@ -176,8 +178,14 @@ async def agent_step(call: StepCall) -> StepResult:
     ref = f"agent_run:{run_id}"
     if found is None or found.status != "succeeded":
         error = found.error if found is not None else str(ended.get("status"))
+        # An AI control's refusal (LEKA-406) is not mended by trying again.
+        failure = found.detail.get("failure") if found is not None else None
+        controlled = isinstance(failure, dict) and failure.get("reason") in CONTROLLED
         return StepResult(
-            "failed", ref=ref, error=error, retryable=error in ("no_model", "timeout", "error")
+            "failed",
+            ref=ref,
+            error=error,
+            retryable=error in ("no_model", "timeout", "error") and not controlled,
         )
     return StepResult(
         "succeeded",

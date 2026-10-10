@@ -14,7 +14,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.governance.models import (
@@ -253,5 +253,8 @@ class AIControlRepository:
         if outcome is not None:
             query = query.where(AIControlEvent.outcome == outcome)
         if run_id is not None:
-            query = query.where(AIControlEvent.run_id == run_id)
+            # An agent run's own: its calls are about it by their ref.
+            query = query.where(
+                or_(AIControlEvent.run_id == run_id, AIControlEvent.ref == f"agent_run:{run_id}")
+            )
         return (await self._session.scalars(query)).all()

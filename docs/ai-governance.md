@@ -43,9 +43,11 @@ call (`governance.current_actor`).
   None left: refused.
 - **Usage**: every limit covering the work is checked before each call; the
   first one reached refuses it.
-- **Output**: every check covering the work looks at the answer, one after
-  the other. A **block wins**; redactions are made in turn; a flag keeps the
-  answer as it is and says so.
+- **Output**: every check covering the work looks at **the answer as the
+  model gave it** — a redaction never hides from a block what it would find.
+  A **block wins**; what the redactions found is taken out, once; a flag
+  keeps the answer as it is and says so. A structured answer redacted is read
+  and held to what its caller expects again; no longer valid, blocked.
 - **Approval**: the first control covering the agent at or above its risk
   holds it.
 
@@ -126,5 +128,18 @@ did, for whom). An agent run says it waits for approval.
   hours, the last 30 days.
 - **Approval is for agents.** A workflow does not pause: its agent step
   fails `approval_required`. Run the agent on its own, approved, instead.
+  An agent step a control refused (`refused`, `limited`, `blocked`) is not
+  tried again: the outcome would not change.
+- **A run waiting for approval does not expire**: it waits for a person, who
+  approves, rejects, or — who asked — cancels it. Approved, it is queued
+  from then: the wait is not counted against it.
+- **Only answers are checked**, not the arguments of the tools a model calls:
+  an agent's tools are LEKA's own, read-only, and never leave the workspace.
+- **A limit `per: workspace` counts all the work it covers**, whoever asked;
+  its roles say who is refused once it is reached, not whose calls count.
+  To give a role its own budget, count `per: person`.
+- **Usage is counted on each call** (one query per limit covering the work,
+  indexed on the workspace): fine at today's volumes; a running counter per
+  period is the step after.
 - The controls are read once per gateway — once per request or job: a
   control changed applies from the next one.

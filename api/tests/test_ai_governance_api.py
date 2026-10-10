@@ -199,6 +199,9 @@ async def test_a_secret_in_an_answer_is_redacted_or_blocks_it(
     assert SECRET not in done["output"] and "[redacted]" in done["output"]
     (redacted,) = await _events(client, identity, acme, outcome="redacted")
     assert redacted["detail"]["found"] == ["aws_key"]
+    # Linked to the run it happened in.
+    (of_run,) = await _events(client, identity, acme, run_id=started["id"])
+    assert of_run["outcome"] == "redacted"
 
     _as(identity, acme, "admin")
     await _ok(
@@ -251,6 +254,8 @@ async def test_a_risky_agent_waits_for_someone_who_may_approve(
         await client.post(f"{RUNS}/{held['id']}/approve", json={"note": "Vu avec l'équipe"})
     )
     assert approved["status"] == "queued" and queued == [uuid.UUID(held["id"])]
+    # Queued from now: the sweep does not count the wait for approval.
+    assert approved["queued_at"] > held["queued_at"]
     assert (await client.post(f"{RUNS}/{held['id']}/approve")).status_code == 409
     assert await _run(acme, held["id"]) == {"status": "succeeded"}
     kinds = [e["kind"] for e in (await _ok(await client.get(f"{RUNS}/{held['id']}")))["events"]]
@@ -354,6 +359,35 @@ async def test_controls_changed_by_whom_may_kept_and_never_rewritten(
         201,
     )
     assert (made["max_tokens"], made["period"], made["per"]) == (100_000, "day", "workspace")
+    # A role it names, since deleted, does not stop it being turned off.
+    await _ok(
+        await client.put(
+            "/api/v1/governance/roles/contractor",
+            json={"name": "Prestataire", "base": "member", "added": [], "removed": ["source:read"]},
+        )
+    )
+    theirs = await _ok(
+        await client.post(
+            f"{API}/controls",
+            json={"name": "Prestataires", "kind": "approval", "roles": ["contractor"]},
+        ),
+        201,
+    )
+    assert (await client.delete("/api/v1/governance/roles/contractor")).status_code == 204
+    off = await _ok(
+        await client.put(
+            f"{API}/controls/{theirs['id']}",
+            json={
+                "name": "Prestataires",
+                "kind": "approval",
+                "roles": ["contractor"],
+                "enabled": False,
+            },
+        )
+    )
+    assert off["enabled"] is False
+    assert (await client.delete(f"{API}/controls/{theirs['id']}")).status_code == 204
+
     kind_changed = await client.put(
         f"{API}/controls/{made['id']}", json={"name": "Limite", "kind": "approval"}
     )
@@ -370,8 +404,9 @@ async def test_controls_changed_by_whom_may_kept_and_never_rewritten(
     history = await _ok(
         await client.get("/api/v1/governance/history", params={"subject_type": "ai_control"})
     )
-    assert [h["kind"] for h in history] == ["deleted", "updated", "created"]
-    assert history[1]["before"]["config"]["max_tokens"] == 100_000
+    mine = [h for h in history if h["subject_id"] == made["id"]]
+    assert [h["kind"] for h in mine] == ["deleted", "updated", "created"]
+    assert mine[1]["before"]["config"]["max_tokens"] == 100_000
 
     # What a control did is never rewritten.
     with workspace_scope(acme["acme"]):

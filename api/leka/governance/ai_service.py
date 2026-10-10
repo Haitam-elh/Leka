@@ -108,7 +108,9 @@ class AIControlService:
     async def active(self) -> tuple[Control, ...]:
         return tuple(control_of_row(r) for r in await self._repo.controls(enabled_only=True))
 
-    async def _checked(self, said: ControlInput) -> Control:
+    async def _checked(self, said: ControlInput, kept: Sequence[str] = ()) -> Control:
+        """The control — a role it already named, since deleted, does not
+        stop it being changed or turned off."""
         control = checked_control(
             control_of(
                 said.name.strip(), said.kind, said.config, purposes=said.purposes, roles=said.roles
@@ -117,7 +119,7 @@ class AIControlService:
         known = {r.value for r in Role} | {
             r.key for r in await PolicyRepository(self._session, self._workspace_id).roles()
         }
-        unknown = sorted(set(said.roles) - known)
+        unknown = sorted(set(said.roles) - known - set(kept))
         if unknown:
             raise ControlError("roles", f"No such role: {', '.join(unknown)}.")
         return control
@@ -128,10 +130,10 @@ class AIControlService:
         """Created, or changed — None for a control this workspace does not
         have; ControlError when it cannot be. Only its kind's settings are
         kept."""
-        control = await self._checked(said)
         row = await self._repo.control(control_id) if control_id is not None else None
         if control_id is not None and row is None:
             return None
+        control = await self._checked(said, row.roles if row is not None else ())
         if row is not None and row.kind != said.kind:
             raise ControlError("kind", "A control keeps its kind: create another.")
         before = _said(row) if row is not None else None

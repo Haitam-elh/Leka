@@ -13,9 +13,13 @@ export type AgentRunEvent = components["schemas"]["AgentRunEventRead"];
 export type AgentRunCreate = components["schemas"]["AgentRunCreate"];
 export type RunInputs = AgentRunCreate["inputs"];
 
-/** Still on its way — waiting for approval included (LEKA-406): followed
- * until it ends. */
+/** Still on its way — waiting for approval included (LEKA-406): it may
+ * still be cancelled. */
 export const ACTIVE: ReadonlySet<string> = new Set(["awaiting_approval", "queued", "running"]);
+
+/** Moving on its own: followed closely. One waiting for approval waits for
+ * a person — hours, maybe — and is read again when the page is. */
+export const MOVING: ReadonlySet<string> = new Set(["queued", "running"]);
 
 export const agentRuns = {
   list: (key?: string) =>
