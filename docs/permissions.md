@@ -72,6 +72,8 @@ away, so the chain and the matrix stay what everything else reads.
 | `entity:read_restricted` | no | yes | yes |
 | `access:read` | no | yes | yes |
 | `policy:manage` | no | yes | yes |
+| `audit:read` | no | yes | yes |
+| `audit:manage` | no | no | yes |
 
 **`job:read` is admin and above.** It reads the history of the background jobs run for the
 workspace: which job, how many attempts, when. That is how the system talks to itself, and a
@@ -310,6 +312,16 @@ approval — by its AI controls, at the model gateway and where an agent is
 asked to run. Changing them takes `policy:manage`; approving a held run,
 `intention:approve`, never by who asked it; what they did, `access:read`.
 See [ai-governance.md](ai-governance.md).
+
+## The audit trail (LEKA-407)
+
+Everything that matters — signing in, the team, sources and their secrets,
+restricted entities, access decisions, governance changes, decisions,
+actions, agents and workflows, what the AI controls did — one record each:
+who, as which role, what, to what, the outcome, from where. Searching it
+takes `audit:read` (admins and the owner); how long it is kept, `audit:manage`
+— the owner's alone, never a role of the workspace's own. No route changes a
+record and the database refuses to. See [audit.md](audit.md).
 
 ## What is deliberately absent
 

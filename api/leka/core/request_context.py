@@ -61,9 +61,34 @@ def reset_request_id(token: object) -> None:
     _request_id.reset(token)  # type: ignore[arg-type]
 
 
+# Where the request came from, as the audit trail keeps it (LEKA-407): the
+# caller's address as given — reduced to a network prefix before it is
+# stored — and what it said it was.
+_origin: ContextVar[tuple[str | None, str | None]] = ContextVar(
+    "leka_request_origin", default=(None, None)
+)
+
+
+def set_request_origin(ip: str | None, user_agent: str | None) -> object:
+    return _origin.set((ip, user_agent))
+
+
+def current_request_origin() -> tuple[str | None, str | None]:
+    """(address, user agent) of the request being served; (None, None)
+    outside one."""
+    return _origin.get()
+
+
+def reset_request_origin(token: object) -> None:
+    _origin.reset(token)  # type: ignore[arg-type]
+
+
 __all__ = [
     "current_request_id",
+    "current_request_origin",
     "new_request_id",
     "reset_request_id",
+    "reset_request_origin",
     "set_request_id",
+    "set_request_origin",
 ]

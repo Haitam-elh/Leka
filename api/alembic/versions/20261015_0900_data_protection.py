@@ -2,7 +2,7 @@
 policy in the governance trail.
 
 Revision ID: 8d3f6b2e9a41
-Revises: 2c7e5a9f4b16
+Revises: 8d3f6b2a9c51
 Created: 2026-10-15
 
 An extracted record is protected before it is kept (LEKA-405): a secret or
@@ -23,7 +23,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "8d3f6b2e9a41"
-down_revision: str | None = "2c7e5a9f4b16"
+down_revision: str | None = "8d3f6b2a9c51"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

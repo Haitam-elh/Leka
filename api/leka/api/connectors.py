@@ -23,6 +23,7 @@ from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, Response, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
@@ -62,7 +63,7 @@ from leka.connectors import (
 )
 from leka.core.errors import ErrorCode, FieldError
 from leka.db import SortableField
-from leka.governance import Permission, Principal, require_permission
+from leka.governance import Permission, Principal, Target, audit_as, require_permission
 from leka.ingestion import retention_days
 
 router = APIRouter(tags=["connectors"])
@@ -93,6 +94,21 @@ EVENT_SORTS = SortCatalogue(
     ),
     default="created_at",
 )
+
+
+def _audited(
+    session: AsyncSession, principal: Principal, action: str, source: Source, **detail: object
+) -> None:
+    """A source changed, as the audit trail keeps it (LEKA-407): which, of
+    what kind — never its configuration's values, never a secret."""
+    audit_as(
+        session,
+        principal,
+        "data",
+        f"source.{action}",
+        target=Target("source", source.id, source.name),
+        detail={"kind": getattr(source.kind, "value", source.kind), **detail},
+    )
 
 
 def get_connector_transport() -> httpx.AsyncBaseTransport | None:
@@ -257,12 +273,15 @@ async def list_sources(
 
 
 @router.post("/sources", response_model=SourceRead, status_code=status.HTTP_201_CREATED)
-async def create_source(body: SourceCreate, service: ManagingService) -> SourceRead:
+async def create_source(
+    body: SourceCreate, service: ManagingService, session: SessionDep, principal: Manager
+) -> SourceRead:
     """A new source, in draft. It reads nothing until it is tested and activated."""
     try:
         source = await service.create(body.type, body.display_name, body.config, body.credentials)
     except _REFUSALS as error:
         raise _refused(error) from error
+    _audited(session, principal, "created", source)
     return await _read(service, source)
 
 
@@ -273,7 +292,11 @@ async def get_source(source_id: uuid.UUID, service: ReadingService) -> SourceRea
 
 @router.patch("/sources/{source_id}", response_model=SourceRead)
 async def update_source(
-    source_id: uuid.UUID, body: SourceUpdate, service: ManagingService
+    source_id: uuid.UUID,
+    body: SourceUpdate,
+    service: ManagingService,
+    session: SessionDep,
+    principal: Manager,
 ) -> SourceRead:
     """Rename, or reconfigure. New settings put the source back in draft."""
     source = await _source(service, source_id)
@@ -281,12 +304,17 @@ async def update_source(
         await service.update(source, name=body.display_name, config=body.config)
     except _REFUSALS as error:
         raise _refused(error) from error
+    _audited(session, principal, "updated", source, config=sorted(body.config or {}))
     return await _read(service, source)
 
 
 @router.put("/sources/{source_id}/credentials", response_model=SourceRead)
 async def rotate_credentials(
-    source_id: uuid.UUID, body: CredentialsUpdate, service: ManagingService
+    source_id: uuid.UUID,
+    body: CredentialsUpdate,
+    service: ManagingService,
+    session: SessionDep,
+    principal: Manager,
 ) -> SourceRead:
     """Replace the secret. The source goes back to draft: the new one is unproven."""
     source = await _source(service, source_id)
@@ -294,6 +322,7 @@ async def rotate_credentials(
         await service.rotate_credentials(source, body.credentials)
     except _REFUSALS as error:
         raise _refused(error) from error
+    _audited(session, principal, "credentials_rotated", source)
     return await _read(service, source)
 
 
@@ -325,22 +354,28 @@ async def source_scope_options(source_id: uuid.UUID, service: ManagingService) -
 
 
 @router.post("/sources/{source_id}/activate", response_model=SourceRead)
-async def activate_source(source_id: uuid.UUID, service: ManagingService) -> SourceRead:
+async def activate_source(
+    source_id: uuid.UUID, service: ManagingService, session: SessionDep, principal: Manager
+) -> SourceRead:
     source = await _source(service, source_id)
     try:
         await service.activate(source)
     except _REFUSALS as error:
         raise _refused(error) from error
+    _audited(session, principal, "activated", source)
     return await _read(service, source)
 
 
 @router.post("/sources/{source_id}/disable", response_model=SourceRead)
-async def disable_source(source_id: uuid.UUID, service: ManagingService) -> SourceRead:
+async def disable_source(
+    source_id: uuid.UUID, service: ManagingService, session: SessionDep, principal: Manager
+) -> SourceRead:
     source = await _source(service, source_id)
     try:
         await service.disable(source)
     except _REFUSALS as error:
         raise _refused(error) from error
+    _audited(session, principal, "disabled", source)
     return await _read(service, source)
 
 
@@ -394,9 +429,13 @@ async def source_events(
 
 
 @router.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_source(source_id: uuid.UUID, service: ManagingService) -> Response:
+async def delete_source(
+    source_id: uuid.UUID, service: ManagingService, session: SessionDep, principal: Manager
+) -> Response:
     """Gone, with its credential. Its history stays, and says it was deleted."""
-    await service.delete(await _source(service, source_id))
+    source = await _source(service, source_id)
+    _audited(session, principal, "deleted", source)
+    await service.delete(source)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -428,7 +467,11 @@ async def check_source_settings(
 
 @router.put("/sources/{source_id}/settings", response_model=SettingsSaved)
 async def save_source_settings(
-    source_id: uuid.UUID, settings: SourceSettings, service: ManagingService
+    source_id: uuid.UUID,
+    settings: SourceSettings,
+    service: ManagingService,
+    session: SessionDep,
+    principal: Manager,
 ) -> SettingsSaved:
     """A new version of the settings — before or after activation. 422 with
     every error; saved with its warnings. A scope changed on an active source
@@ -440,6 +483,7 @@ async def save_source_settings(
         )
     except (InvalidSettingsError, SettingsConflictError) as error:
         raise _refused(error) from error
+    _audited(session, principal, "settings_saved", source, version=version, changed=list(changed))
     return SettingsSaved(
         version=version,
         changed=changed,

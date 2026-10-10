@@ -48,7 +48,9 @@ from leka.platform import Role, WorkspaceStatus
 # ── roles of the workspace's own (LEKA-403) ────────────────────────────────
 
 # What only an owner may do: no role of the workspace's own grants it.
-OWNER_ONLY = frozenset({Permission.WORKSPACE_DELETE, Permission.WORKSPACE_TRANSFER})
+OWNER_ONLY = frozenset(
+    {Permission.WORKSPACE_DELETE, Permission.WORKSPACE_TRANSFER, Permission.AUDIT_MANAGE}
+)
 # What every role keeps: a role that cannot read the workspace locks its
 # holder out of it.
 KEPT = frozenset({Permission.WORKSPACE_READ})

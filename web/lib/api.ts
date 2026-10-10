@@ -160,6 +160,16 @@ const SIGN_IN_PATH = "/login";
  * Redirecting on that answer would loop forever. */
 const AUTH_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/verify"];
 
+/** A sign-out under way: the page's other calls, refused now that the
+ * session is gone, must not send the person to sign in — they are leaving,
+ * and the sign-out says where to. Without this the two navigations race, and
+ * a slow answer to the sign-out lets the refusal win. */
+let leaving = false;
+
+export function leavingSession(): void {
+  leaving = true;
+}
+
 function onAnAuthPage(): boolean {
   if (typeof window === "undefined") return true;
   return AUTH_PATHS.some((path) => window.location.pathname.startsWith(path));
@@ -199,7 +209,7 @@ export async function apiFetch<T>(
     );
   }
 
-  if (response.status === 401 && redirectOn401 && !onAnAuthPage()) {
+  if (response.status === 401 && redirectOn401 && !leaving && !onAnAuthPage()) {
     // The session expired, was revoked, or the person was signed out from
     // another device. Send them to sign in, keeping where they were so they
     // can be returned to it.

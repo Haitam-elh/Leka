@@ -21,11 +21,12 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.core.errors import ErrorCode, FieldError
-from leka.governance import Permission, Principal, require_permission
+from leka.governance import Permission, Principal, Target, audit_as, require_permission
 from leka.intentions import (
     ActionEndpointCreate,
     ActionEndpointCreated,
@@ -109,6 +110,14 @@ async def authorize(
         targets=payload.targets,
         by=principal.user_id,
     )
+    audit_as(
+        session,
+        principal,
+        "action",
+        "action_endpoint.authorized",
+        target=Target("action_endpoint", row.id, payload.name),
+        detail={"actions": list(payload.actions), "environments": list(payload.environments)},
+    )
     await session.commit()
     return ActionEndpointCreated(endpoint=endpoint_read(row), secret=secret)
 
@@ -122,6 +131,14 @@ async def change(
     if row is None:
         raise _missing("endpoint")
     await service.update(row, payload.model_dump(exclude_none=True))
+    audit_as(
+        session,
+        principal,
+        "action",
+        "action_endpoint.changed",
+        target=Target("action_endpoint", endpoint_id, row.name),
+        detail={"changed": sorted(payload.model_dump(exclude_none=True))},
+    )
     await session.commit()
     return endpoint_read(row)
 
@@ -132,12 +149,37 @@ async def remove(endpoint_id: uuid.UUID, principal: Admin, session: SessionDep) 
     row = await service.get(endpoint_id)
     if row is None:
         raise _missing("endpoint")
+    audit_as(
+        session,
+        principal,
+        "action",
+        "action_endpoint.removed",
+        target=Target("action_endpoint", endpoint_id, row.name),
+    )
     await service.delete(row)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── plans ────────────────────────────────────────────────────────────────────
+
+
+def _plan_audited(
+    session: AsyncSession,
+    principal: Principal,
+    action: str,
+    intention_id: uuid.UUID,
+    plan_id: uuid.UUID,
+    **detail: object,
+) -> None:
+    audit_as(
+        session,
+        principal,
+        "action",
+        action,
+        target=Target("intention", intention_id),
+        detail={"plan": str(plan_id), **{k: v for k, v in detail.items() if v is not None}},
+    )
 
 
 async def _queued(service: ActionService, principal: Principal) -> None:
@@ -173,6 +215,7 @@ async def plan(
         raise _refused(error) from error
     if made is None:
         raise _missing()
+    _plan_audited(session, principal, "action_plan.created", intention_id, made.id)
     await session.commit()
     return made
 
@@ -199,6 +242,14 @@ async def start(
         raise _refused(error) from error
     if started is None:
         raise _missing()
+    _plan_audited(
+        session,
+        principal,
+        "action_plan.started",
+        intention_id,
+        started.id,
+        scheduled_for=payload.scheduled_for.isoformat() if payload.scheduled_for else None,
+    )
     await session.commit()
     await _queued(service, principal)
     return started
@@ -218,6 +269,9 @@ async def cancel(
         raise _refused(error) from error
     if stopped is None:
         raise _missing()
+    _plan_audited(
+        session, principal, "action_plan.cancelled", intention_id, stopped.id, reason=payload.reason
+    )
     await session.commit()
     return stopped
 
@@ -248,6 +302,15 @@ async def report(
         raise _refused(error) from error
     if reported is None:
         raise _missing("step")
+    _plan_audited(
+        session,
+        principal,
+        "action_step.reported",
+        intention_id,
+        reported.id,
+        step=str(step_id),
+        outcome=payload.outcome,
+    )
     await session.commit()
     await _queued(service, principal)
     return reported
