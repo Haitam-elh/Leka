@@ -39,6 +39,7 @@ from leka.context import (
     IntentAsk,
     IntentPlan,
 )
+from leka.core.sensitive import guarded
 from leka.intelligence import IntelligenceRepository
 from leka.intentions.grounding import acting, readiness, refined
 from leka.intentions.lifecycle import (
@@ -115,6 +116,16 @@ def _ready(ready: ContextReadiness) -> dict[str, object]:
 
 def _now(now: datetime | None) -> datetime:
     return now or datetime.now(UTC)
+
+
+def _guarded(ask: IntentAsk) -> IntentAsk:
+    """Its words and title as kept: a secret or an identity number typed in
+    them taken out (core.sensitive)."""
+    text = guarded(ask.text)
+    title = guarded(ask.title) if ask.title else ask.title
+    if text == ask.text and title == ask.title:
+        return ask
+    return ask.model_copy(update={"text": text, "title": title})
 
 
 def _scope(ask: IntentAsk) -> dict[str, object]:
@@ -257,6 +268,8 @@ class IntentionService:
         if self._contexts is None:
             msg = "Creating an intention assembles its context: a ContextService is needed."
             raise RuntimeError(msg)
+        # A secret typed in it is never kept, nor read by a model (LEKA-405).
+        ask = _guarded(ask)
         at = _now(now)
         intention = Intention(
             workspace_id=self._repository.workspace_id,
@@ -319,6 +332,7 @@ class IntentionService:
         if self._contexts is None:
             msg = "Asking again assembles its context: a ContextService is needed."
             raise RuntimeError(msg)
+        ask = _guarded(ask)
         intention = await self._repository.intention(intention_id, lock=True)
         if intention is None:
             return None

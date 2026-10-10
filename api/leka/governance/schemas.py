@@ -302,7 +302,7 @@ class GovernanceEventRead(BaseModel):
     model_config = ConfigDict(frozen=True, from_attributes=True)
 
     id: uuid.UUID
-    subject_type: Literal["role", "policy", "assignment"]
+    subject_type: Literal["role", "policy", "assignment", "protection"]
     subject_id: str
     kind: str
     by: uuid.UUID | None

@@ -434,6 +434,12 @@ class ExtractedRecordRow(Base, WorkspaceScopedMixin):
     A failure is a row too — `failure_code`, and a `message` that names a
     field and never quotes the payload: that is how a vendor changing a
     payload's shape is seen, one strategy failing all at once.
+
+    `result` is protected before it is kept (LEKA-405, core.sensitive): a
+    secret, an IBAN, a card, a social security number in it is replaced by
+    [redacted:<what>]; `sensitivity` says what was found, by kind and count
+    — never a value — and with which version of the detector, so that a
+    newer one scans it again (ingestion.protection).
     """
 
     __tablename__ = "extracted_records"
@@ -463,6 +469,12 @@ class ExtractedRecordRow(Base, WorkspaceScopedMixin):
         CheckConstraint("length(checksum) = 64", name="checksum_is_sha256"),
         # A source's extraction at a glance, and its failures.
         Index("ix_extracted_records_source_status", "source_id", "status"),
+        # What the protection sweep has yet to scan (LEKA-405).
+        Index(
+            "ix_extracted_records_unscanned",
+            "workspace_id",
+            postgresql_where=text("status = 'extracted' AND sensitivity IS NULL"),
+        ),
         # Its words, for context retrieval (LEKA-371): the extracted only.
         Index(
             "ix_extracted_records_words",
@@ -498,6 +510,9 @@ class ExtractedRecordRow(Base, WorkspaceScopedMixin):
     failure_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     extracted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # What the detector found in it, and its version (LEKA-405); none until
+    # scanned — the protection sweep scans what is not.
+    sensitivity: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
 
 
 class ParseStatus(enum.StrEnum):

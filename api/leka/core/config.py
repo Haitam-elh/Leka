@@ -205,6 +205,33 @@ class Settings(
         return self
 
     @model_validator(mode="after")
+    def _refuse_plaintext_data_in_production(self) -> Self:
+        """Customer data travels and rests encrypted (LEKA-405): in
+        production, a database URL that turns TLS off, or an Amazon S3
+        store told to write unencrypted, stops the process. The connection's
+        TLS is checked again once it is open (platform.posture)."""
+        if self.environment != "production":
+            return self
+        query = (self.database_url.query or "").lower()
+        if any(f"{k}={v}" in query for k in ("ssl", "sslmode") for v in ("disable", "false")):
+            msg = (
+                "LEKA_DATABASE_URL turns TLS off in production: customer data would cross "
+                "the network in the clear. Use ?ssl=require."
+            )
+            raise ValueError(msg)
+        if (
+            self.object_store == "s3"
+            and not self.s3_endpoint_url
+            and self.s3_server_side_encryption == "none"
+        ):
+            msg = (
+                "LEKA_S3_SERVER_SIDE_ENCRYPTION=none on Amazon S3 in production: payloads "
+                "must be written encrypted. Leave it unset (AES256) or use aws:kms."
+            )
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
     def _refuse_local_object_store_in_production(self) -> Self:
         """A local disk is not durable storage.
 
