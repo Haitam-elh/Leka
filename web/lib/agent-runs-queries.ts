@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { ACTIVE, agentRuns, type AgentRunCreate } from "@/lib/agent-runs";
+import { agentRuns, MOVING, type AgentRunCreate } from "@/lib/agent-runs";
 
 export const agentRunKeys = {
   all: ["agent-runs"] as const,
@@ -19,7 +19,7 @@ export function useAgentRuns(key: string) {
     queryFn: () => agentRuns.list(key),
     enabled: Boolean(key),
     refetchInterval: (query) =>
-      query.state.data?.some((run) => ACTIVE.has(run.status)) ? FOLLOW_MS : false,
+      query.state.data?.some((run) => MOVING.has(run.status)) ? FOLLOW_MS : false,
   });
 }
 
@@ -29,7 +29,7 @@ export function useAgentRun(id: string | null) {
     queryFn: () => agentRuns.one(id ?? ""),
     enabled: Boolean(id),
     refetchInterval: (query) =>
-      query.state.data && ACTIVE.has(query.state.data.status) ? FOLLOW_MS : false,
+      query.state.data && MOVING.has(query.state.data.status) ? FOLLOW_MS : false,
   });
 }
 

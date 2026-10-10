@@ -22,6 +22,11 @@ does without.
 A workspace's address (its Azure resource, its own endpoint) is reached
 through the connectors' transport — public https only, pinned against DNS
 rebinding — as any customer-given address is.
+
+The workspace's AI controls (LEKA-406, controls.py) stand on both sides:
+before, the models this work may use and its usage limits; after, what the
+answer may not carry. What they refuse raises NoModelError, said why
+(refused, limited, blocked) — and each call says whom it was for.
 """
 
 from __future__ import annotations
@@ -55,12 +60,14 @@ from leka.capabilities.gateway.contract import (
     ToolChoice,
     provider,
 )
+from leka.capabilities.gateway.controls import ControlRefusedError, Guard
 from leka.capabilities.gateway.profiles import DEFAULTS
 from leka.capabilities.gateway.routing import Needs, Own, Passed, Route, Routing, fallbacks_of
 from leka.capabilities.gateway.routing import route as route_of
 from leka.capabilities.models import ModelCall, WorkspaceModel
 from leka.connectors import BlockedAddressError, PublicTransport
 from leka.core.config import settings
+from leka.governance import current_actor
 from leka.platform import DecryptionError, secret_box
 
 logger = structlog.get_logger(__name__)
@@ -78,7 +85,9 @@ ToolHandler = Callable[[Mapping[str, Any]], Awaitable[str]]
 class NoModelError(Exception):
     """No model is configured that can do it, or none answered — said why:
     `reason` none (no model can), unanswered (every one tried failed),
-    timeout (the budget was spent), tools (too many rounds of tools)."""
+    timeout (the budget was spent), tools (too many rounds of tools); an AI
+    control's (LEKA-406): refused (no model allowed), limited (a usage
+    limit reached), blocked (what the answer carried)."""
 
     def __init__(
         self,
@@ -204,6 +213,7 @@ class Gateway:
         self._retries = max(0, settings.llm_retries if retries is None else retries)
         self._sleep = sleep
         self._urls = urls if urls is not None else (leka_urls() if keys is None else {})
+        self._guard = Guard(session, workspace_id)
 
     # ── which model ─────────────────────────────────────────────────────────
 
@@ -259,16 +269,25 @@ class Gateway:
                 else "No configured model can do what is asked."
             )
             raise NoModelError(reason, passed=routing.passed, reason="none")
+        try:
+            routing = await self._guard.before(request, routing)
+        except ControlRefusedError as refused:
+            raise NoModelError(str(refused), passed=routing.passed, reason=refused.reason) from None
         work = self._through(request, routing, check)
         if budget is None:
-            return await work
+            done = await work
+        else:
+            try:
+                done = await asyncio.wait_for(work, timeout=budget)
+            except TimeoutError as error:
+                await self._session.flush()
+                raise NoModelError(
+                    "No answer in time.", passed=routing.passed, reason="timeout"
+                ) from error
         try:
-            return await asyncio.wait_for(work, timeout=budget)
-        except TimeoutError as error:
-            await self._session.flush()
-            raise NoModelError(
-                "No answer in time.", passed=routing.passed, reason="timeout"
-            ) from error
+            return await self._guard.after(request, done)
+        except ControlRefusedError as refused:
+            raise NoModelError(str(refused), passed=routing.passed, reason=refused.reason) from None
 
     async def _through(
         self,
@@ -369,7 +388,7 @@ class Gateway:
         """An answer in the shape of `model`, checked — and, given `verify`,
         held to what the caller expects of it (what it cites is known…): one
         that does not match is asked again, then of the next model."""
-        read: dict[str, T] = {}
+        read: dict[str, Any] = {}
 
         def check(done: Completion) -> None:
             try:
@@ -385,10 +404,21 @@ class Gateway:
             if problems:
                 raise InvalidOutputError(f"Not what was asked: {'; '.join(problems)[:300]}")
             read["value"] = value
+            read["text"] = done.text
 
         done = await self.complete(
             replace(request, output=Output.of(model)), needs, budget=budget, check=check
         )
+        if done.text == read["text"]:
+            return Structured(read["value"], done)
+        # Redacted by an AI control (LEKA-406): read and held to what the
+        # caller expects again, as it now is.
+        try:
+            check(done)
+        except InvalidOutputError as error:
+            raise NoModelError(
+                "The answer, redacted, is no longer what was asked.", reason="blocked"
+            ) from error
         return Structured(read["value"], done)
 
     async def run_tools(
@@ -476,6 +506,7 @@ class Gateway:
                 latency_ms=done.latency_ms if done is not None else 0,
                 request_id=done.request_id[:200] if done is not None and done.request_id else None,
                 at=at,
+                user_id=actor.user_id if (actor := current_actor()) is not None else None,
             )
         )
 

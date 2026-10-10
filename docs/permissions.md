@@ -302,6 +302,15 @@ in kinds and counts — takes `access:read`; `PUT
 /governance/data-protection/policy`, `policy:manage`. Both decided and kept
 as every permission is. [data-protection.md](data-protection.md).
 
+## AI governance (LEKA-406)
+
+Who may ask is decided here; what the workspace's AI may then do — which
+models, how much, what an answer may not carry, which agents wait for
+approval — by its AI controls, at the model gateway and where an agent is
+asked to run. Changing them takes `policy:manage`; approving a held run,
+`intention:approve`, never by who asked it; what they did, `access:read`.
+See [ai-governance.md](ai-governance.md).
+
 ## What is deliberately absent
 
 Groups, SSO-mapped roles, roles of its own on the owner's base, and grants

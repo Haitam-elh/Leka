@@ -302,7 +302,7 @@ class GovernanceEventRead(BaseModel):
     model_config = ConfigDict(frozen=True, from_attributes=True)
 
     id: uuid.UUID
-    subject_type: Literal["role", "policy", "assignment", "protection"]
+    subject_type: Literal["role", "policy", "assignment", "ai_control", "protection"]
     subject_id: str
     kind: str
     by: uuid.UUID | None
@@ -335,3 +335,73 @@ class EvaluationRead(BaseModel):
     reason: str
     policy: str | None
     message: str
+
+
+# ── AI governance (LEKA-406) ───────────────────────────────────────────────
+
+AIControlKind = Literal["model_access", "usage_limit", "output_check", "approval"]
+Risk = Literal["low", "medium", "high"]
+
+
+class AIControlUpdate(BaseModel):
+    """A control on the workspace's AI: its kind's settings are read, the
+    others left aside."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str = Field(min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    kind: AIControlKind
+    purposes: list[str] = Field(
+        default_factory=list,
+        description="The work it covers, as patterns: agent:*, intention.*; none: all of it.",
+    )
+    roles: list[str] = Field(
+        default_factory=list,
+        description="member, admin, owner or a role of the workspace's own; none: everyone.",
+    )
+    enabled: bool = True
+    # model_access
+    providers: list[str] = Field(default_factory=list, description="none: any provider.")
+    owners: list[Literal["leka", "workspace"]] = Field(
+        default_factory=list, description="Whose account: LEKA's, the workspace's; none: either."
+    )
+    block: bool = Field(default=False, description="No model at all.")
+    # usage_limit
+    period: Literal["day", "month"] = "day"
+    per: Literal["workspace", "person"] = "workspace"
+    max_calls: int | None = Field(default=None, ge=0)
+    max_tokens: int | None = Field(default=None, ge=0)
+    max_cost_usd: float | None = Field(default=None, ge=0)
+    # output_check
+    detect: list[Literal["secrets", "personal_data"]] = Field(default_factory=list)
+    on_finding: Literal["redact", "block", "flag"] = "redact"
+    # approval
+    risk_at_least: Risk = "high"
+
+
+class AIControlRead(AIControlUpdate):
+    id: uuid.UUID
+    updated_at: datetime
+
+
+class AIControlEventRead(BaseModel):
+    """What a control did, once — what it found, never the text."""
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    control_id: uuid.UUID | None
+    control_name: str | None
+    kind: AIControlKind
+    outcome: Literal[
+        "refused", "limited", "redacted", "blocked", "flagged", "held", "approved", "rejected"
+    ]
+    purpose: str | None
+    ref: str | None
+    run_id: uuid.UUID | None
+    user_id: uuid.UUID | None
+    provider: str | None
+    model: str | None
+    at: datetime
+    detail: dict[str, object]

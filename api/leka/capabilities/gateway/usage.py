@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.models import LLMRun, ModelCall
@@ -71,6 +72,29 @@ class ModelUsage:
         if not self.intentions:
             return None
         return sum(self.intentions.values()) / len(self.intentions)
+
+
+async def model_calls(
+    session: AsyncSession,
+    workspace_id: uuid.UUID,
+    *,
+    user_id: uuid.UUID | None = None,
+    run_id: uuid.UUID | None = None,
+    limit: int = 100,
+) -> Sequence[ModelCall]:
+    """The latest calls, for audit (LEKA-406): for one person, one run."""
+    query = (
+        select(ModelCall)
+        .where(ModelCall.workspace_id == workspace_id)
+        .order_by(ModelCall.at.desc(), ModelCall.id)
+        .limit(limit)
+    )
+    if user_id is not None:
+        query = query.where(ModelCall.user_id == user_id)
+    if run_id is not None:
+        # An agent run's calls are about it by their ref (LEKA-395).
+        query = query.where(or_(ModelCall.run_id == run_id, ModelCall.ref == f"agent_run:{run_id}"))
+    return (await session.scalars(query)).all()
 
 
 async def model_usage(

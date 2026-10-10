@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.core.request_context import current_request_id
 from leka.db import session_factory, workspace_scope
+from leka.governance.ai import Actor, act_for
 from leka.governance.models import AccessDecision, EntityRestriction
 from leka.governance.policies import subject_of
 from leka.governance.policy import Decision, Resource, Subject, evaluate
@@ -136,8 +137,12 @@ async def hidden_on_behalf(
 ) -> frozenset[uuid.UUID]:
     """What work done for this person — an agent, a workflow, an analysis —
     must not see: what their role, now — a role of the workspace's own
-    included (LEKA-403) — may not. Nobody: the restricted, all of them."""
+    included (LEKA-403) — may not. Nobody: the restricted, all of them.
+
+    The rest of the job is theirs (LEKA-406): the models it calls are under
+    the AI controls covering them, each call says it was for them."""
     subject = await subject_of(session, workspace_id, user_id)
+    act_for(Actor.of(subject) if subject is not None else None)
     if subject is None:
         return await RestrictionRepository(session, workspace_id).restricted_ids()
     return await hidden_for(session, workspace_id, subject.permissions)
