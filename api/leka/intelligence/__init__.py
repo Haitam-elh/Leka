@@ -29,6 +29,7 @@ model through, and leka.context; below leka.intentions, which reads what it
 concluded through this file (architecture rule 1).
 """
 
+# The enterprise skill library (LEKA-401), registered when this is imported.
 from leka.intelligence.activity import ActivityService
 from leka.intelligence.analysis import (
     Analyzer,
@@ -61,6 +62,7 @@ from leka.intelligence.curation import (
     candidate_read,
     candidate_reads,
 )
+from leka.intelligence.library import LIBRARY
 from leka.intelligence.measures import QualityService, quality_read, quality_reads
 from leka.intelligence.models import (
     AuthorityRule,
@@ -121,6 +123,7 @@ from leka.intelligence.service import IntelligenceService, UnknownAnalyzerError
 
 __all__ = [
     "ANALYZERS",
+    "LIBRARY",
     "ActivityRead",
     "ActivityRepository",
     "ActivityService",
