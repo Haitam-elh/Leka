@@ -462,3 +462,53 @@ class SkillRun(Base, WorkspaceScopedMixin):
     detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CodeChange(Base, WorkspaceScopedMixin):
+    """A change to a repository's code an agent proposed (code-change): the
+    files as they would be, each with its diff against the branch it was
+    read from — for a person to accept or reject. Accepted, LEKA opens a
+    pull request on the source's repository, when its admin allowed it;
+    never a merge."""
+
+    __tablename__ = "code_changes"
+    __table_args__ = (
+        CheckConstraint("status IN ('proposed', 'rejected', 'applied', 'failed')", name="status"),
+        Index("ix_code_changes_workspace_intention", "workspace_id", "intention_id"),
+        Index("ix_code_changes_workspace_run", "workspace_id", "run_id"),
+    )
+
+    # The agent run that proposed it, the intention it answers — no foreign
+    # key to intentions, capabilities sits below them.
+    run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    intention_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False
+    )
+    repository: Mapped[str] = mapped_column(String(200), nullable=False)
+    base_branch: Mapped[str] = mapped_column(String(200), nullable=False)
+    # The commit the files were read at: a pull request starts from it.
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    # Each file: path, status (added, modified, deleted), its new text, its
+    # diff, lines added and removed, why.
+    files: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    proposed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Applied: where.
+    branch: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    pull_request_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pull_request_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    commit_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Failed: why — CodeRefusedError's code, and what GitHub said.
+    error: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)

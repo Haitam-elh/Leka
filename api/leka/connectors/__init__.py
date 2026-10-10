@@ -55,6 +55,13 @@ from leka.connectors.base import (
     ScopeOption,
 )
 from leka.connectors.errors import ConnectorError, Diagnostic, DiagnosticCode, diagnose
+from leka.connectors.github import (
+    CodeRefusedError,
+    FileChange,
+    GitHubCode,
+    PullRequest,
+    open_code,
+)
 from leka.connectors.health import run_health_check
 from leka.connectors.lifecycle import InvalidTransitionError, LifecycleEvent, next_status
 from leka.connectors.models import (
@@ -129,6 +136,7 @@ __all__ = [
     "BlockedAddressError",
     "Capability",
     "CatalogEntry",
+    "CodeRefusedError",
     "ConnectionTestResult",
     "Connector",
     "ConnectorCategory",
@@ -140,7 +148,9 @@ __all__ = [
     "Diagnostic",
     "DiagnosticCode",
     "DuplicateSourceError",
+    "FileChange",
     "Finding",
+    "GitHubCode",
     "HealthRead",
     "HealthResult",
     "HealthStatus",
@@ -152,6 +162,7 @@ __all__ = [
     "NoScopeError",
     "PublicHttpsUrl",
     "PublicTransport",
+    "PullRequest",
     "RawRecord",
     "Received",
     "Receiver",
@@ -197,6 +208,7 @@ __all__ = [
     "in_scope",
     "manifests",
     "next_status",
+    "open_code",
     "register_connector",
     "rotate_source_credentials",
     "run_health_check",
