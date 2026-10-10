@@ -58,7 +58,7 @@ between asking and running runs, and the version asked is kept with it
 | `unavailable` | when it came to run, it could no longer run here — the catalogue's reasons kept (`reasons`): turned off, retired, its source gone… |
 | `not_permitted` | who asked is no longer in the workspace, or their role no longer allows it |
 | `no_model` | no model could, or none answered (the gateway's attempts counted) |
-| `tool_rounds` | the model kept asking for tools and never answered (six rounds) |
+| `tool_rounds` | the model kept asking for tools and never answered — sixteen rounds, the last offered none (`TOOL_ROUNDS`): an agent that read much answers with what it read |
 | `timeout` | past `RUN_BUDGET` (15 minutes): context, tools, model, all of it |
 | `invalid_output` | not what it delivers — a JSON agent answering anything but a JSON object |
 | `abandoned` | its worker went away: running past 30 minutes, queued past 6 hours (the sweep) |

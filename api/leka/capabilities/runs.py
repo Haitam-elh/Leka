@@ -15,7 +15,9 @@
         4. its tools: offered when read-only and permitted, each call kept
            with what came of it (tools.py)
         5. the model, through the gateway: run_tools, deep tier, what its
-           definition needs choosing the model — within RUN_BUDGET
+           definition needs choosing the model — within RUN_BUDGET, at most
+           TOOL_ROUNDS rounds of tools, the last offered none: it answers
+           with what it read
         6. what LEKA draws of it, when the agent says so (`renders`): the
            architect's PowerPoint and PDF (delivery.py)
         7. succeeded with what it delivered, or failed saying why — unless
@@ -98,6 +100,10 @@ ABANDONED = timedelta(minutes=30)
 FORGOTTEN = timedelta(hours=6)
 # What an agent may write, at most: a deck's worth of markdown.
 MAX_TOKENS = 16_000
+# Rounds of tools an agent may take before it answers. Its last round is
+# offered none: it answers with what it read, rather than fail — the
+# architect's instructions ask it to look brick by brick.
+TOOL_ROUNDS = 16
 # What is kept of what a tool was asked, and of what it delivered.
 ARGUMENTS_KEPT = 500
 OUTPUT_KEPT = 200_000
@@ -451,7 +457,11 @@ async def _run(
     try:
         done: Completion = await asyncio.wait_for(
             Gateway(session, workspace_id).run_tools(
-                request, offered_now, replace(needs_of(definition), tools=bool(given))
+                request,
+                offered_now,
+                replace(needs_of(definition), tools=bool(given)),
+                rounds=TOOL_ROUNDS,
+                conclude=True,
             ),
             timeout=budget,
         )
