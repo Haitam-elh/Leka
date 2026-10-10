@@ -9,8 +9,9 @@ agents, the skills and the workflows alike.
       ──▶ a structured answer read and checked against its model: one that
           does not match is tried again, then the next model
       ──▶ every attempt kept (model_calls): for what, about what, which
-          provider, model and version, its tokens, its estimated cost, how
-          long — or why it failed
+          provider, model and version, its tokens — or that the provider
+          did not say them — its cost at the rate in force (rates.py, the
+          rate kept with it), how long — or why it failed
 
 A workspace's model is its company's: its account, its contract, its data
 residency, and what it costs LEKA nothing. A failed one falls back to
@@ -62,6 +63,7 @@ from leka.capabilities.gateway.contract import (
 )
 from leka.capabilities.gateway.controls import ControlRefusedError, Guard
 from leka.capabilities.gateway.profiles import DEFAULTS
+from leka.capabilities.gateway.rates import Rates, load_rates
 from leka.capabilities.gateway.routing import Needs, Own, Passed, Route, Routing, fallbacks_of
 from leka.capabilities.gateway.routing import route as route_of
 from leka.capabilities.models import ModelCall, WorkspaceModel
@@ -215,6 +217,7 @@ class Gateway:
         self._sleep = sleep
         self._urls = urls if urls is not None else (leka_urls() if keys is None else {})
         self._guard = Guard(session, workspace_id)
+        self._rates: Rates | None = None
 
     # ── which model ─────────────────────────────────────────────────────────
 
@@ -315,6 +318,8 @@ class Gateway:
         """One model, tried again while it says its failure is temporary."""
         vendor = provider(route.endpoint.provider)
         model = route.profile.model
+        if self._rates is None:
+            self._rates = await load_rates(self._session)
         if vendor is None:
             attempts.append(self._attempt(route, 1, "unknown provider"))
             return None
@@ -495,6 +500,12 @@ class Gateway:
     ) -> None:
         at = datetime.now(UTC)
         usage = done.usage if done is not None else None
+        reported = usage is not None and usage.reported
+        rate = (
+            self._rates.at(route.endpoint.provider, route.profile.model, at)
+            if self._rates is not None and usage is not None and reported
+            else None
+        )
         self._session.add(
             ModelCall(
                 workspace_id=self._workspace_id,
@@ -516,13 +527,10 @@ class Gateway:
                 tokens_thinking=usage.tokens_thinking if usage else 0,
                 tokens_cached=usage.tokens_cached if usage else 0,
                 tool_calls=len(done.tool_calls) if done is not None else 0,
-                cost_usd=(
-                    route.profile.cost(
-                        usage.tokens_in, usage.tokens_out, at, cached=usage.tokens_cached
-                    )
-                    if usage
-                    else None
-                ),
+                usage_reported=reported,
+                # Unknown — no rate, or no usage said — rather than 0.
+                cost_usd=rate.cost(usage) if rate is not None and usage is not None else None,
+                rate_id=rate.id if rate is not None else None,
                 latency_ms=done.latency_ms if done is not None else 0,
                 request_id=done.request_id[:200] if done is not None and done.request_id else None,
                 at=at,

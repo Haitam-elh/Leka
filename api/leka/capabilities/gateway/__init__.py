@@ -6,7 +6,8 @@ language model asks through here — never a vendor directly.
     openai.py     the chat-completions shape: Mistral, OpenAI (or
                   compatible), a company's Azure OpenAI
     anthropic.py  Anthropic Claude
-    profiles.py   the models LEKA knows: what each can do, what it costs
+    profiles.py   the models LEKA knows: what each can do, its list price
+    rates.py      what a call cost LEKA: the rates kept in the database
     routing.py    which model answers what a task needs, in what order
     service.py    the Gateway: tries, falls back, checks, keeps every call
     usage.py      what was asked, of which model, what it cost
@@ -41,11 +42,13 @@ from leka.capabilities.gateway.profiles import (
     DEFAULTS,
     Price,
     Profile,
+    cost_at,
     of_provider,
     profile,
     profiles,
     register_model,
 )
+from leka.capabilities.gateway.rates import Rate, Rates, load_rates
 from leka.capabilities.gateway.routing import Needs, Own, Passed, Prefer, Route, Routing, route
 from leka.capabilities.gateway.service import (
     Attempt,
@@ -90,6 +93,8 @@ __all__ = [
     "Profile",
     "Provider",
     "ProviderError",
+    "Rate",
+    "Rates",
     "Request",
     "Role",
     "Route",
@@ -102,9 +107,11 @@ __all__ = [
     "ToolChoice",
     "ToolRoundsError",
     "Usage",
+    "cost_at",
     "default_ready",
     "leka_default",
     "leka_keys",
+    "load_rates",
     "model_calls",
     "model_usage",
     "of_provider",

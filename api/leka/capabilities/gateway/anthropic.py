@@ -148,6 +148,7 @@ class Anthropic:
                 + int(usage.get("cache_read_input_tokens") or 0),
                 tokens_out=int(usage.get("output_tokens") or 0),
                 tokens_cached=int(usage.get("cache_read_input_tokens") or 0),
+                reported=bool(usage),
             ),
             latency_ms=latency_ms,
             finish=said.get("stop_reason"),

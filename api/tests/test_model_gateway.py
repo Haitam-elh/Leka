@@ -30,6 +30,7 @@ from leka.capabilities import (
     Gateway,
     Message,
     ModelCall,
+    ModelRate,
     NoModelError,
     Request,
     Tier,
@@ -203,6 +204,36 @@ async def test_the_default_answers_and_the_call_is_kept_with_what_it_cost(
     assert (call.tokens_in, call.tokens_out) == (1000, 300)
     # 1000 x 0.75 + 300 x 3.75, per million, at today's introductory price.
     assert call.cost_usd == pytest.approx(0.001875)
+
+
+async def test_the_call_is_priced_with_the_rate_in_force_and_says_it_was_measured(
+    workspace: uuid.UUID,
+) -> None:
+    script = Script({GOOGLE: [gemini("Because of the 14:02 deploy.")]})
+    await _ask(workspace, script, lambda g: g.complete(ask()))
+    [call] = await _calls(workspace)
+    with system_scope():
+        async with session_factory() as session:
+            rate = await session.get(ModelRate, call.rate_id)
+    assert rate is not None
+    assert (rate.provider, rate.model, rate.per_million_in) == ("google", "gemini-3.8-flash", 0.75)
+    assert call.usage_reported is True
+
+
+async def test_an_answer_without_its_usage_is_kept_unknown_not_free(
+    workspace: uuid.UUID,
+) -> None:
+    said = gemini("Because of the 14:02 deploy.")
+    del said["usageMetadata"]
+    script = Script({GOOGLE: [said]})
+    await _ask(workspace, script, lambda g: g.complete(ask()))
+    [call] = await _calls(workspace)
+    assert (call.usage_reported, call.tokens_in, call.cost_usd, call.rate_id) == (
+        False,
+        0,
+        None,
+        None,
+    )
 
 
 async def test_a_busy_provider_is_tried_again_then_the_fallback_answers(
