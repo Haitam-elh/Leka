@@ -9,7 +9,9 @@ customer owns leaves here.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -83,6 +85,27 @@ def _seconds(value: object) -> float | None:
     return float(value) if isinstance(value, int | float) else None
 
 
+# What a scrape, a health check and the alerts read within this many seconds
+# of each other is read once: a Prometheus scraping every 15 seconds must not
+# keep the database busy counting.
+CACHE_SECONDS = 15.0
+_cache: list[tuple[float, Snapshot]] = []
+
+
+async def cached() -> Snapshot:
+    """The last snapshot if it is fresh enough, a new one otherwise."""
+    if _cache and time.monotonic() - _cache[0][0] < CACHE_SECONDS:
+        return _cache[0][1]
+    snap = await take()
+    _cache[:] = [(time.monotonic(), snap)]
+    return snap
+
+
+def forget() -> None:
+    """For the tests: the next `cached()` reads again."""
+    _cache.clear()
+
+
 async def take(now: datetime | None = None) -> Snapshot:
     """Everything, read now. Each part is read on its own: one that fails is
     named in `unreadable`, and the rest still answers."""
@@ -104,8 +127,7 @@ async def take(now: datetime | None = None) -> Snapshot:
         await _queues(snap)
     except Exception:
         snap.unreadable.append("queues")
-    for name in await breaker.known():
-        snap.breakers[name] = await breaker.state(name)
+    snap.breakers = dict(await breaker.states())
     return snap
 
 
@@ -223,13 +245,25 @@ async def _actions(session: AsyncSession, snap: Snapshot) -> None:
 
 
 async def _queues(snap: Snapshot) -> None:
+    # Here, not at the top: `python -m leka.ops.backup` must be the first to
+    # import its module.
+    from leka.ops.backup import LAST_BACKUP, last_uploaded
+
     client = redis.from_url(str(settings.redis_url), socket_connect_timeout=1, socket_timeout=1)
     try:
         for queue in QUEUES:
             snap.queue_depth[queue] = int(await client.llen(f"rq:queue:{queue}"))
-        last = await client.get("leka:ops:backup:last")
+        last = await client.get(LAST_BACKUP)
         if last:
-            at = datetime.fromisoformat(json.loads(last)["at"])
+            at: datetime | None = datetime.fromisoformat(json.loads(last)["at"])
+        elif settings.backup_expected:
+            # Redis forgot it: the bucket says it — and Redis is told again.
+            at = await asyncio.to_thread(last_uploaded)
+            if at is not None:
+                await client.set(LAST_BACKUP, json.dumps({"at": at.isoformat(), "from": "bucket"}))
+        else:
+            at = None
+        if at is not None:
             snap.last_backup_seconds = (snap.at - at).total_seconds()
     finally:
         await client.aclose()

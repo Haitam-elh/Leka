@@ -197,23 +197,48 @@ async def verify(path: Path, *, url: str | None = None, keep: bool = False) -> V
     return Verified(not differences, differences, len(restored), sum(restored.values()), seconds)
 
 
-async def upload(dumped: Dumped) -> str:
-    """Both files to the backup bucket — and the alerts told it happened."""
+def _bucket_client() -> object:
     import boto3
-    import redis.asyncio as redis
 
-    bucket = os.environ.get("LEKA_BACKUP_BUCKET")
-    if not bucket:
-        raise RuntimeError("LEKA_BACKUP_BUCKET is not set.")
-    client = boto3.client(
+    return boto3.client(
         "s3",
         region_name=os.environ.get("LEKA_BACKUP_REGION"),
         aws_access_key_id=os.environ.get("LEKA_BACKUP_ACCESS_KEY_ID"),
         aws_secret_access_key=os.environ.get("LEKA_BACKUP_SECRET_ACCESS_KEY"),
     )
+
+
+def last_uploaded() -> datetime | None:
+    """When the last dump reached the bucket, read from the bucket itself —
+    what the alerts fall back on when Redis has forgotten it. None: no
+    bucket configured, or nothing in it."""
+    bucket = os.environ.get("LEKA_BACKUP_BUCKET")
+    if not bucket:
+        return None
+    client = _bucket_client()
+    latest: datetime | None = None
+    pages = client.get_paginator("list_objects_v2").paginate(  # type: ignore[attr-defined]
+        Bucket=bucket, Prefix=f"{settings.environment}/"
+    )
+    for page in pages:
+        for item in page.get("Contents", []):
+            if item["Key"].endswith(".manifest.json"):
+                modified: datetime = item["LastModified"]
+                latest = modified if latest is None or modified > latest else latest
+    return latest
+
+
+async def upload(dumped: Dumped) -> str:
+    """Both files to the backup bucket — and the alerts told it happened."""
+    import redis.asyncio as redis
+
+    bucket = os.environ.get("LEKA_BACKUP_BUCKET")
+    if not bucket:
+        raise RuntimeError("LEKA_BACKUP_BUCKET is not set.")
+    client = _bucket_client()
     prefix = f"{settings.environment}/{datetime.now(UTC).strftime('%Y/%m/%d/%H%M%S')}"
     for file in (dumped.path, dumped.manifest):
-        client.upload_file(
+        client.upload_file(  # type: ignore[attr-defined]
             str(file),
             bucket,
             f"{prefix}/{file.name}",

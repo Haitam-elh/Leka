@@ -630,6 +630,35 @@ class ActionService:
             self._event(plan, "step_failed", at=started, step=step, detail={"error": step.error})
             await self._session.flush()
             return
+        circuit = f"action_endpoint:{endpoint.id}"
+        if not await breaker.allow(circuit):
+            # Failing for a while (LEKA-408): not called now — nothing sent,
+            # nothing signed; a person retries it.
+            step.status = "failed"
+            step.error = "circuit_open"
+            step.finished_at = started
+            step.evidence = {"outcome": {"status": "failed", "reason": "circuit_open"}}
+            self._event(plan, "step_failed", at=started, step=step, detail={"error": step.error})
+            audit(
+                self._session,
+                plan.workspace_id,
+                "action",
+                "action.executed",
+                outcome="failure",
+                target=Target("action_endpoint", endpoint.id, endpoint.name),
+                detail={
+                    "action": step.action,
+                    "environment": step.environment,
+                    "plan": str(plan.id),
+                    "intention": str(plan.intention_id),
+                    "status": "failed",
+                    "reason": "circuit_open",
+                    "sent": False,
+                },
+                at=started,
+            )
+            await self._session.flush()
+            return
         intention = await self._intentions.intention(plan.intention_id)
         payload = {
             "event": "leka.action",
@@ -663,11 +692,7 @@ class ActionService:
         began = clock.monotonic()
         outcome: Outcome
         response: dict[str, object] | None = None
-        circuit = f"action_endpoint:{endpoint.id}"
         try:
-            if not await breaker.allow(circuit):
-                # Failing for a while: not called now — a person retries it.
-                raise breaker.OpenCircuitError(circuit)
             async with httpx.AsyncClient(
                 transport=transport or PublicTransport(), timeout=TIMEOUT
             ) as client:
@@ -687,8 +712,6 @@ class ActionService:
                 "excerpt": excerpt(answered.content),
                 "duration_ms": int((clock.monotonic() - began) * 1000),
             }
-        except breaker.OpenCircuitError:
-            outcome = Outcome("failed", reason="circuit_open")
         except BlockedAddressError:
             outcome = Outcome("failed", reason="blocked_address")
         except httpx.TimeoutException:
@@ -700,7 +723,7 @@ class ActionService:
             await breaker.failure(circuit)
         else:
             # A system that answers 5xx is failing; anything else, it is up.
-            if response is not None and int(str(response["status"])) >= 500:
+            if answered.status_code >= 500:
                 await breaker.failure(circuit)
             else:
                 await breaker.success(circuit)

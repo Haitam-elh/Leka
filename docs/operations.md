@@ -53,12 +53,15 @@ silence the alert about it: the `ops-watch` job (worker) and a loop in the
 API process; a Redis lock makes it one judgement. An alert is told **when it
 starts**, again **every six hours** while it lasts, and **when it
 resolves** — by email to `LEKA_OPS_ALERT_EMAILS` and to Sentry. A check that
-crashes reads as firing, never as all clear.
+crashes reads as firing, never as all clear. **Redis down**, the alerts are
+judged all the same, what is firing kept in the process until Redis is back.
+The metrics, the health report and the alerts read the same snapshot, at
+most 15 seconds old.
 
 | Alert | Severity | Fires when |
 | --- | --- | --- |
-| [worker_stalled](#worker-stalled) | critical | a job has waited over 10 minutes |
-| [scheduler_stopped](#scheduler-stopped) | critical | nothing scheduled for 15 minutes |
+| [worker_stalled](#worker-stalled) | critical | a job has waited over 10 minutes, or none has finished for 15 (ops-watch alone runs every 5) |
+| [scheduler_stopped](#scheduler-stopped) | critical | nothing scheduled for 15 minutes — said only while the worker runs: it is the worker that turns a tick into a scheduled run, so a stopped worker is told as such, not as a stopped scheduler |
 | [system_unreadable](#system-unreadable) | critical | LEKA cannot read its own state |
 | [models_failing](#models-failing) | critical | over 25 % of at least 20 model calls failed in an hour |
 | [actions_failing](#actions-failing) | critical | 3 actions on customers' systems failed in an hour |
@@ -76,6 +79,8 @@ Jobs wait, nothing runs them. `docker compose ps worker` — restarting?
 [deployment.md § When the worker stops consuming](deployment.md#when-the-worker-stops-consuming).
 A job running for ever holds a lease: `job_runs` where `status = 'running'`
 and `locked_until` is long past — the sweep reclaims it.
+Worker back and nothing scheduled still: the scheduler is down too — see
+below.
 
 #### scheduler-stopped
 Without it nothing is put on the queue — the worker waits for ever.
@@ -130,8 +135,8 @@ normaliser version is the usual suspect: roll back
 
 | Dependency | Retry | Breaker | Degraded service |
 | --- | --- | --- | --- |
-| A model provider (`model:<provider>:<account>`) | a temporary failure (5xx, timeout, 429) again, with backoff, `LEKA_LLM_RETRIES` times | opens after 5 failures in 60 s, for 30 s; one try then; LEKA's key shared by every workspace, a workspace's own by it alone | the next model of the route answers (the fallbacks, LEKA's default after a workspace's own); none: "no model answered", the run fails, retryable |
-| A customer's system an action calls (`action_endpoint:<id>`) | **never by itself**: an action may have acted — a person decides | opens after 5 failures (timeouts, 5xx) in 60 s, for 30 s | the step fails `circuit_open` — not called; a person retries it |
+| A model provider (`model:<provider>:<account>`) | a temporary failure (5xx, timeout, 429) again, with backoff, `LEKA_LLM_RETRIES` times | counts **one** failure per request, once its retries are spent, and only the provider's own: unreachable, timeout, 5xx, 429 — never an empty or malformed answer; opens after 5 in 60 s, for 30 s; then **one** caller tries; LEKA's key shared by every workspace, a workspace's own by it alone | the next model of the route answers (the fallbacks, LEKA's default after a workspace's own); none: "no model answered", the run fails, retryable |
+| A customer's system an action calls (`action_endpoint:<id>`) | **never by itself**: an action may have acted — a person decides | opens after 5 failures (timeouts, 5xx) in 60 s, for 30 s | the step fails `circuit_open` — nothing built, signed or sent; a person retries it |
 | A vendor a connector reads | backoff on 429/5xx, the vendor's `Retry-After`, a quota reserve (connectors/http.py) | — the next pass retries it | the source's health says it; what was read stays |
 | Background jobs | `max_attempts` with backoff; a lost worker's lease reclaimed | — | the job's history says each attempt and its error |
 | Redis (rate limits, breakers, alerts) | — | — | **never in the way**: a breaker or a limit whose store is down lets the call through, logged |
@@ -153,18 +158,32 @@ and the workers: a provider down for one is down for all.
 ### Taking one — and proving it restores
 
 ```bash
-# On the box, nightly (crontab, 03:30): dumped from one snapshot, uploaded,
-# the alerts told it happened.
-docker compose run --rm -e LEKA_PG_TOOLS="docker run --rm -i --network host postgres:16" \
-  api python -m leka.ops.backup dump /tmp/leka.dump --upload
+# Once, on the box (and again when the API image changes): the API's image
+# with PostgreSQL's own client tools — Debian's are older than RDS and
+# pg_dump refuses a newer server. See deploy/backup.Dockerfile.
+docker build -f /opt/leka/backup.Dockerfile \
+  --build-arg API_IMAGE=ghcr.io/<owner>/leka/api:<sha> -t leka-backup /opt/leka
 
-# Anywhere with the database reachable: restored into a throwaway database,
-# every table counted against the manifest, the sha256 checked first.
-python -m leka.ops.backup verify /tmp/leka.dump
+# Where the dumps land: writable by the image's user (uid 10001).
+sudo install -d -o 10001 -g 10001 /opt/leka/backups
+
+# Nightly (crontab, 03:30): dumped from one snapshot, uploaded to the backup
+# bucket, the alerts told it happened.
+docker run --rm --env-file /opt/leka/production.env -v /opt/leka/backups:/backups \
+  leka-backup python -m leka.ops.backup dump /backups/leka.dump --upload
+
+# Monthly, or after any doubt: restored into a throwaway database beside the
+# source, every table counted against the manifest, the sha256 checked first.
+docker run --rm --env-file /opt/leka/production.env -v /opt/leka/backups:/backups \
+  leka-backup python -m leka.ops.backup verify /backups/leka.dump
 # restored and verified: 89 tables, 1527 rows, restore took 1.4s
 ```
 
-`verify` exits 1 on any difference and names the table: a backup that does
+On a laptop, the tools of the local PostgreSQL container do:
+`LEKA_PG_TOOLS="docker exec -i leka-postgres" python -m leka.ops.backup …`.
+
+`verify` creates its throwaway database on the same server: the database
+user needs `CREATEDB` (on RDS, the master user has it). `verify` exits 1 on any difference and names the table: a backup that does
 not restore is not one. **Run it monthly** on the last night's dump, and
 record the restore time below — it is the RTO, measured.
 
@@ -208,10 +227,11 @@ primary path), logical restore from a dump (the portable one). In order:
 
 ## 5. Gaps, said
 
-- The nightly dump is **built and validated, not yet scheduled on the box**:
-  the crontab line above, and `LEKA_BACKUP_*` in `production.env`, are a
-  step on the instance (with Haitam), as is the backup bucket in another
-  account. Until then `LEKA_BACKUP_EXPECTED` stays off.
+- The nightly dump is **built and validated locally, not yet scheduled on the
+  box**: building `leka-backup` there (deploy/backup.Dockerfile, not yet built
+  against RDS), the crontab lines above, `LEKA_BACKUP_*` in `production.env`
+  and the backup bucket in another account are a step on the instance, with
+  Haitam. Until then `LEKA_BACKUP_EXPECTED` stays off.
 - The RDS point-in-time restore is still to be rehearsed on our instance
   (runbook.md § Honest gaps).
 - The external uptime check is to be created (§ 1).

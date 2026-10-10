@@ -340,9 +340,6 @@ class Gateway:
                     raise ProviderError("An empty answer.", retryable=True)
             except (ProviderError, httpx.HTTPError) as raised:
                 error = _said(raised)
-                if error.retryable:
-                    # Down, slow, overloaded — the provider's, not the request's.
-                    await breaker.failure(circuit)
                 self._record(request, route, attempt, error=str(error), status="failed")
                 attempts.append(self._attempt(route, attempt, str(error)))
                 logger.warning(
@@ -359,6 +356,10 @@ class Gateway:
                     continue
                 if route.endpoint.owner == "workspace" and not error.retryable:
                     await self._mark(failed=str(error))
+                if _down(raised, error):
+                    # Once per request, its retries spent: the provider's
+                    # failure, not the request's (LEKA-408).
+                    await breaker.failure(circuit)
                 return None
             if check is not None:
                 try:
@@ -569,6 +570,18 @@ class Gateway:
         await self._mark(failed=None)
         await self._session.flush()
         return Tested(True, None, done.latency_ms, own.model, done.version)
+
+
+def _down(raised: Exception, error: ProviderError) -> bool:
+    """Whether the provider itself failed — unreachable, slow, overloaded,
+    erring — as a circuit breaker counts it. An answer that is empty, not the
+    shape asked or refused for the request's own fault says nothing about
+    whether the provider is up."""
+    if isinstance(raised, BlockedAddressError):
+        return False  # our refusal of the address, not the provider's failure
+    if isinstance(raised, httpx.HTTPError):
+        return True
+    return error.status is not None and (error.status >= 500 or error.status == 429)
 
 
 def _said(raised: Exception) -> ProviderError:

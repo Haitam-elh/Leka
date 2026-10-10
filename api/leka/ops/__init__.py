@@ -6,7 +6,7 @@ operating data; imported by the API and the schedule only.
 from leka.ops.alerts import RULES, Firing, Rule, Told, judge, run_watch, watch
 from leka.ops.health import Component, components, overall
 from leka.ops.metrics import circuits, observe_request, render
-from leka.ops.snapshot import Snapshot, take
+from leka.ops.snapshot import Snapshot, cached, forget, take
 
 __all__ = [
     "RULES",
@@ -15,8 +15,10 @@ __all__ = [
     "Rule",
     "Snapshot",
     "Told",
+    "cached",
     "circuits",
     "components",
+    "forget",
     "judge",
     "observe_request",
     "overall",

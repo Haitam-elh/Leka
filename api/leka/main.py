@@ -108,8 +108,9 @@ app.middleware("http")(rate_limit_middleware)
 # and those are exactly the refusals somebody will ask about.
 app.middleware("http")(request_id_middleware)
 
-# Every request counted for the metrics (LEKA-408) — outermost of all, so a
-# refusal by any middleware below is counted too.
+# Every request counted for the metrics (LEKA-408) — outside the request id,
+# the rate limit and CSRF, so their refusals are counted too. CORS, added
+# after, is outside it: a preflight the browser sends is not counted.
 app.middleware("http")(metrics_middleware)
 
 app.add_middleware(

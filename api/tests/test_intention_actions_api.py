@@ -37,6 +37,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from leka.connectors import PublicTransport
+from leka.core import breaker
 from leka.db import session_factory, system_scope
 from leka.intentions import actions as actions_module
 from leka.intentions.actions import execute_plan, start_due
@@ -322,6 +323,33 @@ async def test_a_failure_stops_it_says_why_and_is_retried(
         "succeeded"
     )
     assert await _status(client, intention) == "verifying"
+
+
+async def test_a_system_failing_for_a_while_is_not_called_nothing_is_sent(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+) -> None:
+    """Its circuit open (LEKA-408): the step fails `circuit_open` — nothing
+    built, nothing signed, nothing sent; a person retries it."""
+    _as(identity, acme, "admin")
+    made = await _authorize(client)
+    for _ in range(5):
+        await breaker.failure(f"action_endpoint:{made['endpoint']['id']}")
+    intention = await _approved(client, identity, acme)
+    plan = await _plan(client, intention)
+    await _start(client, intention)
+    system = System(secret=made["secret"])
+
+    went = await execute_plan(acme["acme"], uuid.UUID(plan["id"]), transport=system.transport())
+    assert went == "failed"
+    assert system.received == []
+    latest = await _latest(client, intention)
+    assert (latest["status"], latest["error"]) == ("failed", "circuit_open")
+    assert "request" not in latest["steps"][0]["evidence"]
+    endpoints = (await client.get(f"{API}/action-endpoints")).json()
+    assert endpoints[0]["last_called_at"] is None
 
 
 @pytest.mark.parametrize(

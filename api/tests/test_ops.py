@@ -38,7 +38,7 @@ from leka.capabilities.gateway import NoModelError
 from leka.core import breaker
 from leka.core.config import settings
 from leka.db import session_factory, system_scope
-from leka.ops import RULES, Rule, Snapshot, backup, judge, take, watch
+from leka.ops import RULES, Rule, Snapshot, backup, forget, judge, take, watch
 from leka.ops import alerts as alerts_module
 from tests.test_model_gateway import (
     GOOGLE,
@@ -70,8 +70,11 @@ async def test_a_breaker_opens_cools_tries_once_and_closes() -> None:
     assert name in await breaker.known()
 
     await _cooled(name)
-    # Half-open: one try goes through; it fails — open again, at once.
-    assert await breaker.allow(name) and await breaker.state(name) == "half_open"
+    # Half-open: ONE try goes through — the others wait for it.
+    assert await breaker.state(name) == "half_open"
+    assert await breaker.allow(name)
+    assert not await breaker.allow(name)
+    # It fails — open again, at once.
     assert await breaker.failure(name, FAST)
     assert not await breaker.allow(name)
 
@@ -109,10 +112,10 @@ async def test_a_provider_failing_for_everyone_is_cut_off_and_the_fallback_answe
     workspace: uuid.UUID,
 ) -> None:
     busy = httpx.Response(503, json={"error": {"message": "overloaded"}})
-    # Google fails: each attempt counts. Two requests, two attempts each:
-    # past the threshold (5), the circuit opens.
-    script = Script({GOOGLE: [busy] * 6, MISTRAL: [chat("From Mistral.")] * 3})
-    for _ in range(3):
+    # Google fails: once per request, its retries spent (two attempts each).
+    # Five requests: the circuit opens.
+    script = Script({GOOGLE: [busy] * 10, MISTRAL: [chat("From Mistral.")] * 5})
+    for _ in range(5):
         done = await _ask(workspace, script, lambda g: g.complete(ask()))
         assert done.provider == "mistral"
     assert await breaker.state("model:google:leka") == "open"
@@ -132,6 +135,16 @@ async def test_a_request_s_own_fault_does_not_count_against_the_provider(
 ) -> None:
     refused = httpx.Response(400, json={"error": {"message": "bad request"}})
     script = Script({GOOGLE: [refused] * 6, MISTRAL: [chat("ok")] * 6})
+    for _ in range(6):
+        await _ask(workspace, script, lambda g: g.complete(ask()))
+    assert await breaker.state("model:google:leka") == "closed"
+
+
+async def test_an_unusable_answer_is_the_request_s_problem_not_the_provider_s(
+    workspace: uuid.UUID,
+) -> None:
+    # Answered — empty: retried, then the fallback; Google is up all along.
+    script = Script({GOOGLE: [gemini("")] * 12, MISTRAL: [chat("ok")] * 6})
     for _ in range(6):
         await _ask(workspace, script, lambda g: g.complete(ask()))
     assert await breaker.state("model:google:leka") == "closed"
@@ -163,19 +176,23 @@ def _healthy() -> Snapshot:
 
 def test_a_healthy_system_fires_nothing_and_each_failure_fires_its_rule() -> None:
     assert judge(_healthy()) == []
-    cases: dict[str, dict[str, Any]] = {
-        "worker_stalled": {"oldest_waiting_seconds": 1200},
-        "scheduler_stopped": {"last_scheduled_seconds": 3600},
-        "queue_backlog": {"queue_depth": {"leka:low": 900}},
-        "jobs_failing": {"jobs_failed_1h": 12},
-        "models_failing": {"model_calls_1h": {("google", "ok"): 10, ("google", "failed"): 30}},
-        "circuit_open": {"breakers": {"model:google:leka": "open"}},
-        "connectors_failing": {"sync_runs_failed_1h": 7},
-        "processing_failing": {"processing_runs_1h": 20, "processing_failed_1h": 9},
-        "actions_failing": {"action_steps_1h": {"failed": 4, "succeeded": 1}},
-        "system_unreadable": {"unreadable": ["ai"]},
-    }
-    for rule, change in cases.items():
+    cases: list[tuple[str, dict[str, Any]]] = [
+        ("worker_stalled", {"oldest_waiting_seconds": 1200}),
+        # Nothing finished for a while — and nothing scheduled either, since
+        # the worker runs what schedules: the worker is told, not the
+        # scheduler.
+        ("worker_stalled", {"last_job_finished_seconds": 1200, "last_scheduled_seconds": 1200}),
+        ("scheduler_stopped", {"last_scheduled_seconds": 3600}),
+        ("queue_backlog", {"queue_depth": {"leka:low": 900}}),
+        ("jobs_failing", {"jobs_failed_1h": 12}),
+        ("models_failing", {"model_calls_1h": {("google", "ok"): 10, ("google", "failed"): 30}}),
+        ("circuit_open", {"breakers": {"model:google:leka": "open"}}),
+        ("connectors_failing", {"sync_runs_failed_1h": 7}),
+        ("processing_failing", {"processing_runs_1h": 20, "processing_failed_1h": 9}),
+        ("actions_failing", {"action_steps_1h": {"failed": 4, "succeeded": 1}}),
+        ("system_unreadable", {"unreadable": ["ai"]}),
+    ]
+    for rule, change in cases:
         snap = _healthy()
         for field, value in change.items():
             setattr(snap, field, value)
@@ -263,6 +280,35 @@ async def test_an_alert_is_told_when_it_starts_while_it_lasts_and_when_it_ends(
     assert "Resolved" in outbox.sent[-1].body and "resolved" in outbox.sent[-1].subject
 
 
+async def test_with_redis_down_the_alerts_are_still_told(monkeypatch: pytest.MonkeyPatch) -> None:
+    outbox = Outbox()
+    monkeypatch.setattr(alerts_module, "build_email_sender", lambda: outbox)
+    monkeypatch.setattr(
+        alerts_module,
+        "settings",
+        settings.model_copy(update={"ops_alert_emails": "ops@leka.example"}),
+    )
+
+    class Down:
+        async def set(self, *_: object, **__: object) -> None:
+            raise ConnectionError("redis is down")
+
+        async def aclose(self) -> None:
+            return None
+
+    monkeypatch.setattr(alerts_module, "_client", lambda: Down())
+    monkeypatch.setattr(alerts_module, "_memory", alerts_module._Memory())
+    snap = _healthy()
+    snap.unreadable = ["queues"]
+    start = datetime.now(UTC)
+    told = await watch(now=start, snap=snap)
+    assert told is not None and told.started == ("system_unreadable",)
+    assert len(outbox.sent) == 1
+    # Kept in the process: not told again five minutes later.
+    told = await watch(now=start + timedelta(minutes=5), snap=snap)
+    assert told is not None and told.started == () and len(outbox.sent) == 1
+
+
 async def test_the_snapshot_reads_the_system_and_the_scheduler_s_heartbeat() -> None:
     snap = await take()
     assert snap.unreadable == []
@@ -323,6 +369,7 @@ async def test_the_metrics_say_the_system_by_route_never_an_id(
     await breaker.failure(f"action_endpoint:{some_id}", FAST)
     await breaker.failure(f"action_endpoint:{some_id}", FAST)
     await breaker.failure(f"action_endpoint:{some_id}", FAST)
+    forget()
     answer = await client.get("/api/v1/ops/metrics", headers=operator)
     assert answer.status_code == 200 and answer.headers["content-type"].startswith("text/plain")
     said = answer.text
@@ -344,13 +391,16 @@ async def test_the_metrics_say_the_system_by_route_never_an_id(
 async def test_the_health_report_says_which_component_is_down(
     client: AsyncClient, operator: dict[str, str]
 ) -> None:
+    forget()
     answer = await client.get("/api/v1/ops/health", headers=operator)
     report = answer.json()
     found = {c["name"]: c for c in report["components"]}
     assert {"database", "redis", "object_store", "worker", "scheduler", "queues"} <= set(found)
     assert found["database"]["status"] == "ok" and found["redis"]["status"] == "ok"
-    # No scheduler in the tests: down, said why — and LEKA down with it.
-    assert found["scheduler"]["status"] == "down" and found["scheduler"]["detail"]
+    # No worker in the tests — nothing finished: down, said why, and LEKA down
+    # with it. The scheduler is not blamed for what the worker does not run.
+    assert found["worker"]["status"] == "down" and found["worker"]["detail"]
+    assert found["scheduler"]["status"] == "ok"
     assert (report["status"], answer.status_code) == ("down", 503)
 
 

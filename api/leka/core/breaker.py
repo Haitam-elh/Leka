@@ -2,11 +2,11 @@
 for a while — its callers go elsewhere, or say plainly it is down — instead of
 every request waiting on it in turn.
 
-    allow(name)     may it be called now: closed, or half-open (one try)
+    allow(name)     may it be called now: closed, or half-open (one try, one caller)
     failure(name)   it failed as a dependency fails — down, slow, overloaded
     success(name)   it answered: closed again
     state(name)     closed · open · half_open, for the metrics
-    known()         every breaker that has tripped, for the metrics
+    states()        every breaker not closed, and its state — one round trip
 
 One breaker per dependency, shared by every process through Redis: the API
 and the workers see the same state, so a provider down for one is down for
@@ -25,7 +25,8 @@ whether the other side is up.
 
 from __future__ import annotations
 
-import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Literal
 
@@ -53,32 +54,36 @@ class Policy:
 
 DEFAULT = Policy()
 
-_clients: dict[int, redis.Redis] = {}
 
-
-def _redis() -> redis.Redis:
-    """One client per event loop: a job runs in its own (asyncio.run), and a
-    client bound to a finished loop cannot be used again."""
-    loop = id(asyncio.get_running_loop())
-    client = _clients.get(loop)
-    if client is None:
-        if len(_clients) > 32:
-            # Loops long finished (one per job, per test): let them go.
-            _clients.clear()
-        client = redis.from_url(str(settings.redis_url), socket_connect_timeout=1, socket_timeout=1)
-        _clients[loop] = client
-    return client
-
-
-def _keys(name: str) -> tuple[str, str, str]:
-    return f"{PREFIX}{name}:fails", f"{PREFIX}{name}:open", f"{PREFIX}{name}:half"
-
-
-async def allow(name: str) -> bool:
-    """Closed or half-open: yes. Open: no — go elsewhere, or say it is down."""
-    _, opened, _ = _keys(name)
+@asynccontextmanager
+async def _redis() -> AsyncIterator[redis.Redis]:
+    """A client for one operation, closed after it: a job runs in its own
+    event loop (asyncio.run), and a client kept across loops ends up bound
+    to one already closed."""
+    client = redis.from_url(str(settings.redis_url), socket_connect_timeout=1, socket_timeout=1)
     try:
-        return not await _redis().exists(opened)
+        yield client
+    finally:
+        await client.aclose()
+
+
+def _keys(name: str) -> tuple[str, str, str, str]:
+    base = f"{PREFIX}{name}"
+    return f"{base}:fails", f"{base}:open", f"{base}:half", f"{base}:probe"
+
+
+async def allow(name: str, policy: Policy = DEFAULT) -> bool:
+    """Closed: yes. Open: no — go elsewhere, or say it is down. Half-open:
+    yes for ONE caller — the try that tells whether it is back — and no for
+    the others until it does."""
+    _, opened, half, probe = _keys(name)
+    try:
+        async with _redis() as client:
+            if await client.exists(opened):
+                return False
+            if await client.exists(half):
+                return bool(await client.set(probe, "1", nx=True, ex=policy.window_seconds))
+            return True
     except Exception:
         logger.warning("breaker_unavailable", breaker=name, exc_info=True)
         return True
@@ -86,64 +91,93 @@ async def allow(name: str) -> bool:
 
 async def failure(name: str, policy: Policy = DEFAULT) -> bool:
     """Counted; True when this failure opened it."""
-    fails, opened, half = _keys(name)
+    fails, opened, half, _ = _keys(name)
     try:
-        client = _redis()
-        if await client.exists(half) and not await client.exists(opened):
-            # Half-open, and the one try failed: open again, at once.
-            await _open(client, name, policy)
-            return True
-        count = await client.incr(fails)
-        if count == 1:
-            await client.expire(fails, policy.window_seconds)
-        if count >= policy.threshold and not await client.exists(opened):
-            await _open(client, name, policy)
-            return True
+        async with _redis() as client:
+            if await client.exists(half) and not await client.exists(opened):
+                # Half-open, and the one try failed: open again, at once.
+                await _open(client, name, policy)
+                return True
+            # Counted and given its window together: a counter without a
+            # TTL would add up unrelated failures for days.
+            async with client.pipeline(transaction=True) as pipeline:
+                pipeline.incr(fails)
+                pipeline.expire(fails, policy.window_seconds, nx=True)
+                count, _ = await pipeline.execute()
+            if int(count) >= policy.threshold and not await client.exists(opened):
+                await _open(client, name, policy)
+                return True
     except Exception:
         logger.warning("breaker_unavailable", breaker=name, exc_info=True)
     return False
 
 
 async def _open(client: redis.Redis, name: str, policy: Policy) -> None:
-    fails, opened, half = _keys(name)
+    fails, opened, half, probe = _keys(name)
     await client.set(opened, "1", ex=policy.cooldown_seconds)
     # Half-open once the cooldown is over, for as long as a window.
     await client.set(half, "1", ex=policy.cooldown_seconds + policy.window_seconds)
-    await client.delete(fails)
+    await client.delete(fails, probe)
     await client.sadd(KNOWN, name)
     logger.warning("breaker_opened", breaker=name, cooldown=policy.cooldown_seconds)
 
 
 async def success(name: str) -> None:
     """It answered: whatever failed before is forgotten."""
-    fails, _, half = _keys(name)
+    fails, _, half, probe = _keys(name)
     try:
-        await _redis().delete(fails, half)
+        async with _redis() as client:
+            await client.delete(fails, half, probe)
     except Exception:
         logger.warning("breaker_unavailable", breaker=name, exc_info=True)
 
 
 async def state(name: str) -> State:
-    _, opened, half = _keys(name)
+    _, opened, half, _ = _keys(name)
     try:
-        client = _redis()
-        if await client.exists(opened):
-            return "open"
-        if await client.exists(half):
-            return "half_open"
+        async with _redis() as client:
+            if await client.exists(opened):
+                return "open"
+            if await client.exists(half):
+                return "half_open"
     except Exception:
         logger.warning("breaker_unavailable", breaker=name, exc_info=True)
     return "closed"
 
 
-async def known() -> list[str]:
-    """Every breaker that has opened since Redis last forgot."""
+async def states() -> dict[str, State]:
+    """Every breaker that has opened and is not closed yet, and its state —
+    read in one round trip; those closed again are forgotten from the set."""
     try:
-        members = await _redis().smembers(KNOWN)
+        async with _redis() as client:
+            members = sorted(
+                m.decode() if isinstance(m, bytes) else str(m) for m in await client.smembers(KNOWN)
+            )
+            if not members:
+                return {}
+            keys = [k for name in members for k in _keys(name)[1:3]]
+            values = await client.mget(keys)
+            found: dict[str, State] = {}
+            closed: list[str] = []
+            for i, name in enumerate(members):
+                opened, half = values[2 * i], values[2 * i + 1]
+                if opened:
+                    found[name] = "open"
+                elif half:
+                    found[name] = "half_open"
+                else:
+                    closed.append(name)
+            if closed:
+                await client.srem(KNOWN, *closed)
+            return found
     except Exception:
         logger.warning("breaker_unavailable", exc_info=True)
-        return []
-    return sorted(m.decode() if isinstance(m, bytes) else str(m) for m in members)
+        return {}
+
+
+async def known() -> list[str]:
+    """Every breaker that has opened and is not closed again."""
+    return sorted(await states())
 
 
 class OpenCircuitError(Exception):

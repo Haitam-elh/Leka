@@ -51,12 +51,24 @@ class Rule:
 
 
 def worker_stalled(s: Snapshot) -> str | None:
+    """A job waits for a worker — or none has finished for a quarter of an
+    hour, which a working LEKA never goes without: ops-watch alone is
+    scheduled every five minutes."""
     if s.oldest_waiting_seconds is not None and s.oldest_waiting_seconds > 600:
         return f"a job has waited {int(s.oldest_waiting_seconds // 60)} min for a worker"
+    if s.last_job_finished_seconds is None:
+        return "no job finished in the last 7 days"
+    if s.last_job_finished_seconds > 900:
+        return f"no job finished for {int(s.last_job_finished_seconds // 60)} min"
     return None
 
 
 def scheduler_stopped(s: Snapshot) -> str | None:
+    """Nothing scheduled — told only when the worker is running: what the
+    scheduler puts on the queue becomes a run in the worker, so a stopped
+    worker would look like a stopped scheduler. Worker first."""
+    if worker_stalled(s):
+        return None
     if s.last_scheduled_seconds is None:
         return "no sweep was ever scheduled in the last 7 days"
     if s.last_scheduled_seconds > 900:
@@ -203,12 +215,68 @@ def _client() -> redis.Redis:
     return redis.from_url(str(settings.redis_url), socket_connect_timeout=2, socket_timeout=2)
 
 
+class _Memory:
+    """What is firing, kept in this process when Redis cannot keep it: an
+    outage of Redis must not silence the alerts — about Redis among others."""
+
+    def __init__(self) -> None:
+        self.state: dict[str, str] = {}
+        self.windows: set[int] = set()
+
+    async def lock(self, window: int, seconds: int) -> bool:
+        if window in self.windows:
+            return False
+        self.windows = {w for w in self.windows if w > window - 2} | {window}
+        return True
+
+    async def get(self, key: str) -> str | None:
+        return self.state.get(key)
+
+    async def set(self, key: str, value: str) -> None:
+        self.state[key] = value
+
+    async def delete(self, key: str) -> None:
+        self.state.pop(key, None)
+
+
+_memory = _Memory()
+
+
+class _Redis:
+    def __init__(self, client: redis.Redis) -> None:
+        self.client = client
+
+    async def lock(self, window: int, seconds: int) -> bool:
+        return bool(await self.client.set(f"{LOCK}:{window}", "1", nx=True, ex=seconds))
+
+    async def get(self, key: str) -> str | None:
+        raw = await self.client.get(key)
+        return raw.decode() if isinstance(raw, bytes) else raw
+
+    async def set(self, key: str, value: str) -> None:
+        await self.client.set(key, value)
+
+    async def delete(self, key: str) -> None:
+        await self.client.delete(key)
+
+
 async def watch(*, now: datetime | None = None, snap: Snapshot | None = None) -> Told | None:
-    """Judged now and told. None: another process is judging this minute."""
+    """Judged now and told. None: this window was already judged — by the
+    worker's job or the API's loop, whichever came first. Redis down: judged
+    all the same, what is firing kept in this process."""
     moment = now or datetime.now(UTC)
+    seconds = max(60, settings.ops_watch_interval_seconds or 300)
+    window = int(moment.timestamp()) // seconds
     client = _client()
+    store: _Redis | _Memory = _Redis(client)
     try:
-        if not await client.set(LOCK, moment.isoformat(), nx=True, ex=240):
+        try:
+            locked = await store.lock(window, seconds)
+        except Exception:
+            logger.warning("ops_watch_without_redis", exc_info=True)
+            store = _memory
+            locked = await store.lock(window, seconds)
+        if not locked:
             return None
         snapshot = snap or await take(moment)
         firing = {f.rule.name: f for f in judge(snapshot)}
@@ -217,21 +285,21 @@ async def watch(*, now: datetime | None = None, snap: Snapshot | None = None) ->
         resolved: list[tuple[Rule, dict[str, str]]] = []
         for rule in RULES:
             key = f"{STATE}{rule.name}"
-            raw = await client.get(key)
+            raw = await store.get(key)
             known = json.loads(raw) if raw else None
             now_firing = firing.get(rule.name)
             if now_firing is not None and known is None:
                 started.append(now_firing)
-                await client.set(
+                await store.set(
                     key, json.dumps({"since": moment.isoformat(), "told": moment.isoformat()})
                 )
             elif now_firing is not None and known is not None:
                 if moment - datetime.fromisoformat(known["told"]) >= REMIND_EVERY:
                     reminded.append(now_firing)
-                    await client.set(key, json.dumps({**known, "told": moment.isoformat()}))
+                    await store.set(key, json.dumps({**known, "told": moment.isoformat()}))
             elif known is not None:
                 resolved.append((rule, known))
-                await client.delete(key)
+                await store.delete(key)
     finally:
         await client.aclose()
     if started or reminded or resolved:

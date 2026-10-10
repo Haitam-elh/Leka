@@ -26,7 +26,7 @@ from starlette.responses import Response as StarletteResponse
 from leka.api.errors import ApiError
 from leka.core.config import settings
 from leka.core.errors import ErrorCode
-from leka.ops import components, observe_request, overall, render, take, watch
+from leka.ops import cached, components, observe_request, overall, render, watch
 
 logger = structlog.get_logger(__name__)
 
@@ -64,13 +64,13 @@ class OpsHealthRead(BaseModel):
 )
 async def metrics(_: Operator) -> Response:
     return Response(
-        content=render(await take()), media_type="text/plain; version=0.0.4; charset=utf-8"
+        content=render(await cached()), media_type="text/plain; version=0.0.4; charset=utf-8"
     )
 
 
 @router.get("/health", response_model=OpsHealthRead, summary="How every component stands")
 async def ops_health(_: Operator, response: Response) -> OpsHealthRead:
-    found = await components(await take())
+    found = await components(await cached())
     said = overall(found)
     if said == "down":
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
