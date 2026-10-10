@@ -13,6 +13,7 @@ import { ErrorState } from "@/components/states/error-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AccessDecision, AccessModel, EntityHit } from "@/lib/access";
+import { AIAuditCard, AIControlsCard, ApprovalsCard } from "@/components/governance/ai-controls";
 import { HistoryCard, PoliciesCard, RolesCard } from "@/components/governance/roles-policies";
 import {
   useAccessModel,
@@ -34,8 +35,9 @@ import { useTeamMembers } from "@/lib/team-queries";
  * Sécurité & gouvernance (LEKA-402): who may do what — every role's
  * permissions, the reader's own marked — the entities only administrators
  * see, restricted saying why and lifted, and the trail of access decisions,
- * refusals first to hand. Every word is the API's: the model the server
- * enforces, not a copy of it.
+ * refusals first to hand; the controls on the workspace's AI, the runs
+ * waiting for approval and what the controls did (LEKA-406). Every word is
+ * the API's: the model the server enforces, not a copy of it.
  */
 
 const ROLE_ORDER = ["member", "admin", "owner"] as const;
@@ -328,10 +330,14 @@ export function GovernanceScreen() {
           {/* Roles and policies of the workspace's own (LEKA-403). */}
           <RolesCard model={model.data} canManage={mine.has("policy:manage")} />
           <PoliciesCard canManage={mine.has("policy:manage")} roles={roles.data ?? []} />
+          {/* The workspace's AI, governed (LEKA-406). */}
+          <AIControlsCard canManage={mine.has("policy:manage")} roles={roles.data ?? []} />
         </div>
         <div className="flex flex-col gap-4">
           {mine.has("access:read") ? <Restrictions canRestrict={mine.has("entity:restrict")} /> : null}
           {mine.has("access:read") ? <Decisions /> : null}
+          <ApprovalsCard canApprove={mine.has("intention:approve")} />
+          {mine.has("access:read") ? <AIAuditCard /> : null}
           {mine.has("access:read") ? <HistoryCard /> : null}
         </div>
       </div>

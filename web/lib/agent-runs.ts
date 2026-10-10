@@ -13,8 +13,9 @@ export type AgentRunEvent = components["schemas"]["AgentRunEventRead"];
 export type AgentRunCreate = components["schemas"]["AgentRunCreate"];
 export type RunInputs = AgentRunCreate["inputs"];
 
-/** Still on its way: followed until it ends. */
-export const ACTIVE: ReadonlySet<string> = new Set(["queued", "running"]);
+/** Still on its way — waiting for approval included (LEKA-406): followed
+ * until it ends. */
+export const ACTIVE: ReadonlySet<string> = new Set(["awaiting_approval", "queued", "running"]);
 
 export const agentRuns = {
   list: (key?: string) =>
@@ -24,4 +25,11 @@ export const agentRuns = {
     apiFetch<AgentRun>("/agent-runs", { method: "POST", body: JSON.stringify(body) }),
   cancel: (id: string) =>
     apiFetch<AgentRun>(`/agent-runs/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
+  /** Waiting for approval (LEKA-406): the runs to decide. */
+  awaiting: () => apiFetch<AgentRun[]>("/agent-runs?status=awaiting_approval"),
+  decide: (id: string, approve: boolean, note?: string) =>
+    apiFetch<AgentRun>(`/agent-runs/${encodeURIComponent(id)}/${approve ? "approve" : "reject"}`, {
+      method: "POST",
+      body: JSON.stringify(note ? { note } : {}),
+    }),
 };
