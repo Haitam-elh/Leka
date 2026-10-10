@@ -35,8 +35,8 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 
 type Kind = Item["kind"];
-const RISK_RANK = { low: 1, medium: 2, high: 3 } as const;
-const RISK_TONE = { low: "success", medium: "warning", high: "danger" } as const;
+const RISK_RANK = { low: 1, medium: 2, high: 3, critical: 4 } as const;
+const RISK_TONE = { low: "success", medium: "warning", high: "danger", critical: "danger" } as const;
 type Selected = { kind: Kind; id: string } | null;
 /** The type chips: the actions to decide, a proposal's families, then the
  * conflicts. */
