@@ -37,6 +37,12 @@ class StorageSettings:
     s3_region: str = "auto"
     s3_access_key_id: str | None = None
     s3_secret_access_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
+    # How Amazon S3 encrypts what LEKA writes (LEKA-405): asked on every
+    # write. None: AES256 on Amazon S3 itself (no endpoint), none elsewhere —
+    # MinIO refuses the header without a key service, R2 encrypts on its own.
+    # aws:kms uses the bucket's KMS key. "none" only where the provider
+    # encrypts by itself: production refuses it on Amazon S3.
+    s3_server_side_encryption: Literal["AES256", "aws:kms", "none"] | None = None
 
     # The largest single payload LEKA will store, in bytes. Default 1 GiB.
     #
@@ -88,6 +94,14 @@ class StorageSettings:
                 )
                 raise ValueError(msg)
         return value
+
+    @property
+    def s3_encryption(self) -> str | None:
+        """What each write asks S3 to encrypt with — None: nothing asked."""
+        said = self.s3_server_side_encryption
+        if said is None:
+            return None if self.s3_endpoint_url else "AES256"
+        return None if said == "none" else said
 
     @property
     def object_store_root(self) -> Path:
