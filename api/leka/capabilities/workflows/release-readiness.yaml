@@ -1,0 +1,46 @@
+# A service judged ready for its next release, or not (LEKA-401): how it
+# ships, what its recent incidents say, how far a failure of it would reach
+# — the library's skills, composed — and, only when one of them sounds an
+# alarm, the release analysed by its agent. docs/workflows.md says how a
+# workflow is read; docs/skills.md, what each skill gives.
+key: release-readiness
+title: Préparation de release
+summary: Use when someone asks whether a service is ready for its next release — how it ships, its recent incidents, how far a failure of it would reach.
+category: operations
+version: 1.0.0
+lifecycle: active
+goals: [assess_impact, find_change]
+kinds: [change]
+entity_types: [service, deployment, incident]
+inputs:
+  - {name: service, type: entity, required: true, entity_types: [service], description: Le service à livrer.}
+  - {name: environment, type: text, required: false, description: L'environnement visé — la production si rien n'est dit.}
+examples:
+  - Est-ce que payment-api est prête pour sa prochaine release ?
+steps:
+  - id: delivery
+    title: Comment il livre
+    uses: skill:delivery-metrics
+    with: {id: {input: service}, environment: {input: environment}}
+  - id: incidents
+    title: Ses incidents du mois
+    uses: skill:incident-history
+    with: {id: {input: service}, days: 30}
+  # How far a failure would reach never stops the review.
+  - id: reach
+    title: Jusqu'où une panne irait
+    uses: skill:blast-radius
+    with: {id: {input: service}}
+    on_failure: continue
+  # Something sounds an alarm: the release analysed by its agent.
+  - id: review
+    title: L'analyse de la release
+    uses: release-analysis
+    after: [delivery, incidents, reach]
+    with: {release: {input: service}}
+    when:
+      any:
+        - {step: delivery, found: delivery.high_failure_rate}
+        - {step: delivery, found: delivery.failed_deployments}
+        - {step: incidents, found: incident.open}
+        - {step: incidents, found: incident.severe}

@@ -110,7 +110,7 @@ class AgentTool:
 @dataclass(frozen=True)
 class Withheld:
     tool: str
-    why: str  # acts, not_permitted
+    why: str  # acts, not_permitted; a skill: unknown, out_of_scope (LEKA-401)
 
 
 def offered(
