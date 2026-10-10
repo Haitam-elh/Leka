@@ -16,7 +16,24 @@ from leka.governance.dependencies import (
     require_role,
 )
 from leka.governance.models import AccessDecision, EntityRestriction
-from leka.governance.policy import Decision, Resource, Subject, evaluate, sees_restricted
+from leka.governance.policies import (
+    ACTIONS,
+    PolicyInput,
+    PolicyService,
+    Standing,
+    standing,
+    subject_of,
+)
+from leka.governance.policy import (
+    CustomRole,
+    Decision,
+    Resource,
+    RoleError,
+    Rule,
+    Subject,
+    evaluate,
+    sees_restricted,
+)
 from leka.governance.repository import AuditRepository, RestrictionRepository
 from leka.governance.schemas import (
     ROLE_PERMISSIONS,
@@ -24,11 +41,20 @@ from leka.governance.schemas import (
     WRITE_PERMISSIONS,
     AccessDecisionRead,
     AccessModelRead,
+    AssignmentRead,
+    AssignmentUpdate,
+    EvaluationAsk,
+    EvaluationRead,
+    GovernanceEventRead,
     Permission,
+    PolicyRead,
+    PolicyUpdate,
     Principal,
     RestrictionRead,
     RestrictionUpdate,
     RolePermissionsRead,
+    RoleRead,
+    RoleUpdate,
 )
 from leka.governance.service import (
     AuthorisationError,
@@ -56,19 +82,30 @@ from leka.governance.team import pending as pending_invitations
 from leka.governance.team import revoke as revoke_invitation
 
 __all__ = [
+    "ACTIONS",
     "ROLE_PERMISSIONS",
     "ROLE_RANK",
     "WRITE_PERMISSIONS",
     "AccessDecision",
     "AccessDecisionRead",
     "AccessModelRead",
+    "AssignmentRead",
+    "AssignmentUpdate",
     "AuditRepository",
     "AuthorisationError",
+    "CustomRole",
     "Decision",
     "EntityRestriction",
+    "EvaluationAsk",
+    "EvaluationRead",
+    "GovernanceEventRead",
     "GovernanceService",
     "PendingInvitationRead",
     "Permission",
+    "PolicyInput",
+    "PolicyRead",
+    "PolicyService",
+    "PolicyUpdate",
     "Principal",
     "PrincipalDep",
     "Resource",
@@ -76,7 +113,12 @@ __all__ = [
     "RestrictionRepository",
     "RestrictionService",
     "RestrictionUpdate",
+    "RoleError",
     "RolePermissionsRead",
+    "RoleRead",
+    "RoleUpdate",
+    "Rule",
+    "Standing",
     "Subject",
     "TeamMemberRead",
     "WorkspaceSuspendedError",
@@ -98,6 +140,8 @@ __all__ = [
     "require_role",
     "revoke_invitation",
     "sees_restricted",
+    "standing",
+    "subject_of",
     "team_members",
     "worth_keeping",
 ]

@@ -105,7 +105,7 @@ from leka.capabilities.registry import (
 )
 from leka.capabilities.repository import CapabilityRunRepository
 from leka.capabilities.router import ROUTING_VERSION, RouteQuery, Routing, route
-from leka.capabilities.runs import execute_run, queue_run, sweep_runs
+from leka.capabilities.runs import capability_resource, execute_run, queue_run, sweep_runs
 from leka.capabilities.runtime import (
     AgentTool,
     Refusal,
@@ -360,6 +360,7 @@ __all__ = [
     "agent_definition",
     "all_skills",
     "availability",
+    "capability_resource",
     "catalogue",
     "check_input",
     "cites",
