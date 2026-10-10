@@ -830,6 +830,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/governance/data-protection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Data Protection
+         * @description The platform's protections as they stand now, the workspace's policy,
+         *     and per source what LEKA found in its records and took out.
+         */
+        get: operations["data_protection_api_v1_governance_data_protection_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/governance/data-protection/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Policy
+         * @description Changed from now on: what was found before keeps the expiry it was
+         *     given, what is found next gets this one. Kept in the governance trail.
+         */
+        put: operations["set_policy_api_v1_governance_data_protection_policy_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connectors/catalog": {
         parameters: {
             query?: never;
@@ -9720,6 +9762,13 @@ export interface components {
             /** Last Seen At */
             last_seen_at: string | null;
         };
+        /** DataProtectionRead */
+        DataProtectionRead: {
+            posture: components["schemas"]["PostureRead"];
+            policy: components["schemas"]["ProtectionPolicyRead"];
+            /** Sources */
+            sources: components["schemas"]["SourceFindingsRead"][];
+        };
         /**
          * DatabaseDetail
          * @description One database: everything above, its schemas, the databases it serves
@@ -12476,7 +12525,7 @@ export interface components {
              * Subject Type
              * @enum {string}
              */
-            subject_type: "role" | "policy" | "assignment";
+            subject_type: "role" | "policy" | "assignment" | "protection";
             /** Subject Id */
             subject_id: string;
             /** Kind */
@@ -16199,6 +16248,48 @@ export interface components {
             }[];
         };
         /**
+         * PostureRead
+         * @description The platform's protections, read from the running process.
+         */
+        PostureRead: {
+            /** Environment */
+            environment: string;
+            /**
+             * Database Tls
+             * @description PostgreSQL says this connection is TLS.
+             */
+            database_tls: boolean | null;
+            /** Database Tls Version */
+            database_tls_version: string | null;
+            /**
+             * Object Store
+             * @description s3, or local (never in production).
+             */
+            object_store: string;
+            /**
+             * Object Store Encryption
+             * @description What each write asks S3 to encrypt with: AES256, aws:kms; none: nothing.
+             */
+            object_store_encryption: string | null;
+            /**
+             * Credentials Encryption
+             * @description Credentials and endpoint secrets: fernet.
+             */
+            credentials_encryption: string;
+            /**
+             * Credential Keys
+             * @description Keys in use: more than one while a rotation runs.
+             */
+            credential_keys: number;
+            /** Session Cookie Secure */
+            session_cookie_secure: boolean;
+            /**
+             * Overdue Secrets
+             * @description Secrets past their lifetime, by name.
+             */
+            overdue_secrets: string[];
+        };
+        /**
          * Preview
          * @description What a test read of one part of a source, as its mapping reads it —
          *     so the admin sees the mapping work before switching the source on
@@ -16323,6 +16414,21 @@ export interface components {
             name: string;
             /** Type */
             type: string;
+        };
+        /** ProtectionPolicyRead */
+        ProtectionPolicyRead: {
+            /**
+             * Found Payload Days
+             * @description A raw payload a secret or an identity number was found in: kept at most this many days from then.
+             */
+            found_payload_days: number;
+            /** Customised */
+            customised: boolean;
+        };
+        /** ProtectionPolicyUpdate */
+        ProtectionPolicyUpdate: {
+            /** Found Payload Days */
+            found_payload_days: number;
         };
         /**
          * QualityConflict
@@ -18374,6 +18480,35 @@ export interface components {
              * @description The latest, newest first.
              */
             failures: components["schemas"]["ExtractionFailureRead"][];
+        };
+        /**
+         * SourceFindingsRead
+         * @description What one source's records carried — counts by kind, never a value.
+         */
+        SourceFindingsRead: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Name */
+            name: string | null;
+            /** Kind */
+            kind: string | null;
+            /** Records */
+            records: number;
+            /** Scanned */
+            scanned: number;
+            /** With Secrets */
+            with_secrets: number;
+            /** Secrets */
+            secrets: {
+                [key: string]: number;
+            };
+            /** Personal Data */
+            personal_data: {
+                [key: string]: number;
+            };
         };
         /**
          * SourceKind
@@ -24299,6 +24434,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EvaluationRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    data_protection_api_v1_governance_data_protection_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataProtectionRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    set_policy_api_v1_governance_data_protection_policy_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProtectionPolicyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProtectionPolicyRead"];
                 };
             };
             /** @description The request could not be understood. */
