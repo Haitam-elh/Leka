@@ -162,6 +162,7 @@ class ChatCompletions:
                 tokens_out=int(usage.get("completion_tokens") or 0),
                 tokens_thinking=thinking,
                 tokens_cached=cached,
+                reported=bool(usage),
             ),
             latency_ms=latency_ms,
             finish=choice.get("finish_reason"),

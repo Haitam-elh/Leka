@@ -156,8 +156,14 @@ class ModelReading:
         )
         done = await self._runtime.run(task)
         if not done.ok:
-            # No model, none in time, nothing usable: the rules' reading.
+            # No model, none in time, nothing usable: the rules' reading —
+            # what asking cost kept with it (LEKA-430).
             logger.info("intention_read_by_rules", status=done.status, why=done.error)
+            if done.calls and done.run_id is not None:
+                by = understood.read_by or UnderstoodBy(method="rules")
+                return understood.model_copy(
+                    update={"read_by": by.model_copy(update={"run_id": done.run_id})}
+                )
             return understood
         reading: Reading = done.value
         return merged(
@@ -169,6 +175,7 @@ class ModelReading:
                 model=done.model,
                 version=done.version,
                 confidence=reading.confidence,
+                run_id=done.run_id,
             ),
         )
 

@@ -132,6 +132,9 @@ class Usage:
     # Of the tokens in, those the provider read from its cache — billed far
     # less (Gemini's implicit caching: a conversation's repeated start).
     tokens_cached: int = 0
+    # Whether the provider said what it used (LEKA-430): an answer without
+    # it reads 0 tokens — not known, not free.
+    reported: bool = True
 
 
 @dataclass(frozen=True)
