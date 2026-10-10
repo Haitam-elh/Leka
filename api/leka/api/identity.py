@@ -18,7 +18,9 @@ anything they do not know.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
+from collections.abc import Coroutine
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -26,7 +28,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.core import ratelimit
-from leka.db import DatabaseSession, SortableField
+from leka.db import DatabaseSession, SortableField, session_factory, system_scope
+from leka.governance import audit_account
 from leka.identity import (
     AccountDeletion,
     AccountUnverifiedError,
@@ -114,6 +117,40 @@ def client_ip(request: Request) -> str:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+# Work a refusal starts and does not wait for, held until it ends.
+_pending: set[asyncio.Task[None]] = set()
+
+
+def _later(work: Coroutine[object, object, None]) -> None:
+    """Done after the answer, never before it: a refusal takes as long
+    whether the address exists or not — the timing must not tell."""
+    task = asyncio.get_running_loop().create_task(work)
+    _pending.add(task)
+    task.add_done_callback(_pending.discard)
+
+
+async def _failed_sign_in(email: str, why: str) -> None:
+    """A failed sign-in to an account that exists, kept in its workspaces'
+    audit trails (LEKA-407) — never the password, never whether the
+    address exists: an unknown one leaves a log line only."""
+    try:
+        with system_scope():
+            async with session_factory() as db:
+                user = await UserRepository(db).get_by_email(email)
+    except Exception:  # pragma: no cover - the refusal stands regardless
+        return
+    if user is not None:
+        await audit_account(
+            user.id,
+            "user",
+            "user.sign_in_failed",
+            outcome="failure",
+            detail={"why": why},
+            # Anyone may try an address: its owner is the target, not the author.
+            by_them=False,
+        )
 
 
 async def _enforce(scope: str, identifier: str, limit: ratelimit.Limit) -> None:
@@ -226,6 +263,7 @@ async def login(
             remember=payload.remember,
         )
     except AccountUnverifiedError as error:
+        _later(_failed_sign_in(payload.email, "unverified"))
         raise _refuse(
             AuthErrorCode.ACCOUNT_UNVERIFIED,
             "Confirm your email address before signing in. Check your inbox, "
@@ -234,8 +272,12 @@ async def login(
         ) from error
     except AuthenticationError as error:
         # One sentence for every cause. The reason is logged, not returned.
+        _later(_failed_sign_in(payload.email, "invalid_credentials"))
         raise _refuse(AuthErrorCode.INVALID_CREDENTIALS, "Invalid email or password.") from error
 
+    await audit_account(
+        result.user.id, "user", "user.signed_in", detail={"remember": payload.remember}
+    )
     await ratelimit.reset("login:ip", ip, ratelimit.LOGIN_PER_IP)
     await ratelimit.reset("login:email", payload.email, ratelimit.LOGIN_PER_ACCOUNT)
 
@@ -263,6 +305,7 @@ async def logout(response: Response, session: CurrentSession, auth: AuthDep) -> 
     """End this session. The old cookie stops working immediately."""
     if session is not None:
         await auth.logout(session)
+        await audit_account(session.user_id, "user", "user.signed_out")
     clear_session_cookie(response)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -275,6 +318,7 @@ async def logout_everywhere(
     user = await UserRepository(db).get(current.user_id)
     if user is not None:
         await auth.logout_everywhere(user)
+        await audit_account(user.id, "user", "user.signed_out_everywhere")
     clear_session_cookie(response)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -337,6 +381,8 @@ async def delete_me(
             "make someone else its owner first.",
             status.HTTP_409_CONFLICT,
         ) from error
+    # Said before the seats go: afterwards, no workspace would hear of it.
+    await audit_account(user.id, "user", "user.account_closed")
     await auth.delete_account(user)
     clear_session_cookie(response)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -408,7 +454,7 @@ async def reset_password(
     leaving their sessions alive makes the reset pointless.
     """
     try:
-        await auth.reset_password(payload.token, payload.password)
+        reset = await auth.reset_password(payload.token, payload.password)
     except PasswordRejectedError as error:
         raise _refuse(AuthErrorCode.PASSWORD_BREACHED, error.reason, 422) from error
     except AuthenticationError as error:
@@ -417,6 +463,7 @@ async def reset_password(
             "This reset link is no longer valid. Ask for a new one.",
             status.HTTP_400_BAD_REQUEST,
         ) from error
+    await audit_account(reset.id, "user", "user.password_reset")
     clear_session_cookie(response)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -444,9 +491,13 @@ async def change_password(
     except PasswordRejectedError as error:
         raise _refuse(AuthErrorCode.PASSWORD_BREACHED, error.reason, 422) from error
     except AuthenticationError as error:
+        await audit_account(
+            user.id, "user", "user.password_changed", outcome="failure", detail={"why": "invalid"}
+        )
         raise _refuse(
             AuthErrorCode.INVALID_CREDENTIALS, "Your current password is not correct."
         ) from error
+    await audit_account(user.id, "user", "user.password_changed")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -512,6 +563,9 @@ async def revoke_session(
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such session.")
     await auth.logout(target)
+    await audit_account(
+        current.user_id, "user", "user.session_revoked", detail={"session": str(session_id)}
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

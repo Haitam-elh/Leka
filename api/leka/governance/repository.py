@@ -21,6 +21,7 @@ from leka.governance.models import (
     AccessDecision,
     AIControl,
     AIControlEvent,
+    AuditEvent,
     EntityRestriction,
     GovernanceEvent,
     RoleAssignment,
@@ -118,7 +119,10 @@ class PolicyRepository:
         self._session = session
         self._workspace_id = workspace_id
 
-    def add(self, row: WorkspaceRole | RoleAssignment | WorkspacePolicy | GovernanceEvent) -> None:
+    def add(
+        self,
+        row: WorkspaceRole | RoleAssignment | WorkspacePolicy | GovernanceEvent | AuditEvent,
+    ) -> None:
         self._session.add(row)
 
     async def remove(self, row: WorkspaceRole | RoleAssignment | WorkspacePolicy) -> None:

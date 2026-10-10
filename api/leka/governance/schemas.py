@@ -60,6 +60,11 @@ class Permission(enum.StrEnum):
     # Roles of the workspace's own, and its policies (LEKA-403).
     POLICY_MANAGE = "policy:manage"
 
+    # The audit trail (LEKA-407): searched and read; how long it is kept —
+    # the owner's alone.
+    AUDIT_READ = "audit:read"
+    AUDIT_MANAGE = "audit:manage"
+
 
 # Roles are a chain: an owner can do everything an admin can, an admin
 # everything a member can. Expressed as ranks so that require_role(ADMIN)
@@ -94,6 +99,7 @@ _ADMIN_PERMISSIONS = _MEMBER_PERMISSIONS | {
     Permission.ENTITY_READ_RESTRICTED,
     Permission.ACCESS_READ,
     Permission.POLICY_MANAGE,
+    Permission.AUDIT_READ,
 }
 
 # Only an owner deletes the workspace or hands it over. An admin managing
@@ -101,6 +107,8 @@ _ADMIN_PERMISSIONS = _MEMBER_PERMISSIONS | {
 _OWNER_PERMISSIONS = _ADMIN_PERMISSIONS | {
     Permission.WORKSPACE_DELETE,
     Permission.WORKSPACE_TRANSFER,
+    # How long the trail is kept: shortening it erases evidence (LEKA-407).
+    Permission.AUDIT_MANAGE,
 }
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
@@ -125,6 +133,7 @@ WRITE_PERMISSIONS: frozenset[Permission] = frozenset(
         Permission.CONTEXT_MANAGE,
         Permission.ENTITY_RESTRICT,
         Permission.POLICY_MANAGE,
+        Permission.AUDIT_MANAGE,
     }
 )
 
@@ -405,3 +414,71 @@ class AIControlEventRead(BaseModel):
     model: str | None
     at: datetime
     detail: dict[str, object]
+
+
+# ── the audit trail (LEKA-407) ─────────────────────────────────────────────
+
+AuditCategory = Literal[
+    "user",
+    "team",
+    "workspace",
+    "data",
+    "access",
+    "governance",
+    "decision",
+    "action",
+    "ai",
+    "audit",
+]
+
+
+class AuditEventRead(BaseModel):
+    """One event of the audit trail: who, when, what, to what, the outcome,
+    from where — and what else it said."""
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    at: datetime
+    category: AuditCategory
+    action: str
+    outcome: Literal["success", "failure", "denied"]
+    actor_type: Literal["user", "system"]
+    actor_id: uuid.UUID | None
+    actor_role: str | None
+    target_type: str | None
+    target_id: str | None
+    target_label: str | None
+    request_id: str | None
+    ip: str | None = Field(description="A network prefix, never a full address.")
+    user_agent: str | None
+    detail: dict[str, object]
+
+
+class AuditPageRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    events: list[AuditEventRead]
+    next: str | None = Field(description="Reads on from the last event; none: the end.")
+
+
+class AuditEventDetail(AuditEventRead):
+    related: list[AuditEventRead] = Field(description="What else the same request did.")
+
+
+class AuditSettingsRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    retention_days: int
+    default_days: int
+    min_days: int
+    max_days: int
+    oldest: datetime | None = Field(description="The oldest event still kept.")
+    updated_at: datetime | None
+    updated_by: uuid.UUID | None
+
+
+class AuditSettingsUpdate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    retention_days: int = Field(ge=90, le=2555)

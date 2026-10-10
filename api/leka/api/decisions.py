@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, Query, status
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.core.errors import ErrorCode, FieldError
-from leka.governance import Permission, Principal, require_permission
+from leka.governance import Permission, Principal, Target, audit_as, require_permission
 from leka.intentions import (
     ApprovalPolicyRead,
     ApprovalPolicyUpdate,
@@ -130,6 +130,14 @@ async def set_policy(
         raise ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT, ErrorCode.VALIDATION_FAILED, str(error)
         ) from error
+    audit_as(
+        session,
+        principal,
+        "decision",
+        "decision_policy.changed",
+        target=Target("decision_policy", principal.workspace_id),
+        detail={"after": payload.model_dump(exclude_none=True, mode="json")},
+    )
     await session.commit()
     return changed
 
@@ -179,5 +187,19 @@ async def vote(
         ) from error
     if decided is None:
         raise _missing()
+    audit_as(
+        session,
+        principal,
+        "decision",
+        f"decision.{verdict.replace('-', '_')}",
+        target=Target("intention", intention_id),
+        detail={
+            "decision": str(decided.id),
+            "number": decided.number,
+            "status": decided.status,
+            "risk": decided.risk,
+            **({"reason": payload.reason} if payload.reason else {}),
+        },
+    )
     await session.commit()
     return decided

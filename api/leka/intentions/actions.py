@@ -39,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.background import enqueue_job
 from leka.connectors import BlockedAddressError, PublicTransport
 from leka.db import session_factory, system_scope, workspace_scope
+from leka.governance import Target, audit
 from leka.intentions.approval import approvers_of
 from leka.intentions.decisions import DecisionStatus
 from leka.intentions.execution import (
@@ -715,6 +716,25 @@ class ActionService:
             step.error = outcome.reason
             step.finished_at = moment
             self._event(plan, "step_failed", at=moment, step=step, detail={"error": outcome.reason})
+        # LEKA called a system on the workspace's behalf (LEKA-407).
+        audit(
+            self._session,
+            plan.workspace_id,
+            "action",
+            "action.executed",
+            outcome="failure" if outcome.status == "failed" else "success",
+            target=Target("action_endpoint", endpoint.id, endpoint.name),
+            detail={
+                "action": step.action,
+                "environment": step.environment,
+                "plan": str(plan.id),
+                "intention": str(plan.intention_id),
+                "status": outcome.status,
+                **({"reason": outcome.reason} if outcome.reason else {}),
+                **({"http": response["status"]} if response else {}),
+            },
+            at=moment,
+        )
         await self._session.flush()
 
     async def _finish(

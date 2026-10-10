@@ -17,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.core.request_context import current_request_id
 from leka.db import session_factory, workspace_scope
 from leka.governance.ai import Actor, act_for
-from leka.governance.models import AccessDecision, EntityRestriction
+from leka.governance.audit import Target, audit_row
+from leka.governance.models import AccessDecision, AuditEvent, EntityRestriction
 from leka.governance.policies import subject_of
 from leka.governance.policy import Decision, Resource, Subject, evaluate
 from leka.governance.repository import AuditRepository, RestrictionRepository
@@ -189,6 +190,27 @@ def decision_row(
     )
 
 
+def audited(row: AccessDecision) -> AuditEvent:
+    """An access decision, as the audit trail says it (LEKA-407)."""
+    return audit_row(
+        row.workspace_id,
+        "access",
+        row.action,
+        outcome="denied" if row.decision == "deny" else "success",
+        actor_id=row.user_id,
+        actor_role=row.role,
+        target=Target(row.resource_type, row.resource_id) if row.resource_type else None,
+        detail={
+            "permission": row.permission,
+            "rule": row.rule,
+            "reason": row.reason,
+            **({"route": row.route} if row.route else {}),
+            **dict(row.detail or {}),
+        },
+        at=row.at,
+    )
+
+
 def worth_keeping(decision: Decision) -> bool:
     """What the trail keeps: every refusal, every write or run allowed —
     not every read, which would bury the rest."""
@@ -203,8 +225,10 @@ def record(
     decision: Decision,
     **said: object,
 ) -> None:
-    """Kept with what it allowed: committed, or not, with the change."""
-    session.add(decision_row(workspace_id, user_id, role, decision, **said))  # type: ignore[arg-type]
+    """Kept with what it allowed: committed, or not, with the change — and
+    in the audit trail (LEKA-407)."""
+    row = decision_row(workspace_id, user_id, role, decision, **said)  # type: ignore[arg-type]
+    session.add_all([row, audited(row)])
 
 
 async def record_apart(
@@ -219,7 +243,8 @@ async def record_apart(
     try:
         with workspace_scope(workspace_id):
             async with session_factory() as session:
-                session.add(decision_row(workspace_id, user_id, role, decision, **said))  # type: ignore[arg-type]
+                row = decision_row(workspace_id, user_id, role, decision, **said)  # type: ignore[arg-type]
+                session.add_all([row, audited(row)])
                 await session.commit()
     except Exception:
         # Refusing stays refusing: a trail that cannot be written is logged,

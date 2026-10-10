@@ -86,7 +86,9 @@ from leka.governance import (
     AIControlService,
     Permission,
     Subject,
+    Target,
     ai_event,
+    audit,
     current_actor,
     evaluate,
     hidden_on_behalf,
@@ -538,6 +540,21 @@ async def _end(
     )
     if ended.rowcount:  # type: ignore[attr-defined]
         events.add(status.value, failed_step, error=error)
+        # LEKA ran it, for who asked (LEKA-407).
+        audit(
+            session,
+            run.workspace_id,
+            "ai",
+            f"workflow_run.{status.value}",
+            outcome="success" if status == RunStatus.SUCCEEDED else "failure",
+            target=Target("workflow_run", run.id, run.key),
+            detail={
+                "workflow": run.key,
+                "for": str(run.requested_by) if run.requested_by else None,
+                **({"error": error} if error else {}),
+                **({"failed_step": failed_step} if failed_step else {}),
+            },
+        )
         await session.commit()
         logger.info("workflow_run_ended", run=str(run.id), key=run.key, status=status.value)
         return {"status": status.value, **({"error": error} if error else {})}
