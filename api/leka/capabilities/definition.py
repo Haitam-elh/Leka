@@ -179,6 +179,8 @@ class Definition:
     # An agent's: the tools it may be offered — every read-only one when it
     # declares none (LEKA-400).
     tools: tuple[str, ...] = ()
+    # An agent's: the skills it may be offered — none unless named (LEKA-401).
+    skills: tuple[str, ...] = ()
 
     def fingerprint(self) -> str:
         """What it is and does, hashed: everything but where it stands in
@@ -196,6 +198,9 @@ class Definition:
         # Added with the agent library (LEKA-400): none, it says nothing new.
         if not self.tools:
             said.pop("tools")
+        # Added with the skill library (LEKA-401): none, it says nothing new.
+        if not self.skills:
+            said.pop("skills")
         said["goals"] = sorted(self.goals)
         said["kinds"] = sorted(self.kinds)
         canonical = json.dumps(said, sort_keys=True, ensure_ascii=False, default=str)

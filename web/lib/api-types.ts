@@ -4398,7 +4398,8 @@ export interface paths {
          * Run a skill
          * @description What it gave — or why it did not run: no such skill or thing (404),
          *     the person's role may not run it (403), that version does not run or
-         *     what it was given is not what it takes (422, each error in `details`).
+         *     what it was given is not what it takes, what it needs is not
+         *     connected (422, each error in `details`).
          *     One that failed or ran out of time is said in its `status`. Every run is
          *     kept, refused or not.
          */
@@ -17634,6 +17635,21 @@ export interface components {
             origin: string;
             /** Limitations */
             limitations: string[];
+            /**
+             * Reads
+             * @description The kinds of things it reads; none: anything.
+             */
+            reads: string[];
+            /**
+             * Sources
+             * @description What must be connected: one source kind of each group.
+             */
+            sources: string[][];
+            /**
+             * Missing Sources
+             * @description The groups of which nothing is connected here.
+             */
+            missing_sources: string[][];
             /** Fingerprint */
             fingerprint: string;
             /** Input Schema */
@@ -41002,7 +41018,9 @@ export interface operations {
     };
     list_skills_api_v1_skills_get: {
         parameters: {
-            query?: never;
+            query?: {
+                category?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;

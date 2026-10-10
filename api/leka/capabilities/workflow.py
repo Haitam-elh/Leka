@@ -5,7 +5,8 @@ in what order its steps run, which run, and what a run's state is.
     a workflow      key, title, when to use it, version, its lifecycle, what
                     it takes, its steps — a capability catalogue entry of
                     kind `workflow`, so its versions are kept like any other
-    a step          an id; the capability it uses; what it is given (the
+    a step          an id; the capability it uses — or a skill,
+                    `skill:<key>` (LEKA-401); what it is given (the
                     workflow's inputs, or literals); the steps it runs after;
                     the condition it runs on; how often it is retried; what
                     its failure does to the workflow
@@ -53,6 +54,7 @@ from leka.capabilities.definition import (
     Lifecycle,
     semver,
 )
+from leka.capabilities.skills import find_skill
 
 STEP = re.compile(r"^[a-z][a-z0-9_]*$")
 MOST_STEPS = 20
@@ -63,6 +65,15 @@ STATUSES_SAID = ("succeeded", "failed", "skipped")
 
 class WorkflowError(DefinitionError):
     """A workflow that cannot be registered as said."""
+
+
+# A step that uses a skill (LEKA-401) names it so: `uses: skill:<key>`.
+SKILL = "skill:"
+
+
+def skill_of(uses: str) -> str | None:
+    """The skill a step uses — none when it uses a capability."""
+    return uses.removeprefix(SKILL) if uses.startswith(SKILL) else None
 
 
 # ── conditions ──────────────────────────────────────────────────────────────
@@ -463,14 +474,27 @@ def validated(workflow: Workflow, known: Mapping[str, Definition]) -> Workflow:
         if not STEP.match(s.id):
             msg = f"{where}: a step id is a word (snake_case)"
             raise WorkflowError(msg)
-        used = known.get(s.uses)
-        if used is None:
-            msg = f"{where}: no capability {s.uses!r}"
-            raise WorkflowError(msg)
-        if used.kind not in (Kind.RULES, Kind.AGENT):
-            msg = f"{where}: {s.uses!r} cannot run as a step (LEKA's own rules, or an agent)"
-            raise WorkflowError(msg)
-        takes = {i.name for i in used.contract.inputs}
+        key = skill_of(s.uses)
+        if key is not None:
+            # A skill (LEKA-401): given only what its contract takes.
+            skill = find_skill(key)
+            if skill is None:
+                msg = f"{where}: no skill {key!r}"
+                raise WorkflowError(msg)
+            fields = skill.input.model_fields
+            takes = set(fields)
+            needed = [n for n, f in fields.items() if f.is_required()]
+        else:
+            used = known.get(s.uses)
+            if used is None:
+                msg = f"{where}: no capability {s.uses!r}"
+                raise WorkflowError(msg)
+            if used.kind not in (Kind.RULES, Kind.AGENT):
+                msg = f"{where}: {s.uses!r} cannot run as a step (LEKA's own rules, an agent, "
+                msg += "or a skill)"
+                raise WorkflowError(msg)
+            takes = {i.name for i in used.contract.inputs}
+            needed = [i.name for i in used.contract.inputs if i.required]
         if set(s.given) - takes:
             msg = f"{where}: {s.uses!r} does not take {sorted(set(s.given) - takes)}"
             raise WorkflowError(msg)
@@ -478,7 +502,7 @@ def validated(workflow: Workflow, known: Mapping[str, Definition]) -> Workflow:
             if value.input is not None and value.input not in inputs:
                 msg = f"{where}.with.{name}: the workflow takes no input {value.input!r}"
                 raise WorkflowError(msg)
-        missing = [i.name for i in used.contract.inputs if i.required and i.name not in s.given]
+        missing = [n for n in needed if n not in s.given]
         if missing:
             msg = f"{where}: {s.uses!r} needs {missing}"
             raise WorkflowError(msg)

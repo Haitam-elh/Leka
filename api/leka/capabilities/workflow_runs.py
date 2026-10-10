@@ -35,6 +35,7 @@ Every step's state is a row (workflow_run_steps); every move, an event
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -59,6 +60,7 @@ from leka.capabilities.registry import find, find_workflow
 from leka.capabilities.runs import capability_resource, execute_run
 from leka.capabilities.runtime import Refusal
 from leka.capabilities.service import AgentRuntime, NotYoursError, RunFinishedError, RunRefusedError
+from leka.capabilities.skills import SkillRuntime
 from leka.capabilities.workflow import (
     ENDED,
     Ended,
@@ -71,6 +73,7 @@ from leka.capabilities.workflow import (
     next_steps,
     order,
     outcome,
+    skill_of,
 )
 from leka.db import (
     hidden_entities,
@@ -181,6 +184,51 @@ async def agent_step(call: StepCall) -> StepResult:
 
 
 register_step(Kind.AGENT, agent_step)
+
+
+# A skill's output kept with its step, at most (characters).
+SKILL_OUTPUT_KEPT = 20_000
+
+
+async def skill_step(
+    session: AsyncSession,
+    run: WorkflowRun,
+    step: Step,
+    key: str,
+    permissions: frozenset[str],
+) -> StepResult:
+    """A skill, run as a step (LEKA-401): through the skill runtime, with
+    what the person who asked may do — checked, kept about this run. What it
+    concluded — its signals — becomes the step's codes, which a later step's
+    condition reads (`found`)."""
+    outcome = await SkillRuntime(
+        session,
+        run.workspace_id,
+        permissions=permissions,
+        by=run.requested_by,
+        caller=f"workflow:{run.key}",
+        ref=f"workflow_run:{run.id}",
+    ).run(key, given_to(step, run.inputs))
+    ref = f"skill_run:{outcome.run_id}"
+    if not outcome.ok:
+        return StepResult(
+            "failed",
+            ref=ref,
+            error=(outcome.reason or outcome.status)[:60],
+            output={"message": outcome.message, "errors": [dict(e) for e in outcome.errors]},
+            retryable=outcome.status == "timed_out" or outcome.reason == "error",
+        )
+    said = outcome.said()
+    size = len(json.dumps(said, ensure_ascii=False, default=str))
+    signals = outcome.signals
+    worth = [s for s in signals if s.level != "info"] or list(signals)
+    return StepResult(
+        "succeeded",
+        codes=tuple(dict.fromkeys(s.code for s in signals)),
+        summary=" ".join(s.text for s in worth[:3])[:300] or None,
+        ref=ref,
+        output=said if size <= SKILL_OUTPUT_KEPT else {"left_out": size},
+    )
 
 
 # ── kept ────────────────────────────────────────────────────────────────────
@@ -510,38 +558,42 @@ async def _step(
     permissions: frozenset[str],
     subject: Subject,
 ) -> StepResult:
-    """One step, its attempts — as its capability stands for the person,
-    and as the workspace's policies say of it (LEKA-403)."""
-    entry = await CatalogueService(session, run.workspace_id).entry(
-        step.uses, permissions=permissions
-    )
-    if entry is None or not entry.availability.available:
-        why = list(entry.availability.codes) if entry is not None else ["not_found"]
-        events.add("step_failed", step.id, error="unavailable", why=why)
-        return StepResult("failed", error="unavailable", output={"why": why}, retryable=False)
-    if entry.definition.kind is Kind.AGENT:
-        resource = capability_resource(entry.definition)
-        decided = evaluate(
-            subject, Permission(entry.definition.permission), resource, action="agent:run"
+    """One step, its attempts — as its capability stands for the person, and
+    as the workspace's policies say of it (LEKA-403); a skill (LEKA-401),
+    through the skill runtime."""
+    key = skill_of(step.uses)
+    entry: Entry | None = None
+    if key is None:
+        entry = await CatalogueService(session, run.workspace_id).entry(
+            step.uses, permissions=permissions
         )
-        if not decided.allowed:
-            record(
-                session,
-                run.workspace_id,
-                subject.user_id,
-                subject.role,
-                decided,
-                action="agent:run",
-                resource=resource,
-                detail={"workflow_run": str(run.id), "step": step.id},
+        if entry is None or not entry.availability.available:
+            why = list(entry.availability.codes) if entry is not None else ["not_found"]
+            events.add("step_failed", step.id, error="unavailable", why=why)
+            return StepResult("failed", error="unavailable", output={"why": why}, retryable=False)
+        if entry.definition.kind is Kind.AGENT:
+            resource = capability_resource(entry.definition)
+            decided = evaluate(
+                subject, Permission(entry.definition.permission), resource, action="agent:run"
             )
-            events.add("step_failed", step.id, error="policy_denied", policy=decided.policy)
-            return StepResult(
-                "failed",
-                error="policy_denied",
-                output={"policy": decided.policy},
-                retryable=False,
-            )
+            if not decided.allowed:
+                record(
+                    session,
+                    run.workspace_id,
+                    subject.user_id,
+                    subject.role,
+                    decided,
+                    action="agent:run",
+                    resource=resource,
+                    detail={"workflow_run": str(run.id), "step": step.id},
+                )
+                events.add("step_failed", step.id, error="policy_denied", policy=decided.policy)
+                return StepResult(
+                    "failed",
+                    error="policy_denied",
+                    output={"policy": decided.policy},
+                    retryable=False,
+                )
     result = StepResult("failed", error="not_run")
     for attempt in range(1, step.attempts + 1):
         row.status = StepStatus.RUNNING.value
@@ -550,19 +602,23 @@ async def _step(
         events.add("step_started", step.id, attempt=attempt)
         await session.commit()
         started = time.monotonic()
-        result = await _attempt(
-            StepCall(
-                workspace_id=run.workspace_id,
-                run_id=run.id,
-                step=step,
-                capability=entry.definition,
-                given=given_to(step, run.inputs),
-                intention_id=run.intention_id,
-                requested_by=run.requested_by,
-                permissions=permissions,
-                attempt=attempt,
+        if key is not None:
+            result = await skill_step(session, run, step, key, permissions)
+        else:
+            assert entry is not None  # refused above otherwise
+            result = await _attempt(
+                StepCall(
+                    workspace_id=run.workspace_id,
+                    run_id=run.id,
+                    step=step,
+                    capability=entry.definition,
+                    given=given_to(step, run.inputs),
+                    intention_id=run.intention_id,
+                    requested_by=run.requested_by,
+                    permissions=permissions,
+                    attempt=attempt,
+                )
             )
-        )
         ms = int((time.monotonic() - started) * 1000)
         if result.status == "succeeded" or not result.retryable or attempt == step.attempts:
             events.add(

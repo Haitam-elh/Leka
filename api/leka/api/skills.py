@@ -1,8 +1,9 @@
 """Skills (LEKA-396), over HTTP.
 
-    GET   /skills                     every skill, as a caller gets it: what
+    GET   /skills?category            every skill, as a caller gets it: what
                                       it does, what it takes and gives, who
-                                      may run it, where it stands
+                                      may run it, what it needs connected,
+                                      where it stands
     GET   /skills/runs?key&ref        the workspace's skill runs, the latest
                                       first: of one skill, about one thing
                                       (`intention:<id>`)
@@ -30,6 +31,7 @@ from leka.capabilities import (
     SkillRunRead,
     SkillRuntime,
     all_skills,
+    connected_sources,
     find_skill,
     run_read,
     skill_read,
@@ -38,7 +40,8 @@ from leka.capabilities import (
 from leka.core.errors import ErrorCode, FieldError
 from leka.governance import Permission, Principal, require_permission
 
-# LEKA's own skills, registered when imported (leka/intentions/skills.py).
+# LEKA's own skills, registered when imported: its reads
+# (leka/intentions/skills.py), its library (leka/intelligence/library.py).
 from leka.intentions import SKILLS
 
 router = APIRouter(prefix="/skills", tags=["capabilities"])
@@ -50,6 +53,7 @@ REFUSED = {
     "not_found": (status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND),
     "unknown": (status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND),
     "not_permitted": (status.HTTP_403_FORBIDDEN, ErrorCode.PERMISSION_DENIED),
+    "unavailable": (status.HTTP_422_UNPROCESSABLE_CONTENT, ErrorCode.VALIDATION_FAILED),
     "not_runnable": (status.HTTP_422_UNPROCESSABLE_CONTENT, ErrorCode.VALIDATION_FAILED),
     "invalid_input": (status.HTTP_422_UNPROCESSABLE_CONTENT, ErrorCode.VALIDATION_FAILED),
 }
@@ -62,9 +66,18 @@ def _permissions(principal: Principal) -> frozenset[str]:
 
 
 @router.get("", response_model=list[SkillRead], summary="Every skill LEKA has")
-async def list_skills(principal: Reader) -> list[SkillRead]:
+async def list_skills(
+    session: SessionDep,
+    principal: Reader,
+    category: Annotated[str | None, Query(max_length=40)] = None,
+) -> list[SkillRead]:
     permissions = _permissions(principal)
-    return [skill_read(skill, permissions) for skill in all_skills()]
+    connected = await connected_sources(session, principal.workspace_id)
+    return [
+        skill_read(skill, permissions, connected)
+        for skill in all_skills()
+        if category is None or skill.category == category
+    ]
 
 
 @router.get("/runs", response_model=list[SkillRunRead], summary="The workspace's skill runs")
@@ -80,11 +93,12 @@ async def list_runs(
 
 
 @router.get("/{key}", response_model=SkillRead, summary="One skill, every version of it")
-async def get_skill(key: Key, principal: Reader) -> SkillRead:
+async def get_skill(key: Key, session: SessionDep, principal: Reader) -> SkillRead:
     skill = find_skill(key)
     if skill is None:
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such skill.")
-    return skill_read(skill, _permissions(principal))
+    connected = await connected_sources(session, principal.workspace_id)
+    return skill_read(skill, _permissions(principal), connected)
 
 
 @router.post("/{key}/run", response_model=SkillRunRead, summary="Run a skill")
@@ -93,7 +107,8 @@ async def run_skill(
 ) -> SkillRunRead:
     """What it gave — or why it did not run: no such skill or thing (404),
     the person's role may not run it (403), that version does not run or
-    what it was given is not what it takes (422, each error in `details`).
+    what it was given is not what it takes, what it needs is not
+    connected (422, each error in `details`).
     One that failed or ran out of time is said in its `status`. Every run is
     kept, refused or not."""
     runtime = SkillRuntime(
@@ -109,8 +124,10 @@ async def run_skill(
     await session.commit()
     if outcome.status == "refused" and outcome.reason in REFUSED:
         code, kind = REFUSED[outcome.reason]
+        # What it was given that is wrong, or what it needs connected.
+        where = "" if outcome.reason == "unavailable" else "inputs."
         details = [
-            FieldError(field=f"inputs.{e['field']}", message=e["message"]) for e in outcome.errors
+            FieldError(field=f"{where}{e['field']}", message=e["message"]) for e in outcome.errors
         ]
         raise ApiError(code, kind, outcome.message or "Refused.", details=details or None)
     assert row is not None  # every run is kept

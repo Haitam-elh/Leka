@@ -64,6 +64,7 @@ from leka.capabilities.runtime import (
     output_of,
     runnable,
 )
+from leka.capabilities.skills import SkillRuntime, agent_skill_tools, skill_handlers
 from leka.capabilities.tools import TOOLS, Answer, handlers
 from leka.connectors import SourceRepository
 from leka.context import AssembledContext, ContextRepository, ContextService, IntentAsk
@@ -386,6 +387,10 @@ async def _run(
     # Its tools: those it declares (LEKA-400), what it may use, by who asked.
     declared = [t for t in tools if not definition.tools or t.name in definition.tools]
     given, withheld = offered(declared, permissions)
+    # Its skills: those it names, within what it reads (LEKA-401).
+    named, out_of_reach = agent_skill_tools(definition)
+    skilled, unskilled = offered(named, permissions)
+    given, withheld = [*given, *skilled], [*withheld, *out_of_reach, *unskilled]
     for kept in withheld:
         steps.add("tool_withheld", name=kept.tool, why=kept.why)
     await session.commit()
@@ -394,6 +399,18 @@ async def _run(
         definition,
         GraphService(GraphRepository(session, workspace_id)),
         KnowledgeService(EntityRepository(session, workspace_id)),
+    )
+    # Each skill call checked and kept (skill_runs), about this run.
+    bound |= skill_handlers(
+        SkillRuntime(
+            session,
+            workspace_id,
+            permissions=permissions,
+            by=run.requested_by,
+            caller=f"agent:{definition.key}",
+            ref=f"agent_run:{run.id}",
+        ),
+        [t.name for t in skilled],
     )
     request = Request(
         purpose=f"agent:{definition.key}"[:100],
