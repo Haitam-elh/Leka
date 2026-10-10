@@ -12,7 +12,8 @@ month.
 
 ## Roles
 
-Three, and no more.
+Three, as the base of every other: a workspace builds its own on them
+(LEKA-403, below).
 
 | Role | Who it is for |
 | --- | --- |
@@ -43,6 +44,11 @@ The asymmetry decides it: adding a role later costs one `CHECK` constraint;
 removing one costs migrating every existing membership. Wait for the
 evidence.
 
+**LEKA-403 kept the three as the base, and let a workspace name its own on
+them** — « Tech Lead », « Sécurité » — rather than adding seats of a new
+kind: a role of its own is a base role with permissions added and taken
+away, so the chain and the matrix stay what everything else reads.
+
 ## The matrix
 
 | Permission | member | admin | owner |
@@ -65,6 +71,7 @@ evidence.
 | `entity:restrict` | no | yes | yes |
 | `entity:read_restricted` | no | yes | yes |
 | `access:read` | no | yes | yes |
+| `policy:manage` | no | yes | yes |
 
 **`job:read` is admin and above.** It reads the history of the background jobs run for the
 workspace: which job, how many attempts, when. That is how the system talks to itself, and a
@@ -222,10 +229,72 @@ session; every query is scoped to it by the guard, fail-closed
 restricted entities — restricted, said why, and lifted, by an admin — and the
 trail of decisions, refusals first to hand.
 
+## Roles and policies of the workspace's own (LEKA-403)
+
+### A role of its own
+
+An admin (`policy:manage`) names a role on a base — **member or admin**,
+never owner — with what it **adds** and what it **takes away**
+(`PUT /governance/roles/{key}`):
+
+- **Inherited, then added, then taken away — taking away wins.**
+- Refused (422, said why): adding what only an owner may
+  (`workspace:delete`, `workspace:transfer`), adding what its base already
+  has, taking away what its base has not, taking away `workspace:read`
+  (it would lock its holder out), adding and taking away the same.
+- **Given to a person whose seat has its base** (`PUT
+  /governance/assignments/{user}`) — another base is refused (409): change
+  the seat first, which stays the members' screen's. A seat that changes base
+  no longer carries it. Taken back (`role: null`): the seat's own again.
+- **Read on every request**, like the seat: given or taken back, in force
+  at the next one. What it grants decides everything the role did — routes,
+  the catalogue and the router, restricted entities, the work done for the
+  person.
+- Held, it cannot be deleted (409); its base cannot change while held.
+
+### A policy
+
+A rule of the workspace (`/governance/policies`, `policy:manage`):
+
+| Field | |
+| --- | --- |
+| `effect` | `deny` — refuse; or `allow` — an exception |
+| `actions` | permissions, or the executions decided before they run (`agent:run`, `workflow:run`); `*` every one |
+| `roles` | `member`, `admin`, `owner` or a role of its own; none: everyone |
+| conditions | `resource_types`, `risk_at_least` (low · medium · high), `kinds`, `categories` — a policy with any applies only to a resource that meets them all |
+| `priority` | 0 to 100 |
+| `enabled` | off, it is kept and not applied |
+
+**Evaluated in the one evaluation, after the role, before the owner and the
+restriction** — so it applies wherever a permission is decided: every
+route's dependency, an agent or a workflow started (with the capability's
+risk, kind, category), and again **when it runs** — an agent, an agent step
+of a workflow — for the person, as things stand then.
+
+### Precedence, deterministic
+
+1. **A policy only takes away.** An exception never grants what the role
+   does not carry: it lifts a refusal of lower priority.
+2. Of the policies that apply, **the highest priority decides**.
+3. **At the same priority, a refusal wins** over an exception.
+4. Same priority, same effect: by id — always the same order.
+
+The decision says which policy decided (`policy`), its rule `policy`, its
+reason `policy_denied` or `policy_allows`; the trail keeps it.
+`POST /governance/evaluate` asks the decision a role would get — a
+permission, an action, a resource — **without doing anything**.
+
+### Their history
+
+`governance_events` — every role created, changed, deleted; every role
+given or taken back; every policy created, changed (enabled, disabled),
+deleted — who, when, **before and after**; append-only, the database refusing
+to rewrite one (`GET /governance/history`, `access:read`).
+
 ## What is deliberately absent
 
-Groups, custom roles, SSO-mapped roles, and grants to one person on one
-entity: a restriction is by role. All are plausible one day; none is needed
+Groups, SSO-mapped roles, roles of its own on the owner's base, and grants
+to one person on one entity: a restriction is by role. All are plausible one day; none is needed
 by any screen that exists. See
 [adr/007-tenant-isolation-strategy.md](adr/007-tenant-isolation-strategy.md).
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -57,6 +57,9 @@ class Permission(enum.StrEnum):
     ENTITY_READ_RESTRICTED = "entity:read_restricted"
     ACCESS_READ = "access:read"
 
+    # Roles of the workspace's own, and its policies (LEKA-403).
+    POLICY_MANAGE = "policy:manage"
+
 
 # Roles are a chain: an owner can do everything an admin can, an admin
 # everything a member can. Expressed as ranks so that require_role(ADMIN)
@@ -90,6 +93,7 @@ _ADMIN_PERMISSIONS = _MEMBER_PERMISSIONS | {
     Permission.ENTITY_RESTRICT,
     Permission.ENTITY_READ_RESTRICTED,
     Permission.ACCESS_READ,
+    Permission.POLICY_MANAGE,
 }
 
 # Only an owner deletes the workspace or hands it over. An admin managing
@@ -120,6 +124,7 @@ WRITE_PERMISSIONS: frozenset[Permission] = frozenset(
         Permission.INTENTION_APPROVE,
         Permission.CONTEXT_MANAGE,
         Permission.ENTITY_RESTRICT,
+        Permission.POLICY_MANAGE,
     }
 )
 
@@ -136,16 +141,24 @@ class Principal(BaseModel):
     to log out — which is not a revocation, it is a delay.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     user_id: uuid.UUID
     workspace_id: uuid.UUID
     role: Role
     workspace_status: WorkspaceStatus
+    # A role of the workspace's own (LEKA-403): its key, and what it grants —
+    # its base role's permissions, with what it adds and less what it takes
+    # away. None: the base role's, as the matrix says.
+    custom_role: str | None = None
+    granted: frozenset[Permission] | None = None
+    # The workspace's policies in force (governance.policy.Rule), read on this
+    # request like the role.
+    policies: tuple[Any, ...] = ()
 
     @property
     def permissions(self) -> frozenset[Permission]:
-        return ROLE_PERMISSIONS[self.role]
+        return self.granted if self.granted is not None else ROLE_PERMISSIONS[self.role]
 
     def has(self, permission: Permission) -> bool:
         return permission in self.permissions
@@ -174,6 +187,7 @@ class AccessModelRead(BaseModel):
     writes: list[Permission] = Field(description="Refused while the workspace is suspended.")
     mine: list[Permission]
     role: Role
+    custom_role: str | None = Field(default=None, description="A role of the workspace's own.")
 
 
 class RestrictionUpdate(BaseModel):
@@ -213,3 +227,111 @@ class AccessDecisionRead(BaseModel):
     reason: str
     route: str | None
     request_id: str | None
+
+
+# ── LEKA-403: roles of the workspace's own, policies, their history ────────
+
+
+class RoleUpdate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str = Field(min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    base: Literal["member", "admin"]
+    added: list[str] = Field(default_factory=list, description="Permissions it adds to its base.")
+    removed: list[str] = Field(
+        default_factory=list, description="Permissions of its base it takes away."
+    )
+
+
+class RoleRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    key: str
+    name: str
+    description: str | None
+    base: Literal["member", "admin"]
+    added: list[str]
+    removed: list[str]
+    permissions: list[Permission] = Field(
+        description="What it grants: inherited, added, less removed."
+    )
+    holders: int
+
+
+class AssignmentUpdate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    role: str | None = Field(description="A role of the workspace's own; none: their seat's.")
+
+
+class AssignmentRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    user_id: uuid.UUID
+    role: str
+
+
+class PolicyUpdate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str = Field(min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    effect: Literal["deny", "allow"]
+    actions: list[str] = Field(
+        min_length=1, description="Permissions, or agent:run, workflow:run; * for every one."
+    )
+    roles: list[str] = Field(
+        default_factory=list,
+        description="member, admin, owner or a role of the workspace's own; none: everyone.",
+    )
+    resource_types: list[str] = Field(default_factory=list)
+    risk_at_least: Literal["low", "medium", "high"] | None = None
+    kinds: list[str] = Field(default_factory=list)
+    categories: list[str] = Field(default_factory=list)
+    priority: int = Field(default=50, ge=0, le=100)
+    enabled: bool = True
+
+
+class PolicyRead(PolicyUpdate):
+    id: uuid.UUID
+    updated_at: datetime
+
+
+class GovernanceEventRead(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    subject_type: Literal["role", "policy", "assignment"]
+    subject_id: str
+    kind: str
+    by: uuid.UUID | None
+    at: datetime
+    before: dict[str, object] | None
+    after: dict[str, object] | None
+
+
+class EvaluationAsk(BaseModel):
+    """A decision, asked without doing anything: as this role would be
+    answered, under the policies in force."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    role: Literal["member", "admin", "owner"] = "member"
+    custom_role: str | None = None
+    permission: str
+    action: str | None = None
+    resource_type: str | None = None
+    risk: Literal["low", "medium", "high"] | None = None
+    kind: str | None = None
+    category: str | None = None
+
+
+class EvaluationRead(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    allowed: bool
+    rule: str
+    reason: str
+    policy: str | None
+    message: str

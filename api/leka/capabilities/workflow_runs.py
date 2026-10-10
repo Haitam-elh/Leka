@@ -57,7 +57,7 @@ from leka.capabilities.models import (
     WorkflowRunStep,
 )
 from leka.capabilities.registry import find, find_workflow
-from leka.capabilities.runs import execute_run, permissions_of
+from leka.capabilities.runs import capability_resource, execute_run
 from leka.capabilities.runtime import Refusal
 from leka.capabilities.service import AgentRuntime, NotYoursError, RunFinishedError, RunRefusedError
 from leka.capabilities.skills import SkillRuntime
@@ -82,8 +82,14 @@ from leka.db import (
     system_scope,
     workspace_scope,
 )
-from leka.governance import hidden_on_behalf
-from leka.platform import MembershipRepository
+from leka.governance import (
+    Permission,
+    Subject,
+    evaluate,
+    hidden_on_behalf,
+    record,
+    subject_of,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -550,9 +556,11 @@ async def _step(
     step: Step,
     events: Events,
     permissions: frozenset[str],
+    subject: Subject,
 ) -> StepResult:
-    """One step, its attempts — as its capability stands for the person; a
-    skill (LEKA-401), through the skill runtime."""
+    """One step, its attempts — as its capability stands for the person, and
+    as the workspace's policies say of it (LEKA-403); a skill (LEKA-401),
+    through the skill runtime."""
     key = skill_of(step.uses)
     entry: Entry | None = None
     if key is None:
@@ -563,6 +571,29 @@ async def _step(
             why = list(entry.availability.codes) if entry is not None else ["not_found"]
             events.add("step_failed", step.id, error="unavailable", why=why)
             return StepResult("failed", error="unavailable", output={"why": why}, retryable=False)
+        if entry.definition.kind is Kind.AGENT:
+            resource = capability_resource(entry.definition)
+            decided = evaluate(
+                subject, Permission(entry.definition.permission), resource, action="agent:run"
+            )
+            if not decided.allowed:
+                record(
+                    session,
+                    run.workspace_id,
+                    subject.user_id,
+                    subject.role,
+                    decided,
+                    action="agent:run",
+                    resource=resource,
+                    detail={"workflow_run": str(run.id), "step": step.id},
+                )
+                events.add("step_failed", step.id, error="policy_denied", policy=decided.policy)
+                return StepResult(
+                    "failed",
+                    error="policy_denied",
+                    output={"policy": decided.policy},
+                    retryable=False,
+                )
     result = StepResult("failed", error="not_run")
     for attempt in range(1, step.attempts + 1):
         row.status = StepStatus.RUNNING.value
@@ -639,14 +670,12 @@ async def _drive(
     events: Events,
 ) -> dict[str, object]:
     workflow = workflow_of(run)
-    seat = (
-        await MembershipRepository(session, run.workspace_id).get_for_user(run.requested_by)
-        if run.requested_by is not None
-        else None
-    )
-    if seat is None:
+    # Their role now — a role of the workspace's own included — and the
+    # policies in force (LEKA-403).
+    subject = await subject_of(session, run.workspace_id, run.requested_by)
+    if subject is None:
         return await _end(session, run, steps, events, RunStatus.FAILED, error="not_permitted")
-    permissions = permissions_of(seat.role)
+    permissions = frozenset(p.value for p in subject.permissions)
     while True:
         statuses = {k: StepStatus(s.status) for k, s in steps.items()}
         ended = {k: Ended(s.status, codes_of(s)) for k, s in steps.items() if s.status in ENDED}
@@ -671,7 +700,7 @@ async def _drive(
             if await _cancelled(session, run):
                 return {"status": "cancelled"}
             row, step = steps[step_id], workflow.step(step_id)
-            result = await _step(session, run, row, step, events, permissions)
+            result = await _step(session, run, row, step, events, permissions, subject)
             row.status = (
                 StepStatus.SUCCEEDED.value
                 if result.status == "succeeded"

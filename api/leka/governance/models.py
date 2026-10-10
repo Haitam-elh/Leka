@@ -15,10 +15,13 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -79,3 +82,98 @@ class AccessDecision(Base, WorkspaceScopedMixin):
     route: Mapped[str | None] = mapped_column(String(200), nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+class WorkspaceRole(Base, WorkspaceScopedMixin):
+    """A role of the workspace's own (LEKA-403): a base role — member or
+    admin — with the permissions it adds and those it takes away."""
+
+    __tablename__ = "workspace_roles"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "key", name="uq_workspace_roles_key"),
+        UniqueConstraint("workspace_id", "id", name="uq_workspace_roles_workspace_id_id"),
+        CheckConstraint("base IN ('member', 'admin')", name="base"),
+    )
+
+    key: Mapped[str] = mapped_column(String(60), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    base: Mapped[str] = mapped_column(String(10), nullable=False)
+    added: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    removed: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class RoleAssignment(Base, WorkspaceScopedMixin):
+    """A person given a role of the workspace's own (LEKA-403) — on the
+    base role their seat already has."""
+
+    __tablename__ = "role_assignments"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "user_id", name="uq_role_assignments_user"),
+        ForeignKeyConstraint(
+            ["workspace_id", "role_id"],
+            ["workspace_roles.workspace_id", "workspace_roles.id"],
+            ondelete="CASCADE",
+            name="fk_role_assignments_role",
+        ),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    role_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    assigned_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class WorkspacePolicy(Base, WorkspaceScopedMixin):
+    """A rule of the workspace (LEKA-403): for these actions, these roles,
+    these resources — refuse, or allow by exception — at this priority."""
+
+    __tablename__ = "workspace_policies"
+    __table_args__ = (
+        CheckConstraint("effect IN ('deny', 'allow')", name="effect"),
+        CheckConstraint("priority >= 0 AND priority <= 100", name="priority"),
+    )
+
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    effect: Mapped[str] = mapped_column(String(5), nullable=False)
+    actions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    roles: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    # resource_types, risk_at_least, kinds, categories
+    conditions: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, server_default="50")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class GovernanceEvent(Base, WorkspaceScopedMixin):
+    """A change to the workspace's roles or policies (LEKA-403): what, who,
+    when, before and after. Append-only: the database refuses to change one;
+    who did it is forgotten with their account."""
+
+    __tablename__ = "governance_events"
+    __table_args__ = (
+        CheckConstraint("subject_type IN ('role', 'policy', 'assignment')", name="subject_type"),
+        Index("ix_governance_events_workspace_at", "workspace_id", "at"),
+    )
+
+    subject_type: Mapped[str] = mapped_column(String(12), nullable=False)
+    subject_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    # created, updated, deleted, assigned, unassigned
+    kind: Mapped[str] = mapped_column(String(12), nullable=False)
+    by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    before: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    after: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
