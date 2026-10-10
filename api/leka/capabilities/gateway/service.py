@@ -66,6 +66,7 @@ from leka.capabilities.gateway.routing import Needs, Own, Passed, Route, Routing
 from leka.capabilities.gateway.routing import route as route_of
 from leka.capabilities.models import ModelCall, WorkspaceModel
 from leka.connectors import BlockedAddressError, PublicTransport
+from leka.core import breaker
 from leka.core.config import settings
 from leka.governance import current_actor
 from leka.platform import DecryptionError, secret_box
@@ -317,6 +318,13 @@ class Gateway:
         if vendor is None:
             attempts.append(self._attempt(route, 1, "unknown provider"))
             return None
+        # A provider failing for everyone is left alone a while: the next
+        # route answers instead (LEKA-408).
+        circuit = self._circuit(route)
+        if not await breaker.allow(circuit):
+            attempts.append(self._attempt(route, 1, "circuit open"))
+            logger.warning("model_route_skipped", provider=route.endpoint.provider, why="circuit")
+            return None
         call = Call(
             route.endpoint,
             model,
@@ -332,6 +340,9 @@ class Gateway:
                     raise ProviderError("An empty answer.", retryable=True)
             except (ProviderError, httpx.HTTPError) as raised:
                 error = _said(raised)
+                if error.retryable:
+                    # Down, slow, overloaded — the provider's, not the request's.
+                    await breaker.failure(circuit)
                 self._record(request, route, attempt, error=str(error), status="failed")
                 attempts.append(self._attempt(route, attempt, str(error)))
                 logger.warning(
@@ -362,8 +373,16 @@ class Gateway:
                         continue
                     return None
             self._record(request, route, attempt, done=done, status="ok")
+            await breaker.success(circuit)
             return done
         return None
+
+    def _circuit(self, route: Route) -> str:
+        """One breaker per provider and account: LEKA's key is shared by every
+        workspace; a workspace's own, by it alone."""
+        owner = route.endpoint.owner
+        mine = f":{self._workspace_id}" if owner == "workspace" else ""
+        return f"model:{route.endpoint.provider}:{owner}{mine}"
 
     @staticmethod
     def _attempt(route: Route, attempt: int, error: str) -> Attempt:

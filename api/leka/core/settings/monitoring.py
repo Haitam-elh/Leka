@@ -16,12 +16,12 @@ from leka.core.settings._rotation import RotateEvery
 
 
 class MonitoringSettings:
-    """Sentry, and nothing else.
+    """Sentry; LEKA's own metrics and alerts (LEKA-408).
 
-    No metrics backend and no dashboard, deliberately: docs/background.md
-    already says the SQL queries in it are the dashboard, and a second
-    vendor to configure, pay and audit buys nothing on a product with no
-    traffic yet.
+    No metrics backend to run: /api/v1/ops/metrics speaks Prometheus for
+    whatever scrapes it one day, and the alerts are judged by LEKA itself
+    (leka/ops/alerts.py) and sent by email and to Sentry — no second vendor
+    to configure, pay and audit.
 
     THE DSN IS TREATED AS A SECRET even though Sentry's own documentation
     calls it safe to expose. It identifies the project and lets anyone who
@@ -46,7 +46,23 @@ class MonitoringSettings:
     # stated — an error in Sentry names the commit that introduced it.
     release: str | None = None
 
-    @field_validator("sentry_dsn", "release", mode="before")
+    # Who may read /api/v1/ops/metrics: sent as a bearer token. None: nobody
+    # — the metrics are operating data, not for the internet.
+    metrics_token: Annotated[SecretStr | None, RotateEvery(days=365)] = None
+
+    # Where the operational alerts go, comma-separated. None: Sentry and the
+    # log only.
+    ops_alert_emails: str | None = None
+
+    # The API process judges the alerts too (leka/ops/alerts.py), every so
+    # many seconds; 0 turns that loop off (the worker's job still runs).
+    ops_watch_interval_seconds: int = Field(default=300, ge=0)
+
+    # A nightly dump is expected (leka.ops.backup dump --upload): the alerts
+    # say so when the last good one is older than a day and two hours.
+    backup_expected: bool = False
+
+    @field_validator("sentry_dsn", "release", "metrics_token", "ops_alert_emails", mode="before")
     @classmethod
     def _blank_dsn_is_not_configured(cls, value: object) -> object:
         """An empty LEKA_SENTRY_DSN means "off", not a DSN of length zero.

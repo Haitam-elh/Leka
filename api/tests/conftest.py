@@ -236,9 +236,12 @@ async def clear_rate_limits() -> AsyncIterator[None]:
 
     client = redis.from_url(str(settings.redis_url))
     try:
-        keys = [key async for key in client.scan_iter("leka:ratelimit:*")]
-        if keys:
-            await client.delete(*keys)
+        # And the circuit breakers and alert state (LEKA-408): one test's
+        # failing provider is not the next one's.
+        for pattern in ("leka:ratelimit:*", "leka:breaker:*", "leka:ops:*"):
+            keys = [key async for key in client.scan_iter(pattern)]
+            if keys:
+                await client.delete(*keys)
     finally:
         await client.aclose()
 

@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import enqueue_job
 from leka.connectors import BlockedAddressError, PublicTransport
+from leka.core import breaker
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.governance import Target, audit
 from leka.intentions.approval import approvers_of
@@ -662,7 +663,11 @@ class ActionService:
         began = clock.monotonic()
         outcome: Outcome
         response: dict[str, object] | None = None
+        circuit = f"action_endpoint:{endpoint.id}"
         try:
+            if not await breaker.allow(circuit):
+                # Failing for a while: not called now — a person retries it.
+                raise breaker.OpenCircuitError(circuit)
             async with httpx.AsyncClient(
                 transport=transport or PublicTransport(), timeout=TIMEOUT
             ) as client:
@@ -682,13 +687,23 @@ class ActionService:
                 "excerpt": excerpt(answered.content),
                 "duration_ms": int((clock.monotonic() - began) * 1000),
             }
+        except breaker.OpenCircuitError:
+            outcome = Outcome("failed", reason="circuit_open")
         except BlockedAddressError:
             outcome = Outcome("failed", reason="blocked_address")
         except httpx.TimeoutException:
             # It may have acted, or not: a person finds out — never assumed.
             outcome = Outcome("failed", reason="no_answer")
+            await breaker.failure(circuit)
         except httpx.HTTPError as error:
             outcome = Outcome("failed", reason=type(error).__name__)
+            await breaker.failure(circuit)
+        else:
+            # A system that answers 5xx is failing; anything else, it is up.
+            if response is not None and int(str(response["status"])) >= 500:
+                await breaker.failure(circuit)
+            else:
+                await breaker.success(circuit)
         moment = _now(None)
         endpoint.last_called_at = moment
         step.evidence = {
