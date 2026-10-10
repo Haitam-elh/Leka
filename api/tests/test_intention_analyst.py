@@ -32,8 +32,9 @@ from leka.capabilities import Gateway, SkillRuntime, find_skill
 from leka.capabilities.gateway import service
 from leka.capabilities.skills import LEKA
 from leka.core.config import settings
+from leka.intelligence import LIBRARY
 from leka.intentions.analysis import Asked
-from leka.intentions.analyst import PLATFORM, Reading, tools
+from leka.intentions.analyst import ANALYST_SKILLS, PLATFORM, Reading, tools
 from leka.intentions.skills import READS
 from tests.conftest import FakeIdentity
 from tests.test_context_engine import model
@@ -167,17 +168,9 @@ async def test_the_analyst_reads_through_leka_s_tools_and_its_answer_rests_on_wh
     # Told what LEKA is; given its tools — read only — to look for itself.
     assert looking["systemInstruction"]["parts"][0]["text"].startswith(PLATFORM[:40])
     names = {f["name"] for t in looking["tools"] for f in t["functionDeclarations"]}
-    assert names == {
-        "find",
-        "describe",
-        "dependencies",
-        "happened",
-        "incident",
-        "learned",
-        "sources",
-        "insights",
-        "overview",
-    }
+    # LEKA's reads, then its skill library (LEKA-401).
+    assert names == set(ANALYST_SKILLS)
+    assert {"find", "describe", "delivery-metrics", "blast-radius"} <= names
     analysis = await _get(client, f"/{intention['id']}/analysis")
     assert {s["name"]: s["status"] for s in analysis["steps"]}["synthesis"] == "succeeded"
     result = analysis["result"]
@@ -234,6 +227,6 @@ def test_every_tool_the_analyst_is_given_is_one_of_leka_s_reads() -> None:
         cast(AsyncSession, None), uuid.uuid4(), permissions=LEKA, by=None, caller="analyst"
     )
     given = tools(skills, asked, Reading())
-    assert [tool.name for tool in given] == list(READS)
+    assert [tool.name for tool in given] == [*READS, *(s.key for s in LIBRARY)]
     assert {tool.effect for tool in given} == {"read"}
-    assert {find_skill(key).effect for key in READS} == {"read"}  # type: ignore[union-attr]
+    assert {find_skill(t.name).effect for t in given} == {"read"}  # type: ignore[union-attr]

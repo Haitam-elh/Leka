@@ -10,19 +10,19 @@ router ([capability-router.md](capability-router.md)).
 
 ## 1. The agents
 
-| Agent | Key | Reads (`entity_types`) | Needs connected | Tools | Routed by |
-| --- | --- | --- | --- | --- | --- |
-| Analyse d'architecture | `architecture-analysis` | application, service, database, infra resource, business process, team | — | search, read, dependencies | map dependencies, assess impact · dependency |
-| Revue de code | `code-review` | repository, pull request, commit, service, person, team | GitHub, GitLab or Bitbucket | search, read, what happened | investigate, assess impact · change |
-| Revue de sécurité | `security-review` | application, service, infra resource, cloud account, database, data object, repository | — | search, read, dependencies | check compliance, assess impact · compliance |
-| Analyse des tests | `test-analysis` | repository, service, pull request, commit, release, incident | GitHub, GitLab or Bitbucket | search, read, what happened, dependencies | assess impact, investigate · change |
-| Aide au débogage | `debug-assistant` | service, incident, deployment, change, commit, infra resource, database | — | all four | explain cause, investigate · diagnose |
-| Assistant de documentation | `documentation-assistant` | document, knowledge space, service, application, team, person | Confluence, Microsoft 365, Notion, Google Workspace, Guru or Slab | search, read | find knowledge · knowledge |
-| Investigation d'incident | `incident-investigation` | incident, service, deployment, change, release, team, person | — | all four | explain cause, investigate · diagnose |
-| Analyse d'infrastructure | `infrastructure-analysis` | infra resource, cloud account, resource group, environment, service, database | AWS, Azure or GCP | search, read, dependencies | map dependencies, assess impact · dependency |
-| Analyse des données | `data-analysis` | database, schema, data object, application, service, team | a database source | search, read, dependencies | map dependencies, find owner · dependency, ownership |
-| Analyse de release | `release-analysis` | release, deployment, change, commit, pull request, service, incident | GitHub, GitLab or Bitbucket | all four | find change, assess impact · change |
-| Réparation de build | `build-fixer` | repository, commit, pull request, service, change | GitHub, GitLab or Bitbucket | search, read, what happened | investigate, explain cause · diagnose — **a request to act only** |
+| Agent | Key | Reads (`entity_types`) | Needs connected | Tools | Skills (LEKA-401) | Routed by |
+| --- | --- | --- | --- | --- | --- | --- |
+| Analyse d'architecture | `architecture-analysis` | application, service, database, infra resource, business process, team, repository, business capability, person | — | search, read, dependencies | `blast-radius` | map dependencies, assess impact · dependency |
+| Revue de code | `code-review` | repository, pull request, commit, service, person, team, change, deployment, release, application, incident, business capability, business process | GitHub, GitLab or Bitbucket | search, read, what happened | `change-review`, `repository-profile` | investigate, assess impact · change |
+| Revue de sécurité | `security-review` | application, service, infra resource, cloud account, database, data object, repository, team | — | search, read, dependencies | `security-posture` | check compliance, assess impact · compliance |
+| Analyse des tests | `test-analysis` | repository, service, pull request, commit, release, incident, application, database, infra resource, business capability, business process | GitHub, GitLab or Bitbucket | search, read, what happened, dependencies | `test-scope` | assess impact, investigate · change |
+| Aide au débogage | `debug-assistant` | service, incident, deployment, change, commit, infra resource, database, application, team, person | — | all four | `incident-history` | explain cause, investigate · diagnose |
+| Assistant de documentation | `documentation-assistant` | document, knowledge space, service, application, team, person, repository, database, business capability, business process | Confluence, Microsoft 365, Notion, Google Workspace, Guru or Slab | search, read | `documentation-coverage` | find knowledge · knowledge |
+| Investigation d'incident | `incident-investigation` | incident, service, deployment, change, release, team, person, application, database, infra resource, repository, business capability, business process | — | all four | `incident-history`, `blast-radius` | explain cause, investigate · diagnose |
+| Analyse d'infrastructure | `infrastructure-analysis` | infra resource, cloud account, resource group, environment, service, database, application, team | AWS, Azure or GCP | search, read, dependencies | `infrastructure-inventory` | map dependencies, assess impact · dependency |
+| Analyse des données | `data-analysis` | database, schema, data object, application, service, team, infra resource | a database source | search, read, dependencies | `data-landscape` | map dependencies, find owner · dependency, ownership |
+| Analyse de release | `release-analysis` | release, deployment, change, commit, pull request, service, incident, application, repository, business capability, business process | GitHub, GitLab or Bitbucket | all four | `delivery-metrics`, `change-review` | find change, assess impact · change |
+| Réparation de build | `build-fixer` | repository, commit, pull request, service, change | GitHub, GitLab or Bitbucket | search, read, what happened | — | investigate, explain cause · diagnose — **a request to act only** |
 
 Beside them, the application architect (`application-architecture`, the
 deck, LEKA-393) and three drafts kept from LEKA-329.
@@ -31,8 +31,10 @@ deck, LEKA-393) and three drafts kept from LEKA-329.
 
 Every agent of the library:
 
-- **is the runtime's** — an agent (`kind: agent`), version 1.0.0, run by a
-  model through the gateway, its instructions after the runtime's rules;
+- **is the runtime's** — an agent (`kind: agent`), run by a model through the
+  gateway, its instructions after the runtime's rules; version 1.1.0 since
+  it was given the skills of its domain (LEKA-401), 1.0.0 for the build
+  fixer;
 - **reads only what it is about** — its context, injected by the runtime
   (LEKA-395), holds only things of its `entity_types`; its tools read only
   them;
@@ -62,6 +64,17 @@ The runtime's four read-only tools ([agent-runtime.md](agent-runtime.md)
   releases, merges around a thing over the last 1 to 30 days, the latest
   first.
 
+**And the skills of their domain** (LEKA-401, [skills.md](skills.md) §§ 9
+and 10), each named in the file (`skills:`, the table above): an assessment
+an expert would make — the delivery metrics of a service, its incident
+history, the blast radius of a failure, what to test, a change reviewed, a
+repository profiled, the security posture, the documentation coverage, the
+infrastructure inventory, the data landscape. Offered under its key, beside
+the tools, only when it reads nothing beyond the agent's `entity_types`
+(theirs grew to cover them); each call kept as a tool step of the run and as
+a skill run about it. Each says what it concluded as signals, which the
+agent weighs and cites.
+
 ## 4. Their limits
 
 Said in each file, and to whoever reads what they deliver:
@@ -76,13 +89,18 @@ Said in each file, and to whoever reads what they deliver:
 
 ## 5. Validated
 
-`tests/test_agent_library.py`: every agent to the contract above; six
-realistic requests routed to the right one; a question about a broken build
-never to the fixer. `tests/test_agent_library_api.py`, on Acme's model: an
-incident routed to the investigator and investigated — what depends on
-Billing API, what happened around it — its post-mortem delivered, every step
-kept; an architecture read through its dependencies, a thing it is not about
-refused; the documentation assistant offered only the two tools it declares.
+`tests/test_agent_library.py`: every agent to the contract above — and,
+but the build fixer, offered every skill it names, none withheld (LEKA-401);
+six realistic requests routed to the right one; a question about a broken
+build never to the fixer. `tests/test_agent_library_api.py`, on Acme's
+model: an incident routed to the investigator and investigated — what
+depends on Billing API, what happened around it — its post-mortem
+delivered, every step kept; an architecture read through its dependencies;
+a thing the debugging agent is not about refused; the documentation
+assistant offered only the two tools it declares, and its skill.
+`tests/test_skill_library_api.py`: the investigator calling
+`incident-history` and `blast-radius` on Acme's operations, each call kept
+about its run.
 
 ## Not yet
 

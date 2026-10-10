@@ -91,6 +91,7 @@ def agent_definition(agent: Agent, lifecycle: Lifecycle) -> Definition:
         instructions=agent.body,
         path=agent.path,
         tools=head.tools,
+        skills=head.skills,
     )
 
 
@@ -114,6 +115,11 @@ def agents(agents_dir: Path) -> list[Definition]:
         unknown = set(agent.front_matter.tools) - TOOL_NAMES
         if unknown:
             msg = f"{relative}: no tool {sorted(unknown)} — {sorted(TOOL_NAMES)}"
+            raise AgentLoadError(msg)
+        # A skill is offered under its key: one named as a tool would hide it.
+        clash = set(agent.front_matter.skills) & TOOL_NAMES
+        if clash:
+            msg = f"{relative}: {sorted(clash)} is a tool, not a skill"
             raise AgentLoadError(msg)
         found.append(agent_definition(agent, lifecycle))
     return found

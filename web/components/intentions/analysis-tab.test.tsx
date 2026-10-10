@@ -559,6 +559,28 @@ describe("what LEKA read to answer (LEKA-396)", () => {
     expect(reads[3]).toHaveTextContent("Fiche · Billing API3 élément(s) lu(s)");
   });
 
+  it("names a skill of the library as it read (LEKA-401)", async () => {
+    skillApi.runs.mockResolvedValue([
+      read("delivery-metrics", 200, {
+        inputs: { id: `entity:${BILLING}` },
+        output: {
+          of: "Billing API",
+          environment: "production",
+          since: "2026-09-10T12:00:00Z",
+          change_failure_rate: 1,
+        },
+        cited: 2,
+      }),
+    ]);
+    show();
+    const [delivery] = within(await screen.findByTestId("analysis-reads")).getAllByTestId(
+      "analysis-read",
+    );
+    expect(delivery).toHaveTextContent("Indicateurs de livraison · Billing API · production");
+    expect(delivery).toHaveTextContent("depuis le 10 sept.");
+    expect(delivery).toHaveTextContent("2 élément(s) lu(s)");
+  });
+
   it("is not shown when LEKA read nothing: the rules alone answered", async () => {
     show();
     await screen.findByTestId("intention-analysis");

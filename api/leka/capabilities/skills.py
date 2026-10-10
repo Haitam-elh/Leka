@@ -49,7 +49,7 @@ import uuid
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -60,6 +60,7 @@ from leka.capabilities.definition import (
     CATEGORIES,
     KEY,
     RUNNABLE,
+    Definition,
     DefinitionError,
     Lifecycle,
     semver,
@@ -67,9 +68,14 @@ from leka.capabilities.definition import (
 from leka.capabilities.gateway import plain_schema
 from leka.capabilities.llm import RuntimeTool
 from leka.capabilities.models import SkillRun
+from leka.capabilities.repository import WorkspaceCatalogueRepository
+from leka.capabilities.runtime import AgentTool, Withheld
 from leka.capabilities.schemas import SkillRead, SkillRunError, SkillRunRead, SkillVersionRead
+from leka.capabilities.tools import Answer
+from leka.connectors import SourceKind
 from leka.db import session_factory, workspace_scope
 from leka.governance import ROLE_PERMISSIONS, Permission
+from leka.knowledge import EntityType
 from leka.platform import MembershipRepository, Role
 
 logger = structlog.get_logger(__name__)
@@ -78,6 +84,8 @@ logger = structlog.get_logger(__name__)
 # action is a person's decision (LEKA-390).
 EFFECTS = ("read",)
 PERMISSIONS = frozenset(p.value for p in Permission)
+ENTITY_TYPES = frozenset(t.value for t in EntityType)
+SOURCE_KINDS = frozenset(k.value for k in SourceKind)
 # A tool's name, for every provider: 64 characters at most.
 LONGEST_KEY = 64
 # Seconds a skill may take, at most.
@@ -89,6 +97,11 @@ OUTPUT_KEPT = 50_000
 # What any member may do: what LEKA itself reads with, for no one in
 # particular — an intention its sources raised.
 LEKA = frozenset(p.value for p in ROLE_PERMISSIONS[Role.MEMBER])
+
+
+def clock() -> datetime:
+    """Now, as a skill reads it — what a test stands in for."""
+    return datetime.now(UTC)
 
 
 class SkillError(ValueError):
@@ -136,6 +149,26 @@ class Citing(BaseModel):
     cited: list[Cited] = Field(default_factory=list)
 
 
+class Signal(BaseModel):
+    """Something a skill concluded, by its code — what a workflow's condition
+    reads (`found`, LEKA-397), what an agent weighs: how much it matters,
+    said in a sentence, with the values it rests on."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: str = Field(description="domain.signal, e.g. delivery.high_failure_rate.")
+    level: Literal["info", "warning", "critical"]
+    text: str
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+class Assessed(Citing):
+    """What an analysing skill gives: what it read, citable, and what it
+    concluded, as signals."""
+
+    signals: list[Signal] = Field(default_factory=list)
+
+
 # ── a skill ──────────────────────────────────────────────────────────────────
 
 
@@ -172,8 +205,14 @@ class Skill:
     lifecycle: Lifecycle = Lifecycle.ACTIVE
     timeout: float = 20.0
     origin: str = "internal"
-    # What it cannot do, what it needs to be of use (a source connected…).
+    # What it cannot do, what it needs to be of use.
     limitations: tuple[str, ...] = ()
+    # The kinds of things it reads (LEKA-401): an agent is offered it only
+    # when it may read all of them. None said: it reads anything.
+    reads: tuple[str, ...] = ()
+    # What must be connected for it to be of use: one source kind of each
+    # group (`("github", "gitlab", "bitbucket")`). Checked when it runs.
+    sources: tuple[tuple[str, ...], ...] = ()
 
     def contract(self) -> dict[str, Any]:
         """What it takes and what it gives, as JSON schemas."""
@@ -195,6 +234,12 @@ class Skill:
             "origin": self.origin,
             "limitations": list(self.limitations),
         }
+        # Added with the library (LEKA-401): none said, nothing new — what
+        # was registered before stays what it is.
+        if self.reads:
+            said["reads"] = list(self.reads)
+        if self.sources:
+            said["sources"] = [list(group) for group in self.sources]
         canonical = json.dumps(said, sort_keys=True, ensure_ascii=False, default=str)
         return hashlib.sha256(canonical.encode()).hexdigest()
 
@@ -241,6 +286,12 @@ def checked(skill: Skill) -> Skill:
         problems.append(f"unknown permission {skill.permission!r}")
     if not 0 < skill.timeout <= MOST_TIME:
         problems.append(f"timeout: more than 0, {MOST_TIME:g} s at most")
+    unknown_types = sorted(set(skill.reads) - ENTITY_TYPES)
+    if unknown_types:
+        problems.append(f"reads unknown kinds {unknown_types}")
+    for group in skill.sources:
+        if not group or set(group) - SOURCE_KINDS:
+            problems.append(f"sources {list(group)}: kinds of source LEKA connects")
     # What it is said to take and give, as it may come: anything.
     sides: tuple[tuple[str, object], ...] = (("input", skill.input), ("output", skill.output))
     for side, model in sides:
@@ -322,6 +373,16 @@ def skill_versions(key: str) -> list[Skill]:
     return REGISTRY.versions(key)
 
 
+async def connected_sources(session: AsyncSession, workspace_id: uuid.UUID) -> frozenset[str]:
+    """The kinds of source a workspace reads from, as the catalogue says."""
+    return frozenset(await WorkspaceCatalogueRepository(session, workspace_id).connected())
+
+
+def missing_sources(skill: Skill, connected: Collection[str]) -> list[tuple[str, ...]]:
+    """Each group of its prerequisites none of which is connected."""
+    return [group for group in skill.sources if not set(group) & set(connected)]
+
+
 async def permitted(
     session: AsyncSession, workspace_id: uuid.UUID, user_id: uuid.UUID | None
 ) -> frozenset[str]:
@@ -341,6 +402,7 @@ MESSAGES = {
     "not_found": "No such skill, or no such version.",
     "not_runnable": "This version does not run: it is {lifecycle}.",
     "not_permitted": "Running it takes the permission {permission}.",
+    "unavailable": "It needs a source connected: {missing}.",
     "invalid_input": "What it was given is not what it takes.",
     "invalid_output": "It gave something other than what it promised.",
     "timed_out": "No answer in {timeout:g} s.",
@@ -371,6 +433,11 @@ class SkillOutcome:
     @property
     def cited(self) -> tuple[Cited, ...]:
         found = getattr(self.output, "cited", None) if self.ok else None
+        return tuple(found or ())
+
+    @property
+    def signals(self) -> tuple[Signal, ...]:
+        found = getattr(self.output, "signals", None) if self.ok else None
         return tuple(found or ())
 
     def said(self) -> dict[str, Any]:
@@ -430,6 +497,13 @@ class SkillRuntime:
         self._now = now
         self._registry = registry
         self._kept: dict[uuid.UUID, SkillRun] = {}
+        self._connected: frozenset[str] | None = None
+
+    async def connected(self) -> frozenset[str]:
+        """The kinds of source the workspace reads from — read once."""
+        if self._connected is None:
+            self._connected = await connected_sources(self._session, self._workspace_id)
+        return self._connected
 
     def kept(self, run_id: uuid.UUID) -> SkillRun | None:
         """A run this runtime kept, as it is kept."""
@@ -479,6 +553,21 @@ class SkillRuntime:
             return said("refused", "not_runnable", lifecycle=skill.lifecycle.value)
         if skill.permission not in self._permissions:
             return said("refused", "not_permitted", permission=skill.permission)
+        missing = missing_sources(skill, await self.connected()) if skill.sources else []
+        if missing:
+            return said(
+                "refused",
+                "unavailable",
+                missing="; ".join(" or ".join(group) for group in missing),
+                errors=tuple(
+                    {
+                        "field": "sources",
+                        "code": "missing_source",
+                        "message": f"one of {', '.join(group)}",
+                    }
+                    for group in missing
+                ),
+            )
         try:
             value = skill.input.model_validate(given)
         except ValidationError as error:
@@ -519,7 +608,7 @@ class SkillRuntime:
                         Call(
                             self._workspace_id,
                             session,
-                            self._now or datetime.now(UTC),
+                            self._now or clock(),
                             self._by,
                             self._caller,
                         ),
@@ -628,9 +717,13 @@ async def skill_runs(
 # ── as they are read ─────────────────────────────────────────────────────────
 
 
-def skill_read(skill: Skill, permissions: Collection[str]) -> SkillRead:
-    """A skill as a person reads it — whether they may run it."""
+def skill_read(
+    skill: Skill, permissions: Collection[str], connected: Collection[str] = ()
+) -> SkillRead:
+    """A skill as a person reads it — whether they may run it here: their
+    permission, its lifecycle, its prerequisites connected."""
     contract = skill.contract()
+    missing = missing_sources(skill, connected)
     return SkillRead(
         key=skill.key,
         version=skill.version,
@@ -639,11 +732,14 @@ def skill_read(skill: Skill, permissions: Collection[str]) -> SkillRead:
         category=skill.category,
         effect=skill.effect,
         permission=skill.permission,
-        usable=skill.permission in permissions and skill.lifecycle in RUNNABLE,
+        usable=skill.permission in permissions and skill.lifecycle in RUNNABLE and not missing,
         lifecycle=skill.lifecycle.value,
         timeout=skill.timeout,
         origin=skill.origin,
         limitations=list(skill.limitations),
+        reads=list(skill.reads),
+        sources=[list(group) for group in skill.sources],
+        missing_sources=[list(group) for group in missing],
         fingerprint=skill.fingerprint(),
         input_schema=contract["input"],
         output_schema=contract["output"],
@@ -684,3 +780,56 @@ def run_read(
         latency_ms=run.latency_ms,
         at=run.at,
     )
+
+
+# ── to an agent (LEKA-401) ───────────────────────────────────────────────────
+
+
+def agent_skill_tools(
+    definition: Definition, registry: SkillRegistry = REGISTRY
+) -> tuple[list[AgentTool], list[Withheld]]:
+    """The skills an agent names, as tools it may be offered — each under
+    its key, needing its permission. One LEKA does not have, or that reads a
+    kind of thing the agent may not (or anything at all), is withheld, said
+    why: an agent reads only what its front matter says it is about."""
+    given: list[AgentTool] = []
+    kept: list[Withheld] = []
+    mine = set(definition.entity_types)
+    for key in definition.skills:
+        skill = registry.find(key)
+        if skill is None or skill.lifecycle not in RUNNABLE:
+            kept.append(Withheld(key, "unknown"))
+        elif not skill.reads or not set(skill.reads) <= mine:
+            kept.append(Withheld(key, "out_of_scope"))
+        else:
+            given.append(
+                AgentTool(
+                    name=skill.key,
+                    description=skill.summary,
+                    parameters=tool_schema(skill.input),
+                    permission=skill.permission,
+                    effect="read",
+                )
+            )
+    return given, kept
+
+
+def skill_handlers(
+    runtime: SkillRuntime, keys: Sequence[str]
+) -> dict[str, Callable[[Mapping[str, Any]], Awaitable[Answer]]]:
+    """Each skill, as an agent's tool calls it: through the runtime —
+    checked, kept — answering as a tool does."""
+
+    def bind(key: str) -> Callable[[Mapping[str, Any]], Awaitable[Answer]]:
+        async def call(arguments: Mapping[str, Any]) -> Answer:
+            outcome = await runtime.run(key, arguments)
+            said = json.dumps(outcome.said(), ensure_ascii=False, default=str)
+            if outcome.ok:
+                return Answer(said, "ok")
+            return Answer(
+                said, "refused" if outcome.status == "refused" else "failed", outcome.reason
+            )
+
+        return call
+
+    return {key: bind(key) for key in keys}

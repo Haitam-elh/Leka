@@ -639,6 +639,15 @@ role now), the database holding it read only, and kept about the intention
 | `insights` | what LEKA already concluded and is still open |
 | `overview` | what the model holds: how many of each kind, the environments, its last build |
 
+And the skill library (LEKA-401, [skills.md](skills.md) § 9): the
+assessments an expert of each domain would make — `delivery-metrics`,
+`incident-history`, `blast-radius`, `test-scope`, `change-review`,
+`repository-profile`, `security-posture`, `documentation-coverage`,
+`infrastructure-inventory`, `data-landscape`. It is told to use the skill
+that computes an assessment rather than reads put together, and to rest on
+the signals it gives. The question's environment is filled in when the model
+leaves it out.
+
 It is told what LEKA is (things, events, relationships, sources, stated or
 inferred, a state measured only when monitoring is connected) and how to
 answer: the answer first, plainly, then names, versions, counts, dates in

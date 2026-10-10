@@ -94,12 +94,26 @@ class AgentFrontMatter(BaseModel):
         default=(),
         description="The tools it may be offered (LEKA-400); every read-only one when none",
     )
+    skills: tuple[str, ...] = Field(
+        default=(),
+        description="The skills it may be offered (LEKA-401): none unless named, each within "
+        "the kinds of things it may read",
+    )
 
     @field_validator("name")
     @classmethod
     def _kebab_case(cls, value: str) -> str:
         if not NAME_PATTERN.match(value):
             msg = f"name must be kebab-case, got {value!r}"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("skills")
+    @classmethod
+    def _skill_keys(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        wrong = [key for key in value if not NAME_PATTERN.match(key)]
+        if wrong:
+            msg = f"a skill is named in kebab-case, got {wrong}"
             raise ValueError(msg)
         return value
 
@@ -881,6 +895,13 @@ class SkillRead(BaseModel):
     timeout: float
     origin: str
     limitations: list[str]
+    reads: list[str] = Field(description="The kinds of things it reads; none: anything.")
+    sources: list[list[str]] = Field(
+        description="What must be connected: one source kind of each group."
+    )
+    missing_sources: list[list[str]] = Field(
+        description="The groups of which nothing is connected here."
+    )
     fingerprint: str
     input_schema: dict[str, JsonValue]
     output_schema: dict[str, JsonValue]

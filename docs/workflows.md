@@ -29,7 +29,8 @@ inputs:                              # what it takes, as a capability's contract
   - {name: deck, type: boolean, required: false}
 steps:
   - id: incidents                    # a word, unique in the workflow
-    uses: incidents                  # a capability: LEKA's own rules, or an agent
+    uses: incidents                  # a capability: LEKA's own rules, or an agent —
+                                     # or a skill: skill:<key> (LEKA-401)
     retry: {attempts: 2}             # 1 to 3 — a retryable failure tried again
   - id: changes
     uses: changes
@@ -176,6 +177,14 @@ intention (LEKA-398), it is offered there, for that intention.
 | --- | --- |
 | `incident-review` | incidents (2 attempts) → changes, when nothing explains it → ownership → documentation (its failure does not stop it) |
 | `architecture-dossier` | standing → dependencies, documentation → the architect's deck, when asked (`deck`) and there is documentation |
+| `release-readiness` | the skills `delivery-metrics`, `incident-history` (30 days), `blast-radius` (its failure does not stop it) → the `release-analysis` agent, only when delivery or incidents sound an alarm (LEKA-401) |
+
+**A step that uses a skill** (`uses: skill:<key>`, LEKA-401,
+[skills.md](skills.md) § 11): given only what the skill takes, checked when
+the workflow loads; run through the skill runtime with the permissions of
+whoever asked; what it concluded — its signals — becomes the step's codes,
+which a later step's condition reads (`found`); a refusal is not retried, a
+timeout or an error is.
 
 ## Not yet
 
