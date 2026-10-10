@@ -54,6 +54,7 @@ from leka.capabilities import (
     Task,
     Tier,
 )
+from leka.intelligence import LIBRARY
 from leka.intentions.analysis import Answer, Asked, Evidence, Point, Result, SourceRef
 from leka.intentions.skills import READS
 from leka.intentions.writing import Written, known_ids, material
@@ -94,7 +95,11 @@ senior engineer who knows their systems:
 2. Read what answers it with your tools — what changed, what happened, what \
 depends on what, who owns what, what LEKA already concluded. Start from \
 what you are given (what LEKA's rules already found, the context); fetch \
-what is missing. A few precise calls, not every tool.
+what is missing. A few precise calls, not every tool. When the question \
+asks for an assessment — how a team ships, what a failure would reach, \
+what to test, what is exposed, what is documented, a change reviewed — \
+the skill that computes it answers better than reads put together: use it, \
+and rest on the signals it gives.
 3. Cross-check: a deployment just before an incident on the same thing is a \
 probable cause, not a proven one.
 4. Answer.
@@ -156,17 +161,29 @@ class Reading:
             self.read.setdefault(item.id, evidence_of(item))
 
 
+LIBRARY_KEYS = tuple(skill.key for skill in LIBRARY)
+# What it may call: LEKA's reads, then its skill library (LEKA-401) — the
+# assessments an expert of each domain would make.
+ANALYST_SKILLS = (*READS, *LIBRARY_KEYS)
+
+
 def tools(skills: SkillRuntime, asked: Asked, reading: Reading) -> list[RuntimeTool]:
-    """LEKA's reads (skills.py), as the model may call them — each run
-    through the skill runtime: checked, read only, kept. What the question
-    already says, the model may leave out: its period, its environment."""
+    """LEKA's reads and its library (skills.py, intelligence/library.py), as
+    the model may call them — each run through the skill runtime: checked,
+    read only, kept. What the question already says, the model may leave
+    out: its period, its environment."""
     period: dict[str, object] = {"since": asked.since, "until": asked.until}
+    where: dict[str, object] = {"environment": asked.environment}
     fills: dict[str, dict[str, object]] = {
         "happened": period,
         "learned": period,
-        "dependencies": {"environment": asked.environment},
+        "dependencies": where,
+        "delivery-metrics": where,
+        "test-scope": where,
+        "security-posture": where,
+        "infrastructure-inventory": where,
     }
-    return [skills.tool(key, fill=fills.get(key), cited=reading.keep) for key in READS]
+    return [skills.tool(key, fill=fills.get(key), cited=reading.keep) for key in ANALYST_SKILLS]
 
 
 # ── what it is given, what it gives back ─────────────────────────────────────
