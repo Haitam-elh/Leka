@@ -23,8 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.capabilities import ModelCall
-from leka.capabilities.gateway import leka_cost
+from leka.capabilities import ModelCall, leka_cost
 from leka.core.config import settings
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.governance import allowance, credits_of, next_month
