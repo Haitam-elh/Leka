@@ -431,7 +431,16 @@ async def _run(
     except ToolRoundsError:
         return await _fail(session, run, "tool_rounds")
     except NoModelError as error:
-        return await _fail(session, run, "no_model", said=str(error), tried=len(error.attempts))
+        # Why, an AI control's own included: refused, limited, blocked
+        # (LEKA-406).
+        return await _fail(
+            session,
+            run,
+            "no_model",
+            said=str(error),
+            tried=len(error.attempts),
+            reason=error.reason,
+        )
     except TimeoutError:
         return await _fail(session, run, "timeout", seconds=budget)
 

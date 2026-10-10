@@ -18,6 +18,7 @@ from typing import Annotated, Any
 from fastapi import Depends, HTTPException, Request, status
 
 from leka.db import DatabaseSession, hidden_entities, workspace_scope
+from leka.governance.ai import Actor, acting
 from leka.governance.policies import standing
 from leka.governance.policy import Subject, evaluate
 from leka.governance.repository import AuditRepository
@@ -120,7 +121,8 @@ async def get_current_principal(
             policies=held.policies,
         )
         hidden = await hidden_for(session, workspace_id, principal.permissions)
-        with hidden_entities(hidden):
+        # What the request has models do is done for them (LEKA-406).
+        with hidden_entities(hidden), acting(Actor.of(Subject.of(principal))):
             yield principal
 
 

@@ -543,6 +543,9 @@ class ModelCallRead(BaseModel):
     tokens_cached: int = 0
     cost_usd: float | None
     latency_ms: int
+    # Whom it was asked for (LEKA-406); none: LEKA's own work.
+    user_id: uuid.UUID | None = None
+    run_id: uuid.UUID | None = None
 
 
 class LLMRunRead(BaseModel):
@@ -599,7 +602,9 @@ class ModelUsageRead(BaseModel):
 
 # ── agent runs (LEKA-395) ───────────────────────────────────────────────────
 
-RunStatusWord = Literal["queued", "running", "succeeded", "failed", "cancelled"]
+RunStatusWord = Literal[
+    "awaiting_approval", "queued", "running", "succeeded", "failed", "cancelled"
+]
 
 
 class AgentRunCreate(BaseModel):
@@ -619,6 +624,14 @@ class AgentRunCreate(BaseModel):
         default=None,
         description="A context to read; none: assembled from what it is given.",
     )
+
+
+class AgentRunDecision(BaseModel):
+    """A held run approved or rejected (LEKA-406) — why, if said."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    note: str | None = Field(default=None, max_length=500)
 
 
 class AgentRunRead(BaseModel):

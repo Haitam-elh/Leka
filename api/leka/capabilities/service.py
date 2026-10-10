@@ -1,6 +1,7 @@
 """What the API calls: agents run for one workspace (LEKA-395) — asked,
-read, cancelled; how a run runs is runs.py, what a run is, runtime.py — and
-intentions routed to a capability (LEKA-398), how router.py decides.
+read, cancelled; held for approval, approved, rejected (LEKA-406); how a
+run runs is runs.py, what a run is, runtime.py — and intentions routed to a
+capability (LEKA-398), how router.py decides.
 """
 
 from __future__ import annotations
@@ -37,8 +38,17 @@ class RunFinishedError(Exception):
     """A run that ended cannot be cancelled."""
 
 
+class NotAwaitingError(Exception):
+    """Only a run waiting for approval is approved or rejected (LEKA-406)."""
+
+
+class OwnRunError(Exception):
+    """Who asked a run does not approve it (LEKA-406)."""
+
+
 class AgentRuntime:
-    """Agents run for one workspace: asked, read, cancelled."""
+    """Agents run for one workspace: asked, read, cancelled — and, when an
+    approval control holds one (LEKA-406), approved or rejected."""
 
     def __init__(
         self,
@@ -61,10 +71,13 @@ class AgentRuntime:
         permissions: frozenset[str],
         intention_id: uuid.UUID | None = None,
         context_id: uuid.UUID | None = None,
+        held_by: str | None = None,
         now: datetime | None = None,
     ) -> AgentRun:
         """Kept queued — RunRefusedError when it cannot run here, by this
-        person, with this. The caller commits, then queues it (queue_run)."""
+        person, with this. The caller commits, then queues it (queue_run).
+        Held by an approval control (`held_by`, its name — LEKA-406), it
+        waits instead: approve() queues it."""
         entry = await self._catalogue.entry(key, permissions=permissions, user_id=by)
         refused = refusal_of(entry, inputs)
         if refused is not None:
@@ -82,19 +95,25 @@ class AgentRuntime:
             id=uuid.uuid4(),
             key=definition.key,
             version=definition.version,
-            status=RunStatus.QUEUED.value,
+            status=(RunStatus.AWAITING_APPROVAL if held_by else RunStatus.QUEUED).value,
             inputs=dict(inputs),
             requested_by=by,
             intention_id=intention_id,
             context_id=context_id,
             format=format_,
-            detail={"pending": list(pending)} if pending else {},
+            detail={
+                **({"pending": list(pending)} if pending else {}),
+                **({"held_by": held_by} if held_by else {}),
+            },
             tool_calls=0,
             queued_at=moment,
         )
         self._runs.add(run)
         await self._session.flush()
-        Steps(self._session, run, 0).add("queued", by=str(by))
+        if held_by:
+            Steps(self._session, run, 0).add("held", by=str(by), control=held_by)
+        else:
+            Steps(self._session, run, 0).add("queued", by=str(by))
         await self._session.flush()
         return run
 
@@ -123,7 +142,11 @@ class AgentRuntime:
             return None
         if run.requested_by != by and not anyones:
             raise NotYoursError
-        if RunStatus(run.status) not in (RunStatus.QUEUED, RunStatus.RUNNING):
+        if RunStatus(run.status) not in (
+            RunStatus.AWAITING_APPROVAL,
+            RunStatus.QUEUED,
+            RunStatus.RUNNING,
+        ):
             raise RunFinishedError
         moment = now_or(now)
         run.status = RunStatus.CANCELLED.value
@@ -131,6 +154,39 @@ class AgentRuntime:
         run.error = None
         run.detail = {**run.detail, "cancelled_by": str(by)}
         Steps(self._session, run, await self._runs.last_seq(run.id)).add("cancelled", by=str(by))
+        await self._session.flush()
+        return run
+
+    async def decide(
+        self,
+        run_id: uuid.UUID,
+        *,
+        by: uuid.UUID,
+        approve: bool,
+        note: str | None = None,
+        now: datetime | None = None,
+    ) -> AgentRun | None:
+        """A held run approved — queued: the caller commits, then queues it
+        (queue_run) — or rejected: cancelled, never run. Never by who asked it
+        (OwnRunError); only one waiting (NotAwaitingError)."""
+        run = await self._runs.run(run_id, lock=True)
+        if run is None:
+            return None
+        if RunStatus(run.status) is not RunStatus.AWAITING_APPROVAL:
+            raise NotAwaitingError
+        if run.requested_by == by:
+            raise OwnRunError
+        said = {"by": str(by), **({"note": note} if note else {})}
+        steps = Steps(self._session, run, await self._runs.last_seq(run.id))
+        if approve:
+            run.status = RunStatus.QUEUED.value
+            run.detail = {**run.detail, "approved_by": str(by)}
+            steps.add("approved", **said)
+        else:
+            run.status = RunStatus.CANCELLED.value
+            run.finished_at = now_or(now)
+            run.detail = {**run.detail, "rejected_by": str(by)}
+            steps.add("rejected", **said)
         await self._session.flush()
         return run
 

@@ -83,10 +83,14 @@ from leka.db import (
     workspace_scope,
 )
 from leka.governance import (
+    AIControlService,
     Permission,
     Subject,
+    ai_event,
+    current_actor,
     evaluate,
     hidden_on_behalf,
+    holding,
     record,
     subject_of,
 )
@@ -592,6 +596,32 @@ async def _step(
                     "failed",
                     error="policy_denied",
                     output={"policy": decided.policy},
+                    retryable=False,
+                )
+            # A workflow does not wait for approval: an agent an approval
+            # control holds does not run in one (LEKA-406).
+            held = holding(
+                await AIControlService(session, run.workspace_id).active(),
+                entry.definition.key,
+                entry.definition.risk,
+                current_actor(),
+            )
+            if held is not None:
+                ai_event(
+                    session,
+                    run.workspace_id,
+                    held,
+                    "held",
+                    actor=current_actor(),
+                    purpose=f"agent:{entry.definition.key}",
+                    ref=entry.definition.key,
+                    detail={"workflow_run": str(run.id), "step": step.id},
+                )
+                events.add("step_failed", step.id, error="approval_required", control=held.name)
+                return StepResult(
+                    "failed",
+                    error="approval_required",
+                    output={"control": held.name},
                     retryable=False,
                 )
     result = StepResult("failed", error="not_run")

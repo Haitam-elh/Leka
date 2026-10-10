@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.governance.models import (
     AccessDecision,
+    AIControl,
+    AIControlEvent,
     EntityRestriction,
     GovernanceEvent,
     RoleAssignment,
@@ -201,4 +203,55 @@ class PolicyRepository:
         )
         if subject_type is not None:
             query = query.where(GovernanceEvent.subject_type == subject_type)
+        return (await self._session.scalars(query)).all()
+
+
+class AIControlRepository:
+    """One workspace's AI controls, and what they did (LEKA-406)."""
+
+    def __init__(self, session: AsyncSession, workspace_id: uuid.UUID) -> None:
+        self._session = session
+        self._workspace_id = workspace_id
+
+    def add(self, row: AIControl | AIControlEvent) -> None:
+        self._session.add(row)
+
+    async def remove(self, row: AIControl) -> None:
+        await self._session.delete(row)
+
+    async def controls(self, *, enabled_only: bool = False) -> Sequence[AIControl]:
+        query = (
+            select(AIControl)
+            .where(AIControl.workspace_id == self._workspace_id)
+            .order_by(AIControl.kind, AIControl.name, AIControl.id)
+        )
+        if enabled_only:
+            query = query.where(AIControl.enabled.is_(True))
+        return (await self._session.scalars(query)).all()
+
+    async def control(self, control_id: uuid.UUID) -> AIControl | None:
+        found: AIControl | None = await self._session.scalar(
+            select(AIControl).where(
+                AIControl.workspace_id == self._workspace_id, AIControl.id == control_id
+            )
+        )
+        return found
+
+    async def events(
+        self,
+        *,
+        outcome: str | None = None,
+        run_id: uuid.UUID | None = None,
+        limit: int = 100,
+    ) -> Sequence[AIControlEvent]:
+        query = (
+            select(AIControlEvent)
+            .where(AIControlEvent.workspace_id == self._workspace_id)
+            .order_by(AIControlEvent.at.desc(), AIControlEvent.id)
+            .limit(limit)
+        )
+        if outcome is not None:
+            query = query.where(AIControlEvent.outcome == outcome)
+        if run_id is not None:
+            query = query.where(AIControlEvent.run_id == run_id)
         return (await self._session.scalars(query)).all()
