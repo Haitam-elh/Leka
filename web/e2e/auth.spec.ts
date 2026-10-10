@@ -111,7 +111,8 @@ test("signing out leaves the application even when the API call fails", async ({
   await expect(page).toHaveURL("http://localhost:3000/");
   // The session outlived the failed call, yet the site's "Se connecter"
   // shows the form: someone who asked to leave is not let straight back in.
-  await page.locator("header").getByRole("link", { name: "Se connecter" }).click();
+  // In the home page's top bar: a <nav> since the 2026-10-10 site.
+  await page.getByRole("link", { name: "Se connecter", exact: true }).first().click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: "Se connecter à LEKA" })).toBeVisible();
 });

@@ -1,6 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 import { LANDING, signIn } from "./sign-in";
+
+/** The site's « Se connecter »: in the home page's top bar (a <nav> since
+ * the 2026-10-10 site), or in the other pages' <header>. */
+function siteSignIn(page: Page) {
+  return page.getByRole("link", { name: "Se connecter", exact: true }).first();
+}
 
 /**
  * leka-core.com: Karim's site and the application, one address.
@@ -19,7 +25,7 @@ test("the home page is the site, and its sign-in is the application's", async ({
 
   await expect(page).toHaveURL("http://localhost:3000/");
   await expect(page).toHaveTitle(/LEKA/);
-  const signIn = page.locator("header").getByRole("link", { name: "Se connecter" });
+  const signIn = siteSignIn(page);
   // Straight to the application's sign-in: not through /login.html, which a
   // browser may still hold from the old hosting as Karim's placeholder page.
   await expect(signIn).toHaveAttribute("href", "/login");
@@ -48,7 +54,7 @@ test("someone signed in follows the site's sign-in straight into the application
   await signIn(page);
 
   await page.goto("/");
-  await page.locator("header").getByRole("link", { name: "Se connecter" }).click();
+  await siteSignIn(page).click();
 
   await expect(page).toHaveURL(LANDING);
 });
@@ -67,11 +73,35 @@ test("on a phone, the site's sign-in is still there", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
-  const signIn = page.locator("header").getByRole("link", { name: "Se connecter" });
+  const signIn = siteSignIn(page);
   await expect(signIn).toBeVisible();
   await signIn.click();
 
   await expect(page).toHaveURL(/\/login$/);
   // And the sign-in's own header keeps it too.
   await expect(page.locator("header").getByRole("link", { name: "Se connecter" })).toBeVisible();
+});
+
+test("the site's pages, its video and what search engines read all answer", async ({
+  page,
+  request,
+}) => {
+  for (const path of ["/a-propos.html", "/faq.html", "/connecteurs.html", "/documentation.html"]) {
+    const answer = await request.get(path);
+    expect(answer.status(), path).toBe(200);
+  }
+  const video = await request.get("/LEKA.mp4", { headers: { Range: "bytes=0-1023" } });
+  expect([200, 206]).toContain(video.status());
+  expect(await (await request.get("/robots.txt")).text()).toContain(
+    "Sitemap: https://leka-core.com/sitemap.xml",
+  );
+  expect(await (await request.get("/sitemap.xml")).text()).toContain(
+    "https://leka-core.com/faq.html",
+  );
+
+  // The header above the sign-in leads to the site's sections as they are now.
+  await page.goto("/login");
+  const nav = page.locator("header nav");
+  await expect(nav.locator('a[href="/#environnement"]')).toBeVisible();
+  await expect(nav.locator('a[href="/#controle"]')).toBeVisible();
 });
