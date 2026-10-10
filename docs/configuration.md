@@ -96,6 +96,16 @@ python -m leka.identity.email --test someone@example.com
 | `LEKA_RESEND_API_KEY` | — | API sender, used when SMTP is not configured |
 | `LEKA_EMAIL_OUTBOX_FILE` | — | Local and CI only: the console sender also appends each message, as one JSON line, to this file. The browser tests read their links from it. Refused in staging and production |
 
+## Pricing page
+
+Prices, discounts and AI capacity are not settings: they live in
+`api/leka/billing/catalogue.yaml` ([pricing.md](pricing.md)).
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `LEKA_SALES_BOOKING_URL` | — | Where an Enterprise prospect books a meeting with the team: a Calendly link or any scheduling page, https. Empty: the pricing page offers the enquiry form only — no address is guessed |
+| `LEKA_SALES_CONTACT_URL` | `https://leka-core.com/demo.html?type=enterprise` | The enquiry path that always works, https |
+
 ## Model access
 
 Read by `leka.capabilities` and nowhere else (architecture rule 7): the

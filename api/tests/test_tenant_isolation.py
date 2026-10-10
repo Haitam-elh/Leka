@@ -66,6 +66,9 @@ pytestmark = pytest.mark.integration
 #                  what LEKA can do, every version, every lifecycle move —
 #                  the product's, no customer's. What a workspace says of
 #                  them is workspace_capabilities, which is scoped.
+#   site_events    what visitors of the public pricing page chose and clicked
+#                  (LEKA-431) — LEKA's own analytics, before anyone signs
+#                  in: no workspace, no person, no address.
 TENANT_FREE_TABLES = frozenset(
     {
         "workspaces",
@@ -76,6 +79,7 @@ TENANT_FREE_TABLES = frozenset(
         "alembic_version",
         "capability_registrations",
         "capability_events",
+        "site_events",
     }
 )
 

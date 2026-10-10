@@ -610,6 +610,12 @@ made again — `e2e/site.spec.ts` fails if one is missed:
    away with the demo button; only the demo button folds — it is the one
    way into the platform from the site.
 3. **No `login.html`**: its address redirects to the application's sign-in.
+4. **The pricing page** (LEKA-431): `tarifs.html`, `tarifs.css` and
+   `tarifs.js` are LEKA's own and stay; each page's header and footer link
+   to it (« Tarifs », `nav.tarifs`), the home page's bar too; `i18n.js`
+   keeps its `nav.tarifs` and `pricing.*` translations; `demo.html` keeps
+   its `enterprise` request type. `e2e/pricing.spec.ts` fails if one is
+   missed.
 
 And `web/components/auth/site-header.tsx`, the header above the sign-in
 screens, follows the site's: the same logo and the same four anchors on
