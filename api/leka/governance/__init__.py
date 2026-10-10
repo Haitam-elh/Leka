@@ -15,12 +15,20 @@ from leka.governance.dependencies import (
     require_permission,
     require_role,
 )
-from leka.governance.models import AccessDecision, EntityRestriction
+from leka.governance.models import (
+    AccessDecision,
+    EntityRestriction,
+    GovernanceEvent,
+    RoleAssignment,
+    WorkspacePolicy,
+    WorkspaceRole,
+)
 from leka.governance.policies import (
     ACTIONS,
     PolicyInput,
     PolicyService,
     Standing,
+    role_of,
     standing,
     subject_of,
 )
@@ -98,6 +106,7 @@ __all__ = [
     "EntityRestriction",
     "EvaluationAsk",
     "EvaluationRead",
+    "GovernanceEvent",
     "GovernanceEventRead",
     "GovernanceService",
     "PendingInvitationRead",
@@ -113,6 +122,7 @@ __all__ = [
     "RestrictionRepository",
     "RestrictionService",
     "RestrictionUpdate",
+    "RoleAssignment",
     "RoleError",
     "RolePermissionsRead",
     "RoleRead",
@@ -121,6 +131,8 @@ __all__ = [
     "Standing",
     "Subject",
     "TeamMemberRead",
+    "WorkspacePolicy",
+    "WorkspaceRole",
     "WorkspaceSuspendedError",
     "WorkspaceUnavailableError",
     "authorize",
@@ -139,6 +151,7 @@ __all__ = [
     "require_permission",
     "require_role",
     "revoke_invitation",
+    "role_of",
     "sees_restricted",
     "standing",
     "subject_of",

@@ -54,11 +54,12 @@ from leka.governance import (
     RoleRead,
     RoleUpdate,
     Subject,
+    WorkspacePolicy,
+    WorkspaceRole,
     evaluate,
     require_permission,
+    role_of,
 )
-from leka.governance.models import WorkspacePolicy, WorkspaceRole
-from leka.governance.policies import role_of
 from leka.knowledge import GraphRepository, GraphService
 from leka.platform import MembershipResolver, Role
 
