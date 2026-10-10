@@ -158,7 +158,9 @@ class Steps:
         """What happened so far, seen by whoever looks: committed."""
         await self._session.commit()
 
-    def add(self, kind: str, **detail: object) -> None:
+    def add(self, kind: str, /, **detail: object) -> None:
+        # Positional only: a failure's detail may say its own `kind` (the
+        # error's type).
         self._seq += 1
         self._session.add(
             AgentRunEvent(

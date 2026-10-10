@@ -43,6 +43,7 @@ from tests.test_agent_runs_api import (
 )
 from tests.test_capabilities_api import _connect
 from tests.test_context_engine import model
+from tests.test_deliverables import deck as drawn_deck
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401 — fixtures
 from tests.test_workflow_runs_api import (
     Script as Steps,
@@ -114,6 +115,7 @@ async def test_a_model_the_workspace_does_not_allow_never_answers(
         client, identity, acme, kind="model_access", providers=["mistral"], roles=["admin"]
     )
     script.answers.append(gemini("# Architecture — Paiement CB"))
+    script.answers.append(gemini(drawn_deck(app_view=False).model_dump_json()))
     first = await _start(client)
     assert await _run(acme, first["id"]) == {"status": "succeeded"}
 
@@ -130,8 +132,8 @@ async def test_a_model_the_workspace_does_not_allow_never_answers(
     run = await _ok(await client.get(f"{RUNS}/{second['id']}"))
     failed = run["events"][-1]["detail"]
     assert failed["reason"] == "refused" and "Mistral seulement" in failed["said"]
-    # Gemini was never asked again.
-    assert len(script.asked) == 1
+    # Gemini was never asked again: the first run's analysis and its deck only.
+    assert len(script.asked) == 2
 
     (refused,) = await _events(client, identity, acme, outcome="refused")
     assert (refused["control_name"], refused["purpose"], refused["provider"]) == (
@@ -149,7 +151,10 @@ async def test_a_usage_limit_per_person_refuses_past_it(
     acme: dict[str, uuid.UUID],
     leka_gemini: Callable[..., Script],
 ) -> None:
-    leka_gemini(gemini("# Une"), gemini("# Jamais"))
+    # A run of the architect is two calls: its analysis, then its deck — both
+    # the agent's, both counted.
+    content = gemini(drawn_deck(app_view=False).model_dump_json())
+    leka_gemini(gemini("# Une"), content, gemini("# Jamais"), content)
     await _ready(acme)
     await _control(
         client,
@@ -159,7 +164,7 @@ async def test_a_usage_limit_per_person_refuses_past_it(
         purposes=["agent:*"],
         per="person",
         period="day",
-        max_calls=1,
+        max_calls=2,
     )
     first = await _start(client)
     assert await _run(acme, first["id"]) == {"status": "succeeded"}
@@ -169,7 +174,7 @@ async def test_a_usage_limit_per_person_refuses_past_it(
     assert run["events"][-1]["detail"]["reason"] == "limited"
 
     (limited,) = await _events(client, identity, acme, outcome="limited")
-    assert limited["detail"]["reached"] == "calls" and limited["detail"]["calls"] == 1
+    assert limited["detail"]["reached"] == "calls" and limited["detail"]["calls"] == 2
 
     # Another person is not counted against it: the admin's run answers.
     _as(identity, acme, "admin")
@@ -179,7 +184,7 @@ async def test_a_usage_limit_per_person_refuses_past_it(
     # Each call says whom it was for.
     calls = await _ok(await client.get(f"{API}/calls", params={"user_id": str(acme["member"])}))
     # Refused before it was asked: the second run made no call.
-    assert [c["user_id"] for c in calls] == [str(acme["member"])]
+    assert [c["user_id"] for c in calls] == [str(acme["member"])] * 2
 
 
 async def test_a_secret_in_an_answer_is_redacted_or_blocks_it(
@@ -190,7 +195,8 @@ async def test_a_secret_in_an_answer_is_redacted_or_blocks_it(
     leka_gemini: Callable[..., Script],
 ) -> None:
     deck = f"# Architecture\n\nLa clé {SECRET} ouvre le bucket."
-    leka_gemini(gemini(deck), gemini(deck))
+    # The first run: its analysis, then its deck; the second: its analysis.
+    leka_gemini(gemini(deck), gemini(drawn_deck(app_view=False).model_dump_json()), gemini(deck))
     await _ready(acme)
     redact = await _control(client, identity, acme, kind="output_check", detect=["secrets"])
     started = await _start(client)
