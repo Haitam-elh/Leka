@@ -33,7 +33,7 @@ import { useTeamMembers } from "@/lib/team-queries";
  * refuses is said as it says it.
  */
 
-const OWNER_ONLY = new Set(["workspace:delete", "workspace:transfer"]);
+const OWNER_ONLY = new Set(["workspace:delete", "workspace:transfer", "audit:manage"]);
 const ACTIONS = ["agent:run", "workflow:run"] as const;
 
 function slug(name: string): string {
