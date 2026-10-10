@@ -167,6 +167,20 @@ def test_a_deck_is_delivered_as_markdown_its_files_pending() -> None:
     assert delivered(plain) == ("json", ())
     both = replace(ARCHITECT, contract=Contract(formats=("markdown", "json")))
     assert delivered(both) == ("markdown", ())
+    # Drawn by LEKA (capabilities/deliverables): no longer pending.
+    drawn = replace(ARCHITECT, renders="architecture_deck")
+    assert delivered(drawn) == ("markdown", ())
+
+
+def test_a_drawn_agent_is_told_how_its_sources_and_deck_work_here() -> None:
+    plain, _ = messages(ARCHITECT, {"parcours": "Paiement CB"}, inject(ARCHITECT, []))
+    drawn = replace(ARCHITECT, renders="architecture_deck")
+    system, _ = messages(drawn, {"parcours": "Paiement CB"}, inject(drawn, []))
+    said = system.content
+    # After its own instructions, never instead of them.
+    assert said.index(drawn.instructions or "") < said.index("How this runs in LEKA")
+    assert "Sources consultées et limites" in said and "NON CONNECTÉ" in said
+    assert "How this runs in LEKA" not in plain.content
 
 
 def test_a_json_agent_delivers_a_json_object_or_nothing() -> None:

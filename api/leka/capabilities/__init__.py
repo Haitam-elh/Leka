@@ -42,6 +42,7 @@ from leka.capabilities.definition import (
     validated,
 )
 from leka.capabilities.definition import discover as discover_capabilities
+from leka.capabilities.delivery import deliverable_of, read_deliverable
 from leka.capabilities.gateway import (
     Gateway,
     Message,
@@ -148,6 +149,7 @@ from leka.capabilities.schemas import (
     CapabilityVersionRead,
     CatalogueSummary,
     CategoryCount,
+    DeliverableRead,
     LLMRunRead,
     ModelBreakdownRead,
     ModelCallRead,
@@ -282,6 +284,7 @@ __all__ = [
     "Contract",
     "Definition",
     "DefinitionError",
+    "DeliverableRead",
     "Entry",
     "Execution",
     "Gateway",
@@ -380,6 +383,7 @@ __all__ = [
     "connected_sources",
     "default_ready",
     "definitions",
+    "deliverable_of",
     "delivered",
     "discover",
     "discover_capabilities",
@@ -404,6 +408,7 @@ __all__ = [
     "provide",
     "queue_run",
     "queue_workflow",
+    "read_deliverable",
     "read_index",
     "register",
     "register_step",

@@ -58,6 +58,12 @@ dependencies = [
     "boto3>=1.35.0",
     # Error reporting — see docs/adr/014-hosting.md. Inert with no DSN set.
     "sentry-sdk[fastapi]>=2.18.0",
+    # An agent's deck, rendered (the architect's .pptx and .pdf): an editable
+    # PowerPoint with native shapes and tables, and its PDF drawn alike.
+    # Both pure Python, no office suite on the box. Approved by Haitam on
+    # 2026-10-10 for the application architect's deliverables.
+    "python-pptx>=1.0.2,<2",
+    "reportlab>=4.2.5,<5",
 ]
 
 [project.optional-dependencies]
@@ -145,7 +151,7 @@ module = ["alembic.*"]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["rq.*", "pgvector.*", "asyncpg.*", "boto3.*", "botocore.*"]
+module = ["rq.*", "pgvector.*", "asyncpg.*", "boto3.*", "botocore.*", "reportlab.*"]
 ignore_missing_imports = true
 
 # ─────────────────────────────────────────────────────────────────────────────

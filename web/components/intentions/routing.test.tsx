@@ -19,8 +19,9 @@ import type { RoutedCandidate, Routing } from "@/lib/intentions/api";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { makeQueryClient } from "@/lib/query";
 
-const api = vi.hoisted(() => ({ routing: vi.fn(), route: vi.fn() }));
+const api = vi.hoisted(() => ({ routing: vi.fn(), route: vi.fn(), one: vi.fn() }));
 const catalogue = vi.hoisted(() => ({ one: vi.fn() }));
+const runs = vi.hoisted(() => ({ list: vi.fn(), one: vi.fn(), start: vi.fn(), cancel: vi.fn() }));
 
 vi.mock("@/lib/intentions/api", async (original) => ({
   ...(await original<typeof import("@/lib/intentions/api")>()),
@@ -29,6 +30,10 @@ vi.mock("@/lib/intentions/api", async (original) => ({
 vi.mock("@/lib/capabilities", async (original) => ({
   ...(await original<typeof import("@/lib/capabilities")>()),
   capabilities: catalogue,
+}));
+vi.mock("@/lib/agent-runs", async (original) => ({
+  ...(await original<typeof import("@/lib/agent-runs")>()),
+  agentRuns: runs,
 }));
 vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
@@ -117,10 +122,17 @@ beforeEach(() => {
     title: "Architecte applicatif",
     kind: "agent",
     available: true,
+    formats: ["pptx", "pdf"],
     inputs: [
       { name: "parcours", type: "text", required: true, description: "", choices: [], entity_types: [] },
     ],
   });
+  api.one.mockResolvedValue({
+    id: "i1",
+    title: "Architecture du paiement",
+    text: "Construis l'architecture du parcours Paiement CB sur le périmètre Digital",
+  });
+  runs.list.mockResolvedValue([]);
 });
 
 describe("where an intention goes", () => {
@@ -137,8 +149,11 @@ describe("where an intention goes", () => {
     expect(within(panel).getByTestId("routing-excluded")).toHaveTextContent(
       "Une question n'est jamais confiée à une capacité qui propose des actions",
     );
-    // The chosen agent, to run for the intention.
+    // The chosen agent, to run for the intention: what it names, suggested;
+    // its runs, followed here.
     expect(await screen.findByTestId("agent-run-form")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText(/Parcours/)).toHaveValue("Paiement CB"));
+    expect(await screen.findByText("Aucune exécution pour l'instant.")).toBeInTheDocument();
   });
 
   it("falls back to LEKA's analysis, saying why", async () => {

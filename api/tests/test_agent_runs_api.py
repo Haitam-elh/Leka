@@ -8,9 +8,13 @@ What these protect:
   about; it searches the model and reads it with its tools, a thing it is
   not about refused, a tool it made up answered unknown — each call kept;
   the model asked through the gateway, its rules before the agent's
-  instructions, each call kept with the run; what it delivered kept, its
-  PPTX and PDF said pending; every step readable, what its calls took.
-  The catalogue now says agents run.
+  instructions, each call kept with the run; what it delivered kept; its
+  deck written from its analysis — asked again of the model, structured,
+  no tools — then drawn: its PowerPoint and PDF kept and downloadable by
+  whoever may read the run, nobody else's; every step readable, what its
+  calls took. The catalogue now says agents run.
+- A deck the model cannot write never fails the run: its analysis stands,
+  said why its files are missing.
 - Refused before anything is kept, said why: no such agent, not an agent,
   not usable here (no source to read, a draft), what it takes not given,
   a context or an intention that is not the workspace's — and an agent
@@ -38,11 +42,14 @@ import uuid
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 from httpx import AsyncClient
+from pptx import Presentation
 from pydantic import SecretStr
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
@@ -58,12 +65,15 @@ from leka.capabilities import (
     sweep_runs,
     sync_catalogue,
 )
+from leka.capabilities.deliverables.layout import deck_slides
 from leka.capabilities.gateway import service
 from leka.core.config import settings
 from leka.db import session_factory, system_scope, workspace_scope
+from leka.platform import LocalObjectStore, storage
 from tests.conftest import FakeIdentity, error_code, error_fields
 from tests.test_capabilities_api import _connect
 from tests.test_context_engine import model
+from tests.test_deliverables import deck as drawn_deck
 from tests.test_knowledge_graph import BILLING, INVOICING
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401 — fixtures
 
@@ -185,6 +195,14 @@ async def _sql(workspace: uuid.UUID, statement: str, **params: Any) -> None:
 # ── end to end ─────────────────────────────────────────────────────────────
 
 
+@pytest.fixture
+def store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> LocalObjectStore:
+    """Where the decks are kept: a directory of the test's."""
+    local = LocalObjectStore(tmp_path)
+    monkeypatch.setattr(storage, "_store", local)
+    return local
+
+
 async def test_the_architect_runs_end_to_end(
     client: AsyncClient,
     identity: FakeIdentity,
@@ -192,14 +210,17 @@ async def test_the_architect_runs_end_to_end(
     acme: dict[str, uuid.UUID],
     leka_gemini: Callable[..., Script],
     queued: list[uuid.UUID],
+    store: LocalObjectStore,
 ) -> None:
     await _ready(acme)
     deck = f"# Architecture — Billing API\n\nBilling API [{model[BILLING]}] sert Checkout."
+    content = drawn_deck(app_view=False)
     script = leka_gemini(
         gemini(call={"name": "search_entities", "args": {"query": "billing"}}),
         gemini(call={"name": "read_entity", "args": {"id": str(model[INVOICING])}}),
         gemini(call={"name": "delete_everything", "args": {}}),
         gemini(deck),
+        gemini(content.model_dump_json()),
     )
     # The catalogue says agents run: nothing in the architect's way.
     catalogue = (await client.get("/api/v1/capabilities")).json()
@@ -207,16 +228,18 @@ async def test_the_architect_runs_end_to_end(
     assert architect["available"] is True and architect["reasons"] == []
 
     started = await _start(client)
+    # Its PowerPoint and PDF, LEKA draws: nothing pending.
     assert (started["status"], started["format"], started["pending"]) == (
         "queued",
         "markdown",
-        ["pptx", "pdf"],
+        [],
     )
     assert (started["title"], started["version"], started["mine"]) == (
         "Architecte applicatif",
-        "18.0.0",
+        "18.1.0",
         True,
     )
+    assert started["deliverables"] == []
     assert queued == [uuid.UUID(started["id"])]
 
     assert await _run(acme, started["id"]) == {"status": "succeeded"}
@@ -241,7 +264,16 @@ async def test_the_architect_runs_end_to_end(
         "tool",
         "tool",
         "answered",
+        "rendered",
         "succeeded",
+    ]
+    rendered = done["events"][7]["detail"]
+    slides = len(deck_slides(content))
+    assert (rendered["formats"], rendered["slides"]) == (["pptx", "pdf"], slides)
+    name = "Architecture applicative - Parcours Paiement CB"
+    assert [(d["format"], d["name"], d["slides"]) for d in done["deliverables"]] == [
+        ("pptx", f"{name}.pptx", slides),
+        ("pdf", f"{name}.pdf", slides),
     ]
     context = done["events"][2]["detail"]
     assert context["given"] > 0
@@ -252,8 +284,8 @@ async def test_the_architect_runs_end_to_end(
         ("delete_everything", "unknown"),
     ]
     assert done["events"][4]["detail"]["why"] == "out_of_scope"
-    assert done["usage"]["calls"] == 4
-    assert done["usage"]["tokens_in"] == 4000
+    assert done["usage"]["calls"] == 5
+    assert done["usage"]["tokens_in"] == 5000
     # An agent's instructions never leave the server.
     assert "PRINCIPE ABSOLU" not in json.dumps(done)
 
@@ -278,12 +310,63 @@ async def test_the_architect_runs_end_to_end(
                 )
             ).all()
     assert {(c.purpose, c.tier, c.status) for c in calls} == {
-        ("agent:application-architecture", "deep", "ok")
+        ("agent:application-architecture", "deep", "ok"),
+        ("agent:application-architecture:deck", "deep", "ok"),
     }
+
+    # The deck: asked structured, with no tool, its writer's rules before the
+    # agent's template; the analysis given as data.
+    asked = script.asked[4]
+    assert asked["generationConfig"]["responseMimeType"] == "application/json"
+    assert "tools" not in asked
+    writer = asked["systemInstruction"]["parts"][0]["text"]
+    assert writer.index("deck writer") < writer.index("PRINCIPE ABSOLU")
+    assert json.loads(asked["contents"][0]["parts"][0]["text"])["analysis"] == deck
+
+    # Its files, downloadable by whoever may read the run.
+    pdf = await client.get(f"{API}/{started['id']}/deliverables/pdf")
+    assert pdf.status_code == 200, pdf.text
+    assert pdf.headers["content-type"] == "application/pdf"
+    assert pdf.content.startswith(b"%PDF")
+    disposition = pdf.headers["content-disposition"]
+    assert disposition.startswith("attachment;") and "Paiement%20CB.pdf" in disposition
+    pptx = await client.get(f"{API}/{started['id']}/deliverables/pptx")
+    assert pptx.status_code == 200
+    assert len(Presentation(BytesIO(pptx.content)).slides) == slides
+    assert (await client.get(f"{API}/{started['id']}/deliverables/docx")).status_code == 422
+    assert (await client.get(f"{API}/{uuid.uuid4()}/deliverables/pdf")).status_code == 404
+    # Kept under the run, in the workspace.
+    kept = [key async for key in store.iter_prefix(f"{acme['acme']}/agent-runs/")]
+    assert sorted(kept) == [
+        f"{acme['acme']}/agent-runs/{started['id']}/deck.pdf",
+        f"{acme['acme']}/agent-runs/{started['id']}/deck.pptx",
+    ]
 
     listed = (await client.get(API, params={"key": ARCHITECT})).json()
     assert [r["id"] for r in listed] == [started["id"]]
     assert (await client.get(API, params={"status": "failed"})).json() == []
+
+
+async def test_a_deck_the_model_cannot_write_never_fails_the_run(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    store: LocalObjectStore,
+) -> None:
+    await _ready(acme)
+    analysis = "# Architecture — Billing API\n\nRien de plus dans les sources."
+    leka_gemini(gemini(analysis), *[gemini("Voici le deck : pas de JSON.")] * 10)
+    started = await _start(client)
+    assert await _run(acme, started["id"]) == {"status": "succeeded"}
+    done = await _detail(client, started["id"])
+    # The analysis stands; why there are no files, said.
+    assert (done["status"], done["output"], done["deliverables"]) == ("succeeded", analysis, [])
+    assert _kinds(done)[-2:] == ["render_failed", "succeeded"]
+    assert done["events"][-2]["detail"] == {"code": "no_model"}
+    assert (await client.get(f"{API}/{started['id']}/deliverables/pdf")).status_code == 404
+    assert [key async for key in store.iter_prefix("")] == []
 
 
 # ── refused ────────────────────────────────────────────────────────────────

@@ -99,6 +99,11 @@ class AgentFrontMatter(BaseModel):
         description="The skills it may be offered (LEKA-401): none unless named, each within "
         "the kinds of things it may read",
     )
+    renders: Literal["architecture_deck"] | None = Field(
+        default=None,
+        description="What LEKA draws of what it delivers: architecture_deck — the editable "
+        "PowerPoint and its PDF, on the application architecture template",
+    )
 
     @field_validator("name")
     @classmethod
@@ -634,6 +639,17 @@ class AgentRunDecision(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+class DeliverableRead(BaseModel):
+    """A file a run delivered: GET /agent-runs/{id}/deliverables/{format}."""
+
+    model_config = ConfigDict(frozen=True)
+
+    format: Literal["pptx", "pdf"]
+    name: str = Field(description="Its file name.")
+    size: int = Field(description="In bytes.")
+    slides: int
+
+
 class AgentRunRead(BaseModel):
     """One run of an agent: where it stands, what it delivers, or why not."""
 
@@ -653,6 +669,10 @@ class AgentRunRead(BaseModel):
     format: Literal["markdown", "json"] = Field(description="What it delivers.")
     pending: list[str] = Field(
         description="What it declares (pptx, pdf…) and the runtime does not render yet."
+    )
+    deliverables: list[DeliverableRead] = Field(
+        description="The files LEKA drew of what it delivered (its pptx, its pdf), each to "
+        "download.",
     )
     error: str | None = Field(
         description="Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, "

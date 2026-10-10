@@ -5,6 +5,9 @@
     GET    /agent-runs?key&status       the workspace's runs, the latest first
     GET    /agent-runs/{id}             one: what it delivered, every step,
                                         what its model calls took
+    GET    /agent-runs/{id}/deliverables/{format}
+                                        a file LEKA drew of it (the
+                                        architect's pptx, pdf): to download
     POST   /agent-runs/{id}/cancel      cancelled — by who asked, or who may
                                         approve
     POST   /agent-runs/{id}/approve     held for approval (LEKA-406): queued
@@ -24,9 +27,12 @@ outcome is kept with what the controls did.
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
 from typing import Annotated, Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import StreamingResponse
 
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
@@ -39,15 +45,20 @@ from leka.capabilities import (
     AgentRunRead,
     AgentRuntime,
     AgentRunUsage,
+    CapabilityRunRepository,
+    DeliverableRead,
     NotAwaitingError,
     NotYoursError,
     OwnRunError,
     RunFinishedError,
     RunRefusedError,
     capability_resource,
+    deliverable_of,
     find,
     queue_run,
+    read_deliverable,
 )
+from leka.capabilities.deliverables import MEDIA_TYPES
 from leka.core.errors import ErrorCode, FieldError
 from leka.governance import (
     AIControlService,
@@ -62,6 +73,7 @@ from leka.governance import (
     require_permission,
 )
 from leka.intentions import IntentionRepository
+from leka.platform import ObjectNotFoundError
 
 router = APIRouter(prefix="/agent-runs", tags=["capabilities"])
 
@@ -122,6 +134,8 @@ def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
     failure = run.detail.get("failure")
     reasons = failure.get("reasons", []) if isinstance(failure, dict) else []
     pending = run.detail.get("pending", [])
+    files = run.detail.get("deliverables", [])
+    files = files if isinstance(files, list) else []
     return AgentRunRead(
         id=run.id,
         key=run.key,
@@ -136,6 +150,16 @@ def run_read(run: AgentRun, principal: Principal) -> AgentRunRead:
         context_version=run.context_version,
         format=run.format,
         pending=[str(p) for p in pending] if isinstance(pending, list) else [],
+        deliverables=[
+            DeliverableRead(
+                format=f["format"],
+                name=str(f["name"]),
+                size=int(f["size"]),
+                slides=int(f["slides"]),
+            )
+            for f in files
+            if isinstance(f, dict) and f.get("format") in ("pptx", "pdf")
+        ],
         error=run.error,
         reasons=[r for r in reasons if isinstance(r, dict)],
         provider=run.provider,
@@ -263,6 +287,49 @@ async def get_run(run_id: uuid.UUID, session: SessionDep, principal: Reader) -> 
         output=run.output,
         events=[AgentRunEventRead.model_validate(e) for e in events],
         usage=AgentRunUsage(calls=calls, tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost),
+    )
+
+
+@router.get(
+    "/{run_id}/deliverables/{fmt}",
+    response_class=StreamingResponse,
+    summary="A file an agent run delivered: its PowerPoint or its PDF",
+    responses={200: {"content": {MEDIA_TYPES["pptx"]: {}, MEDIA_TYPES["pdf"]: {}}}},
+)
+async def get_deliverable(
+    run_id: uuid.UUID, fmt: Literal["pptx", "pdf"], session: SessionDep, principal: Reader
+) -> StreamingResponse:
+    """What LEKA drew of what the run delivered (the architect's deck), as
+    an attachment. 404 when the run, or that file, is not there."""
+    run = await CapabilityRunRepository(session, principal.workspace_id).run(run_id)
+    if run is None:
+        raise _missing()
+    found = deliverable_of(run, fmt)
+    if found is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such file for this run.")
+    chunks = read_deliverable(str(found["key"]))
+    try:
+        first = await anext(chunks)
+    except (StopAsyncIteration, ObjectNotFoundError):
+        raise ApiError(
+            status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "This file is no longer kept."
+        ) from None
+
+    async def body() -> AsyncIterator[bytes]:
+        yield first
+        async for chunk in chunks:
+            yield chunk
+
+    name = str(found.get("name") or f"deck.{fmt}")
+    ascii_name = name.encode("ascii", "replace").decode().replace("?", "_").replace('"', "")
+    return StreamingResponse(
+        body(),
+        media_type=MEDIA_TYPES[fmt],
+        headers={
+            "Content-Disposition": f'attachment; filename="{ascii_name}"; '
+            f"filename*=UTF-8''{quote(name)}",
+            "Cache-Control": "private, no-store",
+        },
     )
 
 

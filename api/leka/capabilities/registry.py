@@ -92,6 +92,7 @@ def agent_definition(agent: Agent, lifecycle: Lifecycle) -> Definition:
         path=agent.path,
         tools=head.tools,
         skills=head.skills,
+        renders=head.renders,
     )
 
 

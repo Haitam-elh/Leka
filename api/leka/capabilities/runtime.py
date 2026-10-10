@@ -75,8 +75,10 @@ FAILURES = (
 )
 
 # What the runtime delivers itself; the rest of what an agent declares
-# (pptx, pdf…) is said pending — rendered from what it delivered, later.
+# (pptx, pdf…) is said pending — unless LEKA draws it (`renders`).
 RENDERED = ("markdown", "json")
+# What LEKA draws, by what an agent renders (capabilities/deliverables).
+DRAWN: Mapping[str, tuple[str, ...]] = {"architecture_deck": ("pptx", "pdf")}
 # Formats whose content is a document: delivered as markdown.
 DOCUMENTS = frozenset({"markdown", "pptx", "pdf", "docx"})
 
@@ -86,7 +88,8 @@ def delivered(definition: Definition) -> tuple[str, tuple[str, ...]]:
     that the runtime does not render yet."""
     formats = definition.contract.formats
     said = "markdown" if DOCUMENTS & set(formats) or "json" not in formats else "json"
-    return said, tuple(f for f in formats if f not in RENDERED)
+    drawn = DRAWN.get(definition.renders or "", ())
+    return said, tuple(f for f in formats if f not in RENDERED and f not in drawn)
 
 
 def runnable(definition: Definition) -> bool:
@@ -230,6 +233,34 @@ FORMAT_SAID = {
     "json": "one JSON object, and nothing around it",
 }
 
+# What an agent whose deliverables LEKA draws is told after its own
+# instructions: where its sources are here, and what this answer is for.
+RENDER_NOTES = {
+    "architecture_deck": """---
+
+How this runs in LEKA (it adapts the instructions above to this platform, it \
+does not replace them):
+- Your sources are those this company connected to LEKA. The context and the \
+tools read the company model LEKA builds from them — documentation \
+(Confluence, SharePoint, Notion…), code (GitHub, GitLab…), tickets (Jira, \
+Linear…), databases, cloud and monitoring. Search them as the instructions \
+search Confluence: by the journey's and the perimeter's words, then by each \
+brick found.
+- Where a source the instructions name (Confluence, SharePoint, the directory \
+files) is not connected or holds nothing on the journey, work from what is \
+connected, and say it: a row in « Sources consultées et limites » with « NON \
+CONNECTÉ » or « SANS RÉSULTAT », and its gaps in orange among the points to \
+confirm. Never fill a gap from general knowledge.
+- This answer is the analysis, in markdown, section by section in the deck's \
+order: the business layer (actor, trigger, groupings A, B, C… and their \
+steps), the six paragraphs of « Le parcours en clair », the business rules, \
+the application view when asked, each sub-process's application layer (its \
+bricks in order of first call, its phases, each chain of calls), the RACI, the \
+points to confirm, the sources. Cite the ids you rely on.
+- LEKA then draws the editable PowerPoint and its PDF from it, on the template \
+above: do not describe files, do not say they are attached.""",
+}
+
 
 def messages(
     definition: Definition,
@@ -246,6 +277,8 @@ def messages(
         format=FORMAT_SAID[format_],
     )
     system = f"{rules}\n\n---\n\n{definition.instructions or ''}"
+    if definition.renders in RENDER_NOTES:
+        system = f"{system}\n\n{RENDER_NOTES[definition.renders]}"
     material: dict[str, object] = {
         "inputs": dict(inputs),
         "context": [

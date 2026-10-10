@@ -2,14 +2,15 @@
 name: application-architecture
 title: Architecte applicatif
 description: Use when someone asks for the application architecture of a business journey on a perimeter — a deck with the business layer in ArchiMate 3.0.1, the application layer as sequence diagrams, the business rules, the RACI, the points to confirm and the sources, built only from the documentation, never invented.
-version: 18.0.0
+version: 18.1.0
 category: architecture
-entity_types: [business_process, application, service, document, person, team, knowledge_space]
-requires: ["confluence|microsoft_365"]
+entity_types: [business_process, application, service, document, person, team, knowledge_space, repository, project, issue, database, schema, data_object, infra_resource, environment]
+requires: ["confluence|microsoft_365|google_workspace|notion|guru|slab|github|gitlab|bitbucket|jira|linear|asana|clickup|monday|trello|postgresql|mysql|mariadb|sqlserver|oracle|mongodb|supabase"]
 mode: read_only
 risk: medium
 outputs: document
 deliverables: [pptx, pdf]
+renders: architecture_deck
 inputs:
   - name: parcours
     type: text
