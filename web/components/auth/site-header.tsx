@@ -29,16 +29,16 @@ export function SiteHeader() {
           <Image src="/leka-logo.svg" alt="LEKA" width={80} height={19} unoptimized priority />
         </a>
         <nav aria-label={t.navigation} className="mr-auto hidden gap-6 md:flex">
-          <a href="/#plateforme" className={link}>
+          <a href="/#environnement" className={link}>
             {t.platform}
           </a>
-          <a href="/#methode" className={link}>
+          <a href="/#intention" className={link}>
             {t.method}
           </a>
-          <a href="/#cas" className={link}>
+          <a href="/#video" className={link}>
             {t.cases}
           </a>
-          <a href="/#securite" className={link}>
+          <a href="/#controle" className={link}>
             {t.security}
           </a>
         </nav>

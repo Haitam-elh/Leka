@@ -75,3 +75,27 @@ test("on a phone, the site's sign-in is still there", async ({ page }) => {
   // And the sign-in's own header keeps it too.
   await expect(page.locator("header").getByRole("link", { name: "Se connecter" })).toBeVisible();
 });
+
+test("the site's pages, its video and what search engines read all answer", async ({
+  page,
+  request,
+}) => {
+  for (const path of ["/a-propos.html", "/faq.html", "/connecteurs.html", "/documentation.html"]) {
+    const answer = await request.get(path);
+    expect(answer.status(), path).toBe(200);
+  }
+  const video = await request.get("/LEKA.mp4", { headers: { Range: "bytes=0-1023" } });
+  expect([200, 206]).toContain(video.status());
+  expect(await (await request.get("/robots.txt")).text()).toContain(
+    "Sitemap: https://leka-core.com/sitemap.xml",
+  );
+  expect(await (await request.get("/sitemap.xml")).text()).toContain(
+    "https://leka-core.com/faq.html",
+  );
+
+  // The header above the sign-in leads to the site's sections as they are now.
+  await page.goto("/login");
+  const nav = page.locator("header nav");
+  await expect(nav.locator('a[href="/#environnement"]')).toBeVisible();
+  await expect(nav.locator('a[href="/#controle"]')).toBeVisible();
+});

@@ -581,10 +581,12 @@ is the only step OVH's side has to reverse.
 
 ### Changing the site
 
-The site is `web/public/` — `index.html`, the other pages, `style.css`,
-`script.js`, `i18n.js`. It is changed through a pull request like any file,
-no longer by FTP: whatever is uploaded to the old hosting is no longer
-what anyone sees. Two things to know before editing it:
+The site is `web/public/` — `index.html`, the other pages (`a-propos.html`,
+`faq.html`, `connecteurs.html`…), `style.css`, `script.js`, `i18n.js` and
+`site-i18n.js`, the video `LEKA.mp4` and its poster, `robots.txt`,
+`sitemap.xml`. It is changed through a pull request like any file, no
+longer by FTP: whatever is uploaded to the old hosting is no longer what
+anyone sees. Two things to know before editing it:
 
 - **It shares the application's origin.** A script on any of its pages runs
   with the same rights as the application's own. Nothing on the site may
@@ -593,6 +595,22 @@ what anyone sees. Two things to know before editing it:
 - **Names the application uses are taken**: no file in `web/public/` named
   like one of its routes (`login`, `register`, `overview`…), and no link to
   `login.html` expected to show a page.
+
+**When Karim hands over a new version** (as the `leka-site` folder of
+2026-10-10), its files replace those in `web/public/`, and three things are
+made again — `e2e/site.spec.ts` fails if one is missed:
+
+1. **« Se connecter » links to `/login`**, not `./login.html`: a browser may
+   still hold the old hosting's placeholder page under that address.
+2. **On a phone, « Se connecter » stays**: the site's `style.css` folds it
+   away with the demo button; only the demo button folds — it is the one
+   way into the platform from the site.
+3. **No `login.html`**: its address redirects to the application's sign-in.
+
+And `web/components/auth/site-header.tsx`, the header above the sign-in
+screens, follows the site's: the same logo and the same four anchors on
+the home page (`#environnement`, `#intention`, `#video`, `#controle` since
+2026-10-10).
 
 ---
 

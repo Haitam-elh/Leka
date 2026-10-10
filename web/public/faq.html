@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ, LEKA</title>
+<meta name="description" content="Questions fréquentes sur LEKA : fonctionnement, connecteurs, contrôle des actions, disponibilité.">
+<meta name="theme-color" content="#0a0f2b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="./leka-mark.svg">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo-leka" viewBox="0 0 1933 461">
+    <path fill="#0a0f2b" d="M1 0 L138 1 L138 362 L375 363 L375 461 L0 460Z M414 0 L816 0 L816 96 L538 98 L540 181 L790 182 L791 230 L790 276 L540 276 L539 362 L820 363 L820 461 L414 461Z M872 0 L1013 0 L1013 178 L1018 179 L1212 0 L1381 0 L1133 225 L1353 459 L1182 461 L1014 284 L1013 460 L873 461Z"/>
+    <path fill="url(#gLeka)" d="M1571 1 L1685 0 L1933 460 L1783 461 L1626 161 L1462 461 L1309 461Z"/>
+  </symbol>
+  <linearGradient id="gLeka" x1="1571" y1="0" x2="1933" y2="461" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#4B33FF"/><stop offset="1" stop-color="#6A46FF"/>
+  </linearGradient>
+</svg>
+
+<header class="header" id="header">
+  <div class="header__inner">
+    <a class="brand" href="./index.html" aria-label="LEKA, accueil">
+      <svg viewBox="0 0 1933 461" role="img" aria-label="LEKA" style="height:19px;width:auto"><use href="#logo-leka"/></svg>
+    </a>
+    <nav class="nav" id="nav" aria-label="Navigation principale">
+      <a href="./index.html#environnement" data-i18n="nav.plateforme">Plateforme</a>
+      <a href="./index.html#intention" data-i18n="nav.methode">Méthode</a>
+      <a href="./index.html#video" data-i18n="nav.cas">Cas d'usage</a>
+      <a href="./index.html#controle" data-i18n="nav.securite">Sécurité</a>
+    </nav>
+    <div class="header__actions">
+      <a class="signin" href="/login" data-i18n="nav.signin">Se connecter</a>
+      <a class="btn btn--primary btn--sm" href="./demo.html?type=demo" data-i18n="cta.demo">Demander une démo</a>
+      <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="nav">
+        <span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <style>.faq{max-width:74ch}.faq details{border-bottom:1px solid #e4e7f2;padding:20px 0}.faq summary{font-weight:600;font-size:17px;cursor:pointer;list-style:none;letter-spacing:-.01em}.faq summary::-webkit-details-marker{display:none}.faq summary::after{content:"+";float:right;color:#4b33ff;font-size:22px;line-height:1}.faq details[open] summary::after{content:"−"}.faq p{margin-top:10px;color:#5b6384;font-size:15px;line-height:1.65}</style>
+  <section class="content-page"><div class="shell">
+    <div class="content-head"><p class="label">FAQ</p><h1>Questions fréquentes</h1>
+      <p>Les réponses aux questions que l'on nous pose le plus souvent.</p></div>
+    <div class="faq"><details><summary>Qu'est-ce que LEKA ?</summary><p>LEKA est une intelligence qui comprend votre environnement technologique, ses relations et ses capacités, pour répondre directement à votre besoin.</p></details><details><summary>Quels outils LEKA peut-il connecter ?</summary><p>Code, tickets, documentation, cloud, données, infrastructure et supervision. La liste détaillée se trouve sur la page Connecteurs.</p></details><details><summary>LEKA peut-il agir sans mon accord ?</summary><p>Non. Vous définissez ce que LEKA peut analyser, recommander ou exécuter, et l'exécution demande une validation humaine.</p></details><details><summary>Qui a accès à quoi ?</summary><p>Chaque utilisateur dispose uniquement des capacités qui lui sont autorisées, et les interactions restent visibles et traçables.</p></details><details><summary>LEKA est-il disponible ?</summary><p>LEKA est en accès anticipé. Demandez une démonstration pour échanger avec l'équipe.</p></details><details><summary>Comment contacter l'équipe ?</summary><p>Écrivez à support@leka-core.com ou utilisez le formulaire de contact.</p></details></div></div></section>
+</main>
+
+<footer class="footer">
+  <div class="shell">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <svg viewBox="0 0 1933 461" role="img" aria-label="LEKA" style="height:20px;width:auto">
+          <use href="#logo-leka"/>
+        </svg>
+        <p data-i18n="footer.tagline">L'intelligence qui comprend votre entreprise avant de vous répondre.</p>
+      </div>
+      <div>
+        <h4 data-i18n="footer.product">Produit</h4>
+        <ul>
+          <li><a href="./index.html#environnement" data-i18n="nav.plateforme">Plateforme</a></li>
+          <li><a href="./index.html#intention" data-i18n="nav.methode">Méthode</a></li>
+          <li><a href="./index.html#video" data-i18n="nav.cas">Cas d'usage</a></li>
+          <li><a href="./index.html#controle" data-i18n="nav.securite">Sécurité</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-i18n="footer.resources">Ressources</h4>
+        <ul>
+          <li><a href="./documentation.html" data-i18n="footer.documentation">Documentation</a></li>
+          <li><a href="./connecteurs.html" data-i18n="footer.connecteurs">Connecteurs</a></li>
+          <li><a href="./changelog.html" data-i18n="footer.changelog">Journal des versions</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-i18n="footer.company">Entreprise</h4>
+        <ul>
+          <li><a href="./a-propos.html" data-i18n="footer.about">À propos</a></li>
+          <li><a href="./faq.html" data-i18n="footer.faq">FAQ</a></li>
+          <li><a href="./demo.html?type=contact" data-i18n="footer.contact">Nous contacter</a></li>
+          <li><a href="./mentions-legales.html" data-i18n="footer.legal">Mentions légales</a></li>
+          <li><a href="./confidentialite.html" data-i18n="footer.privacy">Confidentialité</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span data-i18n="footer.rights">© 2026 LEKA. Tous droits réservés.</span>
+      <span class="footer__lang"><select class="lang-select" aria-label="Language / Langue"></select></span>
+    </div>
+  </div>
+</footer>
+
+<script src="./script.js"></script>
+<script src="./i18n.js"></script>
+<script src="./site-i18n.js"></script>
+</body>
+</html>
