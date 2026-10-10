@@ -146,6 +146,18 @@ this is only what each variable is for. `leka/core/settings/background.py`.
 | `LEKA_JOB_STALE_ENQUEUED_SECONDS` | `3600` | A run the queue never picked up (60–86400) is offered again |
 | `LEKA_RECONCILE_DELETES` | `false` | Whether the scheduled orphan sweep may DELETE. Off means it only reports |
 
+## AI credits
+
+LEKA-430: what each plan lets a workspace's work cost LEKA on LEKA's models a
+month — see [metering.md](metering.md) § 5.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `LEKA_CREDIT_USD` | `0.01` | What a credit is worth of LEKA's model cost, in US dollars |
+| `LEKA_PLAN_CREDITS` | `{"free": 200, "starter": 2000, "growth": 10000, "business": 40000, "enterprise": 100000}` | Each plan's credits a month (JSON); a workspace's own can be set with its plan |
+| `LEKA_CREDIT_WARNINGS` | `[80, 100]` | The percentages of the month's credits past which owners and admins are emailed, once each |
+| `LEKA_CREDITS_ENFORCED` | `true` | Whether LEKA's models are refused a workspace whose month's credits are spent — never billed past them. `false`: counted, shown and warned of only |
+
 ## Monitoring
 
 Errors to Sentry; LEKA's own metrics, health report and alerts (LEKA-408,

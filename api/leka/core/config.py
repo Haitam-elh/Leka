@@ -33,6 +33,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from leka.core.settings._rotation import RotateEvery
 from leka.core.settings.background import BackgroundSettings
+from leka.core.settings.credits import CreditSettings
 from leka.core.settings.database import DatabaseSettings
 from leka.core.settings.email import EmailSettings
 from leka.core.settings.model_access import ModelAccessSettings
@@ -67,6 +68,7 @@ class Settings(
     MonitoringSettings,
     StorageSettings,
     BackgroundSettings,
+    CreditSettings,
     BaseSettings,
 ):
     """Every knob the backend reads from its environment.

@@ -236,6 +236,51 @@ async def test_an_answer_without_its_usage_is_kept_unknown_not_free(
     )
 
 
+async def _spent(workspace_id: uuid.UUID, cost_usd: float) -> None:
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            session.add(
+                ModelCall(
+                    workspace_id=workspace_id,
+                    id=uuid.uuid4(),
+                    purpose="intention.understanding",
+                    tier="fast",
+                    provider="google",
+                    model="gemini-3.8-flash",
+                    route="default",
+                    owner="leka",
+                    status="ok",
+                    cost_usd=cost_usd,
+                    at=datetime.now(UTC),
+                )
+            )
+            await session.commit()
+
+
+async def test_credits_spent_leka_s_models_are_refused_never_billed_past(
+    workspace: uuid.UUID,
+) -> None:
+    # Free: 200 credits, $2 of LEKA's model cost — spent.
+    await _spent(workspace, 2.0)
+    script = Script({GOOGLE: [gemini("Not asked.")]})
+    with pytest.raises(NoModelError) as raised:
+        await _ask(workspace, script, lambda g: g.complete(ask()))
+    assert raised.value.reason == "limited"
+    assert "credits" in str(raised.value)
+    assert script.asked == []
+
+
+async def test_credits_spent_the_workspace_s_own_model_still_answers(
+    workspace: uuid.UUID,
+) -> None:
+    await _spent(workspace, 2.0)
+    await _own(workspace)
+    script = Script({MISTRAL: [chat("From our own Mistral.")]})
+    done = await _ask(workspace, script, lambda g: g.complete(ask()))
+    assert done.text == "From our own Mistral."
+    assert [c.owner for c in await _calls(workspace)][-1] == "workspace"
+
+
 async def test_a_busy_provider_is_tried_again_then_the_fallback_answers(
     workspace: uuid.UUID,
 ) -> None:

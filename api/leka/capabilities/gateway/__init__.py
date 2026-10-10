@@ -61,7 +61,7 @@ from leka.capabilities.gateway.service import (
     leka_default,
     leka_keys,
 )
-from leka.capabilities.gateway.usage import ModelUsage, model_calls, model_usage
+from leka.capabilities.gateway.usage import ModelUsage, leka_cost, model_calls, model_usage
 from leka.capabilities.gateway.workspace import ModelSettingError, ModelSettings
 
 for _provider in (Google(), MISTRAL, OPENAI, AZURE_OPENAI, Anthropic()):
@@ -109,6 +109,7 @@ __all__ = [
     "Usage",
     "cost_at",
     "default_ready",
+    "leka_cost",
     "leka_default",
     "leka_keys",
     "load_rates",

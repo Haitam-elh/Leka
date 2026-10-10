@@ -32,6 +32,7 @@ WHAT LIVES WHERE
     storage.py      object store, S3, retention
     email.py        SMTP and the API sender
     model_access.py the LLM provider and its keys
+    credits.py      the plans' AI credits, warnings, the limit enforced
     _rotation.py    RotateEvery, the lifetime each secret field declares
 
 A field validator lives with the field it validates. A validator that spans

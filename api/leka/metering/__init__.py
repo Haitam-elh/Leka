@@ -5,9 +5,10 @@ end. Reads the capabilities' calls and runs and the intentions; imported by
 the API, the schedule and its command (cli.py) only.
 """
 
-from leka.metering.models import UsageRecord
+from leka.metering.credits import credits_now, run_credit_watch, watch_credits
+from leka.metering.models import CreditWarning, UsageRecord
 from leka.metering.repository import execution_of
-from leka.metering.schemas import ExecutionCost, IntentionCost, StepCost
+from leka.metering.schemas import CreditsRead, ExecutionCost, IntentionCost, StepCost
 from leka.metering.service import (
     WINDOW,
     Metering,
@@ -18,13 +19,18 @@ from leka.metering.service import (
 
 __all__ = [
     "WINDOW",
+    "CreditWarning",
+    "CreditsRead",
     "ExecutionCost",
     "IntentionCost",
     "Metering",
     "StepCost",
     "UsageRecord",
+    "credits_now",
     "execution_of",
     "measured",
+    "run_credit_watch",
     "run_metering_sweep",
     "sweep",
+    "watch_credits",
 ]
