@@ -5071,16 +5071,158 @@ export interface paths {
         };
         /**
          * Policy
-         * @description How many must approve, per risk, and when the asker may not be one —
-         *     the workspace's, or LEKA's default.
+         * @description The governance policy — the workspace's, or LEKA's default: the
+         *     rules that raise a risk, and per risk how many must approve, whether
+         *     the asker may be one, a role one of them must hold, how long an
+         *     approval holds, after how long one waiting is escalated.
          */
         get: operations["policy_api_v1_decisions_policy_get"];
         /**
          * Set Policy
          * @description Changed for the decisions opened from now on: those open keep the
-         *     policy they were opened with. 422 when it cannot be kept.
+         *     policy they were opened with; one approved but not yet run must meet it.
+         *     Per risk, what is not said is kept; a null role or hours, none. Kept in
+         *     the governance trail. 422 when it cannot be kept.
          */
         put: operations["set_policy_api_v1_decisions_policy_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/decisions/policy/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Evaluate Policy
+         * @description What the policy says of an action, were it proposed now: its risk
+         *     and why, what it would need, whether a freeze or a waiver covers it.
+         *     Nothing is kept.
+         */
+        post: operations["evaluate_policy_api_v1_decisions_policy_evaluate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/decisions/exceptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Exceptions
+         * @description Every freeze and waiver, the latest first, each said active or not.
+         */
+        get: operations["exceptions_api_v1_decisions_exceptions_get"];
+        put?: never;
+        /**
+         * Grant Exception
+         * @description A freeze — nothing it covers is approved nor run while it holds — or
+         *     a waiver — what it covers, named actions in named environments, up to a
+         *     medium risk, is approved in advance in your name. 422 when it cannot be
+         *     granted as said.
+         */
+        post: operations["grant_exception_api_v1_decisions_exceptions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/decisions/exceptions/{exception_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Exception
+         * @description It no longer holds from now; it is kept, and so is who revoked it.
+         */
+        post: operations["revoke_exception_api_v1_decisions_exceptions__exception_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/decisions/delegations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Delegations
+         * @description Every delegation, the latest first, each said active or not.
+         */
+        get: operations["delegations_api_v1_decisions_delegations_get"];
+        put?: never;
+        /**
+         * Delegate
+         * @description Your authority to approve lent to a member, up to a risk, for a time
+         *     — 90 days at most. Their votes for you count as yours, and keep both
+         *     names. 422 when it cannot be lent as said.
+         */
+        post: operations["delegate_api_v1_decisions_delegations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/decisions/delegations/{delegation_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Delegation
+         * @description Revoked by who lent it, or by an admin; kept.
+         */
+        post: operations["revoke_delegation_api_v1_decisions_delegations__delegation_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/decisions/governance-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Governance History
+         * @description The governance trail, the latest first: the policy changed, an
+         *     exception or a delegation granted or revoked, a decision escalated,
+         *     waived or frozen — who, when, on what. The database refuses to rewrite
+         *     it.
+         */
+        get: operations["governance_history_api_v1_decisions_governance_history_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -5122,7 +5264,9 @@ export interface paths {
          * @description A vote on the decision open on it, kept with who, when, why and its
          *     context. Rejecting, modifying and asking for changes say why. Modifying
          *     says where it should run, which actions are kept: a new revision, its
-         *     risk read again, the earlier approvals void. 409 when nothing is open.
+         *     risk read again, the earlier approvals void. `on_behalf_of`: cast with
+         *     an approver's authority they delegated to you, else 403. 409 when
+         *     nothing is open, or a freeze covers it.
          */
         post: operations["vote_api_v1_intentions__intention_id__decision__verdict__post"];
         delete?: never;
@@ -6613,7 +6757,9 @@ export interface components {
         };
         /**
          * ApprovalPolicyRead
-         * @description How many must approve, per risk; when the asker may not be one.
+         * @description The workspace's governance of consequential actions: how risk is
+         *     classified, and per risk who must approve, how long an approval holds,
+         *     when a decision waiting is escalated.
          */
         ApprovalPolicyRead: {
             /** Approvals */
@@ -6621,9 +6767,23 @@ export interface components {
                 [key: string]: number;
             };
             /** Separate */
-            separate: ("low" | "medium" | "high")[];
+            separate: ("low" | "medium" | "high" | "critical")[];
             /** Production Raises */
             production_raises: boolean;
+            /** Roles */
+            roles: {
+                [key: string]: ("admin" | "owner") | null;
+            };
+            /** Valid Hours */
+            valid_hours: {
+                [key: string]: number | null;
+            };
+            /** Escalate Hours */
+            escalate_hours: {
+                [key: string]: number | null;
+            };
+            /** Rules */
+            rules: components["schemas"]["RiskRuleRead"][];
             /**
              * Customised
              * @description False: LEKA's default policy.
@@ -6637,9 +6797,23 @@ export interface components {
                 [key: string]: number;
             };
             /** Separate */
-            separate?: ("low" | "medium" | "high")[] | null;
+            separate?: ("low" | "medium" | "high" | "critical")[] | null;
             /** Production Raises */
             production_raises?: boolean | null;
+            /** Roles */
+            roles?: {
+                [key: string]: ("admin" | "owner") | null;
+            } | null;
+            /** Valid Hours */
+            valid_hours?: {
+                [key: string]: number | null;
+            } | null;
+            /** Escalate Hours */
+            escalate_hours?: {
+                [key: string]: number | null;
+            } | null;
+            /** Rules */
+            rules?: components["schemas"]["RiskRuleRead"][] | null;
         };
         /**
          * Arbitration
@@ -10245,6 +10419,64 @@ export interface components {
              */
             override: boolean;
         };
+        /** DecisionGovernanceEventRead */
+        DecisionGovernanceEventRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** By */
+            by: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Subject Id */
+            subject_id: string | null;
+            /** Detail */
+            detail: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
+        /**
+         * DecisionGovernanceRead
+         * @description What the policy said of a decision (LEKA-404): why its risk, what it
+         *     needs, what froze or waived it, when it is escalated.
+         */
+        DecisionGovernanceRead: {
+            /** Reasons */
+            reasons?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+            /** Required Role */
+            required_role?: string | null;
+            /** Valid Hours */
+            valid_hours?: number | null;
+            /** Escalate At */
+            escalate_at?: string | null;
+            /** Escalated At */
+            escalated_at?: string | null;
+            /** Valid Until */
+            valid_until?: string | null;
+            /**
+             * Frozen
+             * @default false
+             */
+            frozen: boolean;
+            /**
+             * Waived
+             * @default false
+             */
+            waived: boolean;
+            /** Exceptions */
+            exceptions?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+        };
         /**
          * DecisionIntention
          * @description The intention a decision is on, as the queue shows it.
@@ -10308,7 +10540,7 @@ export interface components {
              * Risk
              * @enum {string}
              */
-            risk: "low" | "medium" | "high";
+            risk: "low" | "medium" | "high" | "critical";
             /** Analysis Risk */
             analysis_risk: string | null;
             /** Revision */
@@ -10342,6 +10574,7 @@ export interface components {
             decided_at: string | null;
             /** Votes */
             votes: components["schemas"]["DecisionVoteRead"][];
+            governance?: components["schemas"]["DecisionGovernanceRead"];
         };
         /**
          * DecisionSummary
@@ -10396,6 +10629,16 @@ export interface components {
             context: {
                 [key: string]: components["schemas"]["JsonValue"];
             };
+            /**
+             * On Behalf Of
+             * @description Cast with this person's authority, delegated (LEKA-404).
+             */
+            on_behalf_of?: string | null;
+            /**
+             * Role
+             * @description The role of the authority used.
+             */
+            role?: string | null;
         };
         /**
          * DecisionVoteRequest
@@ -10409,6 +10652,84 @@ export interface components {
             environment?: string | null;
             /** Keep */
             keep?: string[] | null;
+            /**
+             * On Behalf Of
+             * @description Vote with this approver's authority, which they delegated to you (LEKA-404).
+             */
+            on_behalf_of?: string | null;
+        };
+        /**
+         * DelegationCreate
+         * @description Your authority to approve, lent to a member: up to a risk, for a
+         *     time, said why.
+         */
+        DelegationCreate: {
+            /**
+             * To
+             * Format: uuid
+             */
+            to: string;
+            /**
+             * Max Risk
+             * @enum {string}
+             */
+            max_risk: "low" | "medium" | "high" | "critical";
+            /** Reason */
+            reason: string;
+            /**
+             * Starts At
+             * @description None: now.
+             */
+            starts_at?: string | null;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+        };
+        /** DelegationRead */
+        DelegationRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Delegated By
+             * Format: uuid
+             */
+            delegated_by: string;
+            /**
+             * Delegated To
+             * Format: uuid
+             */
+            delegated_to: string;
+            /**
+             * Max Risk
+             * @enum {string}
+             */
+            max_risk: "low" | "medium" | "high" | "critical";
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Reason */
+            reason: string;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Revoked By */
+            revoked_by: string | null;
+            /**
+             * Active
+             * @default false
+             */
+            active: boolean;
         };
         /**
          * DeletionScheduled
@@ -12736,6 +13057,89 @@ export interface components {
             after: {
                 [key: string]: unknown;
             } | null;
+        };
+        /**
+         * GovernanceExceptionCreate
+         * @description A freeze — what it covers is not approved nor run — or a waiver —
+         *     what it covers, up to a medium risk, is approved by the policy.
+         */
+        GovernanceExceptionCreate: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "freeze" | "waiver";
+            /** Reason */
+            reason: string;
+            /**
+             * Starts At
+             * @description None: now.
+             */
+            starts_at?: string | null;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Actions */
+            actions?: string[];
+            /** Environments */
+            environments?: string[];
+            /** Targets */
+            targets?: string[];
+            /**
+             * Max Risk
+             * @default low
+             * @enum {string}
+             */
+            max_risk: "low" | "medium";
+        };
+        /** GovernanceExceptionRead */
+        GovernanceExceptionRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "freeze" | "waiver";
+            /** Actions */
+            actions: string[];
+            /** Environments */
+            environments: string[];
+            /** Targets */
+            targets: string[];
+            /**
+             * Max Risk
+             * @enum {string}
+             */
+            max_risk: "low" | "medium" | "high" | "critical";
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Reason */
+            reason: string;
+            /** Granted By */
+            granted_by: string | null;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Revoked By */
+            revoked_by: string | null;
+            /**
+             * Active
+             * @default false
+             */
+            active: boolean;
         };
         /** GraphNodeRead */
         GraphNodeRead: {
@@ -16219,6 +16623,23 @@ export interface components {
              */
             timezone: string;
         };
+        /**
+         * PolicyProbe
+         * @description An action as it could be proposed: what the policy would say of it.
+         */
+        PolicyProbe: {
+            /** Action */
+            action: string;
+            /** Environment */
+            environment?: string | null;
+            /** Targets */
+            targets?: string[];
+            /**
+             * Risk
+             * @description The analysis's, when one said; none: LEKA cannot say.
+             */
+            risk?: ("high" | "medium" | "low") | null;
+        };
         /** PolicyRead */
         PolicyRead: {
             /** Name */
@@ -16243,7 +16664,7 @@ export interface components {
             /** Resource Types */
             resource_types?: string[];
             /** Risk At Least */
-            risk_at_least?: ("low" | "medium" | "high") | null;
+            risk_at_least?: ("low" | "medium" | "high" | "critical") | null;
             /** Kinds */
             kinds?: string[];
             /** Categories */
@@ -16293,7 +16714,7 @@ export interface components {
             /** Resource Types */
             resource_types?: string[];
             /** Risk At Least */
-            risk_at_least?: ("low" | "medium" | "high") | null;
+            risk_at_least?: ("low" | "medium" | "high" | "critical") | null;
             /** Kinds */
             kinds?: string[];
             /** Categories */
@@ -16308,6 +16729,39 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+        };
+        /**
+         * PolicyVerdictRead
+         * @description What the policy says of an action, now.
+         */
+        PolicyVerdictRead: {
+            /**
+             * Risk
+             * @enum {string}
+             */
+            risk: "low" | "medium" | "high" | "critical";
+            /** Reasons */
+            reasons: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+            /** Approvals */
+            approvals: number;
+            /** Separate */
+            separate: boolean;
+            /** Role */
+            role: string | null;
+            /** Valid Hours */
+            valid_hours: number | null;
+            /** Escalate Hours */
+            escalate_hours: number | null;
+            /** Frozen */
+            frozen: boolean;
+            /** Waived */
+            waived: boolean;
+            /** Exceptions */
+            exceptions: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
         };
         /**
          * Preview
@@ -17508,6 +17962,30 @@ export interface components {
             top: number;
             /** Said */
             said: string;
+        };
+        /**
+         * RiskRuleRead
+         * @description A rule that raises a decision's risk (LEKA-404): when every condition
+         *     it says holds of one proposed action — a list left empty holds of any.
+         */
+        RiskRuleRead: {
+            /** Name */
+            name: string;
+            /**
+             * At Least
+             * @enum {string}
+             */
+            at_least: "low" | "medium" | "high" | "critical";
+            /** Actions */
+            actions?: string[];
+            /** Environments */
+            environments?: string[];
+            /** Target Types */
+            target_types?: string[];
+            /** Target Criticality */
+            target_criticality?: string[];
+            /** Reversible */
+            reversible?: boolean | null;
         };
         /**
          * Role
@@ -45709,6 +46187,760 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalPolicyRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    evaluate_policy_api_v1_decisions_policy_evaluate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyProbe"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyVerdictRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    exceptions_api_v1_decisions_exceptions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GovernanceExceptionRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    grant_exception_api_v1_decisions_exceptions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GovernanceExceptionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GovernanceExceptionRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    revoke_exception_api_v1_decisions_exceptions__exception_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                exception_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GovernanceExceptionRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    delegations_api_v1_decisions_delegations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelegationRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    delegate_api_v1_decisions_delegations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DelegationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelegationRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    revoke_delegation_api_v1_decisions_delegations__delegation_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                delegation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelegationRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    governance_history_api_v1_decisions_governance_history_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionGovernanceEventRead"][];
                 };
             };
             /** @description The request could not be understood. */

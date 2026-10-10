@@ -1,6 +1,16 @@
 "use client";
 
-import { Check, MessageSquareWarning, PencilLine, ShieldCheck, X } from "lucide-react";
+import {
+  AlarmClock,
+  Check,
+  Hourglass,
+  MessageSquareWarning,
+  PencilLine,
+  ShieldCheck,
+  Snowflake,
+  Stamp,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -9,7 +19,7 @@ import { cn } from "cn";
 import { entityHref } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { useConfirm } from "@/components/interactions/confirm";
-import { timeAgo } from "@/components/knowledge/time";
+import { exactDate, timeAgo } from "@/components/knowledge/time";
 import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
@@ -17,14 +27,18 @@ import {
   type Decision,
   type DecisionProposal,
   type DecisionVote,
+  lentTo,
   mayApprove,
   remaining,
+  type Risk,
   type VoteKind,
 } from "@/lib/decisions";
-import { useVote } from "@/lib/decisions-queries";
+import { useDelegations, useVote } from "@/lib/decisions-queries";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
+import { personName } from "@/lib/team";
+import { useTeamMembers } from "@/lib/team-queries";
 
 /**
  * A decision on what an intention asks to do (LEKA-390), as À valider's
@@ -38,6 +52,11 @@ import { notify } from "@/lib/notify";
  * Approving asks first and says what it opens the way to; refusing, asking
  * for changes and modifying ask why, which the API keeps with the vote.
  * Nothing is drawn that the API did not say.
+ *
+ * Its governance (LEKA-404): why it is at its risk, the role one approver
+ * must hold, a freeze or a waiver that covered it when it opened, when it
+ * is or was escalated, how long its approval holds — and, for someone an
+ * approver lent their authority to, a vote in that approver's name.
  */
 
 const STATUS_TONES = {
@@ -47,7 +66,7 @@ const STATUS_TONES = {
   changes_requested: "info",
   superseded: "neutral",
 } as const;
-const RISK_TONES = { low: "success", medium: "warning", high: "danger" } as const;
+const RISK_TONES = { low: "success", medium: "warning", high: "danger", critical: "danger" } as const;
 
 export function actionWord(t: Dictionary, action: string): string {
   return (t.intentions.understanding.actionNames as Record<string, string>)[action] ?? action;
@@ -67,7 +86,12 @@ export function proposalTitle(t: Dictionary, proposal: DecisionProposal): string
 export function RiskPill({ risk }: { risk: Decision["risk"] }) {
   const t = useDictionary();
   return (
-    <Pill tone={RISK_TONES[risk]} data-testid="decision-risk" data-risk={risk}>
+    <Pill
+      tone={RISK_TONES[risk]}
+      dot={risk === "critical"}
+      data-testid="decision-risk"
+      data-risk={risk}
+    >
       {t.decisions.risks[risk]}
     </Pill>
   );
@@ -83,6 +107,123 @@ export function DecisionStatusPill({ decision }: { decision: Decision }) {
     >
       {t.decisions.statuses[decision.status]}
     </Pill>
+  );
+}
+
+function level(t: Dictionary, risk: unknown): string {
+  return (t.decisions.levels as Record<string, string>)[String(risk)] ?? String(risk);
+}
+
+/** "Irréversible en production : au moins critique" — one reason of its risk. */
+export function reasonSaid(t: Dictionary, reason: Record<string, unknown>): string {
+  const w = t.decisions;
+  const params = (reason.params ?? {}) as Record<string, unknown>;
+  const code = String(reason.code);
+  if (code === "analysis") return fill(w.reasons.analysis, { level: level(t, params.risk) });
+  if (code === "rule") {
+    const name = String(params.rule ?? "");
+    return fill(w.reasons.rule, {
+      rule: (w.ruleNames as Record<string, string>)[name] ?? `« ${name} »`,
+      level: level(t, params.at_least),
+    });
+  }
+  return (w.reasons as Record<string, string>)[code] ?? code;
+}
+
+/** Why it is at its risk; a freeze or a waiver that covered it; when it is
+ * escalated; how long its approval holds. */
+function Governance({ decision }: { decision: Decision }) {
+  const t = useDictionary();
+  const { locale } = useLocale();
+  const w = t.decisions;
+  const g = decision.governance;
+  if (!g) return null;
+  const reasons = g.reasons ?? [];
+  const said = (kind: string) =>
+    (g.exceptions ?? []).find((e) => e.kind === kind) as Record<string, unknown> | undefined;
+  const freeze = said("freeze");
+  const waiver = said("waiver");
+  const notes: { key: string; icon: React.ReactNode; text: string; tone?: string }[] = [];
+  if (g.frozen && freeze && decision.open) {
+    notes.push({
+      key: "frozen",
+      icon: <Snowflake className="mt-0.5 size-4 shrink-0" aria-hidden="true" />,
+      text: fill(w.frozen, {
+        reason: String(freeze.reason ?? ""),
+        until: exactDate(locale, String(freeze.ends_at)),
+      }),
+      tone: "bg-state-info-soft text-state-info",
+    });
+  }
+  if (g.waived && waiver) {
+    notes.push({
+      key: "waived",
+      icon: <Stamp className="mt-0.5 size-4 shrink-0" aria-hidden="true" />,
+      text: fill(w.waived, { reason: String(waiver.reason ?? "") }),
+    });
+  }
+  if (g.escalated_at) {
+    notes.push({
+      key: "escalated",
+      icon: <AlarmClock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />,
+      text: fill(w.escalatedOn, { when: timeAgo(t, g.escalated_at) }),
+      tone: "bg-state-warning-soft text-state-warning",
+    });
+  } else if (g.escalate_at && decision.open) {
+    notes.push({
+      key: "escalates",
+      icon: <AlarmClock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />,
+      text: fill(w.escalatesAt, { date: exactDate(locale, g.escalate_at) }),
+    });
+  }
+  if (g.valid_until && decision.status === "approved") {
+    notes.push({
+      key: "valid",
+      icon: <Hourglass className="mt-0.5 size-4 shrink-0" aria-hidden="true" />,
+      text: fill(w.validUntil, { date: exactDate(locale, g.valid_until) }),
+    });
+  }
+  if (!reasons.length && !notes.length) return null;
+  return (
+    <div className="flex flex-col gap-2" data-testid="decision-governance">
+      {reasons.length ? (
+        <div>
+          <p className="mb-1 text-sm font-semibold text-brand-navy">{w.why}</p>
+          <ul className="flex flex-col gap-0.5 text-[0.8125rem] text-brand-navy" data-testid="decision-reasons">
+            {reasons.map((reason, index) => (
+              <li key={index}>· {reasonSaid(t, reason)}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {notes.map((note) => (
+        <p
+          key={note.key}
+          data-testid={`decision-${note.key}`}
+          className={cn(
+            "flex items-start gap-2 rounded-lg px-3 py-2 text-[0.8125rem]",
+            note.tone ?? "bg-shell-highlight text-brand-navy",
+          )}
+        >
+          {note.icon}
+          {note.text}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/** "au nom de Ada Lovelace" — read only for a vote cast with an authority lent. */
+function OnBehalf({ id }: { id: string }) {
+  const t = useDictionary();
+  const members = useTeamMembers();
+  const member = members.data?.find((m) => m.user_id === id);
+  const name = member ? personName(member) : t.decisions.governance.someone;
+  return (
+    <span className="text-shell-muted" data-testid="decision-vote-for">
+      {" "}
+      {fill(t.decisions.onBehalf, { name })}
+    </span>
   );
 }
 
@@ -157,6 +298,13 @@ function VoteLine({ vote }: { vote: DecisionVote }) {
     >
       <span className="font-medium text-brand-navy">{w.verdicts[vote.verdict]}</span>
       <span className="text-shell-muted"> {who}</span>
+      {vote.on_behalf_of ? <OnBehalf id={vote.on_behalf_of} /> : null}
+      {vote.role ? (
+        <span className="text-shell-muted">
+          {" "}
+          ({(w.asRole as Record<string, string>)[vote.role] ?? vote.role})
+        </span>
+      ) : null}
       <span className="block text-xs text-shell-muted">
         <time dateTime={vote.at}>{timeAgo(t, vote.at)}</time> ·{" "}
         {fill(w.revision, { revision: vote.revision })}
@@ -261,6 +409,45 @@ function ModifyForm({
   );
 }
 
+/** Whose authority to vote with: one's own, or one lent (LEKA-404). */
+function Authority({
+  lenders,
+  steward,
+  value,
+  onChange,
+}: {
+  lenders: string[];
+  steward: boolean;
+  value: string | null;
+  onChange: (value: string | null) => void;
+}) {
+  const t = useDictionary();
+  const w = t.decisions;
+  const members = useTeamMembers();
+  const name = (id: string) => {
+    const member = members.data?.find((m) => m.user_id === id);
+    return member ? personName(member) : id.slice(0, 8);
+  };
+  return (
+    <label className="flex flex-wrap items-center gap-2 text-[0.8125rem] text-brand-navy">
+      <span>{w.voteAs}</span>
+      <select
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value || null)}
+        className="rounded-md border border-shell-line bg-white px-2 py-1 text-brand-navy"
+        data-testid="decision-authority"
+      >
+        {steward ? <option value="">{w.voteAsMe}</option> : null}
+        {lenders.map((id) => (
+          <option key={id} value={id}>
+            {fill(w.voteFor, { name: name(id) })}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function Actions({ decision }: { decision: Decision }) {
   const t = useDictionary();
   const w = t.decisions;
@@ -269,14 +456,26 @@ function Actions({ decision }: { decision: Decision }) {
   const confirm = useConfirm();
   const vote = useVote(decision.intention_id);
   const [modifying, setModifying] = useState(false);
+  const delegations = useDelegations(decision.open);
+  const lenders = [
+    ...new Set(lentTo(delegations.data, me?.id, decision.risk as Risk).map((d) => d.delegated_by)),
+  ];
+  const [chosen, setChosen] = useState<string | null>(null);
+  // A member votes only with an authority lent: the first, unless they choose.
+  const authority = chosen ?? (steward ? null : (lenders[0] ?? null));
 
   if (!decision.open) return null;
-  if (!steward) return <p className="text-[0.8125rem] text-shell-muted">{w.notYours}</p>;
-  const approvable = mayApprove(decision, me?.id, steward);
-  const iApproved = Boolean(me?.id && decision.approvers.includes(me.id));
-  const askerOnly = decision.separate_asker && decision.asked_by === me?.id;
+  if (!steward && !lenders.length) {
+    return <p className="text-[0.8125rem] text-shell-muted">{w.notYours}</p>;
+  }
+  const approvable = mayApprove(decision, me?.id, steward, authority);
+  const whose = authority ?? me?.id;
+  const iApproved = Boolean(whose && decision.approvers.includes(whose));
+  const askerOnly =
+    decision.separate_asker && (decision.asked_by === me?.id || decision.asked_by === authority);
 
-  async function cast(kind: VoteKind, body: { reason?: string | null; environment?: string | null; keep?: string[] }) {
+  async function cast(kind: VoteKind, raw: { reason?: string | null; environment?: string | null; keep?: string[] }) {
+    const body = authority ? { ...raw, on_behalf_of: authority } : raw;
     if (kind !== "approve" && !(body.reason ?? "").trim()) {
       notify.error({ title: w.refusals.reason_required });
       return false;
@@ -307,6 +506,10 @@ function Actions({ decision }: { decision: Decision }) {
 
   return (
     <div className="flex flex-col gap-3" data-testid="decision-actions">
+      {lenders.length ? (
+        <Authority lenders={lenders} steward={steward} value={authority} onChange={setChosen} />
+      ) : null}
+      {authority ? <p className="text-xs text-shell-muted">{w.lent}</p> : null}
       {iApproved ? (
         <p className="text-[0.8125rem] text-brand-navy">
           {fill(w.youApproved, { count: remaining(decision) })}
@@ -399,16 +602,25 @@ export function DecisionCard({ decision, className }: { decision: Decision; clas
         </span>
         <DecisionStatusPill decision={decision} />
         <RiskPill risk={decision.risk} />
+        {decision.governance?.escalated_at && decision.open ? (
+          <Pill tone="warning" data-testid="decision-escalated-pill">
+            {w.escalated}
+          </Pill>
+        ) : null}
       </div>
       <p className="text-[0.8125rem] text-brand-navy" data-testid="decision-requirement">
         {fill(w.required, { count: decision.required_approvals })}
         {decision.separate_asker ? ` ${w.separate}` : ""}
+        {decision.governance?.required_role
+          ? `, ${(w.roleRequired as Record<string, string>)[decision.governance.required_role] ?? decision.governance.required_role}`
+          : ""}
         {" · "}
         {fill(w.progress, {
           done: Math.min(decision.approvers.length, decision.required_approvals),
           count: decision.required_approvals,
         })}
       </p>
+      <Governance decision={decision} />
       <div>
         <p className="mb-2 text-sm font-semibold text-brand-navy">{w.proposals}</p>
         <ul className="flex flex-col gap-2">

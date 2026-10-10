@@ -665,6 +665,27 @@ class DecisionVoteRead(BaseModel):
     reason: str | None
     changes: dict[str, JsonValue]
     context: dict[str, JsonValue]
+    on_behalf_of: uuid.UUID | None = Field(
+        default=None, description="Cast with this person's authority, delegated (LEKA-404)."
+    )
+    role: str | None = Field(default=None, description="The role of the authority used.")
+
+
+class DecisionGovernanceRead(BaseModel):
+    """What the policy said of a decision (LEKA-404): why its risk, what it
+    needs, what froze or waived it, when it is escalated."""
+
+    model_config = ConfigDict(frozen=True)
+
+    reasons: list[dict[str, JsonValue]] = Field(default_factory=list)
+    required_role: str | None = None
+    valid_hours: int | None = None
+    escalate_at: datetime | None = None
+    escalated_at: datetime | None = None
+    valid_until: datetime | None = None
+    frozen: bool = False
+    waived: bool = False
+    exceptions: list[dict[str, JsonValue]] = Field(default_factory=list)
 
 
 class DecisionRead(BaseModel):
@@ -678,7 +699,7 @@ class DecisionRead(BaseModel):
     number: int
     status: Literal["proposed", "approved", "rejected", "changes_requested", "superseded"]
     open: bool = Field(description="Proposed, and its intention awaiting a decision: votable.")
-    risk: Literal["low", "medium", "high"]
+    risk: Literal["low", "medium", "high", "critical"]
     analysis_risk: str | None
     revision: int
     required_approvals: int
@@ -691,6 +712,7 @@ class DecisionRead(BaseModel):
     created_at: datetime
     decided_at: datetime | None
     votes: list[DecisionVoteRead]
+    governance: DecisionGovernanceRead = Field(default_factory=DecisionGovernanceRead)
 
 
 class DecisionIntention(BaseModel):
@@ -731,23 +753,154 @@ class DecisionSummary(BaseModel):
     superseded: int
 
 
+class RiskRuleRead(BaseModel):
+    """A rule that raises a decision's risk (LEKA-404): when every condition
+    it says holds of one proposed action — a list left empty holds of any."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str = Field(min_length=1, max_length=60)
+    at_least: Literal["low", "medium", "high", "critical"]
+    actions: list[str] = Field(default_factory=list, max_length=30)
+    environments: list[str] = Field(default_factory=list, max_length=30)
+    target_types: list[str] = Field(default_factory=list, max_length=30)
+    target_criticality: list[str] = Field(default_factory=list, max_length=30)
+    reversible: bool | None = None
+
+
+Level = Literal["low", "medium", "high", "critical"]
+
+
 class ApprovalPolicyRead(BaseModel):
-    """How many must approve, per risk; when the asker may not be one."""
+    """The workspace's governance of consequential actions: how risk is
+    classified, and per risk who must approve, how long an approval holds,
+    when a decision waiting is escalated."""
 
     model_config = ConfigDict(frozen=True)
 
-    approvals: dict[Literal["low", "medium", "high"], int]
-    separate: list[Literal["low", "medium", "high"]]
+    approvals: dict[Level, int]
+    separate: list[Level]
     production_raises: bool
+    roles: dict[Level, Literal["admin", "owner"] | None]
+    valid_hours: dict[Level, int | None]
+    escalate_hours: dict[Level, int | None]
+    rules: list[RiskRuleRead]
     customised: bool = Field(description="False: LEKA's default policy.")
 
 
 class ApprovalPolicyUpdate(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    approvals: dict[Literal["low", "medium", "high"], int] = Field(default_factory=dict)
-    separate: list[Literal["low", "medium", "high"]] | None = None
+    approvals: dict[Level, int] = Field(default_factory=dict)
+    separate: list[Level] | None = None
     production_raises: bool | None = None
+    roles: dict[Level, Literal["admin", "owner"] | None] | None = None
+    valid_hours: dict[Level, int | None] | None = None
+    escalate_hours: dict[Level, int | None] | None = None
+    rules: list[RiskRuleRead] | None = Field(default=None, max_length=30)
+
+
+class PolicyProbe(BaseModel):
+    """An action as it could be proposed: what the policy would say of it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    action: str = Field(min_length=1, max_length=40)
+    environment: str | None = Field(default=None, max_length=60)
+    targets: list[uuid.UUID] = Field(default_factory=list, max_length=20)
+    risk: Literal["high", "medium", "low"] | None = Field(
+        default=None, description="The analysis's, when one said; none: LEKA cannot say."
+    )
+
+
+class PolicyVerdictRead(BaseModel):
+    """What the policy says of an action, now."""
+
+    model_config = ConfigDict(frozen=True)
+
+    risk: Literal["low", "medium", "high", "critical"]
+    reasons: list[dict[str, JsonValue]]
+    approvals: int
+    separate: bool
+    role: str | None
+    valid_hours: int | None
+    escalate_hours: int | None
+    frozen: bool
+    waived: bool
+    exceptions: list[dict[str, JsonValue]]
+
+
+class GovernanceExceptionRead(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    kind: Literal["freeze", "waiver"]
+    actions: list[str]
+    environments: list[str]
+    targets: list[uuid.UUID]
+    max_risk: Literal["low", "medium", "high", "critical"]
+    starts_at: datetime
+    ends_at: datetime
+    reason: str
+    granted_by: uuid.UUID | None
+    revoked_at: datetime | None
+    revoked_by: uuid.UUID | None
+    active: bool = False
+
+
+class GovernanceExceptionCreate(BaseModel):
+    """A freeze — what it covers is not approved nor run — or a waiver —
+    what it covers, up to a medium risk, is approved by the policy."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: Literal["freeze", "waiver"]
+    reason: str = Field(min_length=3, max_length=2000)
+    starts_at: datetime | None = Field(default=None, description="None: now.")
+    ends_at: datetime
+    actions: list[str] = Field(default_factory=list, max_length=20)
+    environments: list[str] = Field(default_factory=list, max_length=20)
+    targets: list[uuid.UUID] = Field(default_factory=list, max_length=50)
+    max_risk: Literal["low", "medium"] = "low"
+
+
+class DelegationRead(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    delegated_by: uuid.UUID
+    delegated_to: uuid.UUID
+    max_risk: Literal["low", "medium", "high", "critical"]
+    starts_at: datetime
+    ends_at: datetime
+    reason: str
+    revoked_at: datetime | None
+    revoked_by: uuid.UUID | None
+    active: bool = False
+
+
+class DelegationCreate(BaseModel):
+    """Your authority to approve, lent to a member: up to a risk, for a
+    time, said why."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    to: uuid.UUID
+    max_risk: Literal["low", "medium", "high", "critical"]
+    reason: str = Field(min_length=3, max_length=2000)
+    starts_at: datetime | None = Field(default=None, description="None: now.")
+    ends_at: datetime
+
+
+class DecisionGovernanceEventRead(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: uuid.UUID
+    kind: str
+    by: uuid.UUID | None
+    at: datetime
+    subject_id: uuid.UUID | None
+    detail: dict[str, JsonValue]
 
 
 class DecisionVoteRequest(BaseModel):
@@ -759,6 +912,10 @@ class DecisionVoteRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=2000)
     environment: str | None = Field(default=None, min_length=1, max_length=60)
     keep: list[str] | None = Field(default=None, max_length=20)
+    on_behalf_of: uuid.UUID | None = Field(
+        default=None,
+        description="Vote with this approver's authority, which they delegated to you (LEKA-404).",
+    )
 
 
 # ── execution (LEKA-391) ──────────────────────────────────────────────────────

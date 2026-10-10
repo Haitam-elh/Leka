@@ -137,6 +137,13 @@ SCHEDULE: tuple[Scheduled, ...] = (
         "leka.capabilities.workflow_runs.run_workflows_sweep",
         cron="44 * * * *",
     ),
+    # The decisions waiting past their policy's hours (LEKA-404): escalated,
+    # the asker and the owners told.
+    Scheduled(
+        "decisions-escalation",
+        "leka.intentions.oversight.run_escalation",
+        cron="4,19,34,49 * * * *",
+    ),
     # The audit trail's retention (LEKA-407): what has outlived each
     # workspace's, deleted — and said, in the trail itself.
     Scheduled("audit-sweep", "leka.governance.audit.run_audit_sweep", cron="15 4 * * *"),

@@ -82,8 +82,10 @@ queries — and it never shows the system's own runs, which belong to no workspa
 
 **`intention:approve` decides what intentions ask to do** (LEKA-390): approve, reject,
 modify, ask for changes. The workspace's approval policy may want more than one person for a
-risky action, and not the person who asked ([intentions.md](intentions.md) § 13); changing
-that policy takes `workspace:update`. Carrying out what was approved — planning, starting,
+risky action, not the person who asked, and someone of a given role ([intentions.md](intentions.md)
+§ 13); changing that policy, and granting a freeze or a waiver, takes `workspace:update`; an
+approver may lend their authority to a member, whose votes then count as theirs (LEKA-404,
+[governance-rules.md](governance-rules.md)). Carrying out what was approved — planning, starting,
 scheduling, stopping a run, confirming a person's step — takes `intention:approve`; the
 systems LEKA may act through are authorized with `workspace:update` (LEKA-391). What its
 outcome should be, a person's word on it, reading it again and concluding take

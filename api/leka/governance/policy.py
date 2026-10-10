@@ -107,7 +107,7 @@ def checked_role(role: CustomRole) -> CustomRole:
 
 # ── policies (LEKA-403) ─────────────────────────────────────────────────────
 
-RISKS = ("low", "medium", "high")
+RISKS = ("low", "medium", "high", "critical")  # critical: LEKA-404
 EFFECTS = ("deny", "allow")
 
 
@@ -322,7 +322,7 @@ def rules_checked(rules: Sequence[Rule]) -> Sequence[Rule]:
             msg = f"{r.name}: an effect is deny or allow"
             raise RoleError(msg)
         if r.risk_at_least is not None and r.risk_at_least not in RISKS:
-            msg = f"{r.name}: a risk is low, medium or high"
+            msg = f"{r.name}: a risk is low, medium, high or critical"
             raise RoleError(msg)
         if not 0 <= r.priority <= 100:
             msg = f"{r.name}: a priority from 0 to 100"

@@ -8,7 +8,7 @@ concluded, who approved, what ran.
 
 This is the frame of the Intentions epic. LEKA-384 keeps the intention, its
 lifecycle, its history and its links; LEKA-385 understands it (§ 9), LEKA-386 scopes it (§ 10), LEKA-387 grounds it in its context (§ 11), LEKA-388 analyses it (§ 12),
-LEKA-390 puts what it asks to do to people's decision (§ 13), LEKA-391 carries it out (§ 14);
+LEKA-390 puts what it asks to do to people's decision (§ 13) — governed by LEKA-404 ([governance-rules.md](governance-rules.md)) — LEKA-391 carries it out (§ 14);
 389 concludes; 392 verifies — each moving it along
 this lifecycle and linking what it makes.
 
@@ -151,8 +151,9 @@ context, a finding or an entity — what LEKA was asked about a service.
 | read intentions, their history | `intention:read` — every member |
 | ask; ask again, cancel, archive, restore, link — **one's own** | `intention:create` |
 | the same on **another's** intention | its asker, or who may approve (`intention:approve`) — else 403 |
-| approve, reject, modify, ask for changes | who may approve (`intention:approve`) — and not the asker when the policy keeps them apart (§ 13) |
-| change the approval policy | `workspace:update` (§ 13) |
+| approve, reject, modify, ask for changes | who may approve (`intention:approve`) — or a member an approver lent their authority to — not the asker when the policy keeps them apart, and someone of the role it requires among the approvers (§ 13) |
+| change the approval policy; grant or revoke a freeze or a waiver | `workspace:update` ([governance-rules.md](governance-rules.md)) |
+| lend one's authority to approve | `intention:approve`; revoked by the lender or an admin |
 | plan, start, schedule, stop a run; confirm a person's step | `intention:approve` (§ 14) |
 | authorize a system LEKA acts through | `workspace:update` (§ 14) |
 
@@ -173,7 +174,7 @@ Another workspace's intention is 404: the workspace is the session's
 | `POST /intentions/{id}/cancel` `{reason?}`, `/archive`, `/restore` | the intention |
 | `POST /intentions/{id}/links` `{kind, ref_id}` · `DELETE …/links/{link_id}` | context, finding, entity |
 | `GET /intentions/{id}/analysis` · `/analyses` · `POST …/analyse` | its analysis, the latest and every one; analysed again (§ 12) |
-| `GET /intentions/{id}/decisions` · `POST …/decision/{verdict}` | its decisions; a vote (§ 13) — and `GET /decisions`, `/decisions/summary`, `GET` · `PUT /decisions/policy` |
+| `GET /intentions/{id}/decisions` · `POST …/decision/{verdict}` | its decisions; a vote (§ 13) — and `GET /decisions`, `/decisions/summary`, `GET` · `PUT /decisions/policy`, the governance routes ([governance-rules.md](governance-rules.md) § 8) |
 | `GET /intentions/{id}/plans` · `POST …/plan`, `/plan/start`, `/plan/cancel`, `/plan/steps/{step_id}/report` | carrying it out (§ 14) — and `/action-endpoints` |
 | `PUT /intentions/{id}/plan/expectations` · `GET …/verifications` · `POST …/verification/check`, `/verification/expectations/{expectation_id}/report`, `/verification/conclude` | what came of it (§ 15) |
 | `GET /intentions/{id}/timeline?category&actor&since&until&limit` · `GET /intention-history?…&by` | its whole story; every intention's (§ 15) |
@@ -787,25 +788,21 @@ and links it (`intention_links`, kind `decision`, `#1`):
 | | |
 | --- | --- |
 | the proposals | one per action that changes systems (LEKA-385): the action, what it is on, where (`environment`), the hard constraints (no downtime, a window…), whether it can be undone (`reversible`: a restart, a rollback, a deployment yes; a migration no; else not said) |
-| the risk | the analysis's (§ 12) — `medium` when it cannot say — at least `medium` in production when the policy says so |
-| what it needs | `required_approvals` and `separate_asker` (four eyes: the asker may not be one of them), read from the policy in force — kept with it (`policy`), so a later change does not move it |
+| the risk | low, medium, high or critical: the analysis's (§ 12) — `medium` when it cannot say — raised by the policy's rules, each reason kept (`governance.reasons`, LEKA-404) |
+| what it needs | `required_approvals`, `separate_asker` (four eyes: the asker may not be one of them), `required_role`, how long an approval holds and when it is escalated, read from the policy in force — kept with it (`policy`, `governance`), so a later change does not move it |
 | what it rests on | the analysis, the context's version, the asker |
 
 An earlier decision still waiting on the same intention is superseded.
 
 **The policy** — `workspace.settings.approval_policy`, LEKA's default for
-what it does not say:
-
-| Risk | Approvals | The asker may approve |
-| --- | --- | --- |
-| low | 1 | yes |
-| medium | 1 | yes |
-| high | 2 | no |
-
-plus `production_raises` (true): an action in production is at least
-medium. `GET /decisions/policy` says it; `PUT /decisions/policy` changes it
-(`workspace:update`) — 1 to 5 per risk, a riskier action never needing
-fewer than a safer one, else 422.
+what it does not say: per risk, the approvals, whether the asker may be
+one, the role one must hold, how long an approval holds, when a waiting
+decision is escalated; the rules that raise a risk. By default one approval
+for low and medium, two for high and critical, never the asker on those,
+an owner among a critical one's. `GET /decisions/policy` says it; `PUT
+/decisions/policy` changes it (`workspace:update`). A freeze stops what it
+covers; a waiver approves a standard change in advance; an approver may
+lend their vote. All of it: [governance-rules.md](governance-rules.md).
 
 **Voting** — `POST /intentions/{id}/decision/{verdict}`, `intention:approve`:
 
@@ -817,13 +814,13 @@ fewer than a safer one, else 422.
 | `request-changes` | sent back: `changes_requested`, the intention still awaiting a decision until its asker asks again — the next analysis opens a new one | must |
 
 Enough distinct approvers of the current revision — the asker not among
-them when `separate_asker` — approve it: `approved`, the intention
-`approved` by the person whose vote decided it, its history saying the
-decision, its revision, risk and approvers. Refused, with the refusal's code
-in `details` (`field: "refusal"`): `asker_may_not_approve` (403),
-`already_approved` (409), `reason_required`, `invalid_change`,
-`nothing_changed` (422); nothing open — decided, or its intention moved —
-409.
+them when `separate_asker`, one of them of the `required_role` — approve
+it: `approved`, the intention `approved` by the person whose vote decided
+it, its history saying the decision, its revision, risk and approvers.
+Refused, with the refusal's code in `details` (`field: "refusal"`):
+`asker_may_not_approve`, `no_delegation` (403), `already_approved`,
+`frozen` (409), `reason_required`, `invalid_change`, `nothing_changed`
+(422); nothing open — decided, or its intention moved — 409.
 
 **Every vote kept** (`intention_decision_votes`): who, when, why, on which
 revision, what a modification changed (`changes`: from, to) and the context
@@ -1133,7 +1130,5 @@ concluded short of it, failed.
   answers it (§ 15); each intention's is its tab *Historique*.
 - **A system's own report**: an endpoint that accepted the work (202) is
   confirmed by a person today; a signed callback can say it instead.
-- **The approval policy's screen**: set through the API (§ 13); its place
-  in Sécurité & gouvernance comes with its settings.
 - **Mes intentions**' impact and sources columns (mockup 07): from the
   analysis.

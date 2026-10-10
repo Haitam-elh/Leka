@@ -4,7 +4,10 @@ import { EyeOff, History, Lock, ShieldCheck } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import { cn } from "cn";
+
 import { Card } from "@/components/environment/parts";
+import { ApprovalGovernance } from "@/components/governance/approval-governance";
 import { Pill } from "@/components/intelligence/pill";
 import { useConfirm } from "@/components/interactions/confirm";
 import { exactDate } from "@/components/knowledge/time";
@@ -38,7 +41,9 @@ import { useTeamMembers } from "@/lib/team-queries";
  * see, restricted saying why and lifted, and the trail of access decisions,
  * refusals first to hand; the controls on the workspace's AI, the runs
  * waiting for approval and what the controls did (LEKA-406). Every word is
- * the API's: the model the server enforces, not a copy of it.
+ * the API's: the model the server enforces, not a copy of it. Its second tab,
+ * Approbations, governs consequential actions (LEKA-404,
+ * approval-governance.tsx).
  */
 
 const ROLE_ORDER = ["member", "admin", "owner"] as const;
@@ -317,9 +322,12 @@ export function GovernanceScreen() {
   const model = useAccessModel();
   const roles = useCustomRoles();
   const mine = new Set<string>(model.data?.mine ?? []);
+  const [tab, setTab] = useState<"access" | "approvals">("access");
 
   let body: React.ReactNode;
-  if (model.isError) {
+  if (tab === "approvals") {
+    body = <ApprovalGovernance />;
+  } else if (model.isError) {
     body = <ErrorState error={model.error} onRetry={() => void model.refetch()} />;
   } else if (!model.data) {
     body = <div className="h-96 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
@@ -356,6 +364,26 @@ export function GovernanceScreen() {
   return (
     <PageContainer>
       <PageHeader title={t.nav.governance} breadcrumb={crumbs} />
+      <div className="mb-4 flex gap-1 border-b border-shell-line" role="tablist">
+        {(["access", "approvals"] as const).map((name) => (
+          <button
+            key={name}
+            type="button"
+            role="tab"
+            aria-selected={tab === name}
+            onClick={() => setTab(name)}
+            data-testid={`governance-tab-${name}`}
+            className={cn(
+              "-mb-px border-b-2 px-3 py-2 text-[0.875rem] font-medium",
+              tab === name
+                ? "border-shell-nav-active text-shell-nav-active"
+                : "border-transparent text-shell-muted hover:text-brand-navy",
+            )}
+          >
+            {t.decisions.governance.tabs[name]}
+          </button>
+        ))}
+      </div>
       {body}
     </PageContainer>
   );
