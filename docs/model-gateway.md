@@ -126,10 +126,18 @@ without (the rules).
 `model_calls` — one row per attempt: purpose, ref, tier, provider, model,
 the version that answered, the route (own, default, fallback, alternative)
 and which try, whose model (LEKA's or the workspace's), ok · failed ·
-invalid and why, tokens in, out, thinking, tool calls, **the cost at list
-price** (none when the price is not published), latency, the provider's
+invalid and why, tokens in, out, thinking, tool calls, **whether the
+provider said what it used** (`usage_reported`: an answer without it reads 0
+tokens — not known, not free; none for the calls kept before LEKA-430),
+**the cost at the rate in force** and that rate (`rate_id`; none when the
+model has no rate, or its usage was not said), latency, the provider's
 request id. What answers « why did LEKA say that? » and « what does it
 spend? ». `GET /models/usage` reads it.
+
+The rates are in the database (`model_rates`, LEKA-430): what a model costs
+from a day on, seeded with the list prices above — a new price is a new
+rate, a rate never rewritten. Routing still reads the list prices here.
+[metering.md](metering.md) says how a rate is added.
 
 ## 6. A workspace's own model
 
