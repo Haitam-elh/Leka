@@ -26,7 +26,10 @@ from leka.governance import (
     PendingInvitationRead,
     Permission,
     Principal,
+    Target,
     TeamMemberRead,
+    audit,
+    audit_as,
     inviter_name,
     pending_invitations,
     require_permission,
@@ -119,6 +122,15 @@ async def invite_member(
     invitation, token = await members.invite(
         payload.email, payload.role, invited_by=principal.user_id
     )
+    audit_as(
+        db,
+        principal,
+        "team",
+        "member.invited",
+        # Never the address: personal data the trail would keep for years.
+        target=Target("invitation", invitation.id),
+        detail={"role": invitation.role.value},
+    )
     workspace = await db.get(Workspace, principal.workspace_id)
     await DeferredEmailSender(build_email_sender(), background.add_task).send(
         invitation_message(
@@ -157,6 +169,9 @@ async def revoke(
     """Revoked: its link no longer works."""
     if not await revoke_invitation(db, principal.workspace_id, invitation_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such pending invitation.")
+    audit_as(
+        db, principal, "team", "invitation.revoked", target=Target("invitation", invitation_id)
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -167,6 +182,7 @@ async def change_member_role(
     principal: Annotated[Principal, Depends(require_permission(Permission.MEMBER_UPDATE_ROLE))],
     memberships: MembershipRepositoryDep,
     members: MembershipServiceDep,
+    db: SessionDep,
 ) -> MemberRead:
     """Change someone's role. Admin or above."""
     seat = await _seat_or_404(memberships, membership_id)
@@ -175,7 +191,17 @@ async def change_member_role(
             status.HTTP_409_CONFLICT,
             "This is the last owner. Promote another owner first.",
         )
-    return MemberRead.model_validate(await members.change_role(seat, payload.role))
+    before = seat.role.value
+    changed = await members.change_role(seat, payload.role)
+    audit_as(
+        db,
+        principal,
+        "team",
+        "member.role_changed",
+        target=Target("user", seat.user_id),
+        detail={"before": before, "after": payload.role.value},
+    )
+    return MemberRead.model_validate(changed)
 
 
 @router.delete("/members/{membership_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -184,6 +210,7 @@ async def remove_member(
     principal: Annotated[Principal, Depends(require_permission(Permission.MEMBER_REMOVE))],
     memberships: MembershipRepositoryDep,
     members: MembershipServiceDep,
+    db: SessionDep,
 ) -> Response:
     """Remove a seat. Admin or above.
 
@@ -197,6 +224,14 @@ async def remove_member(
             "This is the last owner. Promote another owner first.",
         )
     await members.remove(seat)
+    audit_as(
+        db,
+        principal,
+        "team",
+        "member.removed",
+        target=Target("user", seat.user_id),
+        detail={"role": seat.role.value},
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -205,6 +240,7 @@ async def accept_invitation(
     token: str,
     user_id: UserIdDep,
     acceptance: InvitationAcceptanceDep,
+    db: SessionDep,
 ) -> MemberRead:
     """Turn an invitation into a seat.
 
@@ -221,6 +257,15 @@ async def accept_invitation(
     membership = await acceptance.accept(token, user_id)
     if membership is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This invitation is not valid.")
+    audit(
+        db,
+        membership.workspace_id,
+        "team",
+        "member.joined",
+        actor_id=user_id,
+        actor_role=membership.role.value,
+        target=Target("user", user_id),
+    )
     return MemberRead.model_validate(membership)
 
 

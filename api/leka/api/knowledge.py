@@ -115,7 +115,10 @@ from leka.governance import (
     Permission,
     Principal,
     Resource,
+    RestrictionRepository,
     Subject,
+    Target,
+    audit_as,
     evaluate,
     record_apart,
     require_permission,
@@ -345,6 +348,15 @@ async def entity(entity_id: uuid.UUID, session: SessionDep, principal: Reader) -
                 route=f"GET /knowledge/entities/{entity_id}",
             )
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
+    # A restricted entity read by who may (LEKA-407): who looked, when.
+    if found.id in await RestrictionRepository(session, principal.workspace_id).restricted_ids():
+        audit_as(
+            session,
+            principal,
+            "data",
+            "entity.restricted_read",
+            target=Target("entity", found.id, found.name),
+        )
     edges, total = await repository.edges_of(found.id, limit=EDGES)
     others = await repository.by_ids(
         [e.to_entity_id if e.from_entity_id == found.id else e.from_entity_id for e in edges]

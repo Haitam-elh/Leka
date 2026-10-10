@@ -904,6 +904,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/governance/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search the audit trail */
+        get: operations["search_api_v1_governance_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/governance/audit/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The audit trail, as CSV
+         * @description What the search finds, at most 10 000 events, the latest first. The
+         *     export is itself kept in the trail, with what it asked.
+         */
+        get: operations["export_api_v1_governance_audit_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/governance/audit/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How long the trail is kept */
+        get: operations["settings_api_v1_governance_audit_settings_get"];
+        /**
+         * Keep the trail so long
+         * @description From 90 days to seven years. Shortened, what is older goes at the next
+         *     sweep, daily. The change is in the trail.
+         */
+        put: operations["keep_api_v1_governance_audit_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/governance/audit/{event_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One audit event */
+        get: operations["event_api_v1_governance_audit__event_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connectors/catalog": {
         parameters: {
             query?: never;
@@ -7250,6 +7327,156 @@ export interface components {
             entity: components["schemas"]["EntityRef"] | null;
             /** Detail */
             detail: string | null;
+        };
+        /** AuditEventDetail */
+        AuditEventDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "user" | "team" | "workspace" | "data" | "access" | "governance" | "decision" | "action" | "ai" | "audit";
+            /** Action */
+            action: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "success" | "failure" | "denied";
+            /**
+             * Actor Type
+             * @enum {string}
+             */
+            actor_type: "user" | "system";
+            /** Actor Id */
+            actor_id: string | null;
+            /** Actor Role */
+            actor_role: string | null;
+            /** Target Type */
+            target_type: string | null;
+            /** Target Id */
+            target_id: string | null;
+            /** Target Label */
+            target_label: string | null;
+            /** Request Id */
+            request_id: string | null;
+            /**
+             * Ip
+             * @description A network prefix, never a full address.
+             */
+            ip: string | null;
+            /** User Agent */
+            user_agent: string | null;
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            };
+            /**
+             * Related
+             * @description What else the same request did.
+             */
+            related: components["schemas"]["AuditEventRead"][];
+        };
+        /**
+         * AuditEventRead
+         * @description One event of the audit trail: who, when, what, to what, the outcome,
+         *     from where — and what else it said.
+         */
+        AuditEventRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "user" | "team" | "workspace" | "data" | "access" | "governance" | "decision" | "action" | "ai" | "audit";
+            /** Action */
+            action: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "success" | "failure" | "denied";
+            /**
+             * Actor Type
+             * @enum {string}
+             */
+            actor_type: "user" | "system";
+            /** Actor Id */
+            actor_id: string | null;
+            /** Actor Role */
+            actor_role: string | null;
+            /** Target Type */
+            target_type: string | null;
+            /** Target Id */
+            target_id: string | null;
+            /** Target Label */
+            target_label: string | null;
+            /** Request Id */
+            request_id: string | null;
+            /**
+             * Ip
+             * @description A network prefix, never a full address.
+             */
+            ip: string | null;
+            /** User Agent */
+            user_agent: string | null;
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            };
+        };
+        /** AuditPageRead */
+        AuditPageRead: {
+            /** Events */
+            events: components["schemas"]["AuditEventRead"][];
+            /**
+             * Next
+             * @description Reads on from the last event; none: the end.
+             */
+            next: string | null;
+        };
+        /** AuditSettingsRead */
+        AuditSettingsRead: {
+            /** Retention Days */
+            retention_days: number;
+            /** Default Days */
+            default_days: number;
+            /** Min Days */
+            min_days: number;
+            /** Max Days */
+            max_days: number;
+            /**
+             * Oldest
+             * @description The oldest event still kept.
+             */
+            oldest: string | null;
+            /** Updated At */
+            updated_at: string | null;
+            /** Updated By */
+            updated_by: string | null;
+        };
+        /** AuditSettingsUpdate */
+        AuditSettingsUpdate: {
+            /** Retention Days */
+            retention_days: number;
         };
         /** AuthorityRuleCreate */
         AuthorityRuleCreate: {
@@ -16231,7 +16458,7 @@ export interface components {
          *     them.
          * @enum {string}
          */
-        Permission: "workspace:read" | "workspace:update" | "workspace:delete" | "workspace:transfer" | "member:read" | "member:invite" | "member:update_role" | "member:remove" | "source:read" | "source:manage" | "intention:read" | "intention:create" | "intention:approve" | "context:manage" | "job:read" | "entity:restrict" | "entity:read_restricted" | "access:read" | "policy:manage";
+        Permission: "workspace:read" | "workspace:update" | "workspace:delete" | "workspace:transfer" | "member:read" | "member:invite" | "member:update_role" | "member:remove" | "source:read" | "source:manage" | "intention:read" | "intention:create" | "intention:approve" | "context:manage" | "job:read" | "entity:restrict" | "entity:read_restricted" | "access:read" | "policy:manage" | "audit:read" | "audit:manage";
         /**
          * PersonDetail
          * @description One person: their teams — each said or inferred — their managers up
@@ -25207,6 +25434,496 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelCallRead"][];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    search_api_v1_governance_audit_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+                category?: ("user" | "team" | "workspace" | "data" | "access" | "governance" | "decision" | "action" | "ai" | "audit")[] | null;
+                action?: string | null;
+                outcome?: ("success" | "failure" | "denied") | null;
+                actor?: string | null;
+                target_type?: string | null;
+                target_id?: string | null;
+                since?: string | null;
+                until?: string | null;
+                q?: string | null;
+                request_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPageRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    export_api_v1_governance_audit_export_get: {
+        parameters: {
+            query?: {
+                category?: ("user" | "team" | "workspace" | "data" | "access" | "governance" | "decision" | "action" | "ai" | "audit")[] | null;
+                action?: string | null;
+                outcome?: ("success" | "failure" | "denied") | null;
+                actor?: string | null;
+                target_type?: string | null;
+                target_id?: string | null;
+                since?: string | null;
+                until?: string | null;
+                q?: string | null;
+                request_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    settings_api_v1_governance_audit_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditSettingsRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    keep_api_v1_governance_audit_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuditSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditSettingsRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    event_api_v1_governance_audit__event_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventDetail"];
                 };
             };
             /** @description The request could not be understood. */

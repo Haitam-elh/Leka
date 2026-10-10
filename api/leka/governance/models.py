@@ -10,6 +10,9 @@ database refusing to change one.
 
 LEKA-406: the workspace's AI controls, and every outcome of one —
 append-only too.
+
+LEKA-407: the audit trail itself — one record per event that matters, in
+one shape whatever produced it; and how long the workspace keeps it.
 """
 
 from __future__ import annotations
@@ -239,3 +242,66 @@ class AIControlEvent(Base, WorkspaceScopedMixin):
     model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+class AuditEvent(Base, WorkspaceScopedMixin):
+    """One thing that happened, as the audit trail keeps it (LEKA-407): who
+    — a person, as which role, or LEKA itself — did what, to what, with
+    what outcome, from where; never the data it touched.
+
+    Append-only: the database refuses to change one, and to delete one but
+    for the retention sweep and the workspace's own deletion. The person is
+    forgotten with their account; what they did stays."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        CheckConstraint(
+            "category IN ('user', 'team', 'workspace', 'data', 'access', 'governance',"
+            " 'decision', 'action', 'ai', 'audit')",
+            name="category",
+        ),
+        CheckConstraint(
+            "outcome IN ('success', 'failure', 'denied')",
+            name="outcome",
+        ),
+        CheckConstraint("actor_type IN ('user', 'system')", name="actor_type"),
+        Index("ix_audit_events_workspace_at", "workspace_id", "at"),
+        Index("ix_audit_events_workspace_actor", "workspace_id", "actor_id", "at"),
+        # A person forgotten with their account: found without reading it all.
+        Index("ix_audit_events_actor_id", "actor_id"),
+        Index("ix_audit_events_workspace_target", "workspace_id", "target_type", "target_id"),
+    )
+
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    category: Mapped[str] = mapped_column(String(12), nullable=False)
+    action: Mapped[str] = mapped_column(String(60), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(10), nullable=False)
+    actor_type: Mapped[str] = mapped_column(String(10), nullable=False)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    actor_role: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    target_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    target_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    target_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # A network prefix, never a full address (identity.truncate_ip).
+    ip: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+
+class AuditSettings(Base, WorkspaceScopedMixin):
+    """How long the workspace keeps its audit trail (LEKA-407) — one row,
+    none: the default."""
+
+    __tablename__ = "audit_settings"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", name="uq_audit_settings_workspace_id"),
+        CheckConstraint("retention_days BETWEEN 90 AND 2555", name="retention_days"),
+    )
+
+    retention_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )

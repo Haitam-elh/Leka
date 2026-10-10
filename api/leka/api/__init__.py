@@ -15,6 +15,7 @@ from leka.api import (
     actions,
     agent_runs,
     ai_governance,
+    audit,
     background,
     billing,
     capabilities,
@@ -51,6 +52,7 @@ api_router.include_router(platform.router)
 api_router.include_router(governance.router)
 api_router.include_router(access.router)
 api_router.include_router(ai_governance.router)
+api_router.include_router(audit.router)
 api_router.include_router(connectors.router)
 api_router.include_router(ingestion.router)
 # What the workspace's sources resolve to (LEKA-357), and what enrichment

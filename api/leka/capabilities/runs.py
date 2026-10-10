@@ -73,6 +73,8 @@ from leka.governance import (
     ROLE_PERMISSIONS,
     Permission,
     Resource,
+    Target,
+    audit,
     evaluate,
     hidden_on_behalf,
     record,
@@ -299,6 +301,25 @@ async def execute_run(
                 return await _fail(session, run, "error", kind=type(error).__name__)
 
 
+def _ended(session: AsyncSession, run: AgentRun, status: str, **detail: object) -> None:
+    """An agent run ended, as the audit trail keeps it (LEKA-407): LEKA ran
+    it, for the person who asked."""
+    audit(
+        session,
+        run.workspace_id,
+        "ai",
+        f"agent_run.{status}",
+        outcome="success" if status == "succeeded" else "failure",
+        target=Target("agent_run", run.id, run.key),
+        detail={
+            "agent": run.key,
+            "version": run.version,
+            "for": str(run.requested_by) if run.requested_by else None,
+            **{k: v for k, v in detail.items() if v is not None},
+        },
+    )
+
+
 async def _fail(
     session: AsyncSession, run: AgentRun, code: str, **detail: object
 ) -> dict[str, object]:
@@ -313,6 +334,7 @@ async def _fail(
     )
     if ended:
         Steps(session, run, await runs.last_seq(run.id)).add("failed", code=code, **detail)
+        _ended(session, run, "failed", error=code, reason=detail.get("reason"))
     await session.commit()
     logger.info("agent_run_ended", run=str(run.id), key=run.key, status="failed", error=code)
     return {"status": "failed" if ended else "cancelled", "error": code}
@@ -468,6 +490,7 @@ async def _run(
     )
     if ended:
         steps.add("succeeded", chars=len(output))
+        _ended(session, run, "succeeded", model=done.model, tool_calls=run.tool_calls)
     await session.commit()
     status = "succeeded" if ended else "cancelled"
     logger.info("agent_run_ended", run=str(run.id), key=run.key, status=status)

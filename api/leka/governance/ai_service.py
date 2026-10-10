@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.governance.ai import Actor, Control, ControlError, checked_control, control_of
+from leka.governance.audit import ai_audited, governance_audited
 from leka.governance.models import AIControl, AIControlEvent, GovernanceEvent
 from leka.governance.repository import AIControlRepository, PolicyRepository
 from leka.platform import Role
@@ -76,24 +77,24 @@ def ai_event(
 ) -> None:
     """What a control did, kept with what happened — in the same session,
     committed with it."""
-    session.add(
-        AIControlEvent(
-            workspace_id=workspace_id,
-            id=uuid.uuid4(),
-            control_id=control.id if control is not None else None,
-            control_name=control.name[:120] if control is not None else None,
-            kind=kind or (control.kind if control is not None else "approval"),
-            outcome=outcome,
-            purpose=purpose[:100] if purpose else None,
-            ref=ref[:100] if ref else None,
-            run_id=run_id,
-            user_id=user_id or (actor.user_id if actor is not None else None),
-            provider=provider,
-            model=model[:120] if model else None,
-            at=datetime.now(UTC),
-            detail=dict(detail or {}),
-        )
+    row = AIControlEvent(
+        workspace_id=workspace_id,
+        id=uuid.uuid4(),
+        control_id=control.id if control is not None else None,
+        control_name=control.name[:120] if control is not None else None,
+        kind=kind or (control.kind if control is not None else "approval"),
+        outcome=outcome,
+        purpose=purpose[:100] if purpose else None,
+        ref=ref[:100] if ref else None,
+        run_id=run_id,
+        user_id=user_id or (actor.user_id if actor is not None else None),
+        provider=provider,
+        model=model[:120] if model else None,
+        at=datetime.now(UTC),
+        detail=dict(detail or {}),
     )
+    # And in the audit trail (LEKA-407).
+    session.add_all([row, ai_audited(row)])
 
 
 class AIControlService:
@@ -176,16 +177,15 @@ class AIControlService:
         before: Mapping[str, object] | None,
         after: Mapping[str, object] | None,
     ) -> None:
-        self._session.add(
-            GovernanceEvent(
-                workspace_id=self._workspace_id,
-                id=uuid.uuid4(),
-                subject_type="ai_control",
-                subject_id=subject_id[:100],
-                kind=kind,
-                by=by,
-                at=datetime.now(UTC),
-                before=dict(before) if before is not None else None,
-                after=dict(after) if after is not None else None,
-            )
+        row = GovernanceEvent(
+            workspace_id=self._workspace_id,
+            id=uuid.uuid4(),
+            subject_type="ai_control",
+            subject_id=subject_id[:100],
+            kind=kind,
+            by=by,
+            at=datetime.now(UTC),
+            before=dict(before) if before is not None else None,
+            after=dict(after) if after is not None else None,
         )
+        self._session.add_all([row, governance_audited(row)])
