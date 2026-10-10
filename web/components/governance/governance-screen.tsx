@@ -13,8 +13,10 @@ import { ErrorState } from "@/components/states/error-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AccessDecision, AccessModel, EntityHit } from "@/lib/access";
+import { HistoryCard, PoliciesCard, RolesCard } from "@/components/governance/roles-policies";
 import {
   useAccessModel,
+  useCustomRoles,
   useDecisions,
   useEntitySearch,
   useRestrictionChange,
@@ -50,7 +52,9 @@ function AccessMatrix({ model }: { model: AccessModel }) {
   return (
     <Card title={w.matrix} icon={<ShieldCheck className="size-4 text-shell-muted" aria-hidden="true" />}>
       <p className="mb-3 text-[0.8125rem] text-shell-muted">
-        {fill(w.yourRole, { role: (w.roles as Record<string, string>)[model.role] ?? model.role })}
+        {fill(w.yourRole, {
+          role: model.custom_role ?? (w.roles as Record<string, string>)[model.role] ?? model.role,
+        })}
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-[0.8125rem]" data-testid="access-matrix">
@@ -308,6 +312,7 @@ export function GovernanceScreen() {
   const pathname = usePathname() ?? "/governance";
   const crumbs = buildBreadcrumb(pathname, t);
   const model = useAccessModel();
+  const roles = useCustomRoles();
   const mine = new Set<string>(model.data?.mine ?? []);
 
   let body: React.ReactNode;
@@ -318,10 +323,16 @@ export function GovernanceScreen() {
   } else {
     body = (
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <AccessMatrix model={model.data} />
+        <div className="flex flex-col gap-4">
+          <AccessMatrix model={model.data} />
+          {/* Roles and policies of the workspace's own (LEKA-403). */}
+          <RolesCard model={model.data} canManage={mine.has("policy:manage")} />
+          <PoliciesCard canManage={mine.has("policy:manage")} roles={roles.data ?? []} />
+        </div>
         <div className="flex flex-col gap-4">
           {mine.has("access:read") ? <Restrictions canRestrict={mine.has("entity:restrict")} /> : null}
           {mine.has("access:read") ? <Decisions /> : null}
+          {mine.has("access:read") ? <HistoryCard /> : null}
         </div>
       </div>
     );
