@@ -18,11 +18,12 @@ or unavailable rather than left out.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -110,3 +111,21 @@ class UsageRecord(Base, WorkspaceScopedMixin):
     rates: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
     steps: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
     metered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CreditWarning(Base, WorkspaceScopedMixin):
+    """A share of a month's AI credits past which the workspace's owners and
+    admins were told (LEKA-430) — once a month for each, whoever asks
+    again."""
+
+    __tablename__ = "credit_warnings"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "period", "threshold", name="uq_credit_warnings_once"),
+    )
+
+    period: Mapped[date] = mapped_column(Date, nullable=False)
+    # A percentage of the month's credits: 80, 100.
+    threshold: Mapped[int] = mapped_column(Integer, nullable=False)
+    credits: Mapped[int] = mapped_column(Integer, nullable=False)
+    used: Mapped[float] = mapped_column(Float, nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

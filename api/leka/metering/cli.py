@@ -15,6 +15,21 @@ HTTP: what they show crosses every workspace, and LEKA's costs are its own.
             [--cached PRICE] [--source TEXT]
         A rate from SINCE on (a day, YYYY-MM-DD), per million tokens in US
         dollars. A rate is never rewritten: a new price is a new rate.
+
+    python -m leka.metering.cli plan WORKSPACE_ID PLAN --by NAME --reason TEXT
+            [--credits N]
+        The workspace on PLAN (free, starter, growth, business, enterprise)
+        from now on — --credits: its credits a month, the plan's overridden
+        (an Enterprise contract). Kept, and in the workspace's audit trail.
+
+    python -m leka.metering.cli plans WORKSPACE_ID
+        Every plan it was on, the latest first.
+
+    python -m leka.metering.cli pack WORKSPACE_ID CREDITS --by NAME --reason TEXT
+        Credits added to this month, gone when it ends. Kept and audited.
+
+    python -m leka.metering.cli credits WORKSPACE_ID
+        Its plan and its AI credits this month — as JSON.
 """
 
 from __future__ import annotations
@@ -32,6 +47,8 @@ from sqlalchemy.exc import IntegrityError
 
 from leka.capabilities import ModelRate
 from leka.db import load_schema, session_factory, system_scope, workspace_scope
+from leka.governance import PlanError, add_pack, plans, set_plan
+from leka.metering.credits import credits_now
 from leka.metering.service import Metering, sweep
 
 
@@ -100,6 +117,65 @@ async def _add(given: argparse.Namespace) -> int:
     return 0
 
 
+async def _plan(given: argparse.Namespace) -> int:
+    workspace_id = uuid.UUID(given.workspace)
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            try:
+                row = await set_plan(
+                    session,
+                    workspace_id,
+                    given.plan,
+                    by=given.by,
+                    reason=given.reason,
+                    monthly_credits=given.credits,
+                )
+            except PlanError as error:
+                sys.stderr.write(f"{error}\n")
+                return 1
+            await session.commit()
+    sys.stdout.write(f"{row.plan} from {row.at.isoformat()}\n")
+    return 0
+
+
+async def _plans(workspace: str) -> int:
+    workspace_id = uuid.UUID(workspace)
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            rows = await plans(session, workspace_id)
+    for row in rows:
+        own = "" if row.monthly_credits is None else f" ({row.monthly_credits} credits)"
+        sys.stdout.write(f"{row.at.isoformat()}  {row.plan}{own}  by {row.set_by} — {row.reason}\n")
+    if not rows:
+        sys.stdout.write("free — never set\n")
+    return 0
+
+
+async def _pack(given: argparse.Namespace) -> int:
+    workspace_id = uuid.UUID(given.workspace)
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            try:
+                row = await add_pack(
+                    session, workspace_id, given.credits, by=given.by, reason=given.reason
+                )
+            except PlanError as error:
+                sys.stderr.write(f"{error}\n")
+                return 1
+            await session.commit()
+    sys.stdout.write(f"+{row.credits} credits for {row.period.isoformat()[:7]}\n")
+    return 0
+
+
+async def _credits(workspace: str) -> int:
+    workspace_id = uuid.UUID(workspace)
+    with workspace_scope(workspace_id):
+        async with session_factory() as session:
+            read = await credits_now(session, workspace_id, now=datetime.now(UTC))
+    sys.stdout.write(read.model_dump_json(indent=2) + "\n")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m leka.metering.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -118,7 +194,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     add.add_argument("per_out", type=float)
     add.add_argument("--cached", type=float)
     add.add_argument("--source")
+    plan = commands.add_parser("plan")
+    plan.add_argument("workspace")
+    plan.add_argument("plan")
+    plan.add_argument("--by", required=True)
+    plan.add_argument("--reason", required=True)
+    plan.add_argument("--credits", type=int)
+    history = commands.add_parser("plans")
+    history.add_argument("workspace")
+    pack = commands.add_parser("pack")
+    pack.add_argument("workspace")
+    pack.add_argument("credits", type=int)
+    pack.add_argument("--by", required=True)
+    pack.add_argument("--reason", required=True)
+    held = commands.add_parser("credits")
+    held.add_argument("workspace")
     given = parser.parse_args(argv)
+    if given.command == "plan":
+        return asyncio.run(_plan(given))
+    if given.command == "plans":
+        return asyncio.run(_plans(given.workspace))
+    if given.command == "pack":
+        return asyncio.run(_pack(given))
+    if given.command == "credits":
+        return asyncio.run(_credits(given.workspace))
     if given.command == "sweep":
         return asyncio.run(_sweep(given.since))
     if given.command == "intention":

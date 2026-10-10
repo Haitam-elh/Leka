@@ -67,3 +67,24 @@ class IntentionCost(BaseModel):
     embedding_cost: str = "not_applicable"
     tool_cost: str = "unavailable"
     infra_cost: str = "unavailable"
+
+
+class CreditsRead(BaseModel):
+    """A workspace's AI credits this month (LEKA-430): its plan's and its
+    packs', what its work on LEKA's models used, what is left — and whether
+    LEKA's models are refused it once they are spent."""
+
+    plan: Literal["free", "starter", "growth", "business", "enterprise"]
+    plan_since: datetime | None = Field(description="None: Free from the start.")
+    monthly: int = Field(description="The plan's credits a month.")
+    packs: int = Field(description="Credits added to this month.")
+    allowance: int
+    used: float
+    remaining: float
+    percent: float = Field(description="Of the allowance used, 0 to 100 and past.")
+    period_start: datetime
+    period_end: datetime
+    state: Literal["ok", "warning", "exhausted"]
+    warn_at: list[int] = Field(description="The percentages past which owners and admins are told.")
+    enforced: bool = Field(description="Spent, LEKA's models are refused until the month ends.")
+    credit_usd: float = Field(description="What a credit is worth of LEKA's model cost.")

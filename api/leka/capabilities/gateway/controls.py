@@ -11,20 +11,28 @@ acted is kept (ai_control_events) with the call it acted on.
 The controls are read once per gateway, on its first call. What the work is
 for and for whom: the request's purpose, the person it is done for
 (governance.current_actor).
+
+The workspace's AI credits (LEKA-430) are a limit of the same kind: spent
+for the month — its plan's and its packs' — LEKA's models are refused it
+until the month ends, a pack is added or its plan changes; never billed
+past it. Its own model, its own account, still answers.
 """
 
 from __future__ import annotations
 
 import uuid
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 
+import structlog
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.gateway.contract import Completion, Request
-from leka.capabilities.gateway.routing import Routing
+from leka.capabilities.gateway.routing import Route, Routing
+from leka.capabilities.gateway.usage import leka_cost
 from leka.capabilities.models import ModelCall
+from leka.core.config import settings
 from leka.governance import (
     PERIODS,
     Actor,
@@ -32,12 +40,16 @@ from leka.governance import (
     Control,
     Used,
     ai_event,
+    allowance,
     check_output,
+    credits_of,
     current_actor,
     limits,
     refusing,
     spent,
 )
+
+logger = structlog.get_logger(__name__)
 
 
 class ControlRefusedError(Exception):
@@ -86,11 +98,22 @@ class Guard:
         )
 
     async def before(self, request: Request, routing: Routing) -> Routing:
-        controls = await self.controls()
-        if not controls or not routing.routes:
+        if not routing.routes:
             return routing
+        allowed = await self._controlled(request, routing)
+        allowed = await self._credited(allowed)
+        if len(allowed) == len(routing.routes):
+            return routing
+        return replace(routing, routes=tuple(allowed))
+
+    async def _controlled(self, request: Request, routing: Routing) -> list[Route]:
+        """The routes the workspace's AI controls leave this work — none:
+        refused; a usage limit reached: limited."""
+        controls = await self.controls()
+        if not controls:
+            return list(routing.routes)
         actor = current_actor()
-        allowed = []
+        allowed: list[Route] = []
         refused: list[tuple[Control, str, str]] = []
         for route in routing.routes:
             by = refusing(
@@ -129,7 +152,35 @@ class Guard:
                 raise ControlRefusedError(
                     f"The usage limit « {control.name} » is reached ({reached}).", "limited"
                 )
-        return replace(routing, routes=tuple(allowed)) if refused else routing
+        return allowed
+
+    async def _credited(self, routes: list[Route]) -> list[Route]:
+        """The routes the workspace's credits leave it: all, while some are
+        left; its own model's alone once they are spent — none of those,
+        refused, `limited`."""
+        if not settings.credits_enforced or all(r.endpoint.owner != "leka" for r in routes):
+            return routes
+        now = datetime.now(UTC)
+        given = await allowance(self._session, self._workspace_id, now)
+        start = datetime.combine(given.period, time.min, tzinfo=UTC)
+        used = credits_of(await leka_cost(self._session, self._workspace_id, since=start))
+        if used < given.credits:
+            return routes
+        own = [r for r in routes if r.endpoint.owner != "leka"]
+        if own:
+            return own
+        logger.info(
+            "ai_credits_spent",
+            workspace=str(self._workspace_id),
+            plan=given.plan.name,
+            credits=given.credits,
+            used=round(used, 2),
+        )
+        raise ControlRefusedError(
+            f"The AI credits of this month are spent ({given.credits} on the"
+            f" {given.plan.name} plan): add a pack or change the plan.",
+            "limited",
+        )
 
     async def _used(self, control: Control, purpose: str, actor: Actor | None) -> Used:
         """What the work this limit covers took in its period: the calls

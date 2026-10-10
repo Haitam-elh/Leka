@@ -13,16 +13,20 @@ append-only too.
 
 LEKA-407: the audit trail itself — one record per event that matters, in
 one shape whatever produced it; and how long the workspace keeps it.
+
+LEKA-430: the workspace's plan — every one it had, from when — and the
+credit packs added to a month: what its AI credits are.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -308,3 +312,43 @@ class AuditSettings(Base, WorkspaceScopedMixin):
     updated_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+
+class WorkspacePlan(Base, WorkspaceScopedMixin):
+    """A plan a workspace was put on, from when, by whom at LEKA, why —
+    every one kept: its plan is the latest; none, Free. `monthly_credits`:
+    the plan's own allowance overridden — an Enterprise contract."""
+
+    __tablename__ = "workspace_plans"
+    __table_args__ = (
+        CheckConstraint(
+            "plan IN ('free', 'starter', 'growth', 'business', 'enterprise')", name="plan"
+        ),
+        CheckConstraint("monthly_credits IS NULL OR monthly_credits >= 0", name="credits"),
+        Index("ix_workspace_plans_workspace_at", "workspace_id", "at"),
+    )
+
+    plan: Mapped[str] = mapped_column(String(12), nullable=False)
+    monthly_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reason: Mapped[str] = mapped_column(String(300), nullable=False)
+    # Who at LEKA: the server command's operator — no account of the workspace.
+    set_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CreditPack(Base, WorkspaceScopedMixin):
+    """Credits added to a month — bought, agreed with LEKA — on top of the
+    plan's; spent or not, gone when the month ends."""
+
+    __tablename__ = "credit_packs"
+    __table_args__ = (
+        CheckConstraint("credits > 0", name="credits"),
+        Index("ix_credit_packs_workspace_period", "workspace_id", "period"),
+    )
+
+    credits: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The month it counts in: its first day.
+    period: Mapped[date] = mapped_column(Date, nullable=False)
+    reason: Mapped[str] = mapped_column(String(300), nullable=False)
+    granted_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

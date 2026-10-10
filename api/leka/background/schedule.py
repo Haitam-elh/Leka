@@ -163,6 +163,9 @@ SCHEDULE: tuple[Scheduled, ...] = (
     Scheduled(
         "metering-sweep", "leka.metering.service.run_metering_sweep", cron="9,24,39,54 * * * *"
     ),
+    # The AI credits (LEKA-430): each share of a month's credits passed, told
+    # to the workspace's owners and admins — once.
+    Scheduled("credit-watch", "leka.metering.credits.run_credit_watch", cron="3,18,33,48 * * * *"),
 )
 
 
