@@ -1,5 +1,9 @@
 # Deployment — how LEKA ships, and how to undo it
 
+> Watching it run — metrics, health, alerts, what to do for each, backups
+> that are proven to restore, recovery targets: [operations.md](operations.md)
+> (LEKA-408).
+
 One environment online: **production**, at `https://leka-core.com` (the
 site and the web app, one address — see [below](#leka-corecom-the-site-and-the-application-as-one))
 and `https://api.leka-core.com` (the API). There is no staging: what

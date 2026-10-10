@@ -64,7 +64,9 @@ from leka.governance import (
     AIControlService,
     Permission,
     Principal,
+    Target,
     ai_event,
+    audit_as,
     authorize,
     current_actor,
     holding,
@@ -239,6 +241,19 @@ async def start_run(body: AgentRunCreate, session: SessionDep, principal: Runner
             run_id=run.id,
             detail={"risk": capability.risk if capability is not None else None},
         )
+    audit_as(
+        session,
+        principal,
+        "ai",
+        "agent_run.requested",
+        target=Target("agent_run", run.id, run.key),
+        detail={
+            "agent": run.key,
+            "version": run.version,
+            "inputs": sorted(body.inputs),
+            **({"held_by": held.name} if held is not None else {}),
+        },
+    )
     read = run_read(run, principal)
     # What the worker reads, committed before it hears of it.
     await session.commit()
@@ -338,6 +353,9 @@ async def cancel_run(run_id: uuid.UUID, session: SessionDep, principal: Runner) 
         raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "It already ended.") from error
     if run is None:
         raise _missing()
+    audit_as(
+        session, principal, "ai", "agent_run.cancelled", target=Target("agent_run", run.id, run.key)
+    )
     return run_read(run, principal)
 
 

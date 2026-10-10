@@ -51,7 +51,7 @@ from leka.capabilities import (
     workflow_catalogue,
 )
 from leka.core.errors import ErrorCode, FieldError
-from leka.governance import Permission, Principal, authorize, require_permission
+from leka.governance import Permission, Principal, Target, audit_as, authorize, require_permission
 from leka.intentions import IntentionRepository
 
 router = APIRouter(tags=["workflows"])
@@ -245,6 +245,14 @@ async def start_run(
         )
     except RunRefusedError as error:
         raise _refused(error) from error
+    audit_as(
+        session,
+        principal,
+        "ai",
+        "workflow_run.requested",
+        target=Target("workflow_run", run.id, run.key),
+        detail={"workflow": run.key, "inputs": sorted(body.inputs)},
+    )
     read = run_read(run, principal)
     await session.commit()
     await queue_workflow(principal.workspace_id, run.id)
@@ -300,6 +308,13 @@ async def cancel_run(run_id: uuid.UUID, session: SessionDep, principal: Runner) 
         raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "It already ended.") from error
     if run is None:
         raise _missing()
+    audit_as(
+        session,
+        principal,
+        "ai",
+        "workflow_run.cancelled",
+        target=Target("workflow_run", run.id, run.key),
+    )
     return run_read(run, principal)
 
 
@@ -325,6 +340,13 @@ async def retry_run(run_id: uuid.UUID, session: SessionDep, principal: Runner) -
         ) from error
     if run is None:
         raise _missing()
+    audit_as(
+        session,
+        principal,
+        "ai",
+        "workflow_run.retried",
+        target=Target("workflow_run", run.id, run.key),
+    )
     read = run_read(run, principal)
     await session.commit()
     await queue_workflow(principal.workspace_id, run.id)

@@ -27,11 +27,14 @@ from collections.abc import Awaitable, Callable
 import structlog
 from fastapi import Request, Response
 
+from leka.api.identity import client_ip
 from leka.core.request_context import (
     current_request_id,
     new_request_id,
     reset_request_id,
+    reset_request_origin,
     set_request_id,
+    set_request_origin,
 )
 
 REQUEST_ID_HEADER = "X-Request-ID"
@@ -62,12 +65,16 @@ async def request_id_middleware(
     # have gone out without one. request.state survives the unwinding.
     request.state.request_id = request_id
     token = set_request_id(request_id)
+    # Where it came from, for the audit trail (LEKA-407).
+    # The address as rate limiting reads it (identity.client_ip): one reading.
+    origin = set_request_origin(client_ip(request), request.headers.get("user-agent"))
     structlog.contextvars.bind_contextvars(request_id=request_id)
     try:
         response = await call_next(request)
     finally:
         structlog.contextvars.unbind_contextvars("request_id")
         reset_request_id(token)
+        reset_request_origin(origin)
 
     # Set after the handler, so a route writing its own headers cannot drop
     # it by accident.

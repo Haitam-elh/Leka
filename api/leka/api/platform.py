@@ -29,7 +29,7 @@ from leka.api.dependencies import (
 )
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.db import SortableField, system_scope
-from leka.governance import Permission, Principal, require_permission
+from leka.governance import Permission, Principal, Target, audit_as, require_permission
 from leka.platform import (
     CurrentWorkspace,
     DeletionScheduled,
@@ -145,12 +145,29 @@ async def configure_current_workspace(
     principal: Annotated[Principal, Depends(require_permission(Permission.WORKSPACE_UPDATE))],
     workspaces: WorkspaceServiceDep,
     repository: WorkspaceRepositoryDep,
+    db: SessionDep,
 ) -> WorkspaceRead:
     """Rename or reconfigure. Admin or above."""
     workspace = await repository.get(principal.workspace_id)
     if workspace is None:  # pragma: no cover
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found.")
+    before = workspace.name
     updated = await workspaces.configure(workspace, name=payload.name, settings=payload.settings)
+    audit_as(
+        db,
+        principal,
+        "workspace",
+        "workspace.updated",
+        target=Target("workspace", workspace.id, updated.name),
+        detail={
+            **(
+                {"name": {"before": before, "after": updated.name}}
+                if before != updated.name
+                else {}
+            ),
+            **({"settings": sorted(payload.settings)} if payload.settings else {}),
+        },
+    )
     return WorkspaceRead.model_validate(updated)
 
 
@@ -190,6 +207,7 @@ async def request_workspace_deletion(
     principal: Annotated[Principal, Depends(require_permission(Permission.WORKSPACE_DELETE))],
     workspaces: WorkspaceServiceDep,
     repository: WorkspaceRepositoryDep,
+    db: SessionDep,
 ) -> DeletionScheduled:
     """Ask for the workspace to be erased. Owner only.
 
@@ -204,6 +222,14 @@ async def request_workspace_deletion(
     due = workspaces.deletion_due_at(scheduled)
     assert scheduled.deletion_requested_at is not None
     assert due is not None
+    audit_as(
+        db,
+        principal,
+        "workspace",
+        "workspace.deletion_requested",
+        target=Target("workspace", workspace.id, workspace.name),
+        detail={"erasure_due_at": due.isoformat()},
+    )
     return DeletionScheduled(
         workspace_id=scheduled.id,
         deletion_requested_at=scheduled.deletion_requested_at,

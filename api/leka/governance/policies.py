@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from leka.governance.audit import governance_audited
 from leka.governance.models import GovernanceEvent, RoleAssignment, WorkspacePolicy, WorkspaceRole
 from leka.governance.policy import (
     BASES,
@@ -183,19 +184,19 @@ class PolicyService:
         before: Mapping[str, object] | None = None,
         after: Mapping[str, object] | None = None,
     ) -> None:
-        self._repo.add(
-            GovernanceEvent(
-                workspace_id=self._workspace_id,
-                id=uuid.uuid4(),
-                subject_type=subject_type,
-                subject_id=subject_id[:100],
-                kind=kind,
-                by=by,
-                at=datetime.now(UTC),
-                before=dict(before) if before is not None else None,
-                after=dict(after) if after is not None else None,
-            )
+        row = GovernanceEvent(
+            workspace_id=self._workspace_id,
+            id=uuid.uuid4(),
+            subject_type=subject_type,
+            subject_id=subject_id[:100],
+            kind=kind,
+            by=by,
+            at=datetime.now(UTC),
+            before=dict(before) if before is not None else None,
+            after=dict(after) if after is not None else None,
         )
+        self._repo.add(row)
+        self._repo.add(governance_audited(row))
 
     # ── roles ───────────────────────────────────────────────────────────────
 

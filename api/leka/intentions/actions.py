@@ -38,7 +38,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import enqueue_job
 from leka.connectors import BlockedAddressError, PublicTransport
+from leka.core import breaker
 from leka.db import session_factory, system_scope, workspace_scope
+from leka.governance import Target, audit
 from leka.intentions.approval import DecisionService, approvers_of, waiver_of
 from leka.intentions.decisions import DecisionStatus, Proposal
 from leka.intentions.execution import (
@@ -667,6 +669,35 @@ class ActionService:
             self._event(plan, "step_failed", at=started, step=step, detail={"error": step.error})
             await self._session.flush()
             return
+        circuit = f"action_endpoint:{endpoint.id}"
+        if not await breaker.allow(circuit):
+            # Failing for a while (LEKA-408): not called now — nothing sent,
+            # nothing signed; a person retries it.
+            step.status = "failed"
+            step.error = "circuit_open"
+            step.finished_at = started
+            step.evidence = {"outcome": {"status": "failed", "reason": "circuit_open"}}
+            self._event(plan, "step_failed", at=started, step=step, detail={"error": step.error})
+            audit(
+                self._session,
+                plan.workspace_id,
+                "action",
+                "action.executed",
+                outcome="failure",
+                target=Target("action_endpoint", endpoint.id, endpoint.name),
+                detail={
+                    "action": step.action,
+                    "environment": step.environment,
+                    "plan": str(plan.id),
+                    "intention": str(plan.intention_id),
+                    "status": "failed",
+                    "reason": "circuit_open",
+                    "sent": False,
+                },
+                at=started,
+            )
+            await self._session.flush()
+            return
         intention = await self._intentions.intention(plan.intention_id)
         payload = {
             "event": "leka.action",
@@ -725,8 +756,16 @@ class ActionService:
         except httpx.TimeoutException:
             # It may have acted, or not: a person finds out — never assumed.
             outcome = Outcome("failed", reason="no_answer")
+            await breaker.failure(circuit)
         except httpx.HTTPError as error:
             outcome = Outcome("failed", reason=type(error).__name__)
+            await breaker.failure(circuit)
+        else:
+            # A system that answers 5xx is failing; anything else, it is up.
+            if answered.status_code >= 500:
+                await breaker.failure(circuit)
+            else:
+                await breaker.success(circuit)
         moment = _now(None)
         endpoint.last_called_at = moment
         step.evidence = {
@@ -754,6 +793,25 @@ class ActionService:
             step.error = outcome.reason
             step.finished_at = moment
             self._event(plan, "step_failed", at=moment, step=step, detail={"error": outcome.reason})
+        # LEKA called a system on the workspace's behalf (LEKA-407).
+        audit(
+            self._session,
+            plan.workspace_id,
+            "action",
+            "action.executed",
+            outcome="failure" if outcome.status == "failed" else "success",
+            target=Target("action_endpoint", endpoint.id, endpoint.name),
+            detail={
+                "action": step.action,
+                "environment": step.environment,
+                "plan": str(plan.id),
+                "intention": str(plan.intention_id),
+                "status": outcome.status,
+                **({"reason": outcome.reason} if outcome.reason else {}),
+                **({"http": response["status"]} if response else {}),
+            },
+            at=moment,
+        )
         await self._session.flush()
 
     async def _finish(

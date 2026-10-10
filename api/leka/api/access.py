@@ -54,8 +54,10 @@ from leka.governance import (
     RoleRead,
     RoleUpdate,
     Subject,
+    Target,
     WorkspacePolicy,
     WorkspaceRole,
+    audit_as,
     evaluate,
     require_permission,
     role_of,
@@ -134,6 +136,14 @@ async def restrict(
         entity_id, reason=body.reason, by=principal.user_id
     )
     name, kind = names[entity_id]
+    audit_as(
+        session,
+        principal,
+        "data",
+        "entity.restricted",
+        target=Target("entity", entity_id, name),
+        detail={"reason": body.reason},
+    )
     return RestrictionRead(
         entity_id=row.entity_id,
         name=name,
@@ -152,6 +162,9 @@ async def restrict(
 async def lift(entity_id: uuid.UUID, session: SessionDep, principal: Restricter) -> Response:
     if not await RestrictionService(session, principal.workspace_id).lift(entity_id):
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "Not restricted.")
+    audit_as(
+        session, principal, "data", "entity.restriction_lifted", target=Target("entity", entity_id)
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

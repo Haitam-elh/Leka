@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AccessDecision, AccessModel, EntityHit } from "@/lib/access";
 import { AIAuditCard, AIControlsCard, ApprovalsCard } from "@/components/governance/ai-controls";
+import { AuditLogCard, AuditRetentionCard } from "@/components/governance/audit-log";
 import { HistoryCard, PoliciesCard, RolesCard } from "@/components/governance/roles-policies";
 import {
   useAccessModel,
@@ -332,6 +333,14 @@ export function GovernanceScreen() {
     body = <div className="h-96 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
   } else {
     body = (
+      <div className="flex flex-col gap-4">
+        {/* The audit trail (LEKA-407): everything that matters, searched. */}
+        {mine.has("audit:read") ? (
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <AuditLogCard />
+            <AuditRetentionCard canChange={mine.has("audit:manage")} />
+          </div>
+        ) : null}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
           <AccessMatrix model={model.data} />
@@ -348,6 +357,7 @@ export function GovernanceScreen() {
           {mine.has("access:read") ? <AIAuditCard /> : null}
           {mine.has("access:read") ? <HistoryCard /> : null}
         </div>
+      </div>
       </div>
     );
   }
