@@ -119,6 +119,8 @@
     'docs.meta_title': { en: `Documentation, LEKA`, de: `Dokumentation, LEKA`, es: `Documentación, LEKA`, it: `Documentazione, LEKA`, nl: `Documentatie, LEKA`, pt: `Documentação, LEKA` },
     'docs.title': { en: `Understand and deploy LEKA`, de: `LEKA verstehen und einführen`, es: `Comprender e implementar LEKA`, it: `Comprendere e distribuire LEKA`, nl: `LEKA begrijpen en implementeren`, pt: `Compreender e implementar a LEKA` },
     'footer.changelog': { en: `Changelog`, de: `Änderungsprotokoll`, es: `Registro de cambios`, it: `Registro modifiche`, nl: `Wijzigingslogboek`, pt: `Registo de alterações` },
+    'footer.about': { en: `About`, de: `Über uns`, es: `Acerca de`, it: `Chi siamo`, nl: `Over ons`, pt: `Sobre nós` },
+    'footer.faq': { en: `FAQ`, de: `FAQ`, es: `Preguntas frecuentes`, it: `FAQ`, nl: `Veelgestelde vragen`, pt: `Perguntas frequentes` },
     'footer.company': { en: `Company`, de: `Unternehmen`, es: `Empresa`, it: `Azienda`, nl: `Bedrijf`, pt: `Empresa` },
     'footer.connecteurs': { en: `Connectors`, de: `Konnektoren`, es: `Conectores`, it: `Connettori`, nl: `Connectoren`, pt: `Conectores` },
     'footer.contact': { en: `Contact us`, de: `Kontaktieren Sie uns`, es: `Contáctenos`, it: `Contattaci`, nl: `Neem contact op`, pt: `Contacte-nos` },
