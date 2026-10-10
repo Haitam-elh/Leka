@@ -1,8 +1,9 @@
 # Usage and cost metering
 
 LEKA-430. What each execution took and cost LEKA — derived from what was
-kept where the work was done, never told twice — and what an intention cost,
-end to end. The code is `api/leka/metering`; the rates are the model
+kept where the work was done, never told twice — what an intention cost,
+end to end; and each workspace's AI credits — its plan's, what it used, the
+limit. The code is `api/leka/metering`; the rates are the model
 gateway's (`api/leka/capabilities/gateway/rates.py`).
 
 ## 1. What a call keeps
@@ -83,3 +84,48 @@ the last six hours — every quarter of an hour (`metering-sweep`). A backfill:
 Its executions metered again, then summed: reading it, analysing it, the
 agents and workflows it ran (`intention_id`), every try — calls, tokens,
 cost, by step, with the same statuses.
+
+## 5. Plans and AI credits
+
+A workspace's **AI credits** are what its plan lets its work cost LEKA on
+LEKA's models each month — apart from what that work costs LEKA, which stays
+LEKA's to read (§ 3). **1 credit = `LEKA_CREDIT_USD` (0.01 $) of LEKA's model
+cost** at the rates in force: a workspace uses, in credits, what its calls to
+LEKA's models cost. A call that failed is not billed; a workspace's own model
+(Enterprise, its account) uses none — and is still metered (§ 3).
+
+| Plan | Credits a month (`LEKA_PLAN_CREDITS`) |
+| --- | --- |
+| Free — every workspace until LEKA puts it on another | 200 |
+| Starter | 2 000 |
+| Growth | 10 000 |
+| Business | 40 000 |
+| Enterprise — or its contract's (`--credits`) | 100 000 |
+
+The month is the calendar month (UTC). A **pack** adds credits to the month it
+is added in, gone when it ends.
+
+**The limit.** Once a month's credits are spent — its plan's and its packs' —
+LEKA's models are refused the workspace until the month ends, a pack is added
+or its plan changes (`LEKA_CREDITS_ENFORCED`, on). **Never billed past it.** The
+refusal is the AI controls' (LEKA-406, `capabilities/gateway/controls.py`):
+the run ends `no_model`, reason `limited`, said why. A workspace's own model
+still answers.
+
+**Warnings.** Each share of the month's credits passed (`LEKA_CREDIT_WARNINGS`:
+80 %, 100 %) is told by email to its owners and admins, once a month
+(`credit_warnings`, the `credit-watch` schedule every quarter of an hour).
+
+**Facturation** shows the plan, the credits used and left, until when, the
+packs, and — near or past the limit — what to do (`GET /billing/credits`).
+
+**No payment yet**: plans and packs are LEKA's to give, by the server command,
+the operator named; each is kept (`workspace_plans`, every plan it was on;
+`credit_packs`) and in the workspace's audit trail (`workspace.plan_changed`,
+`workspace.credits_added`).
+
+    python -m leka.metering.cli plan <workspace id> growth --by bilal --reason "pilot"
+    python -m leka.metering.cli plan <workspace id> enterprise --credits 50000 --by bilal --reason "contract"
+    python -m leka.metering.cli pack <workspace id> 1000 --by bilal --reason "asked by mail"
+    python -m leka.metering.cli plans <workspace id>
+    python -m leka.metering.cli credits <workspace id>
