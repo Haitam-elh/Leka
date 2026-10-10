@@ -39,11 +39,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.background import enqueue_job
 from leka.connectors import BlockedAddressError, PublicTransport
 from leka.db import session_factory, system_scope, workspace_scope
-from leka.intentions.approval import approvers_of
-from leka.intentions.decisions import DecisionStatus
+from leka.intentions.approval import DecisionService, approvers_of, waiver_of
+from leka.intentions.decisions import DecisionStatus, Proposal
 from leka.intentions.execution import (
     DELIVERY,
     SIGNATURE,
+    Check,
     Endpoint,
     Outcome,
     Situation,
@@ -57,14 +58,17 @@ from leka.intentions.execution import (
     scheduled_for,
     sign,
 )
+from leka.intentions.governance import policy_checks
 from leka.intentions.lifecycle import Actor, IntentionStatus
 from leka.intentions.models import (
     ActionEndpoint,
+    GovernanceExceptionRow,
     IntentionDecision,
     IntentionPlan,
     IntentionPlanEvent,
     IntentionPlanStep,
 )
+from leka.intentions.oversight import OversightService
 from leka.intentions.repository import IntentionRepository
 from leka.intentions.schemas import (
     ActionEndpointRead,
@@ -459,15 +463,20 @@ class ActionService:
             if decision.status == DecisionStatus.APPROVED
             else ()
         )
-        allowed = set(
-            await self._session.scalars(
-                select(Membership.user_id).where(
-                    Membership.workspace_id == self._workspace_id,
-                    Membership.user_id.in_(approvers or [uuid.uuid4()]),
-                    Membership.role.in_(APPROVERS),
+        roles = dict(
+            (
+                await self._session.execute(
+                    select(Membership.user_id, Membership.role).where(
+                        Membership.workspace_id == self._workspace_id,
+                        Membership.user_id.in_(approvers or [uuid.uuid4()]),
+                        Membership.role.in_(APPROVERS),
+                    )
                 )
             )
+            .tuples()
+            .all()
         )
+        allowed = set(roles)
         ids = {uuid.UUID(str(t["id"])) for s in steps for t in s.targets}
         present = set(
             await self._session.scalars(
@@ -484,12 +493,41 @@ class ActionService:
             plan_revision=plan.revision,
             approvers=approvers,
             allowed=frozenset(allowed),
-            required=decision.required_approvals,
+            # Approved by a waiver: its grantor's approval is the one it needs.
+            required=1 if waiver_of(decision) else decision.required_approvals,
             endpoints={e.id: e for e in await self._endpoints()},
             present=frozenset(present),
             now=at,
             zone=_zone(plan.timezone),
+            policy=await self._policy(decision, roles, at),
         )
+
+    async def _policy(
+        self, decision: IntentionDecision, roles: Mapping[uuid.UUID, Role], at: datetime
+    ) -> list[Check]:
+        """What the workspace's governance says of it now (LEKA-404): no
+        freeze, its approval not expired, today's policy met by its
+        approvers still allowed — or the waiver that approved it held."""
+        if decision.status != DecisionStatus.APPROVED:
+            return []
+        waived: bool | None = None
+        waiver = waiver_of(decision)
+        if waiver is not None:
+            row = await self._session.get(GovernanceExceptionRow, waiver[0])
+            waived = row is not None and row.revoked_at is None and waiver[1] in roles
+        policy, _ = await DecisionService(self._session, self._workspace_id).policy()
+        found = policy_checks(
+            [Proposal.from_dict(p) for p in decision.proposals],
+            risk=decision.risk,
+            valid_until=decision.valid_until,
+            approvals=len(roles),
+            roles=[r.value for r in roles.values()],
+            policy=policy,
+            exceptions=await OversightService(self._session, self._workspace_id).exceptions(at),
+            now=at,
+            waived=waived,
+        )
+        return [Check(c.code, c.passed, c.detail) for c in found]
 
     async def _check(
         self, plan: IntentionPlan, steps: Sequence[IntentionPlanStep], at: datetime
@@ -615,7 +653,8 @@ class ActionService:
         failed = [
             c
             for c in await self._check(plan, steps, started)
-            if c["code"] in ("endpoint_allows", "approvers_allowed", "decision_approved")
+            if c["code"]
+            in ("endpoint_allows", "approvers_allowed", "decision_approved", "not_frozen")
         ]
         endpoint = (
             await self._session.get(ActionEndpoint, step.endpoint_id) if step.endpoint_id else None
