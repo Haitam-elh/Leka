@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from leka.ops.alerts import queue_backlog, scheduler_stopped, worker_stalled
 from leka.ops.metrics import circuits
-from leka.ops.snapshot import Snapshot
+from leka.ops.repository import Snapshot
 from leka.platform import check_backing_services, object_store
 
 PROBE_SECONDS = 3.0

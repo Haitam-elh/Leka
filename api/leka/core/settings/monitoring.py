@@ -62,7 +62,28 @@ class MonitoringSettings:
     # say so when the last good one is older than a day and two hours.
     backup_expected: bool = False
 
-    @field_validator("sentry_dsn", "release", "metrics_token", "ops_alert_emails", mode="before")
+    # Where the dumps go: a bucket of their own — in another AWS account, so
+    # losing this one does not lose them — and a key that opens only it.
+    backup_bucket: str | None = None
+    backup_region: str | None = None
+    backup_access_key_id: str | None = None
+    backup_secret_access_key: Annotated[SecretStr | None, RotateEvery(days=90)] = None
+
+    # How pg_dump and pg_restore are run: empty, the machine's own; or a
+    # prefix — "docker exec -i leka-postgres" on a laptop.
+    pg_tools: str = ""
+
+    @field_validator(
+        "sentry_dsn",
+        "release",
+        "metrics_token",
+        "ops_alert_emails",
+        "backup_bucket",
+        "backup_region",
+        "backup_access_key_id",
+        "backup_secret_access_key",
+        mode="before",
+    )
     @classmethod
     def _blank_dsn_is_not_configured(cls, value: object) -> object:
         """An empty LEKA_SENTRY_DSN means "off", not a DSN of length zero.

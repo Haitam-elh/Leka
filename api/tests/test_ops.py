@@ -20,7 +20,6 @@ What these protect:
 # ruff: noqa: F811 — the gateway's fixtures are imported to be requested by name.
 from __future__ import annotations
 
-import os
 import shutil
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -406,7 +405,7 @@ async def test_the_health_report_says_which_component_is_down(
 
 # ── backup and restore ─────────────────────────────────────────────────────
 
-TOOLS = os.environ.get("LEKA_PG_TOOLS") or shutil.which("pg_dump")
+TOOLS = settings.pg_tools or shutil.which("pg_dump")
 
 
 @pytest.mark.skipif(not TOOLS, reason="pg_dump and pg_restore: neither here nor LEKA_PG_TOOLS")

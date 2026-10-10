@@ -16,17 +16,25 @@ import asyncio
 import hmac
 import time
 from collections.abc import Awaitable, Callable
-from typing import Annotated, Literal
+from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, Header, Request, Response, status
-from pydantic import BaseModel
 from starlette.responses import Response as StarletteResponse
 
 from leka.api.errors import ApiError
 from leka.core.config import settings
 from leka.core.errors import ErrorCode
-from leka.ops import cached, components, observe_request, overall, render, watch
+from leka.ops import (
+    ComponentRead,
+    OpsHealthRead,
+    cached,
+    components,
+    observe_request,
+    overall,
+    render,
+    watch,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -43,17 +51,6 @@ def _operator(authorization: Annotated[str | None, Header()] = None) -> None:
 
 
 Operator = Annotated[None, Depends(_operator)]
-
-
-class ComponentRead(BaseModel):
-    name: str
-    status: Literal["ok", "degraded", "down"]
-    detail: str | None
-
-
-class OpsHealthRead(BaseModel):
-    status: Literal["ok", "degraded", "down"]
-    components: list[ComponentRead]
 
 
 @router.get(

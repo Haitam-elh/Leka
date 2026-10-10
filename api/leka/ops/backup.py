@@ -51,7 +51,7 @@ def libpq_url(url: str) -> str:
 
 
 def _tools(name: str) -> list[str]:
-    return [*shlex.split(os.environ.get("LEKA_PG_TOOLS", "")), name]
+    return [*shlex.split(settings.pg_tools), name]
 
 
 def _run(command: list[str], *, write: Path | None = None, read: Path | None = None) -> None:
@@ -200,11 +200,12 @@ async def verify(path: Path, *, url: str | None = None, keep: bool = False) -> V
 def _bucket_client() -> object:
     import boto3
 
+    secret = settings.backup_secret_access_key
     return boto3.client(
         "s3",
-        region_name=os.environ.get("LEKA_BACKUP_REGION"),
-        aws_access_key_id=os.environ.get("LEKA_BACKUP_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.environ.get("LEKA_BACKUP_SECRET_ACCESS_KEY"),
+        region_name=settings.backup_region,
+        aws_access_key_id=settings.backup_access_key_id,
+        aws_secret_access_key=secret.get_secret_value() if secret is not None else None,
     )
 
 
@@ -212,7 +213,7 @@ def last_uploaded() -> datetime | None:
     """When the last dump reached the bucket, read from the bucket itself —
     what the alerts fall back on when Redis has forgotten it. None: no
     bucket configured, or nothing in it."""
-    bucket = os.environ.get("LEKA_BACKUP_BUCKET")
+    bucket = settings.backup_bucket
     if not bucket:
         return None
     client = _bucket_client()
@@ -232,7 +233,7 @@ async def upload(dumped: Dumped) -> str:
     """Both files to the backup bucket — and the alerts told it happened."""
     import redis.asyncio as redis
 
-    bucket = os.environ.get("LEKA_BACKUP_BUCKET")
+    bucket = settings.backup_bucket
     if not bucket:
         raise RuntimeError("LEKA_BACKUP_BUCKET is not set.")
     client = _bucket_client()

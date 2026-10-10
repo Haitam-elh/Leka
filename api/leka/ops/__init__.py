@@ -4,14 +4,17 @@ operating data; imported by the API and the schedule only.
 """
 
 from leka.ops.alerts import RULES, Firing, Rule, Told, judge, run_watch, watch
-from leka.ops.health import Component, components, overall
 from leka.ops.metrics import circuits, observe_request, render
-from leka.ops.snapshot import Snapshot, cached, forget, take
+from leka.ops.repository import Snapshot, cached, forget, take
+from leka.ops.schemas import ComponentRead, OpsHealthRead
+from leka.ops.service import Component, components, overall
 
 __all__ = [
     "RULES",
     "Component",
+    "ComponentRead",
     "Firing",
+    "OpsHealthRead",
     "Rule",
     "Snapshot",
     "Told",

@@ -5,7 +5,7 @@ Two kinds:
   long they took — counted as they happen (`observe_request`), in memory;
 - how the whole system stands — jobs, queues, connectors, processing, AI,
   actions, circuit breakers — read from the database and Redis when the
-  metrics are asked for (snapshot.py).
+  metrics are asked for (repository.py).
 
 The text format, written by hand: a dozen families do not need a client
 library, and nothing here holds a lock a request would wait on.
@@ -20,7 +20,7 @@ import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 
-from leka.ops.snapshot import Snapshot
+from leka.ops.repository import Snapshot
 
 # Seconds: the buckets a request's duration falls in.
 BUCKETS = (0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0)

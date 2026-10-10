@@ -31,7 +31,7 @@ import structlog
 from leka.core.config import settings
 from leka.identity import EmailMessage, build_email_sender
 from leka.ops.metrics import circuits
-from leka.ops.snapshot import Snapshot, take
+from leka.ops.repository import Snapshot, take
 
 logger = structlog.get_logger(__name__)
 
