@@ -1,28 +1,34 @@
 "use client";
 
-import { Bot, Database, Headset, Layers, Play, ReceiptText, Users, Waypoints, Workflow } from "lucide-react";
+import { Bot, Database, Headset, Layers, Play, ReceiptText, Sparkles, Users, Waypoints, Workflow } from "lucide-react";
 
-import { IconTile } from "@/components/environment/parts";
+import { IconTile, TILE_TONES } from "@/components/environment/parts";
 import { PageContainer } from "@/components/shell/page-container";
 import { ErrorState } from "@/components/states/error-state";
-import { useWorkspaceUsage } from "@/lib/billing-queries";
+import type { Credits } from "@/lib/billing";
+import { useCredits, useWorkspaceUsage } from "@/lib/billing-queries";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 
 /**
  * Facturation, laid out as docs/product/mockups/16-facturation.jpeg with
- * what is real: no paid plan, payment nor invoice exists on a workspace
- * yet — said so — and the consumption, counted (GET /billing/usage): who
- * is in, what is connected, the model's size, this month's intentions,
- * analyses, capability runs and plans, against last month.
+ * what is real: the workspace's plan and its AI credits this month (GET
+ * /billing/credits, LEKA-430) — used, left, and what to do once they are
+ * spent; no payment nor invoice yet — said so — and the consumption,
+ * counted (GET /billing/usage): who is in, what is connected, the model's
+ * size, this month's intentions, analyses, capability runs and plans,
+ * against last month.
  */
 export function BillingScreen() {
   const t = useDictionary();
   const { locale } = useLocale();
   const w = t.billing;
   const usage = useWorkspaceUsage();
+  const credits = useCredits().data;
   const data = usage.data;
   const number = new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB");
+  const day = (iso: string) =>
+    new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", { dateStyle: "long" }).format(new Date(iso));
 
   return (
     <PageContainer>
@@ -38,7 +44,15 @@ export function BillingScreen() {
         <div className="flex flex-col gap-4" data-testid="billing">
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             {[
-              { key: "plan", icon: ReceiptText, tone: "violet" as const, value: w.planNone, label: w.plan, foot: w.planNoneFoot, small: true },
+              {
+                key: "plan",
+                icon: ReceiptText,
+                tone: "violet" as const,
+                value: credits ? w.plans[credits.plan] : "—",
+                label: w.plan,
+                foot: credits ? (credits.plan_since ? fill(w.planSince, { date: day(credits.plan_since) }) : w.planDefault) : null,
+                small: true,
+              },
               { key: "members", icon: Users, tone: "violet" as const, value: number.format(data.members), label: w.members, foot: null },
               {
                 key: "sources",
@@ -62,6 +76,7 @@ export function BillingScreen() {
               </div>
             ))}
           </div>
+          {credits ? <CreditsSection credits={credits} number={number} day={day} /> : null}
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
             <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="billing-month">
               <h2 className="font-semibold text-brand-navy">{w.month}</h2>
@@ -107,5 +122,63 @@ export function BillingScreen() {
         </div>
       )}
     </PageContainer>
+  );
+}
+
+const BAR = { ok: "bg-shell-nav-active", warning: "bg-state-warning", exhausted: "bg-state-danger" } as const;
+
+/** Its AI credits this month: used of the allowance, what is left until when, and — near or past the limit — what to do. */
+function CreditsSection({
+  credits,
+  number,
+  day,
+}: {
+  credits: Credits;
+  number: Intl.NumberFormat;
+  day: (iso: string) => string;
+}) {
+  const w = useDictionary().billing;
+  const c = w.credits;
+  const end = day(credits.period_end);
+  const shown = Math.min(100, Math.max(0, credits.percent));
+  return (
+    <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="billing-credits">
+      <div className="flex flex-wrap items-start gap-3">
+        <IconTile icon={Sparkles} tone={credits.state === "exhausted" ? "danger" : credits.state === "warning" ? "warning" : "violet"} />
+        <div className="min-w-0 flex-1">
+          <h2 className="font-semibold text-brand-navy">{c.title}</h2>
+          <p className="text-xs text-shell-muted">{c.explain}</p>
+        </div>
+        <p className="text-[1.5rem] leading-tight font-bold text-brand-navy tabular-nums" data-testid="billing-credits-used">
+          {fill(c.used, { used: number.format(Math.round(credits.used)), allowance: number.format(credits.allowance) })}
+        </p>
+      </div>
+      <div
+        className="mt-3 h-2 overflow-hidden rounded-full bg-shell-canvas"
+        role="progressbar"
+        aria-label={c.title}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(shown)}
+      >
+        <div className={`h-full rounded-full ${BAR[credits.state]}`} style={{ width: `${shown}%` }} />
+      </div>
+      <p className="mt-2 text-xs text-shell-muted" data-testid="billing-credits-remaining">
+        {fill(c.remaining, { remaining: number.format(Math.floor(credits.remaining)), date: end })}
+        {credits.packs > 0 ? ` · ${fill(c.packs, { packs: number.format(credits.packs) })}` : null}
+      </p>
+      {credits.state !== "ok" ? (
+        <div
+          className={`mt-3 rounded-lg px-3 py-2 text-[0.8125rem] ${credits.state === "exhausted" ? TILE_TONES.danger : TILE_TONES.warning}`}
+          role="status"
+          data-testid="billing-credits-state"
+        >
+          <p className="font-semibold">
+            {credits.state === "exhausted" ? (credits.enforced ? fill(c.exhausted, { date: end }) : c.exhaustedSoft) : c.warning}
+          </p>
+          <p>{c.how}</p>
+        </div>
+      ) : null}
+    </section>
   );
 }
