@@ -68,8 +68,8 @@ from leka.capabilities.skills import SkillRuntime, agent_skill_tools, skill_hand
 from leka.capabilities.tools import TOOLS, Answer, handlers
 from leka.connectors import SourceRepository
 from leka.context import AssembledContext, ContextRepository, ContextService, IntentAsk
-from leka.db import session_factory, system_scope, workspace_scope
-from leka.governance import ROLE_PERMISSIONS
+from leka.db import hidden_entities, session_factory, system_scope, workspace_scope
+from leka.governance import ROLE_PERMISSIONS, hidden_on_behalf
 from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.knowledge import EntityRepository, GraphRepository, GraphService, KnowledgeService
 from leka.platform import MembershipRepository, Role
@@ -263,8 +263,12 @@ async def execute_run(
             steps = Steps(session, run, await runs.last_seq(run_id))
             steps.add("started")
             await session.commit()
+            # What the person who asked may not see, it does not either
+            # (LEKA-402).
+            hidden = await hidden_on_behalf(session, workspace_id, run.requested_by)
             try:
-                return await _run(session, run, steps, tools, budget)
+                with hidden_entities(hidden):
+                    return await _run(session, run, steps, tools, budget)
             except Exception as error:
                 # Whatever happened, the run says it ended, and how.
                 logger.exception("agent_run_failed", run=str(run_id), key=run.key)

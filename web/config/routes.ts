@@ -42,7 +42,11 @@ export type Permission =
   | "intention:read"
   | "intention:create"
   | "intention:approve"
-  | "job:read";
+  | "job:read"
+  | "context:manage"
+  | "entity:restrict"
+  | "entity:read_restricted"
+  | "access:read";
 
 /**
  * Whether the page behind the entry exists yet.
@@ -222,10 +226,9 @@ export const ROUTES: readonly RouteEntry[] = [
     id: "governance",
     path: "/governance",
     labelKey: "governance",
-    requiredPermission: "workspace:update",
-    // Policies, audit and compliance are what an enterprise plan is for.
-    // A placeholder decision — Karim owns it, and changing it is one word.
-    availability: "plan-gated",
+    // Who may do what, the restricted entities, the trail of access
+    // decisions (LEKA-402): the administrators'.
+    requiredPermission: "access:read",
   },
   {
     id: "team",

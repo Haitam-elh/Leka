@@ -144,6 +144,8 @@ class IntentionLink(Base, WorkspaceScopedMixin):
     """What an intention rests on, or what came of it."""
 
     __tablename__ = "intention_links"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("ref_id",)
     __table_args__ = (
         ForeignKeyConstraint(
             ["workspace_id", "intention_id"],

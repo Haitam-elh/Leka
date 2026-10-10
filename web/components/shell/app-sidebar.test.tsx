@@ -27,7 +27,7 @@ const OWNER = vi.hoisted(() => [
   "workspace:read", "workspace:update", "workspace:delete", "workspace:transfer",
   "member:read", "member:invite", "member:update_role", "member:remove",
   "source:read", "source:manage",
-  "intention:read", "intention:create", "intention:approve", "job:read",
+  "intention:read", "intention:create", "intention:approve", "job:read", "access:read",
 ]);
 /** And everything a member has, which is the interesting half. */
 const MEMBER = vi.hoisted(() => [

@@ -82,15 +82,17 @@ test.describe("the information architecture", () => {
     await expect(page.getByTestId("tab-evidence")).toHaveAttribute("aria-current", "page");
   });
 
-  test("says when a page is not open on this plan, rather than showing an empty one", async ({
+  test("opens Sécurité & gouvernance on who may do what, and the trail of decisions", async ({
     page,
   }) => {
     await signIn(page);
 
-    // Every page is built now — Capacités was the last (LEKA-393). The "not
-    // built yet" state stays covered by route-views.test.tsx.
+    // Every page is built now — Gouvernance was the last (LEKA-402). The
+    // "not built yet" and "not on this plan" states stay covered by
+    // route-views.test.tsx.
     await page.goto("/governance");
-    await expect(page.getByTestId("route-state-plan-gated")).toBeVisible();
+    await expect(page.getByTestId("access-matrix")).toContainText("Restreindre une entité");
+    await expect(page.getByRole("heading", { name: "Journal des accès" })).toBeVisible();
   });
 
   test("keeps the shell around an address that matches nothing", async ({ page }) => {

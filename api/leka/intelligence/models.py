@@ -140,6 +140,8 @@ class Finding(Base, WorkspaceScopedMixin):
     """What an analysis concluded about one thing, kept across runs."""
 
     __tablename__ = "intelligence_findings"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("subject_id",)
     __table_args__ = (
         UniqueConstraint(
             "workspace_id", "analyzer", "key", name="uq_intelligence_findings_analyzer_key"
@@ -224,6 +226,8 @@ class EnrichmentCandidate(Base, WorkspaceScopedMixin):
     """
 
     __tablename__ = "enrichment_candidates"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("subject_id",)
     __table_args__ = (
         UniqueConstraint("workspace_id", "key", name="uq_enrichment_candidates_key"),
         CheckConstraint(_in("status", CANDIDATE_STATUSES), name="status"),
@@ -320,6 +324,8 @@ class KnowledgeConflict(Base, WorkspaceScopedMixin):
     """
 
     __tablename__ = "knowledge_conflicts"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("subject_id",)
     __table_args__ = (
         UniqueConstraint("workspace_id", "key", name="uq_knowledge_conflicts_key"),
         CheckConstraint(_in("status", CONFLICT_STATUSES), name="status"),
@@ -411,6 +417,8 @@ class QualityScoreRow(Base, WorkspaceScopedMixin):
     counts in, where it was read."""
 
     __tablename__ = "quality_scores"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("subject_id",)
     __table_args__ = (
         UniqueConstraint("workspace_id", "key", name="uq_quality_scores_key"),
         CheckConstraint(_in("scope", QUALITY_SCOPES), name="scope"),
@@ -461,6 +469,8 @@ class QualityPoint(Base, WorkspaceScopedMixin):
     — so a series is its changes, not a row per run. Kept a year."""
 
     __tablename__ = "quality_history"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("subject_id",)
     __table_args__ = (
         CheckConstraint(_in("scope", QUALITY_SCOPES), name="scope"),
         CheckConstraint(_in("level", QUALITY_LEVELS), name="level"),

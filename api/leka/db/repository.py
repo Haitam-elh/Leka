@@ -22,6 +22,14 @@ investigation.
 System work that legitimately crosses tenants — the seed script, a
 migration, a worker sweeping every workspace — declares itself with
 `system_scope()`. Explicitly, in one visible line, reviewable in a diff.
+
+**Restricted entities** (LEKA-402) are hidden the same way. A person whose
+role may not see them works inside `hidden_entities(ids)`: every ORM read of
+a table that declares the columns referring to an entity
+(`__entity_refs__`) leaves out the rows that refer to one of them — the
+entity, its relationships, a context's elements, a finding about it, an
+intention's link to it — whichever route or service asks. Outside it,
+nothing is hidden: the system's own work sees everything.
 """
 
 from __future__ import annotations
@@ -32,7 +40,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Final, TypeVar
 
-from sqlalchemy import Select, event, select
+from sqlalchemy import Select, and_, event, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, with_loader_criteria
 
@@ -97,6 +105,28 @@ def system_scope() -> Iterator[None]:
         _current_workspace.reset(token)
 
 
+# Entities the person served may not see (LEKA-402); empty: none hidden.
+_hidden_entities: ContextVar[frozenset[uuid.UUID]] = ContextVar(
+    "leka_hidden_entities", default=frozenset()
+)
+
+
+@contextmanager
+def hidden_entities(ids: frozenset[uuid.UUID]) -> Iterator[None]:
+    """Serve a block for someone who may not see these entities: every
+    table that refers to an entity leaves them out."""
+    token = _hidden_entities.set(frozenset(ids))
+    try:
+        yield
+    finally:
+        _hidden_entities.reset(token)
+
+
+def current_hidden() -> frozenset[uuid.UUID]:
+    """The entities hidden from whoever is served now."""
+    return _hidden_entities.get()
+
+
 def current_workspace() -> uuid.UUID | _System | None:
     """What scope is active right now. None means none was declared."""
     return _current_workspace.get()
@@ -149,6 +179,27 @@ def _enforce_workspace_scope(execute_state: Any) -> None:
             include_aliases=True,
         )
     )
+    hidden = _hidden_entities.get()
+    if hidden:
+        _hide(execute_state, hidden)
+
+
+def _hide(execute_state: Any, hidden: frozenset[uuid.UUID]) -> None:
+    """Leave out the rows that refer to a hidden entity."""
+    for mapper in execute_state.all_mappers:
+        cls = mapper.class_
+        refs: tuple[str, ...] = getattr(cls, "__entity_refs__", ())
+        if not refs:
+            continue
+        criteria = and_(
+            *(
+                or_(getattr(cls, column).is_(None), getattr(cls, column).notin_(hidden))
+                for column in refs
+            )
+        )
+        execute_state.statement = execute_state.statement.options(
+            with_loader_criteria(cls, criteria)
+        )
 
 
 ModelT = TypeVar("ModelT", bound=WorkspaceScopedMixin)

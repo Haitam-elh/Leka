@@ -170,6 +170,8 @@ class Entity(Base, WorkspaceScopedMixin):
     """One real thing of a customer's company."""
 
     __tablename__ = "entities"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("id",)
     __table_args__ = (
         # Target for the composite foreign keys in relationships and versions.
         UniqueConstraint("workspace_id", "id", name="uq_entities_workspace_id_id"),
@@ -250,6 +252,8 @@ class Relationship(Base, WorkspaceScopedMixin):
     """A directed edge between two entities of the same workspace."""
 
     __tablename__ = "relationships"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("from_entity_id", "to_entity_id")
     __table_args__ = (
         UniqueConstraint(
             "workspace_id",
@@ -321,6 +325,8 @@ class RelationshipChange(Base, WorkspaceScopedMixin):
     never deleted, a removed one is kept."""
 
     __tablename__ = "relationship_changes"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("from_entity_id", "to_entity_id")
     __table_args__ = (
         CheckConstraint("change IN ('added', 'changed', 'removed')", name="change"),
         Index("ix_relationship_changes_workspace_recorded", "workspace_id", "recorded_at"),
@@ -348,6 +354,8 @@ class RelationshipIssue(Base, WorkspaceScopedMixin):
     than one of what a thing has one of. Made again at each build."""
 
     __tablename__ = "relationship_issues"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("from_entity_id", "to_entity_id")
     __table_args__ = (
         CheckConstraint("severity IN ('error', 'warning')", name="severity"),
         Index("ix_relationship_issues_workspace_type", "workspace_id", "type"),
@@ -371,6 +379,8 @@ class EntityVersion(Base, WorkspaceScopedMixin):
     """What an entity said, at one of its versions — its history."""
 
     __tablename__ = "entity_versions"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("entity_id",)
     __table_args__ = (
         ForeignKeyConstraint(
             ["workspace_id", "entity_id"],
@@ -446,6 +456,8 @@ class ModelAssertion(Base, WorkspaceScopedMixin):
     leaves a fact the build skips, not an error."""
 
     __tablename__ = "model_assertions"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("entity_id", "from_entity_id", "to_entity_id")
     __table_args__ = (
         CheckConstraint("kind IN ('attribute', 'relationship', 'absence')", name="kind"),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="confidence_range"),
@@ -523,6 +535,8 @@ class ModelOperation(Base, WorkspaceScopedMixin):
               or `failed`, and why"""
 
     __tablename__ = "model_operations"
+    # What refers to an entity: hidden with it (LEKA-402).
+    __entity_refs__ = ("entity_id",)
     __table_args__ = (
         CheckConstraint("kind IN ('restore', 'rebuild')", name="kind"),
         CheckConstraint(

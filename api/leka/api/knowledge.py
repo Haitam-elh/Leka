@@ -110,8 +110,16 @@ from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
 from leka.core.errors import ErrorCode
-from leka.db import SortableField
-from leka.governance import Permission, Principal, require_permission
+from leka.db import SortableField, current_hidden
+from leka.governance import (
+    Permission,
+    Principal,
+    Resource,
+    Subject,
+    evaluate,
+    record_apart,
+    require_permission,
+)
 from leka.ingestion import EnrichmentRepository
 from leka.knowledge import (
     ENTITY_KINDS,
@@ -322,6 +330,20 @@ async def entity(entity_id: uuid.UUID, session: SessionDep, principal: Reader) -
     repository = EntityRepository(session, principal.workspace_id)
     found = await repository.get(Entity, entity_id)
     if found is None:
+        if entity_id in current_hidden():
+            # Restricted (LEKA-402): the same answer as none, the refusal kept.
+            await record_apart(
+                principal.workspace_id,
+                principal.user_id,
+                principal.role,
+                evaluate(
+                    Subject.of(principal),
+                    Permission.WORKSPACE_READ,
+                    Resource("entity", str(entity_id), restricted=True),
+                ),
+                resource=Resource("entity", str(entity_id), restricted=True),
+                route=f"GET /knowledge/entities/{entity_id}",
+            )
         raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, "No such entity.")
     edges, total = await repository.edges_of(found.id, limit=EDGES)
     others = await repository.by_ids(

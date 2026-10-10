@@ -332,6 +332,9 @@ class KnowledgeService:
         kept = dict(list(reached.items())[:MAX_DEPENDENCIES])
         kept[entity_id] = 0
         found = await self._entities.by_ids(list(kept))
+        if entity_id not in found:
+            # Hidden from whoever asks (LEKA-402): as if there were none.
+            return None
         return Dependencies(
             root=EntityBrief.model_validate(found[entity_id]),
             direction=direction,

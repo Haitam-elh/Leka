@@ -41,7 +41,7 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.sql.expression import Exists
 
 from leka.connectors import Source
-from leka.db import WorkspaceScopedRepository
+from leka.db import WorkspaceScopedRepository, current_hidden
 from leka.knowledge.build import Assertion, Built, Current
 from leka.knowledge.contracts import Previous
 from leka.knowledge.models import (
@@ -644,6 +644,8 @@ class EntityRepository(WorkspaceScopedRepository):
                 JOIN relationships r
                   ON r.workspace_id = :workspace
                  AND (r.from_entity_id = reach.id OR r.to_entity_id = reach.id)
+                 AND NOT (r.from_entity_id = ANY(CAST(:hidden AS uuid[])))
+                 AND NOT (r.to_entity_id = ANY(CAST(:hidden AS uuid[])))
                 WHERE reach.depth < :depth
             )
             SELECT reach.id FROM reach
@@ -656,7 +658,14 @@ class EntityRepository(WorkspaceScopedRepository):
         )
         rows = await self._session.execute(
             walk,
-            {"root": entity_id, "workspace": self.workspace_id, "depth": depth, "limit": limit},
+            {
+                "root": entity_id,
+                "workspace": self.workspace_id,
+                "depth": depth,
+                "limit": limit,
+                # Never walked through what the person may not see (LEKA-402).
+                "hidden": list(current_hidden()),
+            },
         )
         ids = [row[0] for row in rows.all()]
         entities = list((await self.by_ids(ids)).values())
@@ -750,6 +759,7 @@ class EntityRepository(WorkspaceScopedRepository):
                   ON r.workspace_id = :workspace
                  AND r.{near} = reach.id
                  AND r.type = ANY(CAST(:types AS text[]))
+                 AND NOT (r.{far} = ANY(CAST(:hidden AS uuid[])))
                  AND (CAST(:environment AS text) IS NULL
                       OR NOT jsonb_exists(r.attributes, 'environments')
                       OR jsonb_exists(r.attributes -> 'environments', :environment))
@@ -772,6 +782,8 @@ class EntityRepository(WorkspaceScopedRepository):
                 "environment": environment,
                 "limit": limit,
                 "types": [kind.value for kind in types],
+                # Never walked through what the person may not see (LEKA-402).
+                "hidden": list(current_hidden()),
             },
         )
         reached = {row[0]: int(row[1]) for row in rows.all()}
