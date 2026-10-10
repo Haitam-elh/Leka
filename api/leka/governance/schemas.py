@@ -295,7 +295,7 @@ class PolicyUpdate(BaseModel):
         description="member, admin, owner or a role of the workspace's own; none: everyone.",
     )
     resource_types: list[str] = Field(default_factory=list)
-    risk_at_least: Literal["low", "medium", "high"] | None = None
+    risk_at_least: Literal["low", "medium", "high", "critical"] | None = None
     kinds: list[str] = Field(default_factory=list)
     categories: list[str] = Field(default_factory=list)
     priority: int = Field(default=50, ge=0, le=100)
