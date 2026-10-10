@@ -892,7 +892,7 @@ class DelegationCreate(BaseModel):
     ends_at: datetime
 
 
-class GovernanceEventRead(BaseModel):
+class DecisionGovernanceEventRead(BaseModel):
     model_config = ConfigDict(frozen=True, from_attributes=True)
 
     id: uuid.UUID

@@ -604,7 +604,10 @@ async def test_the_trail_is_append_only_and_forgets_only_who(
         async with session_factory() as session:
             with pytest.raises(DBAPIError, match="append-only"):
                 await session.execute(
-                    text("UPDATE governance_events SET kind = 'policy_changed' WHERE id = :e"),
+                    text(
+                        "UPDATE decision_governance_events SET kind = 'policy_changed'"
+                        " WHERE id = :e"
+                    ),
                     {"e": event["id"]},
                 )
     # Their account deleted: who it was is forgotten, nothing else.

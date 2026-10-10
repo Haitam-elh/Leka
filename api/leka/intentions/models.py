@@ -343,7 +343,7 @@ class IntentionDecisionVote(Base, WorkspaceScopedMixin):
 # ── governance (LEKA-404) ────────────────────────────────────────────────────
 
 EXCEPTION_KINDS = ("freeze", "waiver")
-GOVERNANCE_EVENTS = (
+DECISION_GOVERNANCE_EVENTS = (
     "policy_changed",
     "exception_granted",
     "exception_revoked",
@@ -414,16 +414,16 @@ class ApprovalDelegation(Base, WorkspaceScopedMixin):
     )
 
 
-class GovernanceEvent(Base, WorkspaceScopedMixin):
+class DecisionGovernanceEvent(Base, WorkspaceScopedMixin):
     """What happened to the workspace's governance: its policy changed, an
     exception or a delegation granted or revoked, a decision escalated,
     waived or frozen — who, when, on what, the detail. Append-only: the
     database refuses to change one."""
 
-    __tablename__ = "governance_events"
+    __tablename__ = "decision_governance_events"
     __table_args__ = (
-        CheckConstraint(_in("kind", GOVERNANCE_EVENTS), name="kind"),
-        Index("ix_governance_events_workspace_at", "workspace_id", "at"),
+        CheckConstraint(_in("kind", DECISION_GOVERNANCE_EVENTS), name="kind"),
+        Index("ix_decision_governance_events_workspace_at", "workspace_id", "at"),
     )
 
     kind: Mapped[str] = mapped_column(String(20), nullable=False)

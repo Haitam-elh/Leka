@@ -642,6 +642,16 @@ class DecisionService:
 
     # ── voting ──────────────────────────────────────────────────────────────
 
+    async def risk_open(self, intention_id: uuid.UUID) -> str | None:
+        """The risk of its latest decision — what an authorization reads of
+        a vote on it (LEKA-403's policies by risk); None when it has none."""
+        return await self._session.scalar(
+            select(IntentionDecision.risk)
+            .where(IntentionDecision.intention_id == intention_id)
+            .order_by(IntentionDecision.number.desc())
+            .limit(1)
+        )
+
     async def vote(
         self,
         intention_id: uuid.UUID,

@@ -44,13 +44,14 @@ from leka.capabilities import (
     WorkflowRunStepRead,
     WorkflowService,
     WorkflowStepRead,
+    capability_resource,
     find,
     find_workflow,
     queue_workflow,
     workflow_catalogue,
 )
 from leka.core.errors import ErrorCode, FieldError
-from leka.governance import Permission, Principal, Resource, authorize, require_permission
+from leka.governance import Permission, Principal, authorize, require_permission
 from leka.intentions import IntentionRepository
 
 router = APIRouter(tags=["workflows"])
@@ -230,7 +231,7 @@ async def start_run(
             principal,
             Permission(capability.permission),
             action=ACTION,
-            resource=Resource("capability", capability.key),
+            resource=capability_resource(capability),
         )
         if not decided.allowed:
             raise ApiError(status.HTTP_403_FORBIDDEN, ErrorCode.PERMISSION_DENIED, decided.message)

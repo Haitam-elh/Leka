@@ -17,7 +17,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/components/interactions/confirm";
-import type { ApprovalPolicy, GovernanceEvent, GovernanceException } from "@/lib/decisions";
+import type { ApprovalPolicy, DecisionGovernanceEvent, GovernanceException } from "@/lib/decisions";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { makeQueryClient } from "@/lib/query";
 
@@ -119,7 +119,7 @@ const FREEZE: GovernanceException = {
   active: true,
 };
 
-const EVENTS: GovernanceEvent[] = [
+const EVENTS: DecisionGovernanceEvent[] = [
   {
     id: "e2",
     kind: "decision_escalated",

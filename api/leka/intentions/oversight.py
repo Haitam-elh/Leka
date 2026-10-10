@@ -7,7 +7,7 @@ pure; here they are read, kept and acted on.
                   when to when, why — revoked by an admin; both kept
     delegations   an approver lends their authority to another member, up
                   to a risk, for a time — revoked by them or an admin
-    the trail     governance_events: the policy changed, an exception or a
+    the trail     decision_governance_events: the policy changed, an exception or a
                   delegation granted or revoked, a decision escalated,
                   waived or frozen — who, when, on what. Append-only.
     escalation    a decision still waiting past its requirement's hours:
@@ -41,7 +41,7 @@ from leka.intentions.governance import (
 )
 from leka.intentions.models import (
     ApprovalDelegation,
-    GovernanceEvent,
+    DecisionGovernanceEvent,
     GovernanceExceptionRow,
     Intention,
     IntentionDecision,
@@ -122,8 +122,8 @@ class OversightService:
         subject_id: uuid.UUID | None = None,
         detail: Mapping[str, object] | None = None,
         now: datetime | None = None,
-    ) -> GovernanceEvent:
-        event = GovernanceEvent(
+    ) -> DecisionGovernanceEvent:
+        event = DecisionGovernanceEvent(
             workspace_id=self._workspace_id,
             id=uuid.uuid4(),
             kind=kind,
@@ -135,11 +135,11 @@ class OversightService:
         self._session.add(event)
         return event
 
-    async def trail(self, *, limit: int = 100) -> list[GovernanceEvent]:
+    async def trail(self, *, limit: int = 100) -> list[DecisionGovernanceEvent]:
         rows = await self._session.scalars(
-            select(GovernanceEvent)
-            .where(GovernanceEvent.workspace_id == self._workspace_id)
-            .order_by(GovernanceEvent.at.desc(), GovernanceEvent.created_at.desc())
+            select(DecisionGovernanceEvent)
+            .where(DecisionGovernanceEvent.workspace_id == self._workspace_id)
+            .order_by(DecisionGovernanceEvent.at.desc(), DecisionGovernanceEvent.created_at.desc())
             .limit(limit)
         )
         return list(rows)

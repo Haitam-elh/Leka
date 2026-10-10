@@ -17,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.core.request_context import current_request_id
 from leka.db import session_factory, workspace_scope
 from leka.governance.models import AccessDecision, EntityRestriction
-from leka.governance.policy import Decision, Resource, Subject, evaluate, sees_restricted
+from leka.governance.policies import subject_of
+from leka.governance.policy import Decision, Resource, Subject, evaluate
 from leka.governance.repository import AuditRepository, RestrictionRepository
 from leka.governance.schemas import (
     WRITE_PERMISSIONS,
@@ -134,24 +135,21 @@ async def hidden_on_behalf(
     session: AsyncSession, workspace_id: uuid.UUID, user_id: uuid.UUID | None
 ) -> frozenset[uuid.UUID]:
     """What work done for this person — an agent, a workflow, an analysis —
-    must not see: what their role, now, may not. Nobody: the restricted, all
-    of them."""
-    seat = (
-        await MembershipResolver(session).get_for_user_in_workspace(user_id, workspace_id)
-        if user_id is not None
-        else None
-    )
-    if seat is None:
+    must not see: what their role, now — a role of the workspace's own
+    included (LEKA-403) — may not. Nobody: the restricted, all of them."""
+    subject = await subject_of(session, workspace_id, user_id)
+    if subject is None:
         return await RestrictionRepository(session, workspace_id).restricted_ids()
-    return await hidden_for(session, workspace_id, seat.role)
+    return await hidden_for(session, workspace_id, subject.permissions)
 
 
 async def hidden_for(
-    session: AsyncSession, workspace_id: uuid.UUID, role: Role
+    session: AsyncSession, workspace_id: uuid.UUID, permissions: frozenset[Permission]
 ) -> frozenset[uuid.UUID]:
-    """The entities a role may not see in this workspace: the restricted
-    ones, unless it may read them."""
-    if sees_restricted(role):
+    """The entities one may not see in this workspace: the restricted ones,
+    unless one's permissions — a role of the workspace's own may add it, or
+    take it away — read them."""
+    if Permission.ENTITY_READ_RESTRICTED in permissions:
         return frozenset()
     return await RestrictionRepository(session, workspace_id).restricted_ids()
 
@@ -236,7 +234,7 @@ async def authorize(
     """An execution decided before it starts — an agent, a workflow, a
     capability — and kept either way: allowed, with what it starts; refused,
     on its own."""
-    decided = evaluate(Subject.of(principal), permission, resource, anyones=anyones)
+    decided = evaluate(Subject.of(principal), permission, resource, anyones=anyones, action=action)
     said: dict[str, object] = {"action": action, "resource": resource}
     if decided.allowed:
         record(session, principal.workspace_id, principal.user_id, principal.role, decided, **said)

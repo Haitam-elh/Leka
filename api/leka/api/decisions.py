@@ -36,12 +36,21 @@ from fastapi import APIRouter, Depends, Query, status
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.core.errors import ErrorCode, FieldError
-from leka.governance import Permission, Principal, require_permission
+from leka.governance import (
+    Permission,
+    Principal,
+    Resource,
+    authorize,
+    evaluate,
+    require_permission,
+    subject_of,
+)
 from leka.intentions import (
     ApprovalPolicyRead,
     ApprovalPolicyUpdate,
     Change,
     DecisionClosedError,
+    DecisionGovernanceEventRead,
     DecisionQueuePage,
     DecisionRead,
     DecisionRefusedError,
@@ -51,7 +60,6 @@ from leka.intentions import (
     DelegationCreate,
     DelegationRead,
     ExceptionAsk,
-    GovernanceEventRead,
     GovernanceExceptionCreate,
     GovernanceExceptionRead,
     IllegalTransitionError,
@@ -331,18 +339,18 @@ async def revoke_delegation(
     return DelegationRead.model_validate(row)
 
 
-@router.get("/decisions/governance-history", response_model=list[GovernanceEventRead])
+@router.get("/decisions/governance-history", response_model=list[DecisionGovernanceEventRead])
 async def governance_history(
     principal: Reader,
     session: SessionDep,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
-) -> list[GovernanceEventRead]:
+) -> list[DecisionGovernanceEventRead]:
     """The governance trail, the latest first: the policy changed, an
     exception or a delegation granted or revoked, a decision escalated,
     waived or frozen — who, when, on what. The database refuses to rewrite
     it."""
     rows = await OversightService(session, principal.workspace_id).trail(limit=limit)
-    return [GovernanceEventRead.model_validate(r) for r in rows]
+    return [DecisionGovernanceEventRead.model_validate(r) for r in rows]
 
 
 @router.get("/intentions/{intention_id}/decisions", response_model=list[DecisionRead])
@@ -370,16 +378,32 @@ async def vote(
     risk read again, the earlier approvals void. `on_behalf_of`: cast with
     an approver's authority they delegated to you, else 403. 409 when
     nothing is open, or a freeze covers it."""
-    if payload.on_behalf_of is None and not principal.has(Permission.INTENTION_APPROVE):
-        raise ApiError(
-            status.HTTP_403_FORBIDDEN,
-            ErrorCode.PERMISSION_DENIED,
-            f"Your role in this workspace ({principal.role.value}) does not allow "
-            f"{Permission.INTENTION_APPROVE.value}.",
-        )
     service = DecisionService(session, principal.workspace_id)
+    # Approving is decided as everything is (LEKA-402, 403): the role, the
+    # workspace's policies — which may read the decision's risk — kept in
+    # the access trail. For a delegated vote, the authority used is the
+    # lender's: theirs is evaluated, as it stands now.
+    risk = await service.risk_open(intention_id)
+    resource = Resource(
+        type="intention", id=str(intention_id), attributes={"risk": risk} if risk else {}
+    )
+    approve = Permission.INTENTION_APPROVE
+    if payload.on_behalf_of is None:
+        decided = await authorize(
+            session, principal, approve, action=approve.value, resource=resource
+        )
+        if not decided.allowed:
+            raise ApiError(status.HTTP_403_FORBIDDEN, ErrorCode.PERMISSION_DENIED, decided.message)
+    else:
+        lender = await subject_of(session, principal.workspace_id, payload.on_behalf_of)
+        if lender is None or not evaluate(lender, approve, resource, action=approve.value).allowed:
+            raise _refused(
+                DecisionRefusedError(
+                    "no_delegation", "They may not approve this decision: nothing to lend."
+                )
+            )
     try:
-        decided = await service.vote(
+        voted = await service.vote(
             intention_id,
             VERDICTS[verdict],
             by=principal.user_id,
@@ -398,7 +422,7 @@ async def vote(
             ErrorCode.CONFLICT,
             "Nothing to decide: no decision is open on this intention.",
         ) from error
-    if decided is None:
+    if voted is None:
         raise _missing()
     await session.commit()
-    return decided
+    return voted

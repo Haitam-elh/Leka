@@ -69,10 +69,18 @@ from leka.capabilities.tools import TOOLS, Answer, handlers
 from leka.connectors import SourceRepository
 from leka.context import AssembledContext, ContextRepository, ContextService, IntentAsk
 from leka.db import hidden_entities, session_factory, system_scope, workspace_scope
-from leka.governance import ROLE_PERMISSIONS, hidden_on_behalf
+from leka.governance import (
+    ROLE_PERMISSIONS,
+    Permission,
+    Resource,
+    evaluate,
+    hidden_on_behalf,
+    record,
+    subject_of,
+)
 from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.knowledge import EntityRepository, GraphRepository, GraphService, KnowledgeService
-from leka.platform import MembershipRepository, Role
+from leka.platform import Role
 
 logger = structlog.get_logger(__name__)
 
@@ -92,6 +100,20 @@ OUTPUT_KEPT = 200_000
 
 def now_or(now: datetime | None = None) -> datetime:
     return now or datetime.now(UTC)
+
+
+def capability_resource(definition: Definition) -> Resource:
+    """A capability, as policies read it (LEKA-403): its risk, kind,
+    category."""
+    return Resource(
+        "capability",
+        definition.key,
+        attributes={
+            "risk": definition.risk,
+            "kind": definition.kind.value,
+            "category": definition.category,
+        },
+    )
 
 
 def permissions_of(role: Role) -> frozenset[str]:
@@ -306,14 +328,12 @@ async def _run(
     workspace_id = run.workspace_id
     # As things stand now: who asked, may they still; the agent, can it
     # still run here.
-    seat = (
-        await MembershipRepository(session, workspace_id).get_for_user(run.requested_by)
-        if run.requested_by is not None
-        else None
-    )
-    if seat is None:
+    # Their role now — a role of the workspace's own included — and the
+    # policies in force (LEKA-403).
+    subject = await subject_of(session, workspace_id, run.requested_by)
+    if subject is None:
         return await _fail(session, run, "not_permitted")
-    permissions = permissions_of(seat.role)
+    permissions = frozenset(p.value for p in subject.permissions)
     entry = await CatalogueService(session, workspace_id).entry(run.key, permissions=permissions)
     refused = refusal_of(entry, run.inputs)
     if refused is not None:
@@ -326,6 +346,26 @@ async def _run(
         )
     assert entry is not None  # refusal_of said not_found otherwise
     definition = entry.definition
+    decided = evaluate(
+        subject,
+        Permission(definition.permission),
+        capability_resource(definition),
+        action="agent:run",
+    )
+    if not decided.allowed:
+        record(
+            session,
+            workspace_id,
+            subject.user_id,
+            subject.role,
+            decided,
+            action="agent:run",
+            resource=capability_resource(definition),
+            detail={"run": str(run.id), "when": "running"},
+        )
+        return await _fail(
+            session, run, "not_permitted", refused=decided.reason, policy=decided.policy
+        )
     if definition.version != run.version:
         run.detail = {**run.detail, "asked_version": run.version}
         run.version = definition.version

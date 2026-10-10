@@ -2,7 +2,7 @@
 by role, delegated and escalated, freezes and waivers, every move kept.
 
 Revision ID: 5b8e1d4a7c26
-Revises: 9e4b2d7c1a83
+Revises: 6a1f3c8e2d57
 Created: 2026-10-14
 
 A decision's risk is classified by the workspace's rules (LEKA-404) and may
@@ -14,7 +14,7 @@ keeps the role of the authority used (`role`).
 
 `governance_exceptions` — freezes and waivers an admin granted, on what,
 from when to when, why; `approval_delegations` — an approver's authority
-lent; `governance_events` — every change of the policy, every exception and
+lent; `decision_governance_events` — every change of the policy, every exception and
 delegation granted or revoked, every decision escalated, waived or frozen:
 append-only, the database refuses to change one.
 """
@@ -29,7 +29,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "5b8e1d4a7c26"
-down_revision: str | None = "9e4b2d7c1a83"
+down_revision: str | None = "6a1f3c8e2d57"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -109,7 +109,7 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_table(
-        "governance_events",
+        "decision_governance_events",
         sa.Column("kind", sa.String(length=20), nullable=False),
         sa.Column("by", sa.UUID(), nullable=True),
         sa.Column("at", sa.DateTime(timezone=True), nullable=False),
@@ -133,28 +133,31 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "kind IN ('policy_changed', 'exception_granted', 'exception_revoked', 'delegation_granted', 'delegation_revoked', 'decision_escalated', 'decision_waived', 'decision_frozen')",
-            name=op.f("ck_governance_events_kind"),
+            name=op.f("ck_decision_governance_events_kind"),
         ),
         sa.ForeignKeyConstraint(
-            ["by"], ["users.id"], name=op.f("fk_governance_events_by_users"), ondelete="SET NULL"
+            ["by"],
+            ["users.id"],
+            name=op.f("fk_decision_governance_events_by_users"),
+            ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["workspace_id"],
             ["workspaces.id"],
-            name=op.f("fk_governance_events_workspace_id_workspaces"),
+            name=op.f("fk_decision_governance_events_workspace_id_workspaces"),
             ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_governance_events")),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_decision_governance_events")),
     )
     op.create_index(
-        "ix_governance_events_workspace_at",
-        "governance_events",
+        "ix_decision_governance_events_workspace_at",
+        "decision_governance_events",
         ["workspace_id", "at"],
         unique=False,
     )
     op.create_index(
-        op.f("ix_governance_events_workspace_id"),
-        "governance_events",
+        op.f("ix_decision_governance_events_workspace_id"),
+        "decision_governance_events",
         ["workspace_id"],
         unique=False,
     )
@@ -272,13 +275,13 @@ def upgrade() -> None:
     # What happened to the governance is never changed.
     op.execute(
         """
-        CREATE FUNCTION governance_events_append_only() RETURNS trigger AS $$
+        CREATE FUNCTION decision_governance_events_append_only() RETURNS trigger AS $$
         BEGIN
             -- Who did it, forgotten when their account is deleted: nothing else.
             IF NEW."by" IS NULL AND to_jsonb(NEW) - 'by' = to_jsonb(OLD) - 'by' THEN
                 RETURN NEW;
             END IF;
-            RAISE EXCEPTION 'governance_events is append-only: what happened is never changed'
+            RAISE EXCEPTION 'decision_governance_events is append-only: what happened is never changed'
                 USING ERRCODE = 'restrict_violation';
         END;
         $$ LANGUAGE plpgsql
@@ -286,16 +289,16 @@ def upgrade() -> None:
     )
     op.execute(
         """
-        CREATE TRIGGER governance_events_append_only
-        BEFORE UPDATE ON governance_events
-        FOR EACH ROW EXECUTE FUNCTION governance_events_append_only()
+        CREATE TRIGGER decision_governance_events_append_only
+        BEFORE UPDATE ON decision_governance_events
+        FOR EACH ROW EXECUTE FUNCTION decision_governance_events_append_only()
         """
     )
 
 
 def downgrade() -> None:
-    op.execute("DROP TRIGGER governance_events_append_only ON governance_events")
-    op.execute("DROP FUNCTION governance_events_append_only()")
+    op.execute("DROP TRIGGER decision_governance_events_append_only ON decision_governance_events")
+    op.execute("DROP FUNCTION decision_governance_events_append_only()")
     # Critical was high before.
     op.execute("UPDATE intention_decisions SET risk = 'high' WHERE risk = 'critical'")
     op.drop_constraint(op.f("ck_intention_decisions_risk"), "intention_decisions", type_="check")
@@ -316,9 +319,13 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_governance_exceptions_workspace_id"), table_name="governance_exceptions")
     op.drop_index("ix_governance_exceptions_live", table_name="governance_exceptions")
     op.drop_table("governance_exceptions")
-    op.drop_index(op.f("ix_governance_events_workspace_id"), table_name="governance_events")
-    op.drop_index("ix_governance_events_workspace_at", table_name="governance_events")
-    op.drop_table("governance_events")
+    op.drop_index(
+        op.f("ix_decision_governance_events_workspace_id"), table_name="decision_governance_events"
+    )
+    op.drop_index(
+        "ix_decision_governance_events_workspace_at", table_name="decision_governance_events"
+    )
+    op.drop_table("decision_governance_events")
     op.drop_index(op.f("ix_approval_delegations_workspace_id"), table_name="approval_delegations")
     op.drop_index("ix_approval_delegations_to", table_name="approval_delegations")
     op.drop_table("approval_delegations")

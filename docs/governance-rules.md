@@ -85,7 +85,11 @@ was opened with.
   neither for themselves nor for someone else (`asker_may_not_approve`).
 - **A role**: one approver must hold it, or a higher one (owner ≥ admin).
   Enough approvals without it, the decision waits for someone who does.
-- **Who may approve at all**: `intention:approve` — an admin, an owner.
+- **Who may approve at all**: `intention:approve` — an admin, an owner —
+  decided as every permission is ([permissions.md](permissions.md)): the
+  role, a role of the workspace's own, the workspace's policies (LEKA-403),
+  which may read the decision's risk (`risk_at_least`, critical included);
+  kept in the access trail.
 
 ### Delegation
 
@@ -103,8 +107,9 @@ The member votes with `on_behalf_of` — any verdict. Their vote counts as
 the lender's approval, once, at the lender's role; it keeps both names, the
 role and the delegation (`context.delegation_id`). Refused
 (`no_delegation`, 403): no delegation from that person to the voter holds
-now at this risk, or the lender may no longer approve. Revoked by who lent
-it, or an admin; kept.
+now at this risk, or the lender may no longer approve — their authority
+evaluated as it stands now, policies included. Revoked by who lent it, or
+an admin; kept.
 
 ## 4. Exceptions
 
@@ -147,7 +152,7 @@ One failing, nothing runs (409, each failed check in `details`).
 
 ## 7. The trail
 
-`governance_events` — append-only, the database refusing to change one;
+`decision_governance_events` — append-only, the database refusing to change one;
 only who acted is forgotten, with their account:
 
 | Kind | |
@@ -158,7 +163,9 @@ only who acted is forgotten, with their account:
 | `decision_frozen` · `decision_waived` · `decision_escalated` | the decision, its risk, the exception |
 
 The votes themselves are kept with their decision
-(`intention_decision_votes`, append-only too).
+(`intention_decision_votes`, append-only too). Roles and access policies
+keep their own trail (`governance_events`, LEKA-403); who was allowed or
+refused, the access trail (`access_decisions`, LEKA-402).
 
 ## 8. The API
 

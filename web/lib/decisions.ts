@@ -24,7 +24,7 @@ export type GovernanceException = components["schemas"]["GovernanceExceptionRead
 export type GovernanceExceptionCreate = components["schemas"]["GovernanceExceptionCreate"];
 export type Delegation = components["schemas"]["DelegationRead"];
 export type DelegationCreate = components["schemas"]["DelegationCreate"];
-export type GovernanceEvent = components["schemas"]["GovernanceEventRead"];
+export type DecisionGovernanceEvent = components["schemas"]["DecisionGovernanceEventRead"];
 export type DecisionStatus = Decision["status"];
 export type Risk = Decision["risk"];
 /** À valider's states, as the API's queue names them. */
@@ -68,7 +68,7 @@ export const decisions = {
     apiFetch<Delegation>("/decisions/delegations", { method: "POST", body: JSON.stringify(body) }),
   revokeDelegation: (id: string) =>
     apiFetch<Delegation>(`/decisions/delegations/${id}/revoke`, { method: "POST" }),
-  history: () => apiFetch<GovernanceEvent[]>("/decisions/governance-history"),
+  history: () => apiFetch<DecisionGovernanceEvent[]>("/decisions/governance-history"),
   of: (intentionId: string) => apiFetch<Decision[]>(`/intentions/${intentionId}/decisions`),
   vote: (intentionId: string, kind: VoteKind, body: VoteBody) =>
     apiFetch<Decision>(`/intentions/${intentionId}/decision/${kind}`, {

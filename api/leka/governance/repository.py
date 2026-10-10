@@ -17,7 +17,14 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from leka.governance.models import AccessDecision, EntityRestriction
+from leka.governance.models import (
+    AccessDecision,
+    EntityRestriction,
+    GovernanceEvent,
+    RoleAssignment,
+    WorkspacePolicy,
+    WorkspaceRole,
+)
 
 
 class AuditRepository:
@@ -99,3 +106,99 @@ class RestrictionRepository:
 
     async def remove(self, row: EntityRestriction) -> None:
         await self._session.delete(row)
+
+
+class PolicyRepository:
+    """One workspace's roles of its own, who holds them, its policies, and
+    the history of their changes (LEKA-403)."""
+
+    def __init__(self, session: AsyncSession, workspace_id: uuid.UUID) -> None:
+        self._session = session
+        self._workspace_id = workspace_id
+
+    def add(self, row: WorkspaceRole | RoleAssignment | WorkspacePolicy | GovernanceEvent) -> None:
+        self._session.add(row)
+
+    async def remove(self, row: WorkspaceRole | RoleAssignment | WorkspacePolicy) -> None:
+        await self._session.delete(row)
+
+    async def roles(self) -> Sequence[WorkspaceRole]:
+        return (
+            await self._session.scalars(
+                select(WorkspaceRole)
+                .where(WorkspaceRole.workspace_id == self._workspace_id)
+                .order_by(WorkspaceRole.name)
+            )
+        ).all()
+
+    async def role(self, key: str) -> WorkspaceRole | None:
+        found: WorkspaceRole | None = await self._session.scalar(
+            select(WorkspaceRole).where(
+                WorkspaceRole.workspace_id == self._workspace_id, WorkspaceRole.key == key
+            )
+        )
+        return found
+
+    async def assignments(self) -> Sequence[RoleAssignment]:
+        return (
+            await self._session.scalars(
+                select(RoleAssignment).where(RoleAssignment.workspace_id == self._workspace_id)
+            )
+        ).all()
+
+    async def assignment(self, user_id: uuid.UUID) -> RoleAssignment | None:
+        found: RoleAssignment | None = await self._session.scalar(
+            select(RoleAssignment).where(
+                RoleAssignment.workspace_id == self._workspace_id,
+                RoleAssignment.user_id == user_id,
+            )
+        )
+        return found
+
+    async def held_role(self, user_id: uuid.UUID) -> WorkspaceRole | None:
+        """The role of the workspace's own this person holds, if any."""
+        found: WorkspaceRole | None = await self._session.scalar(
+            select(WorkspaceRole)
+            .join(
+                RoleAssignment,
+                (RoleAssignment.role_id == WorkspaceRole.id)
+                & (RoleAssignment.workspace_id == WorkspaceRole.workspace_id),
+            )
+            .where(
+                RoleAssignment.workspace_id == self._workspace_id,
+                RoleAssignment.user_id == user_id,
+            )
+        )
+        return found
+
+    async def policies(self, *, enabled_only: bool = False) -> Sequence[WorkspacePolicy]:
+        query = (
+            select(WorkspacePolicy)
+            .where(WorkspacePolicy.workspace_id == self._workspace_id)
+            .order_by(WorkspacePolicy.priority.desc(), WorkspacePolicy.name)
+        )
+        if enabled_only:
+            query = query.where(WorkspacePolicy.enabled.is_(True))
+        return (await self._session.scalars(query)).all()
+
+    async def policy(self, policy_id: uuid.UUID) -> WorkspacePolicy | None:
+        found: WorkspacePolicy | None = await self._session.scalar(
+            select(WorkspacePolicy).where(
+                WorkspacePolicy.workspace_id == self._workspace_id,
+                WorkspacePolicy.id == policy_id,
+            )
+        )
+        return found
+
+    async def history(
+        self, *, subject_type: str | None = None, limit: int = 100
+    ) -> Sequence[GovernanceEvent]:
+        query = (
+            select(GovernanceEvent)
+            .where(GovernanceEvent.workspace_id == self._workspace_id)
+            .order_by(GovernanceEvent.at.desc(), GovernanceEvent.id)
+            .limit(limit)
+        )
+        if subject_type is not None:
+            query = query.where(GovernanceEvent.subject_type == subject_type)
+        return (await self._session.scalars(query)).all()

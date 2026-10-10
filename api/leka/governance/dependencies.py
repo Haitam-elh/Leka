@@ -18,6 +18,7 @@ from typing import Annotated, Any
 from fastapi import Depends, HTTPException, Request, status
 
 from leka.db import DatabaseSession, hidden_entities, workspace_scope
+from leka.governance.policies import standing
 from leka.governance.policy import Subject, evaluate
 from leka.governance.repository import AuditRepository
 from leka.governance.schemas import Permission, Principal
@@ -105,15 +106,20 @@ async def get_current_principal(
             detail="You are not a member of this workspace.",
         )
 
-    principal = Principal(
-        user_id=user_id,
-        workspace_id=workspace_id,
-        role=membership.role,
-        workspace_status=workspace.status,
-    )
-
     with workspace_scope(workspace_id):
-        hidden = await hidden_for(session, workspace_id, membership.role)
+        # A role of the workspace's own, the policies in force (LEKA-403):
+        # read now, like the seat.
+        held = await standing(session, workspace_id, user_id, membership.role)
+        principal = Principal(
+            user_id=user_id,
+            workspace_id=workspace_id,
+            role=membership.role,
+            workspace_status=workspace.status,
+            custom_role=held.custom_role,
+            granted=held.granted,
+            policies=held.policies,
+        )
+        hidden = await hidden_for(session, workspace_id, principal.permissions)
         with hidden_entities(hidden):
             yield principal
 

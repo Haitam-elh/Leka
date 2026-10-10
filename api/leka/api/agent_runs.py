@@ -34,11 +34,12 @@ from leka.capabilities import (
     NotYoursError,
     RunFinishedError,
     RunRefusedError,
+    capability_resource,
     find,
     queue_run,
 )
 from leka.core.errors import ErrorCode, FieldError
-from leka.governance import Permission, Principal, Resource, authorize, require_permission
+from leka.governance import Permission, Principal, authorize, require_permission
 from leka.intentions import IntentionRepository
 
 router = APIRouter(prefix="/agent-runs", tags=["capabilities"])
@@ -152,7 +153,7 @@ async def start_run(body: AgentRunCreate, session: SessionDep, principal: Runner
             principal,
             Permission(capability.permission),
             action=ACTION,
-            resource=Resource("capability", capability.key),
+            resource=capability_resource(capability),
         )
         if not decided.allowed:
             raise ApiError(status.HTTP_403_FORBIDDEN, ErrorCode.PERMISSION_DENIED, decided.message)

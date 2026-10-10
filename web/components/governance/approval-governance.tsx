@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api";
 import {
   type ApprovalPolicy,
-  type GovernanceEvent,
+  type DecisionGovernanceEvent,
   type PolicyVerdict,
   type Risk,
   RISKS,
@@ -802,7 +802,7 @@ function DelegationsCard({ canLend, isAdmin }: { canLend: boolean; isAdmin: bool
 
 // ── the journal ──────────────────────────────────────────────────────────────
 
-function eventDetail(t: Dictionary, event: GovernanceEvent): string | null {
+function eventDetail(t: Dictionary, event: DecisionGovernanceEvent): string | null {
   const w = t.decisions.governance;
   const d = event.detail as Record<string, unknown>;
   if (event.kind === "policy_changed" && Array.isArray(d.changed)) {
