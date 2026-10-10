@@ -2,7 +2,7 @@
 used — or that it is not known — and the usage ledger.
 
 Revision ID: b939e6b4cd71
-Revises: 8d3f6b2a9c51
+Revises: 8d3f6b2e9a41
 Created: 2026-10-16
 
 LEKA-430. `model_rates`: what a model costs from a day on, per million
@@ -26,7 +26,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "b939e6b4cd71"
-down_revision: str | None = "8d3f6b2a9c51"
+down_revision: str | None = "8d3f6b2e9a41"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
