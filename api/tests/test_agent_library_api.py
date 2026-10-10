@@ -90,8 +90,15 @@ async def test_an_incident_is_routed_to_the_investigator_and_investigated(
     assert done["output"] == report
     assert _kinds(done) == ["queued", "started", "context", "tool", "tool", "answered", "succeeded"]
     assert [e["detail"]["outcome"] for e in done["events"] if e["kind"] == "tool"] == ["ok", "ok"]
-    # It is offered the four tools it declares.
-    assert script.declared() == ["search_entities", "read_entity", "dependencies", "what_happened"]
+    # It is offered the four tools it declares, and the skills it names (LEKA-401).
+    assert script.declared() == [
+        "search_entities",
+        "read_entity",
+        "dependencies",
+        "what_happened",
+        "incident-history",
+        "blast-radius",
+    ]
     reached = _answered(script, 1)
     assert reached["direction"] == "used_by"
     assert str(model[CHECKOUT]) in [t["id"] for t in reached["things"]]
@@ -110,22 +117,29 @@ async def test_an_architecture_is_read_through_its_dependencies(
     checkout = str(model[CHECKOUT])
     script = leka_gemini(
         gemini(call={"name": "dependencies", "args": {"id": checkout, "direction": "depends_on"}}),
-        # Invoicing is a business capability: not what this agent reads.
-        gemini(
-            call={
-                "name": "dependencies",
-                "args": {"id": str(model[INVOICING]), "direction": "depends_on"},
-            }
-        ),
         gemini("# Architecture de Checkout\n\nCheckout s'appuie sur Billing API."),
     )
     started = await _start(client, "architecture-analysis", sujet="Checkout")
     assert await _run(acme, started["id"]) == {"status": "succeeded"}
     upstream = _answered(script, 1)
     assert str(model[BILLING]) in [t["id"] for t in upstream["things"]]
-    assert _answered(script, 2) == {"error": "out_of_scope"}
-    # dependencies, never what_happened: it does not declare it.
-    assert script.declared() == ["search_entities", "read_entity", "dependencies"]
+    # dependencies, never what_happened: it does not declare it — and the
+    # skill it names (LEKA-401).
+    assert script.declared() == ["search_entities", "read_entity", "dependencies", "blast-radius"]
+
+    # Invoicing is a business capability: not what the debugging agent reads.
+    script = leka_gemini(
+        gemini(
+            call={
+                "name": "dependencies",
+                "args": {"id": str(model[INVOICING]), "direction": "depends_on"},
+            }
+        ),
+        gemini("# Débogage\n\nRien à dire."),
+    )
+    started = await _start(client, "debug-assistant", symptome="Invoicing")
+    assert await _run(acme, started["id"]) == {"status": "succeeded"}
+    assert _answered(script, 1) == {"error": "out_of_scope"}
 
 
 async def test_least_privilege_and_no_fixing_on_a_question(
@@ -142,7 +156,7 @@ async def test_least_privilege_and_no_fixing_on_a_question(
     script = leka_gemini(gemini("# Documentation de Billing API\n\nÀ compléter."))
     started = await _start(client, "documentation-assistant", sujet="Billing API")
     assert await _run(acme, started["id"]) == {"status": "succeeded"}
-    assert script.declared() == ["search_entities", "read_entity"]
+    assert script.declared() == ["search_entities", "read_entity", "documentation-coverage"]
 
     asked = await client.post(
         f"{API}/capabilities/route",

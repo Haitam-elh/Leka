@@ -20,6 +20,7 @@ import pytest
 import leka.schema  # noqa: F401 — every module provides its capabilities
 from leka.capabilities import Availability, Kind, Lifecycle, RouteQuery, route
 from leka.capabilities.registry import catalogue
+from leka.capabilities.skills import agent_skill_tools
 from leka.capabilities.tools import NAMES
 from leka.knowledge import EntityType
 
@@ -44,11 +45,12 @@ def test_the_library_is_registered_each_agent_to_the_runtime_s_contract() -> Non
     types = {t.value for t in EntityType}
     for key in sorted(LIBRARY):
         d = found[key]
+        # Given their skills (LEKA-401): a new version each.
         assert (d.kind, d.lifecycle, d.model, d.version) == (
             Kind.AGENT,
             Lifecycle.ACTIVE,
             True,
-            "1.0.0",
+            "1.0.0" if key == "build-fixer" else "1.1.0",
         ), key
         assert set(d.entity_types) <= types, key
         assert {"search_entities", "read_entity"} <= set(d.tools) <= NAMES, key
@@ -59,6 +61,13 @@ def test_the_library_is_registered_each_agent_to_the_runtime_s_contract() -> Non
         for section in ("Ce qu'il regarde", "Ce qu'il produit", "Ce qu'il ne doit jamais faire"):
             assert section in said, (key, section)
         assert "Rien d'inventé" in said, key
+        # Each names the library's skills of its domain, and is offered them
+        # all: none reads beyond what the agent may (LEKA-401).
+        if key != "build-fixer":
+            given, withheld = agent_skill_tools(d)
+            assert [t.name for t in given] == list(d.skills) and d.skills, key
+            assert withheld == [], key
+            assert "## Ses compétences" in said, key
 
 
 ASKED = [

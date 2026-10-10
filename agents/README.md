@@ -87,6 +87,7 @@ The agent's instructions, in markdown.
 | `examples` | no | how people ask for it |
 | `permission` | no | what a person needs to use it — `intention:create` by default |
 | `tools` | no | the runtime's tools it may be offered — `search_entities`, `read_entity`, `dependencies`, `what_happened` (LEKA-400); every read-only one when it declares none. Least privilege: declare what it needs |
+| `skills` | no | the skills of LEKA's library it may be offered, by key — `delivery-metrics`, `blast-radius`… (LEKA-401, [docs/skills.md](../docs/skills.md) § 9); none unless named, each only when it reads nothing beyond `entity_types` |
 
 `requires` names source kinds; alternatives in one entry, `"confluence|microsoft_365"`.
 
