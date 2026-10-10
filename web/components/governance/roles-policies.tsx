@@ -258,7 +258,7 @@ export function PoliciesCard({ canManage, roles }: { canManage: boolean; roles: 
   const [name, setName] = useState("");
   const [effect, setEffect] = useState<"deny" | "allow">("deny");
   const [action, setAction] = useState<string>("agent:run");
-  const [risk, setRisk] = useState<"" | "low" | "medium" | "high">("");
+  const [risk, setRisk] = useState<"" | "low" | "medium" | "high" | "critical">("");
   const [who, setWho] = useState<Set<string>>(new Set());
   const [priority, setPriority] = useState("50");
 
@@ -370,10 +370,11 @@ export function PoliciesCard({ canManage, roles }: { canManage: boolean; roles: 
             </label>
             <label className="flex flex-col gap-1 text-[0.8125rem] text-brand-navy">
               {w.riskLabel}
-              <select className="h-9 rounded-md border border-shell-line bg-white px-2 text-sm" value={risk} onChange={(e) => setRisk(e.target.value as "" | "low" | "medium" | "high")}>
+              <select className="h-9 rounded-md border border-shell-line bg-white px-2 text-sm" value={risk} onChange={(e) => setRisk(e.target.value as "" | "low" | "medium" | "high" | "critical")}>
                 <option value="">{w.anyRisk}</option>
                 <option value="medium">{fill(w.riskAtLeast, { risk: w.risks.medium })}</option>
                 <option value="high">{fill(w.riskAtLeast, { risk: w.risks.high })}</option>
+                <option value="critical">{fill(w.riskAtLeast, { risk: w.risks.critical })}</option>
               </select>
             </label>
             <label className="flex flex-col gap-1 text-[0.8125rem] text-brand-navy">

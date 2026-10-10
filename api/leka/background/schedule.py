@@ -137,6 +137,13 @@ SCHEDULE: tuple[Scheduled, ...] = (
         "leka.capabilities.workflow_runs.run_workflows_sweep",
         cron="44 * * * *",
     ),
+    # The decisions waiting past their policy's hours (LEKA-404): escalated,
+    # the asker and the owners told.
+    Scheduled(
+        "decisions-escalation",
+        "leka.intentions.oversight.run_escalation",
+        cron="4,19,34,49 * * * *",
+    ),
 )
 
 

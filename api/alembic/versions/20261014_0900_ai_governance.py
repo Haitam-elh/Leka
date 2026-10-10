@@ -2,7 +2,7 @@
 call was for, agent runs held for approval.
 
 Revision ID: 2c7e5a9f4b16
-Revises: 6a1f3c8e2d57
+Revises: 5b8e1d4a7c26
 Created: 2026-10-14
 
 LEKA-406. A control (`ai_controls`): model access, usage limit, output
@@ -25,7 +25,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "2c7e5a9f4b16"
-down_revision: str | None = "6a1f3c8e2d57"
+down_revision: str | None = "5b8e1d4a7c26"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
