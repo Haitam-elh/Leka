@@ -17,7 +17,10 @@ capabilities its goal calls for run on its context, each isolated, the
 result kept with every piece of evidence and where it came from — and,
 when it asks to act, put to people's decision (approval.py, LEKA-390):
 approved, rejected, modified, under the workspace's policy, every vote
-kept. docs/intentions.md.
+kept — and governed (governance.py, oversight.py, LEKA-404): risk classified
+by rules, approvals by role, delegation, freezes and waivers, approvals that
+expire, decisions escalated, every change in an append-only trail.
+docs/intentions.md, docs/governance-rules.md.
 """
 
 from leka.intentions.actions import (
@@ -55,6 +58,7 @@ from leka.intentions.models import (
     IntentionEvent,
     IntentionLink,
 )
+from leka.intentions.oversight import ExceptionAsk, OversightRefusedError, OversightService
 from leka.intentions.processing import queue_analysis
 from leka.intentions.reading import ModelReading
 from leka.intentions.repository import IntentionFilters, IntentionRepository
@@ -74,10 +78,15 @@ from leka.intentions.schemas import (
     DecisionRead,
     DecisionSummary,
     DecisionVoteRequest,
+    DelegationCreate,
+    DelegationRead,
     ExpectationRead,
     ExpectationReport,
     ExpectationsUpdate,
     GoalRead,
+    GovernanceEventRead,
+    GovernanceExceptionCreate,
+    GovernanceExceptionRead,
     IntentionAnalysisRead,
     IntentionAnalysisRequested,
     IntentionAsked,
@@ -93,6 +102,8 @@ from leka.intentions.schemas import (
     IntentionVerificationRead,
     PlanCancelRequest,
     PlanStartRequest,
+    PolicyProbe,
+    PolicyVerdictRead,
     ProposedAction,
     ReadinessIssue,
     StepReportRequest,
@@ -154,12 +165,18 @@ __all__ = [
     "DecisionService",
     "DecisionSummary",
     "DecisionVoteRequest",
+    "DelegationCreate",
+    "DelegationRead",
     "EndpointService",
+    "ExceptionAsk",
     "ExpectationRead",
     "ExpectationReport",
     "ExpectationsUpdate",
     "Filters",
     "GoalRead",
+    "GovernanceEventRead",
+    "GovernanceExceptionCreate",
+    "GovernanceExceptionRead",
     "IllegalTransitionError",
     "Intention",
     "IntentionAnalysis",
@@ -190,10 +207,14 @@ __all__ = [
     "Move",
     "NotYoursError",
     "NothingToStartError",
+    "OversightRefusedError",
+    "OversightService",
     "PlanCancelRequest",
     "PlanRefusedError",
     "PlanStartRequest",
     "PolicyError",
+    "PolicyProbe",
+    "PolicyVerdictRead",
     "ProposedAction",
     "ReadinessIssue",
     "StepReportRequest",

@@ -295,12 +295,15 @@ async def test_the_policy_is_an_admins_and_kept_as_said(
     acme: dict[str, uuid.UUID],
 ) -> None:
     default = (await client.get(f"{API}/decisions/policy")).json()
-    assert default == {
-        "approvals": {"low": 1, "medium": 1, "high": 2},
-        "separate": ["high"],
+    assert {k: default[k] for k in ("approvals", "separate", "production_raises", "roles")} == {
+        "approvals": {"low": 1, "medium": 1, "high": 2, "critical": 2},
+        "separate": ["high", "critical"],
         "production_raises": True,
-        "customised": False,
+        "roles": {"low": None, "medium": None, "high": None, "critical": "owner"},
     }
+    assert (default["valid_hours"]["critical"], default["escalate_hours"]["critical"]) == (24, 4)
+    assert len(default["rules"]) == 3
+    assert default["customised"] is False
     # A member reads it, may not change it.
     refused = await client.put(f"{API}/decisions/policy", json={"approvals": {"high": 3}})
     assert refused.status_code == 403
@@ -311,8 +314,9 @@ async def test_the_policy_is_an_admins_and_kept_as_said(
     wrong = await client.put(f"{API}/decisions/policy", json={"approvals": {"medium": 3}})
     assert wrong.status_code == 422
     changed = await _policy(client, approvals={"low": 2, "medium": 3, "high": 4})
+    # Critical, not said, asks at least what high does.
     assert (changed["approvals"], changed["customised"]) == (
-        {"low": 2, "medium": 3, "high": 4},
+        {"low": 2, "medium": 3, "high": 4, "critical": 4},
         True,
     )
     # Open already: it keeps the policy it was opened with.
