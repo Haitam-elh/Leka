@@ -7,6 +7,9 @@ an audit log.
 LEKA-402: the entities an admin restricted, and every access decision worth
 keeping — each refusal, each write or run allowed — append-only, the
 database refusing to change one.
+
+LEKA-406: the workspace's AI controls, and every outcome of one —
+append-only too.
 """
 
 from __future__ import annotations
@@ -163,7 +166,9 @@ class GovernanceEvent(Base, WorkspaceScopedMixin):
 
     __tablename__ = "governance_events"
     __table_args__ = (
-        CheckConstraint("subject_type IN ('role', 'policy', 'assignment')", name="subject_type"),
+        CheckConstraint(
+            "subject_type IN ('role', 'policy', 'assignment', 'ai_control')", name="subject_type"
+        ),
         Index("ix_governance_events_workspace_at", "workspace_id", "at"),
     )
 
@@ -177,3 +182,60 @@ class GovernanceEvent(Base, WorkspaceScopedMixin):
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     before: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     after: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+
+
+class AIControl(Base, WorkspaceScopedMixin):
+    """A control on the workspace's AI (LEKA-406): what kind — model access,
+    usage limit, output check, approval — over which work and which roles,
+    with its kind's own settings (governance/ai.py)."""
+
+    __tablename__ = "ai_controls"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('model_access', 'usage_limit', 'output_check', 'approval')", name="kind"
+        ),
+    )
+
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    purposes: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    roles: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    config: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class AIControlEvent(Base, WorkspaceScopedMixin):
+    """What an AI control did, once (LEKA-406): which, to what work — its
+    purpose, what it was about, the run — for whom, on which model; what it
+    found, never the text itself. Append-only: the database refuses to change
+    one; the person is forgotten with their account."""
+
+    __tablename__ = "ai_control_events"
+    __table_args__ = (
+        CheckConstraint(
+            "outcome IN ('refused', 'limited', 'redacted', 'blocked', 'flagged', 'held',"
+            " 'approved', 'rejected')",
+            name="outcome",
+        ),
+        Index("ix_ai_control_events_workspace_at", "workspace_id", "at"),
+    )
+
+    # No foreign key: a control removed leaves what it did.
+    control_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    control_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(10), nullable=False)
+    purpose: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    provider: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")

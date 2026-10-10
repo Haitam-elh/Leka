@@ -32,6 +32,7 @@ import { notify } from "@/lib/notify";
  */
 
 const STATUS_TONE: Record<string, TileTone> = {
+  awaiting_approval: "warning",
   queued: "neutral",
   running: "info",
   succeeded: "success",
@@ -76,12 +77,17 @@ export function RunAgent({
     event.preventDefault();
     setErrors({});
     try {
-      await start.mutateAsync({
+      const started = await start.mutateAsync({
         key: capability.key,
         inputs: inputsOf(capability.inputs, values),
         intention_id: intentionId ?? null,
       });
-      notify.success({ title: w.queued, description: w.queuedHint });
+      // Held by an approval control (LEKA-406): it waits, said so.
+      if (started.status === "awaiting_approval") {
+        notify.success({ title: w.held, description: w.heldHint });
+      } else {
+        notify.success({ title: w.queued, description: w.queuedHint });
+      }
       setValues({});
     } catch (error) {
       if (error instanceof ApiError && error.fieldErrors) {
@@ -183,7 +189,12 @@ function stepSaid(w: Dictionary["agentRuns"], event: AgentRunEvent): string {
     left: String(Number(detail.out_of_scope ?? 0) + Number(detail.beyond ?? 0)),
     why: (w.withheld as Record<string, string>)[String(detail.why)] ?? String(detail.why ?? ""),
     model: String(detail.model ?? ""),
-    code: (w.errors as Record<string, string>)[String(detail.code)] ?? String(detail.code ?? ""),
+    // An AI control's refusal said as such (LEKA-406), else the code.
+    code:
+      (w.errors as Record<string, string>)[String(detail.reason)] ??
+      (w.errors as Record<string, string>)[String(detail.code)] ??
+      String(detail.code ?? ""),
+    control: String(detail.control ?? ""),
   });
 }
 

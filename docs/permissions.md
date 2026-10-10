@@ -293,6 +293,15 @@ given or taken back; every policy created, changed (enabled, disabled),
 deleted — who, when, **before and after**; append-only, the database refusing
 to rewrite one (`GET /governance/history`, `access:read`).
 
+## AI governance (LEKA-406)
+
+Who may ask is decided here; what the workspace's AI may then do — which
+models, how much, what an answer may not carry, which agents wait for
+approval — by its AI controls, at the model gateway and where an agent is
+asked to run. Changing them takes `policy:manage`; approving a held run,
+`intention:approve`, never by who asked it; what they did, `access:read`.
+See [ai-governance.md](ai-governance.md).
+
 ## What is deliberately absent
 
 Groups, SSO-mapped roles, roles of its own on the owner's base, and grants

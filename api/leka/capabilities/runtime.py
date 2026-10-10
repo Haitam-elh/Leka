@@ -37,6 +37,9 @@ from leka.capabilities.gateway import Message
 
 
 class RunStatus(enum.StrEnum):
+    # Held by an approval control until someone who may approve says so
+    # (LEKA-406).
+    AWAITING_APPROVAL = "awaiting_approval"
     QUEUED = "queued"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
@@ -45,6 +48,7 @@ class RunStatus(enum.StrEnum):
 
 
 TRANSITIONS: Mapping[RunStatus, frozenset[RunStatus]] = {
+    RunStatus.AWAITING_APPROVAL: frozenset({RunStatus.QUEUED, RunStatus.CANCELLED}),
     RunStatus.QUEUED: frozenset({RunStatus.RUNNING, RunStatus.FAILED, RunStatus.CANCELLED}),
     RunStatus.RUNNING: frozenset({RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED}),
     RunStatus.SUCCEEDED: frozenset(),

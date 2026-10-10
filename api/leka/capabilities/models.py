@@ -176,6 +176,11 @@ class ModelCall(Base, WorkspaceScopedMixin):
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     request_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # The person it was asked for (LEKA-406) — none for LEKA's own work;
+    # forgotten with their account.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class AgentRun(Base, WorkspaceScopedMixin):
@@ -186,7 +191,9 @@ class AgentRun(Base, WorkspaceScopedMixin):
     __tablename__ = "agent_runs"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')", name="status"
+            "status IN ('awaiting_approval', 'queued', 'running', 'succeeded', 'failed',"
+            " 'cancelled')",
+            name="status",
         ),
         Index("ix_agent_runs_workspace_queued", "workspace_id", "queued_at"),
         UniqueConstraint("workspace_id", "id", name="uq_agent_runs_workspace_id_id"),
@@ -194,7 +201,8 @@ class AgentRun(Base, WorkspaceScopedMixin):
 
     key: Mapped[str] = mapped_column(String(100), nullable=False)
     version: Mapped[str] = mapped_column(String(20), nullable=False)
-    status: Mapped[str] = mapped_column(String(10), nullable=False)
+    # awaiting_approval (LEKA-406): twenty.
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
     # What it was given, as its contract takes it.
     inputs: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
     requested_by: Mapped[uuid.UUID | None] = mapped_column(

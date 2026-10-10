@@ -7,11 +7,18 @@
                                         what its model calls took
     POST   /agent-runs/{id}/cancel      cancelled — by who asked, or who may
                                         approve
+    POST   /agent-runs/{id}/approve     held for approval (LEKA-406): queued
+    POST   /agent-runs/{id}/reject      held for approval: cancelled, never run
 
 Running one takes `intention:create`, and whatever the agent's own
 permission is: the catalogue says it (`not_permitted`). Reading takes
 `intention:read`. The workspace is read from the session, never from the
 path or the payload (rule 3).
+
+An approval control (LEKA-406) holds a run of an agent at or above its risk:
+202 still, `awaiting_approval`, nothing queued. Who may approve
+(`intention:approve`) — never who asked it — approves or rejects it; each
+outcome is kept with what the controls did.
 """
 
 from __future__ import annotations
@@ -26,12 +33,15 @@ from leka.api.errors import ApiError
 from leka.capabilities import (
     AgentRun,
     AgentRunCreate,
+    AgentRunDecision,
     AgentRunDetail,
     AgentRunEventRead,
     AgentRunRead,
     AgentRuntime,
     AgentRunUsage,
+    NotAwaitingError,
     NotYoursError,
+    OwnRunError,
     RunFinishedError,
     RunRefusedError,
     capability_resource,
@@ -39,14 +49,24 @@ from leka.capabilities import (
     queue_run,
 )
 from leka.core.errors import ErrorCode, FieldError
-from leka.governance import Permission, Principal, authorize, require_permission
+from leka.governance import (
+    AIControlService,
+    Permission,
+    Principal,
+    ai_event,
+    authorize,
+    current_actor,
+    holding,
+    require_permission,
+)
 from leka.intentions import IntentionRepository
 
 router = APIRouter(prefix="/agent-runs", tags=["capabilities"])
 
 Reader = Annotated[Principal, Depends(require_permission(Permission.INTENTION_READ))]
 Runner = Annotated[Principal, Depends(require_permission(Permission.INTENTION_CREATE))]
-StatusWord = Literal["queued", "running", "succeeded", "failed", "cancelled"]
+Approver = Annotated[Principal, Depends(require_permission(Permission.INTENTION_APPROVE))]
+StatusWord = Literal["awaiting_approval", "queued", "running", "succeeded", "failed", "cancelled"]
 ACTION = "agent:run"
 
 REFUSED = {
@@ -157,6 +177,19 @@ async def start_run(body: AgentRunCreate, session: SessionDep, principal: Runner
         )
         if not decided.allowed:
             raise ApiError(status.HTTP_403_FORBIDDEN, ErrorCode.PERMISSION_DENIED, decided.message)
+    # An approval control covering it holds it until someone approves
+    # (LEKA-406).
+    actor = current_actor()
+    held = (
+        holding(
+            await AIControlService(session, principal.workspace_id).active(),
+            capability.key,
+            capability.risk,
+            actor,
+        )
+        if capability is not None
+        else None
+    )
     runtime = AgentRuntime(session, principal.workspace_id)
     try:
         run = await runtime.start(
@@ -166,13 +199,27 @@ async def start_run(body: AgentRunCreate, session: SessionDep, principal: Runner
             permissions=frozenset(p.value for p in principal.permissions),
             intention_id=body.intention_id,
             context_id=context_id,
+            held_by=held.name if held is not None else None,
         )
     except RunRefusedError as error:
         raise _refused(error) from error
+    if held is not None:
+        ai_event(
+            session,
+            principal.workspace_id,
+            held,
+            "held",
+            actor=actor,
+            purpose=f"agent:{run.key}",
+            ref=run.key,
+            run_id=run.id,
+            detail={"risk": capability.risk if capability is not None else None},
+        )
     read = run_read(run, principal)
     # What the worker reads, committed before it hears of it.
     await session.commit()
-    await queue_run(principal.workspace_id, run.id)
+    if held is None:
+        await queue_run(principal.workspace_id, run.id)
     return read
 
 
@@ -225,3 +272,79 @@ async def cancel_run(run_id: uuid.UUID, session: SessionDep, principal: Runner) 
     if run is None:
         raise _missing()
     return run_read(run, principal)
+
+
+async def _decide(
+    run_id: uuid.UUID,
+    body: AgentRunDecision,
+    session: SessionDep,
+    principal: Principal,
+    *,
+    approve: bool,
+) -> AgentRunRead:
+    try:
+        run = await AgentRuntime(session, principal.workspace_id).decide(
+            run_id, by=principal.user_id, approve=approve, note=body.note
+        )
+    except OwnRunError as error:
+        raise ApiError(
+            status.HTTP_403_FORBIDDEN,
+            ErrorCode.PERMISSION_DENIED,
+            "Who asked a run does not approve it.",
+        ) from error
+    except NotAwaitingError as error:
+        raise ApiError(
+            status.HTTP_409_CONFLICT, ErrorCode.CONFLICT, "It is not waiting for approval."
+        ) from error
+    if run is None:
+        raise _missing()
+    held_by = run.detail.get("held_by")
+    ai_event(
+        session,
+        principal.workspace_id,
+        None,
+        "approved" if approve else "rejected",
+        kind="approval",
+        user_id=principal.user_id,
+        purpose=f"agent:{run.key}",
+        ref=run.key,
+        run_id=run.id,
+        detail={
+            "control": held_by,
+            "requested_by": str(run.requested_by),
+            **({"note": body.note} if body.note else {}),
+        },
+    )
+    read = run_read(run, principal)
+    await session.commit()
+    if approve:
+        await queue_run(principal.workspace_id, run.id)
+    return read
+
+
+@router.post(
+    "/{run_id}/approve", response_model=AgentRunRead, summary="Approve an agent run held for it"
+)
+async def approve_run(
+    run_id: uuid.UUID,
+    session: SessionDep,
+    principal: Approver,
+    body: AgentRunDecision | None = None,
+) -> AgentRunRead:
+    """Queued, as if never held. 403 for who asked it; 409 when it is not
+    waiting for approval."""
+    return await _decide(run_id, body or AgentRunDecision(), session, principal, approve=True)
+
+
+@router.post(
+    "/{run_id}/reject", response_model=AgentRunRead, summary="Reject an agent run held for it"
+)
+async def reject_run(
+    run_id: uuid.UUID,
+    session: SessionDep,
+    principal: Approver,
+    body: AgentRunDecision | None = None,
+) -> AgentRunRead:
+    """Cancelled, never run. 403 for who asked it; 409 when it is not
+    waiting for approval."""
+    return await _decide(run_id, body or AgentRunDecision(), session, principal, approve=False)

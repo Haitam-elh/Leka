@@ -9,7 +9,7 @@ entities an admin restricted, and the trail of access decisions.
     GET    /governance/roles · PUT · DELETE /{key}       roles of its own (LEKA-403)
     GET    /governance/assignments · PUT /{user}         who holds which
     GET    /governance/policies · POST · PUT · DELETE    its policies
-    GET    /governance/history                  roles and policies, changed
+    GET    /governance/history                  roles, policies, AI controls, changed
     POST   /governance/evaluate                 a decision, asked without acting
 
 Reading the model is any member's; the restrictions and the decisions take
@@ -365,7 +365,9 @@ async def delete_policy(policy_id: uuid.UUID, session: SessionDep, principal: Ma
 async def history(
     session: SessionDep,
     principal: Auditor,
-    subject_type: Annotated[Literal["role", "policy", "assignment"] | None, Query()] = None,
+    subject_type: Annotated[
+        Literal["role", "policy", "assignment", "ai_control"] | None, Query()
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[GovernanceEventRead]:
     rows = await PolicyService(session, principal.workspace_id).history(
