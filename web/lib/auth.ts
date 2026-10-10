@@ -5,7 +5,7 @@
  * path by hand, and so that a route rename is one edit rather than five.
  */
 
-import { apiFetch, rememberCsrfToken } from "@/lib/api";
+import { apiFetch, leavingSession, rememberCsrfToken } from "@/lib/api";
 
 export interface WorkspaceMembership {
   id: string;
@@ -108,10 +108,12 @@ export const auth = {
   // person straight back into the application they just left, and which
   // races whatever navigation the caller is doing. The caller decides
   // where a sign-out lands.
-  logout: () =>
-    apiFetch<void>("/auth/logout", { method: "POST", redirectOn401: false }).finally(() =>
+  logout: () => {
+    leavingSession();
+    return apiFetch<void>("/auth/logout", { method: "POST", redirectOn401: false }).finally(() =>
       rememberCsrfToken(null),
-    ),
+    );
+  },
 
   me: (init: { redirectOn401?: boolean } = {}) =>
     apiFetch<CurrentUser>("/auth/me", init).then(keepToken),

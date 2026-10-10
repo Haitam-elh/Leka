@@ -125,7 +125,8 @@ _pending: set[asyncio.Task[None]] = set()
 
 def _later(work: Coroutine[object, object, None]) -> None:
     """Done after the answer, never before it: a refusal takes as long
-    whether the address exists or not — the timing must not tell."""
+    whether the address exists or not — the timing must not tell; a
+    sign-out answers at once, before the page's other requests are refused."""
     task = asyncio.get_running_loop().create_task(work)
     _pending.add(task)
     task.add_done_callback(_pending.discard)
@@ -305,7 +306,9 @@ async def logout(response: Response, session: CurrentSession, auth: AuthDep) -> 
     """End this session. The old cookie stops working immediately."""
     if session is not None:
         await auth.logout(session)
-        await audit_account(session.user_id, "user", "user.signed_out")
+        # After the answer: the page that asked is navigating away, and its
+        # other requests, refused now, must not get there first.
+        _later(audit_account(session.user_id, "user", "user.signed_out"))
     clear_session_cookie(response)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -318,7 +321,7 @@ async def logout_everywhere(
     user = await UserRepository(db).get(current.user_id)
     if user is not None:
         await auth.logout_everywhere(user)
-        await audit_account(user.id, "user", "user.signed_out_everywhere")
+        _later(audit_account(user.id, "user", "user.signed_out_everywhere"))
     clear_session_cookie(response)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
