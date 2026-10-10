@@ -151,6 +151,11 @@ SCHEDULE: tuple[Scheduled, ...] = (
     # queue like every sweep — behind one, it is late: the API judges them
     # too (main.py), every five minutes whatever the queues and the worker do.
     Scheduled("ops-watch", "leka.ops.alerts.run_watch", cron="*/5 * * * *"),
+    # The usage ledger (LEKA-430): the executions of the last hours metered
+    # again from their calls and runs — late calls, runs that ended.
+    Scheduled(
+        "metering-sweep", "leka.metering.service.run_metering_sweep", cron="9,24,39,54 * * * *"
+    ),
 )
 
 

@@ -206,6 +206,11 @@ class UnderstoodBy(BaseModel):
     model: str | None = None
     version: str | None = None
     confidence: float | None = Field(default=None, description="The model's, of its goal.")
+    run_id: uuid.UUID | None = Field(
+        default=None,
+        description="The LLM runtime's run that read it (LEKA-430): what reading it cost —"
+        " a model asked, even when the rules' reading was kept.",
+    )
 
 
 class Understanding(BaseModel):
