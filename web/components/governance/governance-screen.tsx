@@ -8,6 +8,7 @@ import { cn } from "cn";
 
 import { Card } from "@/components/environment/parts";
 import { ApprovalGovernance } from "@/components/governance/approval-governance";
+import { DataProtection } from "@/components/governance/data-protection";
 import { Pill } from "@/components/intelligence/pill";
 import { useConfirm } from "@/components/interactions/confirm";
 import { exactDate } from "@/components/knowledge/time";
@@ -43,7 +44,8 @@ import { useTeamMembers } from "@/lib/team-queries";
  * waiting for approval and what the controls did (LEKA-406). Every word is
  * the API's: the model the server enforces, not a copy of it. Its second tab,
  * Approbations, governs consequential actions (LEKA-404,
- * approval-governance.tsx).
+ * approval-governance.tsx); its third, Données, how data is protected
+ * (LEKA-405, data-protection.tsx).
  */
 
 const ROLE_ORDER = ["member", "admin", "owner"] as const;
@@ -322,11 +324,13 @@ export function GovernanceScreen() {
   const model = useAccessModel();
   const roles = useCustomRoles();
   const mine = new Set<string>(model.data?.mine ?? []);
-  const [tab, setTab] = useState<"access" | "approvals">("access");
+  const [tab, setTab] = useState<"access" | "approvals" | "data">("access");
 
   let body: React.ReactNode;
   if (tab === "approvals") {
     body = <ApprovalGovernance />;
+  } else if (tab === "data") {
+    body = <DataProtection />;
   } else if (model.isError) {
     body = <ErrorState error={model.error} onRetry={() => void model.refetch()} />;
   } else if (!model.data) {
@@ -365,7 +369,7 @@ export function GovernanceScreen() {
     <PageContainer>
       <PageHeader title={t.nav.governance} breadcrumb={crumbs} />
       <div className="mb-4 flex gap-1 border-b border-shell-line" role="tablist">
-        {(["access", "approvals"] as const).map((name) => (
+        {(["access", "approvals", "data"] as const).map((name) => (
           <button
             key={name}
             type="button"
@@ -380,7 +384,7 @@ export function GovernanceScreen() {
                 : "border-transparent text-shell-muted hover:text-brand-navy",
             )}
           >
-            {t.decisions.governance.tabs[name]}
+            {name === "data" ? t.protection.tab : t.decisions.governance.tabs[name]}
           </button>
         ))}
       </div>

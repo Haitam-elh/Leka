@@ -35,6 +35,7 @@ from leka.api import (
     ops,
     outcomes,
     platform,
+    protection,
     resolution,
     skills,
     webhooks,
@@ -54,6 +55,7 @@ api_router.include_router(governance.router)
 api_router.include_router(access.router)
 api_router.include_router(ai_governance.router)
 api_router.include_router(audit.router)
+api_router.include_router(protection.router)
 api_router.include_router(ops.router)
 api_router.include_router(connectors.router)
 api_router.include_router(ingestion.router)

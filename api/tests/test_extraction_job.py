@@ -112,7 +112,13 @@ async def test_a_second_run_finds_nothing_to_do(source: Source) -> None:
 
     result = await extract_source(source.workspace_id, source.id)
 
-    assert result == {"extracted": 0, "failed": 0, "passed_over": 0, "forgotten": 0}
+    assert result == {
+        "extracted": 0,
+        "failed": 0,
+        "passed_over": 0,
+        "forgotten": 0,
+        "secrets_taken_out": 0,
+    }
     assert {k: v.updated_at for k, v in (await _rows(source)).items()} == before
 
 

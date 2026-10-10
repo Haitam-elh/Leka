@@ -631,6 +631,7 @@ class S3ObjectStore:
         access_key_id: str = "",
         secret_access_key: str = "",
         client: Any | None = None,
+        server_side_encryption: str | None = None,
     ) -> None:
         """Build a client, or take one.
 
@@ -642,6 +643,8 @@ class S3ObjectStore:
         test that needs credentials, and so never runs at all.
         """
         self._bucket = bucket
+        # Asked on every write (LEKA-405): AES256, aws:kms, or nothing.
+        self.encryption = server_side_encryption
         if client is not None:
             self._client = client
             return
@@ -709,7 +712,8 @@ class S3ObjectStore:
                 source,
                 self._bucket,
                 key,
-                ExtraArgs={"ContentType": content_type},
+                ExtraArgs={"ContentType": content_type}
+                | ({"ServerSideEncryption": self.encryption} if self.encryption else {}),
                 Config=transfer,
             )
 
@@ -835,6 +839,7 @@ def build_object_store() -> ObjectStore:
             region=settings.s3_region,
             access_key_id=settings.s3_access_key_id or "",
             secret_access_key=settings.s3_secret_access_key.get_secret_value(),
+            server_side_encryption=settings.s3_encryption,
         )
     return LocalObjectStore(settings.object_store_root)
 

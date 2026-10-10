@@ -8,8 +8,11 @@ Queued at the end of a pass that left something to extract (key
    extracted, changed since (`checksum`), or extracted by another version of
    their strategy — grouped by the batch holding their latest version;
 3. reads each batch once, finds each record's line by its identity AND its
-   checksum, extracts it, and saves the result — or the failure — batch by
-   batch;
+   checksum, extracts it, protects it — a secret or an identity number in
+   it taken out, what it carried counted (LEKA-405, ingestion.protection)
+   — and saves the result — or the failure — batch by batch; a batch
+   something was taken out of is kept no longer than the workspace's
+   data protection policy says;
 4. records its run, then queues the next stage that has work
    (leka/ingestion/pipeline.py).
 
@@ -42,6 +45,12 @@ from leka.ingestion.extraction.contract import ExtractedRecord
 from leka.ingestion.extraction.engine import extract, versions
 from leka.ingestion.models import ExtractionStatus, ProcessingStage, SourceRecord
 from leka.ingestion.pipeline import BY_NAME, advance, stage_run
+from leka.ingestion.protection import (
+    holds_taken_out,
+    protected,
+    protection_policy,
+    shorten_payloads,
+)
 from leka.ingestion.repository import ExtractionRepository
 from leka.platform import ObjectStore, ObjectStoreError, object_store
 
@@ -66,8 +75,11 @@ async def extract_source(workspace_id: uuid.UUID, source_id: uuid.UUID) -> dict[
             if source is None:  # deleted since the job was queued
                 return {}
             async with stage_run(workspace_id, source, ProcessingStage.EXTRACTION) as result:
-                result.update(extracted=0, failed=0, passed_over=0, forgotten=0)
+                result.update(
+                    extracted=0, failed=0, passed_over=0, forgotten=0, secrets_taken_out=0
+                )
                 repository = ExtractionRepository(session, workspace_id)
+                policy = await protection_policy(session, workspace_id)
                 result["forgotten"] = await repository.forget_deleted(source_id)
                 await session.commit()
 
@@ -83,6 +95,10 @@ async def extract_source(workspace_id: uuid.UUID, source_id: uuid.UUID) -> dict[
                     for key, batch in by_batch.items():
                         rows = await _extract_batch(store, source, key, batch, result)
                         await repository.save(rows)
+                        if any(row.get("taken_out") for row in rows):
+                            await shorten_payloads(
+                                session, workspace_id, [key], days=policy.found_payload_days
+                            )
                         await session.commit()
             # Recorded as succeeded: what was extracted is parsed next.
             await advance(session, workspace_id, source, after=ProcessingStage.EXTRACTION)
@@ -132,9 +148,13 @@ async def _extract_batch(
         }
         if isinstance(outcome, ExtractedRecord):
             result["extracted"] += 1
+            kept = protected(outcome.model_dump(mode="json"))
+            result["secrets_taken_out"] += sum(kept.secrets.values())
             row |= {
                 "status": ExtractionStatus.EXTRACTED,
-                "result": outcome.model_dump(mode="json"),
+                "result": kept.value,
+                "sensitivity": kept.summary(),
+                "taken_out": holds_taken_out(kept),
                 "failure_code": None,
                 "message": None,
             }
@@ -143,6 +163,8 @@ async def _extract_batch(
             row |= {
                 "status": ExtractionStatus.FAILED,
                 "result": None,
+                "sensitivity": None,
+                "taken_out": False,
                 "failure_code": outcome.code.value,
                 "message": outcome.message[:500],
             }

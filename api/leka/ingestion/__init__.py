@@ -42,6 +42,17 @@ from leka.ingestion.models import (
     ValidationStatus,
     WebhookDelivery,
 )
+from leka.ingestion.protection import (
+    POLICY_KEY as PROTECTION_POLICY_KEY,
+)
+from leka.ingestion.protection import (
+    ProtectionPolicy,
+    ProtectionPolicyError,
+    SourceFindings,
+    findings_by_source,
+    protection_policy,
+    set_protection_policy,
+)
 from leka.ingestion.repository import (
     ContentRepository,
     EnrichedWorkspaces,
@@ -109,6 +120,7 @@ from leka.ingestion.service import IngestionService
 
 __all__ = [
     "ENRICHER_VERSION",
+    "PROTECTION_POLICY_KEY",
     "RESOLVER_VERSION",
     "ContentRepository",
     "DeliveryStatus",
@@ -153,6 +165,8 @@ __all__ = [
     "ProcessingRunRepository",
     "ProcessingRunStatus",
     "ProcessingStage",
+    "ProtectionPolicy",
+    "ProtectionPolicyError",
     "QualityScores",
     "QuarantinedRecordRead",
     "RawPayload",
@@ -169,6 +183,7 @@ __all__ = [
     "ResolvedKey",
     "ResolvedKeyRead",
     "SourceExtraction",
+    "SourceFindings",
     "SourceNormalisation",
     "SourceParsing",
     "SourcePipeline",
@@ -201,7 +216,10 @@ __all__ = [
     "environment_screen",
     "environment_status",
     "environment_status_deduced",
+    "findings_by_source",
     "monitoring_kinds",
+    "protection_policy",
     "provider_of",
     "retention_days",
+    "set_protection_policy",
 ]

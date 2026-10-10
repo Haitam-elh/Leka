@@ -591,8 +591,15 @@ class ExtractionRepository(WorkspaceScopedRepository):
         """One row per source record: made, or made again."""
         if not rows:
             return
+        # `taken_out` is the job's, not a column (LEKA-405).
         statement = insert(ExtractedRecordRow).values(
-            [{"workspace_id": self.workspace_id, **row} for row in rows]
+            [
+                {
+                    "workspace_id": self.workspace_id,
+                    **{k: v for k, v in row.items() if k != "taken_out"},
+                }
+                for row in rows
+            ]
         )
         excluded = statement.excluded
         await self._session.execute(
@@ -606,6 +613,7 @@ class ExtractionRepository(WorkspaceScopedRepository):
                         "extractor_version",
                         "checksum",
                         "result",
+                        "sensitivity",
                         "failure_code",
                         "message",
                         "extracted_at",
