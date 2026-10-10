@@ -76,14 +76,36 @@
   border-radius: 999px;
   padding: 3px 10px;
 }
-.plan__audience { font-size: 13.5px; color: var(--slate); line-height: 1.5; min-height: 3em; margin: 0; }
-.plan__price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; min-height: 92px; align-content: flex-start; }
+.plan__audience { font-size: 13.5px; color: var(--slate); line-height: 1.5; margin: 0; }
+.plan__price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; align-content: flex-start; }
+
+/* Each part of a card on the same line as in the others — its name, who it
+   is for, its price, its call to action — whatever their lengths. */
+@supports (grid-template-rows: subgrid) {
+  .plan {
+    display: grid;
+    grid-row: span 6;
+    grid-template-rows: subgrid;
+    row-gap: 14px;
+  }
+}
 .plan__amount { font-size: 30px; font-weight: 700; letter-spacing: -.03em; color: var(--ink); }
 .plan__per { font-size: 13px; color: var(--slate); }
 .plan__list { width: 100%; font-size: 13px; color: var(--slate-light); }
 .plan__terms { width: 100%; font-size: 12.5px; color: var(--slate); line-height: 1.45; }
 .plan__cta { display: grid; gap: 8px; }
-.plan__cta .btn { width: 100%; justify-content: center; text-align: center; }
+.plan__cta .btn {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 44px;
+  padding: 10px 12px;
+  white-space: normal;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.25;
+}
 .plan__alt { font-size: 13px; color: var(--slate); text-align: center; text-decoration: underline; }
 .plan__value { font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; margin: 0; }
 .plan__features { list-style: none; margin: 0; padding: 14px 0 0; border-top: 1px solid var(--rule); display: grid; gap: 9px; }
