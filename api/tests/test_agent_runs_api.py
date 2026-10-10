@@ -402,6 +402,40 @@ async def test_an_agent_that_keeps_reading_answers_with_what_it_read(
     assert [d["format"] for d in done["deliverables"]] == ["pptx", "pdf"]
 
 
+async def test_a_model_that_ignores_no_more_tools_is_asked_with_none_declared(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    leka_gemini: Callable[..., Script],
+    store: LocalObjectStore,
+) -> None:
+    """As in production: told to call no more tools on its last round, the
+    model asked for one anyway. Its call is not run; it is asked once more
+    with no tool declared, what it read given as text — and it answers."""
+    await _ready(acme)
+    asking = gemini(call={"name": "search_entities", "args": {"query": "billing"}})
+    analysis = "# Architecture — Billing API\n\nCe que les sources disent."
+    script = leka_gemini(
+        *[asking] * TOOL_ROUNDS,
+        gemini(analysis),
+        gemini(drawn_deck(app_view=False).model_dump_json()),
+    )
+    started = await _start(client)
+    assert await _run(acme, started["id"]) == {"status": "succeeded"}
+    done = await _detail(client, started["id"])
+    assert (done["output"], done["tool_calls"]) == (analysis, TOOL_ROUNDS - 1)
+    final = script.asked[TOOL_ROUNDS]
+    assert "tools" not in final and "toolConfig" not in final
+    # What it was given, then what it read — one turn, no tool exchange.
+    [turn] = final["contents"]
+    said = turn["parts"][0]["text"]
+    assert turn["role"] == "user" and said.startswith('{"inputs"')
+    assert "You have used every round of tools" in said
+    assert "## search_entities" in said and "Billing API" in said
+    assert [d["format"] for d in done["deliverables"]] == ["pptx", "pdf"]
+
+
 # ── refused ────────────────────────────────────────────────────────────────
 
 
@@ -549,12 +583,13 @@ async def test_failures_are_said(
     assert said["error"] == "no_model" and said["events"][-1]["detail"]["tried"] == 1
 
     # A model asking for tools, and never answering — not even when its last
-    # round offers none.
+    # round offers none, nor when it is asked once more with none declared.
     asking = gemini(call={"name": "search_entities", "args": {"query": "billing"}})
-    leka_gemini(*[asking] * TOOL_ROUNDS)
+    leka_gemini(*[asking] * (TOOL_ROUNDS + 1))
     endless = await _start(client)
     assert await _run(acme, endless["id"]) == {"status": "failed", "error": "tool_rounds"}
-    assert (await _detail(client, endless["id"]))["tool_calls"] == TOOL_ROUNDS
+    # What it asked on its last round is never run.
+    assert (await _detail(client, endless["id"]))["tool_calls"] == TOOL_ROUNDS - 1
 
     # Longer than a run may take.
     async def slow(request: httpx.Request) -> httpx.Response:

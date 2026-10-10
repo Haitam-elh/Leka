@@ -106,6 +106,36 @@ class NoModelError(Exception):
         self.reason = reason
 
 
+# What a concluding model is given of what its tools returned, at most.
+READ_KEPT = 12_000
+READ_TOTAL = 400_000
+CONCLUDE = (
+    "You have used every round of tools this run allows. Answer now, as your "
+    "instructions ask, with only what you read below — no tool any more; say "
+    "what is missing.\n\nWhat you read, in order:\n"
+)
+
+
+def _what_was_read(exchanged: Sequence[Message]) -> str:
+    """Each tool call made and what it returned, as text."""
+    asked: dict[str, str] = {}
+    parts = [CONCLUDE]
+    size = len(CONCLUDE)
+    for message in exchanged:
+        for call in message.tool_calls:
+            arguments = json.dumps(dict(call.arguments), ensure_ascii=False, default=str)
+            asked[call.id] = f"{call.name} {arguments}"
+        if message.role is Role.TOOL:
+            said = f"\n## {asked.get(message.tool_call_id or '', message.name or 'tool')}\n"
+            said += message.content[:READ_KEPT]
+            if size + len(said) > READ_TOTAL:
+                parts.append("\n(the rest is left out: too long)")
+                break
+            parts.append(said)
+            size += len(said)
+    return "".join(parts)
+
+
 class ToolRoundsError(NoModelError):
     """A model that kept asking for tools and never answered (run_tools)."""
 
@@ -459,15 +489,22 @@ class Gateway:
         returned, until it answers — `rounds` at most. A tool that fails
         says so to the model; one it made up is said unknown. `conclude`:
         the last round is not offered the tools — it answers with what it
-        read — rather than end in ToolRoundsError."""
+        read — rather than end in ToolRoundsError; and a model that asks
+        for one even then is asked once more with none declared at all,
+        what it read given as text (`_concluded`)."""
         messages = list(request.messages)
         asking = request
         for round_ in range(rounds):
-            if conclude and round_ == rounds - 1:
+            last = conclude and round_ == rounds - 1
+            if last:
                 asking = replace(asking, tool_choice=ToolChoice.NONE)
             done = await self.complete(replace(asking, messages=messages), needs)
             if not done.tool_calls:
                 return done
+            if last:
+                # It would not stop reading, tools refused: its calls are
+                # not run; it is asked again with no tool to call.
+                return await self._concluded(request, messages, needs)
             messages.append(Message(Role.ASSISTANT, done.text, tool_calls=done.tool_calls))
             for tool_call in done.tool_calls:
                 handler = handlers.get(tool_call.name)
@@ -485,6 +522,29 @@ class Gateway:
             # Its first move may be forced; after it, it may answer.
             asking = replace(request, tool_choice=ToolChoice.AUTO)
         raise ToolRoundsError(f"No answer after {rounds} rounds of tools.")
+
+    async def _concluded(
+        self, request: Request, messages: Sequence[Message], needs: Needs
+    ) -> Completion:
+        """The last word of a model that would not stop calling tools: the
+        conversation as it began, what its tools returned given as text,
+        no tool declared — every provider answers that."""
+        read = _what_was_read(messages[len(request.messages) :])
+        # Joined to the request's own last words, not after them: some
+        # providers refuse two turns of the same side in a row.
+        began = list(request.messages)
+        last = began.pop() if began and began[-1].role is Role.USER else None
+        said = f"{last.content}\n\n{read}" if last is not None else read
+        final = replace(
+            request,
+            messages=[*began, Message.user(said)],
+            tools=(),
+            tool_choice=ToolChoice.AUTO,
+        )
+        done = await self.complete(final, replace(needs, tools=False))
+        if done.tool_calls or not done.text.strip():
+            raise ToolRoundsError("No answer, even with no tool left to call.")
+        return done
 
     # ── keeping it ──────────────────────────────────────────────────────────
 
