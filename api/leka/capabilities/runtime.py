@@ -78,7 +78,10 @@ FAILURES = (
 # (pptx, pdf…) is said pending — unless LEKA draws it (`renders`).
 RENDERED = ("markdown", "json")
 # What LEKA draws, by what an agent renders (capabilities/deliverables).
-DRAWN: Mapping[str, tuple[str, ...]] = {"architecture_deck": ("pptx", "pdf")}
+DRAWN: Mapping[str, tuple[str, ...]] = {
+    "architecture_deck": ("pptx", "pdf"),
+    "code_change": ("diff",),
+}
 # Formats whose content is a document: delivered as markdown.
 DOCUMENTS = frozenset({"markdown", "pptx", "pdf", "docx"})
 
@@ -259,6 +262,18 @@ bricks in order of first call, its phases, each chain of calls), the RACI, the \
 points to confirm, the sources. Cite the ids you rely on.
 - LEKA then draws the editable PowerPoint and its PDF from it, on the template \
 above: do not describe files, do not say they are attached.""",
+    "code_change": """---
+
+How this runs in LEKA:
+- Read the code before proposing anything: list_files, then read_file for \
+each file you would change and for what it depends on. A file you did not \
+read, you do not change.
+- This answer is the analysis, in markdown: the problem, where it is in the \
+code (paths, functions), the change file by file and why, its risks, how to \
+test it. LEKA then asks you for the files as they must be, computes the \
+diff itself and shows it to a person, who accepts or rejects it.
+- Nothing is written to the repository by you or by LEKA before that \
+person accepts; then LEKA opens a pull request, never a merge.""",
 }
 
 

@@ -45,6 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
+from leka.capabilities.code_tools import CODE_NAMES, CODE_TOOLS, code_handlers
 from leka.capabilities.definition import Definition, check_input
 from leka.capabilities.delivery import draw
 from leka.capabilities.gateway import (
@@ -419,6 +420,8 @@ async def _run(
     )
     # Its tools: those it declares (LEKA-400), what it may use, by who asked.
     declared = [t for t in tools if not definition.tools or t.name in definition.tools]
+    # The code tools: only to an agent that names them (code_tools.py).
+    declared += [t for t in CODE_TOOLS if t.name in definition.tools]
     given, withheld = offered(declared, permissions)
     # Its skills: those it names, within what it reads (LEKA-401).
     named, out_of_reach = agent_skill_tools(definition)
@@ -433,6 +436,8 @@ async def _run(
         GraphService(GraphRepository(session, workspace_id)),
         KnowledgeService(EntityRepository(session, workspace_id)),
     )
+    if CODE_NAMES & {t.name for t in given}:
+        bound |= code_handlers(session, workspace_id)
     # Each skill call checked and kept (skill_runs), about this run.
     bound |= skill_handlers(
         SkillRuntime(
@@ -499,14 +504,9 @@ async def _run(
         await session.commit()
         drawn = await draw(session, run, definition, output)
         if drawn.error is None:
-            steps.add(
-                "rendered",
-                formats=[f["format"] for f in drawn.files],
-                slides=drawn.files[0]["slides"] if drawn.files else 0,
-                **(drawn.usage or {}),
-            )
+            steps.add(drawn.step, **drawn.said())
         else:
-            steps.add("render_failed", code=drawn.error, said=drawn.said)
+            steps.add("render_failed", code=drawn.error, said=drawn.refusal)
         detail |= drawn.detail()
     runs = CapabilityRunRepository(session, workspace_id)
     ended = await runs.finish(

@@ -361,6 +361,11 @@ when it was asked: someone who left the workspace meanwhile, their run
 fails. Reading runs takes `intention:read`; cancelling one, being who asked
 it or holding `intention:approve`. [agent-runtime.md](agent-runtime.md).
 
+**Code changes** the code-change agent proposes: `GET /code-changes`,
+`GET /code-changes/{id}` take `intention:read`; `POST …/accept` (LEKA opens
+the pull request) and `POST …/reject` take `intention:approve` — who may
+approve what an intention asks to do. A member reads them, never decides.
+
 ## Workflows (LEKA-397)
 
 Running a workflow (`POST /workflow-runs`) takes `intention:create` and the

@@ -29,6 +29,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.catalogue import needs_of
+from leka.capabilities.changes import propose_change
 from leka.capabilities.definition import Definition
 from leka.capabilities.deliverables import MEDIA_TYPES, ArchitectureDeck, render
 from leka.capabilities.gateway import Gateway, Message, NoModelError, Request, Tier
@@ -101,21 +102,38 @@ def file_name(deck: ArchitectureDeck, fmt: str) -> str:
 
 @dataclass(frozen=True)
 class Drawn:
-    """What a run's detail keeps of its files — or why there are none."""
+    """What a run's detail keeps of what LEKA made of it — or why nothing:
+    its files (a deck), or the change it proposes (code_change)."""
 
     files: list[dict[str, Any]]
     error: str | None = None
     usage: dict[str, Any] | None = None
+    # The step it is said as, and what the run's detail keeps instead of
+    # files.
+    step: str = "rendered"
+    kept: dict[str, Any] | None = None
     # What the provider said, when it refused: a person reads why.
-    said: str | None = None
+    refusal: str | None = None
 
     def detail(self) -> dict[str, Any]:
         if self.error is not None:
             return {
                 "deliverables_error": self.error,
-                **({"deliverables_said": self.said} if self.said else {}),
+                **({"deliverables_said": self.refusal} if self.refusal else {}),
             }
+        if self.kept is not None:
+            return dict(self.kept)
         return {"deliverables": self.files}
+
+    def said(self) -> dict[str, Any]:
+        """What its step says."""
+        if self.kept is not None:
+            return {**self.kept, **(self.usage or {})}
+        return {
+            "formats": [f["format"] for f in self.files],
+            "slides": self.files[0]["slides"] if self.files else 0,
+            **(self.usage or {}),
+        }
 
 
 async def draw(
@@ -126,7 +144,23 @@ async def draw(
     *,
     budget: float = DECK_BUDGET,
 ) -> Drawn:
-    """The deck of a run's analysis, drawn and kept — or why not."""
+    """The deck of a run's analysis, drawn and kept — or, for a code-change
+    agent, the change it proposes (changes.py) — or why not."""
+    if definition.renders == "code_change":
+        proposed = await propose_change(session, run, definition, analysis)
+        if proposed.change is None:
+            return Drawn([], proposed.error or "no_change", step="render_failed")
+        change = proposed.change
+        return Drawn(
+            [],
+            usage=proposed.usage,
+            step="proposed",
+            kept={
+                "code_change": str(change.id),
+                "repository": change.repository,
+                "files": len(change.files),
+            },
+        )
     request = Request(
         purpose=f"agent:{definition.key}:deck"[:100],
         messages=deck_messages(definition, run.inputs, analysis),
@@ -148,7 +182,7 @@ async def draw(
         said = next((a.error for a in reversed(error.attempts) if a.error), None)
         logger.warning("deck_not_written", run=str(run.id), reason=error.reason, said=said)
         code = "no_model" if error.reason == "none" else error.reason
-        return Drawn([], code, said=said[:300] if said else None)
+        return Drawn([], code, refusal=said[:300] if said else None)
     except TimeoutError:
         return Drawn([], "timeout")
     except Exception:

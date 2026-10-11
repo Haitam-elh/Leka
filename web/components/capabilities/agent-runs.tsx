@@ -80,6 +80,14 @@ export function suggestedInputs(
     const found = SAID[field.name]?.exec(words);
     if (found?.[1]) said[field.name] = found[1].trim();
   }
+  // The code-change agent: what to change is the intention's words; the
+  // repository, when it names one (owner/repo).
+  if (fields.some((f) => f.name === "demande") && intention.text.trim()) {
+    said.demande = intention.text.trim();
+  }
+  // Both sides three characters at least: « et/ou » is not a repository.
+  const repository = /\b([A-Za-z0-9_.-]{3,}\/[A-Za-z0-9_.-]{3,})\b/.exec(intention.text);
+  if (fields.some((f) => f.name === "depot") && repository?.[1]) said.depot = repository[1];
   if (fields.some((f) => f.name === "parcours") && !said.parcours && intention.title.trim()) {
     said.parcours = intention.title.trim();
   }

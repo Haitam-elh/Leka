@@ -19,6 +19,16 @@ in its warnings.
 A classic token works too (`read:org` for the teams); one with `repo`,
 `workflow`, `admin:*` or any `write:*` scope draws a warning.
 
+**Pull requests for code changes** (`pull_requests`, off by default). The
+code-change agent reads a repository's files live (`list_files`,
+`read_file`) and proposes a change; when a person who may approve accepts
+it, LEKA opens **one pull request** — a new branch `leka/<title>-<id>` from
+the branch it read, one commit, never a merge, never a push to a branch
+that exists (`connectors/github/code.py`). Only on a source whose admin
+switched `pull_requests` on, whose token then needs **Contents** and **Pull
+requests** in *write* on those repositories; refused otherwise, said why
+([agent-runtime.md § 6 ter](../agent-runtime.md)).
+
 **Teams** (`teams`, LEKA-365), with an `organization`: each team — name,
 description, privacy, its parent team — with its **maintainers** and its
 **members**, by login (`GET /orgs/{org}/teams`, then

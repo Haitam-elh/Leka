@@ -99,10 +99,11 @@ class AgentFrontMatter(BaseModel):
         description="The skills it may be offered (LEKA-401): none unless named, each within "
         "the kinds of things it may read",
     )
-    renders: Literal["architecture_deck"] | None = Field(
+    renders: Literal["architecture_deck", "code_change"] | None = Field(
         default=None,
-        description="What LEKA draws of what it delivers: architecture_deck — the editable "
-        "PowerPoint and its PDF, on the application architecture template",
+        description="What LEKA makes of what it delivers: architecture_deck — the editable "
+        "PowerPoint and its PDF, on the application architecture template; code_change — "
+        "the change it proposes, diffed, for a person to accept as a pull request",
     )
 
     @field_validator("name")
@@ -984,3 +985,59 @@ class SkillRunRead(BaseModel):
     deprecated: bool
     latency_ms: int
     at: datetime
+
+
+# ── code changes (the code-change agent) ────────────────────────────────────
+
+
+class CodeChangeFileRead(BaseModel):
+    """One file of a proposed change: what happens to it, its diff."""
+
+    model_config = ConfigDict(frozen=True)
+
+    path: str
+    status: Literal["added", "modified", "deleted"]
+    additions: int
+    deletions: int
+    diff: str = Field(description="Unified diff against the branch it was read from.")
+    why: str
+
+
+class CodeChangeRead(BaseModel):
+    """A code change an agent proposed: its files and their diffs, where it
+    stands — proposed, rejected, applied as a pull request — and whether its
+    source lets LEKA open that pull request."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    run_id: uuid.UUID | None
+    intention_id: uuid.UUID | None
+    repository: str
+    base_branch: str
+    title: str
+    summary: str
+    status: Literal["proposed", "rejected", "applied", "failed"]
+    files: list[CodeChangeFileRead]
+    pull_requests_allowed: bool = Field(
+        description="Its GitHub source allows LEKA to open pull requests (its admin's choice)."
+    )
+    proposed_by: uuid.UUID | None
+    decided_by: uuid.UUID | None
+    decided_at: datetime | None
+    note: str | None
+    branch: str | None
+    pull_request_number: int | None
+    pull_request_url: str | None
+    error: str | None = Field(
+        description="Why its pull request could not be opened: pull_requests_off, not_allowed, "
+        "branch_exists, out_of_scope, not_found, too_large, unavailable, no_source."
+    )
+    error_detail: str | None
+    created_at: datetime
+
+
+class CodeChangeDecision(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    note: str | None = Field(default=None, max_length=2000)

@@ -23,6 +23,7 @@ from pathlib import Path
 
 import yaml
 
+from leka.capabilities.code_tools import CODE_NAMES
 from leka.capabilities.definition import (
     Contract,
     Definition,
@@ -34,13 +35,16 @@ from leka.capabilities.definition import (
 )
 from leka.capabilities.loader import AgentLoadError, load_all, read_index
 from leka.capabilities.schemas import Agent
-from leka.capabilities.tools import NAMES as TOOL_NAMES
+from leka.capabilities.tools import NAMES
 from leka.capabilities.workflow import Workflow, WorkflowError, build
 from leka.capabilities.workflow import validated as validate_workflow
 from leka.connectors import SourceKind
 from leka.core.config import settings
 from leka.governance import Permission
 from leka.knowledge import EntityType
+
+# Every tool an agent may name: the runtime's, and the code tools.
+TOOL_NAMES = NAMES | CODE_NAMES
 
 Provider = Callable[[], Sequence[Definition]]
 _providers: dict[str, Provider] = {}
