@@ -149,6 +149,8 @@ async def test_words_the_rules_cannot_read_are_read_by_the_model_and_answered(
     assert understood["goal"]["code"] == "find_owner"
     assert understood["read_by"]["method"] == "model"
     assert understood["read_by"]["version"] == "gemini-3.8-flash-001"
+    # The run that read it: what reading it cost (LEKA-430).
+    assert understood["read_by"]["run_id"] is not None
     assert understood["restated"] == "Qui s'occupe de Billing API ?"
     assert intention["status"] == "analysing"
 

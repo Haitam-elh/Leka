@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities.models import LLMRun, ModelCall
@@ -136,3 +136,18 @@ async def model_usage(
         usage.runs[run.status] += 1
     usage.latest_runs = list(runs[:10])
     return usage
+
+
+async def leka_cost(session: AsyncSession, workspace_id: uuid.UUID, *, since: datetime) -> float:
+    """What the workspace's work cost LEKA since then, at the rates in force
+    (LEKA-430): the calls to LEKA's models that answered — a failed one is
+    not billed, a workspace's own model is its own account."""
+    spent = await session.scalar(
+        select(func.coalesce(func.sum(ModelCall.cost_usd), 0.0)).where(
+            ModelCall.workspace_id == workspace_id,
+            ModelCall.at >= since,
+            ModelCall.owner == "leka",
+            ModelCall.status != "failed",
+        )
+    )
+    return float(spent or 0.0)

@@ -14,11 +14,12 @@ Agents themselves are never stored here. They are files in agents/
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -142,6 +143,35 @@ class WorkspaceModel(Base, WorkspaceScopedMixin):
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class ModelRate(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """What a model costs LEKA from a day on (LEKA-430), per million tokens,
+    in US dollars — LEKA's and no customer's. A new price is a new row from
+    its day: a rate is never rewritten (the database refuses it), so a call
+    priced with it (model_calls.rate_id) can be priced again, the same.
+    Seeded with the list prices of profiles.py; a model with no rate has no
+    cost — unknown, never 0."""
+
+    __tablename__ = "model_rates"
+    __table_args__ = (
+        UniqueConstraint("provider", "model", "since", name="uq_model_rates_provider_model_since"),
+        CheckConstraint(
+            "per_million_in >= 0 AND per_million_out >= 0"
+            " AND (per_million_cached IS NULL OR per_million_cached >= 0)",
+            name="positive",
+        ),
+    )
+
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    model: Mapped[str] = mapped_column(String(120), nullable=False)
+    since: Mapped[date] = mapped_column(Date, nullable=False)
+    per_million_in: Mapped[float] = mapped_column(Float, nullable=False)
+    per_million_out: Mapped[float] = mapped_column(Float, nullable=False)
+    # A token read from the provider's cache; none: as any token in.
+    per_million_cached: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Where the price was read: a provider's page, a contract.
+    source: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+
 class ModelCall(Base, WorkspaceScopedMixin):
     """One call to a language model: for what, about what, to whom — the
     provider, the model, the version it said — what it cost, how long; or
@@ -149,7 +179,12 @@ class ModelCall(Base, WorkspaceScopedMixin):
     it spend? »."""
 
     __tablename__ = "model_calls"
-    __table_args__ = (Index("ix_model_calls_workspace_at", "workspace_id", "at"),)
+    __table_args__ = (
+        Index("ix_model_calls_workspace_at", "workspace_id", "at"),
+        # The usage ledger reads an execution's calls by what they are about.
+        Index("ix_model_calls_workspace_ref", "workspace_id", "ref"),
+        Index("ix_model_calls_rate_id", "rate_id"),
+    )
 
     purpose: Mapped[str] = mapped_column(String(100), nullable=False)
     ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -172,7 +207,14 @@ class ModelCall(Base, WorkspaceScopedMixin):
     # Of tokens_in, those read from the provider's cache — billed less.
     tokens_cached: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     tool_calls: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # Whether the provider said what the call used (LEKA-430): its tokens
+    # measured, or not known — none for the calls kept before it was asked.
+    usage_reported: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # The rate it was priced with (LEKA-430): its cost can be read again.
+    rate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("model_rates.id", ondelete="RESTRICT"), nullable=True
+    )
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     request_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -66,6 +66,9 @@ pytestmark = pytest.mark.integration
 #                  what LEKA can do, every version, every lifecycle move —
 #                  the product's, no customer's. What a workspace says of
 #                  them is workspace_capabilities, which is scoped.
+#   model_rates    what a model costs LEKA from a day on (LEKA-430): LEKA's
+#                  prices, no customer's. What a call cost a workspace is
+#                  model_calls, which is scoped.
 TENANT_FREE_TABLES = frozenset(
     {
         "workspaces",
@@ -76,6 +79,7 @@ TENANT_FREE_TABLES = frozenset(
         "alembic_version",
         "capability_registrations",
         "capability_events",
+        "model_rates",
     }
 )
 
