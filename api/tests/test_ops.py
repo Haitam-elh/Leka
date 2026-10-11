@@ -430,3 +430,11 @@ async def test_a_backup_restores_every_table_and_a_tampered_one_is_refused(
     with dumped.path.open("ab") as tampered:
         tampered.write(b"\0")
     assert not (await backup.verify(dumped.path)).ok
+
+
+def test_the_database_url_is_read_as_the_postgresql_tools_read_it() -> None:
+    # RDS's URL says ssl=require for SQLAlchemy; pg_dump and asyncpg want sslmode.
+    assert backup.libpq_url("postgresql+asyncpg://u:p@db:5432/leka?ssl=require") == (
+        "postgresql://u:p@db:5432/leka?sslmode=require"
+    )
+    assert backup.libpq_url("postgresql+asyncpg://u:p@db/leka") == "postgresql://u:p@db/leka"
