@@ -31,6 +31,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import pairwise
 
 from leka.context import IntentPlan, kinds_said
 from leka.intentions.schemas import (
@@ -46,7 +47,9 @@ from leka.knowledge import fold
 # Raised each time intentions are understood differently: kept with each.
 # 2: its scope and constraints, and what critical information is missing
 #    (LEKA-386).
-UNDERSTANDING_VERSION = 2
+# 3: an action negated, conditional or doubtful is withheld, not asked; each
+#    action on the things said with it (LEKA-434).
+UNDERSTANDING_VERSION = 3
 
 # ── actions ─────────────────────────────────────────────────────────────
 
@@ -98,9 +101,29 @@ VERBS: tuple[Verb, ...] = (
 DOING = frozenset({"document", "notify", "ticket"})
 # Said in more than a word.
 UPDATE = re.compile(r"\b(?:mettre|mets|mettez|met) (?:a|à) jour\b|\bupdate\b")
+ROLL_BACK = re.compile(r"\broll(?:ed)? back\b")
 TICKET = re.compile(
     r"\b(?:creer|cree|creez|ouvrir|ouvre|ouvrez|create|open)\b(?: \w+){0,2} (?:ticket|issue)\b"
 )
+
+# ── polarity (LEKA-434) ─────────────────────────────────────────────────
+# Whether an action is asked: « Ne redémarre pas Billing API » asks for
+# nothing to be restarted; « si Billing API tombe, redémarre-la » only if;
+# « je ne sais pas s'il faut redémarrer » says no one knows. What is quoted
+# — an error message, a log line — is cited, not asked.
+
+QUOTED = re.compile(r"«[^»]*»|“[^”]*”|\"[^\"]*\"")
+SENTENCES = re.compile(r"[.!?;:\n]+")
+# Where a clause ends, besides a comma: what one says the other does not.
+LINKS = _words("et and puis then mais but ensuite")
+# Folded: « n'arrête » is « n arrete », « don't » is « don t ».
+NOT_BEFORE = _words("not never no without sans jamais ni nor")
+NOT_AFTER = _words("pas plus jamais rien aucun aucune point")
+NE = _words("ne n")
+CONTRACTED = _words("don doesn didn won shouldn mustn can couldn")
+NEGATIONS = NOT_BEFORE | NOT_AFTER | NE
+CONDITIONS = _words("si if unless lorsque lorsqu")
+AFFIRMED, NEGATED, CONDITIONAL, DOUBTFUL = "affirmed", "negated", "conditional", "ambiguous"
 
 # ── mode ────────────────────────────────────────────────────────────────
 
@@ -140,27 +163,123 @@ MIN_WORDS = 2
 
 @dataclass(frozen=True)
 class Found:
-    """An action found: its verb and the word that said it."""
+    """An action found: its verb, the word that said it, whether it is asked
+    — and where it was said (positions in the words read, `_clauses`)."""
 
     verb: Verb
     said: str
+    polarity: str = AFFIRMED
+    at: tuple[int, ...] = ()
+
+
+def _clauses(text: str) -> list[tuple[int, list[str]]]:
+    """The words, folded, by clause — with their sentence — quotes left out."""
+    out: list[tuple[int, list[str]]] = []
+    for number, sentence in enumerate(SENTENCES.split(QUOTED.sub(" ", text))):
+        for part in sentence.split(","):
+            clause: list[str] = []
+            for word in fold(part).split():
+                if word in LINKS:
+                    if clause:
+                        out.append((number, clause))
+                    clause = []
+                else:
+                    clause.append(word)
+            if clause:
+                out.append((number, clause))
+    return out
+
+
+def _polarity(clause: Sequence[str], at: int, earlier: Sequence[str]) -> str:
+    """Whether the verb at `at` of its clause is asked; `earlier`: its
+    sentence's words before it."""
+    left, right = clause[max(0, at - 3) : at], clause[at + 1 : at + 4]
+    contracted = any(w == "t" and i > 0 and left[i - 1] in CONTRACTED for i, w in enumerate(left))
+    if (
+        set(left) & NOT_BEFORE
+        or contracted
+        or "pas" in left[-2:]
+        or right[:1] == ["pas"]
+        or (set(left) & NE and (set(left) | set(right)) & NOT_AFTER)
+    ):
+        return NEGATED
+    if set(clause[:at]) & NEGATIONS:
+        return DOUBTFUL
+    if set(earlier) & CONDITIONS or any(
+        a == "s" and b in ("il", "ils") for a, b in pairwise(earlier)
+    ):
+        return CONDITIONAL
+    return AFFIRMED
 
 
 def actions_of(text: str) -> list[Found]:
-    """The actions its words ask for, in the order said, each once."""
-    folded = fold(text)
-    found: dict[str, Found] = {}
-    for word in folded.split():
-        for verb in VERBS:
-            if word in verb.said and verb.code not in found:
-                found[verb.code] = Found(verb, word)
-    update = UPDATE.search(folded)
-    if update and "update" not in found:
-        found["update"] = Found(_verb("update", True, ""), update.group(0))
-    ticket = TICKET.search(folded)
-    if ticket:
-        found["ticket"] = Found(_verb("ticket", False, ""), ticket.group(0))
-    return list(found.values())
+    """The actions its words speak of, in the order said, each once — asked
+    (affirmed) if any of its mentions is, else as the first said it."""
+    seen: dict[str, list[Found]] = {}
+    position = 0
+    sentence_words: dict[int, list[str]] = {}
+    for number, clause in _clauses(text):
+        earlier = sentence_words.setdefault(number, [])
+        joined = " ".join(clause)
+        hits = [
+            (index, verb, word)
+            for index, word in enumerate(clause)
+            for verb in VERBS
+            if word in verb.said
+        ]
+        for pattern, verb in (
+            (UPDATE, _verb("update", True, "")),
+            (ROLL_BACK, next(v for v in VERBS if v.code == "rollback")),
+            (TICKET, _verb("ticket", False, "")),
+        ):
+            for match in pattern.finditer(joined):
+                hits.append((joined[: match.start()].count(" "), verb, match.group(0)))
+        for index, verb, word in sorted(hits, key=lambda h: h[0]):
+            polarity = _polarity(clause, index, [*earlier, *clause[:index]])
+            seen.setdefault(verb.code, []).append(Found(verb, word, polarity, (position + index,)))
+        earlier.extend(clause)
+        position += len(clause)
+    found = []
+    for mentions in seen.values():
+        asked = [m for m in mentions if m.polarity == AFFIRMED] or [
+            m for m in mentions if m.polarity == mentions[0].polarity
+        ]
+        first = asked[0]
+        found.append(Found(first.verb, first.said, first.polarity, tuple(m.at[0] for m in asked)))
+    return sorted(found, key=lambda f: f.at[0])
+
+
+def targets_of(
+    text: str, found: Sequence[Found], entities: Sequence[UnderstoodEntity]
+) -> dict[str, list[uuid.UUID]]:
+    """What each action is on: the things said after it, before the next
+    one — « Redémarre Billing API et rollback Payment API » restarts
+    Billing API and rolls back Payment API, never both on both. An action
+    said with nothing after it takes what the next one is on (« redémarre
+    et scale Billing API »); a thing not found in the words (named by its
+    business), every action."""
+    words = [w for _, clause in _clauses(text) for w in clause]
+    mentions = sorted((at, f.verb.code) for f in found for at in f.at)
+    on: dict[int, list[uuid.UUID]] = {at: [] for at, _ in mentions}
+    everywhere: list[uuid.UUID] = []
+    for entity in entities:
+        said = fold(entity.said or "").split()
+        where = next(
+            (i for i in range(len(words)) if said and words[i : i + len(said)] == said), None
+        )
+        if where is None or not mentions:
+            everywhere.append(entity.entity_id)
+            continue
+        owner = max((at for at, _ in mentions if at < where), default=mentions[0][0])
+        on[owner].append(entity.entity_id)
+    for index in range(len(mentions) - 2, -1, -1):
+        at, following = mentions[index][0], mentions[index + 1][0]
+        if not on[at]:
+            on[at] = list(on[following])
+    targets: dict[str, list[uuid.UUID]] = {}
+    for at, code in mentions:
+        targets.setdefault(code, []).extend(on[at])
+    return {code: list(dict.fromkeys([*ids, *everywhere])) for code, ids in targets.items()}
 
 
 def mode_of(text: str, actions: Sequence[Found]) -> tuple[str, str | None]:
@@ -345,7 +464,9 @@ def understand(
     """What LEKA understands of these words, read with LEKA-373's plan —
     and, given what the company model says of each thing and the
     environments it knows, their scope (LEKA-386)."""
-    found = actions_of(text)
+    every = actions_of(text)
+    # Only what is asked is acted on; the rest is kept, said why (LEKA-434).
+    found = [a for a in every if a.polarity == AFFIRMED]
     mode, mode_said = mode_of(text, found)
     kinds = kinds_said(text)
     named = _entities(plan)
@@ -366,9 +487,37 @@ def understand(
     # What it excludes is not what it is about.
     kept = {thing.entity_id for thing in scope.entities}
     entities = [entity for entity in named if entity.entity_id in kept]
+    on = targets_of(text, every, entities)
+    actions = [a.model_copy(update={"targets": on.get(a.code, [])}) for a in actions]
+    withheld = [
+        ActionRead(
+            code=a.verb.code,
+            said=a.said,
+            changes_systems=a.verb.changes_systems,
+            polarity=a.polarity,
+            targets=on.get(a.verb.code, []),
+        )
+        for a in every
+        if a.polarity != AFFIRMED
+    ]
+    doubtful = [a for a in withheld if a.changes_systems and a.polarity != NEGATED]
     ambiguities = [
         *_ambiguities(text, plan, kinds, goal, found, entities),
         *missing,
+        *(
+            [
+                AmbiguityRead(
+                    kind="ambiguous_action",
+                    # Changing a customer's systems on a doubt is not a
+                    # reading to correct later: asked first, never proposed.
+                    blocking=True,
+                    said="An action is negated, conditional or doubtful: is it asked?",
+                    options=[a.code for a in doubtful],
+                )
+            ]
+            if doubtful
+            else []
+        ),
     ]
     period = None
     if plan is not None:
@@ -381,6 +530,7 @@ def understand(
         kind=plan.kind if plan is not None else (kinds[0][0] if kinds else "general"),
         goal=goal,
         actions=actions,
+        withheld=withheld,
         entities=entities,
         period=period,
         environment=plan.environment if plan is not None else None,

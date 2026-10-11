@@ -106,6 +106,8 @@ class Asked:
     kind: str
     goal: str
     actions: tuple[tuple[str, bool], ...] = ()
+    # What each action is on, as said with it (LEKA-434); none: all subjects.
+    action_targets: Mapping[str, tuple[uuid.UUID, ...]] | None = None
     subjects: tuple[Subject, ...] = ()
     since: datetime | None = None
     until: datetime | None = None

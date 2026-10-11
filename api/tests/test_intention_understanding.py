@@ -275,6 +275,92 @@ def test_several_requests_and_an_unknown_environment_are_warnings() -> None:
     assert env.options == ["production"]
 
 
+# ── negations, conditions, each action on its own (LEKA-434) ───────────────
+
+TWO = [subject("Billing API"), subject("Payment API", PAYMENT)]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Ne redémarre pas Billing API en production",
+        "Merci de ne pas redémarrer Billing API",
+        "Redémarre pas Billing API",
+        "Do not restart Billing API in production",
+        "Don't restart Billing API",
+        "Never restart Billing API",
+    ],
+)
+def test_a_negated_action_is_not_asked_but_kept_said_so(text: str) -> None:
+    understood = understand(text, plan(text, "general", []))
+    assert understood.actions == []
+    assert understood.goal.code != "act"
+    [withheld] = understood.withheld
+    assert (withheld.code, withheld.polarity) == ("restart", "negated")
+    assert "ambiguous_action" not in blocking(understood)
+
+
+@pytest.mark.parametrize(
+    ("text", "polarity"),
+    [
+        ("Si Billing API tombe, redémarre-la", "conditional"),
+        ("If Billing API is down, restart it", "conditional"),
+        ("Je ne sais pas s'il faut redémarrer Billing API", "ambiguous"),
+    ],
+)
+def test_a_conditional_or_doubtful_action_is_asked_before_anything(
+    text: str, polarity: str
+) -> None:
+    understood = understand(text, plan(text, "general", []))
+    assert understood.actions == []
+    assert [(a.code, a.polarity) for a in understood.withheld] == [("restart", polarity)]
+    assert "ambiguous_action" in blocking(understood)
+    assert not understood.clear
+
+
+def test_what_is_quoted_is_cited_not_asked() -> None:
+    text = "Pourquoi le log de Billing API dit « restart failed » ?"
+    understood = understand(text, plan(text, "diagnose", ["pourquoi"]))
+    assert (understood.actions, understood.withheld) == ([], [])
+
+
+def test_a_negation_after_the_action_is_not_on_it() -> None:
+    text = "Redémarre Billing API qui ne répond plus"
+    understood = understand(text, plan(text, "general", []))
+    assert [(a.code, a.polarity) for a in understood.actions] == [("restart", "affirmed")]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Redémarre Billing API et rollback Payment API",
+        "Restart Billing API and roll back Payment API",
+    ],
+)
+def test_each_action_is_on_what_was_said_with_it(text: str) -> None:
+    understood = understand(text, plan(text, "general", [], subjects=TWO))
+    assert {a.code: a.targets for a in understood.actions} == {
+        "restart": [BILLING],
+        "rollback": [PAYMENT],
+    }
+
+
+def test_one_action_asked_the_other_refused() -> None:
+    text = "Redémarre Billing API mais ne rollback pas Payment API"
+    understood = understand(text, plan(text, "general", [], subjects=TWO))
+    assert [(a.code, a.targets) for a in understood.actions] == [("restart", [BILLING])]
+    assert [(a.code, a.polarity) for a in understood.withheld] == [("rollback", "negated")]
+
+
+def test_two_actions_on_what_follows_them_both() -> None:
+    text = "Redémarre et scale Billing API"
+    understood = understand(text, plan(text, "general", []))
+    assert {a.code: a.targets for a in understood.actions} == {
+        "restart": [BILLING],
+        "scale": [BILLING],
+    }
+
+
 # ── the words kept ─────────────────────────────────────────────────────────
 
 

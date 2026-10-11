@@ -424,9 +424,12 @@ def proposals_of(
     targets: Sequence[Target],
     environment: str | None,
     constraints: Iterable[tuple[str, object, bool]] = (),
+    action_targets: Mapping[str, Sequence[uuid.UUID]] | None = None,
 ) -> tuple[Proposal, ...]:
     """What an intention asks to do to systems, one proposal per action —
-    on what it is about, where, within its hard constraints."""
+    on what it is about, where, within its hard constraints. `action_targets`:
+    each action on the things said with it (LEKA-434) — never every action on
+    every thing; one with none said is on all."""
     held = tuple(
         (kind, value)
         for kind, value, hard in constraints
@@ -436,7 +439,7 @@ def proposals_of(
         Proposal(
             id=code,
             action=code,
-            targets=tuple(targets),
+            targets=_on(targets, (action_targets or {}).get(code)),
             environment=environment,
             constraints=held,
             reversible=REVERSIBLE.get(code),
@@ -444,6 +447,11 @@ def proposals_of(
         for code, changes in dict.fromkeys(actions)
         if changes
     )
+
+
+def _on(targets: Sequence[Target], wanted: Sequence[uuid.UUID] | None) -> tuple[Target, ...]:
+    said = [t for t in targets if wanted and t.id in wanted]
+    return tuple(said or targets)
 
 
 @dataclass(frozen=True)

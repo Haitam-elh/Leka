@@ -355,7 +355,7 @@ describe("an intention's page", () => {
           mode_said: "redemarre",
           kind: "general",
           goal: { code: "act", said: ["redemarre"], confidence: 0.9 },
-          actions: [{ code: "restart", said: "redemarre", changes_systems: true }],
+          actions: [{ code: "restart", said: "redemarre", changes_systems: true, polarity: "affirmed", targets: [] }],
           entities: [
             {
               entity_id: "e1",
@@ -483,7 +483,7 @@ describe("an intention's page", () => {
           mode_said: "redemarre",
           kind: "general",
           goal: { code: "act", said: ["redemarre"], confidence: 0.5 },
-          actions: [{ code: "restart", said: "redemarre", changes_systems: true }],
+          actions: [{ code: "restart", said: "redemarre", changes_systems: true, polarity: "affirmed", targets: [] }],
           entities: [],
           period: null,
           environment: null,

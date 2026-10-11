@@ -407,6 +407,7 @@ class DecisionService:
         targets: Sequence[Target],
         environment: str | None,
         constraints: Sequence[tuple[str, object, bool]],
+        action_targets: Mapping[str, Sequence[uuid.UUID]] | None = None,
         analysis_id: uuid.UUID | None,
         context_version: int | None,
         analysis_risk: str | None,
@@ -414,7 +415,7 @@ class DecisionService:
     ) -> Opened | None:
         """A decision on what the intention asks to do — none when it asks
         to change nothing. Any earlier one still waiting is superseded."""
-        proposals = proposals_of(actions, targets, environment, constraints)
+        proposals = proposals_of(actions, targets, environment, constraints, action_targets)
         if not proposals:
             return None
         moment = _now(now)
