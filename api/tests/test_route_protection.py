@@ -94,6 +94,20 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
         "session: the delivery's signature, checked against the source's "
         "secret before anything is written, is the credential."
     ),
+    ("GET", "/api/v1/pricing"): (
+        "The public pricing page reads it before anyone signs up: the "
+        "catalogue's plans and prices, the same for everybody (LEKA-431)."
+    ),
+    ("POST", "/api/v1/pricing/events"): (
+        "What visitors of the pricing page choose and click, before any "
+        "account. Kept without a person, workspace or address; rate limited "
+        "per address, and over the limit dropped (LEKA-431)."
+    ),
+    ("POST", "/api/v1/billing/stripe/webhook"): (
+        "Stripe telling LEKA a payment happened. Stripe has no session: the "
+        "Stripe-Signature, checked against LEKA_STRIPE_WEBHOOK_SECRET before "
+        "anything is written, is the credential — 400 otherwise (LEKA-431)."
+    ),
 }
 
 # The dependencies that mean "somebody is authenticated".
