@@ -156,6 +156,11 @@ class ArchitectureDeck(_Model):
     """An application architecture deck, as the template wants it."""
 
     parcours: str = Field(description="Le nom du parcours, ex. « Paiement CB ».")
+    organisation: str = Field(
+        default="",
+        description="« <Organisation> - <Entité> - <Service> » as the inputs or the sources "
+        "say them; empty when they do not — never invented.",
+    )
     perimetre: str = Field(
         description="« Périmètre <domaine> - <canaux / variantes> », ex. « Périmètre Digital - "
         "Espace Client TR »."

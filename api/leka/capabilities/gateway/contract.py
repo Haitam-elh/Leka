@@ -282,8 +282,15 @@ def plain_schema(model: type[BaseModel]) -> dict[str, Any]:
     schema = model.model_json_schema()
     definitions = schema.pop("$defs", {})
 
-    def inline(node: Any, seen: frozenset[str] = frozenset()) -> Any:
+    def inline(node: Any, seen: frozenset[str] = frozenset(), *, names: bool = False) -> Any:
         if isinstance(node, dict):
+            if names:
+                # The keys of `properties` are the fields' own names: a field
+                # called "title" is one, and is kept. Dropping it left a
+                # schema "requiring" a property it no longer had — Gemini
+                # refused the architect's deck for it (400), and no deck
+                # was ever drawn.
+                return {k: inline(v, seen) for k, v in node.items()}
             ref = node.get("$ref")
             if isinstance(ref, str) and ref.startswith("#/$defs/"):
                 name = ref.removeprefix("#/$defs/")
@@ -291,7 +298,12 @@ def plain_schema(model: type[BaseModel]) -> dict[str, Any]:
                     msg = f"{model.__name__}: a recursive schema ({name}) cannot be inlined"
                     raise ValueError(msg)
                 return inline(definitions[name], seen | {name})
-            return {k: inline(v, seen) for k, v in node.items() if k != "title"}
+            # "title" here is the schema's label, which no provider needs.
+            return {
+                k: inline(v, seen, names=k in ("properties", "patternProperties"))
+                for k, v in node.items()
+                if k != "title"
+            }
         if isinstance(node, list):
             return [inline(item, seen) for item in node]
         return node

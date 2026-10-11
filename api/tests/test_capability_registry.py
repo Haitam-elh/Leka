@@ -78,12 +78,15 @@ def test_the_repositorys_catalogue_loads_whole() -> None:
     assert (architect.kind, architect.lifecycle, architect.version) == (
         Kind.AGENT,
         Lifecycle.ACTIVE,
-        "18.1.0",
+        "19.0.0",
     )
     assert architect.title == "Architecte applicatif"
     assert [(i.name, i.required) for i in architect.contract.inputs] == [
         ("parcours", True),
         ("perimetre", True),
+        ("organisation", False),
+        ("entite", False),
+        ("service", False),
         ("vue_applicative", False),
     ]
     assert (architect.contract.output, architect.contract.formats) == ("document", ("pptx", "pdf"))
@@ -95,7 +98,9 @@ def test_the_repositorys_catalogue_loads_whole() -> None:
     assert architect.model and architect.mode == "read_only"
     # Its instructions, as written — kept here, never in what is sent.
     assert architect.instructions and "PRINCIPE ABSOLU" in architect.instructions
-    assert "ENGIE" not in architect.title + architect.summary
+    # Generic: any organisation's, said by its inputs — none of its own.
+    assert "ENGIE" not in architect.title + architect.summary + architect.instructions
+    assert "{{ORGANISATION}}" in architect.instructions
     # Not indexed as live: the drafts.
     assert found["correlate-deploy-with-latency"].lifecycle is Lifecycle.DRAFT
 

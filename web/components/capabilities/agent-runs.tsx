@@ -256,6 +256,8 @@ function stepSaid(w: Dictionary["agentRuns"], event: AgentRunEvent): string {
     left: String(Number(detail.out_of_scope ?? 0) + Number(detail.beyond ?? 0)),
     why: (w.withheld as Record<string, string>)[String(detail.why)] ?? String(detail.why ?? ""),
     model: String(detail.model ?? ""),
+    // What the provider answered when it refused, as it said it.
+    said: detail.said ? ` (${String(detail.said)})` : "",
     // An AI control's refusal said as such (LEKA-406), else the code.
     code:
       (w.errors as Record<string, string>)[String(detail.reason)] ??
