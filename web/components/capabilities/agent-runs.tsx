@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { exactDate } from "@/components/knowledge/time";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import type { TileTone } from "@/components/environment/parts";
@@ -18,7 +18,7 @@ import {
   type RunInputs,
 } from "@/lib/agent-runs";
 import { useAgentRun, useAgentRunChange, useAgentRuns } from "@/lib/agent-runs-queries";
-import { ApiError } from "@/lib/api";
+import { ApiError, apiAddress } from "@/lib/api";
 import type { CapabilityDetail } from "@/lib/capabilities";
 import { fill, type Dictionary } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
@@ -43,6 +43,49 @@ const STATUS_TONE: Record<string, TileTone> = {
 type Field = CapabilityDetail["inputs"][number];
 type Values = Record<string, string | boolean>;
 
+/** A field as people read it: the dictionary's name for it, else its own,
+ * made readable ("vue_applicative" → "Vue applicative"). */
+export function fieldLabel(t: Dictionary, name: string): string {
+  const known = (t.agentRuns.fields as Record<string, string>)[name];
+  if (known) return known;
+  const spaced = name.replace(/[_-]+/g, " ").trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+const STOP = String.raw`(?=\s+(?:sur|pour|dans|avec|et)\s+(?:le|la|les|l')|[,.;:!?»"]|$)`;
+const SAID: Record<string, RegExp> = {
+  parcours: new RegExp(String.raw`parcours\s+(?:de\s+|du\s+|d'|«\s*)?(.+?)\s*` + STOP, "i"),
+  perimetre: new RegExp(
+    String.raw`p[ée]rim[èe]tre\s+(?:de\s+|du\s+|d'|«\s*)?(.+?)\s*` + STOP,
+    "i",
+  ),
+};
+
+/** What an intention already says of what an agent takes — « Construis
+ * l'architecture du parcours Paiement CB sur le périmètre Digital » gives
+ * the journey and the perimeter; the journey, at least, its title. Only a
+ * suggestion: the person reads it and changes it before running. */
+export function suggestedInputs(
+  fields: Field[],
+  intention: { title: string; text: string } | undefined,
+): Values {
+  if (!intention) return {};
+  const said: Values = {};
+  const words = `${intention.title}. ${intention.text}`;
+  for (const field of fields) {
+    if (field.type === "boolean") {
+      if (field.name === "vue_applicative" && /vue\s+applicative/i.test(words)) said[field.name] = true;
+      continue;
+    }
+    const found = SAID[field.name]?.exec(words);
+    if (found?.[1]) said[field.name] = found[1].trim();
+  }
+  if (fields.some((f) => f.name === "parcours") && !said.parcours && intention.title.trim()) {
+    said.parcours = intention.title.trim();
+  }
+  return said;
+}
+
 /** What the form holds, as the contract takes it: an empty optional left out. */
 export function inputsOf(fields: Field[], values: Values): RunInputs {
   const said: RunInputs = {};
@@ -62,15 +105,18 @@ export function inputsOf(fields: Field[], values: Values): RunInputs {
 export function RunAgent({
   capability,
   intentionId,
+  prefill,
 }: {
   capability: CapabilityDetail;
   /** Run for an intention: its context is the agent's (LEKA-398). */
   intentionId?: string;
+  /** What the intention already says of its inputs: suggested, editable. */
+  prefill?: Values;
 }) {
   const t = useDictionary();
   const w = t.agentRuns;
   const { start } = useAgentRunChange();
-  const [values, setValues] = useState<Values>({});
+  const [values, setValues] = useState<Values>(() => prefill ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   async function run(event: React.FormEvent) {
@@ -88,7 +134,7 @@ export function RunAgent({
       } else {
         notify.success({ title: w.queued, description: w.queuedHint });
       }
-      setValues({});
+      setValues(prefill ?? {});
     } catch (error) {
       if (error instanceof ApiError && error.fieldErrors) {
         setErrors(error.fieldErrors);
@@ -97,9 +143,18 @@ export function RunAgent({
     }
   }
 
+  const files = capability.formats.filter((f) => f === "pptx" || f === "pdf");
   return (
-    <Card title={w.run} icon={<Play className="size-4 text-shell-muted" aria-hidden="true" />}>
+    <Card
+      title={fill(w.runNamed, { title: capability.title })}
+      icon={<Play className="size-4 text-shell-muted" aria-hidden="true" />}
+    >
       <form className="flex flex-col gap-3" onSubmit={(e) => void run(e)} data-testid="agent-run-form">
+        {prefill && Object.keys(prefill).length ? (
+          <p className="text-xs text-shell-muted" data-testid="agent-run-prefilled">
+            {w.prefilled}
+          </p>
+        ) : null}
         {capability.inputs.map((field) => {
           const id = `agent-input-${field.name}`;
           const error = errors[`inputs.${field.name}`];
@@ -114,12 +169,12 @@ export function RunAgent({
                       setValues((was) => ({ ...was, [field.name]: checked === true }))
                     }
                   />
-                  {field.description || field.name}
+                  {fieldLabel(t, field.name)}
                 </label>
               ) : (
                 <>
                   <label htmlFor={id} className="text-[0.8125rem] font-medium text-brand-navy">
-                    {field.name}
+                    {fieldLabel(t, field.name)}
                     <span className="font-normal text-shell-muted">
                       {" · "}
                       {field.required ? t.catalogue.detail.required : t.catalogue.detail.optional}
@@ -151,6 +206,9 @@ export function RunAgent({
                   )}
                 </>
               )}
+              {field.description && field.type !== "boolean" ? (
+                <p className="text-xs text-shell-muted">{field.description}</p>
+              ) : null}
               {error ? (
                 <p className="text-xs text-state-danger" role="alert">
                   {(w.inputErrors as Record<string, string>)[error] ?? error}
@@ -165,12 +223,21 @@ export function RunAgent({
             {start.isPending ? w.starting : w.start}
           </Button>
           <span className="text-xs text-shell-muted">
-            {capability.available ? w.readOnly : w.cannotRun}
+            {capability.available
+              ? files.length
+                ? fill(w.readOnlyFiles, { formats: files.map((f) => f.toUpperCase()).join(" + ") })
+                : w.readOnly
+              : w.cannotRun}
           </span>
         </div>
       </form>
     </Card>
   );
+}
+
+/** Whether LEKA draws files of what it delivers (the architect's deck). */
+function hasFiles(run: AgentRun): boolean {
+  return run.key === "application-architecture";
 }
 
 function statusSaid(w: Dictionary["agentRuns"], run: AgentRun): string {
@@ -195,7 +262,39 @@ function stepSaid(w: Dictionary["agentRuns"], event: AgentRunEvent): string {
       (w.errors as Record<string, string>)[String(detail.code)] ??
       String(detail.code ?? ""),
     control: String(detail.control ?? ""),
+    formats: Array.isArray(detail.formats)
+      ? detail.formats.map((f) => String(f).toUpperCase()).join(" + ")
+      : "",
+    slides: String(detail.slides ?? 0),
   });
+}
+
+/** The files LEKA drew of what a run delivered: downloaded as they are,
+ * the PDF first — the template's mandatory deliverable. */
+export function Deliverables({ run }: { run: AgentRun }) {
+  const t = useDictionary();
+  const w = t.agentRuns;
+  if (!run.deliverables.length) return null;
+  const files = [...run.deliverables].sort((a, b) => (a.format === "pdf" ? -1 : b.format === "pdf" ? 1 : 0));
+  return (
+    <div className="flex flex-wrap items-center gap-2" data-testid="agent-run-deliverables">
+      {files.map((file) => (
+        <a
+          key={file.format}
+          className={buttonVariants({ size: "sm", variant: file.format === "pdf" ? "default" : "outline" })}
+          href={apiAddress(`/agent-runs/${encodeURIComponent(run.id)}/deliverables/${file.format}`)}
+          download={file.name}
+          data-format={file.format}
+        >
+          <Download className="size-3.5" aria-hidden="true" />
+          {file.format === "pdf" ? w.downloadPdf : w.downloadPptx}
+        </a>
+      ))}
+      <span className="text-xs text-shell-muted">
+        {fill(w.slides, { count: run.deliverables[0]?.slides ?? 0 })}
+      </span>
+    </div>
+  );
 }
 
 function download(run: AgentRunDetail) {
@@ -219,7 +318,7 @@ function RunDetail({ id }: { id: string }) {
       {data.output ? (
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-shell-muted">{w.delivered}</span>
+            <span className="text-xs font-semibold text-shell-muted">{w.analysis}</span>
             <Button type="button" variant="outline" size="sm" onClick={() => download(data)}>
               <Download className="size-3.5" aria-hidden="true" />
               {w.download}
@@ -265,11 +364,13 @@ function RunDetail({ id }: { id: string }) {
   );
 }
 
-export function AgentRuns({ agentKey }: { agentKey: string }) {
+export function AgentRuns({ agentKey, intentionId }: { agentKey: string; intentionId?: string }) {
   const t = useDictionary();
   const { locale } = useLocale();
   const w = t.agentRuns;
-  const { data } = useAgentRuns(agentKey);
+  const { data: all } = useAgentRuns(agentKey);
+  // For an intention: its runs only.
+  const data = intentionId ? all?.filter((run) => run.intention_id === intentionId) : all;
   const { cancel } = useAgentRunChange();
   const [open, setOpen] = useState<string | null>(null);
 
@@ -316,6 +417,13 @@ export function AgentRuns({ agentKey }: { agentKey: string }) {
                 {run.model ? ` · ${run.model}` : ""}
                 {run.tool_calls ? ` · ${fill(w.toolCalls, { count: run.tool_calls })}` : ""}
               </p>
+              {run.deliverables.length ? (
+                <div className="mt-2">
+                  <Deliverables run={run} />
+                </div>
+              ) : run.status === "running" && run.pending.length === 0 && hasFiles(run) ? (
+                <p className="mt-1 text-xs text-shell-muted">{w.drawing}</p>
+              ) : null}
               {open === run.id ? <RunDetail id={run.id} /> : null}
             </li>
           ))}

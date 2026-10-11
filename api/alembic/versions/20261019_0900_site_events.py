@@ -1,8 +1,8 @@
 """Site events: what visitors of the pricing page chose and clicked.
 
 Revision ID: 6b1d8e3f2a94
-Revises: 8d3f6b2e9a41
-Created: 2026-10-17
+Revises: 0a074280012e
+Created: 2026-10-19
 
 LEKA-431. One row per thing a visitor of leka-core.com's pricing page did —
 the page viewed, a billing interval or a plan chosen, a call to action, an
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "6b1d8e3f2a94"
-down_revision: str | None = "8d3f6b2e9a41"
+down_revision: str | None = "0a074280012e"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

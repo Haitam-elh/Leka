@@ -69,6 +69,9 @@ pytestmark = pytest.mark.integration
 #   site_events    what visitors of the public pricing page chose and clicked
 #                  (LEKA-431) — LEKA's own analytics, before anyone signs
 #                  in: no workspace, no person, no address.
+#   model_rates    what a model costs LEKA from a day on (LEKA-430): LEKA's
+#                  prices, no customer's. What a call cost a workspace is
+#                  model_calls, which is scoped.
 TENANT_FREE_TABLES = frozenset(
     {
         "workspaces",
@@ -80,6 +83,7 @@ TENANT_FREE_TABLES = frozenset(
         "capability_registrations",
         "capability_events",
         "site_events",
+        "model_rates",
     }
 )
 

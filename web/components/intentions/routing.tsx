@@ -3,7 +3,7 @@
 import { Compass, RefreshCw } from "lucide-react";
 import Link from "next/link";
 
-import { RunAgent } from "@/components/capabilities/agent-runs";
+import { AgentRuns, RunAgent, suggestedInputs } from "@/components/capabilities/agent-runs";
 import { reasonSaid, titleOf } from "@/components/capabilities/catalogue";
 import { WorkflowPanel } from "@/components/capabilities/workflow-runs";
 import { Card, type TileTone } from "@/components/environment/parts";
@@ -15,7 +15,7 @@ import { useCapability } from "@/lib/capabilities-queries";
 import { fill, type Dictionary } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import type { RoutedCandidate, Routing } from "@/lib/intentions/api";
-import { useIntentionRouting, useRouteAgain } from "@/lib/intentions/queries";
+import { useIntention, useIntentionRouting, useRouteAgain } from "@/lib/intentions/queries";
 
 /**
  * Where an intention goes (LEKA-398): the capability LEKA chose for it —
@@ -50,9 +50,21 @@ function excludedSaid(t: Dictionary, candidate: RoutedCandidate): string {
 
 function SelectedAgent({ candidate, intentionId }: { candidate: RoutedCandidate; intentionId: string }) {
   const { data } = useCapability(candidate.key);
+  const { data: intention } = useIntention(intentionId);
   if (!data) return null;
   if (data.kind === "workflow") return <WorkflowPanel capability={data} intentionId={intentionId} />;
-  return <RunAgent capability={data} intentionId={intentionId} />;
+  // What the intention says of its inputs, suggested; its runs, followed here.
+  return (
+    <>
+      <RunAgent
+        key={intention ? "prefilled" : "empty"}
+        capability={data}
+        intentionId={intentionId}
+        prefill={suggestedInputs(data.inputs, intention)}
+      />
+      <AgentRuns agentKey={data.key} intentionId={intentionId} />
+    </>
+  );
 }
 
 export function RoutingPanel({ intentionId }: { intentionId: string }) {

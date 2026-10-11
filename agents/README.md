@@ -88,6 +88,7 @@ The agent's instructions, in markdown.
 | `permission` | no | what a person needs to use it — `intention:create` by default |
 | `tools` | no | the runtime's tools it may be offered — `search_entities`, `read_entity`, `dependencies`, `what_happened` (LEKA-400); every read-only one when it declares none. Least privilege: declare what it needs |
 | `skills` | no | the skills of LEKA's library it may be offered, by key — `delivery-metrics`, `blast-radius`… (LEKA-401, [docs/skills.md](../docs/skills.md) § 9); none unless named, each only when it reads nothing beyond `entity_types` |
+| `renders` | no | what LEKA draws of what it delivers — `architecture_deck`: the editable PowerPoint and its PDF on the application architecture template ([docs/agent-runtime.md](../docs/agent-runtime.md) § 6 bis); its `pptx` and `pdf` are then not pending |
 
 `requires` names source kinds; alternatives in one entry, `"confluence|microsoft_365"`.
 

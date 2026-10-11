@@ -15,8 +15,12 @@
         4. its tools: offered when read-only and permitted, each call kept
            with what came of it (tools.py)
         5. the model, through the gateway: run_tools, deep tier, what its
-           definition needs choosing the model — within RUN_BUDGET
-        6. succeeded with what it delivered, or failed saying why — unless
+           definition needs choosing the model — within RUN_BUDGET, at most
+           TOOL_ROUNDS rounds of tools, the last offered none: it answers
+           with what it read
+        6. what LEKA draws of it, when the agent says so (`renders`): the
+           architect's PowerPoint and PDF (delivery.py)
+        7. succeeded with what it delivered, or failed saying why — unless
            it was cancelled meanwhile: then that stands
     THE SWEEP (agent-runs-sweep): a run no worker will finish — running past
     ABANDONED, queued past FORGOTTEN — failed, `abandoned`.
@@ -42,6 +46,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.background import JobQueue, enqueue_job
 from leka.capabilities.catalogue import CatalogueService, Entry, needs_of
 from leka.capabilities.definition import Definition, check_input
+from leka.capabilities.delivery import draw
 from leka.capabilities.gateway import (
     Completion,
     Gateway,
@@ -95,6 +100,10 @@ ABANDONED = timedelta(minutes=30)
 FORGOTTEN = timedelta(hours=6)
 # What an agent may write, at most: a deck's worth of markdown.
 MAX_TOKENS = 16_000
+# Rounds of tools an agent may take before it answers. Its last round is
+# offered none: it answers with what it read, rather than fail — the
+# architect's instructions ask it to look brick by brick.
+TOOL_ROUNDS = 16
 # What is kept of what a tool was asked, and of what it delivered.
 ARGUMENTS_KEPT = 500
 OUTPUT_KEPT = 200_000
@@ -155,7 +164,9 @@ class Steps:
         """What happened so far, seen by whoever looks: committed."""
         await self._session.commit()
 
-    def add(self, kind: str, **detail: object) -> None:
+    def add(self, kind: str, /, **detail: object) -> None:
+        # Positional only: a failure's detail may say its own `kind` (the
+        # error's type).
         self._seq += 1
         self._session.add(
             AgentRunEvent(
@@ -446,7 +457,11 @@ async def _run(
     try:
         done: Completion = await asyncio.wait_for(
             Gateway(session, workspace_id).run_tools(
-                request, offered_now, replace(needs_of(definition), tools=bool(given))
+                request,
+                offered_now,
+                replace(needs_of(definition), tools=bool(given)),
+                rounds=TOOL_ROUNDS,
+                conclude=True,
             ),
             timeout=budget,
         )
@@ -477,6 +492,22 @@ async def _run(
     output = output_of(done.text, run.format)
     if output is None:
         return await _fail(session, run, "invalid_output", format=run.format)
+    # What LEKA draws of it — the architect's deck (delivery.py): its files,
+    # or why there are none; the analysis stands either way.
+    detail = dict(run.detail)
+    if definition.renders is not None:
+        await session.commit()
+        drawn = await draw(session, run, definition, output)
+        if drawn.error is None:
+            steps.add(
+                "rendered",
+                formats=[f["format"] for f in drawn.files],
+                slides=drawn.files[0]["slides"] if drawn.files else 0,
+                **(drawn.usage or {}),
+            )
+        else:
+            steps.add("render_failed", code=drawn.error)
+        detail |= drawn.detail()
     runs = CapabilityRunRepository(session, workspace_id)
     ended = await runs.finish(
         run.id,
@@ -487,6 +518,7 @@ async def _run(
         model=done.model[:120],
         model_version=done.version[:120],
         tool_calls=run.tool_calls,
+        detail=detail,
     )
     if ended:
         steps.add("succeeded", chars=len(output))

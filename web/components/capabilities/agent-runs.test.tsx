@@ -9,6 +9,10 @@
  * shows what it delivered, its files still to come, every step in words —
  * a tool read, one not offered and why — and what its model calls took;
  * a run of one's own on its way can be cancelled.
+ * Its fields in words, suggested from the intention it runs for — the
+ * journey and the perimeter it names — and still editable; the files LEKA
+ * drew of what it delivered (the architect's PDF and PowerPoint) offered to
+ * download, the PDF first; for an intention, its runs only.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -31,13 +35,16 @@ vi.mock("@/lib/agent-runs", async (original) => ({
 }));
 vi.mock("@/lib/notify", () => ({ notify: notices }));
 
-const { AgentRuns, RunAgent, inputsOf } = await import("@/components/capabilities/agent-runs");
+const { AgentRuns, RunAgent, inputsOf, suggestedInputs } = await import(
+  "@/components/capabilities/agent-runs"
+);
 
 const ARCHITECT = {
   key: "application-architecture",
   title: "Architecte applicatif",
   kind: "agent",
   available: true,
+  formats: ["pptx", "pdf"],
   inputs: [
     { name: "parcours", type: "text", required: true, description: "Le parcours", choices: [], entity_types: [] },
     { name: "perimetre", type: "text", required: true, description: "Le périmètre", choices: [], entity_types: [] },
@@ -67,6 +74,7 @@ function run(overrides: Partial<AgentRun> = {}): AgentRun {
     context_version: 1,
     format: "markdown",
     pending: ["pptx", "pdf"],
+    deliverables: [],
     error: null,
     reasons: [],
     provider: "google",
@@ -121,8 +129,8 @@ describe("running an agent", () => {
   it("asks what it takes and runs it", async () => {
     const user = userEvent.setup();
     show(<RunAgent capability={ARCHITECT} />);
-    await user.type(screen.getByLabelText(/parcours/), "Paiement CB");
-    await user.type(screen.getByLabelText(/perimetre/), "Digital");
+    await user.type(screen.getByLabelText(/Parcours/), "Paiement CB");
+    await user.type(screen.getByLabelText(/Périmètre/), "Digital");
     await user.click(screen.getByRole("checkbox", { name: "Ajouter la vue applicative" }));
     await user.click(screen.getByRole("button", { name: "Lancer" }));
     await waitFor(() =>
@@ -145,6 +153,41 @@ describe("running an agent", () => {
     show(<RunAgent capability={ARCHITECT} />);
     await user.click(screen.getByRole("button", { name: "Lancer" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Obligatoire.");
+  });
+
+  it("suggests what the intention says, and runs what the person kept", async () => {
+    const intention = {
+      title: "Architecture du paiement",
+      text: "Construis l'architecture du parcours Paiement CB sur le périmètre Digital - Espace Client TR, avec la vue applicative.",
+    };
+    const prefill = suggestedInputs(ARCHITECT.inputs, intention);
+    expect(prefill).toEqual({
+      parcours: "Paiement CB",
+      perimetre: "Digital - Espace Client TR",
+      vue_applicative: true,
+    });
+    // Nothing named: the journey is the intention's title.
+    expect(suggestedInputs(ARCHITECT.inputs, { title: "Facturation", text: "Explique." })).toEqual({
+      parcours: "Facturation",
+    });
+    const user = userEvent.setup();
+    show(<RunAgent capability={ARCHITECT} intentionId="i-1" prefill={prefill} />);
+    expect(screen.getByText("Lancer « Architecte applicatif »")).toBeInTheDocument();
+    expect(screen.getByTestId("agent-run-prefilled")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Parcours/)).toHaveValue("Paiement CB");
+    await user.clear(screen.getByLabelText(/Périmètre/));
+    await user.type(screen.getByLabelText(/Périmètre/), "Digital");
+    await user.click(screen.getByRole("button", { name: "Lancer" }));
+    await waitFor(() =>
+      expect(api.start).toHaveBeenCalledWith({
+        key: "application-architecture",
+        inputs: { parcours: "Paiement CB", perimetre: "Digital", vue_applicative: true },
+        intention_id: "i-1",
+      }),
+    );
+    expect(
+      screen.getByText(/LEKA en produit le PPTX \+ PDF à télécharger/),
+    ).toBeInTheDocument();
   });
 
   it("cannot be started when it cannot run here", () => {
@@ -178,6 +221,35 @@ describe("its runs", () => {
     expect(within(detail).getByTestId("agent-run-usage")).toHaveTextContent(
       "3 appel(s) au modèle · 3900 tokens",
     );
+  });
+
+  it("offers the files LEKA drew to download, the PDF first", async () => {
+    const files = [
+      { format: "pptx" as const, name: "Architecture applicative - Parcours Paiement CB.pptx", size: 9, slides: 11 },
+      { format: "pdf" as const, name: "Architecture applicative - Parcours Paiement CB.pdf", size: 7, slides: 11 },
+    ];
+    api.list.mockResolvedValue([run({ pending: [], deliverables: files })]);
+    show(<AgentRuns agentKey={ARCHITECT.key} />);
+    const offered = await screen.findByTestId("agent-run-deliverables");
+    const links = within(offered).getAllByRole("link");
+    expect(links.map((l) => l.textContent)).toEqual(["Télécharger le PDF", "Télécharger le PowerPoint"]);
+    expect(links[0]).toHaveAttribute(
+      "href",
+      expect.stringMatching(/\/api\/v1\/agent-runs\/11111111-1111-1111-1111-111111111111\/deliverables\/pdf$/),
+    );
+    expect(links[0]).toHaveAttribute("download", files[1]!.name);
+    expect(offered).toHaveTextContent("11 slides");
+  });
+
+  it("for an intention, shows its runs only", async () => {
+    api.list.mockResolvedValue([
+      run({ id: "a", intention_id: "i-1", inputs: { parcours: "Paiement CB" } }),
+      run({ id: "b", intention_id: "i-2", inputs: { parcours: "Facturation" } }),
+    ]);
+    show(<AgentRuns agentKey={ARCHITECT.key} intentionId="i-1" />);
+    const [only, ...rest] = await screen.findAllByTestId("agent-run");
+    expect(rest).toEqual([]);
+    expect(only).toHaveTextContent("Paiement CB");
   });
 
   it("cancels a run of one's own on its way", async () => {

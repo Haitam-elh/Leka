@@ -4432,6 +4432,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-runs/{run_id}/deliverables/{fmt}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A file an agent run delivered: its PowerPoint or its PDF
+         * @description What LEKA drew of what the run delivered (the architect's deck), as
+         *     an attachment. 404 when the run, or that file, is not there.
+         */
+        get: operations["get_deliverable_api_v1_agent_runs__run_id__deliverables__fmt__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent-runs/{run_id}/cancel": {
         parameters: {
             query?: never;
@@ -5649,6 +5670,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/credits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ai Credits */
+        get: operations["ai_credits_api_v1_billing_credits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pricing": {
         parameters: {
             query?: never;
@@ -6339,6 +6377,11 @@ export interface components {
              */
             pending: string[];
             /**
+             * Deliverables
+             * @description The files LEKA drew of what it delivered (its pptx, its pdf), each to download.
+             */
+            deliverables: components["schemas"]["DeliverableRead"][];
+            /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
              */
@@ -6450,6 +6493,11 @@ export interface components {
              * @description What it declares (pptx, pdf…) and the runtime does not render yet.
              */
             pending: string[];
+            /**
+             * Deliverables
+             * @description The files LEKA drew of what it delivered (its pptx, its pdf), each to download.
+             */
+            deliverables: components["schemas"]["DeliverableRead"][];
             /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
@@ -10282,6 +10330,75 @@ export interface components {
             };
         };
         /**
+         * CreditsRead
+         * @description A workspace's AI credits this month (LEKA-430): its plan's and its
+         *     packs', what its work on LEKA's models used, what is left — and whether
+         *     LEKA's models are refused it once they are spent.
+         */
+        CreditsRead: {
+            /**
+             * Plan
+             * @enum {string}
+             */
+            plan: "free" | "starter" | "growth" | "business" | "enterprise";
+            /**
+             * Plan Since
+             * @description None: Free from the start.
+             */
+            plan_since: string | null;
+            /**
+             * Monthly
+             * @description The plan's credits a month.
+             */
+            monthly: number;
+            /**
+             * Packs
+             * @description Credits added to this month.
+             */
+            packs: number;
+            /** Allowance */
+            allowance: number;
+            /** Used */
+            used: number;
+            /** Remaining */
+            remaining: number;
+            /**
+             * Percent
+             * @description Of the allowance used, 0 to 100 and past.
+             */
+            percent: number;
+            /**
+             * Period Start
+             * Format: date-time
+             */
+            period_start: string;
+            /**
+             * Period End
+             * Format: date-time
+             */
+            period_end: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "ok" | "warning" | "exhausted";
+            /**
+             * Warn At
+             * @description The percentages past which owners and admins are told.
+             */
+            warn_at: number[];
+            /**
+             * Enforced
+             * @description Spent, LEKA's models are refused until the month ends.
+             */
+            enforced: boolean;
+            /**
+             * Credit Usd
+             * @description What a credit is worth of LEKA's model cost.
+             */
+            credit_usd: number;
+        };
+        /**
          * Criticality
          * @description How critical a service or an application is, and who says so.
          */
@@ -10897,6 +11014,29 @@ export interface components {
              * Format: date-time
              */
             erasure_due_at: string;
+        };
+        /**
+         * DeliverableRead
+         * @description A file a run delivered: GET /agent-runs/{id}/deliverables/{format}.
+         */
+        DeliverableRead: {
+            /**
+             * Format
+             * @enum {string}
+             */
+            format: "pptx" | "pdf";
+            /**
+             * Name
+             * @description Its file name.
+             */
+            name: string;
+            /**
+             * Size
+             * @description In bytes.
+             */
+            size: number;
+            /** Slides */
+            slides: number;
         };
         /**
          * DeliveryAccepted
@@ -20163,6 +20303,11 @@ export interface components {
              * @description The model's, of its goal.
              */
             confidence?: number | null;
+            /**
+             * Run Id
+             * @description The LLM runtime's run that read it (LEKA-430): what reading it cost — a model asked, even when the rules' reading was kept.
+             */
+            run_id?: string | null;
         };
         /**
          * UnderstoodEntity
@@ -43110,6 +43255,102 @@ export interface operations {
             };
         };
     };
+    get_deliverable_api_v1_agent_runs__run_id__deliverables__fmt__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                fmt: "pptx" | "pdf";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation": unknown;
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     cancel_run_api_v1_agent_runs__run_id__cancel_post: {
         parameters: {
             query?: never;
@@ -49514,6 +49755,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceUsageRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    ai_credits_api_v1_billing_credits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditsRead"];
                 };
             };
             /** @description The request could not be understood. */

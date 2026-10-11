@@ -67,21 +67,23 @@ class Profile:
         provider's cache at their own price; None when the price is not
         known."""
         price = self.price(at)
-        if price is None:
-            return None
-        cached = max(0, min(cached, tokens_in))
-        cache = (
-            price.per_million_in if price.per_million_cached is None else price.per_million_cached
+        return None if price is None else cost_at(price, tokens_in, tokens_out, cached=cached)
+
+
+def cost_at(price: Price, tokens_in: int, tokens_out: int, *, cached: int = 0) -> float:
+    """What tokens cost at a price: those read from the provider's cache at
+    their own price, or as any token in when it has none."""
+    cached = max(0, min(cached, tokens_in))
+    cache = price.per_million_in if price.per_million_cached is None else price.per_million_cached
+    return round(
+        (
+            (tokens_in - cached) * price.per_million_in
+            + cached * cache
+            + tokens_out * price.per_million_out
         )
-        return round(
-            (
-                (tokens_in - cached) * price.per_million_in
-                + cached * cache
-                + tokens_out * price.per_million_out
-            )
-            / 1_000_000,
-            6,
-        )
+        / 1_000_000,
+        6,
+    )
 
 
 _LONG_AGO = date(2025, 1, 1)
