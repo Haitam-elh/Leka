@@ -168,7 +168,7 @@ change one; erased with its workspace):
 | `tool_withheld` | the tool, why |
 | `tool` | the tool, what it was asked (500 characters), outcome (ok, refused, failed, unknown), why, how long |
 | `answered` | provider, model, version, tokens |
-| `rendered` · `render_failed` | the formats, the slides, the deck's model and tokens · why (`no_model`, `timeout`, `render`, `storage`) |
+| `rendered` · `render_failed` | the formats, the slides, the deck's model and tokens · why (`no_model`: no model here can write it; `unanswered`: the model was asked and gave no deck, with what it said (`said`); `timeout`, `render`, `storage`) |
 | `succeeded` · `failed` · `cancelled` | how many characters · the code and its detail · by whom |
 
 What its calls took — calls, tokens, the cost at list price — is read from
