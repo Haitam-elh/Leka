@@ -80,7 +80,7 @@ export function SupportList({ items }: { items: readonly Support[] }) {
           ) : (
             <span
               aria-hidden="true"
-              className="mt-1 ml-0.5 size-3 shrink-0 rounded-full bg-shell-line"
+              className="mt-1 ms-0.5 size-3 shrink-0 rounded-full bg-shell-line"
             />
           )}
           <span className={item.established ? "text-brand-navy" : "text-shell-muted"}>

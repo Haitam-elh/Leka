@@ -122,7 +122,7 @@ export function CardLink({ href, children }: { href: string; children: React.Rea
       className="flex shrink-0 items-center gap-1 rounded text-[0.8125rem] font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
     >
       {children}
-      <ArrowRight className="size-3.5" aria-hidden="true" />
+      <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />
     </Link>
   );
 }
@@ -241,7 +241,7 @@ export function EventList({
   empty: string;
   detailed?: boolean;
 }) {
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   if (rows.length === 0) {
     return <p className="py-4 text-center text-[0.8125rem] text-shell-muted">{empty}</p>;
   }
@@ -277,7 +277,7 @@ export function EventList({
               ) : null}
             </span>
             {!detailed && row.where ? (
-              <span className="hidden max-w-28 shrink-0 truncate text-right text-xs text-shell-nav-active sm:block">
+              <span className="hidden max-w-28 shrink-0 truncate text-end text-xs text-shell-nav-active sm:block">
                 {row.where}
               </span>
             ) : null}

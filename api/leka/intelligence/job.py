@@ -48,6 +48,7 @@ from leka.background.runner import RQ_JOB_TIMEOUT
 from leka.capabilities import Execution, LLMRuntime, Needs, Task
 from leka.context import ContextRepository
 from leka.db import session_factory, system_scope, workspace_scope
+from leka.identity import workspace_language
 from leka.intelligence.analysis import (
     Analyzer,
     Authority,
@@ -267,6 +268,7 @@ async def _work(workspace_id: uuid.UUID, analyzer: Analyzer) -> ModelWork | None
         kept = await IntelligenceRepository(session, workspace_id).candidates_of(analyzer.name)
         standing = {key: proposal_of(c) for key, c in kept.items() if c.status == "proposed"}
         decided = frozenset(k for k, c in kept.items() if c.status in ("accepted", "rejected"))
+        language = await workspace_language(session, workspace_id)
 
     async def run(task: Task) -> Execution:
         async with session_factory() as session:
@@ -287,7 +289,14 @@ async def _work(workspace_id: uuid.UUID, analyzer: Analyzer) -> ModelWork | None
             await LLMRuntime(session, workspace_id).remember(purpose, digests, answered=answered)
             await session.commit()
 
-    return ModelWork(run=run, kept=standing, decided=decided, asked=asked, remember=remember)
+    return ModelWork(
+        run=run,
+        kept=standing,
+        decided=decided,
+        asked=asked,
+        remember=remember,
+        language=language,
+    )
 
 
 async def _model(

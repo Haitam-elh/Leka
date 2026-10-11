@@ -664,7 +664,7 @@ function Overview({
             className="flex items-center gap-2 rounded-lg border border-brand-navy/20 bg-white px-4 py-2 text-sm font-medium text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
           >
             {w.analysis.action}
-            <ArrowRight className="size-4" aria-hidden="true" />
+            <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
           </Link>
         </section>
       )}
@@ -747,7 +747,7 @@ function Dependencies({ rows, max }: { rows: readonly Dependency[]; max?: number
               <span className="block truncate text-xs text-shell-muted">{row.note}</span>
             </span>
             {row.status ? <StatusBadge variant={`entity.${row.status}`} size="sm" /> : null}
-            <ChevronRight className="size-4 shrink-0 text-shell-muted" aria-hidden="true" />
+            <ChevronRight className="rtl:-scale-x-100 size-4 shrink-0 text-shell-muted" aria-hidden="true" />
           </li>
         );
       })}

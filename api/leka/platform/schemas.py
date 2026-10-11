@@ -13,6 +13,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from leka.core import languages
 from leka.platform.models import InvitationStatus, Role, WorkspaceStatus
 
 
@@ -25,6 +26,13 @@ class WorkspaceCreate(BaseModel):
     """
 
     name: str = Field(min_length=1, max_length=200)
+    # The language of what is shared in it; its creator's when not said.
+    default_language: str | None = Field(default=None, max_length=35)
+
+    @field_validator("default_language")
+    @classmethod
+    def _language(cls, value: str | None) -> str | None:
+        return languages.listed(value) if value is not None else None
 
 
 class WorkspaceUpdate(BaseModel):
@@ -37,6 +45,12 @@ class WorkspaceUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
     settings: dict[str, object] | None = None
+    default_language: str | None = Field(default=None, max_length=35)
+
+    @field_validator("default_language")
+    @classmethod
+    def _language(cls, value: str | None) -> str | None:
+        return languages.listed(value) if value is not None else None
 
 
 class WorkspaceRead(BaseModel):
@@ -47,6 +61,7 @@ class WorkspaceRead(BaseModel):
     slug: str
     status: WorkspaceStatus
     settings: dict[str, object]
+    default_language: str
     created_at: datetime
 
 

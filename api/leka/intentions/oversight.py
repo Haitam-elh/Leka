@@ -28,7 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.db import session_factory, system_scope, workspace_scope
-from leka.identity import EmailMessage, User, build_email_sender
+from leka.identity import EmailMessage, User, build_email_sender, email_language
 from leka.intentions.decisions import Requirement
 from leka.intentions.governance import (
     Delegation,
@@ -49,6 +49,29 @@ from leka.intentions.models import (
 from leka.platform import Membership, Role, Workspace
 
 logger = structlog.get_logger(__name__)
+
+# What an escalation says, in each language e-mails are translated into
+# (leka/core/languages.yaml, `ui.emails`).
+_ESCALATION: dict[str, dict[str, str]] = {
+    "fr": {
+        "untitled": "une intention",
+        "nameless": "votre espace",
+        "subject": "LEKA — une décision attend : {title}",
+        "body": (
+            "La décision sur « {title} » ({workspace}) attend toujours, au risque {risk}. "
+            "Elle est escaladée : ouvrez À valider dans LEKA pour la trancher."
+        ),
+    },
+    "en": {
+        "untitled": "an intention",
+        "nameless": "your workspace",
+        "subject": "LEKA — a decision is waiting: {title}",
+        "body": (
+            "The decision on “{title}” ({workspace}) is still waiting, at risk {risk}. "
+            "It is escalated: open To approve in LEKA to settle it."
+        ),
+    },
+}
 
 
 def _now(now: datetime | None) -> datetime:
@@ -399,11 +422,12 @@ class OversightService:
         return escalated
 
     async def _tell(self, decision: IntentionDecision) -> None:
-        """The asker and the owners, told: a decision waits."""
+        """The asker and the owners, told: a decision waits — each in their
+        language, else the workspace's."""
         intention = await self._session.get(Intention, decision.intention_id)
         owners = (
-            await self._session.scalars(
-                select(User.email)
+            await self._session.execute(
+                select(User.email, User.language)
                 .join(Membership, Membership.user_id == User.id)
                 .where(
                     Membership.workspace_id == self._workspace_id,
@@ -412,25 +436,35 @@ class OversightService:
             )
         ).all()
         asker = (
-            await self._session.scalar(select(User.email).where(User.id == decision.asked_by))
+            (
+                await self._session.execute(
+                    select(User.email, User.language).where(User.id == decision.asked_by)
+                )
+            ).first()
             if decision.asked_by
             else None
         )
         workspace = await self._session.get(Workspace, self._workspace_id)
-        title = intention.title if intention is not None else "une intention"
         sender = build_email_sender()
-        for to in sorted({*owners, *([asker] if asker else [])}):
+        people = {(email, chosen) for email, chosen in [*owners, *([asker] if asker else [])]}
+        for to, chosen in sorted(people):
+            language = email_language(
+                chosen, workspace=workspace.default_language if workspace else None
+            )
+            words = _ESCALATION.get(language) or _ESCALATION["en"]
+            title = intention.title if intention is not None else words["untitled"]
+            said = {
+                "title": title,
+                "workspace": workspace.name if workspace else words["nameless"],
+                "risk": decision.risk,
+            }
             try:
                 await sender.send(
                     EmailMessage(
                         to=to,
-                        subject=f"LEKA — une décision attend : {title}"[:200],
-                        body=(
-                            f"La décision sur « {title} » "
-                            f"({workspace.name if workspace else 'votre espace'}) attend "
-                            f"toujours, au risque {decision.risk}. Elle est escaladée : "
-                            "ouvrez À valider dans LEKA pour la trancher."
-                        ),
+                        subject=words["subject"].format(**said)[:200],
+                        body=words["body"].format(**said),
+                        language=language,
                     )
                 )
             except Exception:

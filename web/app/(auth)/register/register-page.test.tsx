@@ -50,11 +50,13 @@ describe("the registration form", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: "Créer le compte" }));
 
-    expect(register).toHaveBeenCalledWith("nora@acme.example", PASSWORD, {
-      first_name: "Nora",
-      last_name: "Diallo",
-      company: "Acme",
-    });
+    // With the language the form was shown in: the account keeps it.
+    expect(register).toHaveBeenCalledWith(
+      "nora@acme.example",
+      PASSWORD,
+      { first_name: "Nora", last_name: "Diallo", company: "Acme" },
+      "fr",
+    );
     expect(await screen.findByText("Consultez votre boîte de réception")).toBeVisible();
   });
 

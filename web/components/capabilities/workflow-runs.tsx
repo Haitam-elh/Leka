@@ -233,7 +233,7 @@ function runSaid(w: Dictionary["workflows"], run: WorkflowRun): string {
 
 function RunDetail({ id }: { id: string }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.workflows;
   const { data } = useWorkflowRun(id);
   if (!data) return <div className="h-16 animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />;
@@ -267,7 +267,7 @@ function RunDetail({ id }: { id: string }) {
 
 export function WorkflowRuns({ workflowKey }: { workflowKey: string }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.workflows;
   const { data } = useWorkflowRuns(workflowKey);
   const { cancel, retry } = useWorkflowChange();
@@ -296,7 +296,7 @@ export function WorkflowRuns({ workflowKey }: { workflowKey: string }) {
                 </Pill>
                 <button
                   type="button"
-                  className="min-w-0 flex-1 text-left text-[0.8125rem] text-brand-navy hover:underline"
+                  className="min-w-0 flex-1 text-start text-[0.8125rem] text-brand-navy hover:underline"
                   aria-expanded={open === run.id}
                   onClick={() => setOpen(open === run.id ? null : run.id)}
                 >

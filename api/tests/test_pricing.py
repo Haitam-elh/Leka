@@ -22,6 +22,7 @@ What these protect:
 
 from __future__ import annotations
 
+import importlib
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,10 @@ from leka.core.config import settings
 from leka.db import session_factory, system_scope
 
 TODAY = date(2026, 10, 17)
+
+# The module itself: `leka.governance.plans` is also the name of a function
+# the package exports.
+governance_plans = importlib.import_module("leka.governance.plans")
 
 
 def _raw() -> dict[str, Any]:
@@ -60,13 +65,7 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     enterprise = offer.plan("enterprise")
     assert (enterprise.self_service, enterprise.ai_credits_per_month.contractual) == (False, True)
     allowances = {p.key: p.ai_credits_per_month for p in offer.plans if p.key != "enterprise"}
-    assert {k: c.value for k, c in allowances.items()} == {
-        "free": 100,
-        "starter": 500,
-        "growth": 2000,
-        "business": 8000,
-    }
-    assert all(c.provisional for c in allowances.values())
+    assert all(c.provisional and not c.contractual for c in allowances.values())
     assert (offer.annual_discount_percent, offer.launch_offer.percent) == (20, 30)
     assert (offer.launch_offer.months, offer.launch_offer.intervals) == (12, ("month",))
     assert offer.add_ons.available is False and offer.capacity.packs == ()
@@ -183,6 +182,30 @@ async def test_anyone_reads_the_pricing_as_checkout_charges_it(
     )
     booked = (await client.get("/api/v1/pricing")).json()
     assert booked["booking"]["url"] == "https://calendly.com/example/leka"
+
+
+async def test_the_credits_shown_are_the_ones_metering_grants(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One figure, metering's (LEKA-430): the page cannot promise other than
+    what a workspace gets — and follows LEKA_PLAN_CREDITS when it changes."""
+    said = (await client.get("/api/v1/pricing")).json()
+    granted = {p["key"]: p["ai_credits_per_month"] for p in said["plans"]}
+    assert granted == {
+        "free": 200,
+        "starter": 2000,
+        "growth": 10000,
+        "business": 40000,
+        "enterprise": None,  # per contract
+    }
+    assert granted["growth"] == governance_plans.plan_credits("growth")
+
+    changed = {**settings.plan_credits, "growth": 12000}
+    monkeypatch.setattr(
+        governance_plans, "settings", settings.model_copy(update={"plan_credits": changed})
+    )
+    again = (await client.get("/api/v1/pricing")).json()
+    assert next(p for p in again["plans"] if p["key"] == "growth")["ai_credits_per_month"] == 12000
 
 
 @pytest.mark.integration

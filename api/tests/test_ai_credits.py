@@ -19,15 +19,16 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from leka.capabilities import ModelCall
-from leka.db import session_factory, workspace_scope
+from leka.db import session_factory, system_scope, workspace_scope
 from leka.governance import AuditEvent, PlanError, add_pack, allowance, set_plan
 from leka.identity import User
 from leka.metering import CreditWarning, credits_now, watch_credits
 from leka.metering import credits as credit_watch
 from leka.metering.cli import main
+from leka.platform import Workspace
 from tests.conftest import FakeIdentity
 from tests.test_sources_api import _as, acme  # noqa: F401 — a fixture
 
@@ -166,6 +167,7 @@ async def test_each_share_passed_is_told_to_owners_and_admins_once(
 
     monkeypatch.setattr(credit_watch, "build_email_sender", lambda: Capture())
     workspace = acme["acme"]
+    await _speaks(workspace, "fr")
     await _keep(workspace, _spend(workspace, 1.65))
 
     with workspace_scope(workspace):
@@ -203,3 +205,48 @@ def test_the_command_refuses_an_unknown_plan(capsys: pytest.CaptureFixture[str])
     )
     assert code == 1
     assert "unknown plan" in capsys.readouterr().err
+
+
+async def _speaks(workspace: uuid.UUID, language: str, **people: str | None) -> None:
+    """The workspace's language, and the ones its people chose."""
+    with system_scope():
+        async with session_factory() as session:
+            await session.execute(
+                update(Workspace).where(Workspace.id == workspace).values(default_language=language)
+            )
+            for user_id, chosen in people.items():
+                await session.execute(
+                    update(User).where(User.id == uuid.UUID(user_id)).values(language=chosen)
+                )
+            await session.commit()
+
+
+async def test_each_is_told_in_their_language_else_the_workspace_s(
+    acme: dict[str, uuid.UUID], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The admin chose English in a French workspace; the member chose
+    nothing. Only owners and admins are told — the admin, in English."""
+    sent: list[Any] = []
+
+    class Capture:
+        async def send(self, message: Any) -> None:
+            sent.append(message)
+
+    monkeypatch.setattr(credit_watch, "build_email_sender", lambda: Capture())
+    workspace = acme["acme"]
+    await _speaks(workspace, "fr", **{str(acme["admin"]): "en"})
+    await _keep(workspace, _spend(workspace, 1.65))
+
+    await watch_credits()
+
+    [message] = sent
+    assert message.language == "en"
+    assert "80%" in message.subject and "overage is never charged" in message.body
+
+    sent.clear()
+    await _speaks(workspace, "fr", **{str(acme["admin"]): "ja"})
+    await _keep(workspace, _spend(workspace, 0.50))
+    await watch_credits()
+    # Japanese: e-mails are not translated into it — the workspace's French.
+    [message] = sent
+    assert message.language == "fr" and "épuisés" in message.subject

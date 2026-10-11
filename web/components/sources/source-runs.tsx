@@ -17,10 +17,10 @@ import { useSourceRuns } from "@/lib/sources-queries";
  */
 export function SourceRunsSection({ source }: { source: Source }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.sources.runs;
   const runs = useSourceRuns(source.id);
-  const number = new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB");
+  const number = new Intl.NumberFormat(locale);
   const running = runs.data?.[0]?.status === "running" ? runs.data[0] : null;
   const labels: Record<Outcome, string> = {
     running: w.running,

@@ -35,10 +35,10 @@ const LOOK = {
 
 function Reception({ source }: { source: Source }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.sources.reception;
   const deliveries = useSourceDeliveries(source.id);
-  const number = new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB");
+  const number = new Intl.NumberFormat(locale);
   const address = receivingAddress(source.id);
   const mode =
     typeof source.config.signature === "string" ? source.config.signature : "hmac_sha256";

@@ -89,7 +89,7 @@ function Facts({ capability }: { capability: CapabilityDetail }) {
 
 export function CapabilityScreen() {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.catalogue.detail;
   const params = useParams<{ capabilityId: string }>();
   const pathname = usePathname() ?? "/";
@@ -249,7 +249,7 @@ export function CapabilityScreen() {
                         : w.modelWaiting}
                     </span>
                     {data.model_needs ? (
-                      <span className="w-full pl-6 text-xs text-shell-muted">
+                      <span className="w-full ps-6 text-xs text-shell-muted">
                         {[
                           data.model_needs.structured ? w.modelNeeds.structured : null,
                           data.model_needs.tools ? w.modelNeeds.tools : null,
@@ -331,7 +331,7 @@ export function CapabilityScreen() {
         breadcrumb={crumbs}
         actions={
           <Link href={routes.capabilities()} className={buttonVariants({ variant: "outline" })}>
-            <ArrowLeft className="size-4" aria-hidden="true" />
+            <ArrowLeft className="rtl:-scale-x-100 size-4" aria-hidden="true" />
             {w.back}
           </Link>
         }

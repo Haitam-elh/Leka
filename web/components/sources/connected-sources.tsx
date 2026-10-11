@@ -67,7 +67,7 @@ export function SourceLines({ lines, max }: { lines: readonly SourceLine[]; max:
             {line.name}
           </span>
           <StatusBadge variant={`source.${line.tone}`} />
-          <span className="shrink-0 text-right text-xs whitespace-nowrap text-shell-muted">
+          <span className="shrink-0 text-end text-xs whitespace-nowrap text-shell-muted">
             {line.seen ? timeAgo(t, line.seen) : t.overview.neverSeen}
           </span>
         </li>

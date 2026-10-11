@@ -76,14 +76,14 @@ const TOP = 8;
 
 export function StackedBars({ data, className }: { data: readonly Column[]; className?: string }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const top = niceTop(Math.max(0, ...data.map(total)));
   const plot = HEIGHT - BOTTOM - TOP;
   const slot = (WIDTH - LEFT) / Math.max(1, data.length);
   const bar = Math.min(36, slot * 0.55);
   const y = (value: number) => TOP + plot - (value / top) * plot;
   const every = Math.ceil(data.length / 8);
-  const label = new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", {
+  const label = new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
   });

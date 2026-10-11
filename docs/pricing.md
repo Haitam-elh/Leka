@@ -22,7 +22,7 @@ are told in advance. They are never shown as a cost-validated guarantee.
 | List price, a month excl. VAT | €0 | €59 | **€179** — recommended | €599 | per contract |
 | Launch offer, monthly billing | — | €41.30 for 12 months, then €59 | €125.30 for 12 months, then €179 | €419.30 for 12 months, then €599 | — |
 | Billed yearly (−20 %) | — | €47.20 a month, €566.40 a year | €143.20 a month, €1,718.40 a year | €479.20 a month, €5,750.40 a year | — |
-| AI credits a month | 100 *(provisional)* | 500 *(provisional)* | 2,000 *(provisional)* | 8,000 *(provisional)* | by contract |
+| AI credits a month | 200 *(provisional)* | 2,000 *(provisional)* | 10,000 *(provisional)* | 40,000 *(provisional)* | by contract |
 | Core agents: Application Architect, QA (test analysis) | included | included | included | included | included |
 | Language model | managed by LEKA | managed by LEKA | managed by LEKA | managed by LEKA | managed by LEKA, **or the customer's own** |
 | Specialist agents (security review, incident investigation, infrastructure, code review, data, release, documentation, debugging, build fixer, architecture analysis) | add-ons, **not on sale yet** | add-ons | add-ons | add-ons | add-ons |
@@ -135,7 +135,11 @@ Enterprise's booking page: `LEKA_SALES_BOOKING_URL` in `production.env` (https),
 | Growth | €125.30 | €25.06 |
 | Business | €419.30 | €83.86 |
 
-Free cannot reach a margin at €0. It is held by its 100-credit cap, abuse and rate limits, and its measured cost per active workspace (LEKA-430).
+Free cannot reach a margin at €0. It is held by its 200-credit cap, abuse and rate limits, and its measured cost per active workspace (LEKA-430).
+
+**The credits a month are metering's (LEKA-430), not the catalogue's.** They are `LEKA_PLAN_CREDITS` (200, 2,000, 10,000, 40,000), read by `GET /pricing`: what the page promises is what a workspace gets, and the two can never disagree (`tests/test_pricing.py`). Agreed with LEKA-430 on 2026-10-11.
+
+**Against the ceilings above**, a credit being $0.01 of LEKA's model cost, a plan whose credits are all used costs at most: Starter $20, Growth $100, Business $400 a month — above each ceiling. Most workspaces will not use all their credits; the metering reports (`python -m leka.metering.cli report plans`) say how many do, and are where these values are revisited.
 
 ## 7. Paying: Stripe
 

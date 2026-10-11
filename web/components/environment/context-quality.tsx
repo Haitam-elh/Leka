@@ -239,7 +239,7 @@ function Measures({
                   style={{ width: `${Math.round((measure.score ?? 0) * 100)}%` }}
                 />
               </span>
-              <span className="w-12 text-right font-medium text-brand-navy tabular-nums">
+              <span className="w-12 text-end font-medium text-brand-navy tabular-nums">
                 {measure.score === null || measure.score === undefined
                   ? w.unknown
                   : pct(measure.score)}

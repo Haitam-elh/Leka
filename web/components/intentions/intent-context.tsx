@@ -110,7 +110,7 @@ export function IntentContext({
  * differently, and how what it gathered changed. */
 function AskedAgain({ assembled }: { assembled: AssembledContext }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const read = (assembled.changes ?? []).filter(
     (change) => change.kind === "intent" && change.field !== "text",
   );
@@ -185,7 +185,7 @@ function Missing({ assembled }: { assembled: AssembledContext }) {
 
 function Scope({ plan }: { plan: IntentPlan }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.intent;
   const kinds = w.kinds as Record<string, string>;
   const how = w.how as Record<string, string>;

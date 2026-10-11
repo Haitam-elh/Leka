@@ -145,7 +145,7 @@ export function KnowledgeTable<T>({
                         : "none"
                       : undefined
                   }
-                  className={cn(column.align === "end" && "text-right", column.className)}
+                  className={cn(column.align === "end" && "text-end", column.className)}
                 >
                   {column.sortValue ? (
                     <button
@@ -202,7 +202,7 @@ export function KnowledgeTable<T>({
                   {columns.map((column) => (
                     <TableCell
                       key={column.id}
-                      className={cn(column.align === "end" && "text-right", column.className)}
+                      className={cn(column.align === "end" && "text-end", column.className)}
                     >
                       {column.cell(row)}
                     </TableCell>

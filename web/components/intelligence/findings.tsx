@@ -112,7 +112,7 @@ function InsightRow({
           />
         ) : null}
       </div>
-      {open ? <EvidenceList id={list} items={evidence} className="mt-3 sm:ml-13" /> : null}
+      {open ? <EvidenceList id={list} items={evidence} className="mt-3 sm:ms-13" /> : null}
     </li>
   );
 }

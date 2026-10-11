@@ -23,10 +23,11 @@ from httpx import AsyncClient
 from pydantic import ValidationError
 from sqlalchemy import select
 
+from leka.core import languages
 from leka.core.config import Settings, settings
 from leka.core.settings.paths import REPO_ROOT
 from leka.db import session_factory, system_scope
-from leka.identity import EmailMessage, links
+from leka.identity import EmailMessage, User, links, messages
 from leka.identity.links import reset_link, verification_link
 from leka.identity.models import EmailToken
 from tests.test_auth_api import (
@@ -200,6 +201,7 @@ def test_the_console_sender_keeps_an_outbox_for_the_browser_tests(
         "subject": "s",
         "body": "b",
         "html": "<p>b</p>",
+        "language": None,
     }
 
 
@@ -375,3 +377,111 @@ def test_the_link_checker_reads_real_files() -> None:
     """The page checker is only worth something if it reads the real tree."""
     assert Path(WEB_APP / "(auth)" / "reset-password" / "page.tsx").is_file()
     assert Path(WEB_APP / "(auth)" / "verify" / "[token]" / "page.tsx").is_file()
+
+
+# ── in the person's language (docs/languages.md) ─────────────────────────────
+
+
+def _registering(language: str) -> dict[str, Any]:
+    return {"email": "nora@acme.example", "password": PASSWORD, **PROFILE, "language": language}
+
+
+@pytest.mark.integration
+async def test_the_email_is_written_in_the_language_the_form_was_shown_in(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    await client.post(f"{API}/register", json=_registering("en"))
+
+    message = mailbox.sent[-1]
+    assert message.subject == "Confirm your LEKA email address"
+    assert "24 hours" in message.body
+    assert message.language == "en"
+    assert message.html is not None and 'lang="en" dir="ltr"' in message.html
+    # And the account keeps it: the language its owner saw, and could change.
+    with system_scope():
+        async with session_factory() as session:
+            user = await session.scalar(select(User).where(User.email == "nora@acme.example"))
+    assert user is not None and user.language == "en"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("language", "written"),
+    [
+        # Japanese: e-mails are not translated into it — English, the end of
+        # its chain, never an empty e-mail.
+        ("ja", "en"),
+        # Dari reads Persian before English; neither is translated.
+        ("prs", "en"),
+        # French: translated.
+        ("fr", "fr"),
+    ],
+)
+async def test_a_language_emails_are_not_translated_into_falls_back(
+    client: AsyncClient, mailbox: CapturingEmailSender, language: str, written: str
+) -> None:
+    await client.post(f"{API}/register", json=_registering(language))
+
+    message = mailbox.sent[-1]
+    assert message.language == written
+    assert message.subject == messages.WORDS[written]["verification.subject"]
+    assert message.body.strip() and "{" not in message.body
+
+
+@pytest.mark.integration
+async def test_the_account_s_language_wins_over_the_page_s(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    """Asked from a page in French by someone who chose English: English."""
+    await client.post(f"{API}/register", json=_registering("en"))
+    await client.post(f"{API}/verify/{urlparse(_link(mailbox.sent[-1])).path.rsplit('/', 1)[1]}")
+
+    await client.post(
+        f"{API}/password/forgot", json={"email": "nora@acme.example", "language": "fr"}
+    )
+
+    assert mailbox.sent[-1].subject == "Reset your LEKA password"
+
+
+@pytest.mark.integration
+async def test_without_a_choice_the_page_s_language_writes_the_email(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    """An account that never chose — made before languages existed."""
+    await client.post(f"{API}/register", json=_registering("en"))
+    await client.post(f"{API}/verify/{urlparse(_link(mailbox.sent[-1])).path.rsplit('/', 1)[1]}")
+    with system_scope():
+        async with session_factory() as session:
+            user = await session.scalar(select(User).where(User.email == "nora@acme.example"))
+            assert user is not None
+            user.language = None
+            await session.commit()
+
+    await client.post(
+        f"{API}/password/forgot", json={"email": "nora@acme.example", "language": "fr"}
+    )
+    assert mailbox.sent[-1].subject == "Réinitialisez votre mot de passe LEKA"
+
+    await client.post(f"{API}/password/forgot", json={"email": "nora@acme.example"})
+    assert mailbox.sent[-1].subject == "Reset your LEKA password"
+
+
+@pytest.mark.integration
+async def test_a_language_leka_does_not_offer_is_refused(
+    client: AsyncClient, mailbox: CapturingEmailSender
+) -> None:
+    refused = await client.post(f"{API}/register", json=_registering("xx"))
+    assert refused.status_code == 422
+    assert not mailbox.sent
+
+
+def test_each_language_emails_are_translated_into_has_every_word() -> None:
+    """Both ways: a language the catalogue says e-mails speak has every
+    word, and no e-mail is written in a language the catalogue does not
+    say — what is translated is never said otherwise."""
+    said = {language.tag for language in languages.catalogue().languages if "emails" in language.ui}
+    assert set(messages.WORDS) == said
+    keys = set(messages.WORDS[languages.catalogue().default])
+    for language, words in messages.WORDS.items():
+        assert set(words) == keys, language
+        assert all(text.strip() for text in words.values()), language

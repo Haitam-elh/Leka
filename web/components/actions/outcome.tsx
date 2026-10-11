@@ -654,7 +654,7 @@ export function VerificationCard({
   steward: boolean;
 }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const me = useCurrentUser();
   const confirm = useConfirm();
   const w = t.outcome;
@@ -810,7 +810,7 @@ export function ImpactBanner({ intentionId }: { intentionId: string }) {
         data-testid="impact-history"
       >
         {w.fullHistory}
-        <ArrowRight className="size-4" aria-hidden="true" />
+        <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
       </Link>
     </section>
   );

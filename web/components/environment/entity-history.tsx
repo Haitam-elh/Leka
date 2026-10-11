@@ -78,7 +78,7 @@ function fieldLabel(t: Dictionary, field: string): string {
 export function EntityHistory({ entityId, name }: { entityId: string; name: string }) {
   const t = useDictionary();
   const w = t.environment.sheet.history;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const history = useEntityHistory(entityId);
   const [moment, setMoment] = useState<string | null>(null);
 
@@ -107,7 +107,7 @@ export function EntityHistory({ entityId, name }: { entityId: string; name: stri
           icon={<History className="size-5 text-shell-muted" aria-hidden="true" />}
         >
           {data.versions.length ? (
-            <ol className="relative space-y-4 border-l border-shell-line pl-5">
+            <ol className="relative space-y-4 border-s border-shell-line ps-5">
               {data.versions.map((version, index) => (
                 <Version
                   key={version.id}
@@ -212,7 +212,7 @@ function Version({
 }) {
   const t = useDictionary();
   const w = t.environment.sheet.history;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const permissions = usePermissions();
   const mayDecide = permissions?.includes("intention:approve") ?? false;
   const { restore } = useOperations();
@@ -236,7 +236,7 @@ function Version({
   return (
     <li className="relative" data-testid={`history-version-${version.version}`}>
       <span
-        className="absolute top-1.5 -left-[1.6875rem] size-3 rounded-full border-2 border-white bg-brand-violet"
+        className="absolute top-1.5 -start-[1.6875rem] size-3 rounded-full border-2 border-white bg-brand-violet"
         aria-hidden="true"
       />
       <div className="flex flex-wrap items-center gap-2">
@@ -334,7 +334,7 @@ function Version({
 function OperationLine({ operation }: { operation: Operation }) {
   const t = useDictionary();
   const w = t.environment.sheet.history;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const user = useCurrentUser();
   const permissions = usePermissions();
   const { undo } = useOperations();
@@ -405,7 +405,7 @@ function AtPanel({
 }) {
   const t = useDictionary();
   const w = t.environment.sheet.history;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const at = useEntityAt(entityId, moment);
   // Opened from a version far down the list: the reader is taken to it.
   const heading = useRef<HTMLDivElement>(null);
@@ -492,7 +492,7 @@ export function RemovedEntity({
 }) {
   const t = useDictionary();
   const w = t.environment.sheet.history;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const history = useEntityHistory(entityId);
   if (history.isError) return <>{fallback}</>;
   const data = history.data;

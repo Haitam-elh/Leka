@@ -291,11 +291,11 @@ export function EnvironmentScreen() {
         </div>
         {tab === "architecture" ? (
           // The architecture says its states under its canvas: here, the way to the detail.
-          <div className="lg:ml-auto">
+          <div className="lg:ms-auto">
             <DetailedLink />
           </div>
         ) : (
-          <ul aria-label={w.legend} className="flex flex-wrap gap-x-5 gap-y-1 lg:ml-auto lg:pr-2">
+          <ul aria-label={w.legend} className="flex flex-wrap gap-x-5 gap-y-1 lg:ms-auto lg:pe-2">
             {LEGEND.map((state) => (
               <li key={state} className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
                 <span
@@ -329,7 +329,7 @@ function DetailedLink() {
       className="flex items-center gap-1.5 rounded-lg bg-brand-navy px-3 py-1 text-[0.8125rem] font-medium text-white outline-none hover:bg-brand-navy/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
     >
       {t.environment.map.detailed}
-      <ArrowRight className="size-3.5" aria-hidden="true" />
+      <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />
     </Link>
   );
 }
@@ -487,7 +487,7 @@ function MapCard({
           className="flex items-center gap-1.5 rounded-lg border border-shell-line px-3 py-1.5 text-[0.8125rem] font-medium text-shell-nav-active outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
         >
           {w.detailed}
-          <ArrowRight className="size-3.5" aria-hidden="true" />
+          <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />
         </Link>
       }
     >
@@ -603,7 +603,7 @@ function Help() {
         <span className="block text-[0.9375rem] font-semibold text-brand-navy">{w.title}</span>
         <span className="block text-[0.8125rem] text-shell-muted">{w.body}</span>
       </span>
-      <ArrowRight className="size-4 text-shell-nav-active" aria-hidden="true" />
+      <ArrowRight className="rtl:-scale-x-100 size-4 text-shell-nav-active" aria-hidden="true" />
     </Link>
   );
 }

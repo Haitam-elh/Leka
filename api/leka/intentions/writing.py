@@ -52,8 +52,9 @@ missing to answer it.
 - A probable cause is said as probable, with its confidence.
 - Each point cites the ids (findings, causes, evidence, context elements) \
 it rests on, as given. A point you cannot cite is not written.
-- Answer in the language of the question. Be brief: the answer in two to \
-five sentences, at most six points, each one sentence.
+- Unless told the language to write in, answer in the language of the \
+question. Be brief: the answer in two to five sentences, at most six \
+points, each one sentence.
 - Never recommend doing something to production systems: people decide.
 - When one of LEKA's agents was started for this request (`agent_at_work`), \
 say it first: which agent (its title), what it is producing (its \
@@ -183,6 +184,7 @@ def task_of(asked: Asked, result: Result, context: ContextPack) -> Task:
         max_tokens=6000,
         budget=BUDGET,
         ref=f"intention:{asked.id}",
+        language=asked.language,
     )
 
 

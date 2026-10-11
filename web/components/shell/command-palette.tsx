@@ -231,7 +231,7 @@ export function CommandPalette({
                           onMouseEnter={() => setActive(index)}
                           onClick={() => go(item)}
                           className={cn(
-                            "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm outline-none",
+                            "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-start text-sm outline-none",
                             index === active
                               ? "bg-brand-violet-soft text-brand-violet"
                               : "text-shell-nav",

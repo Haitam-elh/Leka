@@ -12,11 +12,12 @@ import { Label } from "@/components/ui/label";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { auth, justSignedOut } from "@/lib/auth";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useDictionary, useSpokenLanguage } from "@/lib/i18n/locale-provider";
 import { useOnlineStatus } from "@/lib/use-online-status";
 
 function LoginForm() {
   const t = useDictionary();
+  const language = useSpokenLanguage();
   const online = useOnlineStatus();
   const router = useRouter();
   // Where to go once signed in. apiFetch puts the page an expired session
@@ -83,7 +84,7 @@ function LoginForm() {
     setResent(false);
     setResendError(null);
     try {
-      await auth.resendVerification(email);
+      await auth.resendVerification(email, language);
       // The server answers the same whether the address exists or not, and
       // so does this screen. That sameness is about the ANSWER: a request
       // that failed got none, and "a link is on its way" would be untrue —

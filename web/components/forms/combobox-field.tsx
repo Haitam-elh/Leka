@@ -162,7 +162,7 @@ export function MultiSelectField<
                   {option.label}
                   <ComboboxPrimitive.ChipRemove
                     aria-label={fill(t.forms.remove, { label: option.label })}
-                    className="-mr-0.5 ml-0.5 rounded p-0.5 opacity-60 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+                    className="-me-0.5 ms-0.5 rounded p-0.5 opacity-60 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-violet/40"
                   >
                     ✕
                   </ComboboxPrimitive.ChipRemove>

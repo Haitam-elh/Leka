@@ -1,36 +1,52 @@
 /* ==========================================================================
-   LEKA, internationalisation (FR par defaut, 7 langues au choix)
-   Principe : le HTML de chaque page reste la source de verite pour le
-   francais (mis en cache au premier passage) ; ce fichier fournit les
-   equivalents dans les autres langues, appliques via data-i18n /
-   data-i18n-placeholder / data-title-key.
-   La langue choisie est memorisee dans localStorage et s'applique a
-   chaque page chargee. A la toute premiere visite (aucune preference
-   enregistree), la langue du navigateur est utilisee comme suggestion
-   de depart si elle correspond a une langue proposee ; sinon le site
-   reste en francais. Ceci n'est PAS une geolocalisation par pays : un
-   site statique sans serveur ne peut pas interroger l'adresse IP du
-   visiteur pour en deduire un pays. La preference de langue du
-   navigateur (Accept-Language) est le signal cote client standard et
-   respectueux de la vie privee pour cet usage.
+   LEKA, internationalisation du site (docs/languages.md)
+   Le HTML de chaque page reste la source de verite pour le francais ; ce
+   fichier fournit les equivalents dans les autres langues du site, appliques
+   via data-i18n / data-i18n-placeholder / data-title-key.
+
+   Deux notions, comme dans l'application :
+   - la langue CHOISIE : l'une des 140 du catalogue (/languages.json) ;
+   - la langue AFFICHEE : la premiere de sa chaine dans laquelle le site est
+     ecrit (francais, anglais, et en partie allemand, espagnol, italien,
+     neerlandais, portugais). Une phrase absente retombe sur l'anglais, puis
+     sur le francais du HTML. Jamais de texte vide.
+
+   Ordre de choix, a chaque page :
+   1. ?lang=xx dans l'adresse (liens explorables par les moteurs : sitemap.xml) ;
+   2. un choix deja fait sur cet appareil (cookie et localStorage "leka-lang") ;
+   3. les langues du navigateur (Accept-Language cote client) ;
+   4. l'anglais.
+   Un site statique ne connait pas le pays du visiteur : aucune
+   geolocalisation, aucune permission demandee.
+
+   Un choix fait ici (menu ou ?lang=) est garde sur l'appareil, et marque
+   pour l'onglet (sessionStorage "leka-lang-now") : en se connectant, le
+   compte le reprend (web/lib/i18n/resolve.ts).
    ========================================================================== */
 (() => {
   'use strict';
 
   const LANG_KEY = 'leka-lang';
+  const NOW_KEY = 'leka-lang-now';
+  const DEFAULT = 'en';
+  const YEAR = 60 * 60 * 24 * 365;
 
-  // Langues proposees, dans leur propre langue, avec les codes de
-  // navigateur qu'on leur associe pour la detection au premier passage.
+  // Les langues dans lesquelles le site est ecrit (en tout ou en partie),
+  // dans leur propre langue. Le reste du catalogue arrive de /languages.json.
   const LANGS = [
-    { code: 'fr', label: 'Français', browserMatches: ['fr'] },
-    { code: 'en', label: 'English', browserMatches: ['en'] },
-    { code: 'de', label: 'Deutsch', browserMatches: ['de'] },
-    { code: 'es', label: 'Español', browserMatches: ['es'] },
-    { code: 'it', label: 'Italiano', browserMatches: ['it'] },
-    { code: 'nl', label: 'Nederlands', browserMatches: ['nl'] },
-    { code: 'pt', label: 'Português', browserMatches: ['pt'] }
+    { code: 'fr', label: 'Français' },
+    { code: 'en', label: 'English' },
+    { code: 'de', label: 'Deutsch' },
+    { code: 'es', label: 'Español' },
+    { code: 'it', label: 'Italiano' },
+    { code: 'nl', label: 'Nederlands' },
+    { code: 'pt', label: 'Português' }
   ];
   const LANG_CODES = LANGS.map((l) => l.code);
+
+  // Le catalogue des 140 langues, une fois charge.
+  let CATALOGUE = null;
+  let chosen = null;
 
   const I18N = {
     'changelog.entry1.h': { en: `New LEKA website`, de: `Neue LEKA-Website`, es: `Nuevo sitio web de LEKA`, it: `Nuovo sito web LEKA`, nl: `Nieuwe LEKA-website`, pt: `Novo site da LEKA` },
@@ -379,83 +395,229 @@
     'privacy.toc.responsable': { en: `Data controller`, de: `Verantwortlicher`, es: `Responsable del tratamiento`, it: `Titolare del trattamento`, nl: `Verwerkingsverantwoordelijke`, pt: `Responsável pelo tratamento` },
     'privacy.toc.securite': { en: `Security`, de: `Sicherheit`, es: `Seguridad`, it: `Sicurezza`, nl: `Beveiliging`, pt: `Segurança` },
     'privacy.updated': { en: `Last updated: September 2026`, de: `Zuletzt aktualisiert: September 2026`, es: `Última actualización: septiembre de 2026`, it: `Ultimo aggiornamento: settembre 2026`, nl: `Laatst bijgewerkt: september 2026`, pt: `Última atualização: setembro de 2026` },
+    'lang.group.site': { en: `Website languages`, de: `Sprachen der Website`, es: `Idiomas del sitio`, it: `Lingue del sito`, nl: `Talen van de website`, pt: `Idiomas do site` },
+    'lang.group.others': { en: `Other languages (website in English)`, de: `Weitere Sprachen (Website auf Englisch)`, es: `Otros idiomas (sitio en inglés)`, it: `Altre lingue (sito in inglese)`, nl: `Andere talen (website in het Engels)`, pt: `Outros idiomas (site em inglês)` },
+    'lang.notice': { en: `This website is not translated into {name} yet: it is shown in {shown}. Once you sign in, LEKA answers you in {name}.`, de: `Diese Website ist noch nicht auf {name} übersetzt: Sie wird auf {shown} angezeigt. Nach der Anmeldung antwortet LEKA Ihnen auf {name}.`, es: `Este sitio aún no está traducido al {name}: se muestra en {shown}. Una vez conectado, LEKA le responde en {name}.`, it: `Questo sito non è ancora tradotto in {name}: è mostrato in {shown}. Dopo l'accesso, LEKA ti risponde in {name}.`, nl: `Deze website is nog niet vertaald in het {name}: hij wordt getoond in het {shown}. Na het inloggen antwoordt LEKA u in het {name}.`, pt: `Este site ainda não está traduzido para {name}: é apresentado em {shown}. Depois de iniciar sessão, a LEKA responde-lhe em {name}.` },
   };
 
-  function detectInitialLang() {
-    try {
-      const stored = localStorage.getItem(LANG_KEY);
-      if (stored && LANG_CODES.includes(stored)) return stored;
-    } catch (e) { /* ignore */ }
+  // Les textes francais du HTML, quand aucune langue ne les remplace.
+  const FRENCH = {
+    'lang.group.site': 'Langues du site',
+    'lang.group.others': 'Autres langues (site en anglais)',
+    'lang.notice': "Ce site n'est pas encore traduit en {name} : il s'affiche en {shown}. Une fois connecté, LEKA vous répond en {name}."
+  };
 
-    // Pas de preference enregistree : on regarde une seule fois la
-    // langue du navigateur (pas le pays, LEKA n'a pas de service de
-    // geolocalisation cote serveur pour cela).
-    const prefs = (navigator.languages && navigator.languages.length)
-      ? navigator.languages
-      : [navigator.language || navigator.userLanguage || 'fr'];
-    for (const pref of prefs) {
-      const short = String(pref).slice(0, 2).toLowerCase();
-      if (LANG_CODES.includes(short)) return short;
-    }
-    return 'fr';
+  // ── Le catalogue : les memes regles que web/lib/i18n/languages.ts ──────────
+
+  function canonical(tag) {
+    const parts = String(tag || '').trim().replace(/_/g, '-').toLowerCase().split('-').filter(Boolean);
+    if (!parts.length || !/^[a-z]{2,3}$/.test(parts[0])) return null;
+    return parts.map((part, i) => (i === 0 ? part
+      : part.length === 4 && /^[a-z]+$/.test(part) ? part[0].toUpperCase() + part.slice(1)
+      : part.length === 2 ? part.toUpperCase() : part)).join('-');
   }
 
-  function applyLanguage(lang) {
-    lang = LANG_CODES.includes(lang) ? lang : 'fr';
+  function byTag(tag) {
+    return CATALOGUE ? CATALOGUE.languages.find((l) => l.tag === tag) : null;
+  }
+
+  // La langue du catalogue pour une etiquette telle qu'un navigateur la dit :
+  // zh-TW est le chinois traditionnel, pt-BR le portugais.
+  function match(tag) {
+    const said = canonical(tag);
+    if (!said) return null;
+    const parts = said.split('-');
+    for (let n = parts.length; n > 0; n -= 1) {
+      const candidate = parts.slice(0, n).join('-');
+      if (CATALOGUE) {
+        if (CATALOGUE.aliases[candidate]) return CATALOGUE.aliases[candidate];
+        if (byTag(candidate)) return candidate;
+      } else if (n === 1 && LANG_CODES.includes(candidate)) {
+        // Avant le catalogue, seules les langues du site sont reconnues.
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  // La langue affichee : la premiere de la chaine (la langue, ses parents, sa
+  // langue de base, l'anglais) dans laquelle le site est ecrit.
+  function shownFor(tag) {
+    const seen = [];
+    let candidate = tag;
+    while (candidate && !seen.includes(candidate)) {
+      seen.push(candidate);
+      const entry = byTag(candidate);
+      candidate = entry ? entry.parent : null;
+    }
+    seen.push(String(tag).split('-')[0], DEFAULT);
+    return seen.find((code) => LANG_CODES.includes(code)) || DEFAULT;
+  }
+
+  function nativeName(tag) {
+    const entry = byTag(tag) || LANGS.find((l) => l.code === tag);
+    return entry ? (entry.native || entry.label) : tag;
+  }
+
+  // ── Ou le choix est garde ───────────────────────────────────────────────────
+
+  function readCookie(name) {
+    const found = document.cookie.split('; ').find((pair) => pair.indexOf(name + '=') === 0);
+    return found ? decodeURIComponent(found.slice(name.length + 1)) : null;
+  }
+
+  function rememberChoice(tag) {
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = LANG_KEY + '=' + encodeURIComponent(tag) + '; Path=/; Max-Age=' + YEAR + '; SameSite=Lax' + secure;
+    try { localStorage.setItem(LANG_KEY, tag); } catch (e) { /* ignore */ }
+    try { sessionStorage.setItem(NOW_KEY, tag); } catch (e) { /* ignore */ }
+  }
+
+  function fromAddress() {
+    try {
+      return new URLSearchParams(window.location.search).get('lang');
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function detectInitialLang() {
+    const asked = match(fromAddress());
+    if (asked) return { tag: asked, explicit: true };
+    let stored = readCookie(LANG_KEY);
+    try { stored = stored || localStorage.getItem(LANG_KEY); } catch (e) { /* ignore */ }
+    const kept = match(stored);
+    if (kept) return { tag: kept, explicit: false };
+    // Les langues du navigateur, la plus voulue d'abord. Pas le pays : un
+    // site statique ne le connait pas, et ne le demande pas.
+    const prefs = (navigator.languages && navigator.languages.length)
+      ? navigator.languages
+      : [navigator.language || navigator.userLanguage || DEFAULT];
+    for (const pref of prefs) {
+      const found = match(pref);
+      if (found) return { tag: found, explicit: false };
+    }
+    return { tag: DEFAULT, explicit: false };
+  }
+
+  // ── Afficher ───────────────────────────────────────────────────────────────
+
+  // Le mot dans la langue affichee, sinon en anglais, sinon le francais du HTML.
+  function wordFor(entry, lang, original) {
+    if (lang === 'fr' || !entry) return original;
+    if (entry[lang] !== undefined) return entry[lang];
+    if (entry.en !== undefined) return entry.en;
+    return original;
+  }
+
+  function said(key, lang, values) {
+    const entry = I18N[key];
+    let text = lang === 'fr' ? FRENCH[key] : (entry && (entry[lang] || entry.en)) || FRENCH[key];
+    Object.keys(values || {}).forEach((name) => { text = text.split('{' + name + '}').join(values[name]); });
+    return text;
+  }
+
+  function showNotice(tag, lang) {
+    let notice = document.getElementById('lang-notice');
+    if (tag === lang || LANG_CODES.includes(tag)) {
+      if (notice) notice.remove();
+      return;
+    }
+    if (!notice) {
+      notice = document.createElement('p');
+      notice.id = 'lang-notice';
+      notice.setAttribute('role', 'status');
+      notice.style.cssText = 'margin:0;padding:10px 16px;background:#f3f0ff;color:#0a0f2b;font-size:14px;text-align:center;border-bottom:1px solid #e3ddff';
+      document.body.insertBefore(notice, document.body.firstChild);
+    }
+    const entry = byTag(tag);
+    notice.setAttribute('dir', 'auto');
+    notice.textContent = said('lang.notice', lang, { name: nativeName(tag), shown: nativeName(lang) });
+    if (entry) notice.dataset.language = tag;
+  }
+
+  function applyLanguage(tag, explicit) {
+    tag = match(tag) || DEFAULT;
+    chosen = tag;
+    const lang = shownFor(tag);
     document.documentElement.setAttribute('lang', lang);
+    document.documentElement.dataset.language = tag;
 
     document.querySelectorAll('[data-i18n]').forEach((el) => {
       const key = el.getAttribute('data-i18n');
       if (el.dataset.i18nOrig === undefined) el.dataset.i18nOrig = el.innerHTML;
-      const entry = I18N[key];
-      el.innerHTML = (lang !== 'fr' && entry && entry[lang] !== undefined) ? entry[lang] : el.dataset.i18nOrig;
+      el.innerHTML = wordFor(I18N[key], lang, el.dataset.i18nOrig);
     });
 
     document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
       const key = el.getAttribute('data-i18n-placeholder');
       if (el.dataset.i18nOrigPh === undefined) el.dataset.i18nOrigPh = el.getAttribute('placeholder') || '';
-      const entry = I18N[key];
-      el.setAttribute('placeholder', (lang !== 'fr' && entry && entry[lang] !== undefined) ? entry[lang] : el.dataset.i18nOrigPh);
+      el.setAttribute('placeholder', wordFor(I18N[key], lang, el.dataset.i18nOrigPh));
     });
 
     document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
       const key = el.getAttribute('data-i18n-aria');
       if (el.dataset.i18nOrigAria === undefined) el.dataset.i18nOrigAria = el.getAttribute('aria-label') || '';
-      const entry = I18N[key];
-      el.setAttribute('aria-label', (lang !== 'fr' && entry && entry[lang] !== undefined) ? entry[lang] : el.dataset.i18nOrigAria);
+      el.setAttribute('aria-label', wordFor(I18N[key], lang, el.dataset.i18nOrigAria));
     });
 
     const titleKey = document.body.getAttribute('data-title-key');
     if (titleKey) {
       if (document.body.dataset.titleOrig === undefined) document.body.dataset.titleOrig = document.title;
-      const entry = I18N[titleKey];
-      document.title = (lang !== 'fr' && entry && entry[lang] !== undefined) ? entry[lang] : document.body.dataset.titleOrig;
+      document.title = wordFor(I18N[titleKey], lang, document.body.dataset.titleOrig);
     }
 
+    buildSwitchers();
     document.querySelectorAll('.lang-select').forEach((select) => {
-      if (select.value !== lang) select.value = lang;
+      if (select.value !== tag) select.value = tag;
     });
 
-    try { localStorage.setItem(LANG_KEY, lang); } catch (e) { /* ignore */ }
+    if (explicit) rememberChoice(tag);
+    showNotice(tag, lang);
 
-    document.dispatchEvent(new CustomEvent('leka:langchange', { detail: { lang } }));
+    document.dispatchEvent(new CustomEvent('leka:langchange', { detail: { lang, chosen: tag } }));
   }
 
+  // Le menu : les langues du site d'abord, puis les autres du catalogue, chacune
+  // dans sa propre langue. Une liste native : on y tape les premieres lettres.
   function buildSwitchers() {
+    const lang = shownFor(chosen || DEFAULT);
+    const site = LANGS.map((l) => '<option value="' + l.code + '" lang="' + l.code + '">' + l.label + '</option>').join('');
+    const others = CATALOGUE
+      ? CATALOGUE.languages.filter((l) => !LANG_CODES.includes(l.tag)).map((l) =>
+        '<option value="' + l.tag + '" lang="' + l.tag + '" dir="' + l.dir + '">' + l.native + ' — ' + l.english + '</option>').join('')
+      : (chosen && !LANG_CODES.includes(chosen) ? '<option value="' + chosen + '">' + chosen + '</option>' : '');
+    const html = '<optgroup label="' + said('lang.group.site', lang) + '">' + site + '</optgroup>'
+      + (others ? '<optgroup label="' + said('lang.group.others', lang) + '">' + others + '</optgroup>' : '');
     document.querySelectorAll('.lang-select').forEach((select) => {
-      if (select.dataset.i18nReady) return;
-      select.innerHTML = LANGS.map((l) => `<option value="${l.code}">${l.label}</option>`).join('');
-      select.addEventListener('change', () => applyLanguage(select.value));
-      select.dataset.i18nReady = 'true';
+      if (select.dataset.i18nHtml !== html) {
+        select.innerHTML = html;
+        select.dataset.i18nHtml = html;
+      }
+      if (!select.dataset.i18nReady) {
+        select.addEventListener('change', () => applyLanguage(select.value, true));
+        select.dataset.i18nReady = 'true';
+      }
     });
   }
 
   function initLanguage() {
-    buildSwitchers();
-    applyLanguage(detectInitialLang());
+    const first = detectInitialLang();
+    applyLanguage(first.tag, first.explicit);
+    // Le catalogue, sans bloquer la page : ensuite seulement, le menu offre les
+    // 140 langues, et une langue que le site ne connaissait pas est reconnue.
+    fetch('/languages.json')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((catalogue) => {
+        if (!catalogue) return;
+        CATALOGUE = catalogue;
+        const again = detectInitialLang();
+        applyLanguage(again.tag, again.explicit);
+      })
+      .catch(() => { /* Les langues du site suffisent. */ });
   }
 
-  window.LEKA_I18N = { applyLanguage, langs: LANGS };
+  window.LEKA_I18N = { applyLanguage: (tag) => applyLanguage(tag, true), langs: LANGS };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initLanguage);

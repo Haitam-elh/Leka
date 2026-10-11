@@ -124,7 +124,7 @@ function useOverviewData(): Load {
 // ── Formatting ──────────────────────────────────────────────────────────────
 
 function intlLocale(locale: string): string {
-  return locale === "fr" ? "fr-FR" : "en-GB";
+  return locale;
 }
 
 function capitalise(text: string): string {
@@ -159,7 +159,7 @@ function Card({
             className="flex items-center gap-1 rounded text-[0.8125rem] font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
           >
             {action.label}
-            <ArrowRight className="size-3.5" aria-hidden="true" />
+            <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />
           </Link>
         ) : null}
       </div>
@@ -216,7 +216,7 @@ function Empty({ icon, title, body }: { icon: LucideIcon; title: string; body?: 
 
 function Greeting({ load }: { load: Load }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const user = useCurrentUser();
   // The first name given at registration; an account made before it was
   // asked is greeted by the first part of its address until it gives one.
@@ -436,7 +436,7 @@ const EVENT_LOOK: Record<SourceEvent["type"], { icon: LucideIcon; tone: TileTone
 
 function ActivityCard({ load }: { load: Load }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const events = load.status === "ready" ? load.events : [];
 
   return (
@@ -635,7 +635,7 @@ function Banner({ load }: { load: Load }) {
       {/* A plain list: value then label, read in that order. */}
       <ul className="flex divide-x divide-shell-line">
         {stats.map(({ icon: Icon, value, label }) => (
-          <li key={label} className="flex items-center gap-3 px-5 first:pl-0 last:pr-0">
+          <li key={label} className="flex items-center gap-3 px-5 first:ps-0 last:pe-0">
             <span className="flex size-10 items-center justify-center rounded-lg bg-white">
               <Icon className="size-5 text-shell-nav-active" aria-hidden="true" />
             </span>

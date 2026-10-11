@@ -99,7 +99,7 @@ function Who({
 function Detail({ id, names }: { id: string; names: Map<string, string> }) {
   const t = useDictionary();
   const w = t.governance.audit;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const { data } = useAuditEvent(id);
   if (!data)
     return (
@@ -157,7 +157,7 @@ function Detail({ id, names }: { id: string; names: Map<string, string> }) {
 export function AuditLogCard() {
   const t = useDictionary();
   const w = t.governance.audit;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const members = useTeamMembers();
   const names = new Map(
     (members.data ?? []).map((m) => [m.user_id, personName(m)]),
@@ -276,7 +276,7 @@ export function AuditLogCard() {
             >
               <button
                 type="button"
-                className="flex w-full flex-col gap-0.5 text-left"
+                className="flex w-full flex-col gap-0.5 text-start"
                 aria-expanded={open === e.id}
                 onClick={() => setOpen(open === e.id ? null : e.id)}
               >
@@ -326,7 +326,7 @@ export function AuditLogCard() {
 export function AuditRetentionCard({ canChange }: { canChange: boolean }) {
   const t = useDictionary();
   const w = t.governance.audit;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const { data } = useAuditSettings();
   const keep = useAuditRetention();
   const [days, setDays] = useState<number | null>(null);

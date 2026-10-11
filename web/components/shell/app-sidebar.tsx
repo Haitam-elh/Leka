@@ -50,7 +50,7 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
     <div className="group/sidebar flex h-full flex-col bg-shell-surface">
       <div
         className={cn(
-          "flex items-start gap-2 pt-7 pr-3 pb-6 pl-7",
+          "flex items-start gap-2 pt-7 pe-3 pb-6 ps-7",
           collapsed && "justify-center px-0 pt-5 pb-4",
         )}
       >
@@ -89,7 +89,7 @@ export function AppSidebar({ collapsed, onToggle, onNavigate, badges }: AppSideb
         aria-label={t.shell.mainNavigation}
         // 8px on the right, not 12: « Mon environnement » holds on one line
         // beside its chevron in the mockup's 224px.
-        className={cn("flex-1 overflow-y-auto pr-2 pb-4 pl-3", collapsed && "px-2")}
+        className={cn("flex-1 overflow-y-auto pe-2 pb-4 ps-3", collapsed && "px-2")}
       >
         {/* The view a line opens is in the query (`?tab=`), and reading the
             query needs a boundary for static rendering. Until it is read,

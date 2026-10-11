@@ -1,6 +1,7 @@
 /* LEKA, traductions des nouvelles pages (index, à propos, FAQ).
    Le français reste dans le HTML ; chaque langue ajoute un dictionnaire "texte FR" -> "texte traduit".
-   Pour ajouter une langue : ajouter D.de = {...} etc. Une phrase absente reste en français. */
+   Pour ajouter une langue : ajouter D.de = {...} etc. Une phrase absente retombe sur
+   l'anglais, puis sur le français du HTML (docs/languages.md). */
 (() => {
   const D = { en: {
 "Environnement":"Environment","Capacités":"Capabilities","De l'intention à l'action":"From intent to action","Contrôle":"Control","Se connecter":"Sign in","Découvrir LEKA":"Discover LEKA",
@@ -51,9 +52,11 @@
   const H = { en: { h1: 'Give your stack <span class="grad">intelligence</span>.' } };
   const K = new Set(Object.values(D).flatMap(Object.keys));
   const L = () => document.documentElement.lang || 'fr';
-  window.T = (s) => { const d = D[L()]; return d && d[s] !== undefined ? d[s] : s; };
+  // La langue affichee, sinon l'anglais : la chaine de repli de docs/languages.md.
+  const words = (l) => (l === 'fr' ? {} : { ...D.en, ...(D[l] || {}) });
+  window.T = (s) => { const d = words(L()); return d[s] !== undefined ? d[s] : s; };
   const run = () => {
-    const l = L(), d = D[l] || {};
+    const l = L(), d = words(l);
     const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let n;
     while ((n = w.nextNode())) {
@@ -64,7 +67,7 @@
     }
     document.querySelectorAll('[data-h]').forEach((el) => {
       if (el.__o === undefined) el.__o = el.innerHTML;
-      const h = H[l]; el.innerHTML = h && h[el.dataset.h] !== undefined ? h[el.dataset.h] : el.__o;
+      const h = l === 'fr' ? null : (H[l] || H.en); el.innerHTML = h && h[el.dataset.h] !== undefined ? h[el.dataset.h] : el.__o;
     });
     document.querySelectorAll('header .nav a, header .signin, header .btn').forEach((a) => {
       if (a.__o === undefined) a.__o = a.textContent; if (!a.hasAttribute('data-i18n')) a.textContent = d[a.__o.trim()] !== undefined ? d[a.__o.trim()] : a.__o;
