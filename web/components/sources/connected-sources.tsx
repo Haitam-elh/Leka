@@ -58,18 +58,21 @@ export function SourceLines({ lines, max }: { lines: readonly SourceLine[]; max:
   return (
     <ul className="space-y-1">
       {shown.map((line) => (
+        // Its name has the width to be read; when it was last seen, under it.
         <li key={line.id} className="flex items-center gap-3 py-1.5" data-testid="source-row">
           <SourceLogo kind={line.kind} className="size-5 shrink-0" />
-          <span
-            title={line.name}
-            className="min-w-0 flex-1 truncate text-[0.8125rem] font-medium text-brand-navy"
-          >
-            {line.name}
+          <span className="min-w-0 flex-1">
+            <span
+              title={line.name}
+              className="block truncate text-[0.8125rem] font-medium text-brand-navy"
+            >
+              {line.name}
+            </span>
+            <span className="block text-xs whitespace-nowrap text-shell-muted">
+              {line.seen ? timeAgo(t, line.seen) : t.overview.neverSeen}
+            </span>
           </span>
           <StatusBadge variant={`source.${line.tone}`} />
-          <span className="shrink-0 text-end text-xs whitespace-nowrap text-shell-muted">
-            {line.seen ? timeAgo(t, line.seen) : t.overview.neverSeen}
-          </span>
         </li>
       ))}
     </ul>

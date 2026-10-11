@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronRight, Plus, Search } from "lucide-react";
+import { ArrowRight, ChevronRight, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 import { cn } from "cn";
 
 import type { TileTone } from "@/components/environment/parts";
+import { SummarySaid } from "@/components/intentions/analysis-tab";
 import { Pill } from "@/components/intelligence/pill";
 import { timeAgo } from "@/components/knowledge/time";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
@@ -14,9 +15,10 @@ import { ErrorState } from "@/components/states/error-state";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { routes } from "@/config/routes";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { fill } from "@/lib/i18n/dictionaries";
+import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { Intention, IntentionPhase, IntentionStatus } from "@/lib/intentions/api";
-import { useIntentionCounts, useIntentions } from "@/lib/intentions/queries";
+import { useIntention, useIntentionCounts, useIntentions } from "@/lib/intentions/queries";
 
 /**
  * Mes intentions (LEKA-384, mockup 07): what was asked of LEKA, the latest
@@ -84,6 +86,45 @@ function Row({ intention }: { intention: Intention }) {
         <ChevronRight className="rtl:-scale-x-100 hidden size-4 text-shell-muted md:block" aria-hidden="true" />
       </Link>
     </li>
+  );
+}
+
+/** Mockup 07's panel: the latest intention — where it stands, what it came
+ * to — and the way to its analysis. */
+function Preview({ id }: { id: string }) {
+  const t = useDictionary();
+  const { format: locale } = useLocale();
+  const w = t.intentions.preview;
+  const { data } = useIntention(id);
+  if (!data) return <div className="h-64 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
+  const ago = timeAgo(t, data.created_at);
+  return (
+    <aside
+      aria-label={w.title}
+      className="flex flex-col gap-3 rounded-xl border border-shell-line bg-white p-4"
+      data-testid="intention-preview"
+    >
+      <div>
+        <p className="text-xs font-medium tracking-wide text-shell-nav uppercase">{w.latest}</p>
+        <h2 className="mt-1 text-[1.0625rem] font-semibold text-brand-navy" dir="auto">
+          {data.title}
+        </h2>
+        <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-shell-muted">
+          <StatusPill status={data.status} />
+          {fill(t.intentions.created, {
+            when: ago.charAt(0).toLocaleLowerCase(locale) + ago.slice(1),
+          })}
+        </p>
+      </div>
+      <div>
+        <h3 className="mb-1 text-[0.875rem] font-semibold text-brand-navy">{w.summary}</h3>
+        <SummarySaid intention={data} none={t.intentions.overview.noSummary} />
+      </div>
+      <Link href={routes.intention(id)} className={buttonVariants({ className: "w-full" })}>
+        {w.open}
+        <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
+      </Link>
+    </aside>
   );
 }
 
@@ -201,7 +242,14 @@ export function IntentionsList() {
           />
         </label>
       </div>
-      <section className="overflow-hidden rounded-xl border border-shell-line bg-white">{body}</section>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
+        <section className="overflow-hidden rounded-xl border border-shell-line bg-white">{body}</section>
+        {rows[0] ? (
+          <div className="hidden xl:block">
+            <Preview id={rows[0].id} />
+          </div>
+        ) : null}
+      </div>
     </PageContainer>
   );
 }

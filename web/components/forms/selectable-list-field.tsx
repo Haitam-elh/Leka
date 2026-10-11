@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef } from "react";
+import { useId, useRef, useState } from "react";
 import type { FieldValues, Path } from "react-hook-form";
 
 import { cn } from "cn";
@@ -44,13 +44,21 @@ export function SelectableListField<
 >({
   items,
   selectAll = false,
+  max,
+  more,
   ...props
 }: Omit<FormFieldProps<TFieldValues, TName>, "children" | "counter" | "wrapInControl" | "layout"> & {
   items: readonly SelectableItem[];
   /** Adds the "Tout sélectionner" control above the list. */
   selectAll?: boolean;
+  /** How many rows to show before the rest is asked for — a long list is
+   * opened, not scrolled through beside the form (mockup 02's five). */
+  max?: number;
+  /** What opens the rest: "Voir toutes les sources ({count})". */
+  more?: string;
 }) {
   const t = useDictionary();
+  const [all, setAll] = useState(false);
   const list = useRef<HTMLDivElement | null>(null);
   const rows = useId();
 
@@ -100,14 +108,14 @@ export function SelectableListField<
               onKeyDown={onKeyDown}
               className="divide-y divide-shell-line overflow-hidden rounded-lg border border-shell-line"
             >
-              {items.map((item, index) => {
+              {(all || max === undefined ? items : items.slice(0, max)).map((item, index) => {
                 const checked = selected.includes(item.value);
                 const title = `${rows}-${index}`;
                 return (
                   <label
                     key={item.value}
                     className={cn(
-                      "flex cursor-pointer items-start gap-3 bg-white p-3 transition-colors",
+                      "flex cursor-pointer items-center gap-3 bg-white px-3 py-2 transition-colors",
                       checked && "bg-brand-violet-soft/40",
                       (item.disabled ?? disabled) && "cursor-not-allowed opacity-60",
                     )}
@@ -118,10 +126,9 @@ export function SelectableListField<
                       onCheckedChange={(next) => toggle(item.value, Boolean(next))}
                       onBlur={field.onBlur}
                       aria-labelledby={title}
-                      className="mt-0.5"
                     />
                     {item.icon ? (
-                      <span aria-hidden="true" className="mt-0.5 shrink-0">
+                      <span aria-hidden="true" className="shrink-0">
                         {item.icon}
                       </span>
                     ) : null}
@@ -143,9 +150,22 @@ export function SelectableListField<
               })}
             </div>
 
-            <p className="text-xs text-shell-muted">
-              {fill(t.forms.selectedCount, { count: selected.length })}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-shell-muted">
+                {fill(t.forms.selectedCount, { count: selected.length })}
+              </p>
+              {max !== undefined && items.length > max ? (
+                <button
+                  type="button"
+                  aria-expanded={all}
+                  onClick={() => setAll(!all)}
+                  className="rounded text-xs font-medium text-brand-violet outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+                  data-testid="selectable-more"
+                >
+                  {all ? t.forms.fewer : fill(more ?? t.forms.all, { count: items.length })}
+                </button>
+              ) : null}
+            </div>
           </div>
         );
       }}
