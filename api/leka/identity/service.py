@@ -159,7 +159,9 @@ class AuthService:
 
     # ── Registration and verification ────────────────────────────────────────
 
-    async def register(self, email: str, password: str, profile: AccountProfile) -> None:
+    async def register(
+        self, email: str, password: str, profile: AccountProfile, *, language: str | None = None
+    ) -> None:
         """Create an account, or pretend to.
 
         Returns nothing in every case, and the route answers identically —
@@ -176,16 +178,18 @@ class AuthService:
 
         The profile is kept only on a NEW account. Registering again with an
         address never rewrites who its owner said they were: anyone can type
-        someone else's address into the form.
+        someone else's address into the form. So is `language`, the one the
+        form was shown in — which also writes the e-mail that follows.
         """
         await self._reject_unusable_password(password)
 
         existing = await self._users.get_by_email(email)
         if existing is not None:
             if existing.is_verified:
-                await self._email.send(messages.already_registered(email))
+                said = messages.email_language(existing.language, said=language)
+                await self._email.send(messages.already_registered(email, language=said))
             else:
-                await self._issue_verification(existing)
+                await self._issue_verification(existing, said=language)
             return
 
         user = User(
@@ -196,19 +200,20 @@ class AuthService:
             company=profile.company,
             job_title=profile.job_title,
             company_size=profile.company_size,
+            language=language,
         )
         self._users.add(user)
         await self._users.flush()
         await self._issue_verification(user)
 
-    async def resend_verification(self, email: str) -> None:
+    async def resend_verification(self, email: str, *, language: str | None = None) -> None:
         """Send another verification link, or do nothing. Same answer either way."""
         user = await self._users.get_by_email(email)
         if user is None or user.is_verified:
             return
-        await self._issue_verification(user)
+        await self._issue_verification(user, said=language)
 
-    async def _issue_verification(self, user: User) -> None:
+    async def _issue_verification(self, user: User, *, said: str | None = None) -> None:
         # Any outstanding link dies: two live links means the older one,
         # possibly forwarded, still works.
         await self._tokens.invalidate_outstanding(user.id, TokenPurpose.VERIFICATION)
@@ -223,7 +228,8 @@ class AuthService:
             )
         )
         await self._tokens.flush()
-        await self._email.send(messages.verification(user.email, token))
+        language = messages.email_language(user.language, said=said)
+        await self._email.send(messages.verification(user.email, token, language=language))
 
     async def verify_email(self, token: str) -> User:
         """Consume a verification token."""
@@ -335,8 +341,9 @@ class AuthService:
 
     # ── Passwords ────────────────────────────────────────────────────────────
 
-    async def request_password_reset(self, email: str) -> None:
-        """Send a reset link, or do nothing. The caller cannot tell which."""
+    async def request_password_reset(self, email: str, *, language: str | None = None) -> None:
+        """Send a reset link, or do nothing. The caller cannot tell which.
+        Written in the account's language, else the page's (`language`)."""
         user = await self._users.get_by_email(email)
         if user is None:
             return
@@ -352,7 +359,8 @@ class AuthService:
             )
         )
         await self._tokens.flush()
-        await self._email.send(messages.password_reset(user.email, token))
+        said = messages.email_language(user.language, said=language)
+        await self._email.send(messages.password_reset(user.email, token, language=said))
 
     async def reset_password(self, token: str, new_password: str) -> User:
         """Set a new password from a reset link.

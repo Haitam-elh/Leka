@@ -302,6 +302,9 @@ async def test_the_team_its_invitations_and_the_email_that_carries_one(
 
     monkeypatch.setattr(governance_api, "build_email_sender", lambda: Capture())
     workspace = await _create_workspace(client, identity, people["owner"], "Acme Corp")
+    # A French workspace: an invitation to it is written in French.
+    said = await client.patch(f"{API}/workspaces/current", json={"default_language": "fr"})
+    assert said.status_code == 200 and said.json()["default_language"] == "fr"
     invited = await client.post(
         f"{API}/members/invite", json={"email": "nora@acme.example", "role": "admin"}
     )

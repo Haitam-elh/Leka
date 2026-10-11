@@ -201,7 +201,7 @@ async def register(
     """Create an account. Answers the same whether the address was free."""
     await _enforce("register:ip", client_ip(request), ratelimit.REGISTER_PER_IP)
     try:
-        await auth.register(payload.email, payload.password, payload)
+        await auth.register(payload.email, payload.password, payload, language=payload.language)
     except PasswordRejectedError as error:
         raise _refuse(AuthErrorCode.PASSWORD_BREACHED, error.reason, 422) from error
     return RegistrationAccepted()
@@ -216,7 +216,7 @@ async def resend_verification(
     payload: ForgotPasswordRequest, request: Request, auth: AuthDep
 ) -> RegistrationAccepted:
     await _enforce("verify:email", payload.email, ratelimit.VERIFICATION_RESEND_PER_ACCOUNT)
-    await auth.resend_verification(payload.email)
+    await auth.resend_verification(payload.email, language=payload.language)
     return RegistrationAccepted()
 
 
@@ -442,7 +442,7 @@ async def forgot_password(
     """Ask for a reset link. The answer never says whether the account exists."""
     await _enforce("reset:ip", client_ip(request), ratelimit.PASSWORD_RESET_PER_IP)
     await _enforce("reset:email", payload.email, ratelimit.PASSWORD_RESET_PER_EMAIL)
-    await auth.request_password_reset(payload.email)
+    await auth.request_password_reset(payload.email, language=payload.language)
     return RecoveryAccepted()
 
 

@@ -35,7 +35,9 @@ pytestmark = pytest.mark.integration
 API = "/api/v1/auth"
 PASSWORD = "correct horse battery staple"
 # Who registers: what the form requires, and nothing it leaves optional.
-PROFILE = {"first_name": "Nora", "last_name": "Diallo", "company": "Acme"}
+# With the language the form was shown in, as the web always sends it: the
+# e-mail that follows is written in it.
+PROFILE = {"first_name": "Nora", "last_name": "Diallo", "company": "Acme", "language": "fr"}
 
 
 class CapturingEmailSender:

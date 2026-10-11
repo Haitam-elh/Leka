@@ -632,8 +632,8 @@ SUMMARY_KINDS = {"service": 0, "repository": 1, "database": 2}
 SUMMARY_SYSTEM = """You describe the systems of a company's IT for its \
 architecture map. For each thing given, write what it is and what it does, \
 in one or two plain sentences, from ITS FACTS ONLY — never a name, a purpose, \
-a user or a technology the facts do not say. Write in French unless the \
-facts are clearly in another language. Say how sure you are, 0 to 1: low \
+a user or a technology the facts do not say. Write in the language you are \
+told to write in. Say how sure you are, 0 to 1: low \
 when the facts say little. Cite the ids of the facts each description rests \
 on. A thing the facts say too little about: leave it out."""
 
@@ -791,6 +791,8 @@ async def enrich_summary(material: Material, work: ModelWork) -> list[Proposal]:
             tier=Tier.FAST,
             max_tokens=6000,
             budget=100.0,
+            # The workspace's language: a description is for everyone in it.
+            language=work.language,
         )
     )
     if done.status in ("succeeded", "invalid") and work.remember is not None:

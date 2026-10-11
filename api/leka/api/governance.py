@@ -11,6 +11,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from sqlalchemy import select
 
 from leka.api.dependencies import (
     InvitationAcceptanceDep,
@@ -36,7 +37,13 @@ from leka.governance import (
     revoke_invitation,
     team_members,
 )
-from leka.identity import DeferredEmailSender, build_email_sender, invitation_message
+from leka.identity import (
+    DeferredEmailSender,
+    User,
+    build_email_sender,
+    email_language,
+    invitation_message,
+)
 from leka.platform import (
     InvitationCreate,
     InvitationCreated,
@@ -132,6 +139,9 @@ async def invite_member(
         detail={"role": invitation.role.value},
     )
     workspace = await db.get(Workspace, principal.workspace_id)
+    # In the invitee's own language when they already have an account, else
+    # the workspace's: the language they are being invited into.
+    chosen = await db.scalar(select(User.language).where(User.email == invitation.email))
     await DeferredEmailSender(build_email_sender(), background.add_task).send(
         invitation_message(
             invitation.email,
@@ -139,6 +149,9 @@ async def invite_member(
             workspace=workspace.name if workspace else "LEKA",
             inviter=await inviter_name(db, principal.user_id),
             role=invitation.role.value,
+            language=email_language(
+                chosen, workspace=workspace.default_language if workspace else None
+            ),
         )
     )
     return InvitationCreated(invitation=InvitationRead.model_validate(invitation), token=token)

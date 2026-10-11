@@ -34,6 +34,7 @@ from typing import Any, Literal
 
 from leka.capabilities.definition import Definition, Kind
 from leka.capabilities.gateway import Message
+from leka.core import languages
 
 
 class RunStatus(enum.StrEnum):
@@ -226,7 +227,7 @@ figure or link of your own. What is missing is said missing, never invented.
 - Cite what you rely on by its id, as given ([id]).
 - You may read only things of these types: {types}. Use only the tools \
 offered; never ask for credentials or for more access.
-- Deliver {format}, in the language of the inputs."""
+- Deliver {format}, {language}"""
 
 FORMAT_SAID = {
     "markdown": "one markdown document",
@@ -268,13 +269,23 @@ def messages(
     injected: Injected,
     *,
     tools: Sequence[AgentTool] = (),
+    language: str | None = None,
 ) -> list[Message]:
     """What the model is given: the runtime's rules, then the agent's
-    instructions; what it is asked with and its context, as data."""
+    instructions; what it is asked with and its context, as data. In the
+    language of the person who asked (`language`), unless the agent's own
+    instructions require one."""
     format_, _ = delivered(definition)
     rules = RULES.format(
         types=", ".join(definition.entity_types) or "none",
         format=FORMAT_SAID[format_],
+        language=(
+            f"in {languages.describe(language)} — the language of the person who asked — "
+            "unless the agent's instructions below require another. Names, ids, "
+            "quotations and code stay as they are."
+            if language is not None
+            else "in the language of the inputs."
+        ),
     )
     system = f"{rules}\n\n---\n\n{definition.instructions or ''}"
     if definition.renders in RENDER_NOTES:

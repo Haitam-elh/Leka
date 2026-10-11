@@ -57,6 +57,7 @@ from leka.capabilities.gateway import (
 )
 from leka.capabilities.gateway.service import InvalidOutputError, ToolRoundsError, json_of
 from leka.capabilities.models import LLMRun, ModelAsk, ModelCall
+from leka.core import languages
 
 logger = structlog.get_logger(__name__)
 
@@ -212,6 +213,10 @@ class Task:
     # instructions, ADR 004): then said as given — instructions, input and
     # context being already in it — the rest of the runtime unchanged.
     messages: Sequence[Message] | None = None
+    # The language to write in (a tag of leka/core/languages.yaml): the
+    # person's, or the workspace's for what it shares. None: the model
+    # follows the instructions alone.
+    language: str | None = None
 
 
 @dataclass(frozen=True)
@@ -340,8 +345,11 @@ class LLMRuntime:
         }
         if task.context.items:
             said["context"] = task.context.said()
+        system = f"{task.instructions.strip()}\n\n{GUARDRAILS}"
+        if task.language is not None:
+            system = f"{system}\n- {languages.writing_rule(task.language)}"
         return [
-            Message.system(f"{task.instructions.strip()}\n\n{GUARDRAILS}"),
+            Message.system(system),
             Message.user(json.dumps(said, ensure_ascii=False, default=str)),
         ]
 

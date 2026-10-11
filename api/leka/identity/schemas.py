@@ -20,6 +20,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from leka.core import languages
 from leka.core.security import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH
 from leka.identity.models import CompanySize
 
@@ -129,8 +130,21 @@ class AccountProfile(BaseModel):
         return _plain_text(value) if isinstance(value, str) else value
 
 
-class RegisterRequest(_EmailField, _PasswordField, AccountProfile):
-    pass
+class _LanguageField(BaseModel):
+    """The language the page was shown in, when the person is not known yet:
+    the e-mail sent next is written in it, as far as e-mails are translated."""
+
+    language: str | None = Field(default=None, max_length=35)
+
+    @field_validator("language")
+    @classmethod
+    def _listed(cls, value: str | None) -> str | None:
+        return languages.listed(value) if value is not None else None
+
+
+class RegisterRequest(_EmailField, _PasswordField, AccountProfile, _LanguageField):
+    """Registering keeps the language the form was shown in as the account's:
+    the person saw it, and could change it, on that page."""
 
 
 class ProfileUpdate(BaseModel):
@@ -148,11 +162,24 @@ class ProfileUpdate(BaseModel):
     company: str | None = Field(default=None, max_length=200)
     job_title: str | None = Field(default=None, max_length=100)
     company_size: CompanySize | None = None
+    # A language LEKA offers, and a region; null clears the choice.
+    language: str | None = Field(default=None, max_length=35)
+    region: str | None = Field(default=None, max_length=2)
 
     @field_validator("first_name", "last_name", "company", "job_title", mode="before")
     @classmethod
     def _text(cls, value: object) -> object:
         return _plain_text(value) if isinstance(value, str) else value
+
+    @field_validator("language")
+    @classmethod
+    def _language(cls, value: str | None) -> str | None:
+        return languages.listed(value) if value is not None else None
+
+    @field_validator("region")
+    @classmethod
+    def _region(cls, value: str | None) -> str | None:
+        return languages.listed_region(value) if value is not None else None
 
     @model_validator(mode="after")
     def _required_stay_filled(self) -> ProfileUpdate:
@@ -174,8 +201,9 @@ class LoginRequest(_EmailField):
     remember: bool = False
 
 
-class ForgotPasswordRequest(_EmailField):
-    pass
+class ForgotPasswordRequest(_EmailField, _LanguageField):
+    """An address, and the language the page was shown in — for the e-mail
+    of someone who never chose one."""
 
 
 class ResetPasswordRequest(_PasswordField):
@@ -207,6 +235,9 @@ class UserRead(BaseModel):
     company: str | None = None
     job_title: str | None = None
     company_size: CompanySize | None = None
+    # None until chosen.
+    language: str | None = None
+    region: str | None = None
 
 
 class SessionRead(BaseModel):

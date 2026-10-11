@@ -20,6 +20,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, UniqueConstrai
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from leka.core import languages
 from leka.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, WorkspaceScopedMixin
 
 
@@ -107,6 +108,18 @@ class Workspace(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # preferences. JSONB because this list will grow with the product, and a
     # column per setting means a migration per preference.
     settings: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, server_default="{}")
+
+    # The language its shared words are in (a tag of leka/core/languages.yaml):
+    # what LEKA writes for everyone in it, its e-mails to a member who chose
+    # no language, and where a translation missing in a member's own
+    # language is looked up before English. A column, not a setting: e-mails
+    # and the model's prompts read it without parsing settings.
+    default_language: Mapped[str] = mapped_column(
+        String(35),
+        nullable=False,
+        default=lambda: languages.catalogue().default,
+        server_default="en",
+    )
 
 
 class Membership(Base, WorkspaceScopedMixin):
