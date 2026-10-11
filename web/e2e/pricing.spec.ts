@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { signIn } from "./sign-in";
+
 /**
  * The pricing page (LEKA-431), as a visitor reads it: every price from the
  * API — the catalogue's — the launch offer on monthly billing, the annual
@@ -68,4 +70,14 @@ test("every page of the site leads to the pricing", async ({ page }) => {
     await page.goto(address);
     await expect(page.locator('a[href="./tarifs.html"]').first()).toBeAttached();
   }
+});
+
+test("Facturation says when online payment is not open", async ({ page }) => {
+  // No Stripe key here, as in CI: nothing can be bought, and it is said.
+  await signIn(page);
+  await page.goto("/billing");
+  const section = page.getByTestId("billing-subscription");
+  await expect(section).toContainText("Votre formule");
+  await expect(section.getByTestId("billing-not-available")).toContainText("pas encore ouvert");
+  await expect(section.getByRole("link", { name: "Voir les tarifs" })).toHaveAttribute("href", "/tarifs.html");
 });
