@@ -16,6 +16,7 @@ import { IconTile, type TileTone } from "@/components/environment/parts";
 import { ConfidenceBadge } from "@/components/intelligence/confidence";
 import { EvidenceButton, EvidenceList } from "@/components/intelligence/evidence";
 import { Pill } from "@/components/intelligence/pill";
+import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import {
   type CauseTag,
@@ -117,27 +118,50 @@ function InsightRow({
   );
 }
 
-export function FindingList({ findings }: { findings: readonly Finding[] }) {
+export function FindingList({
+  findings,
+  max,
+}: {
+  findings: readonly Finding[];
+  /** How many to show before "Voir les N constats": a long list is opened,
+   * not scrolled through. */
+  max?: number;
+}) {
   const t = useDictionary();
   const w = t.intelligence;
+  const [all, setAll] = useState(false);
   if (findings.length === 0) {
     return <p className="text-[0.8125rem] text-shell-muted">{w.findings.none}</p>;
   }
+  const shown = all || max === undefined ? findings : findings.slice(0, max);
   return (
-    <ul className="space-y-2" data-testid="findings">
-      {findings.map((finding) => (
-        <InsightRow
-          key={finding.id}
-          icon={ScrollText}
-          tone="info"
-          title={finding.title ?? finding.statement}
-          tag={w.tags.fact}
-          description={finding.title ? finding.statement : null}
-          evidence={finding.evidence}
-          testId="finding"
-        />
-      ))}
-    </ul>
+    <div>
+      <ul className="space-y-2" data-testid="findings">
+        {shown.map((finding) => (
+          <InsightRow
+            key={finding.id}
+            icon={ScrollText}
+            tone="info"
+            title={finding.title ?? finding.statement}
+            tag={w.tags.fact}
+            description={finding.title ? finding.statement : null}
+            evidence={finding.evidence}
+            testId="finding"
+          />
+        ))}
+      </ul>
+      {shown.length < findings.length || all ? (
+        <button
+          type="button"
+          aria-expanded={all}
+          onClick={() => setAll(!all)}
+          className="mt-2 flex items-center gap-1 rounded text-[0.8125rem] font-medium text-shell-nav-active hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40 outline-none"
+          data-testid="findings-all"
+        >
+          {all ? w.evidence.fewer : fill(w.findings.all, { count: findings.length })}
+        </button>
+      ) : null}
+    </div>
   );
 }
 

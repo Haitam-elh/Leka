@@ -24,6 +24,9 @@ export const MOVING: ReadonlySet<string> = new Set(["queued", "running"]);
 export const agentRuns = {
   list: (key?: string) =>
     apiFetch<AgentRun[]>(`/agent-runs${key ? `?key=${encodeURIComponent(key)}` : ""}`),
+  /** The agents at work on an intention — started for it (dispatch). */
+  forIntention: (intentionId: string) =>
+    apiFetch<AgentRun[]>(`/agent-runs?intention_id=${encodeURIComponent(intentionId)}`),
   one: (id: string) => apiFetch<AgentRunDetail>(`/agent-runs/${encodeURIComponent(id)}`),
   start: (body: AgentRunCreate) =>
     apiFetch<AgentRun>("/agent-runs", { method: "POST", body: JSON.stringify(body) }),

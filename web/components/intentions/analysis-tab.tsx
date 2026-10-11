@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertOctagon,
+  ArrowRight,
   CircleCheck,
   CircleDashed,
   CircleX,
@@ -13,8 +14,8 @@ import {
   RotateCw,
   ScanSearch,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef } from "react";
 
 import { cn } from "cn";
@@ -28,12 +29,24 @@ import {
 } from "@/components/environment/parts";
 import { word } from "@/components/insights/leka-insights";
 import { ReadinessPanel } from "@/components/intentions/readiness";
+import { NextSteps } from "@/components/intentions/decision-step";
 import { ReadsCard } from "@/components/intentions/reads-card";
-import { AnalysisState, AnalysisView, EvidenceList, Pill } from "@/components/intelligence";
+import { ScopeCard } from "@/components/intentions/scope";
+import {
+  AnalysisState,
+  AnalysisView,
+  ConfidencePanel,
+  EvidenceList,
+  FindingList,
+  ImpactPanel,
+  IntelligenceSection,
+  Pill,
+} from "@/components/intelligence";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
 import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
 import { ErrorState } from "@/components/states/error-state";
 import { Button } from "@/components/ui/button";
+import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
@@ -45,6 +58,7 @@ import {
   type Links,
 } from "@/lib/intention-analysis";
 import type { Finding } from "@/lib/insights";
+import type { Analysis } from "@/lib/intelligence";
 import type { IntentionDetail } from "@/lib/intentions/api";
 import type { components } from "@/lib/api-types";
 import {
@@ -255,7 +269,7 @@ function StepsCard({ analysis }: { analysis: IntentionAnalysis }) {
                   : fill(w.level, { n: level + 1 }) + (members.length > 1 ? ` · ${w.together}` : "")}
               </p>
             ) : null}
-            <ul className="divide-y divide-shell-line/60">
+            <ul className="mt-2 grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
               {members.map((row) => {
                 const step = ran.get(row.name);
                 const look = step ? STEP_LOOK[step.status] : null;
@@ -274,14 +288,15 @@ function StepsCard({ analysis }: { analysis: IntentionAnalysis }) {
                 return (
                   <li
                     key={row.name}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-[0.8125rem]"
+                    className="flex flex-col gap-2 rounded-lg border border-shell-line p-3 text-[0.8125rem]"
                     data-testid="analysis-step"
                     data-name={row.name}
                     data-status={step?.status ?? "running"}
                   >
+                    <span className="flex min-w-0 items-start gap-2">
                     <Icon
                       className={cn(
-                        "size-4 shrink-0",
+                        "mt-0.5 size-4 shrink-0",
                         step ? undefined : "text-shell-nav-active motion-safe:animate-spin",
                         look?.tone === "success" && "text-state-success",
                         look?.tone === "danger" && "text-state-danger",
@@ -311,12 +326,15 @@ function StepsCard({ analysis }: { analysis: IntentionAnalysis }) {
                         </span>
                       ) : null}
                     </span>
-                    <Pill tone={look?.tone ?? "violet"}>{w.statuses[step?.status ?? "running"]}</Pill>
-                    {step && step.status !== "skipped" ? (
-                      <span className="w-16 text-end text-xs tabular-nums text-shell-muted">
-                        {step.duration_ms ? fill(w.ms, { ms: step.duration_ms }) : w.instant}
-                      </span>
-                    ) : null}
+                    </span>
+                    <span className="mt-auto flex items-center justify-between gap-2">
+                      <Pill tone={look?.tone ?? "violet"}>{w.statuses[step?.status ?? "running"]}</Pill>
+                      {step && step.status !== "skipped" ? (
+                        <span className="text-xs tabular-nums text-shell-muted">
+                          {step.duration_ms ? fill(w.ms, { ms: step.duration_ms }) : w.instant}
+                        </span>
+                      ) : null}
+                    </span>
                   </li>
                 );
               })}
@@ -436,41 +454,41 @@ export function SummarySaid({ intention, none }: { intention: IntentionDetail; n
   );
 }
 
-/** The analysis answered in words by a model (LEKA-394): what it says,
- * each point and how much it rests on, who wrote it. */
-function AnswerCard({ answer }: { answer: AnalysisAnswer }) {
+/** The analysis answered in words by a model (LEKA-394), as the
+ * synthesis says it (mockup 04): what it comes to, each point and how much
+ * it rests on, its caveats, who wrote it. */
+function AnswerSaid({ answer }: { answer: AnalysisAnswer }) {
   const t = useDictionary();
   const w = t.intentions.analysis.answer;
   return (
-    <Card
-      title={w.title}
-      icon={<Sparkles className="size-4 text-shell-nav-active" aria-hidden="true" />}
-    >
-      <div className="flex flex-col gap-2" data-testid="analysis-answer">
-        <p className="text-[0.9375rem] text-brand-navy">{answer.text}</p>
-        {answer.points.length ? (
-          <ul className="flex flex-col gap-1.5 text-[0.8125rem] text-brand-navy">
-            {answer.points.map((point) => (
-              <li key={point.text} className="flex flex-wrap items-baseline gap-2" data-testid="answer-point">
-                <span className="min-w-0 flex-1">{point.text}</span>
-                <Pill tone="neutral">{fill(w.rests, { count: String(point.cites.length) })}</Pill>
-              </li>
+    <div className="mt-1 flex flex-col gap-2" data-testid="analysis-answer">
+      <p className="text-[0.9375rem] text-brand-navy" dir="auto">
+        {answer.text}
+      </p>
+      {answer.points.length ? (
+        <ul className="flex flex-col gap-1.5 text-[0.8125rem] text-brand-navy">
+          {answer.points.map((point) => (
+            <li key={point.text} className="flex flex-wrap items-baseline gap-2" data-testid="answer-point">
+              <span className="min-w-0 flex-1" dir="auto">
+                {point.text}
+              </span>
+              <Pill tone="neutral">{fill(w.rests, { count: String(point.cites.length) })}</Pill>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {answer.caveats.length ? (
+        <div className="text-[0.8125rem]">
+          <p className="font-semibold text-brand-navy">{w.caveats}</p>
+          <ul className="list-disc ps-5 text-shell-muted">
+            {answer.caveats.map((caveat) => (
+              <li key={caveat}>{caveat}</li>
             ))}
           </ul>
-        ) : null}
-        {answer.caveats.length ? (
-          <div className="text-[0.8125rem]">
-            <p className="font-semibold text-brand-navy">{w.caveats}</p>
-            <ul className="list-disc ps-5 text-shell-muted">
-              {answer.caveats.map((caveat) => (
-                <li key={caveat}>{caveat}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        <p className="text-xs text-shell-muted">{fill(w.by, { model: modelTitle(answer.model) })}</p>
-      </div>
-    </Card>
+        </div>
+      ) : null}
+      <p className="text-xs text-shell-muted">{fill(w.by, { model: modelTitle(answer.model) })}</p>
+    </div>
   );
 }
 
@@ -492,7 +510,12 @@ function Nothing({ title, body }: { title: string; body: string }) {
   );
 }
 
-export function AnalysisTab({ intention }: { intention: IntentionDetail }) {
+/** Step 2, mockup 03: how the analysis goes or went. On the left LEKA at
+ * work — each capability it mobilised, a card each, and the first of what
+ * it found; on the right what it reads — what it consulted, how far its
+ * context can ground it, the scope — and its earlier analyses. Its
+ * conclusions are step 3's (AnalysisResults). */
+export function AnalysisProgress({ intention }: { intention: IntentionDetail }) {
   const t = useDictionary();
   const w = t.intentions.analysis;
   const links = useLinks();
@@ -505,43 +528,140 @@ export function AnalysisTab({ intention }: { intention: IntentionDetail }) {
   if (data === undefined) return <Loading />;
   if (data === null && !live) return <Nothing title={w.none} body={w.noneBody} />;
   return (
-    <div className="space-y-4" data-testid="intention-analysis">
-      <Head intention={intention} analysis={data} live={live} />
-      {data?.status === "blocked" ? (
-        <>
-          <div
-            role="status"
-            className="flex items-start gap-3 rounded-xl bg-state-danger-soft px-4 py-3 text-[0.8125rem]"
-            data-testid="analysis-blocked"
-          >
-            <AlertOctagon className="mt-0.5 size-4 shrink-0 text-state-danger" aria-hidden="true" />
-            <div className="min-w-0 text-brand-navy">
-              <p className="font-semibold">{w.blocked}</p>
-              <p className="text-shell-muted">{w.blockedBody}</p>
+    <div
+      className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start"
+      data-testid="intention-analysis"
+    >
+      <div className="min-w-0 space-y-4">
+        <Head intention={intention} analysis={data} live={live} />
+        {data?.status === "blocked" ? (
+          <>
+            <div
+              role="status"
+              className="flex items-start gap-3 rounded-xl bg-state-danger-soft px-4 py-3 text-[0.8125rem]"
+              data-testid="analysis-blocked"
+            >
+              <AlertOctagon className="mt-0.5 size-4 shrink-0 text-state-danger" aria-hidden="true" />
+              <div className="min-w-0 text-brand-navy">
+                <p className="font-semibold">{w.blocked}</p>
+                <p className="text-shell-muted">{w.blockedBody}</p>
+              </div>
             </div>
-          </div>
-          {intention.readiness ? <ReadinessPanel readiness={intention.readiness} /> : null}
-        </>
-      ) : data ? (
+            {intention.readiness ? <ReadinessPanel readiness={intention.readiness} /> : null}
+          </>
+        ) : data ? (
+          <>
+            <StepsCard analysis={data} />
+            {data.status === "running" ? (
+              <AnalysisState status="running" />
+            ) : shown?.status === "failed" ? (
+              // What stopped it, said where it stopped: there are no results.
+              <AnalysisState status="failed" missing={shown.missing} />
+            ) : shown && shown.findings.length ? (
+              <FirstFindings intentionId={intention.id} findings={shown.findings} />
+            ) : null}
+          </>
+        ) : null}
+      </div>
+      <aside className="min-w-0 space-y-4" aria-label={w.title}>
+        {data ? <ReadsCard intentionId={intention.id} analysis={data} /> : null}
+        {intention.readiness && data?.status !== "blocked" ? (
+          <ReadinessPanel readiness={intention.readiness} />
+        ) : null}
+        <ScopeCard intention={intention} />
+        <PreviousCard intentionId={intention.id} />
+      </aside>
+    </div>
+  );
+}
+
+/** Mockup 03's "Premiers constats": the first three of what it found, and
+ * the way to all of it. */
+function FirstFindings({
+  intentionId,
+  findings,
+}: {
+  intentionId: string;
+  findings: Analysis["findings"];
+}) {
+  const t = useDictionary();
+  const w = t.intentions.analysis;
+  return (
+    <IntelligenceSection
+      kind="fact"
+      title={w.firstFindings}
+      count={findings.length > 3 ? fill(t.intelligence.findings.count, { count: findings.length }) : undefined}
+      level={2}
+      action={
+        <Link
+          href={`${routes.intentions()}/${intentionId}/results`}
+          className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-brand-violet hover:underline"
+          data-testid="analysis-see-results"
+        >
+          {w.seeResults}
+          <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
+        </Link>
+      }
+    >
+      <FindingList findings={findings.slice(0, 3)} />
+    </IntelligenceSection>
+  );
+}
+
+/** Step 3, mockup 04: what the analysis comes to — LEKA's answer, its
+ * synthesis and confidence, what it found and on what evidence, what it
+ * reaches, what it proposes. */
+export function AnalysisResults({ intention }: { intention: IntentionDetail }) {
+  const t = useDictionary();
+  const w = t.intentions.analysis;
+  const links = useLinks();
+  const { analysis, live } = useAnalysisOf(intention);
+  const data = analysis.data;
+  const shown = useMemo(() => (data ? intentionAnalysis(t, data, links) : null), [data, t, links]);
+  if (analysis.isError) {
+    return <ErrorState error={analysis.error} onRetry={() => void analysis.refetch()} />;
+  }
+  if (data === undefined) return <Loading />;
+  if (!data || data.status === "running" || live) {
+    return <AnalysisState status="running" />;
+  }
+  return (
+    <div className="space-y-4" data-testid="intention-results">
+      {shown ? (
+        <AnalysisView
+          analysis={shown}
+          said={data.result?.answer ? <AnswerSaid answer={data.result.answer} /> : undefined}
+          proposals={shown.recommendations.length > 0}
+          level={2}
+        />
+      ) : (
+        <Nothing title={w.none} body={w.noneBody} />
+      )}
+    </div>
+  );
+}
+
+/** Step 4's side, mockup 05: what the decision rests on — what the
+ * analysis says it reaches, how sure it is — and what follows a yes. */
+export function DecisionAside({ intention }: { intention: IntentionDetail }) {
+  const t = useDictionary();
+  const links = useLinks();
+  const { analysis } = useAnalysisOf(intention);
+  const data = analysis.data;
+  const shown = useMemo(() => (data ? intentionAnalysis(t, data, links) : null), [data, t, links]);
+  const said = shown && shown.status !== "failed" && shown.status !== "pending";
+  return (
+    <aside className="min-w-0 space-y-4" aria-label={t.decision.aside} data-testid="decision-aside">
+      {said ? (
         <>
-          {data.result?.answer ? <AnswerCard answer={data.result.answer} /> : null}
-          <ReadsCard intentionId={intention.id} analysis={data} />
-          <StepsCard analysis={data} />
-          {data.status === "running" ? (
-            <AnalysisState status="running" />
-          ) : shown ? (
-            <AnalysisView
-              analysis={shown}
-              // What LEKA proposes (LEKA-389), apart from what it found —
-              // drawn when it proposes something.
-              proposals={shown.recommendations.length > 0}
-              level={2}
-            />
-          ) : null}
+          <IntelligenceSection kind="impact" title={t.intelligence.impact.global} level={2}>
+            <ImpactPanel impact={shown.impact} />
+          </IntelligenceSection>
+          <ConfidencePanel score={shown.confidence} support={shown.support} level={2} />
         </>
       ) : null}
-      <PreviousCard intentionId={intention.id} />
-    </div>
+      <NextSteps />
+    </aside>
   );
 }
 

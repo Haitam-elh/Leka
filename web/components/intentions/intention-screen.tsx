@@ -1,24 +1,48 @@
 "use client";
 
-import { Archive, ArchiveRestore, Link2, SearchX, XCircle } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowRight,
+  Link2,
+  MessageSquareText,
+  SearchX,
+  XCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
+
+import { cn } from "cn";
 
 import { ActionsTab } from "@/components/actions/actions-tab";
 import { IntentionDecision } from "@/components/decisions/intention-decision";
 import { Card, entityHref } from "@/components/environment/parts";
-import { AnalysisTab, EvidenceTab, SummarySaid } from "@/components/intentions/analysis-tab";
+import { AgentWork } from "@/components/intentions/agent-work";
+import {
+  AnalysisProgress,
+  AnalysisResults,
+  DecisionAside,
+  EvidenceTab,
+  SummarySaid,
+} from "@/components/intentions/analysis-tab";
+import {
+  IntentionStepper,
+  type Step,
+  StepBadge,
+  STEPS,
+  stepOf,
+} from "@/components/intentions/intention-stepper";
 import { kindOf, StatusPill } from "@/components/intentions/intentions-list";
 import { ReadinessPanel } from "@/components/intentions/readiness";
 import { linkedLabel } from "@/components/intentions/link-words";
 import { RoutingPanel } from "@/components/intentions/routing";
+import { scopeLines } from "@/components/intentions/scope";
 import { TimelineTab } from "@/components/intentions/timeline-tab";
 import { UnderstandingPanel } from "@/components/intentions/understanding";
 import { useConfirm } from "@/components/interactions/confirm";
 import { Pill } from "@/components/intelligence/pill";
-import { exactDate, timeAgo } from "@/components/knowledge/time";
+import { timeAgo } from "@/components/knowledge/time";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
-import { RouteTabs } from "@/components/shell/route-tabs";
 import { useCurrentUser } from "@/components/shell/shell-provider";
 import { ErrorState } from "@/components/states/error-state";
 import { StatePanel } from "@/components/states/state-panel";
@@ -45,8 +69,6 @@ import { notify } from "@/lib/notify";
  * once done with, restores it. Nothing is shown that the API did not say.
  */
 
-type Dictionary = ReturnType<typeof useDictionary>;
-
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function IntentionScreen() {
@@ -59,9 +81,15 @@ export function IntentionScreen() {
   const data = intention.data;
   const crumbs = buildBreadcrumb(pathname, t, data ? () => data.title : undefined);
   useNamePage(pathname, data?.title);
-  const tab = matchRoute(pathname)?.tab ?? "overview";
+  // The address says which view; none, the step it is at.
+  const segment = pathname.replace(/\/$/, "").split("/").length > 3 ? matchRoute(pathname)?.tab : null;
   const missing =
     !valid || (intention.error instanceof ApiError && intention.error.status === 404);
+
+  const where = data ? stepOf(data.status, decides(data)) : null;
+  const shown: View = (segment as View | null | undefined) ?? (where ? SEGMENT_OF[where.at] : "overview");
+  const step: Step | null = STEP_OF[shown] ?? null;
+  const hrefOf = (each: Step) => `${routes.intentions()}/${id}/${SEGMENT_OF[each]}`;
 
   let body: React.ReactNode;
   if (missing) {
@@ -81,51 +109,194 @@ export function IntentionScreen() {
     body = <ErrorState error={intention.error} onRetry={() => void intention.refetch()} />;
   } else if (!data) {
     body = <div className="h-80 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
-  } else if (tab === "history") {
+  } else if (shown === "history") {
     body = <TimelineTab id={data.id} />;
-  } else if (tab === "analysis") {
-    body = <AnalysisTab intention={data} />;
-  } else if (tab === "evidence") {
+  } else if (shown === "evidence") {
     body = <EvidenceTab intention={data} />;
-  } else if (tab === "actions") {
+  } else if (shown === "analysis") {
+    body = <AnalysisProgress intention={data} />;
+  } else if (shown === "results") {
+    body = <ResultsStep intention={data} />;
+  } else if (shown === "decision") {
+    body = <DecisionStep intention={data} />;
+  } else if (shown === "actions") {
     body = <ActionsTab intention={data} />;
-  } else if (tab === "overview") {
-    body = <Overview intention={data} />;
   } else {
-    body = (
-      <p className="rounded-xl border border-shell-line bg-white px-5 py-6 text-[0.875rem] text-shell-muted">
-        {t.intentions.soon}
-      </p>
-    );
+    body = <Overview intention={data} />;
   }
+
+  const w = t.intentions.steps;
+  // Step 2 says it is analysing while it is, and that it analysed after.
+  const analysed =
+    step === "analysis" && data !== undefined && !["analysing", "submitted"].includes(data.status);
+  const heading = step
+    ? analysed
+      ? w.analysis.done
+      : w[step].heading
+    : shown === "history"
+      ? t.tabs.history
+      : t.tabs.evidence;
+  const lead = step ? (analysed ? w.analysis.doneLead : w[step].lead) : undefined;
 
   return (
     <PageContainer>
       <PageHeader
-        title={data?.title ?? t.nav.intentionDetail}
+        title={data ? heading : t.nav.intentionDetail}
+        subtitle={data ? lead : undefined}
         breadcrumb={crumbs}
-        actions={data ? <Actions intention={data} /> : undefined}
+        actions={
+          data ? (
+            <>
+              {step ? <StepBadge step={step} /> : null}
+              <Actions intention={data} />
+            </>
+          ) : undefined
+        }
       />
-      {data ? (
-        <div className="-mt-3 mb-4 text-[0.875rem] text-shell-accent-muted">
-          <Subtitle intention={data} />
-        </div>
+      {data && where ? (
+        <>
+          <IntentionStepper
+            current={where.at}
+            shown={step ?? undefined}
+            reached={where.reached}
+            done={data.status === "completed"}
+            hrefOf={hrefOf}
+            testIdOf={(each) => `tab-${SEGMENT_OF[each]}`}
+            last={decides(data) ? undefined : STEPS.indexOf("results")}
+          />
+          <Asked intention={data} />
+          {/* What an agent is doing for it — its PDF the moment it is drawn. */}
+          <div className="mb-4">
+            <AgentWork intentionId={data.id} />
+          </div>
+        </>
       ) : null}
-      {/* The tabs are the route's: shown whatever the intention, so a shared
-          link lands on its tab. */}
-      <RouteTabs />
       {body}
+      {data ? <MoreViews id={data.id} shown={shown} /> : null}
     </PageContainer>
+  );
+}
+
+/** What the address may say, and the step each view is. */
+type View = "overview" | "analysis" | "results" | "decision" | "actions" | "evidence" | "history";
+const SEGMENT_OF: Record<Step, View> = {
+  intention: "overview",
+  analysis: "analysis",
+  results: "results",
+  decision: "decision",
+  action: "actions",
+};
+const STEP_OF: Partial<Record<View, Step>> = {
+  overview: "intention",
+  analysis: "analysis",
+  results: "results",
+  decision: "decision",
+  actions: "action",
+};
+
+const DECIDED: readonly IntentionDetail["status"][] = [
+  "awaiting_decision",
+  "approved",
+  "scheduled",
+  "executing",
+  "verifying",
+  "rejected",
+];
+
+/** Whether it goes, or went, past its results: something to do on the
+ * systems, put to a decision. A question answered stops at its results —
+ * as the tab Actions reads it. */
+function decides(intention: IntentionDetail): boolean {
+  if (DECIDED.includes(intention.status)) return true;
+  const understood = intention.understanding;
+  if (!understood) return intention.status !== "completed";
+  return (
+    understood.goal.code === "act" || understood.actions.some((action) => action.changes_systems)
+  );
+}
+
+/** Mockup 04's banner: what was asked, said once above every step. */
+function Asked({ intention }: { intention: IntentionDetail }) {
+  return (
+    <section
+      className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-shell-line bg-white px-5 py-4"
+      data-testid="intention-asked"
+    >
+      <span className="flex size-10 items-center justify-center rounded-full bg-brand-violet-soft text-brand-violet">
+        <MessageSquareText className="size-5" aria-hidden="true" />
+      </span>
+      <p
+        className="min-w-0 flex-1 text-[1.0625rem] font-semibold text-brand-navy"
+        data-testid="intention-text"
+        dir="auto"
+      >
+        {intention.text}
+      </p>
+      <Subtitle intention={intention} />
+    </section>
+  );
+}
+
+/** The evidence and the whole story: one click away from every step, the
+ * one open marked. */
+function MoreViews({ id, shown }: { id: string; shown: View }) {
+  const t = useDictionary();
+  const w = t.intentions.steps;
+  return (
+    <nav className="mt-6 flex flex-wrap gap-2" aria-label={t.intentions.title}>
+      {(["evidence", "history"] as const).map((view) => (
+        <Link
+          key={view}
+          href={`${routes.intentions()}/${id}/${view}`}
+          aria-current={shown === view ? "page" : undefined}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[0.8125rem] font-medium text-brand-violet hover:bg-brand-violet-soft",
+            shown === view && "bg-brand-violet-soft",
+          )}
+          data-testid={`tab-${view}`}
+        >
+          {w[view]}
+          <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+/** Step 3, mockup 04: what LEKA concludes, then what it found. */
+function ResultsStep({ intention }: { intention: IntentionDetail }) {
+  return <AnalysisResults intention={intention} />;
+}
+
+/** Step 4, mockup 05: what to decide, and why. Nothing to decide — a
+ * question answered — said so. */
+function DecisionStep({ intention }: { intention: IntentionDetail }) {
+  const t = useDictionary();
+  return (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
+      <div className="min-w-0 space-y-4">
+        <IntentionDecision intentionId={intention.id} />
+        {decides(intention) ? null : (
+          <p className="rounded-xl border border-shell-line bg-white px-5 py-6 text-[0.875rem] text-shell-muted">
+            {t.intentions.steps.notNeeded}
+          </p>
+        )}
+      </div>
+      <DecisionAside intention={intention} />
+    </div>
   );
 }
 
 function Subtitle({ intention }: { intention: IntentionDetail }) {
   const t = useDictionary();
   const me = useCurrentUser();
-  const when = timeAgo(t, intention.created_at);
+  const { format: locale } = useLocale();
+  // Said inside a sentence: « Créée il y a 3 min », not « Créée Il y a ».
+  const ago = timeAgo(t, intention.created_at);
+  const when = ago.charAt(0).toLocaleLowerCase(locale) + ago.slice(1);
   const name = intention.created_by && intention.created_by === me?.id ? t.intentions.you : null;
   return (
-    <span className="flex flex-wrap items-center gap-2">
+    <span className="flex flex-wrap items-center gap-2 text-[0.8125rem] text-shell-muted">
       <StatusPill status={intention.status} />
       {intention.archived_at ? <Pill tone="neutral">{t.intentions.archived}</Pill> : null}
       <span>
@@ -206,26 +377,6 @@ function Actions({ intention }: { intention: IntentionDetail }) {
 
 // ── Vue d'ensemble ──────────────────────────────────────────────────────
 
-function scopeLines(t: Dictionary, locale: string, scope: Record<string, unknown>): string[] {
-  const w = t.intentions.overview;
-  const lines: string[] = [];
-  if (typeof scope.environment === "string") {
-    lines.push(`${w.environment} · ${scope.environment}`);
-  }
-  if (typeof scope.since === "string") {
-    const since = exactDate(locale, scope.since);
-    const until = typeof scope.until === "string" ? ` → ${exactDate(locale, scope.until)}` : "";
-    lines.push(`${w.period} · ${since}${until}`);
-  }
-  if (Array.isArray(scope.services) && scope.services.length) {
-    lines.push(fill(w.services, { count: scope.services.length }));
-  }
-  if (Array.isArray(scope.sources) && scope.sources.length) {
-    lines.push(fill(w.sources, { count: scope.sources.length }));
-  }
-  return lines;
-}
-
 function LinkLine({ link }: { link: IntentionLink }) {
   const t = useDictionary();
   const kind = t.intentions.linkKinds[link.kind];
@@ -269,11 +420,10 @@ function Overview({ intention }: { intention: IntentionDetail }) {
             intentionId={intention.status === "needs_clarification" ? intention.id : undefined}
           />
         ) : null}
+        {/* What was asked is the banner above every step: here, what it is
+            and where. */}
         <Card title={w.asked}>
-          <p className="text-[0.9375rem] text-brand-navy" data-testid="intention-text">
-            {intention.text}
-          </p>
-          <dl className="mt-3 grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-3 gap-y-2 text-[0.8125rem]">
+          <dl className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-3 gap-y-2 text-[0.8125rem]">
             <dt className="text-shell-muted">{w.kind}</dt>
             <dd className="text-brand-navy">{kind ?? "—"}</dd>
             <dt className="text-shell-muted">{w.scope}</dt>

@@ -3,6 +3,8 @@
 import { Lightbulb } from "lucide-react";
 import { useId } from "react";
 
+import { cn } from "cn";
+
 import { IconTile } from "@/components/environment/parts";
 import { AnalysisState } from "@/components/intelligence/analysis-state";
 import {
@@ -37,11 +39,15 @@ export function AnalysisSummary({
   analysis,
   level = 3,
   action,
+  said,
 }: {
   analysis: Analysis;
   level?: 2 | 3;
   /** Under the confidence: "Voir le détail de l'analyse". */
   action?: React.ReactNode;
+  /** What it comes to, when more than a sentence says it: a model's
+   * answer, its points and caveats (LEKA-394). */
+  said?: React.ReactNode;
 }) {
   const t = useDictionary();
   const w = t.intelligence.summary;
@@ -62,7 +68,14 @@ export function AnalysisSummary({
           >
             {w.title}
           </Heading>
-          <p className="mt-1 text-[0.8125rem] text-shell-muted">{analysis.summary ?? w.none}</p>
+          {said}
+          {said && !analysis.summary ? null : (
+            // LEKA's own sentence: what each capability concluded — under a
+            // model's answer, what that answer was written from.
+            <p className={cn("text-[0.8125rem] text-shell-muted", said ? "mt-2" : "mt-1")}>
+              {analysis.summary ?? w.none}
+            </p>
+          )}
         </div>
       </div>
       <div className="space-y-3 md:border-s md:border-shell-line md:ps-4">
@@ -79,9 +92,12 @@ export function AnalysisView({
   onRetry,
   proposals = true,
   synthesis = true,
+  said,
   level = 3,
 }: {
   analysis: Analysis;
+  /** What its synthesis says, when more than its sentence (AnalysisSummary). */
+  said?: React.ReactNode;
   onRetry?: () => void;
   /** Whether the proposals' section is drawn, even empty. */
   proposals?: boolean;
@@ -102,7 +118,7 @@ export function AnalysisView({
       <AnalysisState status={analysis.status} missing={analysis.missing} onRetry={onRetry} />
       {analysis.status === "failed" || analysis.status === "pending" ? null : (
         <>
-          {synthesis ? <AnalysisSummary analysis={analysis} level={level} /> : null}
+          {synthesis ? <AnalysisSummary analysis={analysis} level={level} said={said} /> : null}
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] xl:items-start">
             <div className="min-w-0 space-y-4">
               <IntelligenceSection
@@ -111,7 +127,7 @@ export function AnalysisView({
                 count={count(w.findings.count, analysis.findings.length)}
                 level={level}
               >
-                <FindingList findings={analysis.findings} />
+                <FindingList findings={analysis.findings} max={4} />
               </IntelligenceSection>
               <IntelligenceSection
                 kind="hypothesis"

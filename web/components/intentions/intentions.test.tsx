@@ -180,7 +180,7 @@ describe("Mes intentions", () => {
 
 describe("an intention's page", () => {
   it("says what was asked, its scope, its links — and what is not concluded", async () => {
-    route.pathname = `/intentions/${ID}`;
+    route.pathname = `/intentions/${ID}/overview`;
     show(<IntentionScreen />);
 
     expect(await screen.findByTestId("intention-text")).toHaveTextContent(
@@ -302,7 +302,7 @@ describe("an intention's page", () => {
   });
 
   it("is cancelled once asked, with the reason given", async () => {
-    route.pathname = `/intentions/${ID}`;
+    route.pathname = `/intentions/${ID}/overview`;
     const cancelled = intention({ status: "cancelled", phase: "finished", moves: [] });
     api.cancel.mockResolvedValue(cancelled);
     const user = userEvent.setup();
@@ -344,7 +344,7 @@ describe("an intention's page", () => {
   });
 
   it("says what LEKA understood, each part with its words", async () => {
-    route.pathname = `/intentions/${ID}`;
+    route.pathname = `/intentions/${ID}/overview`;
     api.one.mockResolvedValue(
       intention({
         goal: "act",
@@ -395,7 +395,7 @@ describe("an intention's page", () => {
   });
 
   it("says its scope: where, when, what is excluded, under what constraints", async () => {
-    route.pathname = `/intentions/${ID}`;
+    route.pathname = `/intentions/${ID}/overview`;
     api.one.mockResolvedValue(
       intention({
         understanding: {
@@ -470,7 +470,7 @@ describe("an intention's page", () => {
   });
 
   it("says what LEKA needs to go on, and leads to clarifying it", async () => {
-    route.pathname = `/intentions/${ID}`;
+    route.pathname = `/intentions/${ID}/overview`;
     api.one.mockResolvedValue(
       intention({
         status: "needs_clarification",
@@ -512,7 +512,7 @@ describe("an intention's page", () => {
   });
 
   it("says whether its context can ground the analysis, and what blocks it", async () => {
-    route.pathname = `/intentions/${ID}`;
+    route.pathname = `/intentions/${ID}/overview`;
     api.one.mockResolvedValue(
       intention({
         readiness: {
@@ -566,7 +566,7 @@ describe("an intention's page", () => {
   });
 
   it("says a missing intention, its tabs kept", async () => {
-    route.pathname = `/intentions/${ID}`;
+    route.pathname = `/intentions/${ID}/overview`;
     api.one.mockRejectedValue(new ApiError(404, `/intentions/${ID}`, "No such intention."));
     show(<IntentionScreen />);
     expect(await screen.findByTestId("intention-not-found")).toHaveTextContent(

@@ -638,52 +638,60 @@ function PlanView({
   // Once it ran, whether it achieved what was expected (LEKA-392).
   const verifications = useVerifications(plan.intention_id, plan.status === "succeeded");
   const verification = verifications.data?.find((v) => v.plan_id === plan.id);
+  // Mockup 06: the plan, its steps and what came of it on the left; its
+  // journal on the right; what it changed, across, under both.
   return (
     <div className="flex flex-col gap-4" data-testid="plan" data-status={plan.status}>
-      <section className="flex flex-col gap-4 rounded-xl border border-shell-line bg-white p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-[1.0625rem] font-semibold text-brand-navy">
-            {fill(w.plan, { number: plan.number })}
-          </h2>
-          <Pill tone={PLAN_TONES[plan.status]} data-testid="plan-status">
-            {w.statuses[plan.status]}
-          </Pill>
-          {plan.started_at ? (
-            <span className="text-xs text-shell-muted">{timeAgo(t, plan.started_at)}</span>
-          ) : null}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
+        <div className="flex min-w-0 flex-col gap-4">
+          <section className="flex flex-col gap-4 rounded-xl border border-shell-line bg-white p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[1.0625rem] font-semibold text-brand-navy">
+                {fill(w.plan, { number: plan.number })}
+              </h2>
+              <Pill tone={PLAN_TONES[plan.status]} data-testid="plan-status">
+                {w.statuses[plan.status]}
+              </Pill>
+              {plan.started_at ? (
+                <span className="text-xs text-shell-muted">{timeAgo(t, plan.started_at)}</span>
+              ) : null}
+            </div>
+            {plan.status === "succeeded" ? (
+              <p className="text-[0.875rem] text-brand-navy">{w.succeededBody}</p>
+            ) : plan.status === "failed" || plan.status === "blocked" ? (
+              <p className="text-[0.875rem] text-state-danger">
+                {w.failedBody}
+                {plan.error ? ` ${errorSaid(t, plan.error)}` : ""}
+              </p>
+            ) : null}
+            <Checks plan={plan} />
+            {steward ? (
+              <Controls plan={plan} intention={intention} />
+            ) : (
+              <p className="text-[0.8125rem] text-shell-muted">{w.readOnly}</p>
+            )}
+          </section>
+          {verification ? (
+            <VerificationCard verification={verification} steward={steward} />
+          ) : (
+            <ExpectedOutcome plan={plan} steward={steward} />
+          )}
+          <ul className="flex flex-col gap-3" data-testid="plan-steps">
+            {plan.steps.map((step) => (
+              <StepCard
+                key={step.id}
+                plan={plan}
+                step={step}
+                steward={steward}
+                verification={verification}
+              />
+            ))}
+          </ul>
         </div>
-        {plan.status === "succeeded" ? (
-          <p className="text-[0.875rem] text-brand-navy">{w.succeededBody}</p>
-        ) : plan.status === "failed" || plan.status === "blocked" ? (
-          <p className="text-[0.875rem] text-state-danger">
-            {w.failedBody}
-            {plan.error ? ` ${errorSaid(t, plan.error)}` : ""}
-          </p>
-        ) : null}
-        <Checks plan={plan} />
-        {steward ? (
-          <Controls plan={plan} intention={intention} />
-        ) : (
-          <p className="text-[0.8125rem] text-shell-muted">{w.readOnly}</p>
-        )}
-      </section>
-      {verification ? (
-        <VerificationCard verification={verification} steward={steward} />
-      ) : (
-        <ExpectedOutcome plan={plan} steward={steward} />
-      )}
-      <ul className="flex flex-col gap-3" data-testid="plan-steps">
-        {plan.steps.map((step) => (
-          <StepCard
-            key={step.id}
-            plan={plan}
-            step={step}
-            steward={steward}
-            verification={verification}
-          />
-        ))}
-      </ul>
-      <Journal events={plan.events} />
+        <aside className="min-w-0">
+          <Journal events={plan.events} />
+        </aside>
+      </div>
       <ImpactBanner intentionId={plan.intention_id} />
     </div>
   );

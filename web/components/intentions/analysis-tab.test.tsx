@@ -216,7 +216,7 @@ afterEach(() => {
 });
 
 describe("an intention's analysis", () => {
-  it("says how it went, step by step, and what it found — no proposal", async () => {
+  it("says how it went, step by step — what it found is its results'", async () => {
     show();
 
     const head = await screen.findByTestId("analysis-head");
@@ -234,8 +234,21 @@ describe("an intention's analysis", () => {
     expect(steps[1]).toHaveTextContent("Responsabilités · pour son objectif");
     expect(steps[2]).toHaveTextContent("Erreur : RuntimeError");
     expect(steps[2]).toHaveTextContent("En échec");
+    // What it comes to is step 3's, not drawn here.
+    expect(screen.queryByTestId("analysis")).not.toBeInTheDocument();
+    // Completed: nothing to run again.
+    expect(screen.queryByTestId("analysis-again")).not.toBeInTheDocument();
+    // Its analyses, the latest first.
+    const previous = await screen.findByTestId("analysis-previous");
+    expect(previous).toHaveTextContent("Analyse n° 2Partielle");
+    expect(previous).toHaveTextContent("Analyse n° 1En échec");
+  });
 
-    const view = screen.getByTestId("analysis");
+  it("says what it found on its results — no proposal", async () => {
+    route.pathname = `/intentions/${ID}/results`;
+    show();
+
+    const view = await screen.findByTestId("analysis");
     expect(view).toHaveAttribute("data-status", "partial");
     expect(screen.getByTestId("analysis-state")).toHaveTextContent(
       "Changements n'a pas abouti : en échec.",
@@ -246,12 +259,42 @@ describe("an intention's analysis", () => {
     expect(view).toHaveTextContent("1 source(s) derrière son contexte");
     // Nothing proposed (LEKA-389): no proposals' section, no empty promise.
     expect(screen.queryByText("Recommandations de LEKA")).not.toBeInTheDocument();
-    // Completed: nothing to run again.
-    expect(screen.queryByTestId("analysis-again")).not.toBeInTheDocument();
-    // Its analyses, the latest first.
-    const previous = await screen.findByTestId("analysis-previous");
-    expect(previous).toHaveTextContent("Analyse n° 2Partielle");
-    expect(previous).toHaveTextContent("Analyse n° 1En échec");
+  });
+
+  it("lays out, as mockup 03, the first of what it found and the scope beside it", async () => {
+    show();
+    const first = await screen.findByTestId("analysis-see-results");
+    expect(first).toHaveAttribute("href", `/intentions/${ID}/results`);
+    expect(screen.getByRole("heading", { name: "Premiers constats" })).toBeInTheDocument();
+    const scope = screen.getByTestId("analysis-scope");
+    // Nothing chosen: every environment, the default period.
+    expect(scope).toHaveTextContent("EnvironnementTous");
+    expect(scope).toHaveTextContent("PériodePar défaut pour ce type de demande");
+  });
+
+  it("says a question answered needs no decision nor action", async () => {
+    show();
+    await screen.findByTestId("analysis-head");
+    for (const step of ["decision", "action"]) {
+      const said = screen.getByTestId(`intention-step-${step}`);
+      expect(said).toHaveAttribute("data-state", "skipped");
+      expect(said).toHaveTextContent("Non nécessaire");
+      expect(within(said).queryByRole("link")).not.toBeInTheDocument();
+    }
+    expect(screen.getByTestId("intention-step-results")).toHaveAttribute("data-state", "done");
+  });
+
+  it("lays its decision beside what it rests on, as mockup 05", async () => {
+    route.pathname = `/intentions/${ID}/decision`;
+    api.one.mockResolvedValue(intention({ status: "awaiting_decision", phase: "active" }));
+    show();
+    const aside = await screen.findByTestId("decision-aside");
+    expect(await within(aside).findByRole("heading", { name: "Impact global" })).toBeInTheDocument();
+    expect(within(aside).getByRole("heading", { name: "Confiance de l'analyse" })).toBeInTheDocument();
+    expect(within(aside).getByRole("heading", { name: "Prochaines étapes" })).toBeInTheDocument();
+    // What it comes to is step 3's: not drawn again under the decision.
+    expect(screen.queryByTestId("intention-results")).not.toBeInTheDocument();
+    expect(screen.getByTestId("intention-step-decision")).toHaveAttribute("data-state", "current");
   });
 
   it("says how LEKA orchestrated it: what ran together, what each was handed (LEKA-399)", async () => {
@@ -341,8 +384,13 @@ describe("an intention's analysis", () => {
     api.one.mockResolvedValue(intention());
     await vi.advanceTimersByTimeAsync(4_000);
     await waitFor(() =>
-      expect(screen.getByTestId("analysis")).toHaveAttribute("data-status", "partial"),
+      expect(screen.getAllByTestId("analysis-step").map((s) => s.dataset.status)).toEqual([
+        "succeeded",
+        "succeeded",
+        "failed",
+      ]),
     );
+    expect(screen.queryByTestId("analysis-state")).not.toBeInTheDocument();
     // Done: the intention it moved, read again.
     await waitFor(() => expect(api.one.mock.calls.length).toBeGreaterThan(1));
     await waitFor(() =>
@@ -436,7 +484,7 @@ describe("an intention's analysis", () => {
 
 describe("its overview", () => {
   it("says what its analysis came to, in the reader's words", async () => {
-    route.pathname = `/intentions/${ID}`;
+    route.pathname = `/intentions/${ID}/overview`;
     show();
     // Not the API's English sentence kept on the intention.
     expect(await screen.findByText("Billing API appartient à Payments.")).toHaveAttribute(
@@ -469,7 +517,8 @@ describe("its answer, written by a model (LEKA-394)", () => {
     });
   }
 
-  it("leads the analysis, each point saying how much it rests on, and who wrote it", async () => {
+  it("leads its results, each point saying how much it rests on, and who wrote it", async () => {
+    route.pathname = `/intentions/${ID}/results`;
     api.analysis.mockResolvedValue(answered());
     show();
     const answer = await screen.findByTestId("analysis-answer");
@@ -484,7 +533,7 @@ describe("its answer, written by a model (LEKA-394)", () => {
   });
 
   it("is what the analysis came to, on its overview", async () => {
-    route.pathname = `/intentions/${ID}`;
+    route.pathname = `/intentions/${ID}/overview`;
     api.analysis.mockResolvedValue(answered());
     show();
     expect(await screen.findByText("Payments est responsable de Billing API.")).toHaveAttribute(
@@ -494,8 +543,9 @@ describe("its answer, written by a model (LEKA-394)", () => {
   });
 
   it("is not shown when no model wrote one", async () => {
+    route.pathname = `/intentions/${ID}/results`;
     show();
-    await screen.findByTestId("intention-analysis");
+    await screen.findByTestId("intention-results");
     expect(screen.queryByTestId("analysis-answer")).not.toBeInTheDocument();
   });
 });
@@ -656,6 +706,10 @@ const OWNER = {
 };
 
 describe("what LEKA recommends (LEKA-389)", () => {
+  beforeEach(() => {
+    route.pathname = `/intentions/${ID}/results`;
+  });
+
   it("proposes apart from what it found, each with why, risk, and its evidence", async () => {
     const found = analysis();
     api.analysis.mockResolvedValue({

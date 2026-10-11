@@ -1,0 +1,87 @@
+"use client";
+
+import { Bot, LoaderCircle } from "lucide-react";
+
+import { Deliverables } from "@/components/capabilities/agent-runs";
+import { IconTile } from "@/components/environment/parts";
+import { Pill } from "@/components/intelligence/pill";
+import type { AgentRun } from "@/lib/agent-runs";
+import { useIntentionRuns } from "@/lib/agent-runs-queries";
+import { fill } from "@/lib/i18n/dictionaries";
+import { useDictionary } from "@/lib/i18n/locale-provider";
+
+/**
+ * The agents at work on an intention (docs/intentions.md § 15 bis): LEKA
+ * handed it to the one that does what it asks — the architect for a deck —
+ * and here is what it is doing, on what, and its files as soon as they are
+ * drawn: the PDF first, then the PowerPoint. The first thing a person who
+ * asked for a deliverable looks for, so it comes first on the page.
+ */
+
+const TONES = {
+  held: "warning",
+  queued: "neutral",
+  running: "violet",
+  succeeded: "success",
+  failed: "danger",
+  cancelled: "neutral",
+} as const;
+
+function inputsSaid(run: AgentRun): string {
+  return Object.values(run.inputs)
+    .filter((value): value is string => typeof value === "string" && value.trim() !== "")
+    .join(" · ");
+}
+
+export function AgentWork({ intentionId }: { intentionId: string }) {
+  const t = useDictionary();
+  const w = t.intentions.agentWork;
+  const statuses = t.agentRuns.statuses as Record<string, string>;
+  const errors = t.agentRuns.errors as Record<string, string>;
+  const { data } = useIntentionRuns(intentionId);
+  if (!data?.length) return null;
+  return (
+    <section
+      className="rounded-xl border border-brand-violet/30 bg-white p-4 shadow-[0_1px_0_rgba(78,10,244,0.06)]"
+      aria-labelledby="agent-work-title"
+      data-testid="agent-work"
+    >
+      <h2 id="agent-work-title" className="sr-only">
+        {w.title}
+      </h2>
+      <ul className="flex flex-col gap-4">
+        {data.map((run) => {
+          const moving = run.status === "queued" || run.status === "running";
+          const agent = run.title ?? run.key;
+          const said = moving
+            ? fill(w.working, { agent })
+            : run.status === "succeeded"
+              ? fill(run.deliverables.length ? w.delivered : w.done, { agent })
+              : fill(w.stopped, { agent });
+          return (
+            <li key={run.id} className="flex flex-col gap-3 sm:flex-row sm:items-center" data-testid="agent-work-run">
+              <IconTile icon={moving ? LoaderCircle : Bot} tone={moving ? "violet" : "success"} className="size-11" />
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-2">
+                  <span className="text-[1rem] font-semibold text-brand-navy">{said}</span>
+                  <Pill tone={TONES[run.status as keyof typeof TONES] ?? "neutral"}>
+                    {statuses[run.status] ?? run.status}
+                  </Pill>
+                </p>
+                <p className="text-[0.8125rem] text-shell-muted" dir="auto">
+                  {inputsSaid(run)}
+                </p>
+                {run.status === "failed" && run.error ? (
+                  <p className="text-[0.8125rem] text-state-danger">{errors[run.error] ?? run.error}</p>
+                ) : moving ? (
+                  <p className="text-[0.8125rem] text-shell-muted">{w.filesSoon}</p>
+                ) : null}
+              </div>
+              <Deliverables run={run} />
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
