@@ -89,11 +89,14 @@ describe("numbers, dates, time zones and currencies", () => {
   // French groups digits with a narrow no-break space, and puts a no-break
   // space before €: compared as plain spaces.
   const plain = (text: string) => text.replace(/[\u202f\u00a0]/g, " ");
+  // Swiss German groups digits with an apostrophe: straight in Node 22's
+  // CLDR, curly in Node 24's — compared as a straight one.
+  const straight = (text: string) => text.replace(/\u2019/g, "'");
 
   it("writes numbers and amounts as each region does", () => {
     expect(plain(new Intl.NumberFormat("fr-FR").format(1234567.5))).toBe("1 234 567,5");
     expect(new Intl.NumberFormat("en-US").format(1234567.5)).toBe("1,234,567.5");
-    expect(new Intl.NumberFormat("de-CH").format(1234567.5)).toBe("1’234’567.5");
+    expect(straight(new Intl.NumberFormat("de-CH").format(1234567.5))).toBe("1'234'567.5");
     expect(new Intl.NumberFormat("hi-IN").format(1234567)).toBe("12,34,567");
     expect(new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY" }).format(1234)).toBe("￥1,234");
     expect(plain(new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(125.3))).toBe(
