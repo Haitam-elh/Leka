@@ -91,6 +91,11 @@ test.describe("Intention analysis", () => {
     await expect(action).toContainText("Action demandée");
     await expect(action).toHaveAttribute("data-status", "succeeded");
     await page.getByTestId("tab-results").click();
+    // Its synthesis says it first; the finding, among all of them.
+    await expect(page.getByTestId("analysis-summary")).toContainText(
+      "Redémarrer demandé : une personne décide avant que quoi que ce soit ne soit fait.",
+    );
+    await page.getByTestId("findings-all").click();
     await expect(page.getByTestId("analysis")).toContainText(
       "Demandé : Redémarrer auth-service. Une personne doit l'approuver avant toute exécution.",
     );
