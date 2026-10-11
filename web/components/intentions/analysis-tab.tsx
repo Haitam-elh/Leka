@@ -101,7 +101,12 @@ function useLinks(): Links {
 function onItsWay(intention: IntentionDetail, analysis: IntentionAnalysis | null | undefined) {
   if (intention.status !== "analysing" || intention.archived_at) return false;
   if (!analysis) return true;
-  return analysis.status === "running" || analysis.context_id !== intention.context_id;
+  const currentVersion = intention.readiness?.version;
+  return (
+    analysis.status === "running" ||
+    analysis.context_id !== intention.context_id ||
+    (currentVersion != null && analysis.context_version !== currentVersion)
+  );
 }
 
 /** Its asker, or who may approve, while it can be analysed again. */
