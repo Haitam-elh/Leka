@@ -1,7 +1,7 @@
 """Languages: the one a person chose and their region; a workspace's own.
 
 Revision ID: 5d8a1c3e7f29
-Revises: 7c2e9f4a1b85
+Revises: 4e7a2c9d1b63
 Created: 2026-10-19
 
 `users.language` and `users.region`: what a person chose (a tag of
@@ -22,7 +22,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "5d8a1c3e7f29"
-down_revision: str | None = "7c2e9f4a1b85"
+down_revision: str | None = "4e7a2c9d1b63"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

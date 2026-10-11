@@ -168,7 +168,8 @@ change one; erased with its workspace):
 | `tool_withheld` | the tool, why |
 | `tool` | the tool, what it was asked (500 characters), outcome (ok, refused, failed, unknown), why, how long |
 | `answered` | provider, model, version, tokens |
-| `rendered` · `render_failed` | the formats, the slides, the deck's model and tokens · why (`no_model`, `timeout`, `render`, `storage`) |
+| `rendered` · `render_failed` | the formats, the slides, the deck's model and tokens · why (`no_model`, `timeout`, `render`, `storage`, `error`; a change: `no_repository`, `no_change`…) |
+| `proposed` | the code change kept, its repository, how many files |
 | `succeeded` · `failed` · `cancelled` | how many characters · the code and its detail · by whom |
 
 What its calls took — calls, tokens, the cost at list price — is read from
@@ -207,6 +208,34 @@ why its files are missing (`deliverables_error`, a `render_failed` step).
 Its model calls are the run's (`agent_run:<id>`, purpose
 `agent:<key>:deck`).
 
+## 6 ter. What it proposes to change — the code-change agent
+
+An agent whose front matter says `renders: code_change` (`code-change`,
+1.0.0, `proposes_action`) reads a repository's code with the two code tools
+it names — `list_files`, `read_file` (`capabilities/code_tools.py`): live,
+read-only, through the workspace's GitHub source whose scope holds the
+repository, offered **only to an agent that names them**, never by default —
+and delivers its analysis in markdown. Then (`capabilities/changes.py`):
+
+1. **the change, written by the model** — asked again, no tools, structured
+   (`ChangeProposal`: the repository, the branch, each file **whole** as it
+   must be, or `null` to remove it, and why), from the analysis only;
+2. **diffed by LEKA** — each file read again on that branch; the diff is
+   LEKA's own (`difflib`), never the model's; a path outside the repository
+   or into `.git`, or a file the same as before, is left out; at most 20
+   files;
+3. **kept, proposed** (`code_changes`) with its run and intention — a step
+   `proposed`.
+
+**A person decides** (`intention:approve`): rejects it, said why — or
+accepts it, and LEKA opens **one pull request** on the source's repository
+(a new branch `leka/…`, one commit, the summary and its files as body, who
+accepted it) — when the source allows it (`pull_requests`); refused, it
+stays proposed and says why (`pull_requests_off`, `not_allowed` — the token
+cannot write — `branch_exists`…). Never a merge: reviewing and merging the
+pull request stays the team's. What fails while proposing never fails the
+run (`render_failed`, its code).
+
 ## 7. The API
 
 | Route | | Permission |
@@ -215,6 +244,8 @@ Its model calls are the run's (`agent_run:<id>`, purpose
 | `GET /agent-runs?key&status&limit` | the workspace's runs, the latest first | `intention:read` |
 | `GET /agent-runs/{id}` | one: what it delivered, every step, what its calls took | `intention:read` |
 | `GET /agent-runs/{id}/deliverables/{pptx\|pdf}` | a file LEKA drew of it, as an attachment; 404 when there is none | `intention:read` |
+| `GET /code-changes?intention_id&run_id` · `GET /code-changes/{id}` | the changes the code-change agent proposed, each file with its diff | `intention:read` |
+| `POST /code-changes/{id}/accept` · `/reject` `{note?}` | accepted — its pull request opened, 409 when its source does not allow it or GitHub refuses — or rejected | `intention:approve` |
 | `POST /agent-runs/{id}/cancel` | cancelled: 403 another's (unless one may approve), 409 ended | `intention:create` |
 
 Refused, nothing kept: no such agent, or intention (404); the person's role
