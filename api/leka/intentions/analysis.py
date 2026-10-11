@@ -111,6 +111,9 @@ class Asked:
     until: datetime | None = None
     environment: str | None = None
     constraints: tuple[tuple[str, object, bool], ...] = ()
+    # The agent LEKA handed it to, at work (dispatch.py): which, delivering
+    # what, with what — said first in the answer.
+    handed: Mapping[str, object] | None = None
 
     @property
     def acting(self) -> bool:

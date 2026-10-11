@@ -43119,6 +43119,8 @@ export interface operations {
             query?: {
                 key?: string | null;
                 status?: ("awaiting_approval" | "queued" | "running" | "succeeded" | "failed" | "cancelled") | null;
+                /** @description An intention's runs: the agents at work on it. */
+                intention_id?: string | null;
                 limit?: number;
             };
             header?: never;

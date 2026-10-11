@@ -49,7 +49,12 @@ class CapabilityRunRepository:
         return found
 
     async def runs(
-        self, *, key: str | None = None, status: str | None = None, limit: int = 50
+        self,
+        *,
+        key: str | None = None,
+        status: str | None = None,
+        intention_id: uuid.UUID | None = None,
+        limit: int = 50,
     ) -> Sequence[AgentRun]:
         query = (
             select(AgentRun)
@@ -61,6 +66,8 @@ class CapabilityRunRepository:
             query = query.where(AgentRun.key == key)
         if status is not None:
             query = query.where(AgentRun.status == status)
+        if intention_id is not None:
+            query = query.where(AgentRun.intention_id == intention_id)
         return (await self._session.scalars(query)).all()
 
     async def events(self, run_id: uuid.UUID) -> Sequence[AgentRunEvent]:

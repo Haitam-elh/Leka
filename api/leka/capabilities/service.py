@@ -118,9 +118,14 @@ class AgentRuntime:
         return run
 
     async def runs(
-        self, *, key: str | None = None, status: str | None = None, limit: int = 50
+        self,
+        *,
+        key: str | None = None,
+        status: str | None = None,
+        intention_id: uuid.UUID | None = None,
+        limit: int = 50,
     ) -> Sequence[AgentRun]:
-        return await self._runs.runs(key=key, status=status, limit=limit)
+        return await self._runs.runs(key=key, status=status, intention_id=intention_id, limit=limit)
 
     async def run(
         self, run_id: uuid.UUID
