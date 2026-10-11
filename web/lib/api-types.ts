@@ -5687,6 +5687,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** LEKA CORE's plans and prices */
+        get: operations["read_pricing_api_v1_pricing_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pricing/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What a visitor of the pricing page chose or clicked */
+        post: operations["record_event_api_v1_pricing_events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The subscription */
+        get: operations["read_subscription_api_v1_billing_subscription_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pay for a plan, with Stripe */
+        post: operations["start_checkout_api_v1_billing_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/capacity/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Buy AI capacity, with Stripe */
+        post: operations["start_capacity_checkout_api_v1_billing_capacity_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/portal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stripe's customer portal */
+        post: operations["open_portal_api_v1_billing_portal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/stripe/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stripe's events, verified by their signature */
+        post: operations["stripe_webhook_api_v1_billing_stripe_webhook_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -7656,6 +7775,17 @@ export interface components {
             created_at: string;
         };
         /**
+         * BookingRead
+         * @description Where an Enterprise prospect books a meeting — none until it is
+         *     configured — and the contact path that always works.
+         */
+        BookingRead: {
+            /** Url */
+            url: string | null;
+            /** Contact Url */
+            contact_url: string;
+        };
+        /**
          * BusinessContext
          * @description What a technical thing — a service, an application, a table, a
          *     resource — means to the business: the capabilities and processes that
@@ -8525,6 +8655,11 @@ export interface components {
             /** Superseded At */
             superseded_at: string | null;
         };
+        /** CapacityCheckoutCreate */
+        CapacityCheckoutCreate: {
+            /** Pack */
+            pack: string;
+        };
         /** CatalogEntry */
         CatalogEntry: {
             key: components["schemas"]["SourceKind"];
@@ -8865,6 +9000,29 @@ export interface components {
             requester: components["schemas"]["EntityBrief"] | null;
             /** Incident Count */
             incident_count: number;
+        };
+        /** CheckoutCreate */
+        CheckoutCreate: {
+            /**
+             * Plan
+             * @enum {string}
+             */
+            plan: "starter" | "growth" | "business";
+            /**
+             * Interval
+             * @enum {string}
+             */
+            interval: "month" | "year";
+        };
+        /**
+         * CheckoutRead
+         * @description Where to pay — Stripe's page — and what will be charged, as the
+         *     pricing page says it.
+         */
+        CheckoutRead: {
+            /** Url */
+            url: string;
+            quote: components["schemas"]["Quote"] | null;
         };
         /**
          * CloudAccountDetail
@@ -10232,6 +10390,12 @@ export interface components {
             ticket: string;
             /** Added */
             added: string[];
+        };
+        /** CoreAgentRead */
+        CoreAgentRead: {
+            /** Key */
+            key: string;
+            name: components["schemas"]["Words"];
         };
         /**
          * CoverageRead
@@ -15448,6 +15612,23 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["ViewSourceRead"][];
         };
+        /** LaunchOfferRead */
+        LaunchOfferRead: {
+            /** Percent */
+            percent: number;
+            /** Months */
+            months: number;
+            /** Open */
+            open: boolean;
+            /** Ends On */
+            ends_on: string | null;
+            /**
+             * Stacks With Annual
+             * @default false
+             * @constant
+             */
+            stacks_with_annual: false;
+        };
         /**
          * LeftOutRead
          * @description A thing found and left out (LEKA-372), and why.
@@ -16855,6 +17036,31 @@ export interface components {
                 [key: string]: components["schemas"]["JsonValue"];
             };
         };
+        /** PlanRead */
+        PlanRead: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Self Service */
+            self_service: boolean;
+            /** Recommended */
+            recommended: boolean;
+            audience: components["schemas"]["Words"];
+            value: components["schemas"]["Words"];
+            /** Quotes */
+            quotes: components["schemas"]["Quote"][];
+            /** Ai Credits Per Month */
+            ai_credits_per_month: number | null;
+            /** Ai Credits Provisional */
+            ai_credits_provisional: boolean;
+            /** Ai Credits Contractual */
+            ai_credits_contractual: boolean;
+            /** Managed Llm */
+            managed_llm: boolean;
+            /** Own Llm */
+            own_llm: boolean;
+        };
         /**
          * PlanStartRequest
          * @description Run now — or at a moment, when given.
@@ -17008,6 +17214,11 @@ export interface components {
                 [key: string]: components["schemas"]["JsonValue"];
             }[];
         };
+        /** PortalRead */
+        PortalRead: {
+            /** Url */
+            url: string;
+        };
         /**
          * PostureRead
          * @description The platform's protections, read from the running process.
@@ -17079,6 +17290,37 @@ export interface components {
              * @description Fields the mapping names that the first record lacks.
              */
             missing?: string[];
+        };
+        /**
+         * PricingRead
+         * @description The catalogue as the pricing page shows it: every price computed here,
+         *     from catalogue.yaml — the page states none of its own.
+         */
+        PricingRead: {
+            /** Version */
+            version: string;
+            /** Currency */
+            currency: string;
+            /** Annual Discount Percent */
+            annual_discount_percent: number;
+            launch_offer: components["schemas"]["LaunchOfferRead"];
+            /** Core Agents */
+            core_agents: components["schemas"]["CoreAgentRead"][];
+            /** Plans */
+            plans: components["schemas"]["PlanRead"][];
+            /** Add Ons Available */
+            add_ons_available: boolean;
+            /** Capacity Any Time */
+            capacity_any_time: boolean;
+            /**
+             * Automatic Overage
+             * @default false
+             * @constant
+             */
+            automatic_overage: false;
+            /** Capacity Packs Available */
+            capacity_packs_available: boolean;
+            booking: components["schemas"]["BookingRead"];
         };
         /**
          * ProcessingRunRead
@@ -17410,6 +17652,33 @@ export interface components {
              * Format: date-time
              */
             validated_at: string;
+        };
+        /**
+         * Quote
+         * @description What a plan costs on an interval.
+         */
+        Quote: {
+            /** Plan */
+            plan: string;
+            /**
+             * Interval
+             * @enum {string}
+             */
+            interval: "month" | "year";
+            /** List Monthly */
+            list_monthly: number;
+            /** Discount */
+            discount: ("annual" | "launch") | null;
+            /** Percent */
+            percent: number;
+            /** Monthly */
+            monthly: number;
+            /** Charged */
+            charged: number;
+            /** For Months */
+            for_months: number | null;
+            /** Then Monthly */
+            then_monthly: number | null;
         };
         /**
          * RankingReport
@@ -18941,6 +19210,26 @@ export interface components {
              */
             members: number;
         };
+        /** SiteEventCreate */
+        SiteEventCreate: {
+            /**
+             * Event
+             * @enum {string}
+             */
+            event: "page_viewed" | "interval_selected" | "plan_selected" | "cta_clicked" | "enterprise_booking_clicked" | "enterprise_contact_clicked";
+            /**
+             * Page
+             * @default pricing
+             * @constant
+             */
+            page: "pricing";
+            /** Plan */
+            plan?: ("free" | "starter" | "growth" | "business" | "enterprise") | null;
+            /** Interval */
+            interval?: ("month" | "year") | null;
+            /** Language */
+            language?: ("fr" | "en") | null;
+        };
         /**
          * SkillRead
          * @description A skill, as a caller gets it: what it does, what it takes and gives,
@@ -19640,6 +19929,33 @@ export interface components {
             name: string;
             /** Kind */
             kind: string | null;
+        };
+        /**
+         * SubscriptionRead
+         * @description The workspace's subscription, as Stripe last said it.
+         */
+        SubscriptionRead: {
+            /**
+             * Available
+             * @description Stripe is configured here: plans can be bought.
+             */
+            available: boolean;
+            /** Plan */
+            plan: string;
+            /** Interval */
+            interval: string | null;
+            /** Status */
+            status: string | null;
+            /** Current Period End */
+            current_period_end: string | null;
+            /** Cancel At Period End */
+            cancel_at_period_end: boolean;
+            /** Launch Offer Available */
+            launch_offer_available: boolean;
+            /** Last Invoice */
+            last_invoice: string | null;
+            /** Has Customer */
+            has_customer: boolean;
         };
         /** SyncRequested */
         SyncRequested: {
@@ -20359,6 +20675,13 @@ export interface components {
         Withdrawal: {
             /** Reason */
             reason?: string | null;
+        };
+        /** Words */
+        Words: {
+            /** Fr */
+            fr: string;
+            /** En */
+            en: string;
         };
         /**
          * WorkflowRead
@@ -49679,6 +50002,660 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    read_pricing_api_v1_pricing_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricingRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    record_event_api_v1_pricing_events_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteEventCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    read_subscription_api_v1_billing_subscription_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    start_checkout_api_v1_billing_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckoutCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    start_capacity_checkout_api_v1_billing_capacity_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CapacityCheckoutCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    open_portal_api_v1_billing_portal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    stripe_webhook_api_v1_billing_stripe_webhook_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Not signed by Stripe */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Not signed in, or the session has expired. */
             401: {

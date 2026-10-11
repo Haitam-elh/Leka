@@ -3,6 +3,7 @@
 import { Bot, Database, Headset, Layers, Play, ReceiptText, Sparkles, Users, Waypoints, Workflow } from "lucide-react";
 
 import { IconTile, TILE_TONES } from "@/components/environment/parts";
+import { SubscriptionSection } from "@/components/billing/subscription-section";
 import { PageContainer } from "@/components/shell/page-container";
 import { ErrorState } from "@/components/states/error-state";
 import type { Credits } from "@/lib/billing";
@@ -77,6 +78,7 @@ export function BillingScreen() {
             ))}
           </div>
           {credits ? <CreditsSection credits={credits} number={number} day={day} /> : null}
+          <SubscriptionSection />
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
             <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="billing-month">
               <h2 className="font-semibold text-brand-navy">{w.month}</h2>

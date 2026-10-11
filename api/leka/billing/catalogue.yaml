@@ -1,0 +1,144 @@
+# LEKA CORE's commercial catalogue (LEKA-431) — the ONE source of truth for
+# its plans, their prices and discounts, what each includes, and the AI
+# capacity that can be added. The pricing page, the API and checkout read it;
+# nothing else states a price.
+#
+# Prices are in euro cents, excluding VAT. `provisional: true` marks a launch
+# hypothesis — the AI-credit allowances above all — to be revisited once
+# usage and cost metering (LEKA-430) has measured real usage; it is never
+# shown as a guarantee. Change a value here, in a pull request: the page
+# follows, nothing else to edit.
+#
+# Values not decided yet are absent, never guessed: seats, sources and
+# workspaces per plan; specialist add-on and capacity-pack prices.
+
+version: "2026-10-10"
+currency: EUR
+
+# 20% off when billed yearly.
+annual_discount_percent: 20
+
+# The launch offer: 30% off the first 12 months, on monthly billing only —
+# never stacked with the annual discount.
+launch_offer:
+  percent: 30
+  months: 12
+  intervals: [month]
+  # Until when a new subscription may take it; empty: until further notice.
+  ends_on: null
+
+# The core agents every plan includes, within its AI capacity.
+core_agents:
+  - key: application-architecture
+    name: { fr: "Architecte applicatif", en: "Application architect" }
+  - key: test-analysis
+    name: { fr: "QA — analyse des tests", en: "QA — test analysis" }
+
+plans:
+  - key: free
+    name: Free
+    monthly_price: 0
+    self_service: true
+    audience:
+      fr: "Découvrir LEKA sur un premier périmètre."
+      en: "Try LEKA on a first scope."
+    value:
+      fr: "Connectez vos premières sources et posez vos premières intentions, avec l'Architecte et la QA."
+      en: "Connect your first sources and ask your first intentions, with the Architect and QA."
+    ai_credits_per_month: { value: 100, provisional: true }
+    managed_llm: true
+    own_llm: false
+    launch_offer: false
+    annual: false
+
+  - key: starter
+    name: Starter
+    monthly_price: 5900
+    self_service: true
+    audience:
+      fr: "Une petite équipe technique qui veut une vue claire de son SI."
+      en: "A small engineering team that wants a clear view of its systems."
+    value:
+      fr: "Le modèle de votre environnement tenu à jour, et l'Architecte et la QA pour vos premiers livrables."
+      en: "A continuously updated model of your environment, and the Architect and QA for your first deliverables."
+    ai_credits_per_month: { value: 500, provisional: true }
+    managed_llm: true
+    own_llm: false
+    launch_offer: true
+    annual: true
+
+  - key: growth
+    name: Growth
+    monthly_price: 17900
+    self_service: true
+    recommended: true
+    audience:
+      fr: "Les équipes qui pilotent leur SI au quotidien avec LEKA."
+      en: "Teams that run their systems with LEKA every day."
+    value:
+      fr: "Plus de capacité IA pour vos architectures, vos analyses et vos intentions, sur tout votre périmètre."
+      en: "More AI capacity for your architectures, analyses and intentions, across your whole scope."
+    ai_credits_per_month: { value: 2000, provisional: true }
+    managed_llm: true
+    own_llm: false
+    launch_offer: true
+    annual: true
+
+  - key: business
+    name: Business
+    monthly_price: 59900
+    self_service: true
+    audience:
+      fr: "Les organisations à plusieurs équipes et plusieurs périmètres."
+      en: "Organisations with several teams and scopes."
+    value:
+      fr: "La capacité IA d'une organisation à plusieurs équipes, sur tout son SI."
+      en: "The AI capacity of an organisation with several teams, across its systems."
+    ai_credits_per_month: { value: 8000, provisional: true }
+    managed_llm: true
+    own_llm: false
+    launch_offer: true
+    annual: true
+
+  - key: enterprise
+    name: Enterprise
+    # Priced per contract: never a self-service checkout.
+    monthly_price: null
+    self_service: false
+    audience:
+      fr: "Les grandes organisations, avec leurs exigences de sécurité et leur propre modèle."
+      en: "Large organisations, with their security requirements and their own model."
+    value:
+      fr: "Une capacité IA définie au contrat, et la possibilité de connecter votre propre modèle de langage."
+      en: "AI capacity set by contract, and the option to connect your own language model."
+    ai_credits_per_month: { value: null, contractual: true }
+    managed_llm: true
+    own_llm: true
+    launch_offer: false
+    annual: false
+
+# Specialist agents: optional, sold individually or in bundles — listed
+# only once available; never a purchase flow before.
+add_ons:
+  available: false
+  agents:
+    - security-review
+    - incident-investigation
+    - infrastructure-analysis
+    - code-review
+    - data-analysis
+    - release-analysis
+    - documentation-assistant
+    - debug-assistant
+    - build-fixer
+    - architecture-analysis
+  bundles: []
+
+# AI capacity bought on top of a plan, at any time — before the allowance
+# runs out too — without changing plan. Never an automatic overage charge:
+# at the limit, billable usage pauses until capacity is bought or the plan
+# upgraded. Pack sizes and prices: decided after LEKA-430's data.
+capacity:
+  purchase_any_time: true
+  automatic_overage: false
+  packs: []

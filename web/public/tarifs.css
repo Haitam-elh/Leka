@@ -1,0 +1,138 @@
+/* ==========================================================================
+   LEKA, la page Tarifs (LEKA-431). Les jetons de style.css (couleurs,
+   rayons, ombres, espacements) : rien de nouveau, seulement leur emploi.
+   Fichier propre a LEKA, hors du site livre par Karim (docs/deployment.md).
+   ========================================================================== */
+
+.pricing .content-head { max-width: 760px; }
+
+.pricing-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-top: var(--s-5, 32px);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--mist);
+}
+.pricing-toggle button {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 18px;
+  background: transparent;
+  color: var(--slate);
+  cursor: pointer;
+}
+.pricing-toggle button[aria-checked="true"] { background: #fff; color: var(--ink); box-shadow: var(--shadow-sm); }
+.pricing-toggle button:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+.pricing-toggle__save { color: var(--green); font-weight: 600; margin-left: 4px; }
+
+.pricing-launch {
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--violet);
+  font-weight: 600;
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: var(--s-5, 32px);
+  align-items: stretch;
+}
+@media (max-width: 1180px) { .pricing-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 860px) { .pricing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .pricing-grid { grid-template-columns: 1fr; } }
+
+.pricing-state { grid-column: 1 / -1; color: var(--slate); font-size: 15px; padding: 24px 0; }
+.pricing-state--error { display: grid; gap: 12px; justify-items: start; }
+.pricing-state--error[hidden] { display: none; }
+
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 20px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: #fff;
+}
+.plan--recommended {
+  border-color: var(--violet);
+  box-shadow: var(--shadow-lg);
+  background: linear-gradient(180deg, var(--violet-wash), #fff 38%);
+}
+.plan__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.plan__name { font-size: 19px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+.plan__badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--violet);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.plan__audience { font-size: 13.5px; color: var(--slate); line-height: 1.5; margin: 0; }
+.plan__price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; align-content: flex-start; }
+
+/* Each part of a card on the same line as in the others — its name, who it
+   is for, its price, its call to action — whatever their lengths. */
+@supports (grid-template-rows: subgrid) {
+  .plan {
+    display: grid;
+    grid-row: span 6;
+    grid-template-rows: subgrid;
+    row-gap: 14px;
+  }
+}
+.plan__amount { font-size: 30px; font-weight: 700; letter-spacing: -.03em; color: var(--ink); }
+.plan__per { font-size: 13px; color: var(--slate); }
+.plan__list { width: 100%; font-size: 13px; color: var(--slate-light); }
+.plan__terms { width: 100%; font-size: 12.5px; color: var(--slate); line-height: 1.45; }
+.plan__cta { display: grid; gap: 8px; }
+.plan__cta .btn {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 44px;
+  padding: 10px 12px;
+  white-space: normal;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.25;
+}
+.plan__alt { font-size: 13px; color: var(--slate); text-align: center; text-decoration: underline; }
+.plan__value { font-size: 13.5px; color: var(--ink-soft); line-height: 1.5; margin: 0; }
+.plan__features { list-style: none; margin: 0; padding: 14px 0 0; border-top: 1px solid var(--rule); display: grid; gap: 9px; }
+.plan__features li { font-size: 13.5px; color: var(--ink-soft); line-height: 1.45; padding-left: 20px; position: relative; }
+.plan__features li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: .45em;
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid var(--violet);
+  border-bottom: 2px solid var(--violet);
+  transform: rotate(-45deg);
+}
+.plan__note { color: var(--slate-light); font-size: 12px; }
+
+.pricing-more {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 56px;
+}
+@media (max-width: 860px) { .pricing-more { grid-template-columns: 1fr; } }
+.pricing-more__card { border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--mist); padding: 22px; display: grid; gap: 10px; align-content: start; }
+.pricing-more__card h2 { font-size: 17px; font-weight: 700; letter-spacing: -.015em; margin: 0; }
+.pricing-more__card p { font-size: 14px; color: var(--slate); line-height: 1.55; margin: 0; }
+
+.pricing-terms { margin-top: 32px; display: grid; gap: 6px; }
+.pricing-terms p { font-size: 12.5px; color: var(--slate-light); line-height: 1.5; margin: 0; max-width: 90ch; }

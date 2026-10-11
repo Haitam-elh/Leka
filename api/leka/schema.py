@@ -22,6 +22,7 @@ fails until it is.
 from __future__ import annotations
 
 import leka.background
+import leka.billing
 import leka.capabilities
 import leka.connectors
 import leka.context
