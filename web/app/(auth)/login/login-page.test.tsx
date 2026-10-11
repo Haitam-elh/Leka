@@ -67,7 +67,8 @@ describe("asking for a new confirmation link", () => {
     await reachTheResendButton();
 
     expect(await screen.findByText(SENT)).toBeInTheDocument();
-    expect(resendVerification).toHaveBeenCalledWith("nora@acme.example");
+    // With the page's language: the e-mail is written in it.
+    expect(resendVerification).toHaveBeenCalledWith("nora@acme.example", "fr");
   });
 
   it("says what went wrong when it did not, and lets them try again", async () => {

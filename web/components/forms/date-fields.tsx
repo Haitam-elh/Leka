@@ -70,7 +70,7 @@ function DateTrigger({
       onBlur={onBlur}
       aria-invalid={invalid || undefined}
       className={cn(
-        "flex h-9 w-full items-center gap-2 rounded-lg border border-shell-line bg-white px-3 text-left text-sm outline-none focus-visible:border-brand-violet focus-visible:ring-3 focus-visible:ring-brand-violet/30 disabled:cursor-not-allowed disabled:opacity-60",
+        "flex h-9 w-full items-center gap-2 rounded-lg border border-shell-line bg-white px-3 text-start text-sm outline-none focus-visible:border-brand-violet focus-visible:ring-3 focus-visible:ring-brand-violet/30 disabled:cursor-not-allowed disabled:opacity-60",
         invalid && "border-shell-badge-foreground",
       )}
     >

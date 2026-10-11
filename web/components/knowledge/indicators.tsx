@@ -138,7 +138,7 @@ export function FreshnessIndicator({
   className,
 }: FreshnessIndicatorProps) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const state = freshnessOf(lastUpdated, thresholds);
   const { tone, icon: Icon } = FRESHNESS_LOOK[state];
   const ago = lastUpdated ? timeAgo(t, lastUpdated) : t.knowledge.freshness.never;

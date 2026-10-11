@@ -12,7 +12,8 @@
     "e2e": "playwright test",
     "lock": "docker run --rm --platform linux/amd64 -v \"$PWD\":/app -w /app node:22 npm install --no-audit --no-fund",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "i18n:report": "I18N_REPORT=1 vitest run lib/i18n/coverage.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

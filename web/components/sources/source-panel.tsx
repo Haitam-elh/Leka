@@ -81,7 +81,7 @@ export function SourcePanel({
         className="flex items-center gap-1 self-end rounded text-sm font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
       >
         {s.openDetail}
-        <ArrowRight className="size-3.5" aria-hidden="true" />
+        <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />
       </Link>
     </aside>
   );
@@ -99,7 +99,7 @@ export function SourceFacts({
   records?: number;
 }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const s = t.sources.panel;
   const when = (iso: string | null | undefined) => (iso ? timeAgo(t, iso) : t.sources.never);
   const account = source.source_metadata.login ?? source.source_metadata.workspace;
@@ -122,7 +122,7 @@ export function SourceFacts({
       value:
         records === undefined
           ? t.sources.notCounted
-          : new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB").format(records),
+          : new Intl.NumberFormat(locale).format(records),
     },
     { label: s.lastCheck, value: when(source.last_health_check_at) },
     { label: s.owner, value: owner },

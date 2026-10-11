@@ -40,12 +40,12 @@ const FIELD =
 type Provider = WorkspaceModelUpdate["provider"];
 
 function number(value: number, locale: string): string {
-  return new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB").format(value);
+  return new Intl.NumberFormat(locale).format(value);
 }
 
 function priceSaid(t: Dictionary, profile: ModelProfile, locale: string): string[] {
   const w = t.languageModel;
-  const where = locale === "fr" ? "fr-FR" : "en-GB";
+  const where = locale;
   if (!profile.price) return [w.noPrice];
   const said = [
     fill(w.price, {
@@ -68,7 +68,7 @@ function priceSaid(t: Dictionary, profile: ModelProfile, locale: string): string
 function DefaultModel({ gateway }: { gateway: ModelGateway }) {
   const t = useDictionary();
   const w = t.languageModel;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const model = gateway.default;
   const vendor = gateway.providers.find((p) => p.name === model.provider);
   return (
@@ -369,8 +369,8 @@ function OwnModel({ gateway, admin }: { gateway: ModelGateway; admin: boolean })
 function Usage({ usage }: { usage: ModelUsage }) {
   const t = useDictionary();
   const w = t.languageModel;
-  const { locale } = useLocale();
-  const where = locale === "fr" ? "fr-FR" : "en-GB";
+  const { format: locale } = useLocale();
+  const where = locale;
   const total = usage.total;
   const purposes = w.purposes as Record<string, string>;
   const tiles = [
@@ -475,7 +475,7 @@ function Usage({ usage }: { usage: ModelUsage }) {
                   <Pill tone={call.status === "ok" ? "success" : "danger"}>
                     {w.callStatuses[call.status]}
                   </Pill>
-                  <span className="ml-auto text-xs text-shell-muted tabular-nums">
+                  <span className="ms-auto text-xs text-shell-muted tabular-nums">
                     {number(call.tokens_in + call.tokens_out, locale)} tokens ·{" "}
                     {timeAgo(t, call.at)}
                   </span>

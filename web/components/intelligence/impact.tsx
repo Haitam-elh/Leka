@@ -106,7 +106,7 @@ export function ImpactPanel({ impact }: { impact: Impact | null }) {
                         className="flex items-center gap-3 rounded-lg px-1 py-1.5 outline-none hover:bg-shell-canvas focus-visible:ring-2 focus-visible:ring-brand-violet/40"
                       >
                         {body}
-                        <ChevronRight className="size-4 shrink-0 text-shell-muted" aria-hidden="true" />
+                        <ChevronRight className="rtl:-scale-x-100 size-4 shrink-0 text-shell-muted" aria-hidden="true" />
                       </Link>
                     ) : (
                       <span className="flex items-center gap-3 px-1 py-1.5">{body}</span>

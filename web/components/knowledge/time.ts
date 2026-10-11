@@ -23,7 +23,7 @@ export function timeAgo(t: Dictionary, iso: string | Date, now = Date.now()): st
 
 /** "25 sept. 2026, 14:02" — the moment itself, in the reader's time zone. */
 export function exactDate(locale: string, iso: string | Date): string {
-  return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(iso));
@@ -34,7 +34,7 @@ export function shortWhen(locale: string, iso: string | Date, now = Date.now()):
   const date = new Date(iso);
   const today = new Date(now).toDateString() === date.toDateString();
   return new Intl.DateTimeFormat(
-    locale === "fr" ? "fr-FR" : "en-GB",
+    locale,
     today ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short" },
   ).format(date);
 }

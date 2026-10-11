@@ -81,7 +81,7 @@ function Row({ intention }: { intention: Intention }) {
         <span className="col-span-2 text-[0.8125rem] text-shell-muted md:col-span-1">
           {timeAgo(t, intention.updated_at)}
         </span>
-        <ChevronRight className="hidden size-4 text-shell-muted md:block" aria-hidden="true" />
+        <ChevronRight className="rtl:-scale-x-100 hidden size-4 text-shell-muted md:block" aria-hidden="true" />
       </Link>
     </li>
   );
@@ -186,17 +186,17 @@ export function IntentionsList() {
             );
           })}
         </div>
-        <label className="relative lg:ml-auto lg:w-80">
+        <label className="relative lg:ms-auto lg:w-80">
           <span className="sr-only">{w.search}</span>
           <Search
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-shell-muted"
+            className="pointer-events-none absolute top-1/2 start-3 size-4 -translate-y-1/2 text-shell-muted"
             aria-hidden="true"
           />
           <Input
             value={q}
             onChange={(event) => setQ(event.target.value)}
             placeholder={w.search}
-            className="pl-9"
+            className="ps-9"
             data-testid="intentions-search"
           />
         </label>

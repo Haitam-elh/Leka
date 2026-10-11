@@ -130,7 +130,7 @@ function FoundCard({ sources }: { sources: SourceFindings[] }) {
         <div className="overflow-x-auto">
           <table className="w-full text-[0.8125rem]" data-testid="protection-found">
             <thead>
-              <tr className="text-left text-xs text-shell-muted">
+              <tr className="text-start text-xs text-shell-muted">
                 {(["source", "scanned", "withSecrets", "secrets", "personal"] as const).map((c) => (
                   <th key={c} scope="col" className="px-2 py-1 font-medium">
                     {w.columns[c]}
@@ -141,7 +141,7 @@ function FoundCard({ sources }: { sources: SourceFindings[] }) {
             <tbody>
               {sources.map((s) => (
                 <tr key={s.source_id} className="border-t border-shell-line align-top" data-source={s.source_id}>
-                  <th scope="row" className="px-2 py-1.5 text-left font-medium text-brand-navy">
+                  <th scope="row" className="px-2 py-1.5 text-start font-medium text-brand-navy">
                     {s.name ?? s.source_id.slice(0, 8)}
                     {s.kind ? <span className="block text-xs font-normal text-shell-muted">{s.kind}</span> : null}
                   </th>

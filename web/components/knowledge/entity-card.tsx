@@ -138,7 +138,7 @@ export function EntityCard({
       onClick={() => onClick(id)}
       aria-current={selected ? "true" : undefined}
       title={name}
-      className="block max-w-full truncate text-left outline-none after:absolute after:inset-0 after:rounded-[inherit] after:content-[''] focus-visible:after:ring-3 focus-visible:after:ring-brand-violet/40"
+      className="block max-w-full truncate text-start outline-none after:absolute after:inset-0 after:rounded-[inherit] after:content-[''] focus-visible:after:ring-3 focus-visible:after:ring-brand-violet/40"
     >
       {name}
     </button>

@@ -265,7 +265,7 @@ function ToolChoice({
         disabled={connected}
         onClick={onToggle}
         className={cn(
-          "flex w-full items-center gap-3 rounded-lg border bg-white p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40",
+          "flex w-full items-center gap-3 rounded-lg border bg-white p-3 text-start outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40",
           chosen ? "border-brand-violet bg-brand-violet-soft" : "border-shell-line",
           connected ? "cursor-default opacity-70" : "hover:border-brand-violet",
         )}

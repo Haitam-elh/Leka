@@ -280,7 +280,7 @@ function Shown({
   onPick: (id: string) => void;
 }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.environment.sheet.context;
   const [version, setVersion] = useState<number | null>(null);
   const [pair, setPair] = useState<readonly [number, number] | null>(null);
@@ -596,7 +596,7 @@ function ElementRow({
         <ElementInspect contextId={at.contextId} version={at.version} refId={element.ref_id} />
       ) : null}
       {open && canFeedback ? (
-        <div className="mt-2 ml-6">
+        <div className="mt-2 ms-6">
           <ElementFeedback contextId={at.contextId} version={at.version} refId={element.ref_id} />
         </div>
       ) : null}
@@ -659,7 +659,7 @@ function Provenance({
   names: ReadonlyMap<string, ContextElement>;
 }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.environment.sheet.context;
   const said = element.provenance;
   const attributes = Object.entries(said.attributes);
@@ -834,7 +834,7 @@ function Versions({
               onClick={() => onShow(row.version)}
               aria-current={row.version === shown ? "true" : undefined}
               className={cn(
-                "w-full rounded-md px-2 py-1 text-left outline-none hover:bg-shell-canvas focus-visible:ring-2 focus-visible:ring-brand-violet/40",
+                "w-full rounded-md px-2 py-1 text-start outline-none hover:bg-shell-canvas focus-visible:ring-2 focus-visible:ring-brand-violet/40",
                 row.version === shown && "bg-brand-violet-soft",
               )}
             >
@@ -862,7 +862,7 @@ function Versions({
               <button
                 type="button"
                 onClick={() => onCompare([row.version - 1, row.version])}
-                className="ml-2 rounded text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+                className="ms-2 rounded text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
               >
                 {fill(w.compare, { previous: row.version - 1 })}
               </button>

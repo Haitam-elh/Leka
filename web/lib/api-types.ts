@@ -13399,8 +13399,14 @@ export interface components {
              */
             stated: boolean;
         };
-        /** ForgotPasswordRequest */
+        /**
+         * ForgotPasswordRequest
+         * @description An address, and the language the page was shown in — for the e-mail
+         *     of someone who never chose one.
+         */
         ForgotPasswordRequest: {
+            /** Language */
+            language?: string | null;
             /** Email */
             email: string;
         };
@@ -17384,6 +17390,10 @@ export interface components {
             /** Job Title */
             job_title?: string | null;
             company_size?: components["schemas"]["CompanySize"] | null;
+            /** Language */
+            language?: string | null;
+            /** Region */
+            region?: string | null;
         };
         /**
          * ProposalRead
@@ -17862,8 +17872,14 @@ export interface components {
             /** @description The check it was, and after which changes (LEKA-374). */
             check?: components["schemas"]["ContextCheckRead"] | null;
         };
-        /** RegisterRequest */
+        /**
+         * RegisterRequest
+         * @description Registering keeps the language the form was shown in as the account's:
+         *     the person saw it, and could change it, on that page.
+         */
         RegisterRequest: {
+            /** Language */
+            language?: string | null;
             /** First Name */
             first_name: string;
             /** Last Name */
@@ -20508,6 +20524,10 @@ export interface components {
             /** Job Title */
             job_title?: string | null;
             company_size?: components["schemas"]["CompanySize"] | null;
+            /** Language */
+            language?: string | null;
+            /** Region */
+            region?: string | null;
         };
         /**
          * ValidationIssueCount
@@ -20937,6 +20957,8 @@ export interface components {
         WorkspaceCreate: {
             /** Name */
             name: string;
+            /** Default Language */
+            default_language?: string | null;
         };
         /**
          * WorkspaceMembershipRead
@@ -21038,6 +21060,8 @@ export interface components {
             settings: {
                 [key: string]: unknown;
             };
+            /** Default Language */
+            default_language: string;
             /**
              * Created At
              * Format: date-time
@@ -21086,6 +21110,8 @@ export interface components {
             settings?: {
                 [key: string]: unknown;
             } | null;
+            /** Default Language */
+            default_language?: string | null;
         };
         /**
          * WorkspaceUsageRead

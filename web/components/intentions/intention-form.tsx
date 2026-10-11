@@ -380,7 +380,7 @@ function Line({ label, value }: { label: string; value: string }) {
   return (
     <p className="flex justify-between gap-3">
       <span className="text-shell-muted">{label}</span>
-      <span className="text-right font-medium text-shell-nav">{value}</span>
+      <span className="text-end font-medium text-shell-nav">{value}</span>
     </p>
   );
 }

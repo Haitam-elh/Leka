@@ -363,7 +363,7 @@ function NodeBox({ node }: { node: MapNode }) {
     </>
   );
   const box =
-    "relative z-10 flex min-w-[7.5rem] items-center gap-1.5 rounded-lg border bg-white px-1.5 py-1.5 text-left";
+    "relative z-10 flex min-w-[7.5rem] items-center gap-1.5 rounded-lg border bg-white px-1.5 py-1.5 text-start";
   const border =
     node.status === "incident"
       ? "border-state-danger/40 bg-state-danger-soft/40"

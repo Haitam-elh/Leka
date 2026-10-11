@@ -66,7 +66,7 @@ export function SidebarSection({
         // The icon and the name where a line's are — 22px, at 70px from the
         // edge — the chevron in what is left, and what the pillar is for
         // under the name, as wide as the row allows.
-        className="grid w-full grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-x-5 rounded-lg py-[10px] pr-1 pl-4 text-left transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+        className="grid w-full grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-x-5 rounded-lg py-[10px] pe-1 ps-4 text-start transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
       >
         <Icon
           className={cn(
@@ -84,7 +84,7 @@ export function SidebarSection({
         >
           {t.nav[section.labelKey]}
         </span>
-        <span className="-ml-4 flex items-center gap-1.5">
+        <span className="-ms-4 flex items-center gap-1.5">
           {waiting > 0 ? (
             <>
               <span className="sr-only">{`, ${fill(t.shell.pendingApprovals, { count: waiting })}`}</span>
@@ -186,7 +186,7 @@ export function RailSection({
           {waiting > 0 ? (
             <span
               aria-hidden="true"
-              className="absolute top-1.5 right-3 size-1.5 rounded-full bg-shell-badge-foreground"
+              className="absolute top-1.5 end-3 size-1.5 rounded-full bg-shell-badge-foreground"
             />
           ) : null}
         </TooltipTrigger>

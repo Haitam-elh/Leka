@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, LogOut, Settings, User } from "lucide-react";
+import { ChevronDown, Globe, LogOut, Settings, User } from "lucide-react";
 import { useState } from "react";
 import { cn } from "cn";
 
@@ -10,15 +10,15 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useChooseLanguage } from "@/components/language/account-language";
+import { LanguageDialog } from "@/components/language/language-picker";
 import { ProfileDialog } from "@/components/shell/profile-dialog";
 import { useCurrentUser, useCurrentWorkspace } from "@/components/shell/shell-provider";
-import { LOCALES, type Locale } from "@/lib/i18n/dictionaries";
-import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
+import { language as languageOf } from "@/lib/i18n/languages";
+import { useDictionary, useLanguage } from "@/lib/i18n/locale-provider";
 import { auth, markSignedOut } from "@/lib/auth";
 
 /**
@@ -29,8 +29,9 @@ import { auth, markSignedOut } from "@/lib/auth";
  * places: at the foot of the sidebar, with their role, and in the header
  * beside the notifications. One menu, two shapes, so the two cannot drift.
  *
- * The language lives here rather than in Settings because it is the one
- * preference someone changes before they can read the settings page.
+ * The language lives here as well as in Settings because it is the one
+ * preference someone changes before they can read the settings page. It
+ * opens the picker of every language LEKA offers (components/language).
  */
 export function UserMenu({
   variant,
@@ -43,8 +44,11 @@ export function UserMenu({
   const t = useDictionary();
   const user = useCurrentUser();
   const workspace = useCurrentWorkspace();
-  const { locale, setLocale } = useLocale();
+  const { language } = useLanguage();
+  const choose = useChooseLanguage();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const current = languageOf(language);
 
   const email = user?.email ?? "";
   // The name given at registration. An account made before registration
@@ -90,7 +94,7 @@ export function UserMenu({
           aria-label={t.shell.account}
           data-testid="user-menu"
           className={cn(
-            "flex items-center gap-2 rounded-lg text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
+            "flex items-center gap-2 rounded-lg text-start transition-colors outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
             variant === "sidebar"
               ? "w-full gap-4 px-3 py-2 hover:bg-brand-violet-soft/60"
               : "px-2 py-1.5 hover:bg-brand-violet-soft/60",
@@ -145,17 +149,15 @@ export function UserMenu({
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuRadioGroup
-            value={locale}
-            onValueChange={(next: string) => setLocale(next as Locale)}
-          >
-            <DropdownMenuLabel className="text-shell-muted">{t.shell.language}</DropdownMenuLabel>
-            {LOCALES.map((candidate) => (
-              <DropdownMenuRadioItem key={candidate} value={candidate}>
-                {t.languages[candidate]}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
+          <DropdownMenuGroup>
+            <DropdownMenuItem onClick={() => setLanguageOpen(true)} data-testid="language">
+              <Globe className="size-4" aria-hidden="true" />
+              <span className="min-w-0 flex-1 truncate">{t.shell.language}</span>
+              <span lang={current?.tag} dir={current?.dir} className="truncate text-shell-muted">
+                {current?.native ?? language}
+              </span>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem onClick={signOut} data-testid="sign-out">
@@ -168,6 +170,11 @@ export function UserMenu({
       {/* Outside the menu: it closes as the dialog opens, and would take a
           dialog rendered inside it along. */}
       <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
+      <LanguageDialog
+        open={languageOpen}
+        onOpenChange={setLanguageOpen}
+        onChoose={(chosen) => void choose(chosen)}
+      />
     </>
   );
 }

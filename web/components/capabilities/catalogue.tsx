@@ -194,14 +194,14 @@ function Trend({ now, before, goodWhenDown = false }: { now: number; before: num
 function minutes(ms: number | null | undefined, locale: string): string {
   if (ms === null || ms === undefined) return "—";
   if (ms < 60_000) {
-    return `${new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB", { maximumFractionDigits: 1 }).format(ms / 1000)} s`;
+    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(ms / 1000)} s`;
   }
-  return `${new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB", { maximumFractionDigits: 1 }).format(ms / 60_000)} min`;
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(ms / 60_000)} min`;
 }
 
 function Stats({ summary }: { summary: CatalogueSummary }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const s = t.catalogue.stats;
   const tiles: { key: string; icon: LucideIcon; tone: TileTone; value: string; label: string; foot: React.ReactNode }[] = [
     {
@@ -228,7 +228,7 @@ function Stats({ summary }: { summary: CatalogueSummary }) {
       key: "runs",
       icon: Play,
       tone: "success",
-      value: new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB").format(summary.runs),
+      value: new Intl.NumberFormat(locale).format(summary.runs),
       label: s.runs,
       foot: summary.runs || summary.runs_previous ? (
         <Trend now={summary.runs} before={summary.runs_previous} />
@@ -360,14 +360,14 @@ const BOTTOM = 18;
 
 function UsageChart({ summary }: { summary: CatalogueSummary }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const used = summary.categories.map((c) => c.category);
   const totals = summary.days.map((d) => Object.values(d.runs).reduce((a, b) => a + b, 0));
   const top = Math.max(4, ...totals);
   const slot = WIDTH / Math.max(1, summary.days.length);
   const bar = slot * 0.5;
   const plot = HEIGHT - BOTTOM;
-  const day = new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", {
+  const day = new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
   });
@@ -461,7 +461,7 @@ function Top({ summary }: { summary: CatalogueSummary }) {
 
 function Latest({ summary }: { summary: CatalogueSummary }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   return (
     <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="catalogue-latest">
       <h2 className="mb-2 font-semibold text-brand-navy">{t.catalogue.latest}</h2>
@@ -479,7 +479,7 @@ function Latest({ summary }: { summary: CatalogueSummary }) {
                   <p className="line-clamp-1 text-xs text-shell-muted">{item.summary}</p>
                 </div>
                 <time dateTime={item.registered_at} className="shrink-0 text-xs text-shell-muted">
-                  {new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", {
+                  {new Intl.DateTimeFormat(locale, {
                     day: "numeric",
                     month: "short",
                     year: "numeric",
@@ -575,13 +575,13 @@ function Filters({
       </div>
       <div className="flex flex-1 items-center gap-2 xl:justify-end">
         <label className="relative flex min-w-0 flex-1 items-center xl:max-w-64">
-          <Search className="absolute left-2.5 size-4 text-shell-muted" aria-hidden="true" />
+          <Search className="absolute start-2.5 size-4 text-shell-muted" aria-hidden="true" />
           <input
             value={q}
             onChange={(event) => setQ(event.target.value)}
             placeholder={w.search}
             aria-label={w.search}
-            className="h-9 w-full rounded-lg border border-shell-line bg-white pr-2 pl-8 text-sm text-brand-navy outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+            className="h-9 w-full rounded-lg border border-shell-line bg-white pe-2 ps-8 text-sm text-brand-navy outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40"
             data-testid="catalogue-search"
           />
         </label>
@@ -763,7 +763,7 @@ export function CatalogueScreen() {
             </div>
             <Link href={routes.intentionNew()} className={buttonVariants({ variant: "outline" })}>
               {w.ask}
-              <ArrowRight className="size-4" aria-hidden="true" />
+              <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
             </Link>
           </section>
         </div>

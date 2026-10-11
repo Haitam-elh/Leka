@@ -78,15 +78,23 @@ describe("the account menu", () => {
     expect(screen.getByTestId("user-menu")).toHaveFocus();
   });
 
-  it("offers the languages the interface speaks", async () => {
+  it("says the language, and opens the picker of every one LEKA offers", async () => {
     const user = userEvent.setup();
     mount(<UserMenu variant="header" />);
 
     await user.tab();
     await user.keyboard("{Enter}");
 
-    expect(await screen.findByText(fr.languages.fr)).toBeVisible();
-    expect(screen.getByText(fr.languages.en)).toBeVisible();
+    const item = await screen.findByTestId("language");
+    expect(item).toHaveTextContent(fr.shell.language);
+    expect(item).toHaveTextContent("Français");
+
+    // Just above the way out.
+    await user.keyboard("{End}{ArrowUp}");
+    await waitFor(() => expect(item).toHaveFocus());
+    await user.keyboard("{Enter}");
+    expect(await screen.findByTestId("language-dialog")).toBeVisible();
+    expect(screen.getAllByRole("option")).toHaveLength(140);
   });
 });
 

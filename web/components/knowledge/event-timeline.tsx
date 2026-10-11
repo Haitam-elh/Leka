@@ -73,7 +73,7 @@ export function EventTimeline({
   className,
 }: EventTimelineProps) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
 
@@ -112,7 +112,7 @@ export function EventTimeline({
                   aria-hidden="true"
                   className={cn(
                     "absolute w-px bg-shell-line",
-                    compact ? "top-5 bottom-0 left-[9px]" : "top-8 bottom-0 left-[15px]",
+                    compact ? "top-5 bottom-0 start-[9px]" : "top-8 bottom-0 start-[15px]",
                   )}
                 />
               ) : null}
@@ -140,7 +140,7 @@ export function EventTimeline({
                     <button
                       type="button"
                       onClick={() => onSelect(event.id)}
-                      className="min-w-0 truncate text-left text-[0.8125rem] font-medium text-brand-navy outline-none after:absolute after:inset-0 after:content-[''] focus-visible:after:rounded-md focus-visible:after:ring-3 focus-visible:after:ring-brand-violet/40"
+                      className="min-w-0 truncate text-start text-[0.8125rem] font-medium text-brand-navy outline-none after:absolute after:inset-0 after:content-[''] focus-visible:after:rounded-md focus-visible:after:ring-3 focus-visible:after:ring-brand-violet/40"
                     >
                       {event.title}
                     </button>
@@ -160,7 +160,7 @@ export function EventTimeline({
                     ) : null}
                     <span
                       className={cn(
-                        "ml-auto shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium",
+                        "ms-auto shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium",
                         TONES[tone].badge,
                       )}
                     >

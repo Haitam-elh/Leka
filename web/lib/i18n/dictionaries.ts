@@ -1,25 +1,27 @@
 /**
- * Every word the interface puts on screen, in each language it speaks.
- *
- * FRENCH IS THE DEFAULT. The product is sold in French and the mockups are in
- * French; English exists beside it so that adding a market later is a
- * translation rather than a refactor of fifty components.
+ * Every word the interface puts on screen, in each language it is written
+ * in — French and English today, both approved. Which languages LEKA offers,
+ * and how far each is translated, is the catalogue's to say
+ * (public/languages.json, docs/languages.md); a language the interface is
+ * not written in falls back along its chain (lib/i18n/languages.ts): its
+ * parents, its base language, the workspace's, then English.
  *
  * A LANGUAGE CANNOT FALL BEHIND. `en` is typed as `Dictionary`, so a key
  * added here and forgotten there fails `npm run typecheck`. A navigation
- * label with no translation fails `config/routes.test.ts`.
+ * label with no translation fails `config/routes.test.ts`. A partial
+ * translation (PARTIAL below) may leave keys out: they fall back, and
+ * `npm run i18n:report` says which.
  *
- * Deliberately not a library. next-intl drops in behind `useDictionary()` the
- * day a screen needs plurals, dates or locale-prefixed URLs.
+ * Deliberately not a library: plurals, dates and numbers are the browser's
+ * own Intl (lib/i18n/format.ts).
  */
 
+/** The languages the interface is written in whole. */
 export const LOCALES = ["fr", "en"] as const;
 
-export type Locale = (typeof LOCALES)[number];
-
-export function isLocale(value: unknown): value is Locale {
-  return typeof value === "string" && (LOCALES as readonly string[]).includes(value);
-}
+/** A language the screens may speak: one of LOCALES, a partial
+ * translation's, or a QA pseudo-language (lib/i18n/pseudo.ts). */
+export type Locale = string;
 
 const fr = {
   /** One key per route in config/routes.ts. */
@@ -5704,9 +5706,43 @@ const fr = {
       unknown: "La demande n'a pas abouti. Réessayez.",
     },
   },
-  languages: {
-    fr: "Français",
-    en: "English",
+  /** Choosing a language (docs/languages.md). Every name in it is the
+   * catalogue's: a language's own name, and its name in English. */
+  language: {
+    title: "Langue",
+    open: "Langue : {name}",
+    dialogTitle: "Choisir la langue",
+    dialogDescription:
+      "La langue de LEKA pour vous, sur tous vos appareils. {count} langues, cherchées par leur nom ou leur nom anglais.",
+    search: "Rechercher une langue",
+    none: "Aucune langue ne correspond à « {query} ».",
+    groupTranslated: "Interface traduite",
+    groupOthers: "Autres langues",
+    reviewed: "Interface traduite et relue",
+    translated: "Interface traduite, relecture en cours",
+    partial: "Interface traduite en partie, le reste en {shown}",
+    fallback: "Interface en {shown} pour l'instant",
+    answers: "LEKA vous répond en {name}",
+    aiLimited: "Réponses en {name} : qualité variable selon le modèle",
+    current: "Langue actuelle",
+    saved: "Langue enregistrée : {name}",
+    failed: "La langue n'a pas pu être enregistrée sur votre compte. Elle reste choisie sur cet appareil.",
+    detected: "LEKA s'affiche en {name}, la langue de votre navigateur.",
+    keep: "Garder",
+    change: "Changer",
+    settingsTitle: "Langue et région",
+    settingsDescription:
+      "La langue dans laquelle LEKA vous parle et vous répond, et la région qui écrit les dates, les nombres et les montants.",
+    region: "Région",
+    regionHint: "Pour les dates, les nombres et les montants. Elle ne change pas la langue.",
+    regionBrowser: "Celle du navigateur",
+    regionExample: "Exemple : {example}",
+    workspaceTitle: "Langue de l'espace",
+    workspaceDescription:
+      "Celle des textes que LEKA écrit pour tout l'espace, des e-mails à ceux qui n'ont pas choisi de langue, et de l'interface quand la langue de quelqu'un n'est pas encore traduite.",
+    workspaceSaved: "Langue de l'espace enregistrée : {name}",
+    workspaceReadOnly: "Seuls un propriétaire ou un administrateur peuvent la changer.",
+    pageNotTranslated: "Cette page n'est pas encore traduite en {name} : elle s'affiche en {shown}.",
   },
 };
 
@@ -11186,13 +11222,52 @@ const en: Dictionary = {
       unknown: "That did not go through. Try again.",
     },
   },
-  languages: {
-    fr: "Français",
-    en: "English",
+  language: {
+    title: "Language",
+    open: "Language: {name}",
+    dialogTitle: "Choose your language",
+    dialogDescription:
+      "LEKA's language for you, on every device. {count} languages, found by their own name or their English name.",
+    search: "Search for a language",
+    none: "No language matches “{query}”.",
+    groupTranslated: "Interface translated",
+    groupOthers: "Other languages",
+    reviewed: "Interface translated and reviewed",
+    translated: "Interface translated, review in progress",
+    partial: "Interface partly translated, the rest in {shown}",
+    fallback: "Interface in {shown} for now",
+    answers: "LEKA answers you in {name}",
+    aiLimited: "Answers in {name}: quality varies with the model",
+    current: "Current language",
+    saved: "Language saved: {name}",
+    failed: "The language could not be saved to your account. It stays chosen on this device.",
+    detected: "LEKA is shown in {name}, your browser's language.",
+    keep: "Keep",
+    change: "Change",
+    settingsTitle: "Language and region",
+    settingsDescription:
+      "The language LEKA speaks and answers you in, and the region that writes dates, numbers and amounts.",
+    region: "Region",
+    regionHint: "For dates, numbers and amounts. It does not change the language.",
+    regionBrowser: "Your browser's",
+    regionExample: "Example: {example}",
+    workspaceTitle: "Workspace language",
+    workspaceDescription:
+      "The language of what LEKA writes for the whole workspace, of e-mails to people who chose none, and of the interface when someone's language is not translated yet.",
+    workspaceSaved: "Workspace language saved: {name}",
+    workspaceReadOnly: "Only an owner or an administrator can change it.",
+    pageNotTranslated: "This page is not translated into {name} yet: it is shown in {shown}.",
   },
 };
 
-export const DICTIONARIES: Record<Locale, Dictionary> = { fr, en };
+export const DICTIONARIES: Record<string, Dictionary> = { fr, en };
+
+type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
+
+/** Translations in progress: any key left out falls back along the
+ * language's chain. None yet — the catalogue says so, and a test holds the
+ * two together. */
+export const PARTIAL: Record<string, DeepPartial<Dictionary>> = {};
 
 /** Replaces `{name}` placeholders. The whole templating this product needs. */
 export function fill(template: string, values: Record<string, string | number>): string {

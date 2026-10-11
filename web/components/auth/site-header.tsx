@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { LanguageButton } from "@/components/language/language-picker";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 
 /**
@@ -16,6 +17,9 @@ import { useDictionary } from "@/lib/i18n/locale-provider";
  * application, so they are plain <a> — a full page load, which is what
  * they need; <Link> would ask the router for a page it does not have. The
  * sign-in is the application's own, so it is a <Link>.
+ *
+ * And the language, before anyone signs in (docs/languages.md): chosen
+ * here, it stays on the device and the account takes it on sign-in.
  */
 /* eslint-disable @next/next/no-html-link-for-pages -- static pages, above */
 export function SiteHeader() {
@@ -28,7 +32,7 @@ export function SiteHeader() {
         <a href="/" aria-label={t.home} className="flex-none">
           <Image src="/leka-logo.svg" alt="LEKA" width={80} height={19} unoptimized priority />
         </a>
-        <nav aria-label={t.navigation} className="mr-auto hidden gap-6 md:flex">
+        <nav aria-label={t.navigation} className="me-auto hidden gap-6 md:flex">
           <a href="/#environnement" className={link}>
             {t.platform}
           </a>
@@ -42,7 +46,8 @@ export function SiteHeader() {
             {t.security}
           </a>
         </nav>
-        <div className="ml-auto flex items-center gap-4 md:ml-0">
+        <div className="ms-auto flex items-center gap-4 md:ms-0">
+          <LanguageButton className="h-[38px] px-2 text-[15px] font-medium text-site-slate hover:text-site-ink" />
           {/* On a phone, as on the site: the sign-in stays, the demo folds. */}
           <Link href="/login" className={link}>
             {t.signIn}

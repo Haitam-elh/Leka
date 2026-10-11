@@ -5,6 +5,7 @@ import { Suspense } from "react";
 
 import { ActionEndpoints } from "@/components/settings/action-endpoints";
 import { LanguageModel } from "@/components/settings/language-model";
+import { LanguageSettings } from "@/components/settings/language-settings";
 import { WorkspaceGeneralForm } from "@/components/settings/workspace-general-form";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -18,6 +19,8 @@ function Settings() {
     <PageContainer>
       <PageHeader title={t.nav.settings} subtitle={t.settings.generalTitle} />
       <div className="flex flex-col gap-6">
+        {/* The person's language and region, and the workspace's language. */}
+        <LanguageSettings />
         <WorkspaceGeneralForm failOnce={failOnce} />
         {/* The model that reads and answers (LEKA-394). */}
         <LanguageModel />

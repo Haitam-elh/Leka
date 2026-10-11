@@ -65,7 +65,7 @@ export function AnalysisSummary({
           <p className="mt-1 text-[0.8125rem] text-shell-muted">{analysis.summary ?? w.none}</p>
         </div>
       </div>
-      <div className="space-y-3 md:border-l md:border-shell-line md:pl-4">
+      <div className="space-y-3 md:border-s md:border-shell-line md:ps-4">
         <ConfidenceBadge score={analysis.confidence} />
         <SupportList items={analysis.support ?? []} />
         {action}
