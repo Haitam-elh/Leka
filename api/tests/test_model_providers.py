@@ -326,6 +326,30 @@ def test_a_schema_is_sent_with_its_references_inlined() -> None:
     assert "title" not in schema
 
 
+def test_a_field_called_title_is_a_field_and_is_kept() -> None:
+    """The schema's own "title" label goes; a property named "title" stays.
+    Dropping both left the architect's deck schema "requiring" a property it
+    no longer had: Gemini answered 400, and no deck was ever drawn."""
+    from leka.capabilities.deliverables import ArchitectureDeck
+
+    def requires_what_it_has(node: object) -> None:
+        if isinstance(node, dict):
+            properties = node.get("properties")
+            if isinstance(properties, dict):
+                assert set(node.get("required", [])) <= set(properties), node.get("required")
+            for value in node.values():
+                requires_what_it_has(value)
+        elif isinstance(node, list):
+            for value in node:
+                requires_what_it_has(value)
+
+    schema = plain_schema(ArchitectureDeck)
+    requires_what_it_has(schema)
+    band = schema["properties"]["processes"]["items"]["properties"]["bands"]["items"]
+    assert "title" in band["properties"] and "title" in band["required"]
+    assert "title" not in schema
+
+
 def test_gemini_costs_what_google_lists_and_its_price_doubles_in_2027() -> None:
     flash = profile("google", "gemini-3.8-flash")
     assert flash.cost(1_000_000, 1_000_000, datetime(2026, 10, 9, tzinfo=UTC)) == 4.5

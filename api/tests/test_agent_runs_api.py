@@ -237,7 +237,7 @@ async def test_the_architect_runs_end_to_end(
     )
     assert (started["title"], started["version"], started["mine"]) == (
         "Architecte applicatif",
-        "18.1.0",
+        "19.0.0",
         True,
     )
     assert started["deliverables"] == []
@@ -365,7 +365,9 @@ async def test_a_deck_the_model_cannot_write_never_fails_the_run(
     # The analysis stands; why there are no files, said.
     assert (done["status"], done["output"], done["deliverables"]) == ("succeeded", analysis, [])
     assert _kinds(done)[-2:] == ["render_failed", "succeeded"]
-    assert done["events"][-2]["detail"] == {"code": "no_model"}
+    # Said as it was: the model answered, and not a deck — never "no model".
+    assert done["events"][-2]["detail"]["code"] == "unanswered"
+    assert "Invalid JSON" in done["events"][-2]["detail"]["said"]
     assert (await client.get(f"{API}/{started['id']}/deliverables/pdf")).status_code == 404
     assert [key async for key in store.iter_prefix("")] == []
 

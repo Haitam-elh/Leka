@@ -80,6 +80,7 @@ from leka.intentions.analyst import answer as analyst_answer
 from leka.intentions.approval import DecisionService
 from leka.intentions.capabilities import CAPABILITIES
 from leka.intentions.decisions import Target
+from leka.intentions.dispatch import dispatch
 from leka.intentions.grounding import side
 from leka.intentions.lifecycle import Actor
 from leka.intentions.lifecycle import IntentionStatus as S
@@ -412,6 +413,23 @@ async def _analyse_intention(
             # And answers them in their language (identity.spoken_language).
             asked = replace(asked, language=await spoken_language(session, asker, workspace_id))
             context_id = intention.context_id
+            # The agent that does what it asks, started for them (dispatch.py)
+            # — once. Its work is the answer's first word. In a session of
+            # its own: whatever goes wrong there leaves this one whole.
+            try:
+                async with session_factory() as own:
+                    mine = await IntentionRepository(own, workspace_id).intention(intention.id)
+                    handed = await dispatch(own, workspace_id, mine) if mine else None
+            except Exception:
+                logger.warning(
+                    "intention_dispatch_failed", intention=str(intention.id), exc_info=True
+                )
+                handed = None
+            if handed is not None and handed.run_id is not None:
+                asked = replace(asked, handed=handed.said())
+                if ready is not None and ready.status == "blocked":
+                    # An agent is at work on it: nothing to clarify first.
+                    ready = ready.model_copy(update={"status": "limited"})
             version = ready.version if ready is not None else None
             row = IntentionAnalysis(
                 workspace_id=workspace_id,

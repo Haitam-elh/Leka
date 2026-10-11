@@ -513,7 +513,7 @@ async def _run(
         if drawn.error is None:
             steps.add(drawn.step, **drawn.said())
         else:
-            steps.add("render_failed", code=drawn.error)
+            steps.add("render_failed", code=drawn.error, said=drawn.refusal)
         detail |= drawn.detail()
     runs = CapabilityRunRepository(session, workspace_id)
     ended = await runs.finish(

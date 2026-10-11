@@ -4,7 +4,7 @@ contents, the journey in plain words, the business rules, the application
 view when asked, one slide per sub-process, the RACI, the points to
 confirm, the sources — always last.
 
-Each slide: the title bold in ENGIE blue, top left, an orange italic
+Each slide: the title bold in the principal colour (#1F3864), top left, an orange italic
 subtitle under it, the same landscape page. A process slide: the whole
 business layer (ArchiMate 3.0.1) on top, its sub-process framed in red, a
 red line down to the front; under it, the application layer as a sequence
@@ -143,8 +143,16 @@ def title_slide(deck: ArchitectureDeck) -> Slide:
             2.4,
             WIDTH - 2 * MARGIN,
             0.35,
-            text="ENGIE France B2C - DSI DGP - DSI RUN | Couche métier ArchiMate 3.0.1 + couche "
-            "applicative en diagramme de séquence",
+            # The organisation as the inputs or the sources say it — no one's
+            # name of LEKA's own.
+            text=" | ".join(
+                part
+                for part in (
+                    deck.organisation.strip(),
+                    "Couche métier ArchiMate 3.0.1 + couche applicative en diagramme de séquence",
+                )
+                if part
+            ),
             size=11,
             color=GREY_TEXT,
         ),

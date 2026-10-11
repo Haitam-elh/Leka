@@ -259,6 +259,16 @@ things named, the period, the environment, the gaps), never redone.
 | `several_requests` | no | several « ? », or several actions joined (et, and, puis, then) |
 | `unknown_environment` | no | an environment the model does not know — options: those it knows |
 
+**Read by a model, worked on as it is.**
+LEKA's job is to understand the whole request and do the work; asking back is the exception. When a model read it (`reading.py`):
+- **A plan is not an action.** A verb that changes systems (« migrer ») made the rules read an action. The model may settle that the request is a plan, an assessment or a document (`plan_migration`, `assess_impact`, `map_dependencies`, `check_compliance`, `find_knowledge`), but only when its words ask for one: « évalue », « simule », « propose un plan », « documente », « génère », « PDF »…
+  - Then nothing that would change systems is asked of anyone.
+  - What only an action needs is no longer blocking: which thing exactly (`no_subject`, `unknown_subject`, `ambiguous_subject`, `action_without_target`).
+  - « les serveurs AWS » is every AWS server LEKA knows.
+- **A real command stays one.** « Redémarre Billing API » stays the action it is, whatever a model says.
+- **A request the model understood** (`understood: true`, confident) is analysed even when its goal fits none of the list: `unclear_goal` is no longer blocking.
+- **Only what nothing can be made of is asked back.** Asking back keeps every rule above when no model read it.
+
 **In the lifecycle.** Understood at creation, after its context is read: clear,
 it is `analysing`; not, `needs_clarification` — the move's detail says the
 goal and the blocking ambiguities. Clarified by asking again
@@ -1092,6 +1102,30 @@ workspace's, another workspace's 404. Web: `actions-tab.test.tsx`,
 `intentions.test.tsx`; e2e `intention-outcomes.spec.ts`, on the demo:
 expected, confirmed by a person, achieved, its story told and filtered;
 concluded short of it, failed.
+
+## 15 bis. Handed to the agent that does the work
+
+A request for what an agent delivers (a deck, a document, a review, an investigation, a plan) is handed to that agent: LEKA does the work, not only answers it (`dispatch.py`).
+
+1. **At the start of its analysis, a model reads two things:**
+   - the request;
+   - the agents the person may use here, each with what it delivers, its formats and its inputs.
+
+   It says which agent does the work, with which inputs, taken from the request's own words. Or it says none: LEKA's own analysis answers then, and a plain question is the analysis's.
+2. **Checked before anything starts:**
+   - the agent is one of those offered;
+   - its inputs are exactly its contract's: unknown ones are dropped, booleans are read as such, and no required input is missing.
+3. **Started for the person who asked,** as if they had launched it:
+   - the same checks, re-made by the worker (their role read then);
+   - the same approval controls (LEKA-406);
+   - the run is kept on the intention, where its files (the PDF, the PowerPoint) appear.
+4. **Said first in the answer:** which agent is at work and what it delivers. Never that LEKA cannot produce a document: its agents do.
+
+**Once per intention:** analysing it again starts nothing more, and the agent already at work is the one said.
+
+An agent at work on it unblocks it: what an action would need first no longer stops it.
+
+No model, or no agent offered: nothing is started, and the analysis answers as before.
 
 ## 16. Tested
 
