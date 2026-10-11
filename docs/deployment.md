@@ -624,6 +624,21 @@ the home page (`#environnement`, `#intention`, `#video`, `#controle` since
 
 ---
 
+## Payments: Stripe (LEKA-431)
+
+The keys go in `production.env`, and nowhere else:
+`LEKA_STRIPE_SECRET_KEY` and `LEKA_STRIPE_WEBHOOK_SECRET` — test keys
+(`sk_test_…`) until live payments are opened. After a deployment that
+changes `api/leka/billing/catalogue.yaml`, and once per Stripe account:
+
+```bash
+dc exec api python -m leka.billing.cli stripe-sync
+```
+
+It creates the products, prices, the launch coupon and the customer portal's
+settings that are missing, and prints them. The webhook endpoint, its events
+and the test-to-live steps: [pricing.md](pricing.md) § 7.
+
 ## What is deliberately not here
 
 - **No staging.** One environment. A change is tested by CI and the browser

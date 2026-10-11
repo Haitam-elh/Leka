@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -94,3 +95,45 @@ class SiteEventCount(_Read):
     plan: str | None
     interval: str | None
     count: int = Field(ge=0)
+
+
+# ── paying ──────────────────────────────────────────────────────────────────
+
+
+class CheckoutCreate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    plan: Literal["starter", "growth", "business"]
+    interval: Literal["month", "year"]
+
+
+class CapacityCheckoutCreate(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    pack: str = Field(min_length=1, max_length=40)
+
+
+class CheckoutRead(_Read):
+    """Where to pay — Stripe's page — and what will be charged, as the
+    pricing page says it."""
+
+    url: str
+    quote: Quote | None
+
+
+class PortalRead(_Read):
+    url: str
+
+
+class SubscriptionRead(_Read):
+    """The workspace's subscription, as Stripe last said it."""
+
+    available: bool = Field(description="Stripe is configured here: plans can be bought.")
+    plan: str
+    interval: str | None
+    status: str | None
+    current_period_end: datetime | None
+    cancel_at_period_end: bool
+    launch_offer_available: bool
+    last_invoice: str | None
+    has_customer: bool

@@ -40,7 +40,7 @@ LAYERS: dict[str, int] = {
     "connectors": 4,
     # LEKA CORE's commercial offer (LEKA-431): its catalogue, the pricing
     # page's analytics.
-    "billing": 4,
+    "billing": 6,
     "ingestion": 5,
     "governance": 5,
     "knowledge": 6,

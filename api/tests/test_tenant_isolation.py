@@ -66,6 +66,10 @@ pytestmark = pytest.mark.integration
 #                  what LEKA can do, every version, every lifecycle move —
 #                  the product's, no customer's. What a workspace says of
 #                  them is workspace_capabilities, which is scoped.
+#   stripe_events  every event Stripe sent (LEKA-431), kept once by its id
+#                  before LEKA knows which workspace it is about — or when it
+#                  is about none. Which one it was: `for_workspace_id`, as
+#                  job_runs says it; nothing exposes these rows.
 #   site_events    what visitors of the public pricing page chose and clicked
 #                  (LEKA-431) — LEKA's own analytics, before anyone signs
 #                  in: no workspace, no person, no address.
@@ -83,6 +87,7 @@ TENANT_FREE_TABLES = frozenset(
         "capability_registrations",
         "capability_events",
         "site_events",
+        "stripe_events",
         "model_rates",
     }
 )

@@ -86,7 +86,7 @@ Each is added to the catalogue when decided, and the page shows it with nothing 
 
 | Plan | Call to action | Where it goes |
 | --- | --- | --- |
-| Self-service | « Commencer » (Free: « Commencer gratuitement ») | sign-up, with `?plan&interval`. Checkout comes with the Stripe integration (§ 7) |
+| Self-service | « Commencer » (Free: « Commencer gratuitement ») | sign-up, with `?plan&interval`; paying is then done from Facturation (§ 7) |
 | Enterprise, `LEKA_SALES_BOOKING_URL` set | « Réserver un rendez-vous avec notre équipe » | the booking page (Calendly or equivalent), in a new tab, with « ou nous écrire » beside it |
 | Enterprise, `LEKA_SALES_BOOKING_URL` not set | « Nous contacter » | the enquiry form (`LEKA_SALES_CONTACT_URL`, by default `demo.html?type=enterprise`). No booking address is ever guessed |
 
@@ -137,15 +137,66 @@ Enterprise's booking page: `LEKA_SALES_BOOKING_URL` in `production.env` (https),
 
 Free cannot reach a margin at €0. It is held by its 100-credit cap, abuse and rate limits, and its measured cost per active workspace (LEKA-430).
 
-## 7. Not yet
+## 7. Paying: Stripe
 
-LEKA-431's next pull request: **Stripe**.
+Self-service plans and capacity packs are paid through **Stripe**, with no SDK:
+`leka/billing/stripe.py` makes the REST calls and checks the signatures.
 
-- **Checkout** for the self-service plans.
-- **Verified, idempotent webhooks**: checkout completed; subscription created, updated or deleted; invoice paid or payment failed; refunds.
-- **Entitlements**: the workspace's plan and its included credits, granted only after a verified event.
-- **Capacity packs**: credited once after a verified payment.
-- **The documented policy** for renewals, cancellations, failed payments, plan changes and proration.
-- **Documentation**: the Stripe dashboard configuration, and the test-to-live rollout.
+| | |
+| --- | --- |
+| **The catalogue in Stripe** | `python -m leka.billing.cli stripe-sync` creates what is missing (`leka/billing/sync.py`): each plan a product (`leka_core_<plan>`), each price a Stripe price found by its **lookup key** (`leka_core_<plan>_<interval>_<cents>`, e.g. `leka_core_growth_year_171840`), the launch offer a coupon (`leka_launch_30_12m`: 30 %, 12 months, on the plans' products), capacity packs (`leka_core_pack_<key>_<cents>`), and the customer portal's settings. Prices are amounts excluding VAT (`tax_behavior: exclusive`). No price id is configured: a price changed in the catalogue is a new Stripe price, found by its new key. Run it once per environment, then after each catalogue change |
+| **Checkout** | `POST /billing/checkout {plan, interval}` (`workspace:update`) opens Stripe Checkout for Starter, Growth or Business. It charges the price found by its key, so it charges what the page shows. The launch coupon is added **only** for monthly billing, while the offer is open, on a workspace that never subscribed. A year gets the annual discount alone, and no promotion codes are accepted. A workspace already subscribed is sent to the portal (409) |
+| **AI capacity** | `POST /billing/capacity/checkout {pack}`, at any time and whatever the plan: a one-time Checkout. A pack not in the catalogue cannot be bought |
+| **The portal** | `POST /billing/portal`: Stripe's customer portal, to change the card, see invoices, change plan or cancel |
+| **The webhook** | `POST /billing/stripe/webhook`, public. It is believed only when its `Stripe-Signature` holds (HMAC-SHA256, 5 minutes of tolerance); otherwise it gets a 400. Each event is kept once by its id (`stripe_events`), so a repeated delivery changes nothing. When applying it fails, the event is not kept and Stripe delivers it again |
 
-Until then, no checkout or purchase flow is shown. The credit ledger and its consumption are LEKA-430's.
+**What a verified event changes**:
+
+| Event | Effect |
+| --- | --- |
+| `checkout.session.completed`, a subscription | Its subscription is read, and the workspace is put on its plan (`leka.governance.set_plan`, audited, with "stripe" as who) |
+| `checkout.session.completed`, a paid pack | The pack's credits are added once (`add_pack`). The same payment told again, even under another event id, is never credited twice. Not paid yet: nothing |
+| `customer.subscription.created/updated/deleted` | The plan as Stripe says it now: `active`, `trialing` and `past_due` keep it; `unpaid`, `canceled` and `incomplete_expired` go back to Free. An event older than the last one applied never undoes it |
+| `invoice.paid`, `invoice.payment_failed` | Said on the account. A failed payment is shown on Facturation |
+| `charge.refunded` | Kept. What a refund undoes is a person's decision |
+
+The plan and its credits come **only from a verified event**, never from the browser coming back from Checkout. Each month's included credits are the plan's (LEKA-430, `leka.governance.allowance`).
+
+**The policy** (to confirm with Karim; it is what the portal's settings make):
+
+| | |
+| --- | --- |
+| Upgrade, or any change of plan or interval | In the portal, immediate, **prorated**: the difference is charged now, or credited on the next invoice |
+| Cancellation | At the **end of the period paid for**: the plan holds until then, then Free. No refund |
+| Failed renewal | Stripe retries (its Smart Retries) while the subscription is `past_due`, and the plan holds. Once Stripe gives up (`unpaid` or `canceled`), the workspace goes back to Free |
+| The launch offer | Once per workspace: a workspace that ever subscribed does not get it again |
+| Overage | Never. At the limit, runs pause until capacity is bought or the plan changes (LEKA-430) |
+
+**In Facturation** (`web/components/billing/subscription-section.tsx`):
+- Without Stripe configured, the page says payment is not open.
+- Otherwise, Starter, Growth and Business are shown at the pricing's prices: with the launch offer only while the workspace may take it, and yearly with the yearly total. « Choisir … » opens Checkout.
+- Once subscribed, the page shows the plan, its renewal or end, a failed payment, and « Gérer l'abonnement » (the portal).
+- Coming back from Stripe, it says what happened: the plan comes with Stripe's confirmation, and a cancelled checkout charged nothing.
+
+**Invoices and VAT**: Stripe sends receipts and invoices, and the portal lists them. **Stripe Tax is not enabled**: prices are excluding VAT and no tax is added until Karim decides how VAT is charged (an EU B2B reverse charge…). Nothing here claims VAT compliance.
+
+### Setting Stripe up (test, then live)
+
+1. **Keys**: `LEKA_STRIPE_SECRET_KEY` (`sk_test_…`, then `sk_live_…`) in `production.env`, never in the repository and never in a browser.
+2. **Catalogue**: `docker compose … exec api python -m leka.billing.cli stripe-sync`. It prints each price's key and id.
+3. **Webhook**: in Stripe, Developers → Webhooks → Add endpoint:
+   - URL: `https://api.leka-core.com/api/v1/billing/stripe/webhook`;
+   - events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`, `charge.refunded`.
+
+   Then put its signing secret (`whsec_…`) in `LEKA_STRIPE_WEBHOOK_SECRET` and redeploy.
+4. **Try it in test mode**, on Facturation:
+   - card `4242 4242 4242 4242`, any future date, any CVC: the plan comes within seconds;
+   - card `4000 0000 0000 0341`: the renewal fails;
+   - cancel from the portal: Free at the period's end.
+5. **Live**: once the account is verified, the VAT decided and the policy confirmed, follow the same steps with the live key and a live webhook (its own secret).
+
+### Not yet
+
+- **Capacity pack sizes and prices**: `capacity.packs` stays empty until LEKA-430's data decides them.
+- **Specialist add-ons**: not on sale until available.
+- **Stripe Tax**: once the VAT treatment is decided.
