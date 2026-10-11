@@ -327,6 +327,8 @@ class ModelWork:
     # again only once they changed — and remembering what it was asked.
     asked: Callable[[str, Sequence[str]], Awaitable[dict[str, str]]] | None = None
     remember: Callable[[str, Mapping[str, str], Collection[str]], Awaitable[None]] | None = None
+    # The workspace's language: what it shares is written in it.
+    language: str | None = None
 
 
 @dataclass(frozen=True)

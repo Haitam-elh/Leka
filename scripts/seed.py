@@ -150,7 +150,8 @@ async def _build_demo_workspace() -> None:
     async with session_factory() as session:
         await _reset(session)
 
-        workspace = Workspace(name=WORKSPACE_NAME, slug=WORKSPACE_SLUG)
+        # A French company, as the demo has always been (docs/languages.md).
+        workspace = Workspace(name=WORKSPACE_NAME, slug=WORKSPACE_SLUG, default_language="fr")
         session.add(workspace)
         await session.flush()
 
@@ -165,6 +166,8 @@ async def _build_demo_workspace() -> None:
             email=DEMO_EMAIL,
             password_hash=hash_password(DEMO_PASSWORD),
             email_verified_at=NOW,
+            # Chosen, as registering keeps the language the form was shown in.
+            language="fr",
         )
         session.add(account)
         await session.flush()

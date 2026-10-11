@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { accountLanguage } from "./account-language";
 import { signIn } from "./sign-in";
 
 /**
@@ -127,10 +128,18 @@ test.describe("the shell", () => {
     await expect(environment).toContainText("Mon environnement");
     await expect(environment).toContainText("Le système vivant de votre entreprise.");
 
-    await page.getByTestId("user-menu").last().click();
-    await page.getByRole("menuitemradio", { name: "English" }).click();
+    try {
+      await page.getByTestId("user-menu").last().click();
+      await page.getByRole("menuitem", { name: /Langue/ }).click();
+      const picker = page.getByTestId("language-dialog");
+      await picker.getByRole("combobox").fill("English");
+      await picker.getByRole("option", { name: /^English/ }).click();
 
-    await expect(environment).toContainText("My environment");
-    await expect(environment).toContainText("Your company's living system.");
+      await expect(environment).toContainText("My environment");
+      await expect(environment).toContainText("Your company's living system.");
+    } finally {
+      // Kept on the account: given back, for the specs after this one.
+      accountLanguage("fr");
+    }
   });
 });

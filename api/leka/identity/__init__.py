@@ -22,6 +22,8 @@ from leka.identity.email import (
     SmtpEmailSender,
     build_email_sender,
 )
+from leka.identity.language import spoken_language, workspace_language
+from leka.identity.messages import email_language
 from leka.identity.messages import invitation as invitation_message
 from leka.identity.models import CompanySize, EmailToken, Session, TokenPurpose, User
 from leka.identity.repository import (
@@ -104,9 +106,12 @@ __all__ = [
     "build_email_sender",
     "configure_identity",
     "current_user_id",
+    "email_language",
     "invitation_message",
     "load_session",
     "read_session_token",
     "session_store",
+    "spoken_language",
     "truncate_ip",
+    "workspace_language",
 ]

@@ -150,7 +150,7 @@ export function RolesCard({ model, canManage }: { model: AccessModel; canManage:
                 </Pill>
                 <span className="text-xs text-shell-muted">{fill(w.holders, { count: role.holders })}</span>
                 {canManage ? (
-                  <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={() => void remove(role)}>
+                  <Button type="button" variant="outline" size="sm" className="ms-auto" onClick={() => void remove(role)}>
                     {w.delete}
                   </Button>
                 ) : null}
@@ -404,7 +404,7 @@ function eventSaid(t: Dictionary, e: GovernanceEvent): string {
 
 export function HistoryCard() {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const { data } = useGovernanceHistory();
   return (
     <Card title={t.governance.history} icon={<History className="size-4 text-shell-muted" aria-hidden="true" />}>

@@ -59,7 +59,7 @@ export function AnalysisState({
         <p className="font-semibold">{w.title}</p>
         <p className="text-shell-muted">{w.body}</p>
         {missing.length > 0 ? (
-          <ul className="mt-1 list-disc pl-5 text-shell-muted">
+          <ul className="mt-1 list-disc ps-5 text-shell-muted">
             {missing.map((item) => (
               <li key={item}>{item}</li>
             ))}

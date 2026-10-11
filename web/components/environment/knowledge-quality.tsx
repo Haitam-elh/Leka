@@ -113,7 +113,7 @@ function ScoreBar({ value, label }: { value: number | null | undefined; label?: 
         ) : null}
       </span>
       <span
-        className="w-20 shrink-0 text-right text-[0.8125rem] font-medium text-brand-navy tabular-nums"
+        className="w-20 shrink-0 text-end text-[0.8125rem] font-medium text-brand-navy tabular-nums"
         aria-label={label}
       >
         {known ? `${pct(value)} %` : t.knowledgeQuality.unknown}
@@ -160,7 +160,7 @@ export function QualityTrend({
   now?: number;
 }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.knowledgeQuality.trend;
   const id = useId();
   const [active, setActive] = useState<number | null>(null);

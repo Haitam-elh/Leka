@@ -188,7 +188,7 @@ export function GraphExplorer() {
               href={routes.environmentGraph()}
               className="flex h-9 items-center gap-1.5 rounded-lg border border-shell-line px-3 text-[0.8125rem] font-medium text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
             >
-              <ArrowLeft className="size-4" aria-hidden="true" />
+              <ArrowLeft className="rtl:-scale-x-100 size-4" aria-hidden="true" />
               {w.reset}
             </Link>
           </>
@@ -341,7 +341,7 @@ function Selected({
         {sources.length ? (
           <div className="flex justify-between gap-3">
             <dt className="text-shell-muted">{w.shownBy}</dt>
-            <dd className="text-right text-brand-navy">{sources.join(", ")}</dd>
+            <dd className="text-end text-brand-navy">{sources.join(", ")}</dd>
           </div>
         ) : null}
       </dl>
@@ -351,7 +351,7 @@ function Selected({
           className="flex items-center gap-1.5 rounded-lg bg-brand-navy px-3 py-1.5 text-[0.8125rem] font-medium text-white outline-none hover:bg-brand-navy/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
         >
           {w.open}
-          <ArrowRight className="size-3.5" aria-hidden="true" />
+          <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />
         </Link>
         {!isRoot ? (
           <button
@@ -405,7 +405,7 @@ function PathFinder({
                   return (
                     <li key={step.id} className="text-[0.8125rem]">
                       {link ? (
-                        <span className="block pl-3 text-xs text-shell-muted">
+                        <span className="block ps-3 text-xs text-shell-muted">
                           {forward ? "↓ " : "↑ "}
                           {t.knowledge.relationships[link.type as RelationshipType]}
                         </span>

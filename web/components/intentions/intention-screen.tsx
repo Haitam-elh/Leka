@@ -254,7 +254,7 @@ function LinkLine({ link }: { link: IntentionLink }) {
 
 function Overview({ intention }: { intention: IntentionDetail }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.intentions.overview;
   const kind = kindOf(t, intention.kind);
   const scope = scopeLines(t, locale, intention.scope as Record<string, unknown>);

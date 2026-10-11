@@ -57,7 +57,7 @@ export function AppHeader({
           <>
             <span
               aria-hidden="true"
-              className="absolute top-1.5 right-1.5 size-2 rounded-full bg-shell-badge-foreground"
+              className="absolute top-1.5 end-1.5 size-2 rounded-full bg-shell-badge-foreground"
             />
             <span className="sr-only">{notificationCount}</span>
           </>
@@ -91,7 +91,7 @@ function SearchTrigger({
       type="button"
       onClick={onOpen}
       data-testid="open-search"
-      className="flex h-[38px] w-full max-w-[41rem] items-center gap-2.5 rounded-lg border border-shell-line bg-shell-canvas px-3.5 text-left text-sm text-shell-muted transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+      className="flex h-[38px] w-full max-w-[41rem] items-center gap-2.5 rounded-lg border border-shell-line bg-shell-canvas px-3.5 text-start text-sm text-shell-muted transition-colors outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
     >
       <Search className="size-4 shrink-0" aria-hidden="true" />
       <span className="flex-1 truncate">{t.shell.searchPlaceholder}</span>

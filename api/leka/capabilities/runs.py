@@ -86,6 +86,7 @@ from leka.governance import (
     record,
     subject_of,
 )
+from leka.identity import spoken_language
 from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.knowledge import EntityRepository, GraphRepository, GraphService, KnowledgeService
 from leka.platform import Role
@@ -452,7 +453,13 @@ async def _run(
     )
     request = Request(
         purpose=f"agent:{definition.key}"[:100],
-        messages=messages(definition, run.inputs, injected, tools=given),
+        messages=messages(
+            definition,
+            run.inputs,
+            injected,
+            tools=given,
+            language=await spoken_language(session, run.requested_by, workspace_id),
+        ),
         tier=Tier.DEEP,
         max_tokens=MAX_TOKENS,
         tools=[Tool(t.name, t.description, t.parameters) for t in given],

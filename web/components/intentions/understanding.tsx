@@ -182,7 +182,7 @@ type Scope = NonNullable<UnderstandingRead["scope"]>;
  * constraints — each with the words that set it. */
 function ScopeSection({ scope }: { scope: Scope }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.intentions.understanding.scope;
   const kinds = w.kinds as Record<string, string>;
   const lifecycles = w.lifecycles as Record<string, string>;

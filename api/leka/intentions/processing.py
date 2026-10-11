@@ -55,6 +55,7 @@ from leka.connectors import Source, SourceRepository
 from leka.context import AssembledContext, ContextRepository, ContextService
 from leka.db import hidden_entities, session_factory, system_scope, workspace_scope
 from leka.governance import hidden_on_behalf
+from leka.identity import spoken_language
 from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.intelligence import IntelligenceRepository, QualityRepository, QualityService
 from leka.intentions.analysis import (
@@ -408,6 +409,8 @@ async def _analyse_intention(
             asked = asked_of(intention, understood, moment)
             # Whose question it is: LEKA reads for them, with what they may read.
             asker = intention.created_by
+            # And answers them in their language (identity.spoken_language).
+            asked = replace(asked, language=await spoken_language(session, asker, workspace_id))
             context_id = intention.context_id
             version = ready.version if ready is not None else None
             row = IntentionAnalysis(

@@ -57,7 +57,7 @@ export function DecisionPanel({ item, onClose }: { item: DecisionItem; onClose: 
           className="mt-1 inline-flex items-center gap-1 font-medium text-shell-nav-active hover:underline"
         >
           {t.decisions.see}
-          <ArrowRight className="size-3.5" aria-hidden="true" />
+          <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />
         </Link>
       </div>
       <DecisionCard decision={decision} />

@@ -42,7 +42,7 @@ export function ProvenanceBadge({
   className,
 }: ProvenanceBadgeProps) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const synced = syncedAt !== undefined ? syncedAt : (source.syncedAt ?? null);
   const stale = synced !== null && hoursSince(synced) >= staleAfterHours;
 

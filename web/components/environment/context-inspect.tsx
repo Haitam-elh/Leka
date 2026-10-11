@@ -57,7 +57,7 @@ export function ElementInspect({
   return (
     <section
       aria-label={w.title}
-      className="mt-2 ml-6 space-y-2 rounded-md bg-shell-canvas/60 p-2 text-xs"
+      className="mt-2 ms-6 space-y-2 rounded-md bg-shell-canvas/60 p-2 text-xs"
       data-testid="element-inspect"
     >
       <div>
@@ -152,7 +152,7 @@ function Evidence({
 
 function EvidenceLine({ record }: { record: EvidenceRecord }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.environment.sheet.context.inspect.evidence;
   const when = record.updated_at ?? record.created_at;
   return (

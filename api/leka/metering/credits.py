@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime, time
 
 import structlog
@@ -27,7 +28,7 @@ from leka.capabilities import ModelCall, leka_cost
 from leka.core.config import settings
 from leka.db import session_factory, system_scope, workspace_scope
 from leka.governance import allowance, credits_of, next_month
-from leka.identity import EmailMessage, User, build_email_sender
+from leka.identity import EmailMessage, User, build_email_sender, email_language
 from leka.metering.models import CreditWarning
 from leka.metering.schemas import CreditsRead
 from leka.platform import Membership, Role, Workspace
@@ -140,13 +141,88 @@ async def _watch(workspace_id: uuid.UUID, now: datetime) -> list[int]:
     return passed
 
 
+# What the warnings say, in each language e-mails are translated into
+# (leka/core/languages.yaml, `ui.emails`).
+_WORDS: dict[str, dict[str, str]] = {
+    "fr": {
+        "nameless": "votre espace",
+        "date": "%d/%m/%Y",
+        "spent.subject": "LEKA — les crédits IA de {name} sont épuisés",
+        "spent.body": (
+            "{name} a utilisé tous ses crédits IA du mois ({allowance} crédits, plan {plan}). "
+        ),
+        "spent.enforced": "L'IA de LEKA est suspendue jusqu'au {end}, ",
+        "spent.open": "Rien n'est bloqué pour l'instant, ",
+        "spent.end": (
+            "sauf ajout d'un pack de crédits ou passage à un plan supérieur : "
+            "contactez-nous. Aucun dépassement n'est jamais facturé."
+        ),
+        "near.subject": "LEKA — {threshold} % des crédits IA de {name} utilisés",
+        "near.body": (
+            "{name} a utilisé {threshold} % de ses crédits IA du mois "
+            "({used} sur {allowance}, plan {plan}). "
+            "Il en reste {remaining} jusqu'au {end}. Au-delà, l'IA de LEKA "
+            "s'arrête jusqu'au mois suivant, sauf ajout d'un pack ou passage à un plan "
+            "supérieur — aucun dépassement n'est facturé."
+        ),
+    },
+    "en": {
+        "nameless": "your workspace",
+        "date": "%d %b %Y",
+        "spent.subject": "LEKA — {name} has used all its AI credits",
+        "spent.body": (
+            "{name} has used all its AI credits for the month ({allowance} credits, {plan} plan). "
+        ),
+        "spent.enforced": "LEKA's AI is paused until {end}, ",
+        "spent.open": "Nothing is blocked for now, ",
+        "spent.end": (
+            "unless a credit pack is added or the plan is upgraded: contact us. "
+            "Overage is never charged."
+        ),
+        "near.subject": "LEKA — {name} has used {threshold}% of its AI credits",
+        "near.body": (
+            "{name} has used {threshold}% of its AI credits for the month "
+            "({used} of {allowance}, {plan} plan). "
+            "{remaining} are left until {end}. Beyond that, LEKA's AI stops until the "
+            "next month, unless a pack is added or the plan is upgraded — overage is "
+            "never charged."
+        ),
+    },
+}
+
+
+def _warning(read: CreditsRead, threshold: int, name: str | None, language: str) -> EmailMessage:
+    words = _WORDS.get(language) or _WORDS["en"]
+    said = {
+        "name": name or words["nameless"],
+        "allowance": read.allowance,
+        "plan": read.plan,
+        "threshold": threshold,
+        "used": f"{read.used:g}",
+        "remaining": f"{read.remaining:g}",
+        "end": read.period_end.strftime(words["date"]),
+    }
+    if threshold >= 100:
+        subject = words["spent.subject"].format(**said)
+        body = (
+            words["spent.body"].format(**said)
+            + words["spent.enforced" if read.enforced else "spent.open"].format(**said)
+            + words["spent.end"]
+        )
+    else:
+        subject = words["near.subject"].format(**said)
+        body = words["near.body"].format(**said)
+    return EmailMessage(to="", subject=subject[:200], body=body, language=language)
+
+
 async def _tell(
     session: AsyncSession, workspace_id: uuid.UUID, read: CreditsRead, threshold: int
 ) -> None:
-    """Its owners and admins, told — in French, as LEKA speaks to them."""
+    """Its owners and admins, told — each in their language, else the
+    workspace's."""
     to = (
-        await session.scalars(
-            select(User.email)
+        await session.execute(
+            select(User.email, User.language)
             .join(Membership, Membership.user_id == User.id)
             .where(
                 Membership.workspace_id == workspace_id,
@@ -155,34 +231,14 @@ async def _tell(
         )
     ).all()
     workspace = await session.get(Workspace, workspace_id)
-    name = workspace.name if workspace is not None else "votre espace"
-    end = read.period_end.strftime("%d/%m/%Y")
-    if threshold >= 100:
-        subject = f"LEKA — les crédits IA de {name} sont épuisés"
-        body = (
-            f"{name} a utilisé tous ses crédits IA du mois ({read.allowance} crédits, plan "
-            f"{read.plan}). "
-            + (
-                "L'IA de LEKA est suspendue jusqu'au " + end + ", "
-                if read.enforced
-                else "Rien n'est bloqué pour l'instant, "
-            )
-            + "sauf ajout d'un pack de crédits ou passage à un plan supérieur : "
-            "contactez-nous. Aucun dépassement n'est jamais facturé."
-        )
-    else:
-        subject = f"LEKA — {threshold} % des crédits IA de {name} utilisés"
-        body = (
-            f"{name} a utilisé {threshold} % de ses crédits IA du mois "
-            f"({read.used:g} sur {read.allowance}, plan {read.plan}). "
-            f"Il en reste {read.remaining:g} jusqu'au {end}. Au-delà, l'IA de LEKA "
-            "s'arrête jusqu'au mois suivant, sauf ajout d'un pack ou passage à un plan "
-            "supérieur — aucun dépassement n'est facturé."
-        )
+    name = workspace.name if workspace is not None else None
     sender = build_email_sender()
-    for address in sorted(set(to)):
+    for address, chosen in sorted(set(to)):
+        language = email_language(
+            chosen, workspace=workspace.default_language if workspace else None
+        )
         try:
-            await sender.send(EmailMessage(to=address, subject=subject[:200], body=body))
+            await sender.send(replace(_warning(read, threshold, name, language), to=address))
         except Exception:
             logger.warning(
                 "credit_warning_email_failed", workspace=str(workspace_id), exc_info=True

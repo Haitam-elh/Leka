@@ -79,7 +79,7 @@ function SeeWhole({ item, className }: { item: EvidenceRef; className?: string }
       {outside ? (
         <ArrowUpRight className="size-3.5" aria-hidden="true" />
       ) : (
-        <ArrowRight className="size-3.5" aria-hidden="true" />
+        <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />
       )}
     </>
   );
@@ -148,7 +148,7 @@ export function EvidenceList({
 
 function EvidenceItem({ item }: { item: EvidenceRef }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.intelligence.evidence;
   const [open, setOpen] = useState(false);
   const details = useId();
@@ -183,7 +183,7 @@ function EvidenceItem({ item }: { item: EvidenceRef }) {
       {open ? (
         <dl
           id={details}
-          className="mt-2 ml-12 grid gap-x-3 gap-y-1 rounded-md bg-shell-canvas p-2 text-xs sm:grid-cols-[8rem_minmax(0,1fr)]"
+          className="mt-2 ms-12 grid gap-x-3 gap-y-1 rounded-md bg-shell-canvas p-2 text-xs sm:grid-cols-[8rem_minmax(0,1fr)]"
           data-testid="evidence-detail"
         >
           <dt className="text-shell-muted">{w.kind}</dt>

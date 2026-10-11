@@ -142,7 +142,7 @@ function Chip({
 
 export function TimelineTab({ id }: { id: string }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const me = useCurrentUser();
   const w = t.intentions.history;
   const [categories, setCategories] = useState<TimelineCategory[]>([]);
@@ -197,7 +197,7 @@ export function TimelineTab({ id }: { id: string }) {
     body = <p className="text-[0.8125rem] text-shell-muted">{filtered ? w.emptyFiltered : w.empty}</p>;
   } else {
     body = (
-      <ol className="relative space-y-4 border-l border-shell-line pl-5" data-testid="intention-history">
+      <ol className="relative space-y-4 border-s border-shell-line ps-5" data-testid="intention-history">
         {[...timeline.data].reverse().map((item) => {
           const who =
             item.actor === "system"
@@ -218,7 +218,7 @@ export function TimelineTab({ id }: { id: string }) {
             >
               <span
                 aria-hidden="true"
-                className="absolute top-1.5 -left-[1.6rem] size-2.5 rounded-full border-2 border-white bg-brand-violet"
+                className="absolute top-1.5 -start-[1.6rem] size-2.5 rounded-full border-2 border-white bg-brand-violet"
               />
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-[0.875rem] font-medium text-brand-navy">{itemSaid(t, item)}</p>

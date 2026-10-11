@@ -3,75 +3,196 @@
 /**
  * Which language the interface speaks, and how a component asks for a word.
  *
- * French by default: the product is sold in French and the mockups are in
- * French. English is one click away in the account menu.
+ * Three things, kept apart (docs/languages.md):
  *
- * The choice lives in the browser, not in the URL: locale-prefixed routes
- * (/en/…, /fr/…) are a routing decision with consequences for every link,
- * every redirect and the session cookie's path, and nothing yet needs them.
- * When something does — a shared link that must open in the recipient's
- * language — this provider is where that changes, and no component moves.
+ *   language  what the person chose, or what was found for them
+ *             (lib/i18n/resolve.ts): any of the catalogue's 140 — what
+ *             LEKA answers them in
+ *   locale    what the screens speak: the language, or the first of its
+ *             chain the interface is translated into (lib/i18n/translate.ts)
+ *   format    what writes dates, numbers and amounts: the screens' language
+ *             in the person's region
+ *
+ * The server reads the first signals — the device's cookie, the browser's
+ * Accept-Language, a CDN's country — so the first paint is already in the
+ * right language (app/layout.tsx). The browser then adds what only it
+ * knows: a choice made in this tab, its storage. Signed in, the account's
+ * language comes in through adopt(), from the shell.
+ *
+ * The choice lives in the account and on the device, not in the URL:
+ * locale-prefixed routes (/en/…) would move every link, every redirect
+ * and the session cookie's path, and nothing needs them — the site's
+ * crawlable pages carry ?lang= (public/i18n.js).
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import type { Dictionary, Locale } from "@/lib/i18n/dictionaries";
+import { type Direction, direction, formatLocale, isListed, regionOf } from "@/lib/i18n/languages";
+import { isPseudo } from "@/lib/i18n/pseudo";
 import {
-  DICTIONARIES,
-  type Dictionary,
-  isLocale,
-  type Locale,
-} from "@/lib/i18n/dictionaries";
+  browserSignals,
+  qaFromAddress,
+  remember,
+  resolve,
+  type Source,
+  settled,
+} from "@/lib/i18n/resolve";
+import { wordsFor } from "@/lib/i18n/translate";
 
-const STORAGE_KEY = "leka.locale";
-// The language chosen on leka-core.com's own pages (public/i18n.js). Same
-// origin, same storage: someone who read the site in English arrives in an
-// application in English, as long as the application speaks that language.
-const SITE_KEY = "leka-lang";
-const FALLBACK: Locale = "fr";
+export interface Initial {
+  language: string;
+  source: Source;
+  /** The region of the browser's first language, as the server heard it. */
+  region?: string | null;
+  /** The country a CDN said the request came from — a hint. */
+  country?: string | null;
+}
+
+/** What an account says, as /auth/me answers it. */
+export interface AccountLanguage {
+  language?: string | null;
+  region?: string | null;
+}
 
 interface LocaleValue {
+  language: string;
+  source: Source;
   locale: Locale;
-  setLocale: (locale: Locale) => void;
+  region: string | null;
+  format: string;
+  dir: Direction;
+  workspaceLanguage: string | null;
   dictionary: Dictionary;
+  missing: string[];
+  /** Signed in, and the account has no language yet: LEKA shows one it
+   * found, and asks once whether to keep it. */
+  unconfirmed: boolean;
+  /** A person's own choice: kept on this device, and marked for the account. */
+  setLanguage: (language: string) => void;
+  setRegion: (region: string | null) => void;
+  /** The workspace's language changed. */
+  setWorkspaceLanguage: (language: string | null) => void;
+  /** The account and its workspace, once known. Answers the language to save
+   * to the account, if one should be: a choice made before signing in. */
+  adopt: (account: AccountLanguage | null, workspace?: string | null) => string | null;
+  /** The account now holds this language. */
+  saved: (language: string) => void;
 }
 
 const LocaleContext = createContext<LocaleValue | null>(null);
 
-export function LocaleProvider({ children }: { children: React.ReactNode }) {
-  // Always starts at the fallback, and only then reads the browser. The
-  // server renders the same HTML for everyone, and a first paint that
-  // disagreed with it would be a hydration error rather than a translation.
-  const [locale, setStored] = useState<Locale>(FALLBACK);
+const DEFAULT_INITIAL: Initial = { language: "en", source: "default" };
 
+function browserRegion(): string | null {
+  if (typeof navigator === "undefined") return null;
+  return regionOf(navigator.language ?? "") ?? null;
+}
+
+export function LocaleProvider({
+  children,
+  initial = DEFAULT_INITIAL,
+}: {
+  children: React.ReactNode;
+  initial?: Initial;
+}) {
+  const [language, setChosen] = useState(initial.language);
+  const [source, setSource] = useState<Source>(initial.source);
+  const [region, setStoredRegion] = useState<string | null>(null);
+  const [heardRegion, setHeardRegion] = useState<string | null>(initial.region ?? null);
+  const [workspaceLanguage, setWorkspaceLanguage] = useState<string | null>(null);
+  const [account, setAccount] = useState<AccountLanguage | null>(null);
+  const adopted = useRef(false);
+
+  // What only the browser knows: a choice made in this tab, its storage,
+  // its own languages. Once, on mount.
   useEffect(() => {
-    let remembered: string | null = null;
-    try {
-      remembered =
-        window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(SITE_KEY);
-    } catch {
-      // Private browsing, or storage refused. English it is.
+    qaFromAddress(window.location.search);
+    const found = resolve(browserSignals(initial.country ?? null));
+    // An account adopted meanwhile has the last word.
+    if (!adopted.current) {
+      setChosen(found.language);
+      setSource(found.source);
     }
-    if (isLocale(remembered) && remembered !== locale) {
-      setStored(remembered);
-      document.documentElement.lang = remembered;
-    }
-    // Once, on mount: this restores a preference, it does not follow it.
+    setHeardRegion(browserRegion() ?? initial.region ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const setLocale = useCallback((next: Locale) => {
-    setStored(next);
-    document.documentElement.lang = next;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // The language still changes for this visit; it just will not persist.
+  const words = useMemo(() => wordsFor(language, workspaceLanguage), [language, workspaceLanguage]);
+  const dir: Direction = language === "ar-XB" ? "rtl" : direction(words.shown);
+  const format = isPseudo(words.shown) ? "en" : formatLocale(words.shown, region ?? heardRegion);
+
+  // The document says what it is written in, for screen readers, fonts,
+  // hyphenation and spelling — and which way it reads.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.lang = words.shown;
+    root.dir = dir;
+    root.dataset.language = language;
+    if (words.missing.length && process.env.NODE_ENV === "development") {
+      console.warn(`[i18n] ${language}: ${words.missing.length} keys fall back`, words.missing);
     }
+  }, [words, dir, language]);
+
+  const setLanguage = useCallback((next: string) => {
+    if (!isListed(next) && !isPseudo(next)) return;
+    setChosen(next);
+    setSource("now");
+    if (!isPseudo(next)) remember(next);
   }, []);
 
+  const adopt = useCallback(
+    (said: AccountLanguage | null, workspace?: string | null): string | null => {
+      adopted.current = true;
+      setAccount(said);
+      setWorkspaceLanguage(workspace ?? null);
+      setStoredRegion(said?.region ?? null);
+      if (said === null) return null;
+      const signals = browserSignals(initial.country ?? null);
+      const found = resolve({ ...signals, account: said.language ?? null });
+      setChosen(found.language);
+      setSource(found.source);
+      // A choice made just now, or on this device before the account had
+      // any: the account takes it.
+      const keep =
+        (found.source === "now" && found.language !== said.language) ||
+        (found.source === "device" && !said.language);
+      return keep ? found.language : null;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const saved = useCallback((kept: string) => {
+    settled();
+    setAccount((previous) => (previous ? { ...previous, language: kept } : previous));
+    setSource("account");
+  }, []);
+
+  const setRegion = useCallback((next: string | null) => setStoredRegion(next), []);
+
+  const unconfirmed =
+    account !== null && !account.language && ["browser", "country", "default"].includes(source);
+
   const value = useMemo<LocaleValue>(
-    () => ({ locale, setLocale, dictionary: DICTIONARIES[locale] }),
-    [locale, setLocale],
+    () => ({
+      language,
+      source,
+      locale: words.shown,
+      region,
+      format,
+      dir,
+      workspaceLanguage,
+      dictionary: words.dictionary,
+      missing: words.missing,
+      unconfirmed,
+      setLanguage,
+      setRegion,
+      setWorkspaceLanguage,
+      adopt,
+      saved,
+    }),
+    [language, source, words, region, format, dir, workspaceLanguage, unconfirmed, setLanguage, setRegion, adopt, saved],
   );
 
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
@@ -90,8 +211,26 @@ export function useDictionary(): Dictionary {
   return useLocaleContext().dictionary;
 }
 
-/** The current language, and how to change it. */
-export function useLocale(): Pick<LocaleValue, "locale" | "setLocale"> {
-  const { locale, setLocale } = useLocaleContext();
-  return { locale, setLocale };
+/** The current language, and how to change it.
+ *
+ * `locale` is what the screens speak (fr, en…); `format` what writes dates
+ * and numbers — give `format`, never `locale`, to Intl. `setLocale` is the
+ * person's own choice. */
+export function useLocale(): Pick<LocaleValue, "locale" | "format" | "language" | "dir"> & {
+  setLocale: (language: string) => void;
+} {
+  const { locale, format, language, dir, setLanguage } = useLocaleContext();
+  return { locale, format, language, dir, setLocale: setLanguage };
+}
+
+/** The language an account or an e-mail may be given — one the catalogue
+ * lists, never a QA pseudo-language. */
+export function useSpokenLanguage(): string | undefined {
+  const { language } = useLocaleContext();
+  return isListed(language) ? language : undefined;
+}
+
+/** Everything, for the language picker, the settings and the shell. */
+export function useLanguage(): LocaleValue {
+  return useLocaleContext();
 }

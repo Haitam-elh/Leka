@@ -123,6 +123,13 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=True,
     )
 
+    # The language they chose — a tag of leka/core/languages.yaml — and
+    # their region, which formats dates, numbers and currencies and never
+    # chooses the language. NULL until chosen: the interface then follows
+    # the browser, and e-mails the workspace's language.
+    language: Mapped[str | None] = mapped_column(String(35), nullable=True)
+    region: Mapped[str | None] = mapped_column(String(2), nullable=True)
+
     @property
     def is_verified(self) -> bool:
         return self.email_verified_at is not None

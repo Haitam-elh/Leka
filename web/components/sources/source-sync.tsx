@@ -40,10 +40,10 @@ const ORDER = [
  */
 export function SourceSyncSection({ source }: { source: Source }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.sources.sync;
   const syncs = useSourceSyncs(source.id);
-  const number = new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB");
+  const number = new Intl.NumberFormat(locale);
 
   const columns: KnowledgeColumn<SourceSync>[] = [
     {

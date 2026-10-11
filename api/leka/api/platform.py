@@ -28,8 +28,10 @@ from leka.api.dependencies import (
     WorkspaceServiceDep,
 )
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
+from leka.core import languages
 from leka.db import SortableField, system_scope
 from leka.governance import Permission, Principal, Target, audit_as, require_permission
+from leka.identity import UserRepository
 from leka.platform import (
     CurrentWorkspace,
     DeletionScheduled,
@@ -51,13 +53,23 @@ async def create_workspace(
     payload: WorkspaceCreate,
     user_id: UserIdDep,
     workspaces: WorkspaceServiceDep,
+    db: SessionDep,
 ) -> WorkspaceRead:
     """Create a workspace and become its owner.
 
     No principal: this is the one tenancy action performed by someone who is
     not yet in any workspace.
     """
-    workspace = await workspaces.create(payload.name, owner_user_id=user_id)
+    # The language said, else its creator's, else the catalogue's default:
+    # what its shared words will be written in.
+    creator = await UserRepository(db).get(user_id)
+    workspace = await workspaces.create(
+        payload.name,
+        owner_user_id=user_id,
+        default_language=payload.default_language
+        or (creator.language if creator else None)
+        or languages.catalogue().default,
+    )
     return WorkspaceRead.model_validate(workspace)
 
 
@@ -151,8 +163,13 @@ async def configure_current_workspace(
     workspace = await repository.get(principal.workspace_id)
     if workspace is None:  # pragma: no cover
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found.")
-    before = workspace.name
-    updated = await workspaces.configure(workspace, name=payload.name, settings=payload.settings)
+    before, language_before = workspace.name, workspace.default_language
+    updated = await workspaces.configure(
+        workspace,
+        name=payload.name,
+        settings=payload.settings,
+        default_language=payload.default_language,
+    )
     audit_as(
         db,
         principal,
@@ -166,6 +183,16 @@ async def configure_current_workspace(
                 else {}
             ),
             **({"settings": sorted(payload.settings)} if payload.settings else {}),
+            **(
+                {
+                    "default_language": {
+                        "before": language_before,
+                        "after": updated.default_language,
+                    }
+                }
+                if language_before != updated.default_language
+                else {}
+            ),
         },
     )
     return WorkspaceRead.model_validate(updated)

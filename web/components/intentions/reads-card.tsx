@@ -40,7 +40,7 @@ const LOOK: Record<SkillRun["status"], { icon: LucideIcon; tone: TileTone }> = {
 function moment(locale: string, iso: string | null): string | null {
   const date = iso ? new Date(iso) : null;
   if (!date || Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", {
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -56,7 +56,7 @@ export function ReadsCard({
   analysis: IntentionAnalysis;
 }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.intentions.analysis.reads;
   const runs = useSkillRuns(`intention:${intentionId}`, analysis.status === "running");
   const read = useMemo(
@@ -130,7 +130,7 @@ export function ReadsCard({
               ) : (
                 <Pill tone={look.tone}>{w.statuses[run.status]}</Pill>
               )}
-              <span className="w-16 text-right text-xs tabular-nums text-shell-muted">
+              <span className="w-16 text-end text-xs tabular-nums text-shell-muted">
                 {fill(w.ms, { ms: run.latency_ms })}
               </span>
             </li>

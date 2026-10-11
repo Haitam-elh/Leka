@@ -68,7 +68,7 @@ export function SearchInput({
   return (
     <div className={cn("relative", className)}>
       <Search
-        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-shell-muted"
+        className="pointer-events-none absolute top-1/2 start-3 size-4 -translate-y-1/2 text-shell-muted"
         aria-hidden="true"
       />
       <input
@@ -90,14 +90,14 @@ export function SearchInput({
           }
           input.current?.blur();
         }}
-        className="h-9 w-full rounded-lg border border-shell-line bg-white pr-9 pl-9 text-sm outline-none placeholder:text-shell-muted focus-visible:border-brand-violet focus-visible:ring-3 focus-visible:ring-brand-violet/30 [&::-webkit-search-cancel-button]:hidden"
+        className="h-9 w-full rounded-lg border border-shell-line bg-white pe-9 ps-9 text-sm outline-none placeholder:text-shell-muted focus-visible:border-brand-violet focus-visible:ring-3 focus-visible:ring-brand-violet/30 [&::-webkit-search-cancel-button]:hidden"
       />
       {typed.length > 0 ? (
         <button
           type="button"
           onClick={clear}
           aria-label={t.forms.clear}
-          className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-shell-muted outline-none hover:text-shell-nav focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+          className="absolute top-1/2 end-2 -translate-y-1/2 rounded p-1 text-shell-muted outline-none hover:text-shell-nav focus-visible:ring-2 focus-visible:ring-brand-violet/40"
         >
           <X className="size-4" aria-hidden="true" />
         </button>

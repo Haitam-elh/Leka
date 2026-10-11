@@ -92,7 +92,9 @@ outcome should be, a person's word on it, reading it again and concluding take
 `intention:approve`; its verification and its whole story are read with `intention:read`
 (LEKA-392). The capability catalogue is read with `workspace:read` — kept at hand
 too; turning a capability on or off for the workspace takes `workspace:update`
-(LEKA-393).
+(LEKA-393). Each person chooses their own language and region (`PATCH
+/auth/me`, no permission: it is theirs); the workspace's language — what LEKA
+writes for everyone in it — takes `workspace:update` ([languages.md](languages.md)).
 
 **`context:manage` is admin and above.** A member makes contexts, makes them again,
 widens and narrows them, and archives or stops following the ones they made. Archiving

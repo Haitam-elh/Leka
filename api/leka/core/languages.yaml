@@ -1,0 +1,224 @@
+# The languages LEKA offers — the one source of truth (docs/languages.md).
+#
+# Read by the API (leka/core/languages.py, checked when read) and published
+# to the web as web/public/languages.json (a test keeps the copy equal).
+# Adding a language, or saying one is now translated, is an edit here — no
+# product logic changes.
+#
+# A product-priority catalogue, not a ranking of the world's languages.
+#
+# Each language:
+#   tag       its BCP 47 tag, canonical case: language, then a script only
+#             where the language is written in more than one (zh-Hans,
+#             zh-Hant). Never a region: the region is a setting of its own,
+#             and the two combine into the formatting locale (pt + BR → pt-BR).
+#   english   its name in English
+#   native    its name in itself — what the picker shows first
+#   script    ISO 15924 — how it is written
+#   dir       rtl for right-to-left scripts; ltr when left out
+#   parent    the language a missing translation falls back to before the
+#             workspace's, when it is not simply the tag's own base
+#             (Dari reads Persian, Cantonese Traditional Chinese)
+#   ai        how well language models generally write it today — strong,
+#             good or limited. LEKA's estimate across providers, never a
+#             promise, revised as models change
+#   ui        where LEKA's own words are translated, by surface:
+#               reviewed    translated and approved by a person who speaks it
+#               translated  translated, not yet approved
+#               partial     some of it translated; the rest falls back
+#             A surface left out is not translated: it falls back. Never
+#             say translated what has not been.
+#
+# Surfaces: app (the application), site (leka-core.com), emails.
+
+version: 2026-10-11
+
+# The last language of every fallback chain.
+default: en
+
+languages:
+  - { tag: en, english: English, native: English, script: Latn, ai: strong, ui: { app: reviewed, site: reviewed, emails: reviewed } }
+  - { tag: zh-Hans, english: Mandarin Chinese (Simplified), native: 简体中文, script: Hans, ai: strong }
+  - { tag: zh-Hant, english: Mandarin Chinese (Traditional), native: 繁體中文, script: Hant, ai: strong }
+  - { tag: es, english: Spanish, native: Español, script: Latn, ai: strong, ui: { site: partial } }
+  - { tag: fr, english: French, native: Français, script: Latn, ai: strong, ui: { app: reviewed, site: reviewed, emails: reviewed } }
+  - { tag: ar, english: Modern Standard Arabic, native: العربية الفصحى, script: Arab, dir: rtl, ai: strong }
+  - { tag: arz, english: Egyptian Arabic, native: مصرى, script: Arab, dir: rtl, parent: ar, ai: good }
+  - { tag: de, english: German, native: Deutsch, script: Latn, ai: strong, ui: { site: partial } }
+  - { tag: pt, english: Portuguese, native: Português, script: Latn, ai: strong, ui: { site: partial } }
+  - { tag: it, english: Italian, native: Italiano, script: Latn, ai: strong, ui: { site: partial } }
+  - { tag: nl, english: Dutch, native: Nederlands, script: Latn, ai: strong, ui: { site: partial } }
+  - { tag: ru, english: Russian, native: Русский, script: Cyrl, ai: strong }
+  - { tag: uk, english: Ukrainian, native: Українська, script: Cyrl, ai: strong }
+  - { tag: pl, english: Polish, native: Polski, script: Latn, ai: strong }
+  - { tag: cs, english: Czech, native: Čeština, script: Latn, ai: strong }
+  - { tag: sk, english: Slovak, native: Slovenčina, script: Latn, ai: good }
+  - { tag: sl, english: Slovenian, native: Slovenščina, script: Latn, ai: good }
+  - { tag: hr, english: Croatian, native: Hrvatski, script: Latn, ai: good }
+  - { tag: sr, english: Serbian, native: Српски, script: Cyrl, ai: good }
+  - { tag: bs, english: Bosnian, native: Bosanski, script: Latn, ai: good }
+  - { tag: bg, english: Bulgarian, native: Български, script: Cyrl, ai: good }
+  - { tag: mk, english: Macedonian, native: Македонски, script: Cyrl, ai: good }
+  - { tag: ro, english: Romanian, native: Română, script: Latn, ai: strong }
+  - { tag: hu, english: Hungarian, native: Magyar, script: Latn, ai: strong }
+  - { tag: el, english: Greek, native: Ελληνικά, script: Grek, ai: strong }
+  - { tag: tr, english: Turkish, native: Türkçe, script: Latn, ai: strong }
+  - { tag: az, english: Azerbaijani, native: Azərbaycan dili, script: Latn, ai: good }
+  - { tag: hy, english: Armenian, native: Հայերեն, script: Armn, ai: good }
+  - { tag: ka, english: Georgian, native: ქართული, script: Geor, ai: good }
+  - { tag: sq, english: Albanian, native: Shqip, script: Latn, ai: good }
+  - { tag: lt, english: Lithuanian, native: Lietuvių, script: Latn, ai: good }
+  - { tag: lv, english: Latvian, native: Latviešu, script: Latn, ai: good }
+  - { tag: et, english: Estonian, native: Eesti, script: Latn, ai: good }
+  - { tag: fi, english: Finnish, native: Suomi, script: Latn, ai: strong }
+  - { tag: sv, english: Swedish, native: Svenska, script: Latn, ai: strong }
+  - { tag: nb, english: Norwegian Bokmål, native: Norsk bokmål, script: Latn, ai: strong }
+  - { tag: nn, english: Norwegian Nynorsk, native: Norsk nynorsk, script: Latn, parent: nb, ai: good }
+  - { tag: da, english: Danish, native: Dansk, script: Latn, ai: strong }
+  - { tag: is, english: Icelandic, native: Íslenska, script: Latn, ai: good }
+  - { tag: ga, english: Irish, native: Gaeilge, script: Latn, ai: good }
+  - { tag: cy, english: Welsh, native: Cymraeg, script: Latn, ai: good }
+  - { tag: gd, english: Scottish Gaelic, native: Gàidhlig, script: Latn, ai: limited }
+  - { tag: eu, english: Basque, native: Euskara, script: Latn, ai: good }
+  - { tag: ca, english: Catalan, native: Català, script: Latn, ai: good }
+  - { tag: gl, english: Galician, native: Galego, script: Latn, ai: good }
+  - { tag: mt, english: Maltese, native: Malti, script: Latn, ai: good }
+  - { tag: lb, english: Luxembourgish, native: Lëtzebuergesch, script: Latn, ai: good }
+  - { tag: be, english: Belarusian, native: Беларуская, script: Cyrl, ai: good }
+  - { tag: he, english: Hebrew, native: עברית, script: Hebr, dir: rtl, ai: strong }
+  - { tag: yi, english: Yiddish, native: ייִדיש, script: Hebr, dir: rtl, ai: limited }
+  - { tag: fa, english: Persian (Farsi), native: فارسی, script: Arab, dir: rtl, ai: good }
+  - { tag: prs, english: Dari, native: دری, script: Arab, dir: rtl, parent: fa, ai: good }
+  - { tag: ps, english: Pashto, native: پښتو, script: Arab, dir: rtl, ai: limited }
+  - { tag: ur, english: Urdu, native: اردو, script: Arab, dir: rtl, ai: good }
+  - { tag: hi, english: Hindi, native: हिन्दी, script: Deva, ai: strong }
+  - { tag: bn, english: Bengali, native: বাংলা, script: Beng, ai: good }
+  - { tag: pa, english: Punjabi, native: ਪੰਜਾਬੀ, script: Guru, ai: good }
+  - { tag: gu, english: Gujarati, native: ગુજરાતી, script: Gujr, ai: good }
+  - { tag: mr, english: Marathi, native: मराठी, script: Deva, ai: good }
+  - { tag: ne, english: Nepali, native: नेपाली, script: Deva, ai: good }
+  - { tag: si, english: Sinhala, native: සිංහල, script: Sinh, ai: limited }
+  - { tag: ta, english: Tamil, native: தமிழ், script: Taml, ai: good }
+  - { tag: te, english: Telugu, native: తెలుగు, script: Telu, ai: good }
+  - { tag: kn, english: Kannada, native: ಕನ್ನಡ, script: Knda, ai: good }
+  - { tag: ml, english: Malayalam, native: മലയാളം, script: Mlym, ai: good }
+  - { tag: or, english: Odia, native: ଓଡ଼ିଆ, script: Orya, ai: limited }
+  - { tag: as, english: Assamese, native: অসমীয়া, script: Beng, ai: limited }
+  - { tag: sa, english: Sanskrit, native: संस्कृतम्, script: Deva, ai: limited }
+  - { tag: th, english: Thai, native: ไทย, script: Thai, ai: strong }
+  - { tag: lo, english: Lao, native: ລາວ, script: Laoo, ai: limited }
+  - { tag: km, english: Khmer, native: ខ្មែរ, script: Khmr, ai: limited }
+  - { tag: vi, english: Vietnamese, native: Tiếng Việt, script: Latn, ai: strong }
+  - { tag: id, english: Indonesian, native: Bahasa Indonesia, script: Latn, ai: strong }
+  - { tag: ms, english: Malay, native: Bahasa Melayu, script: Latn, ai: good }
+  - { tag: jv, english: Javanese, native: Basa Jawa, script: Latn, ai: limited }
+  - { tag: su, english: Sundanese, native: Basa Sunda, script: Latn, ai: limited }
+  - { tag: fil, english: Filipino, native: Filipino, script: Latn, ai: good }
+  - { tag: ceb, english: Cebuano, native: Cebuano, script: Latn, ai: limited }
+  - { tag: my, english: Burmese, native: မြန်မာ, script: Mymr, ai: limited }
+  - { tag: shn, english: Shan, native: ၵႂၢမ်းတႆး, script: Mymr, ai: limited }
+  - { tag: mn, english: Mongolian, native: Монгол, script: Cyrl, ai: good }
+  - { tag: ja, english: Japanese, native: 日本語, script: Jpan, ai: strong }
+  - { tag: ko, english: Korean, native: 한국어, script: Kore, ai: strong }
+  - { tag: yue, english: Cantonese, native: 粵語, script: Hant, parent: zh-Hant, ai: good }
+  - { tag: wuu, english: Wu Chinese, native: 吴语, script: Hans, parent: zh-Hans, ai: limited }
+  - { tag: hak, english: Hakka Chinese, native: 客家話, script: Hant, parent: zh-Hant, ai: limited }
+  - { tag: bo, english: Tibetan, native: བོད་སྐད་, script: Tibt, ai: limited }
+  - { tag: ug, english: Uyghur, native: ئۇيغۇرچە, script: Arab, dir: rtl, ai: limited }
+  - { tag: kk, english: Kazakh, native: Қазақ тілі, script: Cyrl, ai: good }
+  - { tag: uz, english: Uzbek, native: Oʻzbekcha, script: Latn, ai: good }
+  - { tag: ky, english: Kyrgyz, native: Кыргызча, script: Cyrl, ai: limited }
+  - { tag: tg, english: Tajik, native: Тоҷикӣ, script: Cyrl, ai: limited }
+  - { tag: tk, english: Turkmen, native: Türkmençe, script: Latn, ai: limited }
+  - { tag: tt, english: Tatar, native: Татарча, script: Cyrl, ai: limited }
+  - { tag: ba, english: Bashkir, native: Башҡортса, script: Cyrl, ai: limited }
+  - { tag: kmr, english: Kurdish (Kurmanji), native: Kurmancî, script: Latn, ai: limited }
+  - { tag: ckb, english: Kurdish (Sorani), native: کوردیی ناوەندی, script: Arab, dir: rtl, ai: limited }
+  - { tag: so, english: Somali, native: Soomaali, script: Latn, ai: limited }
+  - { tag: am, english: Amharic, native: አማርኛ, script: Ethi, ai: limited }
+  - { tag: om, english: Oromo, native: Afaan Oromoo, script: Latn, ai: limited }
+  - { tag: ti, english: Tigrinya, native: ትግርኛ, script: Ethi, ai: limited }
+  - { tag: ha, english: Hausa, native: Hausa, script: Latn, ai: limited }
+  - { tag: yo, english: Yoruba, native: Èdè Yorùbá, script: Latn, ai: limited }
+  - { tag: ig, english: Igbo, native: Asụsụ Igbo, script: Latn, ai: limited }
+  - { tag: pcm, english: Nigerian Pidgin, native: Naijá, script: Latn, ai: limited }
+  - { tag: sw, english: Swahili, native: Kiswahili, script: Latn, ai: good }
+  - { tag: rw, english: Kinyarwanda, native: Ikinyarwanda, script: Latn, ai: limited }
+  - { tag: rn, english: Kirundi, native: Ikirundi, script: Latn, ai: limited }
+  - { tag: lg, english: Luganda, native: Luganda, script: Latn, ai: limited }
+  - { tag: ln, english: Lingala, native: Lingála, script: Latn, ai: limited }
+  - { tag: sn, english: Shona, native: chiShona, script: Latn, ai: limited }
+  - { tag: zu, english: Zulu, native: isiZulu, script: Latn, ai: limited }
+  - { tag: xh, english: Xhosa, native: isiXhosa, script: Latn, ai: limited }
+  - { tag: af, english: Afrikaans, native: Afrikaans, script: Latn, ai: good }
+  - { tag: mg, english: Malagasy, native: Malagasy, script: Latn, ai: limited }
+  - { tag: wo, english: Wolof, native: Wolof, script: Latn, ai: limited }
+  - { tag: bm, english: Bambara, native: Bamanankan, script: Latn, ai: limited }
+  - { tag: ff, english: Fula, native: Pulaar, script: Latn, ai: limited }
+  - { tag: ak, english: Akan (Twi), native: Akan (Twi), script: Latn, ai: limited }
+  - { tag: ee, english: Ewe, native: Eʋegbe, script: Latn, ai: limited }
+  - { tag: zgh, english: Berber (Tamazight), native: ⵜⴰⵎⴰⵣⵉⵖⵜ, script: Tfng, ai: limited }
+  - { tag: ht, english: Haitian Creole, native: Kreyòl ayisyen, script: Latn, ai: limited }
+  - { tag: jam, english: Jamaican Patois, native: Patwa, script: Latn, ai: limited }
+  - { tag: pap, english: Papiamento, native: Papiamentu, script: Latn, ai: limited }
+  - { tag: qu, english: Quechua, native: Runa Simi, script: Latn, ai: limited }
+  - { tag: ay, english: Aymara, native: Aymar aru, script: Latn, ai: limited }
+  - { tag: gn, english: Guarani, native: Avañeʼẽ, script: Latn, ai: limited }
+  - { tag: mi, english: Māori, native: Te Reo Māori, script: Latn, ai: limited }
+  - { tag: sm, english: Samoan, native: Gagana Sāmoa, script: Latn, ai: limited }
+  - { tag: to, english: Tongan, native: Lea faka-Tonga, script: Latn, ai: limited }
+  - { tag: fj, english: Fijian, native: Na Vosa Vakaviti, script: Latn, ai: limited }
+  - { tag: la, english: Latin, native: Latina, script: Latn, ai: good }
+  - { tag: eo, english: Esperanto, native: Esperanto, script: Latn, ai: good }
+  - { tag: sd, english: Sindhi, native: سنڌي, script: Arab, dir: rtl, ai: limited }
+  - { tag: ks, english: Kashmiri, native: کٲشُر, script: Arab, dir: rtl, ai: limited }
+  - { tag: doi, english: Dogri, native: डोगरी, script: Deva, ai: limited }
+  - { tag: kok, english: Konkani, native: कोंकणी, script: Deva, ai: limited }
+  - { tag: mai, english: Maithili, native: मैथिली, script: Deva, ai: limited }
+  - { tag: mni, english: Meitei (Manipuri), native: মৈতৈলোন্, script: Beng, ai: limited }
+  - { tag: brx, english: Bodo, native: बड़ो, script: Deva, ai: limited }
+
+# What browsers and older systems say for a language the catalogue names
+# otherwise. Checked before the tag's own base: zh-TW is Traditional
+# Chinese, not "zh".
+aliases:
+  zh: zh-Hans
+  zh-CN: zh-Hans
+  zh-SG: zh-Hans
+  zh-MY: zh-Hans
+  zh-TW: zh-Hant
+  zh-HK: zh-Hant
+  zh-MO: zh-Hant
+  yue-HK: yue
+  yue-Hant: yue
+  wuu-Hans: wuu
+  "no": nb
+  iw: he
+  ji: yi
+  in: id
+  tl: fil
+  tw: ak
+  ku: kmr
+  ku-Arab: ckb
+  fa-AF: prs
+  mo: ro
+  jw: jv
+  sr-Cyrl: sr
+  sh: bs
+  mni-Beng: mni
+
+# Every region a person may choose (ISO 3166-1 alpha-2), for dates, numbers
+# and currencies. Names come from the browser, in the interface's language.
+# No region is favoured, and none is refused.
+regions: [
+  AD, AE, AF, AG, AI, AL, AM, AO, AQ, AR, AS, AT, AU, AW, AX, AZ, BA, BB, BD, BE, BF, BG, BH, BI, BJ,
+  BL, BM, BN, BO, BQ, BR, BS, BT, BV, BW, BY, BZ, CA, CC, CD, CF, CG, CH, CI, CK, CL, CM, CN, CO, CR,
+  CU, CV, CW, CX, CY, CZ, DE, DJ, DK, DM, DO, DZ, EC, EE, EG, EH, ER, ES, ET, FI, FJ, FK, FM, FO, FR,
+  GA, GB, GD, GE, GF, GG, GH, GI, GL, GM, GN, GP, GQ, GR, GS, GT, GU, GW, GY, HK, HM, HN, HR, HT, HU,
+  ID, IE, IL, IM, IN, IO, IQ, IR, IS, IT, JE, JM, JO, JP, KE, KG, KH, KI, KM, KN, KP, KR, KW, KY, KZ,
+  LA, LB, LC, LI, LK, LR, LS, LT, LU, LV, LY, MA, MC, MD, ME, MF, MG, MH, MK, ML, MM, MN, MO, MP, MQ,
+  MR, MS, MT, MU, MV, MW, MX, MY, MZ, NA, NC, NE, NF, NG, NI, NL, "NO", NP, NR, NU, NZ, OM, PA, PE, PF,
+  PG, PH, PK, PL, PM, PN, PR, PS, PT, PW, PY, QA, RE, RO, RS, RU, RW, SA, SB, SC, SD, SE, SG, SH, SI,
+  SJ, SK, SL, SM, SN, SO, SR, SS, ST, SV, SX, SY, SZ, TC, TD, TF, TG, TH, TJ, TK, TL, TM, TN, TO, TR,
+  TT, TV, TW, TZ, UA, UG, UM, US, UY, UZ, VA, VC, VE, VG, VI, VN, VU, WF, WS, XK, YE, YT, ZA, ZM, ZW,
+]

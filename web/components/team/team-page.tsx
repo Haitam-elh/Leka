@@ -119,7 +119,7 @@ function Invite({ onClose }: { onClose: () => void }) {
 
 function Members({ members, canManage }: { members: TeamMember[]; canManage: boolean }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const me = useCurrentUser();
   const w = t.team;
   const confirm = useConfirm();
@@ -175,18 +175,18 @@ function Members({ members, canManage }: { members: TeamMember[]; canManage: boo
   return (
     <div className="flex flex-col gap-3">
       <label className="relative flex max-w-72 items-center">
-        <Search className="absolute left-2.5 size-4 text-shell-muted" aria-hidden="true" />
+        <Search className="absolute start-2.5 size-4 text-shell-muted" aria-hidden="true" />
         <input
           value={q}
           onChange={(event) => setQ(event.target.value)}
           placeholder={w.search}
           aria-label={w.search}
-          className={cn(FIELD, "w-full pl-8")}
+          className={cn(FIELD, "w-full ps-8")}
           data-testid="team-search"
         />
       </label>
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-[0.8125rem]" data-testid="team-members">
+        <table className="w-full text-start text-[0.8125rem]" data-testid="team-members">
           <thead className="text-xs text-shell-muted">
             <tr className="border-b border-shell-line">
               <th className="py-2 font-medium">{w.columns.name}</th>
@@ -272,7 +272,7 @@ function Members({ members, canManage }: { members: TeamMember[]; canManage: boo
 
 function Invitations() {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.team;
   const invitations = useInvitations(true);
   const { revoke } = useTeamChange();

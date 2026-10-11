@@ -43,7 +43,7 @@ export function PageHeader({ title, subtitle, breadcrumb, actions }: PageHeaderP
           <ol className="flex flex-wrap items-center gap-1 text-xs text-shell-muted">
             {breadcrumb.map((crumb, index) => (
               <li key={`${crumb.label}-${index}`} className="flex items-center gap-1">
-                {index > 0 && <ChevronRight className="size-3" aria-hidden="true" />}
+                {index > 0 && <ChevronRight className="rtl:-scale-x-100 size-3" aria-hidden="true" />}
                 {crumb.href ? (
                   <Link
                     href={crumb.href}

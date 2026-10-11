@@ -317,7 +317,7 @@ function download(run: AgentRunDetail) {
 
 function RunDetail({ id }: { id: string }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.agentRuns;
   const { data } = useAgentRun(id);
   if (!data) return <div className="h-24 animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />;
@@ -374,7 +374,7 @@ function RunDetail({ id }: { id: string }) {
 
 export function AgentRuns({ agentKey, intentionId }: { agentKey: string; intentionId?: string }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.agentRuns;
   const { data: all } = useAgentRuns(agentKey);
   // For an intention: its runs only.
@@ -405,7 +405,7 @@ export function AgentRuns({ agentKey, intentionId }: { agentKey: string; intenti
                 </Pill>
                 <button
                   type="button"
-                  className="min-w-0 flex-1 text-left text-[0.8125rem] text-brand-navy hover:underline"
+                  className="min-w-0 flex-1 text-start text-[0.8125rem] text-brand-navy hover:underline"
                   aria-expanded={open === run.id}
                   onClick={() => setOpen(open === run.id ? null : run.id)}
                 >

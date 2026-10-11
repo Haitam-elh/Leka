@@ -388,7 +388,7 @@ export function AIControlsCard({ canManage, roles }: { canManage: boolean; roles
 export function ApprovalsCard({ canApprove }: { canApprove: boolean }) {
   const t = useDictionary();
   const w = t.governance.ai;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const { data } = useAwaitingRuns();
   const decide = useRunDecision();
   const members = useTeamMembers();
@@ -415,7 +415,7 @@ export function ApprovalsCard({ canApprove }: { canApprove: boolean }) {
                 {exactDate(locale, run.queued_at)}
               </span>
               {canApprove && !run.mine ? (
-                <span className="ml-auto flex gap-2">
+                <span className="ms-auto flex gap-2">
                   <Button type="button" size="sm" disabled={decide.isPending} onClick={() => decided(run, true)}>
                     {w.approve}
                   </Button>
@@ -455,7 +455,7 @@ function eventSaid(e: AIControlEvent, names: Map<string, string>, someone: strin
 export function AIAuditCard() {
   const t = useDictionary();
   const w = t.governance.ai;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const { data } = useAIEvents(true);
   const members = useTeamMembers();
   const names = new Map((members.data ?? []).map((m) => [m.user_id, personName(m)]));

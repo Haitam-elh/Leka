@@ -76,7 +76,9 @@ class WorkspaceService:
         self._workspaces = workspaces
         self._session = session
 
-    async def create(self, name: str, owner_user_id: uuid.UUID) -> Workspace:
+    async def create(
+        self, name: str, owner_user_id: uuid.UUID, *, default_language: str | None = None
+    ) -> Workspace:
         """Create a workspace and seat its owner, in one transaction.
 
         The two are inseparable: a workspace with no owner is unusable and
@@ -86,6 +88,8 @@ class WorkspaceService:
         """
         slug = await self._unique_slug(slugify(name))
         workspace = await self._workspaces.create(name=name, slug=slug)
+        if default_language is not None:
+            workspace.default_language = default_language
 
         # The workspace now exists, so its scope can be entered — which the
         # membership write needs, since memberships are workspace-scoped.
@@ -112,6 +116,7 @@ class WorkspaceService:
         *,
         name: str | None = None,
         settings: dict[str, object] | None = None,
+        default_language: str | None = None,
     ) -> Workspace:
         """Update a workspace's name or settings.
 
@@ -122,6 +127,8 @@ class WorkspaceService:
             workspace.name = name
         if settings is not None:
             workspace.settings = {**workspace.settings, **settings}
+        if default_language is not None:
+            workspace.default_language = default_language
         return workspace
 
     async def suspend(self, workspace: Workspace) -> Workspace:

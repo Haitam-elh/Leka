@@ -55,8 +55,8 @@ export function SidebarNavItem({
         // Measured on the mockup: 42px tall, a 22px icon, the label at 70px
         // from the sidebar's edge. A nested line sits under its section's
         // name, shorter, its label where the section's starts.
-        "group relative flex items-center rounded-lg pr-0 text-[0.8125rem] leading-5 font-medium tracking-[-0.015em] transition-colors outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
-        nested ? "py-[7px] pl-[58px]" : "gap-5 py-[10px] pl-4",
+        "group relative flex items-center rounded-lg pe-0 text-[0.8125rem] leading-5 font-medium tracking-[-0.015em] transition-colors outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
+        nested ? "py-[7px] ps-[58px]" : "gap-5 py-[10px] ps-4",
         active
           ? "bg-brand-violet-soft text-shell-nav-active"
           : "text-shell-nav hover:bg-brand-violet-soft/60",
@@ -81,12 +81,12 @@ export function SidebarNavItem({
         (collapsed ? (
           <span
             aria-hidden="true"
-            className="absolute top-1.5 right-3 size-1.5 rounded-full bg-shell-badge-foreground"
+            className="absolute top-1.5 end-3 size-1.5 rounded-full bg-shell-badge-foreground"
           />
         ) : (
           <span
             aria-hidden="true"
-            className="mr-2 rounded-full bg-shell-badge px-2 py-0.5 text-xs font-semibold text-shell-badge-foreground"
+            className="me-2 rounded-full bg-shell-badge px-2 py-0.5 text-xs font-semibold text-shell-badge-foreground"
           >
             {badge}
           </span>

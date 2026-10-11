@@ -10,11 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useDictionary, useSpokenLanguage } from "@/lib/i18n/locale-provider";
 import { useOnlineStatus } from "@/lib/use-online-status";
 
 export default function ForgotPasswordPage() {
   const t = useDictionary();
+  const language = useSpokenLanguage();
   const online = useOnlineStatus();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +28,7 @@ export default function ForgotPasswordPage() {
     setError(null);
 
     try {
-      await auth.forgotPassword(email);
+      await auth.forgotPassword(email, language);
       setSent(true);
     } catch (caught) {
       // Whatever the SERVER answered, the same confirmation: whether an

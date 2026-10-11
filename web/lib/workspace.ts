@@ -23,6 +23,12 @@ export const workspace = {
    * belongs to none does first. */
   create: (name: string) =>
     apiFetch<WorkspaceRead>("/workspaces", { method: "POST", body: JSON.stringify({ name }) }),
+  /** Change what an admin may: its language, here (docs/languages.md). */
+  configure: (changes: { default_language?: string }) =>
+    apiFetch<WorkspaceRead>("/workspaces/current", {
+      method: "PATCH",
+      body: JSON.stringify(changes),
+    }),
   /** Make it the workspace this browser works in. */
   enter: (workspaceId: string) =>
     apiFetch<unknown>(`/workspaces/${workspaceId}/switch`, { method: "POST" }),

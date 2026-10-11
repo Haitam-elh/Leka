@@ -76,8 +76,8 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
       // grid of numbers.
       scope="col"
       className={cn(
-        "h-9 px-3 text-left align-middle text-xs font-medium text-shell-muted whitespace-nowrap",
-        "[&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "h-9 px-3 text-start align-middle text-xs font-medium text-shell-muted whitespace-nowrap",
+        "[&:has([role=checkbox])]:pe-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
@@ -91,7 +91,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
       data-slot="table-cell"
       className={cn(
         "p-3 align-middle whitespace-nowrap text-shell-nav",
-        "[&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "[&:has([role=checkbox])]:pe-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}

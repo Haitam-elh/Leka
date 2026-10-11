@@ -362,7 +362,7 @@ function Actions({ candidate }: { candidate: CandidateDetail }) {
           className="flex items-center gap-1 self-start rounded text-xs font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
         >
           {p.reprocess}
-          <ArrowRight className="size-3" aria-hidden="true" />
+          <ArrowRight className="rtl:-scale-x-100 size-3" aria-hidden="true" />
         </button>
       ) : null}
     </section>
