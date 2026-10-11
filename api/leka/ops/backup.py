@@ -36,7 +36,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import asyncpg
 
@@ -46,8 +46,12 @@ LAST_BACKUP = "leka:ops:backup:last"
 
 
 def libpq_url(url: str) -> str:
-    """postgresql+asyncpg://… as the PostgreSQL tools read it."""
-    return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    """postgresql+asyncpg://… as the PostgreSQL tools — and asyncpg's own
+    connect — read it: SQLAlchemy's `ssl=require` (RDS) is libpq's
+    `sslmode=require`; neither pg_dump nor asyncpg.connect knows `ssl`."""
+    parsed = urlparse(url.replace("postgresql+asyncpg://", "postgresql://", 1))
+    query = [("sslmode" if k == "ssl" else k, v) for k, v in parse_qsl(parsed.query)]
+    return urlunparse(parsed._replace(query=urlencode(query)))
 
 
 def _tools(name: str) -> list[str]:
