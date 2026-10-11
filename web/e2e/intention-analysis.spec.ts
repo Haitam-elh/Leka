@@ -47,6 +47,10 @@ test.describe("Intention analysis", () => {
     await expect(steps.nth(2)).toHaveAttribute("data-name", "synthesis");
     await expect(steps.nth(2)).toHaveAttribute("data-status", "succeeded");
     await expect(steps.nth(2)).toContainText("Synthèse · toujours");
+
+    // Step 3, mockup 04: what it comes to.
+    await page.getByTestId("tab-results").click();
+    await expect(page).toHaveURL(/\/results$/);
     await expect(page.getByTestId("analysis-answer")).toContainText("Rédigée par Gemini 3.8 Flash");
     // What it found, worded — no proposal.
     await expect(page.getByTestId("analysis-summary")).toContainText(
@@ -86,6 +90,7 @@ test.describe("Intention analysis", () => {
     const action = page.locator('[data-testid="analysis-step"][data-name="action"]');
     await expect(action).toContainText("Action demandée");
     await expect(action).toHaveAttribute("data-status", "succeeded");
+    await page.getByTestId("tab-results").click();
     await expect(page.getByTestId("analysis")).toContainText(
       "Demandé : Redémarrer auth-service. Une personne doit l'approuver avant toute exécution.",
     );

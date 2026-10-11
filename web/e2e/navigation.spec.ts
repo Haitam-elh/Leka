@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { ask } from "./intention-helpers";
 import { LANDING, signIn } from "./sign-in";
 
 /**
@@ -69,13 +70,14 @@ test.describe("the information architecture", () => {
 
   test("keeps a tab in the URL, so it can be sent to someone", async ({ page }) => {
     await signIn(page);
-    await page.goto("/intentions/42");
+    const id = await ask(page, `Qui est responsable de auth-service ? (${Date.now()})`);
 
-    await expect(page.getByTestId("tab-overview")).toHaveAttribute("aria-current", "page");
+    // Its bare address opens the step it is at.
+    await expect(page.getByTestId("tab-analysis")).toHaveAttribute("aria-current", "page");
 
     await page.getByTestId("tab-evidence").click();
 
-    await expect(page).toHaveURL("http://localhost:3000/intentions/42/evidence");
+    await expect(page).toHaveURL(`http://localhost:3000/intentions/${id}/evidence`);
     await expect(page.getByTestId("tab-evidence")).toHaveAttribute("aria-current", "page");
     // Reloading the shared link lands on the same tab.
     await page.reload();

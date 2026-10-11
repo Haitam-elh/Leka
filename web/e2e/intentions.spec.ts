@@ -35,9 +35,18 @@ test.describe("Intentions", () => {
     // Kept: followed from Mes intentions.
     await page.getByTestId("intention-follow").click();
     await expect(page).toHaveURL(/\/intentions\/[0-9a-f-]{36}$/);
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(asked);
+    // Opened at the step it is at (mockup 03): what was asked, above it.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Analyse en cours");
+    await expect(page.getByTestId("intention-step-badge")).toHaveText("Étape 2 sur 5");
+    await expect(page.getByTestId("intention-step-analysis")).toHaveAttribute(
+      "data-state",
+      "current",
+    );
     await expect(page.getByTestId("intention-status")).toContainText("En analyse");
     await expect(page.getByTestId("intention-text")).toContainText(asked);
+    // Step 1: what it is, and the context linked to it.
+    await page.getByTestId("tab-overview").click();
+    await expect(page).toHaveURL(/\/overview$/);
     await expect(page.getByTestId("intention-link").first()).toContainText("v1");
 
     // Its history: asked, its context linked, LEKA analysing.

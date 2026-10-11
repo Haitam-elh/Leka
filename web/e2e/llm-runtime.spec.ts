@@ -27,7 +27,9 @@ test.describe("LLM runtime", () => {
     await signIn(page);
     const id = await ask(page, `auth-service, c'est à qui de voir ça ? (${Date.now()})`);
 
-    // Read by the model: its goal settled, not stopped for a question.
+    // Read by the model: its goal settled, not stopped for a question —
+    // what LEKA understood is step 1's.
+    await page.getByTestId("tab-overview").click();
     const understood = page.getByTestId("intention-understanding");
     await expect(understood.getByTestId("understanding-goal")).toContainText(
       "Trouver le responsable",
@@ -43,6 +45,7 @@ test.describe("LLM runtime", () => {
     await page.goto(`/intentions/${id}/analysis`);
     const synthesis = page.locator('[data-testid="analysis-step"][data-name="synthesis"]');
     await expect(synthesis).toHaveAttribute("data-status", "succeeded");
+    await page.goto(`/intentions/${id}/results`);
     const answer = page.getByTestId("analysis-answer");
     await expect(answer).toContainText("D'après l'analyse");
     await expect(answer.getByTestId("answer-point").first()).toContainText("élément(s) cité(s)");
