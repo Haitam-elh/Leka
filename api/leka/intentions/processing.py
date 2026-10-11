@@ -180,6 +180,8 @@ async def analyse_pending(*, limit: int = 100) -> dict[str, int]:
                 .where(
                     IntentionAnalysis.intention_id == Intention.id,
                     IntentionAnalysis.context_id == Intention.context_id,
+                    IntentionAnalysis.context_version
+                    == Intention.readiness["version"].as_integer(),
                     IntentionAnalysis.status != "blocked",
                 )
                 .exists()
@@ -892,10 +894,14 @@ async def _finish(
         row.finished_at = datetime.now(UTC)
         failed = [o for o in outcomes if o.status in ("failed", "timed_out")]
         row.error = failed[0].error if result.status == "failed" and failed else None
+        current_version = (
+            intention.readiness.get("version") if intention.readiness is not None else None
+        )
         current = (
             intention.status == S.ANALYSING.value
             and intention.archived_at is None
             and intention.context_id == context_id
+            and row.context_version == current_version
         )
         if not current:
             row.detail = {**row.detail, "superseded": True}
