@@ -33,6 +33,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from leka.core.settings._rotation import RotateEvery
 from leka.core.settings.background import BackgroundSettings
+from leka.core.settings.billing import BillingSettings
 from leka.core.settings.credits import CreditSettings
 from leka.core.settings.database import DatabaseSettings
 from leka.core.settings.email import EmailSettings
@@ -61,6 +62,7 @@ class OverdueSecret(NamedTuple):
 
 class Settings(
     RuntimeSettings,
+    BillingSettings,
     DatabaseSettings,
     SecuritySettings,
     EmailSettings,

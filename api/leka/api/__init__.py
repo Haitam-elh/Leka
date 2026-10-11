@@ -36,9 +36,11 @@ from leka.api import (
     ops,
     outcomes,
     platform,
+    pricing,
     protection,
     resolution,
     skills,
+    subscriptions,
     webhooks,
     workflows,
 )
@@ -88,5 +90,9 @@ api_router.include_router(actions.router)
 api_router.include_router(outcomes.router)
 # What the workspace holds and did this month (Facturation).
 api_router.include_router(billing.router)
+# LEKA CORE's plans and prices, public, for the site (LEKA-431).
+api_router.include_router(pricing.router)
+# Paying for it: Stripe Checkout, the portal, Stripe's verified events.
+api_router.include_router(subscriptions.router)
 
 __all__ = ["api_router"]

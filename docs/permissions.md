@@ -342,6 +342,15 @@ the workspace entered at once. `GET /billing/usage` — what the workspace
 holds and did this month, counted — any member; no plan, payment nor
 invoice is held by LEKA yet.
 
+## Paying (LEKA-431)
+
+`GET /billing/subscription` takes `workspace:read`. `POST /billing/checkout`,
+`/billing/capacity/checkout` and `/billing/portal` take `workspace:update`: a
+workspace's owners and admins pay. `GET /pricing` and `POST /pricing/events`
+are public — the site's pricing page; `POST /billing/stripe/webhook` is public
+and believed only when signed by Stripe. A plan or credits change only from a
+verified Stripe event ([pricing.md](pricing.md) § 7).
+
 ## Agents (LEKA-395)
 
 Running an agent (`POST /agent-runs`) takes `intention:create` **and the

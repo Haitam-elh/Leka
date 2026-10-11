@@ -52,6 +52,10 @@ SECRET_OWNERS: dict[str, frozenset[str]] = {
     "encryption_keys": frozenset({"leka.platform.secrets"}),
     "s3_secret_access_key": frozenset({"leka.platform.storage"}),
     "smtp_password": frozenset({"leka.identity.email"}),
+    # Stripe (LEKA-431): the one module that calls Stripe and verifies its
+    # webhooks; the routes ask it whether payment is open, never the key.
+    "stripe_secret_key": frozenset({"leka.billing.subscriptions"}),
+    "stripe_webhook_secret": frozenset({"leka.billing.subscriptions"}),
     "resend_api_key": frozenset({"leka.identity.email"}),
     # The DSN is read once, to start the SDK. The events themselves are
     # cleaned by leka.core.logging, which is why this module is not also a

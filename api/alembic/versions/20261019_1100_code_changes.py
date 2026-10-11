@@ -1,7 +1,7 @@
 """Code changes: what the code-change agent proposes, and what came of it.
 
 Revision ID: 4e7a2c9d1b63
-Revises: 0a074280012e
+Revises: 7c2e9f4a1b85
 Created: 2026-10-19
 
 One row per change an agent proposed (`code_changes`): the run and the
@@ -21,7 +21,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "4e7a2c9d1b63"
-down_revision: str | None = "0a074280012e"
+down_revision: str | None = "7c2e9f4a1b85"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

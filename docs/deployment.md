@@ -610,6 +610,12 @@ made again — `e2e/site.spec.ts` fails if one is missed:
    away with the demo button; only the demo button folds — it is the one
    way into the platform from the site.
 3. **No `login.html`**: its address redirects to the application's sign-in.
+4. **The pricing page** (LEKA-431): `tarifs.html`, `tarifs.css` and
+   `tarifs.js` are LEKA's own and stay; each page's header and footer link
+   to it (« Tarifs », `nav.tarifs`), the home page's bar too; `i18n.js`
+   keeps its `nav.tarifs` and `pricing.*` translations; `demo.html` keeps
+   its `enterprise` request type. `e2e/pricing.spec.ts` fails if one is
+   missed.
 
 And `web/components/auth/site-header.tsx`, the header above the sign-in
 screens, follows the site's: the same logo and the same four anchors on
@@ -617,6 +623,21 @@ the home page (`#environnement`, `#intention`, `#video`, `#controle` since
 2026-10-10).
 
 ---
+
+## Payments: Stripe (LEKA-431)
+
+The keys go in `production.env`, and nowhere else:
+`LEKA_STRIPE_SECRET_KEY` and `LEKA_STRIPE_WEBHOOK_SECRET` — test keys
+(`sk_test_…`) until live payments are opened. After a deployment that
+changes `api/leka/billing/catalogue.yaml`, and once per Stripe account:
+
+```bash
+dc exec api python -m leka.billing.cli stripe-sync
+```
+
+It creates the products, prices, the launch coupon and the customer portal's
+settings that are missing, and prints them. The webhook endpoint, its events
+and the test-to-live steps: [pricing.md](pricing.md) § 7.
 
 ## What is deliberately not here
 

@@ -96,6 +96,19 @@ python -m leka.identity.email --test someone@example.com
 | `LEKA_RESEND_API_KEY` | — | API sender, used when SMTP is not configured |
 | `LEKA_EMAIL_OUTBOX_FILE` | — | Local and CI only: the console sender also appends each message, as one JSON line, to this file. The browser tests read their links from it. Refused in staging and production |
 
+## Pricing and payment
+
+Prices, discounts and AI capacity are not settings: they live in
+`api/leka/billing/catalogue.yaml` ([pricing.md](pricing.md)).
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `LEKA_STRIPE_SECRET_KEY` | — | Stripe's secret key: `sk_test_…` to try, `sk_live_…` in production. Empty: nothing can be bought — Facturation says payment is not open |
+| `LEKA_STRIPE_WEBHOOK_SECRET` | — | The webhook endpoint's signing secret (`whsec_…`), from Stripe's dashboard. Empty: every webhook is refused |
+| `LEKA_STRIPE_API_URL` | `https://api.stripe.com` | Stripe's API; replaced in the tests only |
+| `LEKA_SALES_BOOKING_URL` | — | Where an Enterprise prospect books a meeting with the team: a Calendly link or any scheduling page, https. Empty: the pricing page offers the enquiry form only — no address is guessed |
+| `LEKA_SALES_CONTACT_URL` | `https://leka-core.com/demo.html?type=enterprise` | The enquiry path that always works, https |
+
 ## Model access
 
 Read by `leka.capabilities` and nowhere else (architecture rule 7): the
@@ -205,6 +218,8 @@ are in `docs/runbook.md`.
 | `LEKA_DATABASE_URL` | `leka.db.session`, `alembic.env`, `leka.background.runner`, `leka.ops.backup` | 365 days |
 | `LEKA_REDIS_URL` | `leka.core.ratelimit`, `leka.platform.health`, `leka.background.jobs`, `leka.core.breaker`, `leka.ops` | 365 days |
 | `LEKA_SMTP_PASSWORD` | `leka.identity.email` | 365 days |
+| `LEKA_STRIPE_SECRET_KEY` | `leka.billing.subscriptions` | 365 days |
+| `LEKA_STRIPE_WEBHOOK_SECRET` | `leka.billing.subscriptions` | 365 days |
 | `LEKA_RESEND_API_KEY` | `leka.identity.email` | 90 days |
 | `LEKA_GOOGLE_API_KEY` | `leka.capabilities` | 90 days |
 | `LEKA_ANTHROPIC_API_KEY` | `leka.capabilities` | 90 days |
