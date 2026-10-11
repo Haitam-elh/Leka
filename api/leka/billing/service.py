@@ -18,6 +18,7 @@ from leka.billing.schemas import (
     SiteEventCount,
     SiteEventCreate,
 )
+from leka.governance import plan_credits
 
 
 def pricing(
@@ -37,6 +38,8 @@ def pricing(
             else []
         )
         allowance = plan.ai_credits_per_month
+        # Metering's, never a second figure of the page's own (LEKA-430).
+        monthly = None if allowance.contractual else plan_credits(plan.key)
         plans.append(
             PlanRead(
                 key=plan.key,
@@ -46,7 +49,7 @@ def pricing(
                 audience=plan.audience,
                 value=plan.value,
                 quotes=quotes,
-                ai_credits_per_month=allowance.value,
+                ai_credits_per_month=monthly,
                 ai_credits_provisional=allowance.provisional,
                 ai_credits_contractual=allowance.contractual,
                 managed_llm=plan.managed_llm,

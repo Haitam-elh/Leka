@@ -46,7 +46,8 @@ test("the plans, monthly with the launch offer, yearly with the annual discount"
   await expect(page.locator("#launchNote")).toBeHidden();
 
   // AI capacity, the core agents, the own model on Enterprise only.
-  await expect(growth).toContainText("2 000 crédits IA / mois");
+  // Metering's credits (LEKA-430), as the page reads them from it.
+  await expect(growth).toContainText("10 000 crédits IA / mois");
   await expect(growth).toContainText("Architecte applicatif et QA — analyse des tests inclus");
   const enterprise = page.locator('article.plan[data-plan="enterprise"]');
   await expect(enterprise).toContainText("Sur devis");

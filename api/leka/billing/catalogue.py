@@ -38,20 +38,16 @@ class Words(_Model):
 
 
 class Allowance(_Model):
-    """A plan's monthly AI credits — a capacity unit, not tokens."""
+    """A plan's monthly AI credits — a capacity unit, not tokens.
 
-    value: int | None = Field(default=None, ge=0)
+    How many is metering's to say (LEKA-430, `governance.plan_credits`,
+    LEKA_PLAN_CREDITS): the page reads them from it, so it can never promise
+    other than what a workspace gets. Only a contract says otherwise."""
+
     # A launch hypothesis, until metering (LEKA-430) measures real usage.
     provisional: bool = False
     # Set per contract (Enterprise).
     contractual: bool = False
-
-    @model_validator(mode="after")
-    def _said(self) -> Allowance:
-        if self.value is None and not self.contractual:
-            msg = "an allowance is a number of credits, or contractual"
-            raise ValueError(msg)
-        return self
 
 
 class Plan(_Model):
