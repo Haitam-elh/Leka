@@ -366,6 +366,47 @@ async def test_a_late_analysis_moves_nothing_that_moved_on(
     assert analysis["detail"]["superseded"] is True
 
 
+async def test_a_late_analysis_of_an_old_context_version_is_superseded_and_swept(
+    client: AsyncClient,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    intention = await _ask(client, "Qui est responsable de Billing API ?")
+    old_version = intention["readiness"]["version"]
+    reading = processing._material
+    reasked: dict[str, Any] = {}
+
+    async def reasked_while_reading(*args: Any, **kwargs: Any) -> Material:
+        response = await client.post(
+            f"{API}/{intention['id']}/ask", json={"text": "Qui maintient Billing API ?"}
+        )
+        assert response.status_code == 200, response.text
+        updated = response.json()["intention"]
+        reasked["version"] = updated["readiness"]["version"]
+        reasked["context_id"] = updated["context_id"]
+        return await reading(*args, **kwargs)
+
+    monkeypatch.setattr(processing, "_material", reasked_while_reading)
+    outcome = await _analysed(acme, intention)
+
+    assert outcome["superseded"] is True
+    assert reasked["context_id"] == intention["context_id"]
+    assert reasked["version"] > old_version
+    assert (await _get(client, f"/{intention['id']}"))["status"] == "analysing"
+
+    # The old run must not satisfy the sweep for the new version.
+    monkeypatch.setattr(processing, "_material", reading)
+    swept = await analyse_pending()
+    assert swept["analysed"] == 1
+    assert (await _get(client, f"/{intention['id']}"))["status"] == "completed"
+    analyses = await _get(client, f"/{intention['id']}/analyses")
+    assert [item["context_version"] for item in analyses] == [reasked["version"], old_version]
+    assert analyses[0]["status"] == "complete"
+    assert analyses[1]["detail"]["superseded"] is True
+
+
 # ── queued, swept, read ──────────────────────────────────────────────────────
 
 
