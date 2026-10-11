@@ -51,8 +51,9 @@ def _write(tmp_path: Path, content: str) -> Path:
 
 
 # Agents that propose actions — each a decision reviewed as such: the build
-# fixer proposes a fix, never applies it (LEKA-400, docs/agent-library.md).
-PROPOSES = frozenset({"build-fixer"})
+# fixer proposes a fix, never applies it (LEKA-400, docs/agent-library.md);
+# the code-change agent proposes a diff a person accepts as a pull request.
+PROPOSES = frozenset({"build-fixer", "code-change"})
 
 
 def test_the_repository_agents_all_load() -> None:

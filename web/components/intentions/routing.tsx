@@ -4,6 +4,7 @@ import { Compass, RefreshCw } from "lucide-react";
 import Link from "next/link";
 
 import { AgentRuns, RunAgent, suggestedInputs } from "@/components/capabilities/agent-runs";
+import { CodeChanges } from "@/components/capabilities/code-changes";
 import { reasonSaid, titleOf } from "@/components/capabilities/catalogue";
 import { WorkflowPanel } from "@/components/capabilities/workflow-runs";
 import { Card, type TileTone } from "@/components/environment/parts";
@@ -63,6 +64,8 @@ function SelectedAgent({ candidate, intentionId }: { candidate: RoutedCandidate;
         prefill={suggestedInputs(data.inputs, intention)}
       />
       <AgentRuns agentKey={data.key} intentionId={intentionId} />
+      {/* What it proposes to change in code: a diff, accepted as a pull request. */}
+      {data.formats.includes("diff") ? <CodeChanges intentionId={intentionId} /> : null}
     </>
   );
 }

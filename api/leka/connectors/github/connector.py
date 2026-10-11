@@ -32,6 +32,8 @@ one record per service, store or service outside, whole each pass.
 
 LEKA READS. A classic token that carries write scopes is accepted — GitHub
 is where it is scoped, not here — but the test says so, in its warnings.
+The one write is code.py's: a pull request for a code change a person
+accepted, on a source whose admin allowed it (`pull_requests`).
 """
 
 from __future__ import annotations
@@ -111,6 +113,12 @@ class GitHubConfig(BaseModel):
         max_length=MAX_SCOPE_OPTIONS,
         description="Full names ('acme/api') of the repositories to read. "
         "Empty: every repository the token sees.",
+    )
+    pull_requests: bool = Field(
+        default=False,
+        description="Allow LEKA to open a pull request for a code change a person accepted — "
+        "a new branch, one commit, never a merge. The token then needs Contents and Pull "
+        "requests in write.",
     )
 
     @model_validator(mode="after")
