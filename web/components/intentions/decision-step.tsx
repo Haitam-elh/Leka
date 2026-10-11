@@ -249,7 +249,7 @@ export function DecisionStep() {
 
 /** Mockup 05's "Prochaines étapes": what follows a yes — the process, not
  * data. */
-function NextSteps() {
+export function NextSteps() {
   const t = useDictionary();
   const w = t.decision.next;
   const steps = [

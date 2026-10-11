@@ -63,8 +63,14 @@ export function PageHeader({ title, subtitle, breadcrumb, actions }: PageHeaderP
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-brand-navy">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-shell-muted">{subtitle}</p>}
+          {/* As every mockup draws it: a large, bold title, its line under
+              it in the accent's muted violet. */}
+          <h1 className="text-[1.75rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy md:text-[2.25rem]">
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="mt-1 text-[0.9375rem] text-shell-accent-muted md:text-[1.0625rem]">{subtitle}</p>
+          )}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>

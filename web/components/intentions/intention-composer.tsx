@@ -2,6 +2,7 @@
 
 import {
   ArrowUp,
+  ChevronRight,
   FileDiff,
   FileSymlink,
   Link2,
@@ -11,12 +12,14 @@ import {
   Send,
   ShieldCheck,
   Sparkle,
+  Sparkles,
   X,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 import { cn } from "cn";
+import { IconTile, type TileTone } from "@/components/environment/parts";
 import { useConfirm } from "@/components/interactions/confirm";
 import { useCurrentWorkspace } from "@/components/shell/shell-provider";
 import { Badge } from "@/components/ui/badge";
@@ -159,27 +162,43 @@ export function IntentionComposer({
   const missing = empty ? 0 : Math.max(0, INTENTION_MIN - value.trim().length);
   const compact = variant === "compact";
   const whyDisabled = useId();
+  // The card's headings and each suggestion's words, named for their parts.
+  const ids = useId();
 
   // The mockup's four, with their icons. Each fills in a sentence; none sends.
-  const suggestions: { icon: LucideIcon; label: string; template: string }[] = [
+  const suggestions: {
+    icon: LucideIcon;
+    tone: TileTone;
+    label: string;
+    hint: string;
+    template: string;
+  }[] = [
     {
       icon: Link2,
+      tone: "danger",
       label: t.composer.suggestIncident,
+      hint: t.composer.suggestIncidentHint,
       template: t.composer.suggestIncidentTemplate,
     },
     {
       icon: FileDiff,
+      tone: "warning",
       label: t.composer.suggestChange,
+      hint: t.composer.suggestChangeHint,
       template: t.composer.suggestChangeTemplate,
     },
     {
       icon: ShieldCheck,
+      tone: "success",
       label: t.composer.suggestCompliance,
+      hint: t.composer.suggestComplianceHint,
       template: t.composer.suggestComplianceTemplate,
     },
     {
       icon: FileSymlink,
+      tone: "info",
       label: t.composer.suggestMigration,
+      hint: t.composer.suggestMigrationHint,
       template: t.composer.suggestMigrationTemplate,
     },
   ];
@@ -327,159 +346,212 @@ export function IntentionComposer({
     );
   }
 
+  // Mockup 02: the question in a card — its spark, what to write, the box,
+  // what to attach, the button to send — then « Suggestions pour vous », a
+  // card each.
   return (
-    <div className={cn("space-y-3", className)}>
-      <div
-        data-testid="composer-dropzone"
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={(event) => {
-          event.preventDefault();
-          addFiles(event.dataTransfer.files);
-        }}
-        className={cn(
-          "rounded-xl border border-shell-line bg-white p-3 transition-colors focus-within:border-brand-violet focus-within:ring-3 focus-within:ring-brand-violet/20",
-        )}
+    <div className={cn("space-y-4", className)}>
+      <section
+        aria-labelledby={`${ids}-title`}
+        className="rounded-xl border border-shell-line bg-white p-5"
       >
-        <Textarea
-          ref={box}
-          value={value}
-          onChange={(event) => setValue(name, event.target.value, { shouldDirty: true })}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
-            event.preventDefault();
-            onSubmit();
-          }}
-          aria-label={t.composer.label}
-          aria-keyshortcuts="Meta+Enter Control+Enter"
-          placeholder={t.composer.placeholder}
-          rows={compact ? 1 : 6}
-          data-testid="intention-input"
-          className={cn(
-            "resize-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0",
-            compact && "min-h-9",
-          )}
-        />
-
-        {attachments.length > 0 ? (
-          <ul className="mt-2 flex flex-wrap gap-1.5">
-            {attachments.map((attachment) => (
-              <li
-                key={attachment.name}
-                className="flex items-center gap-1 rounded-md bg-shell-canvas px-2 py-1 text-xs text-shell-nav"
-              >
-                {attachment.name}
-                <button
-                  type="button"
-                  aria-label={fill(t.composer.removeFile, {
-                    name: attachment.name,
-                  })}
-                  onClick={() =>
-                    onAttachmentsChange?.(
-                      attachments.filter((current) => current.name !== attachment.name),
-                    )
-                  }
-                  className="rounded p-0.5 opacity-60 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-violet/40"
-                >
-                  <X className="size-3" aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        {/* Wraps as two groups rather than squeezing words: at 1024px, with
-            the rail, "⌘↵ pour lancer" used to break over three lines. */}
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {compact ? null : (
-            <>
-              <input
-                ref={fileInput}
-                type="file"
-                multiple
-                accept={ACCEPTED_TYPES.join(",")}
-                className="hidden"
-                onChange={(event) => {
-                  addFiles(event.target.files);
-                  event.target.value = "";
-                }}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => fileInput.current?.click()}
-              >
-                <Paperclip className="size-4" aria-hidden="true" />
-                {t.composer.attach}
-              </Button>
-              {/* Hidden outright where the browser could not do it anyway:
-                  a permanently disabled button on a machine that will never
-                  support it is a promise that cannot be kept. */}
-              {dictatable ? (
-                <Button type="button" variant="ghost" size="sm" disabled={!DICTATION_ENABLED}>
-                  <Mic className="size-4" aria-hidden="true" />
-                  {t.composer.dictate}
-                  <Badge variant="secondary">{t.composer.soon}</Badge>
-                </Button>
-              ) : null}
-            </>
-          )}
-
-          <div className="ms-auto flex items-center gap-2 whitespace-nowrap">
-            {/* Polite, and only while it is true: announced once as the
-                person types past it, not read out on every keystroke. */}
-            <span id={whyDisabled} aria-live="polite" className="text-xs text-shell-muted">
-              {missing > 0 ? fill(t.composer.tooShortHint, { count: missing }) : null}
-            </span>
-            <span
-              className={cn(
-                "text-xs tabular-nums",
-                tooLong ? "text-shell-badge-foreground" : "text-shell-muted",
-              )}
+        <div className="mb-4 flex items-start gap-3">
+          <IconTile icon={Sparkles} tone="violet" className="size-11" />
+          <div className="min-w-0">
+            <h2
+              id={`${ids}-title`}
+              className="text-[1.25rem] font-semibold tracking-[-0.01em] text-brand-navy"
             >
-              {fill(t.forms.charCount, {
-                count: value.length,
-                max: INTENTION_MAX,
-              })}
-            </span>
-            {missing > 0 ? null : (
-              <span className="hidden text-xs text-shell-muted sm:inline">
-                {t.composer.submitHint}
-              </span>
-            )}
-            <Button
-              type="button"
-              size="sm"
-              onClick={onSubmit}
-              // Below the minimum there is nothing to analyse, past the
-              // maximum there is nothing we would send. Both are refusals the
-              // person can see before pressing.
-              disabled={empty || tooLong || missing > 0 || submitting}
-              aria-describedby={missing > 0 ? whyDisabled : undefined}
-              data-testid="intention-submit"
-            >
-              <Send className="size-4" aria-hidden="true" />
-              {t.composer.submit}
-            </Button>
+              {t.composer.question}
+            </h2>
+            <p className="text-[0.875rem] text-shell-muted">{t.composer.questionLead}</p>
           </div>
         </div>
-      </div>
+        <div
+          data-testid="composer-dropzone"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            addFiles(event.dataTransfer.files);
+          }}
+          className={cn(
+            "rounded-xl border border-shell-line bg-white p-3 transition-colors focus-within:border-brand-violet focus-within:ring-3 focus-within:ring-brand-violet/20",
+          )}
+        >
+          <Textarea
+            ref={box}
+            value={value}
+            onChange={(event) => setValue(name, event.target.value, { shouldDirty: true })}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
+              event.preventDefault();
+              onSubmit();
+            }}
+            aria-label={t.composer.label}
+            aria-keyshortcuts="Meta+Enter Control+Enter"
+            placeholder={t.composer.placeholder}
+            rows={compact ? 1 : 6}
+            data-testid="intention-input"
+            className={cn(
+              "resize-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0",
+              compact && "min-h-9",
+            )}
+          />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-shell-muted">{t.composer.suggestions}</span>
-        {suggestions.map(({ icon: Icon, label, template }) => (
-          <Button
-            key={label}
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void applySuggestion(template)}
-          >
-            <Icon className="size-4" aria-hidden="true" />
-            {label}
-          </Button>
-        ))}
-      </div>
+          {attachments.length > 0 ? (
+            <ul className="mt-2 flex flex-wrap gap-1.5">
+              {attachments.map((attachment) => (
+                <li
+                  key={attachment.name}
+                  className="flex items-center gap-1 rounded-md bg-shell-canvas px-2 py-1 text-xs text-shell-nav"
+                >
+                  {attachment.name}
+                  <button
+                    type="button"
+                    aria-label={fill(t.composer.removeFile, {
+                      name: attachment.name,
+                    })}
+                    onClick={() =>
+                      onAttachmentsChange?.(
+                        attachments.filter((current) => current.name !== attachment.name),
+                      )
+                    }
+                    className="rounded p-0.5 opacity-60 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+                  >
+                    <X className="size-3" aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {/* Wraps as two groups rather than squeezing words: at 1024px, with
+              the rail, "⌘↵ pour lancer" used to break over three lines. */}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {compact ? null : (
+              <>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  multiple
+                  accept={ACCEPTED_TYPES.join(",")}
+                  className="hidden"
+                  onChange={(event) => {
+                    addFiles(event.target.files);
+                    event.target.value = "";
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => fileInput.current?.click()}
+                >
+                  <Paperclip className="size-4" aria-hidden="true" />
+                  {t.composer.attach}
+                </Button>
+                {/* Hidden outright where the browser could not do it anyway:
+                    a permanently disabled button on a machine that will never
+                    support it is a promise that cannot be kept. */}
+                {dictatable ? (
+                  <Button type="button" variant="ghost" size="sm" disabled={!DICTATION_ENABLED}>
+                    <Mic className="size-4" aria-hidden="true" />
+                    {t.composer.dictate}
+                    <Badge variant="secondary">{t.composer.soon}</Badge>
+                  </Button>
+                ) : null}
+              </>
+            )}
+
+            <div className="ms-auto flex items-center gap-2 whitespace-nowrap">
+              {/* Polite, and only while it is true: announced once as the
+                  person types past it, not read out on every keystroke. */}
+              <span id={whyDisabled} aria-live="polite" className="text-xs text-shell-muted">
+                {missing > 0 ? fill(t.composer.tooShortHint, { count: missing }) : null}
+              </span>
+              <span
+                className={cn(
+                  "text-xs tabular-nums",
+                  tooLong ? "text-shell-badge-foreground" : "text-shell-muted",
+                )}
+              >
+                {fill(t.forms.charCount, {
+                  count: value.length,
+                  max: INTENTION_MAX,
+                })}
+              </span>
+              {missing > 0 ? null : (
+                <span className="hidden text-xs text-shell-muted sm:inline">
+                  {t.composer.submitHint}
+                </span>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                onClick={onSubmit}
+                // Below the minimum there is nothing to analyse, past the
+                // maximum there is nothing we would send. Both are refusals the
+                // person can see before pressing.
+                disabled={empty || tooLong || missing > 0 || submitting}
+                aria-describedby={missing > 0 ? whyDisabled : undefined}
+                data-testid="intention-submit"
+              >
+                <Send className="size-4" aria-hidden="true" />
+                {t.composer.submit}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <section
+        aria-labelledby={`${ids}-suggestions`}
+        className="rounded-xl border border-shell-line bg-white p-4"
+      >
+        <h2
+          id={`${ids}-suggestions`}
+          className="mb-3 flex items-center gap-2 text-[1rem] font-semibold text-brand-navy"
+        >
+          <Sparkles className="size-4 text-brand-violet" aria-hidden="true" />
+          {t.composer.suggestionsTitle}
+        </h2>
+        <ul className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+          {suggestions.map(({ icon, tone, label, hint, template }, index) => (
+            <li key={label}>
+              <button
+                type="button"
+                onClick={() => void applySuggestion(template)}
+                // Named by its label, described by its hint: a test, or a
+                // screen reader, finds « Analyser un incident récent ».
+                aria-labelledby={`${ids}-s${index}`}
+                aria-describedby={`${ids}-h${index}`}
+                className="group flex h-full w-full flex-col items-start gap-2 rounded-xl border border-shell-line bg-white p-4 text-start transition-colors outline-none hover:border-brand-violet/40 hover:bg-brand-violet-soft/30 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+              >
+                <IconTile icon={icon} tone={tone} className="size-10" />
+                <span
+                  id={`${ids}-s${index}`}
+                  className="text-[0.875rem] font-semibold text-brand-navy"
+                >
+                  {label}
+                </span>
+                <span className="flex w-full items-end gap-2">
+                  <span
+                    id={`${ids}-h${index}`}
+                    className="min-w-0 flex-1 text-[0.8125rem] text-shell-muted"
+                  >
+                    {hint}
+                  </span>
+                  <ChevronRight
+                    className="size-4 shrink-0 text-shell-muted transition-transform group-hover:translate-x-0.5 rtl:-scale-x-100"
+                    aria-hidden="true"
+                  />
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
 }

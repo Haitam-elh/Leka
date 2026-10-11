@@ -133,6 +133,8 @@ const fr = {
   tabs: {
     overview: "Vue d'ensemble",
     analysis: "Analyse",
+    results: "Résultats",
+    decision: "Décision",
     evidence: "Preuves",
     actions: "Actions",
     history: "Historique",
@@ -229,6 +231,8 @@ const fr = {
     clearSelection: "Tout désélectionner",
     maxReached: "{max} au maximum",
     selectedCount: "{count} sélectionné(s)",
+    all: "Tout voir ({count})",
+    fewer: "Voir moins",
     pickDate: "Choisir une date",
     dateFrom: "Du",
     dateTo: "Au",
@@ -283,6 +287,15 @@ const fr = {
     dictate: "Dictée",
     soon: "Bientôt",
     suggestions: "Suggestions",
+    suggestionsTitle: "Suggestions pour vous",
+    question: "Quelle est votre intention ?",
+    questionLead:
+      "Décrivez votre besoin en langage naturel. Plus votre demande est précise, plus les recommandations seront pertinentes.",
+    suggestIncidentHint: "Identifier la cause racine et les services impactés.",
+    suggestChangeHint: "Voir l'impact d'un déploiement sur l'environnement.",
+    suggestComplianceHint: "Contrôler ce qu'un service doit respecter, et ce qui manque.",
+    suggestMigrationHint: "Analyser les dépendances et les risques.",
+    lead: "Décrivez votre besoin. LEKA analyse votre environnement et vous propose des recommandations concrètes.",
     /** The overview's box, as on mockup 01. */
     compactPlaceholder: "Décrivez votre intention en langage naturel…",
     attachOnNextStep: "Joindre un fichier (à l'étape suivante)",
@@ -304,6 +317,7 @@ const fr = {
     fileTypeRefused: "{name} n'est pas d'un type accepté.",
     removeFile: "Retirer {name}",
     contextTitle: "Contexte qui sera analysé",
+    allSources: "Voir toutes les sources ({count})",
     whySources: "Pourquoi ces sources ?",
     whySourcesBody:
       "LEKA ne lit que les sources cochées. Moins de sources, c'est une analyse plus rapide et moins de contexte inutile.",
@@ -1547,6 +1561,46 @@ const fr = {
       migration: "Vers où il part, ce qui s'appuie sur lui, ce sur quoi il s'appuie.",
       action:
         "Une action demandée sur les systèmes : ce qu'elle touche, ses contraintes, le dernier déploiement.",
+      synthesis:
+        "La réponse en mots, écrite à partir de l'analyse : chaque point cite ce sur quoi il s'appuie.",
+      evolution: "Ce que LEKA a appris sur la période : ce qui est apparu, a changé ou a disparu.",
+      // Workflows and agents, for the screen: their files' descriptions are
+      // what the model reads to choose them.
+      "architecture-dossier":
+        "Le dossier d'architecture complet d'un parcours : état, dépendances, documentation, puis le deck de l'architecte.",
+      "incident-review":
+        "La revue complète d'un incident : ce qui s'est passé et pourquoi, ce qui a changé avant, qui en est responsable.",
+      "release-readiness":
+        "Si un service est prêt pour sa prochaine release : comment il est livré, ses incidents récents, jusqu'où irait une panne.",
+      "application-architecture":
+        "Le deck d'architecture d'un parcours : couche métier ArchiMate, séquences applicatives, règles, RACI — en PDF et PowerPoint.",
+      "architecture-analysis":
+        "L'architecture d'une application expliquée : ses composants, ses dépendances, ses points faibles.",
+      "detect-undocumented-dependency":
+        "Les dépendances vues en production ou dans le code qu'aucune documentation ne décrit.",
+      "map-service-ownership": "Le vrai responsable d'un service, d'après les commits et les tickets.",
+      "correlate-deploy-with-latency":
+        "Relie une hausse de latence ou d'erreurs au déploiement qui peut l'expliquer.",
+      "incident-investigation":
+        "La chronologie d'un incident, ce qu'il a touché, sa cause probable, et son post-mortem rédigé.",
+      "infrastructure-analysis":
+        "Où tourne un service, sur quelles ressources, ce qui est partagé, ce qui est un point unique de défaillance.",
+      "data-analysis":
+        "Où vivent les données, qui les lit ou les écrit, qui en est responsable, où elles circulent.",
+      "documentation-assistant":
+        "À quel point un sujet est documenté, et un premier jet de sa documentation, sans rien inventer.",
+      "security-review":
+        "Ce qui expose une application : ses données sensibles, ce qui l'atteint, ce qu'il faut vérifier d'abord.",
+      "test-analysis":
+        "Ce qu'il faut tester avant ou après un changement : ce qu'il touche, ce qui en dépend, ce qui a cassé.",
+      "code-review": "La revue d'une pull request : ce qu'elle touche, ce qu'elle risque, qui doit la relire.",
+      "release-analysis":
+        "Une release analysée : ce qui est parti, ce que cela a touché, ce qui a suivi, le risque de la suivante.",
+      "code-change":
+        "Modifie le code d'un dépôt : un diff proposé, relu par une personne, puis la pull request.",
+      "build-fixer": "Pourquoi un build casse, et une correction proposée — jamais appliquée sans vous.",
+      "debug-assistant":
+        "Les causes probables d'un service qui dysfonctionne, classées : ce qui a changé, ce dont il dépend.",
     },
     detail: {
       back: "Toutes les capacités",
@@ -4689,7 +4743,12 @@ const fr = {
       when: "Quand",
       open: "Voir",
     },
-    findings: { title: "Constats", count: "{count} constat(s)", none: "Aucun constat." },
+    findings: {
+      title: "Constats",
+      count: "{count} constat(s)",
+      none: "Aucun constat.",
+      all: "Voir les {count} constats",
+    },
     causes: {
       title: "Causes probables",
       count: "{count} hypothèse(s)",
@@ -4954,6 +5013,61 @@ const fr = {
   /** What someone asked LEKA, kept (LEKA-384): Mes intentions, an
    * intention's page and its history. */
   intentions: {
+    steps: {
+      label: "Les étapes de l'intention",
+      of: "Étape {n} sur {total}",
+      intention: {
+        title: "Votre intention",
+        hint: "Décrivez votre besoin",
+        heading: "Votre intention",
+        lead: "Ce que vous avez demandé, et ce que LEKA en a compris.",
+      },
+      analysis: {
+        title: "Analyse",
+        hint: "Compréhension et impact",
+        heading: "Analyse en cours",
+        lead: "LEKA collecte le contexte de votre demande et identifie les informations pertinentes.",
+        done: "Analyse",
+        doneLead: "Comment LEKA a analysé votre demande, et sur quoi.",
+      },
+      results: {
+        title: "Résultats",
+        hint: "Recommandations",
+        heading: "Résultats",
+        lead: "Voici les constats de LEKA, basés sur l'analyse de votre environnement.",
+      },
+      decision: {
+        title: "Décision",
+        hint: "Actions à mener",
+        heading: "Décision",
+        lead: "LEKA vous propose des actions concrètes, basées sur des faits et sur leur impact réel.",
+      },
+      action: {
+        title: "Action",
+        hint: "Mise en œuvre",
+        heading: "Action",
+        lead: "Les actions validées sont en cours d'exécution. Vous pouvez suivre leur avancement en temps réel.",
+      },
+      notNeeded: "Aucune action n'est à décider pour cette demande : LEKA y a répondu.",
+      skipped: "Non nécessaire",
+      evidence: "Voir toutes les preuves",
+      history: "Voir l'historique complet",
+    },
+    /** Mockup 07's panel beside the list: the latest intention. */
+    preview: {
+      title: "Aperçu",
+      latest: "La plus récente",
+      summary: "Résumé",
+      open: "Voir l'analyse complète",
+    },
+    agentWork: {
+      title: "Le travail de l'agent",
+      working: "{agent} travaille sur votre demande",
+      done: "{agent} a terminé",
+      delivered: "{agent} a terminé : vos fichiers sont prêts",
+      stopped: "{agent} s'est arrêté",
+      filesSoon: "Ses fichiers apparaîtront ici dès qu'ils sont prêts, en PDF et en PowerPoint.",
+    },
     /** Where it goes (LEKA-398). */
     routing: {
       title: "Capacité choisie",
@@ -5170,6 +5284,13 @@ const fr = {
      * found, on what. */
     analysis: {
       title: "Analyse de LEKA",
+      scopeTitle: "Périmètre de l'analyse",
+      scopeAll: "Tous",
+      scopeDefault: "Par défaut pour ce type de demande",
+      scopeServices: "Services",
+      scopeSources: "Sources",
+      firstFindings: "Premiers constats",
+      seeResults: "Voir les résultats",
       // What a recommendation's why is made of (LEKA-389).
       recommendBasis: { stated: "indiquée par sa source", inferred: "supposée" },
       recommendRisks: { high: "élevé", medium: "moyen", low: "faible", unknown: "inconnu" },
@@ -5301,6 +5422,7 @@ const fr = {
         migration: "Migration",
         action: "Action demandée",
         synthesis: "Synthèse",
+        evolution: "Évolution",
       },
       evidence: {
         title: "Preuves collectées",
@@ -5894,6 +6016,8 @@ const en: Dictionary = {
   tabs: {
     overview: "Overview",
     analysis: "Analysis",
+    results: "Results",
+    decision: "Decision",
     evidence: "Evidence",
     actions: "Actions",
     history: "History",
@@ -5976,6 +6100,8 @@ const en: Dictionary = {
     clearSelection: "Clear selection",
     maxReached: "{max} at most",
     selectedCount: "{count} selected",
+    all: "See all ({count})",
+    fewer: "See less",
     pickDate: "Pick a date",
     dateFrom: "From",
     dateTo: "To",
@@ -6020,6 +6146,15 @@ const en: Dictionary = {
     dictate: "Dictation",
     soon: "Soon",
     suggestions: "Suggestions",
+    suggestionsTitle: "Suggestions for you",
+    question: "What is your intention?",
+    questionLead:
+      "Describe your need in plain words. The more precise your request, the more relevant the recommendations.",
+    suggestIncidentHint: "Find the root cause and the services affected.",
+    suggestChangeHint: "See what a deployment did to the environment.",
+    suggestComplianceHint: "Check what a service must comply with, and what is missing.",
+    suggestMigrationHint: "Analyse the dependencies and the risks.",
+    lead: "Describe what you need. LEKA analyses your environment and proposes concrete recommendations.",
     compactPlaceholder: "Describe what you want in plain language…",
     attachOnNextStep: "Attach a file (on the next step)",
     suggestIncident: "Analyse a recent incident",
@@ -6040,6 +6175,7 @@ const en: Dictionary = {
     fileTypeRefused: "{name} is not an accepted file type.",
     removeFile: "Remove {name}",
     contextTitle: "Context that will be analysed",
+    allSources: "See all sources ({count})",
     whySources: "Why these sources?",
     whySourcesBody:
       "LEKA only reads the sources you tick. Fewer sources means a faster analysis and less irrelevant context.",
@@ -7251,6 +7387,41 @@ const en: Dictionary = {
       compliance: "What a thing of its kind should have, checked.",
       migration: "Where it moves to, what relies on it, what it relies on.",
       action: "An action asked on systems: what it reaches, its constraints, the last deployment.",
+      synthesis: "The analysis answered in words: each point cites what it rests on.",
+      evolution: "What LEKA learned in the period: what appeared, changed or went.",
+      "architecture-dossier":
+        "A journey's full architecture dossier: standing, dependencies, documentation, then the architect's deck.",
+      "incident-review":
+        "An incident reviewed end to end: what happened and why, what changed before, who owns it.",
+      "release-readiness":
+        "Whether a service is ready for its next release: how it ships, its recent incidents, how far a failure would reach.",
+      "application-architecture":
+        "A journey's architecture deck: ArchiMate business layer, application sequences, rules, RACI — as PDF and PowerPoint.",
+      "architecture-analysis":
+        "An application's architecture explained: its parts, its dependencies, its weak points.",
+      "detect-undocumented-dependency":
+        "Dependencies seen in production or in code that no documentation describes.",
+      "map-service-ownership": "A service's real owner, from commits and tickets.",
+      "correlate-deploy-with-latency":
+        "Ties a rise in latency or errors to the deployment that may explain it.",
+      "incident-investigation":
+        "An incident's timeline, what it reached, its likely cause, and its post-mortem drafted.",
+      "infrastructure-analysis":
+        "Where a service runs, on which resources, what is shared, what is a single point of failure.",
+      "data-analysis": "Where data lives, who reads or writes it, who owns it, where it flows.",
+      "documentation-assistant":
+        "How well something is documented, and a first draft of its documentation, nothing invented.",
+      "security-review":
+        "What exposes an application: its sensitive data, what reaches it, what to check first.",
+      "test-analysis":
+        "What to test before or after a change: what it touches, what depends on it, what broke.",
+      "code-review": "A pull request reviewed: what it touches, what it risks, who should look at it.",
+      "release-analysis":
+        "A release analysed: what went out, what it touched, what followed, the next one's risk.",
+      "code-change":
+        "Changes a repository's code: a diff proposed, reviewed by a person, then the pull request.",
+      "build-fixer": "Why a build breaks, and a fix proposed — never applied without you.",
+      "debug-assistant": "A misbehaving service's likely causes, ranked: what changed, what it depends on.",
     },
     detail: {
       back: "All capabilities",
@@ -10289,7 +10460,12 @@ const en: Dictionary = {
       when: "When",
       open: "See",
     },
-    findings: { title: "Findings", count: "{count} finding(s)", none: "No finding." },
+    findings: {
+      title: "Findings",
+      count: "{count} finding(s)",
+      none: "No finding.",
+      all: "See all {count} findings",
+    },
     causes: {
       title: "Probable causes",
       count: "{count} hypothesis(es)",
@@ -10536,6 +10712,60 @@ const en: Dictionary = {
     },
   },
   intentions: {
+    steps: {
+      label: "The steps of the intention",
+      of: "Step {n} of {total}",
+      intention: {
+        title: "Your intention",
+        hint: "Describe your need",
+        heading: "Your intention",
+        lead: "What you asked, and what LEKA understood of it.",
+      },
+      analysis: {
+        title: "Analysis",
+        hint: "Understanding and impact",
+        heading: "Analysis in progress",
+        lead: "LEKA gathers the context of your request and finds what matters.",
+        done: "Analysis",
+        doneLead: "How LEKA analysed your request, and on what.",
+      },
+      results: {
+        title: "Results",
+        hint: "Recommendations",
+        heading: "Results",
+        lead: "LEKA's findings, based on the analysis of your environment.",
+      },
+      decision: {
+        title: "Decision",
+        hint: "Actions to take",
+        heading: "Decision",
+        lead: "LEKA proposes concrete actions, based on facts and their real impact.",
+      },
+      action: {
+        title: "Action",
+        hint: "Carrying it out",
+        heading: "Action",
+        lead: "The approved actions are running. Follow their progress in real time.",
+      },
+      notNeeded: "Nothing needs deciding for this request: LEKA answered it.",
+      skipped: "Not needed",
+      evidence: "See all the evidence",
+      history: "See the whole history",
+    },
+    preview: {
+      title: "Preview",
+      latest: "The latest",
+      summary: "Summary",
+      open: "See the full analysis",
+    },
+    agentWork: {
+      title: "The agent's work",
+      working: "{agent} is working on your request",
+      done: "{agent} is done",
+      delivered: "{agent} is done: your files are ready",
+      stopped: "{agent} stopped",
+      filesSoon: "Its files appear here as soon as they are ready, as PDF and PowerPoint.",
+    },
     routing: {
       title: "Chosen capability",
       again: "Route again",
@@ -10749,6 +10979,13 @@ const en: Dictionary = {
       recommendRisks: { high: "high", medium: "medium", low: "low", unknown: "unknown" },
       systems: "Changes your systems: needs approval",
       title: "LEKA's analysis",
+      scopeTitle: "Scope of the analysis",
+      scopeAll: "All",
+      scopeDefault: "This kind of request's default",
+      scopeServices: "Services",
+      scopeSources: "Sources",
+      firstFindings: "First findings",
+      seeResults: "See the results",
       running: "LEKA is analysing your request",
       runningBody: "Its capabilities are reading the assembled context. This page updates by itself.",
       waiting: "Analysis waiting",
@@ -10874,6 +11111,7 @@ const en: Dictionary = {
         migration: "Migration",
         action: "Requested action",
         synthesis: "Synthesis",
+        evolution: "Evolution",
       },
       evidence: {
         title: "Evidence collected",

@@ -54,7 +54,10 @@ test.describe("Intention decisions", () => {
     // Decided: no longer waiting.
     await expect(panel).toHaveCount(0);
 
+    // Approved, it is at its action; what was decided, step 4.
     await page.goto(`/intentions/${id}`);
+    await expect(page.getByTestId("intention-step-action")).toHaveAttribute("data-state", "current");
+    await page.getByTestId("tab-decision").click();
     await expect(page.getByTestId("intention-status")).toContainText("Approuvée");
     const decision = page.getByTestId("decision");
     await expect(decision.getByTestId("decision-status")).toHaveText("Validée");

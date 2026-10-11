@@ -113,6 +113,45 @@ describe("the new intention's context and scope", () => {
     expect(screen.getByRole("checkbox", { name: "OPS board" })).toBeChecked();
   });
 
+  it("lists one of each kind first, five at once, the rest on asking", async () => {
+    const user = userEvent.setup();
+    const source = (id: string, type: string, display_name: string) => ({
+      id,
+      type,
+      display_name,
+      status: "active",
+    });
+    sourcesApi.list.mockResolvedValue({
+      data: [
+        source("a", "slack", "#incidents"),
+        source("b", "github", "acme/frontend"),
+        source("c", "github", "acme/backend"),
+        source("d", "jira", "OPS board"),
+        source("e", "datadog", "acme-eu"),
+        source("f", "confluence", "Engineering space"),
+        source("g", "aws", "production account"),
+      ],
+      next_cursor: null,
+    });
+    show();
+    await screen.findByText("acme/backend");
+    const list = screen.getByText("acme/backend").closest('[role="group"]') as HTMLElement;
+    // Code, tickets, docs, cloud, observability — then the next of each.
+    // Each box is named by its row's title.
+    const named = (box: HTMLElement) =>
+      document.getElementById(box.getAttribute("aria-labelledby") ?? "")?.textContent;
+    expect(within(list).getAllByRole("checkbox").map(named)).toEqual([
+      "acme/backend",
+      "OPS board",
+      "Engineering space",
+      "production account",
+      "acme-eu",
+    ]);
+    await user.click(screen.getByTestId("selectable-more"));
+    expect(within(list).getAllByRole("checkbox")).toHaveLength(7);
+    expect(screen.getByTestId("selectable-more")).toHaveTextContent("Voir moins");
+  });
+
   it("says when none is connected, and leads to connecting one", async () => {
     sourcesApi.list.mockResolvedValue({ data: [], next_cursor: null });
     show();

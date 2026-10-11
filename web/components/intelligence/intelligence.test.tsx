@@ -293,6 +293,21 @@ describe("findings and probable causes", () => {
     expect(within(finding).getByTestId("evidence")).toHaveTextContent("OPS-1841");
   });
 
+  it("are opened, not scrolled through, when there are many", async () => {
+    const user = userEvent.setup();
+    const findings = Array.from({ length: 6 }, (_, i) => ({
+      id: `f${i}`,
+      title: null,
+      statement: `Constat ${i + 1}`,
+      evidence: [],
+    }));
+    show(<FindingList findings={findings} max={4} />);
+    expect(screen.getAllByTestId("finding")).toHaveLength(4);
+    await user.click(screen.getByTestId("findings-all"));
+    expect(screen.getByTestId("findings-all")).toHaveTextContent("Voir moins");
+    expect(screen.getAllByTestId("finding")).toHaveLength(6);
+  });
+
   it("are ordered, sure to a degree, say why, and open on their evidence", async () => {
     const user = userEvent.setup();
     show(

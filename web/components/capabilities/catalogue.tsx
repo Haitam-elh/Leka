@@ -132,13 +132,18 @@ function categorySaid(t: Dictionary, category: string): string {
 }
 
 /** Its title: LEKA's own in its words, an agent's as its file says it. */
-export function titleOf(t: Dictionary, c: Pick<Capability, "key" | "kind" | "title">): string {
+export function titleOf(
+  t: Dictionary,
+  c: Pick<Capability, "key" | "title"> & { kind?: Capability["kind"] },
+): string {
   if (c.kind === "agent") return c.title;
   return (t.intentions.analysis.capabilities as Record<string, string>)[c.key] ?? c.title;
 }
 
-export function summaryOf(t: Dictionary, c: Pick<Capability, "key" | "kind" | "summary">): string {
-  if (c.kind === "agent") return c.summary;
+/** What it does, in the reader's words: LEKA's own capabilities' and its
+ * agents' from the dictionary — an agent's file describes it for the model
+ * that chooses it — any other agent's as its file says it. */
+export function summaryOf(t: Dictionary, c: Pick<Capability, "key" | "summary">): string {
   return (t.catalogue.summaries as Record<string, string>)[c.key] ?? c.summary;
 }
 
@@ -316,6 +321,8 @@ function Favourite({ capability }: { capability: Capability }) {
 function Card({ capability }: { capability: Capability }) {
   const t = useDictionary();
   const Icon = capability.kind === "agent" ? Bot : (CATEGORY_ICON[capability.category] ?? Lightbulb);
+  // Available and nothing to say: the card says nothing about it.
+  const plain = capability.available && !capability.notes.length;
   return (
     <li
       className="flex flex-col gap-3 rounded-xl border border-shell-line bg-white p-4"
@@ -328,28 +335,33 @@ function Card({ capability }: { capability: Capability }) {
         <div className="min-w-0 flex-1">
           <Link
             href={routes.capability(capability.key)}
-            className="font-semibold text-brand-navy hover:underline"
+            className="line-clamp-2 text-[0.9375rem] leading-snug font-semibold text-brand-navy hover:underline"
+            title={titleOf(t, capability)}
           >
             {titleOf(t, capability)}
           </Link>
-          <p className="mt-0.5 line-clamp-3 text-[0.8125rem] text-shell-muted">
+          <p className="mt-0.5 line-clamp-2 text-[0.8125rem] leading-snug text-shell-muted">
             {summaryOf(t, capability)}
           </p>
         </div>
         <Favourite capability={capability} />
       </div>
-      <div className="mt-auto flex flex-wrap items-center gap-2">
+      <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <Pill tone={CATEGORY_TONE[capability.category] ?? "neutral"}>
           {categorySaid(t, capability.category)}
         </Pill>
-        {capability.kind === "agent" ? <Pill tone="neutral">{t.catalogue.kinds.agent}</Pill> : null}
         <span className="text-xs text-shell-muted">
+          {capability.kind === "agent" ? `${t.catalogue.kinds.agent} · ` : null}
           {capability.usage.runs
             ? fill(t.catalogue.runs, { count: capability.usage.runs })
             : t.catalogue.noRun}
         </span>
+        {plain ? (
+          <span className="sr-only">{t.catalogue.available}</span>
+        ) : (
+          <Availability capability={capability} />
+        )}
       </div>
-      <Availability capability={capability} />
     </li>
   );
 }
@@ -474,9 +486,9 @@ function Latest({ summary }: { summary: CatalogueSummary }) {
                 <Icon className="mt-0.5 size-4 text-shell-nav-active" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <Link href={routes.capability(item.key)} className="font-medium text-brand-navy hover:underline">
-                    {item.title}
+                    {titleOf(t, item)}
                   </Link>
-                  <p className="line-clamp-1 text-xs text-shell-muted">{item.summary}</p>
+                  <p className="line-clamp-1 text-xs text-shell-muted">{summaryOf(t, item)}</p>
                 </div>
                 <time dateTime={item.registered_at} className="shrink-0 text-xs text-shell-muted">
                   {new Intl.DateTimeFormat(locale, {
@@ -547,14 +559,14 @@ function Filters({
   const w = t.catalogue;
   const chip = (active: boolean) =>
     cn(
-      "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[0.8125rem] font-medium",
+      "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[0.75rem] font-medium whitespace-nowrap",
       active
         ? "border-shell-nav-active bg-brand-violet-soft text-shell-nav-active"
         : "border-shell-line bg-white text-brand-navy hover:bg-shell-canvas",
     );
   return (
     <div className="flex flex-col gap-3 xl:flex-row xl:items-center" data-testid="catalogue-filters">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex min-w-0 flex-wrap gap-1.5">
         <button type="button" className={chip(category === null)} onClick={() => setCategory(null)} aria-pressed={category === null}>
           {w.all}
           <span className="rounded bg-white/70 px-1 text-xs text-shell-muted">{summary?.total ?? "…"}</span>
@@ -573,8 +585,8 @@ function Filters({
           </button>
         ))}
       </div>
-      <div className="flex flex-1 items-center gap-2 xl:justify-end">
-        <label className="relative flex min-w-0 flex-1 items-center xl:max-w-64">
+      <div className="flex items-center gap-2 xl:ms-auto xl:shrink-0">
+        <label className="relative flex min-w-0 flex-1 items-center xl:w-52 xl:flex-none">
           <Search className="absolute start-2.5 size-4 text-shell-muted" aria-hidden="true" />
           <input
             value={q}

@@ -7,11 +7,23 @@ import { agentRuns, MOVING, type AgentRunCreate } from "@/lib/agent-runs";
 export const agentRunKeys = {
   all: ["agent-runs"] as const,
   list: (key: string) => ["agent-runs", "list", key] as const,
+  intention: (id: string) => ["agent-runs", "intention", id] as const,
   one: (id: string) => ["agent-runs", "one", id] as const,
 };
 
 /** How often a run on its way is read again. */
 const FOLLOW_MS = 3000;
+
+/** The agents at work on an intention, followed while they are. */
+export function useIntentionRuns(intentionId: string) {
+  return useQuery({
+    queryKey: agentRunKeys.intention(intentionId),
+    queryFn: () => agentRuns.forIntention(intentionId),
+    enabled: Boolean(intentionId),
+    refetchInterval: (query) =>
+      query.state.data?.some((run) => MOVING.has(run.status)) ? FOLLOW_MS : false,
+  });
+}
 
 export function useAgentRuns(key: string) {
   return useQuery({

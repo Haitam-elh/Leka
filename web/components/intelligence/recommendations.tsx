@@ -79,8 +79,12 @@ export function RecommendationCard({
   const chips = (
     <ul className="mt-2 flex flex-wrap items-center gap-2" aria-label={w.chips}>
       {recommendation.effect ? (
-        <li>
-          <Pill tone={priority ? tone : "neutral"}>
+        // A long effect wraps inside its card rather than out of it.
+        <li className="min-w-0 max-w-full">
+          <Pill
+            tone={priority ? tone : "neutral"}
+            className="max-w-full shrink whitespace-normal text-start"
+          >
             {fill(w.effectChip, { effect: recommendation.effect })}
           </Pill>
         </li>

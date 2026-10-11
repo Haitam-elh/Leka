@@ -182,12 +182,16 @@ describe("the catalogue", () => {
     expect(owner).toHaveTextContent("12 exécution(s)");
     expect(owner).toHaveTextContent("Disponible");
     expect(architect).toHaveTextContent("Architecte applicatif");
+    // What it does in the reader's words, not the description its model reads.
+    expect(architect).toHaveTextContent("Le deck d'architecture d'un parcours");
+    expect(architect).not.toHaveTextContent("Use when");
     expect(architect).toHaveAttribute("data-available", "false");
     expect(within(architect).getByTestId("capability-reasons")).toHaveTextContent(
       "Source à connecter : Confluence ou Microsoft 365 · Aucun modèle de langage ne peut l'exécuter ici",
     );
     expect(screen.getByTestId("catalogue-top")).toHaveTextContent("Responsabilités");
     expect(screen.getByTestId("catalogue-latest")).toHaveTextContent("Architecte applicatif");
+    expect(screen.getByTestId("catalogue-latest")).not.toHaveTextContent("Use when");
     expect(screen.getByTestId("catalogue-ask")).toHaveAttribute("href", "/intentions/new");
   });
 

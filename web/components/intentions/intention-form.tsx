@@ -19,6 +19,7 @@ import {
   IntentionComposer,
 } from "@/components/intentions/intention-composer";
 import { DecisionStep } from "@/components/intentions/decision-step";
+import { ControlNotice } from "@/components/intelligence";
 import { IntentContext } from "@/components/intentions/intent-context";
 import { useCurrentWorkspace } from "@/components/shell/shell-provider";
 import { SourceLogo, sourceTitle } from "@/components/sources/source-logo";
@@ -70,6 +71,30 @@ const ALL = "all";
 /** The sources LEKA can read from: connected, and not broken or off. */
 function readable(source: Source): boolean {
   return source.status === "active" || source.status === "degraded";
+}
+
+/** One of each kind first, then the next of each — code, tickets, docs,
+ * cloud, observability… — as mockup 02 lists them: the first few rows say
+ * what LEKA reads, not three repositories in a row. Alphabetical within a
+ * kind. */
+const KINDS_FIRST = ["code", "project", "docs", "cloud", "observability", "data", "chat", "custom"];
+
+export function oneOfEach(sources: readonly Source[]): Source[] {
+  const kinds = new Map<string, Source[]>();
+  for (const source of [...sources].sort((a, b) => a.display_name.localeCompare(b.display_name))) {
+    const kind = KIND_CATEGORY[source.type] ?? "other";
+    kinds.set(kind, [...(kinds.get(kind) ?? []), source]);
+  }
+  const rank = (kind: string) => {
+    const at = KINDS_FIRST.indexOf(kind);
+    return at === -1 ? KINDS_FIRST.length : at;
+  };
+  const ordered: Source[] = [];
+  const queues = [...kinds.entries()].sort(([a], [b]) => rank(a) - rank(b)).map(([, queue]) => queue);
+  for (let round = 0; ordered.length < sources.length; round++) {
+    for (const queue of queues) if (queue[round]) ordered.push(queue[round]);
+  }
+  return ordered;
 }
 
 /** The scope's choices, read from the company model. */
@@ -144,7 +169,7 @@ export function IntentionForm() {
   const environment = useEnvironment();
   const sourceItems = useMemo(
     () =>
-      (sources.data ?? []).filter(readable).map((source) => ({
+      oneOfEach((sources.data ?? []).filter(readable)).map((source) => ({
         value: source.id,
         title: source.display_name,
         subtitle: `${sourceTitle(source.type)} · ${
@@ -262,6 +287,8 @@ export function IntentionForm() {
               label={t.composer.contextTitle}
               items={sourceItems}
               selectAll
+              max={5}
+              more={t.composer.allSources}
               // The panel's heading already says it.
               hideLabel
             />
@@ -271,6 +298,8 @@ export function IntentionForm() {
         <Panel title={t.composer.scopeTitle}>
           <ScopePanel options={scope} />
         </Panel>
+        {/* Mockup 02: nothing changes without a yes. */}
+        <ControlNotice />
       </aside>
     </Form>
   );

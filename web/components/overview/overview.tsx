@@ -147,7 +147,9 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className={cn("rounded-xl border border-shell-line bg-white p-3.5", className)}>
+    <section
+      className={cn("flex flex-col rounded-xl border border-shell-line bg-white p-3.5", className)}
+    >
       <div className="mb-3 flex items-center gap-3">
         {titleIcon}
         <h2 className="flex-1 text-[1.0625rem] font-semibold tracking-[-0.01em] text-brand-navy">
@@ -345,11 +347,13 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
       action={{ label: t.overview.seeDetail, href: routes.environment() }}
       className={className}
     >
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+      {/* The tiles fill the card down to the row's height: no empty band
+          under them beside a taller Insights. */}
+      <div className="grid flex-1 grid-cols-2 gap-2.5 lg:grid-cols-4">
         {tiles.map(({ key, icon, tone, label, filled, value, foot }) => (
           <div
             key={key}
-            className="rounded-lg border border-shell-line px-3 py-3.5"
+            className="flex flex-col rounded-lg border border-shell-line px-3 py-3.5"
             data-testid="kpi-tile"
             data-kpi={key}
           >
@@ -371,12 +375,12 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
                 </p>
               </div>
             </div>
-            <p className="mt-4 line-clamp-2 text-xs text-shell-muted">
+            <p className="mt-auto line-clamp-2 pt-4 text-xs text-shell-muted">
               {environment.isError ? w.notRead : foot}
             </p>
           </div>
         ))}
-        <div className="rounded-lg border border-shell-line px-3 py-3.5" data-testid="kpi-tile">
+        <div className="flex flex-col rounded-lg border border-shell-line px-3 py-3.5" data-testid="kpi-tile">
           <div className="flex items-start gap-3">
             <IconTile icon={Waypoints} tone="info" />
             <div className="min-w-0">
@@ -391,7 +395,7 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
               </p>
             </div>
           </div>
-          <p className="mt-4 text-xs text-shell-muted">
+          <p className="mt-auto pt-4 text-xs text-shell-muted">
             {load.status === "ready"
               ? fill(t.overview.sourcesRatio, { connected, total: list.length })
               : t.overview.notMeasured}
