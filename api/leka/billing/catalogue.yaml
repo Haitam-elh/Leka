@@ -11,6 +11,11 @@
 #
 # Values not decided yet are absent, never guessed: seats, sources and
 # workspaces per plan; specialist add-on and capacity-pack prices.
+#
+# The AI credits a month are NOT here: they are the ones metering grants
+# (LEKA-430, LEKA_PLAN_CREDITS — 200, 2,000, 10,000, 40,000), read from it,
+# so what the page promises is what a workspace gets. Enterprise's are per
+# contract.
 
 version: "2026-10-10"
 currency: EUR
@@ -45,7 +50,7 @@ plans:
     value:
       fr: "Connectez vos premières sources et posez vos premières intentions, avec l'Architecte et la QA."
       en: "Connect your first sources and ask your first intentions, with the Architect and QA."
-    ai_credits_per_month: { value: 100, provisional: true }
+    ai_credits_per_month: { provisional: true }
     managed_llm: true
     own_llm: false
     launch_offer: false
@@ -61,7 +66,7 @@ plans:
     value:
       fr: "Le modèle de votre environnement tenu à jour, et l'Architecte et la QA pour vos premiers livrables."
       en: "A continuously updated model of your environment, and the Architect and QA for your first deliverables."
-    ai_credits_per_month: { value: 500, provisional: true }
+    ai_credits_per_month: { provisional: true }
     managed_llm: true
     own_llm: false
     launch_offer: true
@@ -78,7 +83,7 @@ plans:
     value:
       fr: "Plus de capacité IA pour vos architectures, vos analyses et vos intentions, sur tout votre périmètre."
       en: "More AI capacity for your architectures, analyses and intentions, across your whole scope."
-    ai_credits_per_month: { value: 2000, provisional: true }
+    ai_credits_per_month: { provisional: true }
     managed_llm: true
     own_llm: false
     launch_offer: true
@@ -94,7 +99,7 @@ plans:
     value:
       fr: "La capacité IA d'une organisation à plusieurs équipes, sur tout son SI."
       en: "The AI capacity of an organisation with several teams, across its systems."
-    ai_credits_per_month: { value: 8000, provisional: true }
+    ai_credits_per_month: { provisional: true }
     managed_llm: true
     own_llm: false
     launch_offer: true
@@ -111,7 +116,7 @@ plans:
     value:
       fr: "Une capacité IA définie au contrat, et la possibilité de connecter votre propre modèle de langage."
       en: "AI capacity set by contract, and the option to connect your own language model."
-    ai_credits_per_month: { value: null, contractual: true }
+    ai_credits_per_month: { contractual: true }
     managed_llm: true
     own_llm: true
     launch_offer: false
