@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.capabilities import ContextItem, ContextPack, LLMRuntime, Needs, Task, Tier
 from leka.intentions.schemas import Goal, GoalRead, Understanding, UnderstoodBy
+from leka.knowledge import fold
 
 logger = structlog.get_logger(__name__)
 
@@ -60,15 +61,28 @@ GOALS: dict[str, str] = {
 ABOUT_THE_GOAL = frozenset({"unclear_goal", "competing_goals"})
 
 SYSTEM = f"""You read what someone asks LEKA, the assistant of an IT \
-department, about the company's systems, and say what they want.
+department, about the company's systems, and say what they want. LEKA's \
+job is to understand the whole request and do the work: ask nothing back \
+unless the words truly cannot be understood.
 
 Goals:
 {chr(10).join(f"- {code}: {said}" for code, said in GOALS.items())}
 
-mode: "question" when they want an answer, "request" when they want \
-something done. confidence: how sure you are of the goal, 0 to 1. restated: \
-what is asked, in one short sentence, in the language it was asked, naming \
-what it is about as written. Say only what the words say."""
+- act is only when they want LEKA to change systems now. Evaluating, \
+simulating, planning, proposing a plan, documenting, drawing an \
+architecture or writing a page is never act, even about a migration or a \
+deployment: it is the goal of what they want to know or get \
+(plan_migration, assess_impact, map_dependencies, find_knowledge…).
+- unknown only when nothing can be understood of what is wanted.
+- mode: "question" when they want an answer, "request" when they want \
+something done or produced.
+- confidence: how sure you are of the goal, 0 to 1.
+- restated: what is asked, in one short sentence, in the language it was \
+asked, naming what it is about as written.
+- understood: true when LEKA can start working on it as it is — whatever \
+it names, however broadly (« les serveurs AWS » is every AWS server LEKA \
+knows); false only when the words say nothing LEKA could work on.
+Say only what the words say."""
 
 
 class Reading(BaseModel):
@@ -78,18 +92,96 @@ class Reading(BaseModel):
     goal: Goal
     confidence: float = Field(ge=0, le=1)
     restated: str = Field(max_length=300)
+    understood: bool = True
+
+
+# What says the work asked is to think, plan or produce — not to change
+# systems: what lets the model read « migrer… propose un plan » as a plan.
+PLANNING = frozenset(
+    {
+        "plan",
+        "planifie",
+        "planifier",
+        "evalue",
+        "evaluer",
+        "evaluation",
+        "simule",
+        "simuler",
+        "simulation",
+        "propose",
+        "proposer",
+        "proposition",
+        "analyse",
+        "analyser",
+        "estime",
+        "estimer",
+        "compare",
+        "comparer",
+        "prepare",
+        "preparer",
+        "documente",
+        "documenter",
+        "documentation",
+        "redige",
+        "rediger",
+        "genere",
+        "generer",
+        "dessine",
+        "dessiner",
+        "schema",
+        "architecture",
+        "deck",
+        "rapport",
+        "etude",
+        "strategie",
+        "feuille",
+        "assess",
+        "evaluate",
+        "simulate",
+        "draft",
+        "design",
+        "report",
+        "document",
+        "study",
+        "strategy",
+        "roadmap",
+        "pdf",
+    }
+)
+# The goals a plan may be read as: what is learnt or produced, never done.
+PLANS = frozenset(
+    {"plan_migration", "assess_impact", "map_dependencies", "check_compliance", "find_knowledge"}
+)
+
+# What only matters when systems are changed: the rules ask it of an
+# action, never of a plan or a question.
+ABOUT_ACTING = frozenset(
+    {"no_subject", "unknown_subject", "ambiguous_subject", "action_without_target"}
+)
 
 
 def merged(understood: Understanding, reading: Reading, by: UnderstoodBy) -> Understanding:
-    """The rules' understanding, with what the model settles."""
+    """The rules' understanding, with what the model settles.
+
+    The model settles the goal where the rules could not tell or were less
+    sure — and may say that what a verb made look like an action (« migrer »)
+    is a plan or an assessment: the safe way, nothing is then done to
+    systems. It never makes an action of a question. Understood, a request
+    is worked on as it is: only what acting needs (which thing, exactly)
+    still stops one that changes systems."""
     goal = understood.goal
     acting = any(a.changes_systems for a in understood.actions) or goal.code == "act"
+    sure = reading.confidence >= SURE
+    # An action read as a plan only when its words ask for one — « Redémarre
+    # Billing API » stays the action it is, whatever a model says.
+    planned = reading.goal in PLANS and bool(PLANNING & set(fold(understood.text).split()))
     changed = (
-        not acting
+        sure
         and reading.goal not in ("unknown", "act")
-        and reading.confidence >= max(SURE, goal.confidence)
         and reading.goal != goal.code
+        and (not acting or (planned and reading.confidence >= max(SURE, goal.confidence)))
     )
+    actions = understood.actions
     if changed:
         goal = GoalRead(
             code=reading.goal,
@@ -97,13 +189,29 @@ def merged(understood: Understanding, reading: Reading, by: UnderstoodBy) -> Und
             said=[],
             confidence=round(min(reading.confidence, 0.9), 2),
         )
+        if acting:
+            # A plan, not an action: what would change systems is not asked.
+            actions = [a for a in actions if not a.changes_systems]
+    still_acting = goal.code == "act" or any(a.changes_systems for a in actions)
     settled = goal.code != "unknown"
-    ambiguities = [
-        a for a in understood.ambiguities if not (settled and changed and a.kind in ABOUT_THE_GOAL)
-    ]
+    understood_as_is = reading.understood and sure
+    ambiguities = []
+    for a in understood.ambiguities:
+        if settled and (changed or reading.goal == goal.code) and a.kind in ABOUT_THE_GOAL:
+            continue
+        if a.kind == "action_without_target" and not still_acting:
+            continue
+        if a.blocking and (
+            (a.kind in ABOUT_ACTING and not still_acting)
+            or (a.kind == "unclear_goal" and understood_as_is)
+        ):
+            # Worked on as it is: LEKA looks, and says what it assumed.
+            a = a.model_copy(update={"blocking": False})
+        ambiguities.append(a)
     return understood.model_copy(
         update={
             "goal": goal,
+            "actions": actions,
             # A request is the rules' to say, from their verbs: a model may
             # read one as a question — the safe way — never a question as a
             # request (LEKA-429).
