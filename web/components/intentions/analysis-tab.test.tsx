@@ -350,6 +350,34 @@ describe("an intention's analysis", () => {
     );
   });
 
+  it("reads an analysis of an older version of its context as one still to come (LEKA-433)", async () => {
+    // Asked again: the same context, version 4 — its analysis read version 3.
+    api.one.mockResolvedValue(
+      intention({
+        status: "analysing",
+        phase: "active",
+        summary: null,
+        readiness: {
+          status: "ready",
+          context_id: "c1",
+          version: 4,
+          level: "high",
+          score: 0.9,
+          elements: 4,
+          facets: { technical: 3, business: 0, organizational: 1, temporal: 0 },
+          sources: 1,
+          critical: [],
+          warnings: [],
+        },
+      }),
+    );
+    show();
+
+    const head = await screen.findByTestId("analysis-head");
+    expect(head).toHaveAttribute("data-live", "true");
+    expect(head).toHaveTextContent("Analyse en attente");
+  });
+
   it("says what its context lacks when it could not be analysed", async () => {
     api.one.mockResolvedValue(
       intention({

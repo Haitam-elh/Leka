@@ -597,14 +597,16 @@ status, duration, error), the result, an error (`context_blocked`) and
 `completed` (`answered`), its `summary` the result's first sentence — and
 up to ten of LEKA's findings it rests on linked. An intention that moved
 meanwhile (cancelled, asked again) is not moved: the analysis is kept,
-`superseded`. A failed one is analysed again by its asker or an approver:
+`superseded`, and opens no decision. Asked again, its context keeps its id
+and takes a newer version: an analysis is current only for both — the
+same context **and** the version it read (`context_version`, LEKA-433). A failed one is analysed again by its asker or an approver:
 `retried` to `analysing`, then queued.
 
 **Queued, and swept.** Created and asked again, the route commits, then
 queues the job (`queue_analysis`); `POST …/analyse` the same. Every 15
 minutes (`intention-analysis-sweep`, :07 :22 :37 :52) the intentions
-analysing whose context has no analysis yet are analysed — what no worker
-took. Idempotent.
+analysing whose context version has no analysis yet are analysed — what no
+worker took, a newer version's lost job included. Idempotent.
 
 **The API**: `GET /intentions/{id}/analysis` — the latest (404 « No
 analysis yet. »); `GET …/analyses?limit` — every one, the latest first;
@@ -703,7 +705,9 @@ high; « Redémarre Billing API » awaiting a person's decision; a diagnosis
 no source can ground not analysed; a failing and a slow capability said,
 the others going on; nothing that ran failed, then analysed again; a late
 analysis superseded; queued when asked and asked again, the sweep running
-what waits; another workspace's 404. `tests/test_intention_model.py`, Gemini
+what waits; another workspace's 404; asked again while analysed, the old
+version's analysis superseded — no move, no decision — and the newer one
+recovered by the sweep (LEKA-433). `tests/test_intention_model.py`, Gemini
 scripted: words the rules cannot read, read by the model and analysed; a
 request to act staying the rules'; the answer written, a made-up citation
 dropped; an answer resting on nothing not kept. `tests/test_intention_analyst.py`:

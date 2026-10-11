@@ -407,6 +407,57 @@ async def test_a_late_analysis_of_an_old_context_version_is_superseded_and_swept
     assert analyses[1]["detail"]["superseded"] is True
 
 
+async def test_a_late_analysis_of_an_action_opens_no_decision_the_newer_version_does(
+    client: AsyncClient,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # LEKA-433: asked again while its first analysis reads, an action's old
+    # analysis finishes after — it must neither move it nor put the old words
+    # to a decision. The job queued for the newer version is lost (no worker
+    # here): the sweep recovers it, the same context id at a newer version.
+    words = "Redémarre Billing API en production"
+    intention = await _ask(client, words, environment="production")
+    old_version = intention["readiness"]["version"]
+    reading = processing._material
+    newer: dict[str, Any] = {}
+
+    async def reasked_while_reading(*args: Any, **kwargs: Any) -> Material:
+        response = await client.post(
+            f"{API}/{intention['id']}/ask",
+            json={"text": f"{words}, ce soir", "environment": "production"},
+        )
+        assert response.status_code == 200, response.text
+        newer.update(response.json()["intention"])
+        return await reading(*args, **kwargs)
+
+    monkeypatch.setattr(processing, "_material", reasked_while_reading)
+    outcome = await _analysed(acme, intention)
+
+    assert outcome["superseded"] is True
+    assert newer["context_id"] == intention["context_id"]
+    assert newer["readiness"]["version"] > old_version
+    # Moved nothing, opened nothing.
+    assert (await _get(client, f"/{intention['id']}"))["status"] == "analysing"
+    assert await _get(client, f"/{intention['id']}/decisions") == []
+    # The newer version's job, queued and lost; the sweep finds it.
+    assert queued[-1] == (uuid.UUID(intention["id"]), "asked_again")
+
+    monkeypatch.setattr(processing, "_material", reading)
+    assert (await analyse_pending())["analysed"] == 1
+    assert (await _get(client, f"/{intention['id']}"))["status"] == "awaiting_decision"
+    analyses = await _get(client, f"/{intention['id']}/analyses")
+    assert [a["context_version"] for a in analyses] == [newer["readiness"]["version"], old_version]
+    [decision] = await _get(client, f"/{intention['id']}/decisions")
+    # Put to a person on the newer version's analysis, never the old one's.
+    assert decision["analysis_id"] == analyses[0]["id"]
+    assert decision["context_version"] == newer["readiness"]["version"]
+    # Analysed, the newer version is no longer swept.
+    assert (await analyse_pending())["analysed"] == 0
+
+
 # ── queued, swept, read ──────────────────────────────────────────────────────
 
 

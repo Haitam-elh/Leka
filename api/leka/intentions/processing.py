@@ -17,8 +17,9 @@ result the decision interface reads — kept, and the intention moved on.
                a request on systems     awaiting_decision (proposed): a
                                         person decides (LEKA-390)
                nothing could run        failed
-           — unless it moved on meanwhile (cancelled, asked again): then
-           the analysis is kept, said superseded, and moves nothing
+           — unless it moved on meanwhile (cancelled, asked again — its
+           context the same id at a newer version): then the analysis is
+           kept, said superseded, moves nothing, opens no decision
 
 THE SWEEP (`run_pending_analyses`, hourly) runs what no job did: an
 intention analysing whose context version has no analysis yet — a worker
@@ -175,14 +176,19 @@ async def analyse_pending(*, limit: int = 100) -> dict[str, int]:
     with system_scope():
         async with session_factory() as session:
             # A blocked analysis is not one: questions judged blocked before
-            # they could be answered anyway are analysed now.
+            # they could be answered anyway are analysed now. Asked again,
+            # its context keeps its id and takes a new version (LEKA-374):
+            # what counts is an analysis of that version (LEKA-433) — an
+            # intention kept before readiness had one matches its versionless
+            # analysis, not the sweep again and again.
             analysed = (
                 select(IntentionAnalysis.id)
                 .where(
                     IntentionAnalysis.intention_id == Intention.id,
                     IntentionAnalysis.context_id == Intention.context_id,
-                    IntentionAnalysis.context_version
-                    == Intention.readiness["version"].as_integer(),
+                    IntentionAnalysis.context_version.is_not_distinct_from(
+                        Intention.readiness["version"].as_integer()
+                    ),
                     IntentionAnalysis.status != "blocked",
                 )
                 .exists()
@@ -912,6 +918,8 @@ async def _finish(
         row.finished_at = datetime.now(UTC)
         failed = [o for o in outcomes if o.status in ("failed", "timed_out")]
         row.error = failed[0].error if result.status == "failed" and failed else None
+        # Its context as it stands now: asked again meanwhile, the same id at
+        # a newer version (LEKA-433) — this one is then superseded.
         current_version = (
             intention.readiness.get("version") if intention.readiness is not None else None
         )
