@@ -127,7 +127,12 @@
   /* next/font defines --font-geist-sans on <body>; the theme above maps
    * Tailwind's font-sans onto --font-sans, which nothing set. Undefined, it
    * resolved to the browser's serif and every heading came out wrong. */
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", "Noto Sans",
+    "Noto Sans Arabic", "Noto Sans Hebrew", "Noto Sans Devanagari", "Noto Sans Thai",
+    "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK JP", "Noto Sans CJK KR", sans-serif;
+  /* Geist draws Latin only. The rest — Cyrillic, Greek, Arabic, Hebrew, the
+   * Indic and Southeast Asian scripts, CJK — fall to the system's own faces,
+   * named so each script gets a sans of its family (docs/languages.md). */
 
   /* ── LEKA brand ───────────────────────────────────────────────────────
    *
@@ -263,5 +268,13 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Text a person or a model wrote may be in any language, either way: each
+   * paragraph reads in its own direction — an answer in Arabic right to
+   * left inside a French screen — and the screens' own words keep theirs
+   * (docs/languages.md). Where someone types, the same. */
+  :where(p, li, dd, dt, td, th, blockquote, h1, h2, h3, h4, h5, h6, figcaption, summary, label),
+  :where(textarea, input:not([type="checkbox"], [type="radio"], [type="range"])) {
+    unicode-bidi: plaintext;
   }
 }

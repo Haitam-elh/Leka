@@ -148,7 +148,7 @@ export function RecommendationCard({
           onClick={() => setOpen(!open)}
           className="shrink-0 rounded p-1 text-shell-muted outline-none hover:text-brand-navy focus-visible:ring-2 focus-visible:ring-brand-violet/40"
         >
-          <ChevronRight className={cn("size-5 transition-transform", open && "rotate-90")} />
+          <ChevronRight className={cn("size-5 transition-transform", open ? "rotate-90" : "rtl:-scale-x-100")} />
         </button>
       </div>
     </article>

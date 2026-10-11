@@ -95,7 +95,7 @@ written.
 
 | Module | Responsibility | Depends on | State |
 | --- | --- | --- | --- |
-| `core` | settings, exceptions, FastAPI dependencies, logging | nothing | built |
+| `core` | settings, exceptions, FastAPI dependencies, logging; the 140 languages LEKA offers, their fallback chains and how a browser's are matched (`languages.yaml`, see [languages.md](languages.md)) | nothing | built |
 | `db` | engine, session, declarative base, column mixins, tenant scope guard | `core` | built |
 | `background` | the background loop's machinery: events (an outbox), the job queue, and later job runs and their scheduling. Below `platform` so that platform can use it | `core`, `db` | **LEKA-334** — events, job runs, the queue and its schedule; see [background.md](background.md) |
 | `platform` | tenancy (workspaces, memberships, invitations), the LEKA-330 seam, secrets, health | `core`, `db` | tenancy, seam and secrets built |

@@ -408,7 +408,8 @@
 
   function currentLang() {
     const lang = document.documentElement.lang;
-    return CONFIG[type][lang] ? lang : 'fr';
+    // The language shown, else English, else the page's own French (docs/languages.md).
+    return CONFIG[type][lang] ? lang : CONFIG[type].en ? 'en' : 'fr';
   }
 
   function render() {

@@ -15,7 +15,7 @@ export function SkipLink() {
   return (
     <a
       href="#main-content"
-      className="sr-only rounded-lg bg-brand-navy px-4 py-2 text-sm font-medium text-white focus-visible:not-sr-only focus-visible:fixed focus-visible:top-4 focus-visible:left-4 focus-visible:z-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+      className="sr-only rounded-lg bg-brand-navy px-4 py-2 text-sm font-medium text-white focus-visible:not-sr-only focus-visible:fixed focus-visible:top-4 focus-visible:start-4 focus-visible:z-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40"
     >
       {t.shell.skipToContent}
     </a>

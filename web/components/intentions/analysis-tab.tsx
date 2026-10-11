@@ -82,7 +82,7 @@ type Step = IntentionAnalysis["steps"][number];
 
 function useLinks(): Links {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   return useMemo(
     () => ({
       href: entityHref,
@@ -187,7 +187,7 @@ function seconds(analysis: IntentionAnalysis): string | null {
  * contexte v3". */
 function MetaLine({ analysis }: { analysis: IntentionAnalysis }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.intentions.analysis;
   const took = seconds(analysis);
   const parts = [
@@ -313,7 +313,7 @@ function StepsCard({ analysis }: { analysis: IntentionAnalysis }) {
                     </span>
                     <Pill tone={look?.tone ?? "violet"}>{w.statuses[step?.status ?? "running"]}</Pill>
                     {step && step.status !== "skipped" ? (
-                      <span className="w-16 text-right text-xs tabular-nums text-shell-muted">
+                      <span className="w-16 text-end text-xs tabular-nums text-shell-muted">
                         {step.duration_ms ? fill(w.ms, { ms: step.duration_ms }) : w.instant}
                       </span>
                     ) : null}
@@ -461,7 +461,7 @@ function AnswerCard({ answer }: { answer: AnalysisAnswer }) {
         {answer.caveats.length ? (
           <div className="text-[0.8125rem]">
             <p className="font-semibold text-brand-navy">{w.caveats}</p>
-            <ul className="list-disc pl-5 text-shell-muted">
+            <ul className="list-disc ps-5 text-shell-muted">
               {answer.caveats.map((caveat) => (
                 <li key={caveat}>{caveat}</li>
               ))}

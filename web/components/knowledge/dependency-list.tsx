@@ -88,7 +88,7 @@ export function DependencyList({
                     type="button"
                     onClick={() => onSelect(item.entity.id)}
                     title={item.entity.name}
-                    className="block max-w-full truncate text-left text-[0.8125rem] font-semibold text-brand-navy outline-none after:absolute after:inset-0 after:rounded-md after:content-[''] focus-visible:after:ring-3 focus-visible:after:ring-brand-violet/40"
+                    className="block max-w-full truncate text-start text-[0.8125rem] font-semibold text-brand-navy outline-none after:absolute after:inset-0 after:rounded-md after:content-[''] focus-visible:after:ring-3 focus-visible:after:ring-brand-violet/40"
                   >
                     {item.entity.name}
                   </button>
@@ -111,7 +111,7 @@ export function DependencyList({
               </div>
               {item.status ? <StatusBadge variant={`entity.${item.status}`} size="sm" /> : null}
               {onSelect ? (
-                <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-shell-icon" />
+                <ChevronRight aria-hidden="true" className="rtl:-scale-x-100 size-4 shrink-0 text-shell-icon" />
               ) : null}
             </li>
           );

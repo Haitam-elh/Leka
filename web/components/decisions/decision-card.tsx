@@ -134,7 +134,7 @@ export function reasonSaid(t: Dictionary, reason: Record<string, unknown>): stri
  * escalated; how long its approval holds. */
 function Governance({ decision }: { decision: Decision }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.decisions;
   const g = decision.governance;
   if (!g) return null;

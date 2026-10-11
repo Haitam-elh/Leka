@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { entityHref, typeLabel } from "@/components/environment/parts";
 import { AppHeader } from "@/components/shell/app-header";
+import { LanguageNotice } from "@/components/language/account-language";
 import { AppSidebar } from "@/components/shell/app-sidebar";
 import { CommandPalette, useCommandShortcut } from "@/components/shell/command-palette";
 import { SkipLink } from "@/components/shell/skip-link";
@@ -13,7 +14,7 @@ import { LoadingState } from "@/components/states/loading-state";
 import { OfflineBanner } from "@/components/states/offline-banner";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import type { BadgeKey } from "@/config/routes";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { knowledgeGraph } from "@/lib/knowledge-graph";
 import { knowledgeSearchProvider } from "@/lib/search";
 import { cn } from "cn";
@@ -50,6 +51,7 @@ export function AppShell({
   notificationCount?: number;
 }) {
   const t = useDictionary();
+  const { dir } = useLocale();
   const state = useShell();
   const retry = useShellRetry();
   const [collapsed, setCollapsed] = useState(false);
@@ -118,7 +120,7 @@ export function AppShell({
         id="app-sidebar"
         aria-label={t.shell.sidebar}
         className={cn(
-          "hidden shrink-0 border-r border-shell-line lg:block",
+          "hidden shrink-0 border-e border-shell-line lg:block",
           collapsed ? "w-rail" : "w-sidebar",
         )}
       >
@@ -129,7 +131,7 @@ export function AppShell({
           that opened it — base-ui's dialog does both. */}
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetContent
-          side="left"
+          side={dir === "rtl" ? "right" : "left"}
           showCloseButton={false}
           className="w-sidebar max-w-[85vw] p-0"
         >
@@ -168,6 +170,8 @@ export function AppShell({
               reader navigating by region will find it. */}
           <div className="sticky top-0 z-10">
             <OfflineBanner />
+            {/* An account with no language yet: the one found, kept or changed. */}
+            {state.status === "ready" && <LanguageNotice />}
           </div>
           {state.status === "loading" && <LoadingState />}
           {state.status === "failed" && (

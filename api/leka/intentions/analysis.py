@@ -111,6 +111,9 @@ class Asked:
     until: datetime | None = None
     environment: str | None = None
     constraints: tuple[tuple[str, object, bool], ...] = ()
+    # The language the answer is written in: the asker's, else the
+    # workspace's (identity.spoken_language). None: the question's.
+    language: str | None = None
     # The agent LEKA handed it to, at work (dispatch.py): which, delivering
     # what, with what — said first in the answer.
     handed: Mapping[str, object] | None = None

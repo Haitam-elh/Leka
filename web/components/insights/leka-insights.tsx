@@ -336,7 +336,7 @@ function Line({ finding }: { finding: Finding }) {
           {detail ? ` · ${detail}` : ""}
         </span>
       </span>
-      {href ? <ChevronRight className="mt-2 size-4 text-shell-muted" aria-hidden="true" /> : null}
+      {href ? <ChevronRight className="rtl:-scale-x-100 mt-2 size-4 text-shell-muted" aria-hidden="true" /> : null}
     </>
   );
   return (
@@ -468,7 +468,7 @@ export function LekaInsights({
           ) : (
             <>
               {w.analyse}
-              <ArrowRight className="size-4" aria-hidden="true" />
+              <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
             </>
           )}
         </button>

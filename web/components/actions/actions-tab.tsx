@@ -188,7 +188,7 @@ function Stages({
 
 function Evidence({ step }: { step: PlanStep }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.execution.evidence;
   const evidence = step.evidence as {
     request?: { url?: string; signed_at?: number };
@@ -426,7 +426,7 @@ function Checks({ plan }: { plan: Plan }) {
 
 function Journal({ events }: { events: readonly PlanEvent[] }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const me = useCurrentUser();
   const w = t.execution;
   if (!events.length) return null;
@@ -435,12 +435,12 @@ function Journal({ events }: { events: readonly PlanEvent[] }) {
       title={w.journal}
       icon={<ListChecks className="size-4 text-shell-muted" aria-hidden="true" />}
     >
-      <ol className="relative space-y-3 border-l border-shell-line pl-5" data-testid="plan-journal">
+      <ol className="relative space-y-3 border-s border-shell-line ps-5" data-testid="plan-journal">
         {[...events].reverse().map((event) => (
           <li key={event.id} className="relative" data-kind={event.kind}>
             <span
               aria-hidden="true"
-              className="absolute top-1.5 -left-[1.6rem] size-2.5 rounded-full border-2 border-white bg-brand-violet"
+              className="absolute top-1.5 -start-[1.6rem] size-2.5 rounded-full border-2 border-white bg-brand-violet"
             />
             <p className="text-[0.875rem] font-medium text-brand-navy">
               {(w.events as Record<string, string>)[event.kind] ?? event.kind}
@@ -465,7 +465,7 @@ function localInput(iso: string | null | undefined): string {
 
 function Controls({ plan, intention }: { plan: Plan; intention: IntentionDetail }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.execution;
   const confirm = useConfirm();
   const { run, pending } = useAct(plan.intention_id);

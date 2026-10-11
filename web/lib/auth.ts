@@ -39,6 +39,9 @@ export interface CurrentUser {
     company?: string | null;
     job_title?: string | null;
     company_size?: CompanySize | null;
+    // A tag of the catalogue, and a region; null until chosen.
+    language?: string | null;
+    region?: string | null;
   };
   workspaces: WorkspaceMembership[];
   active_workspace_id: string | null;
@@ -79,19 +82,21 @@ export function justSignedOut(): boolean {
 }
 
 export const auth = {
-  register: (email: string, password: string, profile: AccountProfile) =>
+  /** `language`: the one the form was shown in — the account keeps it,
+   * and the confirmation e-mail is written in it. */
+  register: (email: string, password: string, profile: AccountProfile, language?: string) =>
     apiFetch<{ detail: string }>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ email, password, ...profile }),
+      body: JSON.stringify({ email, password, ...profile, language }),
     }),
 
   verify: (token: string) =>
     apiFetch<unknown>(`/auth/verify/${encodeURIComponent(token)}`, { method: "POST" }),
 
-  resendVerification: (email: string) =>
+  resendVerification: (email: string, language?: string) =>
     apiFetch<{ detail: string }>("/auth/verify/resend", {
       method: "POST",
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, language }),
     }),
 
   /** `remember`: "Se souvenir de cet appareil". Unticked, the session
@@ -128,13 +133,21 @@ export const auth = {
     }).then(() => rememberCsrfToken(null)),
 
   /** Only the fields given change; the answer is the whole person. */
-  updateProfile: (changes: Partial<{ [K in keyof AccountProfile]: AccountProfile[K] | null }>) =>
+  updateProfile: (
+    changes: Partial<
+      { [K in keyof AccountProfile]: AccountProfile[K] | null } & {
+        language: string | null;
+        region: string | null;
+      }
+    >,
+  ) =>
     apiFetch<CurrentUser["user"]>("/auth/me", { method: "PATCH", body: JSON.stringify(changes) }),
 
-  forgotPassword: (email: string) =>
+  /** `language`: the page's, for the e-mail of an account that chose none. */
+  forgotPassword: (email: string, language?: string) =>
     apiFetch<{ detail: string }>("/auth/password/forgot", {
       method: "POST",
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, language }),
     }),
 
   resetPassword: (token: string, password: string) =>

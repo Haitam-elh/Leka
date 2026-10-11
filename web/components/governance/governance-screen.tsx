@@ -69,8 +69,8 @@ function AccessMatrix({ model }: { model: AccessModel }) {
       <div className="overflow-x-auto">
         <table className="w-full text-[0.8125rem]" data-testid="access-matrix">
           <thead>
-            <tr className="text-left text-xs text-shell-muted">
-              <th className="py-1 pr-3 font-medium">{w.permission}</th>
+            <tr className="text-start text-xs text-shell-muted">
+              <th className="py-1 pe-3 font-medium">{w.permission}</th>
               {ROLE_ORDER.map((role) => (
                 <th
                   key={role}
@@ -84,10 +84,10 @@ function AccessMatrix({ model }: { model: AccessModel }) {
           <tbody>
             {model.permissions.map((permission) => (
               <tr key={permission} className="border-t border-shell-line" data-permission={permission}>
-                <td className="py-1.5 pr-3 text-brand-navy">
+                <td className="py-1.5 pe-3 text-brand-navy">
                   {permissionSaid(t, permission)}
                   {writes.has(permission) ? (
-                    <span className="ml-2 text-xs text-shell-muted">{w.write}</span>
+                    <span className="ms-2 text-xs text-shell-muted">{w.write}</span>
                   ) : null}
                 </td>
                 {ROLE_ORDER.map((role) => (
@@ -112,7 +112,7 @@ function AccessMatrix({ model }: { model: AccessModel }) {
 
 function Restrictions({ canRestrict }: { canRestrict: boolean }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.governance;
   const confirm = useConfirm();
   const { data } = useRestrictions();
@@ -212,7 +212,7 @@ function Restrictions({ canRestrict }: { canRestrict: boolean }) {
                     <li key={hit.entity.id}>
                       <button
                         type="button"
-                        className="text-left text-[0.8125rem] text-brand-navy hover:underline"
+                        className="text-start text-[0.8125rem] text-brand-navy hover:underline"
                         onClick={() => setChosen(hit)}
                       >
                         {hit.entity.name} <span className="text-shell-muted">· {hit.entity.type}</span>
@@ -251,7 +251,7 @@ function decisionSaid(t: Dictionary, d: AccessDecision): string {
 
 function Decisions() {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.governance;
   const [only, setOnly] = useState<"deny" | null>("deny");
   const { data } = useDecisions(only);

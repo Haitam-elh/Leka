@@ -317,7 +317,7 @@ function Filters({
         value={search}
         onChange={onSearch}
         placeholder={t.sources.filters.search}
-        className="ml-auto w-full sm:w-64"
+        className="ms-auto w-full sm:w-64"
       />
     </div>
   );
@@ -468,7 +468,7 @@ function NoSources({ action }: { action: React.ReactNode }) {
 
 /** "12 430": the reader's way of writing a number. */
 function useNumber(): (value: number) => string {
-  const { locale } = useLocale();
-  const format = new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB");
+  const { format: locale } = useLocale();
+  const format = new Intl.NumberFormat(locale);
   return (value) => format.format(value);
 }

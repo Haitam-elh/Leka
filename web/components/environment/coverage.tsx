@@ -38,18 +38,18 @@ export function CoveragePanel({
         <p className="text-[0.8125rem] text-shell-muted">{w.empty}</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[34rem] text-left text-[0.8125rem]">
+          <table className="w-full min-w-[34rem] text-start text-[0.8125rem]">
             <caption className="sr-only">{w.caption}</caption>
             <thead>
               <tr className="text-xs text-shell-muted">
-                <th scope="col" className="py-1 pr-3 font-medium">
+                <th scope="col" className="py-1 pe-3 font-medium">
                   {w.kind}
                 </th>
-                <th scope="col" className="py-1 pr-3 font-medium">
+                <th scope="col" className="py-1 pe-3 font-medium">
                   {w.total}
                 </th>
                 {MEASURES.map((measure) => (
-                  <th key={measure} scope="col" className="py-1 pr-3 font-medium">
+                  <th key={measure} scope="col" className="py-1 pe-3 font-medium">
                     {w[measure]}
                   </th>
                 ))}
@@ -62,12 +62,12 @@ export function CoveragePanel({
                   className="border-t border-shell-line/40"
                   data-testid={`coverage-${row.type}`}
                 >
-                  <th scope="row" className="py-1.5 pr-3 font-medium text-brand-navy">
+                  <th scope="row" className="py-1.5 pe-3 font-medium text-brand-navy">
                     {typeLabel(t, row.type)}
                   </th>
-                  <td className="py-1.5 pr-3 text-brand-navy">{row.total}</td>
+                  <td className="py-1.5 pe-3 text-brand-navy">{row.total}</td>
                   {MEASURES.map((measure) => (
-                    <td key={measure} className="py-1.5 pr-3">
+                    <td key={measure} className="py-1.5 pe-3">
                       <Share label={w[measure]} part={row[measure]} total={row.total} />
                     </td>
                   ))}

@@ -301,7 +301,7 @@ function subtitle(w: Words, card: ArchitectureCard, number: Intl.NumberFormat): 
 export function ArchitectureFigures({ data }: { data: Architecture | undefined }) {
   const t = useDictionary();
   const w = t.environment.architecture;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const value = (n: number | undefined) => (n === undefined ? "—" : String(n));
   const figures = data?.figures;
   const providers = Object.keys(figures?.providers ?? {});
@@ -1217,7 +1217,7 @@ function CodeList({
           <li key={repository.id} className="min-w-0">
             <CardBox card={repository} selected={repository.id === selected} onSelect={onSelect} />
             {modules.length ? (
-              <ul className="mt-1.5 ml-2 flex flex-col gap-1.5 border-l border-shell-line pl-2">
+              <ul className="mt-1.5 ms-2 flex flex-col gap-1.5 border-s border-shell-line ps-2">
                 {modules.map((module) => (
                   <li key={module.id} className="min-w-0">
                     <CardBox card={module} selected={module.id === selected} onSelect={onSelect} />
@@ -1318,7 +1318,7 @@ export function CardBox({
 }) {
   const t = useDictionary();
   const w = t.environment.architecture;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const number = new Intl.NumberFormat(locale);
   const kind = kindLabel(w, card);
   const health = card.status
@@ -1360,7 +1360,7 @@ export function CardBox({
       title={`${card.name} — ${subtitle(w, card, number)}`}
       onClick={() => onSelect(card.id)}
       className={cn(
-        "relative z-20 flex w-full min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 text-left outline-none transition focus-visible:ring-3 focus-visible:ring-brand-violet/40",
+        "relative z-20 flex w-full min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 text-start outline-none transition focus-visible:ring-3 focus-visible:ring-brand-violet/40",
         selected
           ? "border-brand-violet/60 bg-white ring-2 ring-brand-violet/30"
           : card.status === "incident"
@@ -1513,7 +1513,7 @@ export function Overview({
   const t = useDictionary();
   const w = t.environment.architecture;
   const p = w.panel;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const number = new Intl.NumberFormat(locale);
   const repository = card.repository_id ? byId.get(card.repository_id) : undefined;
   // The module its code is in: Leka/api for the API.
@@ -1721,7 +1721,7 @@ export function Overview({
 function Parts({ card }: { card: ArchitectureCard }) {
   const t = useDictionary();
   const w = t.environment.architecture;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const number = new Intl.NumberFormat(locale);
   return (
     <div data-testid="architecture-parts">
@@ -1800,7 +1800,7 @@ function Relations({
               <button
                 type="button"
                 onClick={() => onSelect(card.id)}
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-shell-line px-2 py-1 text-left outline-none hover:border-brand-violet/40 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-shell-line px-2 py-1 text-start outline-none hover:border-brand-violet/40 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
               >
                 <IconTile
                   icon={kindIcon(card.kind)}
@@ -1880,7 +1880,7 @@ function Widgets({
                   style={{ width: `${(row.value / most) * 100}%` }}
                 />
               </span>
-              <span className="text-right font-medium text-brand-navy tabular-nums">
+              <span className="text-end font-medium text-brand-navy tabular-nums">
                 {row.value}
               </span>
             </li>
@@ -1911,7 +1911,7 @@ function Widgets({
                     type="button"
                     onClick={() => card && onSelect(card.id)}
                     disabled={!card}
-                    className="flex min-w-0 items-center gap-1.5 text-left text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40 disabled:no-underline"
+                    className="flex min-w-0 items-center gap-1.5 text-start text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40 disabled:no-underline"
                   >
                     <Icon className="size-3.5 shrink-0 text-shell-muted" aria-hidden="true" />
                     <span className="truncate">{card ? cardName(card) : row.name}</span>
@@ -1922,7 +1922,7 @@ function Widgets({
                       style={{ width: `${(row.count / top) * 100}%` }}
                     />
                   </span>
-                  <span className="text-right font-medium text-brand-navy tabular-nums">
+                  <span className="text-end font-medium text-brand-navy tabular-nums">
                     {row.count}
                   </span>
                 </li>

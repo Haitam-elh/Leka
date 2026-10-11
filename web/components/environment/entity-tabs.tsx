@@ -178,7 +178,7 @@ const BOTTOM = 20;
 /** Day by day, stacked by kind, on one scale. */
 export function ActivityChart({ activity }: { activity: EntityActivity }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.environment.sheet.activity;
   const totals = activity.by_day.map((d) => BUCKETS.reduce((sum, b) => sum + d[b], 0));
   const top = Math.max(4, ...totals);
@@ -186,7 +186,7 @@ export function ActivityChart({ activity }: { activity: EntityActivity }) {
   const bar = Math.max(2, Math.min(18, slot * 0.6));
   const plot = HEIGHT - BOTTOM;
   const every = Math.ceil(activity.by_day.length / 8);
-  const day = new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", { day: "numeric", month: "short" });
+  const day = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" });
   if (!totals.some(Boolean)) {
     return <p className="py-8 text-center text-[0.8125rem] text-shell-muted">{w.none}</p>;
   }
@@ -291,7 +291,7 @@ export function MetricsTab({ entityId }: { entityId: string }) {
 
 function EventLine({ event }: { event: EntityActivityEvent }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.environment.sheet.activity;
   const Icon = TYPE_ICON[event.entity.type] ?? FileText;
   const typeWord = (w.types as Record<string, string>)[event.entity.type] ?? event.entity.type;
@@ -404,12 +404,12 @@ export function LogsTab({ entityId }: { entityId: string }) {
 function valueSaid(value: unknown, locale: string): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "✓" : "✗";
-  if (typeof value === "number") return new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB").format(value);
+  if (typeof value === "number") return new Intl.NumberFormat(locale).format(value);
   if (typeof value === "string") {
     if (/^\d{4}-\d{2}-\d{2}T/.test(value)) {
       const at = new Date(value);
       if (!Number.isNaN(at.getTime())) {
-        return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(at);
+        return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(at);
       }
     }
     return value;
@@ -425,7 +425,7 @@ const NOT_CONFIGURATION = new Set(["url", "description"]);
 
 export function ConfigurationTab({ sheet }: { sheet: EntitySheet }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.environment.sheet.activity;
   const entity = sheet.entity;
   const stated = Object.entries(entity.attributes ?? {})

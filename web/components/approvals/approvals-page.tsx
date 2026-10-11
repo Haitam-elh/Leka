@@ -330,7 +330,7 @@ function Filters({
           value={search}
           onChange={onSearch}
           placeholder={a.search}
-          className="ml-auto w-full sm:w-64"
+          className="ms-auto w-full sm:w-64"
         />
       </div>
     </div>

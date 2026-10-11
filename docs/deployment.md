@@ -616,6 +616,13 @@ made again — `e2e/site.spec.ts` fails if one is missed:
    keeps its `nav.tarifs` and `pricing.*` translations; `demo.html` keeps
    its `enterprise` request type. `e2e/pricing.spec.ts` fails if one is
    missed.
+5. **Languages** ([languages.md](languages.md)): `i18n.js` keeps its
+   catalogue-driven menu (the site's languages, then the 140), `?lang=`,
+   the fallback to English, the `leka-lang` cookie and `leka-lang-now`, and
+   the « not translated » notice; `site-i18n.js` falls back to English for
+   a language it has no words for; `sitemap.xml` keeps each page's
+   alternates by language. `e2e/languages.spec.ts` and `e2e/site.spec.ts`
+   fail if one is missed.
 
 And `web/components/auth/site-header.tsx`, the header above the sign-in
 screens, follows the site's: the same logo and the same four anchors on

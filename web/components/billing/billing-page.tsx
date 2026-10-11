@@ -22,14 +22,14 @@ import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
  */
 export function BillingScreen() {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.billing;
   const usage = useWorkspaceUsage();
   const credits = useCredits().data;
   const data = usage.data;
-  const number = new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB");
+  const number = new Intl.NumberFormat(locale);
   const day = (iso: string) =>
-    new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", { dateStyle: "long" }).format(new Date(iso));
+    new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(new Date(iso));
 
   return (
     <PageContainer>
@@ -84,7 +84,7 @@ export function BillingScreen() {
               <h2 className="font-semibold text-brand-navy">{w.month}</h2>
               <p className="mb-3 text-xs text-shell-muted">
                 {fill(w.since, {
-                  date: new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", { dateStyle: "long" }).format(new Date(data.month_start)),
+                  date: new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(new Date(data.month_start)),
                 })}
               </p>
               <ul className="space-y-3">
@@ -101,7 +101,7 @@ export function BillingScreen() {
                     <span className="flex-1 text-brand-navy">{w.rows[key]}</span>
                     <span className="font-semibold text-brand-navy tabular-nums">{number.format(value)}</span>
                     {previous !== undefined ? (
-                      <span className="w-36 text-right text-xs text-shell-muted">{fill(w.versus, { count: previous })}</span>
+                      <span className="w-36 text-end text-xs text-shell-muted">{fill(w.versus, { count: previous })}</span>
                     ) : (
                       <span className="w-36" />
                     )}

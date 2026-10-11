@@ -42,6 +42,10 @@ class EmailMessage:
     body: str
     # Optional: the plain-text body is always sent, and is what counts.
     html: str | None = None
+    # The language it is written in (a tag of leka/core/languages.yaml), sent
+    # as Content-Language: a mail client may offer to translate it, and
+    # reads it aloud in the right voice.
+    language: str | None = None
 
 
 @runtime_checkable
@@ -96,6 +100,8 @@ class ResendEmailSender:
         }
         if message.html:
             payload["html"] = message.html
+        if message.language:
+            payload["headers"] = {"Content-Language": message.language}
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
                 RESEND_ENDPOINT,
@@ -156,6 +162,8 @@ class SmtpEmailSender:
         payload["Subject"] = message.subject
         payload["From"] = self._sender
         payload["To"] = message.to
+        if message.language:
+            payload["Content-Language"] = message.language
 
         context = ssl.create_default_context()
         if self._use_ssl:

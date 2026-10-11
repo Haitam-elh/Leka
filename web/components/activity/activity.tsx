@@ -519,7 +519,7 @@ function Split({ data }: { data: Activity }) {
 function Latest({ items }: { items: readonly ActivityItem[] }) {
   const t = useDictionary();
   const w = t.activity.latest;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const [all, setAll] = useState(false);
   const shown = items.slice(0, all ? ALL : SHOWN);
   return (
@@ -534,7 +534,7 @@ function Latest({ items }: { items: readonly ActivityItem[] }) {
             className="flex items-center gap-1 rounded text-[0.8125rem] font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
           >
             {all ? w.fewer : w.all}
-            <ArrowRight className="size-3.5" aria-hidden="true" />
+            <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />
           </button>
         ) : null
       }
@@ -580,7 +580,7 @@ function Latest({ items }: { items: readonly ActivityItem[] }) {
                   </span>
                 ) : null}
                 {worded.href ? (
-                  <ArrowRight className="size-4 shrink-0 text-shell-muted" aria-hidden="true" />
+                  <ArrowRight className="rtl:-scale-x-100 size-4 shrink-0 text-shell-muted" aria-hidden="true" />
                 ) : (
                   <span className="size-4 shrink-0" />
                 )}
@@ -625,10 +625,10 @@ function Top({ data }: { data: Activity }) {
                 <span className="min-w-0 flex-1 truncate text-[0.8125rem] font-medium text-brand-navy">
                   {subject.name}
                 </span>
-                <span className="w-8 text-right text-[0.8125rem] text-brand-navy tabular-nums">
+                <span className="w-8 text-end text-[0.8125rem] text-brand-navy tabular-nums">
                   {top.count}
                 </span>
-                <span className="w-16 text-right">
+                <span className="w-16 text-end">
                   <Delta count={{ value: top.count, previous: top.previous }} />
                 </span>
               </>
@@ -669,7 +669,7 @@ function People({ data }: { data: Activity }) {
           className="flex items-center gap-1 rounded text-[0.8125rem] font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
         >
           {t.activity.people.team}
-          <ArrowRight className="size-3.5" aria-hidden="true" />
+          <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />
         </Link>
       }
     >
@@ -693,10 +693,10 @@ function People({ data }: { data: Activity }) {
                   </span>
                 ) : null}
               </span>
-              <span className="w-8 text-right text-[0.8125rem] text-brand-navy tabular-nums">
+              <span className="w-8 text-end text-[0.8125rem] text-brand-navy tabular-nums">
                 {person.count}
               </span>
-              <span className="w-16 text-right">
+              <span className="w-16 text-end">
                 <Delta count={{ value: person.count, previous: person.previous }} />
               </span>
             </li>
@@ -760,7 +760,7 @@ function Trends() {
         className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-navy px-5 py-3 text-sm font-medium text-white outline-none hover:bg-brand-navy/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
       >
         {w.cta}
-        <ArrowRight className="size-4" aria-hidden="true" />
+        <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
       </Link>
     </section>
   );

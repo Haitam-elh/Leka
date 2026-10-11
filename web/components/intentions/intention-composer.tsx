@@ -267,7 +267,7 @@ export function IntentionComposer({
                   placeholder={t.composer.compactPlaceholder}
                   rows={1}
                   data-testid="intention-input"
-                  className="min-h-[46px] resize-none rounded-lg border-shell-line bg-shell-canvas py-3 pr-12 pl-4 text-sm shadow-none placeholder:text-shell-muted focus-visible:border-brand-violet focus-visible:ring-brand-violet/20"
+                  className="min-h-[46px] resize-none rounded-lg border-shell-line bg-shell-canvas py-3 pe-12 ps-4 text-sm shadow-none placeholder:text-shell-muted focus-visible:border-brand-violet focus-visible:ring-brand-violet/20"
                 />
                 {onAttachRequest ? (
                   <button
@@ -275,7 +275,7 @@ export function IntentionComposer({
                     onClick={onAttachRequest}
                     aria-label={t.composer.attachOnNextStep}
                     title={t.composer.attachOnNextStep}
-                    className="absolute top-[11px] right-3 rounded p-0.5 text-shell-icon outline-none hover:text-shell-nav-active focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+                    className="absolute top-[11px] end-3 rounded p-0.5 text-shell-icon outline-none hover:text-shell-nav-active focus-visible:ring-2 focus-visible:ring-brand-violet/40"
                   >
                     <Paperclip className="size-[18px]" aria-hidden="true" />
                   </button>
@@ -425,7 +425,7 @@ export function IntentionComposer({
             </>
           )}
 
-          <div className="ml-auto flex items-center gap-2 whitespace-nowrap">
+          <div className="ms-auto flex items-center gap-2 whitespace-nowrap">
             {/* Polite, and only while it is true: announced once as the
                 person types past it, not read out on every keystroke. */}
             <span id={whyDisabled} aria-live="polite" className="text-xs text-shell-muted">

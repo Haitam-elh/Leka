@@ -27,20 +27,20 @@ type Interval = "month" | "year";
 export function SubscriptionSection() {
   const t = useDictionary();
   const w = t.billing.subscription;
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const params = useSearchParams();
   const said = useSubscription().data;
   const pricing = usePricing().data;
   const { checkout, portal } = usePayment();
   const [interval, setInterval] = useState<Interval>("month");
   const money = (cents: number) =>
-    new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB", {
+    new Intl.NumberFormat(locale, {
       style: "currency",
       currency: pricing?.currency ?? "EUR",
       minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
     }).format(cents / 100);
   const day = (iso: string) =>
-    new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", { dateStyle: "long" }).format(new Date(iso));
+    new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(new Date(iso));
 
   if (!said) return null;
   const back = params.get("checkout");

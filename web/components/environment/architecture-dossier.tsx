@@ -518,7 +518,7 @@ function Responsibilities({ data }: { data: Architecture }) {
     <div className="overflow-x-auto">
       <table className="w-full min-w-[44rem] border-collapse text-[0.78125rem]" data-testid="dossier-raci">
         <thead>
-          <tr className="bg-brand-navy text-left text-white">
+          <tr className="bg-brand-navy text-start text-white">
             {d.raci.columns.map((column) => (
               <th key={column} scope="col" className="px-2 py-1.5 font-semibold">
                 {column}
@@ -531,7 +531,7 @@ function Responsibilities({ data }: { data: Architecture }) {
             const known = card.team !== null || card.maintainers.length > 0;
             return (
               <tr key={card.id} className={index % 2 ? "bg-shell-canvas/60" : "bg-white"}>
-                <th scope="row" className="px-2 py-1 text-left font-medium text-brand-navy">
+                <th scope="row" className="px-2 py-1 text-start font-medium text-brand-navy">
                   {cardName(card)}
                 </th>
                 <td className="px-2 py-1 text-brand-navy">{kindLabel(w, card)}</td>
@@ -643,7 +643,7 @@ function Checks({
           <div
             key={kind}
             className={cn(
-              "rounded-lg border-l-4 px-3 py-2",
+              "rounded-lg border-s-4 px-3 py-2",
               kind === "incident"
                 ? "border-state-danger bg-state-danger-soft/50"
                 : "border-state-warning bg-state-warning-soft/40",
@@ -705,7 +705,7 @@ function SourcesAndLimits({ data }: { data: Architecture }) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[30rem] border-collapse text-[0.78125rem]" data-testid="dossier-sources-table">
           <thead>
-            <tr className="bg-brand-navy text-left text-white">
+            <tr className="bg-brand-navy text-start text-white">
               {d.sourceColumns.map((column) => (
                 <th key={column} scope="col" className="px-2 py-1.5 font-semibold">
                   {column}
@@ -716,7 +716,7 @@ function SourcesAndLimits({ data }: { data: Architecture }) {
           <tbody>
             {data.sources.map((source, index) => (
               <tr key={source.source_id} className={index % 2 ? "bg-shell-canvas/60" : "bg-white"}>
-                <th scope="row" className="px-2 py-1 text-left font-medium text-brand-navy">
+                <th scope="row" className="px-2 py-1 text-start font-medium text-brand-navy">
                   <span className="flex items-center gap-1.5">
                     {hasSourceLogo(source.kind) ? (
                       <Logo kind={source.kind} className="size-4" />
@@ -733,7 +733,7 @@ function SourcesAndLimits({ data }: { data: Architecture }) {
                 <td className="px-2 py-1 text-shell-muted">
                   {source.last_synced_at ? timeAgo(t, source.last_synced_at) : d.never}
                 </td>
-                <td className="px-2 py-1 text-right text-brand-navy tabular-nums">
+                <td className="px-2 py-1 text-end text-brand-navy tabular-nums">
                   {source.entities}
                 </td>
               </tr>
@@ -743,7 +743,7 @@ function SourcesAndLimits({ data }: { data: Architecture }) {
       </div>
       <div>
         <p className="text-[0.8125rem] font-semibold text-brand-navy">{d.limitsTitle}</p>
-        <ul className="mt-1 flex list-disc flex-col gap-1 pl-4 text-[0.78125rem] text-brand-navy" data-testid="dossier-limits">
+        <ul className="mt-1 flex list-disc flex-col gap-1 ps-4 text-[0.78125rem] text-brand-navy" data-testid="dossier-limits">
           {limits.map((limit) => (
             <li key={limit}>{limit}</li>
           ))}

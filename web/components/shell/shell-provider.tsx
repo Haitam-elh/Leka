@@ -22,6 +22,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import { ApiError } from "@/lib/api";
 import { auth, type CurrentUser, type WorkspaceMembership } from "@/lib/auth";
+import { useLanguage } from "@/lib/i18n/locale-provider";
 import { type CurrentWorkspace, workspace as workspaceApi } from "@/lib/workspace";
 
 export type ShellState =
@@ -58,6 +59,7 @@ const ShellContext = createContext<ShellContextValue | null>(null);
 
 export function ShellProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { adopt, saved } = useLanguage();
   const [state, setState] = useState<ShellState>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
 
@@ -80,6 +82,14 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
         const current: CurrentWorkspace | null =
           me.active_workspace_id === null ? null : await workspaceApi.current();
         if (cancelled) return;
+        // The account's language, now known — and a choice made before
+        // signing in, which the account takes (lib/i18n/resolve.ts).
+        const keep = adopt(me.user, current?.workspace.default_language ?? null);
+        if (keep) {
+          me.user = await auth.updateProfile({ language: keep }).catch(() => me.user);
+          if (me.user.language === keep) saved(keep);
+        }
+        if (cancelled) return;
         setState({
           status: "ready",
           me,
@@ -101,7 +111,7 @@ export function ShellProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [router, attempt]);
+  }, [router, attempt, adopt, saved]);
 
   // In place, not a reload: the greeting and the menu change with the
   // answer, and the page does not flash through its loading state.

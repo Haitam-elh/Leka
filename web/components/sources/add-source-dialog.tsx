@@ -259,7 +259,7 @@ function ConnectorStep({
             <button
               type="button"
               onClick={() => onPick(entry)}
-              className="flex w-full items-center gap-3 rounded-lg border border-shell-line bg-white p-3 text-left outline-none hover:border-brand-violet focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+              className="flex w-full items-center gap-3 rounded-lg border border-shell-line bg-white p-3 text-start outline-none hover:border-brand-violet focus-visible:ring-2 focus-visible:ring-brand-violet/40"
             >
               <SourceLogo kind={entry.key} className="size-7 shrink-0" />
               <span className="min-w-0">
@@ -316,7 +316,7 @@ function MethodStep({
               <button
                 type="button"
                 onClick={() => onPick(entry)}
-                className="flex w-full items-start gap-3 rounded-lg border border-shell-line bg-white p-3 text-left outline-none hover:border-brand-violet focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+                className="flex w-full items-start gap-3 rounded-lg border border-shell-line bg-white p-3 text-start outline-none hover:border-brand-violet focus-visible:ring-2 focus-visible:ring-brand-violet/40"
               >
                 <SourceLogo kind={entry.key} className="mt-0.5 size-7 shrink-0" />
                 <span className="min-w-0">
@@ -342,7 +342,7 @@ function MethodStep({
           <Ban className="size-4" aria-hidden="true" />
           {w.unsupportedTitle}
         </h4>
-        <ul className="list-disc space-y-0.5 pl-5 text-xs text-shell-muted">
+        <ul className="list-disc space-y-0.5 ps-5 text-xs text-shell-muted">
           {w.unsupported.map((line) => (
             <li key={line}>{line}</li>
           ))}
@@ -674,7 +674,7 @@ function ScopeStep({
           <div className="flex flex-col gap-2">
             <div className="relative">
               <Search
-                className="absolute top-2.5 left-2.5 size-4 text-shell-muted"
+                className="absolute top-2.5 start-2.5 size-4 text-shell-muted"
                 aria-hidden="true"
               />
               <Input
@@ -682,7 +682,7 @@ function ScopeStep({
                 onChange={(event) => setFilter(event.target.value)}
                 placeholder={t.sources.add.scopeSearch}
                 aria-label={t.sources.add.scopeSearch}
-                className="pl-8"
+                className="ps-8"
               />
             </div>
             <ul
@@ -869,13 +869,13 @@ function MappingPreview({ outcome }: { outcome: TestOutcome }) {
           {preview.read === 0 ? (
             <p className="mt-1 text-xs text-shell-muted">{w.preview.empty}</p>
           ) : (
-            <table className="mt-2 w-full text-left text-xs">
+            <table className="mt-2 w-full text-start text-xs">
               <caption className="sr-only">
                 {fill(w.preview.caption, { resource: preview.name })}
               </caption>
               <thead className="text-shell-muted">
                 <tr>
-                  <th scope="col" className="w-40 py-1 pr-3 font-medium">
+                  <th scope="col" className="w-40 py-1 pe-3 font-medium">
                     {w.preview.field}
                   </th>
                   <th scope="col" className="py-1 font-medium">
@@ -886,7 +886,7 @@ function MappingPreview({ outcome }: { outcome: TestOutcome }) {
               <tbody className="divide-y divide-shell-line">
                 {Object.entries(preview.fields ?? {}).map(([name, value]) => (
                   <tr key={name}>
-                    <th scope="row" className="py-1 pr-3 font-normal text-shell-muted">
+                    <th scope="row" className="py-1 pe-3 font-normal text-shell-muted">
                       {fieldLabel(name)}
                     </th>
                     <td className="py-1 break-all text-brand-navy">{value}</td>

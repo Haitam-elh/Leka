@@ -27,10 +27,10 @@ const PARTS: Exclude<Score, "quality">[] = ["completeness", "consistency", "fres
  */
 export function SourceQualitySection({ source }: { source: Source }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.sources.quality;
   const validation = useSourceValidation(source.id);
-  const number = new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB");
+  const number = new Intl.NumberFormat(locale);
   const percent = (value: number | null | undefined) =>
     value === null || value === undefined ? "—" : `${Math.round(value * 100)} %`;
   const read = validation.data;

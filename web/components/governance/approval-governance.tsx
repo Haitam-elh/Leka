@@ -146,7 +146,7 @@ function PolicyCard({ policy, editable }: { policy: ApprovalPolicy; editable: bo
         <div className="overflow-x-auto">
           <table className="w-full text-[0.8125rem]">
             <thead>
-              <tr className="text-left text-xs text-shell-muted">
+              <tr className="text-start text-xs text-shell-muted">
                 {(["risk", "approvals", "separate", "role", "valid", "escalate"] as const).map((c) => (
                   <th key={c} className={`${cell} font-medium`} scope="col">
                     {w.columns[c]}
@@ -157,7 +157,7 @@ function PolicyCard({ policy, editable }: { policy: ApprovalPolicy; editable: bo
             <tbody>
               {RISKS.map((risk) => (
                 <tr key={risk} className="border-t border-shell-line" data-risk={risk}>
-                  <th scope="row" className={`${cell} text-left font-normal`}>
+                  <th scope="row" className={`${cell} text-start font-normal`}>
                     <RiskPill risk={risk} />
                   </th>
                   <td className={cell}>
@@ -503,7 +503,7 @@ function SimulateCard() {
 
 function ExceptionsCard({ editable }: { editable: boolean }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.decisions.governance;
   const names = useNames();
   const confirm = useConfirm();
@@ -668,7 +668,7 @@ function ExceptionsCard({ editable }: { editable: boolean }) {
 
 function DelegationsCard({ canLend, isAdmin }: { canLend: boolean; isAdmin: boolean }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.decisions.governance;
   const me = useCurrentUser();
   const names = useNames();
@@ -817,7 +817,7 @@ function eventDetail(t: Dictionary, event: DecisionGovernanceEvent): string | nu
 
 function JournalCard() {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.decisions.governance;
   const names = useNames();
   const { data } = useGovernanceHistory();

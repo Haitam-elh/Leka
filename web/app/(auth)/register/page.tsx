@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { COMPANY_SIZES, type CompanySize, auth } from "@/lib/auth";
 import { fill } from "@/lib/i18n/dictionaries";
-import { useDictionary } from "@/lib/i18n/locale-provider";
+import { useDictionary, useSpokenLanguage } from "@/lib/i18n/locale-provider";
 import { useOnlineStatus } from "@/lib/use-online-status";
 
 /**
@@ -29,6 +29,7 @@ import { useOnlineStatus } from "@/lib/use-online-status";
  */
 export default function RegisterPage() {
   const t = useDictionary();
+  const language = useSpokenLanguage();
   const online = useOnlineStatus();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -57,7 +58,7 @@ export default function RegisterPage() {
         // Left out rather than sent empty: the API keeps what it is given.
         ...(jobTitle.trim() ? { job_title: jobTitle.trim() } : {}),
         ...(companySize ? { company_size: companySize } : {}),
-      });
+      }, language);
       // Shown whether or not the address was free. The server answers
       // identically in both cases, and so does this screen — otherwise the
       // form becomes a way to ask who already has an account.

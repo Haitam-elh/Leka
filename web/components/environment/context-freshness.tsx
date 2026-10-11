@@ -120,7 +120,7 @@ export function FreshnessPanel({
   updating: boolean;
 }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.environment.sheet.context.freshness;
   const said = context.freshness;
   const [open, setOpen] = useState(false);
@@ -202,7 +202,7 @@ export function FreshnessPanel({
       <div className="mt-1 flex flex-wrap items-center gap-2 text-shell-muted">
         <span data-testid="context-following">{following[said.following]}</span>
         {canFollow && said.following !== "archived" ? (
-          <span className="ml-auto inline-flex items-center gap-2">
+          <span className="ms-auto inline-flex items-center gap-2">
             <Switch
               size="sm"
               checked={context.follow}
@@ -234,7 +234,7 @@ export function VersionWhy({
   version: Pick<ContextVersion | AssembledContext, "changes" | "change_count" | "delta">;
 }) {
   const t = useDictionary();
-  const { locale } = useLocale();
+  const { format: locale } = useLocale();
   const w = t.environment.sheet.context.change;
   const asked = (version.changes ?? []).filter((c) => c.kind === "request" || c.kind === "intent");
   const followed = version.change_count - asked.length;

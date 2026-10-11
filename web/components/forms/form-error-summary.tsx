@@ -65,7 +65,7 @@ export function FormErrorSummary<TValues extends FieldValues>({
             <button
               type="button"
               onClick={() => setFocus(name)}
-              className="text-left text-sm text-shell-badge-foreground underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+              className="text-start text-sm text-shell-badge-foreground underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40"
             >
               {labels[name]} : {resolveValidationMessage(t, error.message ?? "")}
             </button>

@@ -118,7 +118,7 @@ error, a source never read).
 rules or the context did not give you.
 - No internal words: say « LEKA », never « entity », « context element », \
 « company model », « finding id ».
-- In the language of the question (French when asked in French), in the \
+- In the language you are told to write in — else the question's — in the \
 tone of a colleague: precise, brief, no filler. Two to six sentences of \
 answer, then at most eight points.
 - Each point cites the ids it rests on, exactly as given by your tools, the \
@@ -271,6 +271,7 @@ async def answer(
             rounds=ROUNDS,
             conclude=True,
             ref=f"intention:{asked.id}",
+            language=asked.language,
         )
     )
     if not done.ok:
