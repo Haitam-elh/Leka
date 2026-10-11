@@ -59,6 +59,8 @@ alternatives above or below it.
 - processes: one per grouping, same letter and label; its columns in the \
 order of their first call; its bands are its phases; each line is one \
 chain of calls read left to right, each call naming its column exactly.
+- organisation: « <organisation> - <entite> - <service> » from the inputs, \
+else as the analysis names them; empty when neither says — never invented.
 - app_view: only when the inputs ask for it (vue_applicative true), else \
 null; one box per application, flows aggregated, numbered in order.
 - raci: one row per brick and role found; a contact is a name from the \
@@ -110,10 +112,15 @@ class Drawn:
     # files.
     step: str = "rendered"
     kept: dict[str, Any] | None = None
+    # What the provider said, when it refused: a person reads why.
+    refusal: str | None = None
 
     def detail(self) -> dict[str, Any]:
         if self.error is not None:
-            return {"deliverables_error": self.error}
+            return {
+                "deliverables_error": self.error,
+                **({"deliverables_said": self.refusal} if self.refusal else {}),
+            }
         if self.kept is not None:
             return dict(self.kept)
         return {"deliverables": self.files}
@@ -169,8 +176,13 @@ async def draw(
             timeout=budget,
         )
     except NoModelError as error:
-        logger.warning("deck_not_written", run=str(run.id), reason=error.reason)
-        return Drawn([], "no_model")
+        # "none": no model this workspace reaches can write it; otherwise the
+        # models were asked and none gave a deck — said with the last answer,
+        # never as "no model" when one refused (a 400 hid that once).
+        said = next((a.error for a in reversed(error.attempts) if a.error), None)
+        logger.warning("deck_not_written", run=str(run.id), reason=error.reason, said=said)
+        code = "no_model" if error.reason == "none" else error.reason
+        return Drawn([], code, refusal=said[:300] if said else None)
     except TimeoutError:
         return Drawn([], "timeout")
     except Exception:

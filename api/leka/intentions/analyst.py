@@ -126,7 +126,12 @@ rules or the context (« event:… », « entity:… », « finding:… », \
 « source:… », « context:… », or a rule's finding id). A point you cannot \
 cite is not written.
 - You never act on the company's systems and never tell anyone to run \
-something in production: a person decides, through LEKA."""
+something in production: a person decides, through LEKA.
+- When one of LEKA's agents was started for this request (`agent_at_work`), \
+say it first: which agent (its title), what it is producing (its \
+deliverables: a PDF, a PowerPoint…) from which inputs, and that its files \
+appear on this intention when it is done; then what you found. Never say \
+LEKA cannot produce a document or a file: its agents do."""
 
 
 # ── what it read ─────────────────────────────────────────────────────────────

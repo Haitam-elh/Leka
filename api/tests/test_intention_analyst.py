@@ -107,6 +107,10 @@ class Analyst:
         if "restated" in schema["properties"]:
             self.asked.append("reading")
             return _said([{"text": json.dumps(READING)}])
+        if "missing" in schema["properties"]:
+            # Which agent does the work (dispatch.py): none, for a question.
+            self.asked.append("choosing")
+            return _said([{"text": json.dumps({"agent": None})}])
         task = json.loads(body["contents"][0]["parts"][0]["text"])["task"]
         if "tools" not in body:
             self.asked.append("writing")
@@ -163,8 +167,8 @@ async def test_the_analyst_reads_through_leka_s_tools_and_its_answer_rests_on_wh
     intention = await _ask(client, "Billing API, c'est à qui de voir ça ?")
     await _analysed(acme, intention)
 
-    assert scripted.asked == ["reading", "looking", "answering"]
-    looking = scripted.bodies[1]
+    assert scripted.asked == ["reading", "choosing", "looking", "answering"]
+    looking = scripted.bodies[2]
     # Told what LEKA is; given its tools — read only — to look for itself.
     assert looking["systemInstruction"]["parts"][0]["text"].startswith(PLATFORM[:40])
     names = {f["name"] for t in looking["tools"] for f in t["functionDeclarations"]}
@@ -210,7 +214,7 @@ async def test_an_answer_resting_on_nothing_it_read_is_not_kept(
     await _analysed(acme, intention)
 
     # Not kept: what the rules found is said instead.
-    assert scripted.asked == ["reading", "looking", "answering", "writing"]
+    assert scripted.asked == ["reading", "choosing", "looking", "answering", "writing"]
     analysis = await _get(client, f"/{intention['id']}/analysis")
     assert analysis["result"]["answer"]["text"] == "D'après LEKA : Payments."
 

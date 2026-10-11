@@ -268,10 +268,13 @@ async def list_runs(
     principal: Reader,
     key: Annotated[str | None, Query(max_length=100)] = None,
     run_status: Annotated[StatusWord | None, Query(alias="status")] = None,
+    intention_id: Annotated[
+        uuid.UUID | None, Query(description="An intention's runs: the agents at work on it.")
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> list[AgentRunRead]:
     runs = await AgentRuntime(session, principal.workspace_id).runs(
-        key=key, status=run_status, limit=limit
+        key=key, status=run_status, intention_id=intention_id, limit=limit
     )
     return [run_read(run, principal) for run in runs]
 

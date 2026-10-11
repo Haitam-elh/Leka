@@ -87,14 +87,21 @@ async def test_the_catalogue_for_a_workspace_and_a_person(
     assert (architect["kind"], architect["lifecycle"], architect["version"]) == (
         "agent",
         "active",
-        "18.1.0",
+        "19.0.0",
     )
-    assert [i["name"] for i in architect["inputs"]] == ["parcours", "perimetre", "vue_applicative"]
+    assert [i["name"] for i in architect["inputs"]] == [
+        "parcours",
+        "perimetre",
+        "organisation",
+        "entite",
+        "service",
+        "vue_applicative",
+    ]
     assert (architect["output"], architect["formats"]) == ("document", ["pptx", "pdf"])
     assert architect["available"] is False
     # Agents run (LEKA-395): what is in its way is what it needs.
     assert [r["code"] for r in architect["reasons"]] == ["missing_source", "no_model"]
-    # Any documentation, code, ticket or database source (18.1.0).
+    # Any documentation, code, ticket or database source (19.0.0).
     [sources] = architect["sources"]
     assert sources["connected"] is False
     assert {"confluence", "microsoft_365", "github", "jira"} <= set(sources["any_of"])
@@ -124,7 +131,7 @@ async def test_the_catalogue_for_a_workspace_and_a_person(
     assert names == sorted(names, key=str.lower)
 
     detail = (await client.get(f"{API}/{ARCHITECT}")).json()
-    assert detail["history"][0]["version"] == "18.1.0"
+    assert detail["history"][0]["version"] == "19.0.0"
     assert detail["events"][0]["kind"] == "registered"
     assert "instructions" not in detail
     assert (await client.get(f"{API}/nothing-like-this")).status_code == 404

@@ -89,6 +89,10 @@ class Gemini:
         if "restated" in schema["properties"]:
             self.asked.append("reading")
             return _gemini(self.reading)
+        if "missing" in schema["properties"]:
+            # Which agent does the work (dispatch.py): none, for a question.
+            self.asked.append("choosing")
+            return _gemini({"agent": None})
         self.asked.append("writing")
         # The runtime says the task and its LEKA context apart (LEKA-429).
         said = json.loads(body["contents"][0]["parts"][0]["text"])
@@ -167,7 +171,7 @@ async def test_words_the_rules_cannot_read_are_read_by_the_model_and_answered(
     seen = await _get(client, f"/{intention['id']}")
     assert seen["summary"] == "Billing API appartient à Payments."
 
-    assert scripted.asked == ["reading", "writing"]
+    assert scripted.asked == ["reading", "choosing", "writing"]
     calls = await _calls(acme["acme"])
     assert [(c.purpose, c.status) for c in calls] == [
         ("intention.understanding", "ok"),
@@ -191,6 +195,69 @@ async def test_a_request_to_act_stays_the_rules(
     assert (understood["mode"], understood["goal"]["code"]) == ("request", "act")
     assert [a["code"] for a in understood["actions"]] == ["restart"]
     assert understood["read_by"]["method"] == "model"
+
+
+@pytest.mark.parametrize(
+    ("asked", "reading", "goal"),
+    [
+        # Haitam's own, which LEKA used to stop at « À préciser » (2026-10-10):
+        # a plan asked about « les serveurs AWS » — every one LEKA knows.
+        (
+            "je dois migrer les serveurs aws vers azure, évalue les dépendances et simule "
+            "les risques et propose un plan de migration étape par étape",
+            {"mode": "request", "goal": "plan_migration", "confidence": 0.9},
+            "plan_migration",
+        ),
+        # A page to write: what is known, produced.
+        (
+            "génère une partie dans confluence concernant les tests unitaires sur Leka",
+            {"mode": "request", "goal": "find_knowledge", "confidence": 0.8},
+            "find_knowledge",
+        ),
+    ],
+)
+async def test_a_clear_request_is_worked_on_not_sent_back(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    asked: str,
+    reading: dict[str, Any],
+    goal: str,
+) -> None:
+    gemini({**reading, "restated": "x", "understood": True})
+    _as(identity, acme, "member")
+    intention = await _ask(client, asked)
+    understood = intention["understanding"]
+    assert intention["status"] == "analysing"
+    assert understood["clear"] is True
+    assert understood["goal"]["code"] == goal
+    # A plan: nothing that would change systems is asked of anyone.
+    assert not any(a["changes_systems"] for a in understood["actions"])
+
+
+async def test_what_cannot_be_understood_is_still_asked(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+) -> None:
+    gemini(
+        {
+            "mode": "question",
+            "goal": "unknown",
+            "confidence": 0.2,
+            "restated": "?",
+            "understood": False,
+        }
+    )
+    _as(identity, acme, "member")
+    intention = await _ask(client, "bon alors voilà quoi enfin bref")
+    assert intention["status"] == "needs_clarification"
 
 
 async def test_an_answer_resting_on_nothing_is_not_kept(
