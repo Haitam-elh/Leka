@@ -2005,6 +2005,21 @@ const fr = {
       no_delegation:
         "Aucune délégation en cours ne vous permet de voter en son nom sur une décision aussi risquée.",
       frozen: "Un gel couvre cette décision : elle ne peut pas être validée tant qu'il tient.",
+      ungrounded:
+        "Action risquée sans les preuves nécessaires : elle ne peut pas être validée tant que l'intention n'a pas été analysée à nouveau.",
+    },
+    grounding: {
+      blocked:
+        "Action risquée sans les preuves nécessaires — manquant : {missing}. Elle ne peut pas être validée tant que l'intention n'a pas été analysée à nouveau",
+      validation:
+        "Preuves incomplètes — manquant : {missing}. Une validation supplémentaire est demandée avant d'agir",
+      evidence: {
+        standing: "l'état de ce qui est visé",
+        action: "ce que l'action touche",
+        changes: "le dernier changement",
+        ownership: "son responsable",
+        stale: "un contexte à jour",
+      },
     },
     youApproved: "Vous avez validé. En attente de {count} autre(s) validation(s).",
     askerOnly: "La politique demande qu'une autre personne que vous valide cette action.",
@@ -7817,6 +7832,21 @@ const en: Dictionary = {
       invalid_change: "Keep at least one of the proposed actions.",
       no_delegation: "No delegation in force lets you vote for them on a decision this risky.",
       frozen: "A freeze covers this decision: it cannot be approved while the freeze holds.",
+      ungrounded:
+        "A risky action without the evidence it needs: it cannot be approved until the intention is analysed again.",
+    },
+    grounding: {
+      blocked:
+        "A risky action without the evidence it needs — missing: {missing}. It cannot be approved until the intention is analysed again",
+      validation:
+        "Incomplete evidence — missing: {missing}. One more approval is asked before acting",
+      evidence: {
+        standing: "the state of what it targets",
+        action: "what the action reaches",
+        changes: "the last change",
+        ownership: "its owner",
+        stale: "an up-to-date context",
+      },
     },
     youApproved: "You approved. Waiting for {count} more approval(s).",
     askerOnly: "The policy wants someone other than you to approve this action.",

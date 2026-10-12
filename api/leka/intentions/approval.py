@@ -60,12 +60,14 @@ from leka.intentions.governance import (
     evaluate,
     freezes_of,
 )
+from leka.intentions.grounding import action_grounding
 from leka.intentions.lifecycle import Actor, IntentionStatus
 from leka.intentions.models import Intention, IntentionDecision, IntentionDecisionVote
 from leka.intentions.oversight import OversightService
 from leka.intentions.repository import IntentionRepository
 from leka.intentions.schemas import (
     ApprovalPolicyRead,
+    ContextReadiness,
     DecisionGovernanceRead,
     DecisionIntention,
     DecisionQueueItem,
@@ -182,6 +184,7 @@ def _governance_read(decision: IntentionDecision) -> DecisionGovernanceRead:
             "frozen": bool(said.get("frozen_by")),
             "waived": waiver_of(decision) is not None,
             "exceptions": exceptions if isinstance(exceptions, list) else [],
+            "grounding": said.get("grounding"),
         }
     )
 
@@ -408,13 +411,19 @@ class DecisionService:
         environment: str | None,
         constraints: Sequence[tuple[str, object, bool]],
         action_targets: Mapping[str, Sequence[uuid.UUID]] | None = None,
+        evidence: Mapping[str, str] | None = None,
+        readiness: ContextReadiness | None = None,
         analysis_id: uuid.UUID | None,
         context_version: int | None,
         analysis_risk: str | None,
         now: datetime | None = None,
     ) -> Opened | None:
         """A decision on what the intention asks to do — none when it asks
-        to change nothing. Any earlier one still waiting is superseded."""
+        to change nothing. Any earlier one still waiting is superseded.
+        `evidence`: how each capability of its analysis ended — what the
+        action needs missing, or its context stale (LEKA-436), it is gated:
+        high or critical risk, not approvable until analysed again; else one
+        more approval — the reason kept with it, never waived."""
         proposals = proposals_of(actions, targets, environment, constraints, action_targets)
         if not proposals:
             return None
@@ -424,6 +433,10 @@ class DecisionService:
             proposals, analysis_risk=analysis_risk, policy=policy, now=moment
         )
         need = said.requirement
+        grounding = (
+            action_grounding(evidence, readiness, risk=said.risk) if evidence is not None else None
+        )
+        gate = grounding.gate if grounding is not None else None
         earlier = (
             await self._session.scalars(
                 select(IntentionDecision).where(
@@ -457,11 +470,14 @@ class DecisionService:
             analysis_risk=analysis_risk,
             risk=said.risk,
             revision=1,
-            required_approvals=need.approvals,
+            required_approvals=need.approvals + (1 if gate == "validation" else 0),
             separate_asker=need.separate,
             required_role=need.role,
             policy=policy.to_settings(),
-            governance=said.as_dict(),
+            governance={
+                **said.as_dict(),
+                **({"grounding": grounding.as_dict()} if grounding is not None and gate else {}),
+            },
             proposals=[p.as_dict() for p in proposals],
             detail={},
             created_at=moment,
@@ -481,7 +497,7 @@ class DecisionService:
                 },
                 now=moment,
             )
-        elif said.waived_by is not None and said.approved_by is not None:
+        elif said.waived_by is not None and said.approved_by is not None and gate is None:
             await self._waived(intention, decision, said, oversight, moment)
         await self._session.flush()
         return Opened(decision, len(earlier))
@@ -702,6 +718,9 @@ class DecisionService:
             if delegation is None or await oversight.role_of(on_behalf_of) not in APPROVERS:
                 raise DecisionRefusedError("no_delegation", _REFUSALS["no_delegation"])
         if verdict in APPROVING:
+            grounding = (decision.governance or {}).get("grounding")
+            if isinstance(grounding, Mapping) and grounding.get("gate") == "blocked":
+                raise DecisionRefusedError("ungrounded", _REFUSALS["ungrounded"])
             proposals = [Proposal.from_dict(p) for p in decision.proposals]
             frozen = freezes_of(proposals, await oversight.exceptions(moment), moment)
             if frozen:
@@ -858,4 +877,8 @@ _REFUSALS = {
         "longer approve."
     ),
     "frozen": "A freeze covers it: it cannot be approved while the freeze holds.",
+    "ungrounded": (
+        "What this action must rest on is missing or stale: it cannot be approved until it is "
+        "analysed again."
+    ),
 }

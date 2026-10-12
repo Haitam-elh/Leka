@@ -179,6 +179,23 @@ describe("a decision's governance", () => {
     );
   });
 
+  it("says what a risky action lacks, and that it cannot be approved", async () => {
+    choices.of.mockResolvedValue([
+      decision({
+        governance: {
+          ...decision().governance!,
+          escalated_at: null,
+          grounding: { gate: "blocked", missing: ["changes", "ownership"], stale: ["model_stale"] },
+        },
+      }),
+    ]);
+    show();
+    const note = await screen.findByTestId("decision-grounding");
+    expect(note).toHaveTextContent("Action risquée sans les preuves nécessaires");
+    expect(note).toHaveTextContent("le dernier changement, son responsable, un contexte à jour");
+    expect(note).toHaveTextContent("analysée à nouveau");
+  });
+
   it("a member does not vote — unless an approver lent them their authority", async () => {
     choices.of.mockResolvedValue([decision()]);
     const { unmount } = show();

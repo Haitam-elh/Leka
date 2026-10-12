@@ -894,6 +894,30 @@ another workspace. Web: `approvals-page.test.tsx` (the decisions in À
 valider), `intention-decision.test.tsx`; e2e `intention-decisions.spec.ts`,
 on the demo: approved in À valider, refused from the intention's page.
 
+### What an action must rest on (LEKA-436)
+
+A question may be answered in part — its analysis `partial`, what is
+missing said — and is never gated. An action is proposed only as grounded
+as what its analysis read: before its decision opens, the capabilities its
+risk needs must have succeeded, and its context must not be stale.
+
+| Risk | Evidence it needs |
+| --- | --- |
+| low, medium | `standing` (the state of what it targets), `action` (what it reaches) |
+| high, critical | those, and `changes` (the last change on it), `ownership` (who owns it) |
+
+A capability not run or not succeeded is missing; a context whose readiness
+says `model_stale` or `stale_evidence` is stale. Then the decision opens
+**gated** — `governance.grounding {gate, missing, stale}`, said on the
+decision card:
+
+- `blocked` (high, critical): it cannot be approved (refusal `ungrounded`)
+  until the intention is analysed again — asked again, its evidence read
+  anew;
+- `validation` (low, medium): one more approval than the policy asks.
+
+A gated decision is never approved by a waiver.
+
 ## 14. Carrying it out (LEKA-391)
 
 What an approved decision becomes: a plan, checked before it runs, each

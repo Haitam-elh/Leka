@@ -28,6 +28,8 @@ move to `analysing`, and gives downstream capabilities the context itself
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
+from dataclasses import dataclass
 
 from leka.context import AssembledContext, IntentAsk, facet_of
 from leka.intentions.schemas import ContextReadiness, ReadinessIssue, Understanding
@@ -55,6 +57,51 @@ def refined(ask: IntentAsk, understanding: Understanding | None) -> IntentAsk:
 
 def side(entity_type: str) -> str:
     return "temporal" if entity_type in EVENTS else facet_of(entity_type)
+
+
+# What an action must rest on (LEKA-436): the capabilities whose evidence it
+# needs before it may be proposed as grounded — what it is on and what it
+# reaches, always; past medium risk, what changed on it last and who owns it
+# too. A context gone stale is evidence missing.
+ACTION_EVIDENCE = ("standing", "action")
+RISKY_EVIDENCE = ("standing", "action", "changes", "ownership")
+RISKY = frozenset({"high", "critical"})
+STALE = frozenset({"model_stale", "stale_evidence"})
+
+
+@dataclass(frozen=True)
+class Grounding:
+    """Whether what an action rests on held: the capabilities it needs that
+    did not succeed, what in its context is stale — and so its gate:
+    `blocked` (high or critical risk: not approvable until analysed again),
+    `validation` (one more approval, the reason said), none."""
+
+    missing: tuple[str, ...]
+    stale: tuple[str, ...]
+    risky: bool
+
+    @property
+    def gate(self) -> str | None:
+        if not self.missing and not self.stale:
+            return None
+        return "blocked" if self.risky else "validation"
+
+    def as_dict(self) -> dict[str, object]:
+        return {"gate": self.gate, "missing": list(self.missing), "stale": list(self.stale)}
+
+
+def action_grounding(
+    steps: Mapping[str, str], readiness: ContextReadiness | None, *, risk: str
+) -> Grounding:
+    """`steps`: each capability run, by name, and how it ended."""
+    risky = risk in RISKY
+    needed = RISKY_EVIDENCE if risky else ACTION_EVIDENCE
+    issues = [*readiness.critical, *readiness.warnings] if readiness is not None else []
+    return Grounding(
+        missing=tuple(name for name in needed if steps.get(name) != "succeeded"),
+        stale=tuple(dict.fromkeys(i.kind for i in issues if i.kind in STALE)),
+        risky=risky,
+    )
 
 
 def acting(understood: Understanding | None) -> bool:
