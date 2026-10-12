@@ -6,6 +6,7 @@ import {
   Hourglass,
   MessageSquareWarning,
   PencilLine,
+  ShieldAlert,
   ShieldCheck,
   Snowflake,
   Stamp,
@@ -153,6 +154,24 @@ function Governance({ decision }: { decision: Decision }) {
         until: exactDate(locale, String(freeze.ends_at)),
       }),
       tone: "bg-state-info-soft text-state-info",
+    });
+  }
+  if (g.grounding) {
+    // What the action rests on is missing or stale (LEKA-436): blocked, or one more approval.
+    const missing = [
+      ...g.grounding.missing.map((name) => (w.grounding.evidence as Record<string, string>)[name] ?? name),
+      ...g.grounding.stale.map(() => w.grounding.evidence.stale),
+    ];
+    notes.push({
+      key: "grounding",
+      icon: <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />,
+      text: fill(g.grounding.gate === "blocked" ? w.grounding.blocked : w.grounding.validation, {
+        missing: [...new Set(missing)].join(", "),
+      }),
+      tone:
+        g.grounding.gate === "blocked"
+          ? "bg-state-danger-soft text-state-danger"
+          : "bg-state-warning-soft text-state-warning",
     });
   }
   if (g.waived && waiver) {

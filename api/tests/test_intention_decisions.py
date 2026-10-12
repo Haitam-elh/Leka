@@ -39,6 +39,7 @@ from leka.intentions.decisions import (
     risk_of,
     tally,
 )
+from leka.intentions.grounding import action_grounding
 
 ASKER, ADA, BOB = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 BILLING = Target(uuid.uuid4(), "Billing API", "service")
@@ -250,3 +251,20 @@ def test_a_modification_where_it_runs_and_what_is_kept() -> None:
         modified(proposals, Change(keep=()))
     with pytest.raises(ValueError, match="Not proposed: deploy"):
         modified(proposals, Change(keep=("deploy",)))
+
+
+# ── what an action rests on (LEKA-436) ───────────────────────────────────────
+
+DONE = {"standing": "succeeded", "action": "succeeded", "changes": "succeeded"}
+
+
+def test_an_action_is_grounded_on_what_its_risk_needs() -> None:
+    # Medium: what it is on and what it reaches.
+    assert action_grounding(DONE, None, risk="medium").gate is None
+    # High: who owns it too — not run, missing: not approvable.
+    risky = action_grounding(DONE, None, risk="high")
+    assert (risky.gate, risky.missing) == ("blocked", ("ownership",))
+    # Something it needs failed, at medium risk: one more approval.
+    failed = action_grounding({**DONE, "action": "failed"}, None, risk="medium")
+    assert (failed.gate, failed.missing) == ("validation", ("action",))
+    assert failed.as_dict() == {"gate": "validation", "missing": ["action"], "stale": []}

@@ -692,6 +692,25 @@ class DecisionVoteRead(BaseModel):
     role: str | None = Field(default=None, description="The role of the authority used.")
 
 
+class DecisionGroundingRead(BaseModel):
+    """What an action asked rests on, when something it needs is missing
+    (LEKA-436)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    gate: Literal["blocked", "validation"] = Field(
+        description="blocked: high or critical risk, not approvable until analysed again; "
+        "validation: one more approval than the policy asks."
+    )
+    missing: list[str] = Field(
+        description="The capabilities whose evidence it needs that did not succeed: "
+        "standing, action, changes, ownership."
+    )
+    stale: list[str] = Field(
+        description="What in its context is stale: model_stale, stale_evidence."
+    )
+
+
 class DecisionGovernanceRead(BaseModel):
     """What the policy said of a decision (LEKA-404): why its risk, what it
     needs, what froze or waived it, when it is escalated."""
@@ -707,6 +726,9 @@ class DecisionGovernanceRead(BaseModel):
     frozen: bool = False
     waived: bool = False
     exceptions: list[dict[str, JsonValue]] = Field(default_factory=list)
+    grounding: DecisionGroundingRead | None = Field(
+        default=None, description="Set when what it rests on is missing or stale (LEKA-436)."
+    )
 
 
 class DecisionRead(BaseModel):

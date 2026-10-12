@@ -11024,6 +11024,31 @@ export interface components {
             exceptions?: {
                 [key: string]: components["schemas"]["JsonValue"];
             }[];
+            /** @description Set when what it rests on is missing or stale (LEKA-436). */
+            grounding?: components["schemas"]["DecisionGroundingRead"] | null;
+        };
+        /**
+         * DecisionGroundingRead
+         * @description What an action asked rests on, when something it needs is missing
+         *     (LEKA-436).
+         */
+        DecisionGroundingRead: {
+            /**
+             * Gate
+             * @description blocked: high or critical risk, not approvable until analysed again; validation: one more approval than the policy asks.
+             * @enum {string}
+             */
+            gate: "blocked" | "validation";
+            /**
+             * Missing
+             * @description The capabilities whose evidence it needs that did not succeed: standing, action, changes, ownership.
+             */
+            missing: string[];
+            /**
+             * Stale
+             * @description What in its context is stale: model_stale, stale_evidence.
+             */
+            stale: string[];
         };
         /**
          * DecisionIntention

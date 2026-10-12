@@ -972,7 +972,9 @@ async def _finish(
                 now=moment,
             )
             if asked.acting:
-                await _decide(session, workspace_id, service, intention, asked, row, result, moment)
+                await _decide(
+                    session, workspace_id, service, intention, asked, row, result, outcomes, moment
+                )
         await session.commit()
     logger.info(
         "intention_analysed",
@@ -992,15 +994,23 @@ async def _decide(
     asked: Asked,
     row: IntentionAnalysis,
     result: Result,
+    outcomes: Sequence[StepOutcome],
     moment: datetime,
 ) -> None:
     """What it asks to do, put to a person's decision (LEKA-390) — linked to
-    it, so its history says so."""
+    it, so its history says so; gated when what it rests on is missing or
+    its context stale (LEKA-436)."""
     opened = await DecisionService(session, workspace_id).open(
         intention,
         actions=asked.actions,
         targets=[Target(s.id, s.name, s.type) for s in asked.subjects],
         action_targets=asked.action_targets,
+        evidence={o.name: o.status for o in outcomes},
+        readiness=(
+            ContextReadiness.model_validate(intention.readiness)
+            if intention.readiness is not None
+            else None
+        ),
         environment=asked.environment,
         constraints=asked.constraints,
         analysis_id=row.id,

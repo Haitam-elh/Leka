@@ -40,6 +40,8 @@ from sqlalchemy.exc import DBAPIError
 
 from leka.api import intentions as intentions_api
 from leka.db import session_factory, system_scope
+from leka.intentions.analysis import Capability, Material, Output
+from leka.intentions.capabilities import CAPABILITIES
 from leka.intentions.processing import analyse_intention
 from tests.conftest import FakeIdentity
 from tests.test_context_engine import model
@@ -221,6 +223,101 @@ async def test_each_action_is_proposed_on_what_was_said_with_it(
         "restart": ["Billing API"],
         "rollback": ["Checkout"],
     }
+
+
+def _failing(_: Material) -> Output:
+    raise RuntimeError("the changes could not be read")
+
+
+# Its changes never read: what an action in production needs, missing.
+CHANGES_FAILED = [
+    c if c.name != "changes" else Capability("changes", 1, ".", goals=c.goals, run=_failing)
+    for c in CAPABILITIES
+]
+
+
+async def _asked_without_changes(
+    client: AsyncClient, acme: dict[str, uuid.UUID], words: str = RESTART
+) -> dict[str, Any]:
+    response = await client.post(f"{API}/intentions", json={"text": words})
+    assert response.status_code == 201, response.text
+    intention: dict[str, Any] = response.json()["intention"]
+    await analyse_intention(
+        acme["acme"], uuid.UUID(intention["id"]), trigger="created", capabilities=CHANGES_FAILED
+    )
+    return intention
+
+
+async def test_a_high_risk_action_without_its_evidence_cannot_be_approved(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+) -> None:
+    """A restart in production made high by the policy, its changes never
+    read (LEKA-436): proposed, never as grounded — blocked, said why."""
+    _as(identity, acme, "admin")
+    await _policy(
+        client,
+        rules=[
+            {
+                "name": "Restarts in production",
+                "at_least": "high",
+                "actions": ["restart"],
+                "environments": ["production"],
+            }
+        ],
+    )
+    _as(identity, acme, "member")
+    intention = await _asked_without_changes(client, acme)
+    [decision] = await _decisions(client, intention)
+    assert decision["risk"] == "high"
+    grounding = decision["governance"]["grounding"]
+    assert grounding["gate"] == "blocked"
+    assert "changes" in grounding["missing"]
+
+    _as(identity, acme, "admin")
+    refused = await client.post(f"{API}/intentions/{intention['id']}/decision/approve", json={})
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["error"]["details"] == [{"field": "refusal", "message": "ungrounded"}]
+    assert await _status(client, intention) == "awaiting_decision"
+
+
+async def test_a_medium_risk_action_without_its_evidence_needs_one_more_approval(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+) -> None:
+    # What it reaches never read: the « action » capability failed.
+    broken = [
+        c if c.name != "action" else Capability("action", 1, ".", goals=c.goals, run=_failing)
+        for c in CAPABILITIES
+    ]
+    response = await client.post(f"{API}/intentions", json={"text": RESTART})
+    intention: dict[str, Any] = response.json()["intention"]
+    await analyse_intention(
+        acme["acme"], uuid.UUID(intention["id"]), trigger="created", capabilities=broken
+    )
+    [decision] = await _decisions(client, intention)
+    assert (decision["risk"], decision["required_approvals"]) == ("medium", 2)
+    assert decision["governance"]["grounding"] == {
+        "gate": "validation",
+        "missing": ["action"],
+        "stale": [],
+    }
+
+
+async def test_a_question_partly_answered_is_said_partial_no_decision(
+    client: AsyncClient, model: dict[str, uuid.UUID], acme: dict[str, uuid.UUID]
+) -> None:
+    """Informational: answered with what is in the way said — never gated."""
+    question = "Qu'est-ce qui a changé sur Billing API cette semaine ?"
+    intention = await _asked_without_changes(client, acme, question)
+    assert await _status(client, intention) == "completed"
+    analysis = (await client.get(f"{API}/intentions/{intention['id']}/analysis")).json()
+    assert analysis["status"] == "partial"
+    assert await _decisions(client, intention) == []
 
 
 # ── rejected, modified ───────────────────────────────────────────────────────
