@@ -180,14 +180,17 @@ In Gmail, *Show original* must say `SPF: PASS`, `DKIM: PASS` and
 
 Stated here rather than left to be discovered.
 
-1. **No scheduled logical dump exists.** RDS's automated backups (7 days,
-   point in time) are the real protection. They live in the same AWS
-   account: they do not protect against losing the account.
+1. **RDS keeps 1 day of point in time** — the most the free plan allows.
+   The nightly dump (operations.md § 4) covers what is older, up to 24 hours
+   lost. Both live in the same AWS account: neither survives losing it.
 2. **The drill above was measured on Neon**, before the move to RDS. The
    RDS procedure is written from AWS's documentation and has not yet been
-   rehearsed on our instance. Run it once, on a restore beside the live
-   instance, and record the numbers here.
-3. **A dump has never been stored off-provider.**
+   rehearsed on our instance: the free plan refuses the third instance the
+   restore needs (tried 2026-10-12). Run it at the account upgrade — a
+   restore beside the live instance, `db.t4g.micro`, security group
+   `rds-ec2-1`, then table counts against the live one, then delete it —
+   and record the numbers here.
+3. **The dump is stored in S3, not off-provider.**
 4. **The drill has been run once.** Quarterly is the intent; see below.
 
 ---
@@ -195,7 +198,7 @@ Stated here rather than left to be discovered.
 ## Before anything risky — a manual snapshot
 
 A manual snapshot is kept until someone deletes it, unlike the automated
-backups, which age out after 7 days. Take one before a migration that drops
+backups, which age out after 1 day (7 after the account upgrade). Take one before a migration that drops
 or renames, and before any `downgrade`:
 
 ```bash

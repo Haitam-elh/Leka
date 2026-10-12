@@ -40,10 +40,11 @@ Operating data only: counts, ages, rates — no customer's name, text or id.
   each `ok`, `degraded` or `down`, said why. `down` (503) when the database,
   Redis, the worker or the scheduler is.
 
-**One check must live outside LEKA**: when the box itself is gone, nothing
-on it can say so. Point an external uptime monitor (UptimeRobot, Better
-Stack — the free tier is enough) at `https://api.leka-core.com/api/v1/health`
-every minute, alerting the same people.
+**One check lives outside LEKA**: when the box itself is gone, nothing on it
+can say so. UptimeRobot (free plan, account `support@leka-core.com`) asks
+`https://api.leka-core.com/api/v1/health` every 5 minutes and emails
+`support@leka-core.com` when it fails — test notification received
+2026-10-12. Every minute needs the paid plan.
 
 ## 2. Alerts
 
@@ -151,7 +152,7 @@ and the workers: a provider down for one is down for all.
 
 | Layer | What | Where | RPO |
 | --- | --- | --- | --- |
-| RDS automated backups | point in time, 7 days | the same AWS account | ~5 minutes |
+| RDS automated backups | point in time, **1 day** (the free plan; 7 after the upgrade) | the same AWS account | ~5 minutes |
 | **Nightly logical dump** (LEKA-408) | `pg_dump` from one snapshot + a manifest of every table's row count | **the backup bucket** — its own credentials, encrypted at rest, versioned; for now in the same AWS account (see § 5) | 24 hours |
 | S3 payloads | raw payloads, re-read from the vendors by the next passes | AWS | — (re-read) |
 
@@ -254,7 +255,12 @@ primary path), logical restore from a dump (the portable one). In order:
   second one yet): it survives RDS, the instance and the box, not the account
   itself. Moving it to another account is a new bucket there, the
   `LEKA_BACKUP_*` changed — nothing else.
-- The RDS point-in-time restore is still to be rehearsed on our instance
-  (runbook.md § Honest gaps).
-- The external uptime check is to be created (§ 1).
+- The RDS point-in-time restore is not rehearsed on our instance: the free
+  plan refuses a third RDS instance (2026-10-12), so the restore beside the
+  live one cannot be created. Until the account is upgraded, the rehearsed
+  path is the dump (33 s, § 4). **At the upgrade, before the first paying
+  customer**: raise the RDS backup retention to 7 days, run the drill
+  (runbook.md § Honest gaps), record the numbers.
+- RDS keeps **1 day** of point in time: a corruption found later than that is
+  recovered from the dump (up to 24 hours lost).
 - HTTP metrics are per API process: with several, sum them.
