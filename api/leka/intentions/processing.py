@@ -235,6 +235,9 @@ def asked_of(intention: Intention, understood: Understanding | None, now: dateti
         actions=tuple(
             (a.code, a.changes_systems) for a in (understood.actions if understood else [])
         ),
+        action_targets={
+            a.code: tuple(a.targets) for a in (understood.actions if understood else [])
+        },
         subjects=tuple(
             Subject(
                 id=e.entity_id,
@@ -997,6 +1000,7 @@ async def _decide(
         intention,
         actions=asked.actions,
         targets=[Target(s.id, s.name, s.type) for s in asked.subjects],
+        action_targets=asked.action_targets,
         environment=asked.environment,
         constraints=asked.constraints,
         analysis_id=row.id,

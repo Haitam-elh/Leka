@@ -201,6 +201,28 @@ async def test_a_question_asks_for_no_decision(
     assert await _decisions(client, intention) == []
 
 
+async def test_a_negated_action_asks_for_no_decision(
+    client: AsyncClient, model: dict[str, uuid.UUID], acme: dict[str, uuid.UUID]
+) -> None:
+    """« Ne redémarre pas » restarts nothing (LEKA-434)."""
+    intention = await _asked(client, acme, "Ne redémarre pas Billing API en production")
+    assert await _status(client, intention) != "awaiting_decision"
+    assert await _decisions(client, intention) == []
+
+
+async def test_each_action_is_proposed_on_what_was_said_with_it(
+    client: AsyncClient, model: dict[str, uuid.UUID], acme: dict[str, uuid.UUID]
+) -> None:
+    intention = await _asked(
+        client, acme, "Redémarre Billing API et rollback Checkout en production"
+    )
+    [decision] = await _decisions(client, intention)
+    assert {p["action"]: [t["name"] for t in p["targets"]] for p in decision["proposals"]} == {
+        "restart": ["Billing API"],
+        "rollback": ["Checkout"],
+    }
+
+
 # ── rejected, modified ───────────────────────────────────────────────────────
 
 

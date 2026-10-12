@@ -224,6 +224,7 @@ things named, the period, the environment, the gaps), never redone.
 | `kind` | LEKA-373's: diagnose, change, ownership, dependency, compliance, migration, knowledge, general |
 | `goal` | `{code, said, confidence}` (below) |
 | `actions` | each `{code, said, changes_systems}` — the verbs asked, never the nouns: « déploie » is asked, « le déploiement » happened |
+| `withheld` | the actions spoken of but not asked (LEKA-434), each with its `polarity`: `negated` (« ne redémarre pas », « don't restart », « never »), `conditional` (« si Billing API tombe, redémarre-la »), `ambiguous` (a negation before it, not on it: « je ne sais pas s'il faut redémarrer »). Never acted on, never proposed. What is quoted (« … », " … ") is cited, not asked |
 | `entities` | what it is about: `{entity_id, name, type, how (asked, named, business), said, confidence}` — LEKA-373's subjects |
 | `period`, `environment` | as LEKA-373 reads them, with their origin and words |
 | `ambiguities` | each `{kind, blocking, said, options}` (below) |
@@ -257,6 +258,7 @@ things named, the period, the environment, the gaps), never redone.
 | `ambiguous_subject` | **when acting**, else a warning | the same words name several things — options: those things. Read each to answer a question; never act on a guess |
 | `competing_goals` | no | two kinds said as much: read as the first — options: both goals |
 | `several_requests` | no | several « ? », or several actions joined (et, and, puis, then) |
+| `ambiguous_action` | yes | an action on systems negated in part, conditional or doubtful (LEKA-434): asked before anything is proposed |
 | `unknown_environment` | no | an environment the model does not know — options: those it knows |
 
 **Read by a model, worked on as it is.**
@@ -308,6 +310,14 @@ requests, an unknown environment; every part's words in the text.
 `tests/test_intentions_api.py`: understood and kept; « Redémarre le
 service » flagged, asked, clarified; still unclear, asked again; a dry run
 keeps nothing.
+
+**Each action on its own targets (LEKA-434).** An action is on the things
+said after it, before the next one: « Redémarre Billing API et rollback
+Payment API » restarts Billing API and rolls back Payment API — one proposal
+each, never both on both (`actions[].targets`, then the decision's
+proposals). An action said with nothing after it takes what the next one is
+on (« redémarre et scale Billing API »); a thing not found in the words, every
+action.
 
 ## 10. Its scope and constraints (LEKA-386)
 

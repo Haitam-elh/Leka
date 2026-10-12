@@ -138,6 +138,24 @@ def test_what_is_proposed_is_what_changes_systems() -> None:
     assert proposals_of([("investigate", False)], [BILLING], None) == ()
 
 
+def test_each_action_is_proposed_on_its_own_targets_never_on_all() -> None:
+    """« Redémarre Billing API et rollback Payment API » (LEKA-434)."""
+    payment = Target(uuid.uuid4(), "Payment API", "service")
+    proposals = proposals_of(
+        [("restart", True), ("rollback", True)],
+        [BILLING, payment],
+        "production",
+        action_targets={"restart": [BILLING.id], "rollback": [payment.id]},
+    )
+    assert {p.action: p.targets for p in proposals} == {
+        "restart": (BILLING,),
+        "rollback": (payment,),
+    }
+    # Said with none: on all it is about.
+    [both] = proposals_of([("restart", True)], [BILLING, payment], None, action_targets={})
+    assert both.targets == (BILLING, payment)
+
+
 def _votes(*cast: tuple[Verdict, uuid.UUID, int]) -> list[Vote]:
     return [Vote(verdict, by, revision) for verdict, by, revision in cast]
 

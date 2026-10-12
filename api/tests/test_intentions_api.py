@@ -480,7 +480,13 @@ async def test_not_understood_enough_it_is_asked_then_clarified(
     understood = intention["understanding"]
     assert understood["clear"] is False
     assert understood["actions"] == [
-        {"code": "restart", "said": "redemarre", "changes_systems": True}
+        {
+            "code": "restart",
+            "said": "redemarre",
+            "changes_systems": True,
+            "polarity": "affirmed",
+            "targets": [],
+        }
     ]
     blocking = {a["kind"] for a in understood["ambiguities"] if a["blocking"]}
     assert "action_without_target" in blocking

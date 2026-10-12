@@ -5232,6 +5232,7 @@ const fr = {
         subject_gone: "Ce dont vous parlez n'existe plus dans votre entreprise (supprimé ou archivé).",
         subject_dormant: "Ce dont vous parlez est inactif depuis des mois : est-ce toujours ce qui est utilisé ?",
         everything_excluded: "Vous excluez tout ce que vous nommez : de quoi parlez-vous alors ?",
+        ambiguous_action: "Votre demande nie une action, la soumet à une condition ou en doute : faut-il vraiment agir, et sur quoi ?",
       },
       options: "Possibilités : {options}",
       scope: {
@@ -10927,6 +10928,7 @@ const en: Dictionary = {
         subject_gone: "What you mean no longer exists in your company (removed or archived).",
         subject_dormant: "What you mean has been inactive for months: is it still what is used?",
         everything_excluded: "You exclude everything you name: what is it about, then?",
+        ambiguous_action: "Your request negates an action, makes it conditional or doubts it: should LEKA really act, and on what?",
       },
       options: "Possibilities: {options}",
       scope: {

@@ -6258,6 +6258,18 @@ export interface components {
              * @description It would change a customer's systems: only after a person approves (LEKA-390, 391).
              */
             changes_systems: boolean;
+            /**
+             * Polarity
+             * @description Whether it is asked (LEKA-434): affirmed; negated (« ne redémarre pas »); conditional (« si … »); ambiguous (a negation not on it).
+             * @default affirmed
+             * @enum {string}
+             */
+            polarity: "affirmed" | "negated" | "conditional" | "ambiguous";
+            /**
+             * Targets
+             * @description The things it is on, as said with it (LEKA-434); empty: not said.
+             */
+            targets?: string[];
         };
         /**
          * ActivityBucket
@@ -6707,7 +6719,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "too_short" | "unclear_goal" | "competing_goals" | "no_subject" | "unknown_subject" | "ambiguous_subject" | "action_without_target" | "several_requests" | "unknown_environment" | "missing_environment" | "missing_target" | "conflicting_constraints" | "subject_gone" | "subject_dormant" | "everything_excluded";
+            kind: "too_short" | "unclear_goal" | "competing_goals" | "no_subject" | "unknown_subject" | "ambiguous_subject" | "action_without_target" | "several_requests" | "unknown_environment" | "missing_environment" | "missing_target" | "conflicting_constraints" | "subject_gone" | "subject_dormant" | "everything_excluded" | "ambiguous_action";
             /**
              * Blocking
              * @description It cannot go on without an answer.
@@ -20573,8 +20585,16 @@ export interface components {
              */
             kind: string;
             goal: components["schemas"]["GoalRead"];
-            /** Actions */
+            /**
+             * Actions
+             * @description What is asked to be done.
+             */
             actions: components["schemas"]["ActionRead"][];
+            /**
+             * Withheld
+             * @description Actions spoken of but not asked — negated, conditional, doubtful (LEKA-434): never proposed.
+             */
+            withheld?: components["schemas"]["ActionRead"][];
             /** Entities */
             entities: components["schemas"]["UnderstoodEntity"][];
             /**

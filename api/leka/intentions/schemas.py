@@ -47,6 +47,8 @@ AmbiguityKind = Literal[
     "subject_gone",
     "subject_dormant",
     "everything_excluded",
+    # LEKA-434: an action negated in part, conditional or doubtful.
+    "ambiguous_action",
 ]
 ConstraintKind = Literal[
     "exclude",
@@ -111,6 +113,15 @@ class ActionRead(BaseModel):
     changes_systems: bool = Field(
         description="It would change a customer's systems: only after a person approves "
         "(LEKA-390, 391)."
+    )
+    polarity: Literal["affirmed", "negated", "conditional", "ambiguous"] = Field(
+        default="affirmed",
+        description="Whether it is asked (LEKA-434): affirmed; negated (« ne redémarre pas »); "
+        "conditional (« si … »); ambiguous (a negation not on it).",
+    )
+    targets: list[uuid.UUID] = Field(
+        default_factory=list,
+        description="The things it is on, as said with it (LEKA-434); empty: not said.",
     )
 
 
@@ -226,7 +237,12 @@ class Understanding(BaseModel):
     mode_said: str | None = Field(description="What said it: « ? », « pourquoi », « redémarre ».")
     kind: str = Field(description="What it asks the company model for (LEKA-373).")
     goal: GoalRead
-    actions: list[ActionRead]
+    actions: list[ActionRead] = Field(description="What is asked to be done.")
+    withheld: list[ActionRead] = Field(
+        default_factory=list,
+        description="Actions spoken of but not asked — negated, conditional, doubtful "
+        "(LEKA-434): never proposed.",
+    )
     entities: list[UnderstoodEntity]
     period: dict[str, JsonValue] | None = Field(description="since, until, origin, said.")
     environment: str | None
