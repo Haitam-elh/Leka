@@ -430,6 +430,114 @@ async def test_what_must_hold_is_checked_nothing_runs_otherwise(
     assert "check.approvers_allowed" in _codes(demoted)
 
 
+async def _actions_audited(workspace_id: uuid.UUID) -> list[dict[str, Any]]:
+    with system_scope():
+        async with session_factory() as session:
+            rows = await session.execute(
+                text(
+                    "SELECT outcome, detail FROM audit_events WHERE workspace_id = :w"
+                    " AND action = 'action.executed' ORDER BY at"
+                ),
+                {"w": workspace_id},
+            )
+            return [{"outcome": o, **d} for o, d in rows]
+
+
+async def test_a_deadline_passed_while_it_waited_nothing_is_sent(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    jobs: list[uuid.UUID],
+) -> None:
+    """Checked when it started, then queued: by the time the job calls, its
+    deadline has passed (LEKA-435) — no call, said why, audited."""
+    _as(identity, acme, "admin")
+    made = await _authorize(client)
+    intention = await _approved(client, identity, acme)
+    plan = await _plan(client, intention)
+    await _start(client, intention)
+    yesterday = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
+    with system_scope():
+        async with session_factory() as session:
+            await session.execute(
+                text(
+                    "UPDATE intention_plan_steps SET constraints = CAST(:c AS jsonb)"
+                    " WHERE plan_id = :p"
+                ),
+                {"c": json.dumps([{"kind": "deadline", "value": yesterday}]), "p": plan["id"]},
+            )
+            await session.commit()
+    system = System(secret=made["secret"])
+
+    went = await execute_plan(acme["acme"], uuid.UUID(plan["id"]), transport=system.transport())
+    assert went == "failed"
+    assert system.received == []
+    latest = await _latest(client, intention)
+    assert (latest["status"], latest["error"]) == ("failed", "checks_failed")
+    [checked] = latest["steps"][0]["evidence"]["checks"]
+    assert checked["code"] == "before_deadline"
+    [audited] = await _actions_audited(acme["acme"])
+    assert (audited["outcome"], audited["reason"], audited["sent"]) == (
+        "denied",
+        "checks_failed",
+        False,
+    )
+    assert audited["failed"] == ["before_deadline"]
+
+
+async def test_an_endpoint_turned_off_while_it_waited_is_not_called(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    jobs: list[uuid.UUID],
+) -> None:
+    _as(identity, acme, "admin")
+    made = await _authorize(client)
+    intention = await _approved(client, identity, acme)
+    plan = await _plan(client, intention)
+    await _start(client, intention)
+    await client.patch(f"{API}/action-endpoints/{made['endpoint']['id']}", json={"enabled": False})
+    system = System(secret=made["secret"])
+
+    assert await execute_plan(
+        acme["acme"], uuid.UUID(plan["id"]), transport=system.transport()
+    ) == ("failed")
+    assert system.received == []
+    latest = await _latest(client, intention)
+    assert latest["error"] == "no_longer_authorized"
+    [audited] = await _actions_audited(acme["acme"])
+    assert (audited["outcome"], audited["failed"], audited["sent"]) == (
+        "denied",
+        ["endpoint_allows"],
+        False,
+    )
+
+
+async def test_an_empty_answer_is_not_taken_for_done(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    jobs: list[uuid.UUID],
+) -> None:
+    """A 200 with nothing said: it may have acted — a person confirms."""
+    _as(identity, acme, "admin")
+    made = await _authorize(client)
+    intention = await _approved(client, identity, acme)
+    plan = await _plan(client, intention)
+    await _start(client, intention)
+    system = System(secret=made["secret"], body={})
+
+    went = await execute_plan(acme["acme"], uuid.UUID(plan["id"]), transport=system.transport())
+    assert went == "waiting"
+    latest = await _latest(client, intention)
+    step = latest["steps"][0]
+    assert (step["status"], step["evidence"]["outcome"]["reason"]) == ("awaiting", "unconfirmed")
+    assert await _status(client, intention) != "verifying"
+
+
 # ── scheduled, cancelled ─────────────────────────────────────────────────────
 
 

@@ -94,6 +94,10 @@ TIMEOUT = httpx.Timeout(20.0, connect=5.0)
 ACTIVE = ("planned", "scheduled", "running")
 APPROVERS = (Role.ADMIN, Role.OWNER)
 GONE = ("removed", "archived")
+# What failing says the step is no longer allowed — not merely not now.
+AUTHORIZED = frozenset(
+    {"decision_approved", "approvers_allowed", "endpoint_allows", "approval_valid", "policy_met"}
+)
 
 
 class PlanRefusedError(Exception):
@@ -648,25 +652,53 @@ class ActionService:
         *,
         transport: httpx.AsyncBaseTransport | None,
     ) -> None:
-        """The authorized system called, signed — checked again first: what
-        was authorized when planned may not be any more."""
+        """The authorized system called, signed — everything checked again
+        first, at the last moment (LEKA-435): its approval, its approvers, the
+        endpoint, no freeze, its targets, its window and deadline. A plan
+        waits; what held when it started may not any more. One failing, the
+        call is not made — said, and audited."""
         started = _now(None)
         steps = await self._steps(plan.id)
         failed = [
             c
             for c in await self._check(plan, steps, started)
-            if c["code"]
-            in ("endpoint_allows", "approvers_allowed", "decision_approved", "not_frozen")
+            if cast("Mapping[str, object]", c["detail"]).get("step", step.position) == step.position
         ]
         endpoint = (
             await self._session.get(ActionEndpoint, step.endpoint_id) if step.endpoint_id else None
         )
         if failed or endpoint is None:
+            codes = {str(c["code"]) for c in failed}
             step.status = "failed"
-            step.error = "no_longer_authorized"
+            step.error = (
+                "no_longer_authorized"
+                if endpoint is None or codes & AUTHORIZED
+                else "checks_failed"
+            )
             step.finished_at = started
             step.evidence = {"checks": failed}
             self._event(plan, "step_failed", at=started, step=step, detail={"error": step.error})
+            audit(
+                self._session,
+                plan.workspace_id,
+                "action",
+                "action.executed",
+                outcome="denied",
+                target=Target("action_endpoint", endpoint.id, endpoint.name)
+                if endpoint is not None
+                else None,
+                detail={
+                    "action": step.action,
+                    "environment": step.environment,
+                    "plan": str(plan.id),
+                    "intention": str(plan.intention_id),
+                    "status": "failed",
+                    "reason": step.error,
+                    "failed": sorted(codes),
+                    "sent": False,
+                },
+                at=started,
+            )
             await self._session.flush()
             return
         circuit = f"action_endpoint:{endpoint.id}"

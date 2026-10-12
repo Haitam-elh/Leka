@@ -947,13 +947,22 @@ minutes, starts what is due). Step by step:
   done or failed — `POST …/plan/steps/{step_id}/report {outcome, note,
   link?}`, the note required, the link http(s) only;
 - **a system's step** is called by the job (`leka.intentions.actions.run_plan`),
-  once the route has committed: `POST` to its URL, signed. What it
-  answered decides, never assumed:
+  once the route has committed: `POST` to its URL, signed. **Checked again
+  at the last moment** (LEKA-435), just before the call — a plan waits, and
+  what held when it started may not any more: still approved, its approval
+  not expired, its approvers still allowed, the policy met, no freeze, the
+  endpoint still authorizing it, its targets still there, inside its window,
+  before its deadline. One failing: nothing is sent — the step `failed`
+  (`no_longer_authorized`, or `checks_failed` for what is no longer *now*),
+  the failing checks kept with it, `action.executed` audited `denied`,
+  `sent: false`. What it answered decides, never assumed — **the executor's
+  contract**:
 
   | Answer | The step |
   | --- | --- |
-  | 2xx, or `{"status": "succeeded"}` | succeeded |
-  | 202, or `{"status": "accepted"}` | awaiting a person's confirmation — accepted is not done |
+  | 2xx with `{"status": "succeeded"}` | succeeded — the only answer taken for done |
+  | 202, or `{"status": "accepted" \| "pending" \| "running" \| "queued"}` | awaiting a person's confirmation — accepted is not done |
+  | any other 2xx — empty, not JSON, no or an unknown `status` | awaiting a person's confirmation (`unconfirmed`): it may have acted — never said done, never retried as failed |
   | `{"status": "failed"}`, anything but 2xx | failed (`reported_failed`, `http_<code>`) |
   | no answer within 20 s | failed (`no_answer`: it may have acted — a person checks) |
   | a private address | failed (`blocked_address`) |

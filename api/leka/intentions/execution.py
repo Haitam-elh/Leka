@@ -13,8 +13,11 @@ by a person — and what came of each, said as it is.
                          authorizing it, inside the window asked, before the
                          deadline, the target still there — one failing,
                          nothing runs
-      ──▶ outcome_of()   what the system answered: done, accepted (a person
-                         confirms it — never assumed done), or failed
+      ──▶ outcome_of()   what the system answered, by the contract (LEKA-435):
+                         `{"status": "succeeded"}` done; accepted, pending,
+                         running — or anything else, an empty or unreadable
+                         answer included — a person confirms it, never
+                         assumed done; failed
 
 AUTHORIZED SYSTEMS. LEKA holds no write access to a customer's systems: it
 calls the endpoints an admin registered — their own automation, a CI job,
@@ -313,6 +316,11 @@ def verify(secret: str, header: str, body: bytes, *, now: int, tolerance: int = 
     return hmac.compare_digest(expected, parts.get("v1", ""))
 
 
+# The executor's contract (LEKA-435): what a 2xx answer says it did.
+DONE = frozenset({"succeeded"})
+WORKING = frozenset({"accepted", "pending", "running", "queued"})
+
+
 @dataclass(frozen=True)
 class Outcome:
     """What came of a call: succeeded, awaiting a person's confirmation,
@@ -327,9 +335,12 @@ class Outcome:
 
 
 def outcome_of(status_code: int, body: bytes) -> Outcome:
-    """What a system's answer means. Nothing is taken for success that the
-    system did not say: 202, or `accepted`, waits for a person to confirm
-    it was done; anything but a 2xx is a failure."""
+    """What a system's answer means, by the contract (LEKA-435): done only
+    when a 2xx says `{"status": "succeeded"}`; failed when it is not a 2xx
+    or says `failed`; 202 or accepted, pending, running, queued waits for a
+    person to confirm it — and so does any other 2xx: empty, unreadable, a
+    status the contract does not know. It may have acted: never said done,
+    never retried as failed."""
     said: Mapping[str, object] = {}
     try:
         parsed = json.loads(body) if body else {}
@@ -359,9 +370,11 @@ def outcome_of(status_code: int, body: bytes) -> Outcome:
         return Outcome("failed", reason=f"http_{status_code}", **extra)
     if state == "failed":
         return Outcome("failed", reason="reported_failed", **extra)
-    if status_code == 202 or state in ("accepted", "pending", "running"):
+    if status_code == 202 or state in WORKING:
         return Outcome("awaiting", reason="accepted", **extra)
-    return Outcome("succeeded", **extra)
+    if state in DONE:
+        return Outcome("succeeded", **extra)
+    return Outcome("awaiting", reason="unconfirmed", **extra)
 
 
 def excerpt(body: bytes) -> str:
