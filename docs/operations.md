@@ -152,32 +152,55 @@ and the workers: a provider down for one is down for all.
 | Layer | What | Where | RPO |
 | --- | --- | --- | --- |
 | RDS automated backups | point in time, 7 days | the same AWS account | ~5 minutes |
-| **Nightly logical dump** (LEKA-408) | `pg_dump` from one snapshot + a manifest of every table's row count | **the backup bucket** — its own credentials, encrypted at rest; in another account for the account itself to fail | 24 hours |
+| **Nightly logical dump** (LEKA-408) | `pg_dump` from one snapshot + a manifest of every table's row count | **the backup bucket** — its own credentials, encrypted at rest, versioned; for now in the same AWS account (see § 5) | 24 hours |
 | S3 payloads | raw payloads, re-read from the vendors by the next passes | AWS | — (re-read) |
 
 ### Taking one — and proving it restores
 
+On the box, `deploy/backup.sh` does both — copied to `/opt/leka` with
+`backup.Dockerfile` by hand (CD does not send them: copy them again when
+they change), run by the `ubuntu` crontab:
+
 ```bash
-# Once, on the box (and again when the API image changes): the API's image
-# with PostgreSQL's own client tools — Debian's are older than RDS and
-# pg_dump refuses a newer server. See deploy/backup.Dockerfile.
-docker build -f /opt/leka/backup.Dockerfile \
-  --build-arg API_IMAGE=ghcr.io/<owner>/leka/api:<sha> -t leka-backup /opt/leka
-
-# Where the dumps land: writable by the image's user (uid 10001).
-sudo install -d -o 10001 -g 10001 /opt/leka/backups
-
-# Nightly (crontab, 03:30): dumped from one snapshot, uploaded to the backup
-# bucket, the alerts told it happened.
-docker run --rm --env-file /opt/leka/production.env -v /opt/leka/backups:/backups \
-  leka-backup python -m leka.ops.backup dump /backups/leka.dump --upload
-
-# Monthly, or after any doubt: restored into a throwaway database beside the
-# source, every table counted against the manifest, the sha256 checked first.
-docker run --rm --env-file /opt/leka/production.env -v /opt/leka/backups:/backups \
-  leka-backup python -m leka.ops.backup verify /backups/leka.dump
-# restored and verified: 89 tables, 1527 rows, restore took 1.4s
+# Nightly, 03:30 UTC: dumped from one snapshot, uploaded to the backup bucket,
+# the alerts told it happened. Monthly, the 1st: restored into a throwaway
+# database beside the source, every table counted against the manifest, the
+# sha256 checked first.
+30 3 * * * /opt/leka/backup.sh dump   >> /opt/leka/backup.log 2>&1
+30 4 1 * * /opt/leka/backup.sh verify >> /opt/leka/backup.log 2>&1
 ```
+
+What it runs, each time:
+
+```bash
+# The API's image running now, with PostgreSQL's own client tools — Debian's
+# are older than RDS and pg_dump refuses a newer server (backup.Dockerfile,
+# PG_MAJOR = RDS's major version, 16). Rebuilt every run, cached: the backup
+# runs the code deployed, never a stale image.
+docker build -q -f backup.Dockerfile --build-arg API_IMAGE=<the running api image> \
+  -t leka-backup .
+
+# On the compose network, with what docker-compose gives the services and
+# production.env does not hold — the environment, Redis (the upload tells the
+# alerts through it). Without them the settings refuse to load.
+docker run --rm --network leka_default --env-file production.env \
+  -e LEKA_ENVIRONMENT=production -e LEKA_REDIS_URL=redis://redis:6379/0 \
+  -v /opt/leka/backups:/backups leka-backup \
+  python -m leka.ops.backup dump /backups/leka.dump --upload   # or: verify /backups/leka.dump
+```
+
+`/opt/leka/backups` is the image user's (uid 10001: `sudo install -d -o 10001
+-g 10001 /opt/leka/backups`); the log is `/opt/leka/backup.log`.
+
+**The bucket** — `leka-backups-prod-7c2e`, eu-central-1: public access
+blocked, versioned, encrypted (SSE-S3), every version expired after 60 days.
+Written by the IAM user `leka-backup` alone — an inline policy allowing
+`s3:ListBucket` on the bucket and `s3:PutObject`, `s3:GetObject` on its
+objects, nothing else — its key as `LEKA_BACKUP_*` in `production.env`.
+Dumps land under `production/<yyyy>/<mm>/<dd>/<hhmmss>/`.
+
+Measured on production (2026-10-12): 101 tables, 191 698 rows, 42 MB —
+dumped in 17 s; **restored and verified in 33 s**.
 
 On a laptop, the tools of the local PostgreSQL container do:
 `LEKA_PG_TOOLS="docker exec -i leka-postgres" python -m leka.ops.backup …`.
@@ -211,7 +234,7 @@ primary path), logical restore from a dump (the portable one). In order:
 | | Target | Basis |
 | --- | --- | --- |
 | **RPO** — data lost | 5 minutes (RDS point in time); 24 hours if the AWS account is lost (the dump) | RDS backups; the nightly dump |
-| **RTO** — back in service | 1 hour (RDS restore + redeploy); 4 hours from the dump on a new account | RDS restore time; the measured `verify` time + provisioning |
+| **RTO** — back in service | 1 hour (RDS restore + redeploy); 4 hours from the dump on a new account | RDS restore time; the measured `verify` time (33 s for the database, 2026-10-12) + provisioning |
 
 ### Critical dependencies
 
@@ -227,11 +250,10 @@ primary path), logical restore from a dump (the portable one). In order:
 
 ## 5. Gaps, said
 
-- The nightly dump is **built and validated locally, not yet scheduled on the
-  box**: building `leka-backup` there (deploy/backup.Dockerfile, not yet built
-  against RDS), the crontab lines above, `LEKA_BACKUP_*` in `production.env`
-  and the backup bucket in another account are a step on the instance, with
-  Haitam. Until then `LEKA_BACKUP_EXPECTED` stays off.
+- The backup bucket is in the **same AWS account** as production (there is no
+  second one yet): it survives RDS, the instance and the box, not the account
+  itself. Moving it to another account is a new bucket there, the
+  `LEKA_BACKUP_*` changed — nothing else.
 - The RDS point-in-time restore is still to be rehearsed on our instance
   (runbook.md § Honest gaps).
 - The external uptime check is to be created (§ 1).
