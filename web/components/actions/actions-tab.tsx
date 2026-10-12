@@ -193,7 +193,7 @@ function Evidence({ step }: { step: PlanStep }) {
   const evidence = step.evidence as {
     request?: { url?: string; signed_at?: number };
     response?: { status?: number; duration_ms?: number } | null;
-    outcome?: { ref?: string | null };
+    outcome?: { ref?: string | null; reason?: string | null };
     reported?: { note?: string; link?: string | null };
   };
   const lines: React.ReactNode[] = [];
@@ -221,6 +221,9 @@ function Evidence({ step }: { step: PlanStep }) {
   }
   if (evidence.outcome?.ref) {
     lines.push(<span key="ref">{fill(w.ref, { ref: evidence.outcome.ref })}</span>);
+  }
+  if (evidence.outcome?.reason === "unconfirmed") {
+    lines.push(<span key="unconfirmed">{w.unconfirmed}</span>);
   }
   if (evidence.reported?.note) {
     lines.push(

@@ -173,11 +173,16 @@ def test_an_answer_is_taken_as_it_is() -> None:
 
     assert said(200, {"status": "succeeded", "ref": "run-42"}) == ("succeeded", None)
     assert outcome_of(200, b'{"status":"succeeded","ref":"run-42"}').ref == "run-42"
-    assert said(204) == ("succeeded", None)
-    assert said(200, b"<html>ok</html>") == ("succeeded", None)
     # Accepted is not done: a person confirms it.
     assert said(202) == ("awaiting", "accepted")
-    assert said(200, {"status": "accepted"}) == ("awaiting", "accepted")
+    for working in ("accepted", "pending", "running", "queued"):
+        assert said(200, {"status": working}) == ("awaiting", "accepted")
+    # Done only when the contract says so (LEKA-435): an empty, unreadable or
+    # unknown answer may have acted — a person confirms, never assumed done.
+    for unsaid in (b"", b"<html>ok</html>", b"{not json", {}, {"status": "done"}, ["ok"]):
+        assert said(200, unsaid) == ("awaiting", "unconfirmed"), unsaid
+    assert said(204) == ("awaiting", "unconfirmed")
+    assert said(202, {"status": "succeeded"}) == ("awaiting", "accepted")
     assert said(200, {"status": "failed", "detail": "pod crashloop"}) == (
         "failed",
         "reported_failed",

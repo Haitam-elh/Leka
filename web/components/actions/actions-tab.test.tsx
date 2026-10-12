@@ -331,6 +331,31 @@ describe("an intention's actions", () => {
     await waitFor(() => expect(api.cancel).toHaveBeenCalledWith(ID, "Mauvais service."));
   });
 
+  it("an answer that did not say it was done asks a person to check", async () => {
+    api.of.mockResolvedValue([
+      plan({
+        status: "running",
+        started_at: ago(3),
+        steps: [
+          step({
+            status: "awaiting",
+            executor: "webhook",
+            endpoint_name: "Ops runbooks",
+            evidence: {
+              request: { url: "https://ops.acme.example/leka", signed_at: 1_791_435_490 },
+              response: { status: 200, duration_ms: 90 },
+              outcome: { ref: null, reason: "unconfirmed" },
+            },
+          }),
+        ],
+      }),
+    ]);
+    show(intention({ status: "executing" }));
+    expect(await screen.findByTestId("step-evidence")).toHaveTextContent(
+      "Le système a répondu sans dire si l'action est faite : vérifiez, puis confirmez",
+    );
+  });
+
   it("says what was done, its evidence and its log", async () => {
     api.of.mockResolvedValue([
       plan({
