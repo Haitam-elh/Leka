@@ -12,21 +12,23 @@ import {
   Users,
   UsersRound,
 } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { cn } from "cn";
 
-import { IconTile } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { useConfirm } from "@/components/interactions/confirm";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
-import { PageContainer } from "@/components/shell/page-container";
+import { PageContainer, PageHeader } from "@/components/shell/page-container";
+import { StatCard, StatGrid } from "@/components/shell/stat-card";
 import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
 import { ErrorState } from "@/components/states/error-state";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { useEnvironment } from "@/lib/environment-queries";
 import { fill } from "@/lib/i18n/dictionaries";
+import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import { notify } from "@/lib/notify";
 import { initials, personName, type Role, ROLES, type TeamMember } from "@/lib/team";
@@ -318,6 +320,7 @@ function Invitations() {
 
 export function TeamScreen() {
   const t = useDictionary();
+  const pathname = usePathname();
   const w = t.team;
   const permissions = usePermissions() ?? [];
   const canInvite = permissions.includes("member:invite");
@@ -350,32 +353,34 @@ export function TeamScreen() {
 
   return (
     <PageContainer>
-      <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">{w.title}</h1>
-          <p className="mt-1 text-[1.0625rem] text-shell-accent-muted">{w.subtitle}</p>
-        </div>
-        {canInvite ? (
-          <Button type="button" onClick={() => setInviting(true)} data-testid="team-invite-open">
-            <Plus className="size-4" aria-hidden="true" />
-            {w.invite}
-          </Button>
-        ) : null}
-      </div>
+      <PageHeader
+        title={w.title}
+        subtitle={w.subtitle}
+        breadcrumb={buildBreadcrumb(pathname, t)}
+        actions={
+          canInvite ? (
+            <Button type="button" onClick={() => setInviting(true)} data-testid="team-invite-open">
+              <Plus className="size-4" aria-hidden="true" />
+              {w.invite}
+            </Button>
+          ) : null
+        }
+      />
 
       <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4" data-testid="team-stats">
+        <StatGrid count={tiles.length} testId="team-stats">
           {tiles.map((tile) => (
-            <div key={tile.key} className="flex items-start gap-3 rounded-xl border border-shell-line bg-white p-4" data-testid={`team-stat-${tile.key}`}>
-              <IconTile icon={tile.icon} tone={tile.tone} />
-              <div className="min-w-0">
-                <p className="text-[1.5rem] leading-tight font-bold text-brand-navy tabular-nums">{tile.value}</p>
-                <p className="text-[0.8125rem] text-shell-muted">{tile.label}</p>
-                {tile.foot ? <p className="text-xs text-shell-muted">{tile.foot}</p> : null}
-              </div>
-            </div>
+            <StatCard
+              key={tile.key}
+              icon={tile.icon}
+              tone={tile.tone}
+              value={tile.value}
+              label={tile.label}
+              foot={tile.foot}
+              testId={`team-stat-${tile.key}`}
+            />
           ))}
-        </div>
+        </StatGrid>
 
         {inviting ? <Invite onClose={() => setInviting(false)} /> : null}
 

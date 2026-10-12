@@ -36,6 +36,7 @@ import { IconTile, type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { useConfirm } from "@/components/interactions/confirm";
 import { PageContainer } from "@/components/shell/page-container";
+import { StatCard, StatGrid } from "@/components/shell/stat-card";
 import { hasSourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -256,24 +257,19 @@ function Stats({ summary }: { summary: CatalogueSummary }) {
     },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4" data-testid="catalogue-stats">
+    <StatGrid count={tiles.length} testId="catalogue-stats">
       {tiles.map((tile) => (
-        <div
+        <StatCard
           key={tile.key}
-          className="flex items-start gap-3 rounded-xl border border-shell-line bg-white p-4"
-          data-testid={`catalogue-stat-${tile.key}`}
-        >
-          <IconTile icon={tile.icon} tone={tile.tone} />
-          <div className="min-w-0">
-            <p className="text-[1.5rem] leading-tight font-bold text-brand-navy tabular-nums">
-              {tile.value}
-            </p>
-            <p className="text-[0.8125rem] text-shell-muted">{tile.label}</p>
-            <div className="mt-0.5">{tile.foot}</div>
-          </div>
-        </div>
+          icon={tile.icon}
+          tone={tile.tone}
+          value={tile.value}
+          label={tile.label}
+          foot={tile.foot}
+          testId={`catalogue-stat-${tile.key}`}
+        />
       ))}
-    </div>
+    </StatGrid>
   );
 }
 

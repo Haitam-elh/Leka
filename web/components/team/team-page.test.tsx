@@ -34,6 +34,7 @@ const api = vi.hoisted(() => ({
 }));
 const notices = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 
+vi.mock("next/navigation", () => ({ usePathname: () => "/team" }));
 vi.mock("@/lib/team", async (original) => ({
   ...(await original<typeof import("@/lib/team")>()),
   team: api,

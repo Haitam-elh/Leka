@@ -114,7 +114,7 @@ describe("the figures", () => {
   it("are the workspace's own, and what is not counted says so", async () => {
     renderPage();
 
-    const connected = (await screen.findByText("sur 3 au total")).closest("li") as HTMLElement;
+    const connected = (await screen.findByText("sur 3 au total")).closest("[data-testid^='sources-stat-']") as HTMLElement;
     // Two switched on (active, and in error) of three.
     expect(within(connected).getByText("2")).toBeInTheDocument();
     expect(screen.getByText("Comptés dès la première synchronisation")).toBeInTheDocument();
@@ -145,11 +145,11 @@ describe("what the sync read", () => {
     expect(await within(row("Acme GitHub")).findByText("12 430")).toBeInTheDocument();
     expect(within(row("Acme Jira")).getByLabelText("Pas encore compté")).toBeInTheDocument();
 
-    const tile = screen.getByText("Éléments synchronisés").closest("li") as HTMLElement;
+    const tile = screen.getByText("Éléments synchronisés").closest("[data-testid^='sources-stat-']") as HTMLElement;
     expect(within(tile).getByText("12 500")).toBeInTheDocument();
     expect(within(tile).getByText("lus dans 2 source(s)")).toBeInTheDocument();
     // Running is what a worker holds, not what a source's status says.
-    const running = screen.getByText("Synchronisations en cours").closest("li") as HTMLElement;
+    const running = screen.getByText("Synchronisations en cours").closest("[data-testid^='sources-stat-']") as HTMLElement;
     expect(within(running).getByText("1")).toBeInTheDocument();
   });
 });

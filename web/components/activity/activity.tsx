@@ -38,6 +38,7 @@ import { IconTile, type TileTone, typeIcon } from "@/components/environment/part
 import { hrefOf, word } from "@/components/insights/leka-insights";
 import { shortWhen } from "@/components/knowledge/time";
 import { PageContainer } from "@/components/shell/page-container";
+import { StatCard, StatGrid } from "@/components/shell/stat-card";
 import { usePermissions } from "@/components/shell/shell-provider";
 import {
   DropdownMenu,
@@ -372,42 +373,20 @@ function Stats({ data }: { data: Activity }) {
     },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" data-testid="activity-stats">
-      {tiles.map((tile) => {
-        const body = (
-          <div className="flex items-start gap-3">
-            <IconTile
-              icon={tile.icon}
-              tone={tile.tone}
-              className="size-10 2xl:size-12 2xl:rounded-xl"
-            />
-            <div className="min-w-0">
-              <p
-                className="text-[1.5rem] leading-7 font-bold text-brand-navy"
-                data-testid={`activity-stat-${tile.key}`}
-              >
-                {tile.value}
-              </p>
-              <p className="text-[0.8125rem] leading-4 text-shell-muted">{tile.label}</p>
-              <div className="mt-1">{tile.foot}</div>
-            </div>
-          </div>
-        );
-        return tile.href ? (
-          <Link
-            key={tile.key}
-            href={tile.href}
-            className="rounded-xl border border-shell-line bg-white p-3.5 outline-none hover:bg-shell-canvas focus-visible:ring-3 focus-visible:ring-brand-violet/40 2xl:p-4"
-          >
-            {body}
-          </Link>
-        ) : (
-          <div key={tile.key} className="rounded-xl border border-shell-line bg-white p-3.5 2xl:p-4">
-            {body}
-          </div>
-        );
-      })}
-    </div>
+    <StatGrid count={tiles.length} testId="activity-stats">
+      {tiles.map((tile) => (
+        <StatCard
+          key={tile.key}
+          icon={tile.icon}
+          tone={tile.tone}
+          value={tile.value}
+          label={tile.label}
+          foot={tile.foot}
+          href={tile.href}
+          valueTestId={`activity-stat-${tile.key}`}
+        />
+      ))}
+    </StatGrid>
   );
 }
 
