@@ -10,7 +10,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "cn";
 import { SearchInput } from "@/components/forms/search-input";
@@ -76,6 +76,17 @@ export function SourcesPage() {
   useEffect(() => {
     setOpened(new URLSearchParams(window.location.search).get("source"));
   }, []);
+  // On a wide screen, a source in error opens beside the list on arrival:
+  // what broke and how to mend it, rather than a red word among twelve
+  // (LEKA-438). Once, unless the address named one; the address untouched.
+  const arrived = useRef(false);
+  const broken = (list.data ?? []).find((source) => sourceTone(source) === "error");
+  useEffect(() => {
+    if (arrived.current || !list.data) return;
+    arrived.current = true;
+    if (new URLSearchParams(window.location.search).has("source")) return;
+    if (broken && window.matchMedia?.("(min-width: 1280px)").matches) setOpened(broken.id);
+  }, [list.data, broken]);
   const ownerOf = useOwnerOf();
   const summaries = useSyncSummaries();
   // Records read so far, per source; undefined until a pass has read it.
@@ -145,7 +156,8 @@ export function SourcesPage() {
               selectedId={selectedId}
               ownerOf={ownerOf}
               recordsOf={recordsOf}
-              onSelect={(source) => setSelectedId(source.id === selectedId ? null : source.id)}
+              // A row opens; the panel's own button closes it.
+              onSelect={(source) => setSelectedId(source.id)}
             />
             {selected ? (
               <SourcePanel
@@ -210,7 +222,7 @@ function Stats({
     .at(-1);
 
   return (
-    <StatGrid count={5}>
+    <StatGrid count={read.length > 0 ? 5 : 4}>
       <StatCard
         icon={Plug}
         testId="sources-stat-connected"
@@ -234,14 +246,17 @@ function Stats({
         label={s.errors}
         foot={errors === 0 ? s.noErrors : undefined}
       />
-      <StatCard
-        icon={FileText}
-        testId="sources-stat-items"
-        tone="info"
-        value={read.length > 0 ? number(records) : "—"}
-        label={s.items}
-        foot={read.length > 0 ? fill(s.itemsFrom, { count: read.length }) : s.itemsPending}
-      />
+      {/* Counted from the first pass: until then, nothing to show — not a « — ». */}
+      {read.length > 0 ? (
+        <StatCard
+          icon={FileText}
+          testId="sources-stat-items"
+          tone="info"
+          value={number(records)}
+          label={s.items}
+          foot={fill(s.itemsFrom, { count: read.length })}
+        />
+      ) : null}
       <StatCard
         icon={Clock}
         testId="sources-stat-last-sync"
@@ -356,7 +371,7 @@ function SourcesTable({
   const t = useDictionary();
   const c = t.sources.columns;
   const number = useNumber();
-  const columns: KnowledgeColumn<Source>[] = [
+  const all: KnowledgeColumn<Source>[] = [
     {
       id: "name",
       header: c.name,
@@ -417,6 +432,13 @@ function SourcesTable({
     },
     { id: "owner", header: c.owner, cell: ownerOf },
   ];
+  // A column « — » on every line says nothing: it is left out until one
+  // source has something there (LEKA-438).
+  const columns = all.filter(
+    (column) =>
+      (column.id !== "items" || sources.some((source) => recordsOf(source) !== undefined)) &&
+      (column.id !== "owner" || sources.some((source) => ownerOf(source) !== "—")),
+  );
 
   return (
     <KnowledgeTable
