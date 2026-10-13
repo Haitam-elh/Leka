@@ -3293,13 +3293,11 @@ const fr = {
         runbook: "Documentation",
         sources: "Sources",
         unknown: "Non renseigné",
+        notYet: "Pas encore connu : {fields}.",
       },
       lifecycles: { active: "Active", quiet: "Calme", dormant: "Dormante" },
       analysis: {
         title: "Analyse de LEKA",
-        body:
-          "LEKA expliquera ici ce qui se passe sur cet élément et ce qu'il recommande, avec son moteur d'analyse. En attendant, posez-lui la question.",
-        action: "Lancer une intention",
         incident:
           "Ce que le modèle de l'entreprise sait de cet incident : ce qui l'a causé, ce qu'il touche et jusqu'où — chaque affirmation avec ses preuves.",
         full: "Voir l'analyse complète",
@@ -9061,13 +9059,11 @@ const en: Dictionary = {
         runbook: "Documentation",
         sources: "Sources",
         unknown: "Not given",
+        notYet: "Not known yet: {fields}.",
       },
       lifecycles: { active: "Active", quiet: "Quiet", dormant: "Dormant" },
       analysis: {
         title: "LEKA's analysis",
-        body:
-          "LEKA will explain here what is happening to this and what it recommends, with its analysis engine. Meanwhile, ask it.",
-        action: "Start an intention",
         incident:
           "What the company model knows of this incident: what caused it, what it affects and how far — each statement with its evidence.",
         full: "See the full analysis",
