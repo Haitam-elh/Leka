@@ -27,7 +27,12 @@ from leka.capabilities.skills import agent_skill_tools
 from leka.capabilities.tools import NAMES
 from leka.knowledge import EntityType
 
-VERSIONS = {"architecture-analysis": "1.2.0", "code-review": "1.2.0", "security-review": "1.2.0"}
+VERSIONS = {
+    "architecture-analysis": "1.2.0",
+    "code-review": "1.2.0",
+    "documentation-assistant": "1.2.0",
+    "security-review": "1.2.0",
+}
 
 LIBRARY = {
     "architecture-analysis",
@@ -322,3 +327,20 @@ def test_the_architecture_analysis_reads_the_real_links() -> None:
         assert step in said, step
     assert "Une piste donne son compromis" in said
     assert "affaan-m/ECC" in said
+
+
+def test_the_documentation_assistant_maps_what_a_reader_finds() -> None:
+    # LEKA-447: gstack's document-generate and document-release, ECC's ADRs
+    # and living docs, rewritten for what LEKA sees — a coverage map by the
+    # reader's need, the document against the model, one source per fact.
+    said = {d.key: d for d in catalogue()}["documentation-assistant"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "La carte de couverture",
+        "Le document contre le modèle",
+        "Un fait, une source",
+        "Les décisions",
+        "Le brouillon, un lecteur à la fois",
+    ):
+        assert step in said, step
+    assert "garrytan/gstack" in said and "affaan-m/ECC" in said
