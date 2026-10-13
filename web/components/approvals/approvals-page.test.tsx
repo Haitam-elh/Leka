@@ -390,7 +390,7 @@ describe("À valider", () => {
     await waitFor(() => expect(table).not.toHaveTextContent("postgres-prod"));
     expect(table).toHaveTextContent("acme/user-service");
 
-    await user.click(screen.getByRole("button", { name: "Refusé" }));
+    await user.click(screen.getByRole("button", { name: /Refusés/ }));
     await waitFor(() => expect(api.candidates).toHaveBeenCalledWith("rejected"));
     expect(await screen.findByText("Aucune proposition dans cet état.")).toBeVisible();
   });
@@ -423,8 +423,18 @@ describe("À valider", () => {
     expect(window.location.pathname).toBe(`/approvals/${SLA.id}`);
     expect(window.location.search).toBe("?kind=conflict");
 
-    await user.click(within(await screen.findByRole("table")).getByText(/SLA de payment-api/));
+    await user.click(within(screen.getByTestId("conflict-panel")).getByRole("button", { name: "Fermer" }));
     expect(window.location.pathname).toBe("/approvals");
+  });
+
+  it("opens the first thing waiting on a wide screen, the address left the list's", async () => {
+    // jsdom has no matchMedia: a wide screen, said.
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true });
+    window.history.replaceState(null, "", "/approvals");
+    mount();
+    expect(await screen.findByTestId("candidate-panel")).toBeVisible();
+    expect(window.location.pathname).toBe("/approvals");
+    delete (window as Partial<Window>).matchMedia;
   });
 
   it("accepts, and a replacement of a source's word only once confirmed", async () => {
@@ -575,7 +585,7 @@ describe("À valider: the conflicts between sources", () => {
     disputes.one.mockResolvedValue(settled);
     mount();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Validé" }));
+    await user.click(await screen.findByRole("button", { name: /Validés/ }));
     await user.click(within(await screen.findByRole("table")).getByText(/SLA de payment-api/));
     const panel = await screen.findByTestId("conflict-panel");
 
