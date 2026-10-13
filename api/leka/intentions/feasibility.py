@@ -36,17 +36,18 @@ import statistics
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.billing.catalogue import Catalogue
 from leka.billing.catalogue import catalogue as billing_catalogue
-from leka.capabilities import AgentRun, CatalogueService, ModelCall, find
+from leka.capabilities import AgentRun, CatalogueService, ModelCall, find, leka_cost
 from leka.capabilities.definition import Availability, Definition, Kind, Lifecycle
 from leka.capabilities.router import Routing, route
-from leka.governance import credits_of
+from leka.core.config import settings
+from leka.governance import allowance, credits_of, next_month
 from leka.intentions.models import Intention
 from leka.intentions.routing import query_of
 from leka.intentions.schemas import CreditsLeftRead, IntentionBrief, Understanding
@@ -299,6 +300,37 @@ def _bought(add_ons: Sequence[str], sold: Catalogue) -> list[Step]:
     ]
 
 
+async def credits_left(
+    session: AsyncSession, workspace_id: uuid.UUID, *, now: datetime
+) -> CreditsLeftRead:
+    """This month's AI credits, read as metering reads them (LEKA-430,
+    `metering.credits.credits_now`) from what both stand on — the plan's
+    allowance (governance) and what LEKA's models cost (capabilities): the
+    intentions sit below metering, never on it. The two agree, tested."""
+    given = await allowance(session, workspace_id, now)
+    start = datetime.combine(given.period, time.min, tzinfo=UTC)
+    used = round(credits_of(await leka_cost(session, workspace_id, since=start)), 2)
+    total = given.credits
+    percent = round(used / total * 100, 1) if total else (100.0 if used else 0.0)
+    thresholds = sorted({int(t) for t in settings.credit_warnings if 0 < int(t) <= 100})
+    state = (
+        "exhausted"
+        if used >= total
+        else "warning"
+        if thresholds and percent >= thresholds[0]
+        else "ok"
+    )
+    return CreditsLeftRead(
+        plan=given.plan.name,
+        allowance=total,
+        used=used,
+        remaining=round(max(total - used, 0.0), 2),
+        state=state,
+        enforced=settings.credits_enforced,
+        period_end=datetime.combine(next_month(given.period), time.min, tzinfo=UTC),
+    )
+
+
 async def run_costs(
     session: AsyncSession, keys: Sequence[str], *, now: datetime
 ) -> dict[str, float]:
@@ -354,12 +386,7 @@ async def feasibility_of(
     agents = [key for key, (d, _) in entries.items() if d.kind is Kind.AGENT]
     costs = await run_costs(session, agents, now=now)
     needed = needed_of(routing, entries, sold, costs)
-    # Metering reads intentions: read here, not at import.
-    from leka.metering.credits import credits_now
-
-    month = CreditsLeftRead.model_validate(
-        (await credits_now(session, workspace_id, now=now)).model_dump()
-    )
+    month = await credits_left(session, workspace_id, now=now)
     spends = [n.credits for n in needed if n.selected and n.credits is not None]
     estimate = round(sum(spends), 2) if spends else None
     expected = next((s.value for s in brief.slots if s.slot == "expected"), "answer") or "answer"

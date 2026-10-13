@@ -67,6 +67,7 @@ from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.intelligence import IntelligenceRepository
 from leka.intentions import (
     Actor,
+    FeasibilityRead,
     IllegalTransitionError,
     Intention,
     IntentionAnalysisRead,
@@ -92,6 +93,7 @@ from leka.intentions import (
     ModelReading,
     NothingToStartError,
     NotYoursError,
+    SourceToReadRead,
     Understanding,
     Withdrawal,
     intention_read,
@@ -100,7 +102,6 @@ from leka.intentions import (
 )
 from leka.intentions.brief import brief_of, tidy
 from leka.intentions.feasibility import Feasibility, feasibility_of
-from leka.intentions.schemas import FeasibilityRead, SourceToReadRead
 from leka.knowledge import GraphRepository, GraphService
 
 router = APIRouter(prefix="/intentions", tags=["intentions"])

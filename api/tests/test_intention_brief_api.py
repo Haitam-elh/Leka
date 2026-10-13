@@ -25,8 +25,10 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from leka.metering import credits as metering_credits
-from leka.metering.schemas import CreditsRead
+from leka.db import session_factory, workspace_scope
+from leka.intentions import feasibility as feasibility_module
+from leka.intentions.schemas import CreditsLeftRead
+from leka.metering.credits import credits_now
 from tests.conftest import FakeIdentity
 from tests.test_context_engine import model
 from tests.test_intention_analysis_api import API, _ask, _get, queued  # noqa: F401
@@ -159,25 +161,18 @@ async def test_its_credits_spent_the_cheapest_plan_that_is_enough_asked_first(
     intention = await _ask(client, "Qui est responsable de Billing API ?")
     now = datetime.now(UTC)
 
-    async def spent(*args: Any, **kwargs: Any) -> CreditsRead:
-        return CreditsRead(
+    async def spent(*args: Any, **kwargs: Any) -> CreditsLeftRead:
+        return CreditsLeftRead(
             plan="free",
-            plan_since=None,
-            monthly=200,
-            packs=0,
             allowance=200,
             used=200,
             remaining=0,
-            percent=100,
-            period_start=now - timedelta(days=3),
-            period_end=now + timedelta(days=20),
             state="exhausted",
-            warn_at=[80],
             enforced=True,
-            credit_usd=0.01,
+            period_end=now + timedelta(days=20),
         )
 
-    monkeypatch.setattr(metering_credits, "credits_now", spent)
+    monkeypatch.setattr(feasibility_module, "credits_left", spent)
     feasible = await _get(client, f"/{intention['id']}/feasibility")
     assert feasible["verdict"] == "over_quota"
     [step] = feasible["path"]
@@ -186,6 +181,27 @@ async def test_its_credits_spent_the_cheapest_plan_that_is_enough_asked_first(
         "starter",
         True,
     )
+
+
+async def test_its_credits_are_read_as_metering_reads_them(
+    client: AsyncClient, model: dict[str, uuid.UUID], acme: dict[str, uuid.UUID]
+) -> None:
+    # Intentions sit below metering: they read the credits from what metering
+    # stands on, and must say the same.
+    now = datetime.now(UTC)
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            read = await feasibility_module.credits_left(session, acme["acme"], now=now)
+            metered = await credits_now(session, acme["acme"], now=now)
+    assert read.model_dump() == {
+        "plan": metered.plan,
+        "allowance": metered.allowance,
+        "used": metered.used,
+        "remaining": metered.remaining,
+        "state": metered.state,
+        "enforced": metered.enforced,
+        "period_end": metered.period_end,
+    }
 
 
 async def test_another_workspace_sees_none_of_it(

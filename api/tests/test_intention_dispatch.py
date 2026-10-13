@@ -33,7 +33,6 @@ from leka.db import session_factory, workspace_scope
 from leka.intentions import dispatch as dispatch_module
 from leka.intentions import feasibility as feasibility_module
 from leka.intentions.dispatch import Dispatched, checked
-from leka.metering import credits as metering_credits
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import _ready
 from tests.test_context_engine import model
@@ -225,7 +224,7 @@ async def test_an_agent_its_credits_would_stop_midway_is_not_started(
     async def costly(*args: Any, **kwargs: Any) -> dict[str, float]:
         return {ARCHITECT: 120.0}
 
-    monkeypatch.setattr(metering_credits, "credits_now", few)
+    monkeypatch.setattr(feasibility_module, "credits_left", few)
     monkeypatch.setattr(feasibility_module, "run_costs", costly)
     _as(identity, acme, "member")
     intention = await _ask(client, ASKED)

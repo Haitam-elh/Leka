@@ -84,12 +84,12 @@ Answer with the JSON object only."""
 async def _short(session: AsyncSession, workspace_id: uuid.UUID, key: str) -> bool:
     """Whether this month's credits are short of what this agent has cost
     here — and LEKA's models stop once they are spent."""
-    # Metering reads intentions: read here, not at import.
-    from leka.intentions.feasibility import run_costs
-    from leka.metering.credits import credits_now
+    # Looked up when used: the dispatch is imported where feasibility's
+    # own imports are not ready yet.
+    from leka.intentions.feasibility import credits_left, run_costs
 
     now = datetime.now(UTC)
-    month = await credits_now(session, workspace_id, now=now)
+    month = await credits_left(session, workspace_id, now=now)
     if not month.enforced:
         return False
     cost = (await run_costs(session, [key], now=now)).get(key)
