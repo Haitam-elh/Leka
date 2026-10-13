@@ -27,7 +27,7 @@ from leka.capabilities.skills import agent_skill_tools
 from leka.capabilities.tools import NAMES
 from leka.knowledge import EntityType
 
-VERSIONS = {"code-review": "1.2.0", "security-review": "1.2.0"}
+VERSIONS = {"architecture-analysis": "1.2.0", "code-review": "1.2.0", "security-review": "1.2.0"}
 
 LIBRARY = {
     "architecture-analysis",
@@ -303,4 +303,22 @@ def test_the_build_fixer_proposes_the_smallest_fix() -> None:
     ):
         assert step in said, step
     assert "Pas de refonte, pas" in said
+    assert "affaan-m/ECC" in said
+
+
+def test_the_architecture_analysis_reads_the_real_links() -> None:
+    # LEKA-447: ECC's architect, code-architect, code-explorer and
+    # change-impact, rewritten for the company model — from the entry points,
+    # by layer, each weak point proven by its links, the unverified said.
+    said = {d.key: d for d in catalogue()}["architecture-analysis"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "Les points d'entrée",
+        "Les couches",
+        "Les fragilités, chacune prouvée",
+        "Le rayon d'impact",
+        "Vérifié ou non vérifié",
+    ):
+        assert step in said, step
+    assert "Une piste donne son compromis" in said
     assert "affaan-m/ECC" in said
