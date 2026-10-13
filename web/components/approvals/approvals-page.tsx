@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, CircleSlash, CircleX, Clock, type LucideIcon, ShieldCheck, Sparkles } from "lucide-react";
+import { CircleCheck, CircleSlash, CircleX, Clock, ShieldCheck, Sparkles } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
@@ -22,6 +22,7 @@ import { SearchInput } from "@/components/forms/search-input";
 import { type KnowledgeColumn, KnowledgeTable } from "@/components/knowledge/knowledge-table";
 import { timeAgo } from "@/components/knowledge/time";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
+import { StatCard, StatGrid } from "@/components/shell/stat-card";
 import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { StatePanel } from "@/components/states/state-panel";
@@ -210,66 +211,32 @@ function figuresOf(
   };
 }
 
-const TONES = {
-  warning: "bg-state-warning-soft text-state-warning",
-  success: "bg-state-success-soft text-state-success",
-  danger: "bg-state-danger-soft text-state-danger",
-  muted: "bg-shell-canvas text-shell-muted",
-} as const;
 
 function Stats({ figures }: { figures: Figures }) {
   const t = useDictionary();
   const s = t.approvals.stats;
   return (
-    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="approvals-stats">
-      <Stat icon={Clock} tone="warning" value={figures.waiting} label={s.proposed} />
-      <Stat
+    <StatGrid count={4} testId="approvals-stats">
+      <StatCard icon={Clock} tone="warning" value={figures.waiting} label={s.proposed} />
+      <StatCard
         icon={CircleCheck}
         tone="success"
         value={figures.decided}
         label={s.accepted}
-        note={figures.byPolicy ? fill(s.byPolicy, { count: figures.byPolicy }) : undefined}
+        foot={figures.byPolicy ? fill(s.byPolicy, { count: figures.byPolicy }) : undefined}
       />
-      <Stat icon={CircleX} tone="danger" value={figures.refused} label={s.rejected} />
-      <Stat
+      <StatCard icon={CircleX} tone="danger" value={figures.refused} label={s.rejected} />
+      <StatCard
         icon={CircleSlash}
-        tone="muted"
+        tone="neutral"
         value={figures.withdrawn}
         label={s.withdrawn}
-        note={figures.withdrawn ? s.withdrawnNote : undefined}
+        foot={figures.withdrawn ? s.withdrawnNote : undefined}
       />
-    </ul>
+    </StatGrid>
   );
 }
 
-function Stat({
-  icon: Icon,
-  tone,
-  value,
-  label,
-  note,
-}: {
-  icon: LucideIcon;
-  tone: keyof typeof TONES;
-  value: number;
-  label: string;
-  note?: string;
-}) {
-  return (
-    <li className="flex items-center gap-3 rounded-xl border border-shell-line bg-white p-4">
-      <span
-        className={cn("flex size-11 shrink-0 items-center justify-center rounded-lg", TONES[tone])}
-      >
-        <Icon className="size-5" aria-hidden="true" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-xl font-semibold text-brand-navy">{value}</p>
-        <p className="text-sm text-shell-muted">{label}</p>
-        {note ? <p className="text-xs text-shell-muted">{note}</p> : null}
-      </div>
-    </li>
-  );
-}
 
 // ── Filters ─────────────────────────────────────────────────────────────────
 

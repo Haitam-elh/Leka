@@ -1,14 +1,17 @@
 "use client";
 
 import { Bot, Database, Headset, Layers, Play, ReceiptText, Sparkles, Users, Waypoints, Workflow } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 import { IconTile, TILE_TONES } from "@/components/environment/parts";
 import { SubscriptionSection } from "@/components/billing/subscription-section";
-import { PageContainer } from "@/components/shell/page-container";
+import { PageContainer, PageHeader } from "@/components/shell/page-container";
+import { StatCard, StatGrid } from "@/components/shell/stat-card";
 import { ErrorState } from "@/components/states/error-state";
 import type { Credits } from "@/lib/billing";
 import { useCredits, useWorkspaceUsage } from "@/lib/billing-queries";
 import { fill } from "@/lib/i18n/dictionaries";
+import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 
 /**
@@ -22,6 +25,7 @@ import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
  */
 export function BillingScreen() {
   const t = useDictionary();
+  const pathname = usePathname();
   const { format: locale } = useLocale();
   const w = t.billing;
   const usage = useWorkspaceUsage();
@@ -33,17 +37,14 @@ export function BillingScreen() {
 
   return (
     <PageContainer>
-      <div className="mb-5">
-        <h1 className="text-[2.125rem] leading-tight font-bold tracking-[-0.02em] text-brand-navy">{w.title}</h1>
-        <p className="mt-1 text-[1.0625rem] text-shell-accent-muted">{w.subtitle}</p>
-      </div>
+      <PageHeader title={w.title} subtitle={w.subtitle} breadcrumb={buildBreadcrumb(pathname, t)} />
       {usage.isError ? (
         <ErrorState error={usage.error} onRetry={() => void usage.refetch()} />
       ) : !data ? (
         <div className="h-96 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />
       ) : (
         <div className="flex flex-col gap-4" data-testid="billing">
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <StatGrid count={4}>
             {[
               {
                 key: "plan",
@@ -52,7 +53,6 @@ export function BillingScreen() {
                 value: credits ? w.plans[credits.plan] : "—",
                 label: w.plan,
                 foot: credits ? (credits.plan_since ? fill(w.planSince, { date: day(credits.plan_since) }) : w.planDefault) : null,
-                small: true,
               },
               { key: "members", icon: Users, tone: "violet" as const, value: number.format(data.members), label: w.members, foot: null },
               {
@@ -65,18 +65,17 @@ export function BillingScreen() {
               },
               { key: "entities", icon: Database, tone: "success" as const, value: number.format(data.entities), label: w.entities, foot: null },
             ].map((tile) => (
-              <div key={tile.key} className="flex items-start gap-3 rounded-xl border border-shell-line bg-white p-4" data-testid={`billing-${tile.key}`}>
-                <IconTile icon={tile.icon} tone={tile.tone} />
-                <div className="min-w-0">
-                  <p className="text-[0.8125rem] text-shell-muted">{tile.label}</p>
-                  <p className={tile.small ? "text-[1rem] font-semibold text-brand-navy" : "text-[1.5rem] leading-tight font-bold text-brand-navy tabular-nums"}>
-                    {tile.value}
-                  </p>
-                  {tile.foot ? <p className="text-xs text-shell-muted">{tile.foot}</p> : null}
-                </div>
-              </div>
+              <StatCard
+                key={tile.key}
+                icon={tile.icon}
+                tone={tile.tone}
+                value={tile.value}
+                label={tile.label}
+                foot={tile.foot}
+                testId={`billing-${tile.key}`}
+              />
             ))}
-          </div>
+          </StatGrid>
           {credits ? <CreditsSection credits={credits} number={number} day={day} /> : null}
           <SubscriptionSection />
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">

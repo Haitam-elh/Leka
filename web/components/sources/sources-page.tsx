@@ -4,7 +4,6 @@ import {
   CircleAlert,
   Clock,
   FileText,
-  type LucideIcon,
   Plug,
   Plus,
   RefreshCw,
@@ -21,6 +20,7 @@ import { type KnowledgeColumn, KnowledgeTable } from "@/components/knowledge/kno
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { timeAgo } from "@/components/knowledge/time";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
+import { StatCard, StatGrid } from "@/components/shell/stat-card";
 import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
 import { CustomBadge } from "@/components/sources/custom-badge";
 import { capabilityWord, SourcePanel } from "@/components/sources/source-panel";
@@ -200,75 +200,51 @@ function Stats({
     .at(-1);
 
   return (
-    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-      <Stat
+    <StatGrid count={5}>
+      <StatCard
         icon={Plug}
+        testId="sources-stat-connected"
         tone="violet"
         value={connected}
         label={s.connected}
-        note={fill(s.ofTotal, { total: sources.length })}
+        foot={fill(s.ofTotal, { total: sources.length })}
       />
-      <Stat icon={RefreshCw} tone="success" value={running} label={s.running} />
-      <Stat
+      <StatCard
+        icon={RefreshCw}
+        testId="sources-stat-running"
+        tone="success"
+        value={running}
+        label={s.running}
+      />
+      <StatCard
         icon={CircleAlert}
+        testId="sources-stat-errors"
         tone={errors > 0 ? "danger" : "success"}
         value={errors}
         label={s.errors}
-        note={errors === 0 ? s.noErrors : undefined}
+        foot={errors === 0 ? s.noErrors : undefined}
       />
-      <Stat
+      <StatCard
         icon={FileText}
+        testId="sources-stat-items"
         tone="info"
         value={read.length > 0 ? number(records) : "—"}
         label={s.items}
-        note={read.length > 0 ? fill(s.itemsFrom, { count: read.length }) : s.itemsPending}
+        foot={read.length > 0 ? fill(s.itemsFrom, { count: read.length }) : s.itemsPending}
       />
-      <Stat
+      <StatCard
         icon={Clock}
+        testId="sources-stat-last-sync"
         tone="violet"
         value={synced ? timeAgo(t, synced) : s.neverSynced}
         label={s.lastSync}
-        note={synced ? (toWatch > 0 ? fill(s.toWatch, { count: toWatch }) : s.upToDate) : undefined}
+        foot={synced ? (toWatch > 0 ? fill(s.toWatch, { count: toWatch }) : s.upToDate) : undefined}
       />
-    </ul>
+    </StatGrid>
   );
 }
 
-const TONES = {
-  success: "bg-state-success-soft text-state-success",
-  danger: "bg-state-danger-soft text-state-danger",
-  info: "bg-state-info-soft text-state-info",
-  violet: "bg-brand-violet-soft text-shell-nav-active",
-} as const;
 
-function Stat({
-  icon: Icon,
-  tone,
-  value,
-  label,
-  note,
-}: {
-  icon: LucideIcon;
-  tone: keyof typeof TONES;
-  value: string | number;
-  label: string;
-  note?: string;
-}) {
-  return (
-    <li className="flex items-center gap-3 rounded-xl border border-shell-line bg-white p-4">
-      <span
-        className={cn("flex size-11 shrink-0 items-center justify-center rounded-lg", TONES[tone])}
-      >
-        <Icon className="size-5" aria-hidden="true" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-xl font-semibold text-brand-navy">{value}</p>
-        <p className="text-sm text-shell-muted">{label}</p>
-        {note ? <p className="text-xs text-shell-muted">{note}</p> : null}
-      </div>
-    </li>
-  );
-}
 
 // ── Filters ─────────────────────────────────────────────────────────────────
 

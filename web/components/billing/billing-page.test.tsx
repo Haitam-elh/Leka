@@ -11,6 +11,10 @@ import { expect, it, vi } from "vitest";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { makeQueryClient } from "@/lib/query";
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/billing",
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("@/lib/billing", async (original) => ({
   ...(await original<typeof import("@/lib/billing")>()),
   billing: {
