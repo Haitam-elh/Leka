@@ -38,7 +38,7 @@ test.describe("an incident's analysis", () => {
     await expect(analysis.getByTestId("findings")).toContainText("sev2");
     await expect(
       analysis.getByRole("region", { name: "Confiance de l'analyse" }),
-    ).toContainText("source(s) lue(s)");
+    ).toContainText(/sources? lues?/);
     await expect(analysis.getByTestId("impact-level")).toHaveText("Moyen");
     await expect(analysis.getByTestId("impact")).toContainText("payment-api");
     // Nothing proposed that the model does not propose.

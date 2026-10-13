@@ -14,7 +14,10 @@ import {
   UncertaintyList,
 } from "@/components/intelligence/confidence";
 import { EvidenceList } from "@/components/intelligence/evidence";
-import { FindingList, ProbableCauseList } from "@/components/intelligence/findings";
+import {
+  FindingList,
+  ProbableCauseList,
+} from "@/components/intelligence/findings";
 import { ImpactPanel } from "@/components/intelligence/impact";
 import { RecommendationList } from "@/components/intelligence/recommendations";
 import { IntelligenceSection } from "@/components/intelligence/section";
@@ -72,7 +75,12 @@ export function AnalysisSummary({
           {said && !analysis.summary ? null : (
             // LEKA's own sentence: what each capability concluded — under a
             // model's answer, what that answer was written from.
-            <p className={cn("text-[0.8125rem] text-shell-muted", said ? "mt-2" : "mt-1")}>
+            <p
+              className={cn(
+                "text-[0.8125rem] text-shell-muted",
+                said ? "mt-2" : "mt-1",
+              )}
+            >
               {analysis.summary ?? w.none}
             </p>
           )}
@@ -93,9 +101,13 @@ export function AnalysisView({
   proposals = true,
   synthesis = true,
   said,
+  next,
   level = 3,
 }: {
   analysis: Analysis;
+  /** The way on from what it proposes, under its proposals — apart from
+   * what it found, as the proposals are: the one primary action. */
+  next?: React.ReactNode;
   /** What its synthesis says, when more than its sentence (AnalysisSummary). */
   said?: React.ReactNode;
   onRetry?: () => void;
@@ -112,13 +124,24 @@ export function AnalysisView({
   const evidence = evidenceOf(analysis);
   // "0 hypothèse(s)" beside a title says what its empty section already
   // says, and takes the room a side column does not have.
-  const count = (said: string, n: number) => (n > 0 ? fill(said, { count: n }) : undefined);
+  const count = (said: string, n: number) =>
+    n > 0 ? fill(said, { count: n }) : undefined;
   return (
-    <div className="space-y-4" data-testid="analysis" data-status={analysis.status}>
-      <AnalysisState status={analysis.status} missing={analysis.missing} onRetry={onRetry} />
+    <div
+      className="space-y-4"
+      data-testid="analysis"
+      data-status={analysis.status}
+    >
+      <AnalysisState
+        status={analysis.status}
+        missing={analysis.missing}
+        onRetry={onRetry}
+      />
       {analysis.status === "failed" || analysis.status === "pending" ? null : (
         <>
-          {synthesis ? <AnalysisSummary analysis={analysis} level={level} said={said} /> : null}
+          {synthesis ? (
+            <AnalysisSummary analysis={analysis} level={level} said={said} />
+          ) : null}
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] xl:items-start">
             <div className="min-w-0 space-y-4">
               <IntelligenceSection
@@ -154,14 +177,21 @@ export function AnalysisView({
                   level={level}
                 />
               )}
-              <IntelligenceSection kind="impact" title={w.impact.global} level={level}>
+              <IntelligenceSection
+                kind="impact"
+                title={w.impact.global}
+                level={level}
+              >
                 <ImpactPanel impact={analysis.impact} />
               </IntelligenceSection>
               {proposals ? (
                 <IntelligenceSection
                   kind="proposal"
                   title={w.recommendations.title}
-                  count={count(w.recommendations.count, analysis.recommendations.length)}
+                  count={count(
+                    w.recommendations.count,
+                    analysis.recommendations.length,
+                  )}
                   level={level}
                 >
                   <RecommendationList
@@ -169,6 +199,7 @@ export function AnalysisView({
                     compact
                     level={level === 2 ? 3 : 4}
                   />
+                  {next ? <div className="mt-3">{next}</div> : null}
                 </IntelligenceSection>
               ) : null}
               <UncertaintyList items={analysis.uncertainties} />

@@ -287,7 +287,7 @@ describe("around one thing", () => {
       "href",
       `/environment/teams/${PAYMENTS}`,
     );
-    expect(result.getByText("Et 1 autre(s) chemin(s) aussi court(s).")).toBeInTheDocument();
+    expect(result.getByText("Et 1 autre chemin aussi court.")).toBeInTheDocument();
   });
 
   it("says when no way joins them within four steps", async () => {

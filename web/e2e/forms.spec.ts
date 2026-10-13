@@ -34,6 +34,8 @@ test.describe("the intention journey", () => {
 
     // Step 2: the context it asks for, as LEKA read it (LEKA-373).
     await expect(page.getByTestId("intention-step-2")).toBeVisible();
+    // Folded under the context's detail (LEKA-438): opened, it says it all.
+    await page.getByText("Détail du contexte").click();
     const scope = page.getByTestId("intent-scope");
     await expect(scope).toContainText("Diagnostic");
     await expect(scope).toContainText("payment-api« payment api »");

@@ -81,7 +81,7 @@ describe("a proposed code change", () => {
     const user = userEvent.setup();
     show();
     const card = await screen.findByTestId("code-change");
-    expect(card).toHaveTextContent("acme/payments · branche main · 1 fichier(s) · +1 −1");
+    expect(card).toHaveTextContent("acme/payments · branche main · 1 fichier · +1 −1");
     // Its indentation kept, as code.
     expect(within(card).getByTestId("code-change-diff").querySelector('[data-kind="add"]')?.textContent).toBe(
       "+    return account.total - account.pending",

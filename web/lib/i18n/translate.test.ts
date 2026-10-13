@@ -7,7 +7,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { DICTIONARIES, fill, PARTIAL } from "@/lib/i18n/dictionaries";
+import { DICTIONARIES, fill, PARTIAL, setPluralLocale } from "@/lib/i18n/dictionaries";
 import { plural } from "@/lib/i18n/format";
 import { pseudoDictionary } from "@/lib/i18n/pseudo";
 import { forgetWords, wordsFor } from "@/lib/i18n/translate";
@@ -136,5 +136,38 @@ describe("the QA pseudo-languages", () => {
   it("ar-XB: right to left, the words still English", () => {
     const xb = pseudoDictionary("ar-XB", en);
     expect(xb.nav.settings).toBe("‏‮Settings‬‏");
+  });
+});
+
+describe("plurals in a template", () => {
+  afterEach(() => setPluralLocale("fr"));
+
+  it("French: 0 and 1 singular, a formatted count read by its digits", () => {
+    setPluralLocale("fr");
+    const said = "{count} {count|source|sources} {count|demande|demandent} votre attention.";
+    expect(fill(said, { count: 0 })).toBe("0 source demande votre attention.");
+    expect(fill(said, { count: 1 })).toBe("1 source demande votre attention.");
+    expect(fill(said, { count: 3 })).toBe("3 sources demandent votre attention.");
+    expect(fill(said, { count: "1 240" })).toBe("1 240 sources demandent votre attention.");
+  });
+
+  it("English: only 1 is singular; a missing count is left as written", () => {
+    setPluralLocale("en");
+    expect(fill("{count} {count|source|sources}", { count: 0 })).toBe("0 sources");
+    expect(fill("{count} {count|source|sources}", { count: 1 })).toBe("1 source");
+    expect(fill("{other|a|b}", {})).toBe("{other|a|b}");
+  });
+
+  it("no dictionary still says (s)", () => {
+    for (const [language, words] of Object.entries(DICTIONARIES)) {
+      const left: string[] = [];
+      const walk = (node: unknown) => {
+        if (typeof node === "string") {
+          if (/\{\w+\}/.test(node) && /\w\((s|x|es|ies)\)/.test(node)) left.push(node);
+        } else if (node && typeof node === "object") Object.values(node).forEach(walk);
+      };
+      walk(words);
+      expect(left, language).toEqual([]);
+    }
   });
 });

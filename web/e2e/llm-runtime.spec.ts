@@ -48,7 +48,7 @@ test.describe("LLM runtime", () => {
     await page.goto(`/intentions/${id}/results`);
     const answer = page.getByTestId("analysis-answer");
     await expect(answer).toContainText("D'après l'analyse");
-    await expect(answer.getByTestId("answer-point").first()).toContainText("élément(s) cité(s)");
+    await expect(answer.getByTestId("answer-point").first()).toContainText(/éléments? cités?/);
     await expect(answer).toContainText("Rédigée par Gemini 3.8 Flash");
 
     // The capability, and the model its needs chose.

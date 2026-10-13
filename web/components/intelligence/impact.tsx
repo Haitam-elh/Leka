@@ -5,7 +5,11 @@ import Link from "next/link";
 
 import { cn } from "cn";
 
-import { IconTile, type TileTone, typeIcon } from "@/components/environment/parts";
+import {
+  IconTile,
+  type TileTone,
+  typeIcon,
+} from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -34,10 +38,21 @@ const LEVEL_TEXT: Record<RiskLevel, string> = {
 };
 
 /** A risk in a pill, where there is no room for the panel. */
-export function RiskBadge({ level, basis }: { level: RiskLevel; basis?: string | null }) {
+export function RiskBadge({
+  level,
+  basis,
+}: {
+  level: RiskLevel;
+  basis?: string | null;
+}) {
   const t = useDictionary();
   return (
-    <Pill tone={RISK_TONES[level]} data-level={level} data-testid="risk" title={basis ?? undefined}>
+    <Pill
+      tone={RISK_TONES[level]}
+      data-level={level}
+      data-testid="risk"
+      title={basis ?? undefined}
+    >
       <ShieldAlert className="size-3.5" aria-hidden="true" />
       {t.intelligence.risk[level]}
     </Pill>
@@ -51,27 +66,40 @@ export function ImpactPanel({ impact }: { impact: Impact | null }) {
     return <p className="text-[0.8125rem] text-shell-muted">{w.none}</p>;
   }
   const areas = impact.areas.filter((area) => area.items.length > 0);
-  const concerned = new Set(areas.flatMap((area) => area.items.map((item) => item.id))).size;
+  const concerned = new Set(
+    areas.flatMap((area) => area.items.map((item) => item.id)),
+  ).size;
   return (
     <div className="space-y-4 text-[0.8125rem]" data-testid="impact">
       <div className="flex items-start gap-3">
-        <IconTile icon={Activity} tone={RISK_TONES[impact.risk]} className="size-11" />
+        <IconTile
+          icon={Activity}
+          tone={RISK_TONES[impact.risk]}
+          className="size-11"
+        />
         <div className="min-w-0 flex-1">
           <p
-            className={cn("text-2xl leading-tight font-semibold", LEVEL_TEXT[impact.risk])}
+            className={cn(
+              "text-2xl leading-tight font-semibold",
+              LEVEL_TEXT[impact.risk],
+            )}
             data-level={impact.risk}
             data-testid="impact-level"
           >
             {w.levels[impact.risk]}
           </p>
           <p className="text-xs text-shell-muted">
-            {concerned > 0 ? `${fill(w.concerned, { count: concerned })} · ` : null}
+            {concerned > 0
+              ? `${fill(w.concerned, { count: concerned })} · `
+              : null}
             {impact.riskBasis}
           </p>
         </div>
       </div>
       {areas.length === 0 ? (
-        <p className="text-shell-muted">{w.none}</p>
+        // A level is said above: "no known impact" under it read as a
+        // contradiction (LEKA-438).
+        <p className="text-shell-muted">{w.nothingReached}</p>
       ) : (
         areas.map((area) => (
           <div key={area.id}>
@@ -81,7 +109,10 @@ export function ImpactPanel({ impact }: { impact: Impact | null }) {
                 {fill(w.count, { count: area.items.length })}
               </span>
             </p>
-            <ul className="divide-y divide-shell-line/60" aria-label={area.label}>
+            <ul
+              className="divide-y divide-shell-line/60"
+              aria-label={area.label}
+            >
               {area.items.map((item) => {
                 const body = (
                   <>
@@ -94,7 +125,9 @@ export function ImpactPanel({ impact }: { impact: Impact | null }) {
                       {item.label}
                     </span>
                     {item.detail ? (
-                      <span className="shrink-0 text-xs text-shell-muted">{item.detail}</span>
+                      <span className="shrink-0 text-xs text-shell-muted">
+                        {item.detail}
+                      </span>
                     ) : null}
                   </>
                 );
@@ -106,10 +139,15 @@ export function ImpactPanel({ impact }: { impact: Impact | null }) {
                         className="flex items-center gap-3 rounded-lg px-1 py-1.5 outline-none hover:bg-shell-canvas focus-visible:ring-2 focus-visible:ring-brand-violet/40"
                       >
                         {body}
-                        <ChevronRight className="rtl:-scale-x-100 size-4 shrink-0 text-shell-muted" aria-hidden="true" />
+                        <ChevronRight
+                          className="rtl:-scale-x-100 size-4 shrink-0 text-shell-muted"
+                          aria-hidden="true"
+                        />
                       </Link>
                     ) : (
-                      <span className="flex items-center gap-3 px-1 py-1.5">{body}</span>
+                      <span className="flex items-center gap-3 px-1 py-1.5">
+                        {body}
+                      </span>
                     )}
                   </li>
                 );

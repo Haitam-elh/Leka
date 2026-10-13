@@ -148,7 +148,7 @@ describe("choosing the tools", () => {
     const github = screen.getByRole("button", { name: /GitHub/ });
     await userEvent.click(github);
     expect(github).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("1 outil(s) choisi(s)")).toBeVisible();
+    expect(screen.getByText("1 outil choisi")).toBeVisible();
     expect(connect).toBeEnabled();
 
     await userEvent.click(github);
@@ -187,7 +187,7 @@ describe("connecting them", () => {
 
     // Stopped there: each row says where its tool stands.
     await userEvent.click(within(wizard).getByRole("button", { name: "Fermer" }));
-    expect(await screen.findByText("1 sur 2 connecté(s)")).toBeVisible();
+    expect(await screen.findByText("1 sur 2 connectés")).toBeVisible();
     const rows = screen.getAllByRole("listitem");
     expect(within(rows[0]).getByRole("link", { name: "Voir la source" })).toHaveAttribute(
       "href",

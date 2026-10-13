@@ -28,7 +28,7 @@ test.describe("À valider", () => {
     const waiting = page.getByTestId("approvals-waiting").getByRole("listitem");
     await expect(waiting).toHaveCount(3);
     await expect(waiting.filter({ hasText: "SLA de payment-api : 99.95 ou 99.9" })).toHaveCount(1);
-    await expect(page.getByText("4 élément(s) en attente")).toBeVisible();
+    await expect(page.getByText("4 éléments en attente", { exact: true })).toBeVisible();
     await expect(page.getByTestId("nav-approvals")).toContainText("4");
 
     await waiting.filter({ hasText: "SLA de payment-api" }).getByRole("link").click();

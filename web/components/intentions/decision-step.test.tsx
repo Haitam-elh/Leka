@@ -44,7 +44,7 @@ describe("the decision step", () => {
       notice.compareDocumentPosition(proposals) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(notice).toHaveTextContent("Cette étape est un exemple");
-    expect(proposals).toHaveTextContent("3 recommandation(s)");
+    expect(proposals).toHaveTextContent("3 recommandations");
     expect(proposals).toHaveTextContent("Sélectionnez les actions");
 
     const cards = within(proposals).getAllByTestId("recommendation");

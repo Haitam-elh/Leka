@@ -112,7 +112,7 @@ describe("the send button", () => {
     await user.type(box(), "lent ?");
 
     const why = document.getElementById(send().getAttribute("aria-describedby") ?? "");
-    expect(why).toHaveTextContent("Encore 4 caractère(s) pour pouvoir lancer");
+    expect(why).toHaveTextContent("Encore 4 caractères pour pouvoir lancer");
 
     await user.type(box(), " vraiment");
     expect(send()).toBeEnabled();
