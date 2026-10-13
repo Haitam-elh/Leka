@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ChevronRight, Plus, Search } from "lucide-react";
+import { ArrowRight, ChevronRight, Layers, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -12,6 +12,7 @@ import { Pill } from "@/components/intelligence/pill";
 import { timeAgo } from "@/components/knowledge/time";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
 import { ErrorState } from "@/components/states/error-state";
+import { StatePanel } from "@/components/states/state-panel";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { routes } from "@/config/routes";
@@ -62,14 +63,38 @@ export function kindOf(t: Dictionary, kind: string | null): string | null {
   return kind ? ((t.intent.kinds as Record<string, string>)[kind] ?? kind) : null;
 }
 
-function Row({ intention }: { intention: Intention }) {
+/** Where the panel beside the list is drawn (xl): there, a row shows its
+ * intention in it, as mockup 07; narrower, it opens its page. */
+const WIDE = "(min-width: 1280px)";
+
+function Row({
+  intention,
+  chosen,
+  onChoose,
+}: {
+  intention: Intention;
+  chosen: boolean;
+  onChoose: (id: string) => void;
+}) {
   const t = useDictionary();
   const kind = kindOf(t, intention.kind);
   return (
-    <li data-testid="intention-row">
+    <li data-testid="intention-row" data-chosen={chosen || undefined}>
       <Link
         href={routes.intention(intention.id)}
-        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-3 outline-none hover:bg-shell-canvas focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-brand-violet/40 md:grid-cols-[minmax(0,1fr)_10rem_10rem_1rem]"
+        aria-current={chosen || undefined}
+        onClick={(event) => {
+          // A modified click is the person's: a new tab, a new window.
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+          if (window.matchMedia?.(WIDE).matches) {
+            event.preventDefault();
+            onChoose(intention.id);
+          }
+        }}
+        className={cn(
+          "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-3 outline-none hover:bg-shell-canvas focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-brand-violet/40 md:grid-cols-[minmax(0,1fr)_10rem_10rem_1rem]",
+          chosen && "bg-brand-violet-soft/50 shadow-[inset_3px_0_0_var(--brand-violet)]",
+        )}
       >
         <span className="min-w-0">
           <span className="block truncate text-[0.9375rem] font-semibold text-brand-navy">
@@ -91,7 +116,7 @@ function Row({ intention }: { intention: Intention }) {
 
 /** Mockup 07's panel: the latest intention — where it stands, what it came
  * to — and the way to its analysis. */
-function Preview({ id }: { id: string }) {
+function Preview({ id, chosen }: { id: string; chosen: boolean }) {
   const t = useDictionary();
   const { format: locale } = useLocale();
   const w = t.intentions.preview;
@@ -105,7 +130,9 @@ function Preview({ id }: { id: string }) {
       data-testid="intention-preview"
     >
       <div>
-        <p className="text-xs font-medium tracking-wide text-shell-nav uppercase">{w.latest}</p>
+        <p className="text-xs font-medium tracking-wide text-shell-nav uppercase">
+          {chosen ? w.chosen : w.latest}
+        </p>
         <h2 className="mt-1 text-[1.0625rem] font-semibold text-brand-navy" dir="auto">
           {data.title}
         </h2>
@@ -136,6 +163,9 @@ export function IntentionsList() {
   const list = useIntentions(phase, q.trim());
   const counts = useIntentionCounts();
   const rows = list.data?.pages.flatMap((page) => page.data) ?? [];
+  // The one shown beside the list: the one chosen, else the latest.
+  const [chosen, setChosen] = useState<string | null>(null);
+  const previewed = rows.find((row) => row.id === chosen) ?? rows[0];
 
   const counted = (key: IntentionPhase | null): number | null => {
     const data = counts.data;
@@ -148,10 +178,27 @@ export function IntentionsList() {
     body = <ErrorState error={list.error} onRetry={() => void list.refetch()} />;
   } else if (list.isPending) {
     body = <div className="h-64 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
+  } else if (rows.length === 0 && phase === null && !q) {
+    // Nothing asked yet: what asking does, and the way to it (LEKA-438).
+    body = (
+      <StatePanel
+        icon={Layers}
+        title={w.emptyAll}
+        description={w.emptyAllBody}
+        size="section"
+        testId="intentions-empty"
+        actions={
+          <Link href={routes.intentionNew()} className={buttonVariants()}>
+            <Plus className="size-4" aria-hidden="true" />
+            {w.new}
+          </Link>
+        }
+      />
+    );
   } else if (rows.length === 0) {
     body = (
       <p className="px-4 py-10 text-center text-[0.875rem] text-shell-muted" data-testid="intentions-empty">
-        {phase === null && !q ? w.emptyAll : w.empty}
+        {w.empty}
       </p>
     );
   } else {
@@ -168,7 +215,12 @@ export function IntentionsList() {
         </div>
         <ul aria-label={w.caption} className="divide-y divide-shell-line/70" data-testid="intentions">
           {rows.map((intention) => (
-            <Row key={intention.id} intention={intention} />
+            <Row
+              key={intention.id}
+              intention={intention}
+              chosen={intention.id === previewed?.id}
+              onChoose={setChosen}
+            />
           ))}
         </ul>
         {list.hasNextPage ? (
@@ -244,9 +296,9 @@ export function IntentionsList() {
       </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
         <section className="overflow-hidden rounded-xl border border-shell-line bg-white">{body}</section>
-        {rows[0] ? (
+        {previewed ? (
           <div className="hidden xl:block">
-            <Preview id={rows[0].id} />
+            <Preview id={previewed.id} chosen={previewed.id === chosen} />
           </div>
         ) : null}
       </div>

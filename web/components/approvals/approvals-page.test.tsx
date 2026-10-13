@@ -412,6 +412,21 @@ describe("À valider", () => {
     expect(within(panel).getByTestId("candidate-evidence")).toHaveTextContent("Thomas Berger");
   });
 
+  it("keeps the open item in the address: a proposal, a conflict, none", async () => {
+    withConflict();
+    mount();
+    const { user } = await open(/acme\/user-service est le code/);
+    expect(window.location.pathname).toMatch(/^\/approvals\/[^/]+$/);
+    expect(window.location.search).toBe("");
+
+    await user.click(within(await screen.findByRole("table")).getByText(/SLA de payment-api/));
+    expect(window.location.pathname).toBe(`/approvals/${SLA.id}`);
+    expect(window.location.search).toBe("?kind=conflict");
+
+    await user.click(within(await screen.findByRole("table")).getByText(/SLA de payment-api/));
+    expect(window.location.pathname).toBe("/approvals");
+  });
+
   it("accepts, and a replacement of a source's word only once confirmed", async () => {
     mount();
     const { user, panel } = await open(/Criticité de cart/);

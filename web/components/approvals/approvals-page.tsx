@@ -26,6 +26,7 @@ import { StatCard, StatGrid } from "@/components/shell/stat-card";
 import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { StatePanel } from "@/components/states/state-panel";
+import { routes } from "@/config/routes";
 import { useConflicts, useConflictSummary } from "@/lib/conflicts-queries";
 import type { DecisionSummary } from "@/lib/decisions";
 import { useDecisionQueue, useDecisionSummary } from "@/lib/decisions-queries";
@@ -68,9 +69,18 @@ export function ApprovalsPage({
   const [status, setStatus] = useState<CandidateStatus>("proposed");
   const [type, setType] = useState<Type | "all">("all");
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<Selected>(
+  const [selected, setOpened] = useState<Selected>(
     initialId ? { kind: initialKind, id: initialId } : null,
   );
+  // What is open is in the address — /approvals/<id>?kind=… — so it can be
+  // shared, reloaded, gone back to; without a navigation, the page stays.
+  const setSelected = (next: Selected) => {
+    setOpened(next);
+    const url = next
+      ? `${routes.approval(next.id)}${next.kind === "candidate" ? "" : `?kind=${next.kind}`}`
+      : routes.approvals();
+    window.history.replaceState(null, "", url);
+  };
   const proposals = useEnrichmentSummary();
   const disputes = useConflictSummary();
   const choices = useDecisionSummary();

@@ -10,7 +10,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { cn } from "cn";
 import { SearchInput } from "@/components/forms/search-input";
@@ -28,6 +28,7 @@ import { SourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { StatePanel } from "@/components/states/state-panel";
+import { routes } from "@/config/routes";
 import { isCustom } from "@/lib/custom-connectors";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
@@ -65,7 +66,16 @@ export function SourcesPage() {
   const list = useSources();
   const [category, setCategory] = useState<Category | "all">("all");
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setOpened] = useState<string | null>(null);
+  // The source open beside the list is in the address — /sources?source=<id>
+  // — so a link, a reload or Back lands on it open.
+  const setSelectedId = (id: string | null) => {
+    setOpened(id);
+    window.history.replaceState(null, "", id ? `${routes.sources()}?source=${id}` : routes.sources());
+  };
+  useEffect(() => {
+    setOpened(new URLSearchParams(window.location.search).get("source"));
+  }, []);
   const ownerOf = useOwnerOf();
   const summaries = useSyncSummaries();
   // Records read so far, per source; undefined until a pass has read it.

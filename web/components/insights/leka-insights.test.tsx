@@ -438,7 +438,7 @@ describe("Insights LEKA", () => {
       },
       {
         title: "redis-sessions a disparu de vos sources",
-        detail: "auth-service en dépendai(en)t encore · Confirmer la suppression",
+        detail: "auth-service en dépendait encore · Confirmer la suppression",
       },
       {
         title: "Votre architecture a bougé ce mois-ci",

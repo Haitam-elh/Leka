@@ -163,7 +163,7 @@ describe("plurals in a template", () => {
       const left: string[] = [];
       const walk = (node: unknown) => {
         if (typeof node === "string") {
-          if (/\{\w+\}/.test(node) && /\w\((s|x|es|ies)\)/.test(node)) left.push(node);
+          if (/\{\w+\}/.test(node) && /\w\((s|x|es|ies|en|e)\)/.test(node)) left.push(node);
         } else if (node && typeof node === "object") Object.values(node).forEach(walk);
       };
       walk(words);
