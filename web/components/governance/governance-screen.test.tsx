@@ -6,7 +6,8 @@
  * again only once confirmed; an entity restricted by searching it and saying
  * why — not without a reason; the trail of decisions, refusals first, each
  * with who, as which role, what, by which reason in words; a member sees the
- * matrix only.
+ * matrix only. The overview (LEKA-438) says real figures, each opening the
+ * tab it counts; the tab is in the URL.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -26,10 +27,18 @@ const api = vi.hoisted(() => ({
   lift: vi.fn(),
   decisions: vi.fn(),
   search: vi.fn(),
+  roles: vi.fn(),
+  policies: vi.fn(),
+  history: vi.fn(),
 }));
+const route = vi.hoisted(() => ({ search: "" }));
 const people = vi.hoisted(() => ({ members: vi.fn() }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/governance" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/governance",
+  useSearchParams: () => new URLSearchParams(route.search),
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+}));
 vi.mock("@/lib/access", async (original) => ({
   ...(await original<typeof import("@/lib/access")>()),
   access: api,
@@ -94,6 +103,10 @@ function show() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  route.search = "tab=access";
+  api.roles.mockResolvedValue([]);
+  api.policies.mockResolvedValue([]);
+  api.history.mockResolvedValue([]);
   api.model.mockResolvedValue(model("admin", ADMIN_PERMISSIONS));
   api.restrictions.mockResolvedValue([
     {
@@ -152,7 +165,28 @@ describe("governance", () => {
     );
   });
 
+  it("sums it up in real figures, each opening what it counts", async () => {
+    route.search = "";
+    api.decisions.mockResolvedValue([
+      { ...REFUSED, at: new Date().toISOString() },
+      { ...REFUSED, id: "d0", at: "2026-01-05T09:00:00Z" },
+    ]);
+    show();
+    const overview = await screen.findByTestId("governance-overview");
+    await waitFor(() => expect(within(overview).getByTestId("governance-stat-restricted")).toHaveTextContent("1"));
+    expect(within(overview).getByTestId("governance-stat-restricted")).toHaveAttribute("href", "/governance?tab=access");
+    expect(within(overview).getByTestId("governance-stat-policies")).toHaveTextContent("0");
+    expect(within(overview).getByTestId("governance-stat-refusals")).toHaveTextContent("Refus d'accès, 7 derniers jours");
+    // Only this week's refusal counts.
+    await waitFor(() =>
+      expect(within(overview).getByTestId("governance-stat-refusals")).toHaveTextContent(/^1Refus/),
+    );
+    expect(overview).not.toHaveTextContent("/100");
+    expect(screen.getByTestId("governance-tab-overview")).toHaveAttribute("aria-selected", "true");
+  });
+
   it("shows the refusals first, each in words", async () => {
+    route.search = "";
     show();
     const trail = await screen.findByTestId("decisions");
     expect(api.decisions).toHaveBeenCalledWith("deny");
