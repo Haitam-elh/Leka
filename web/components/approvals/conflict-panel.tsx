@@ -14,6 +14,7 @@ import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
+import { closeOnEscape } from "@/components/interactions/escape";
 import type { ConflictDetail } from "@/lib/conflicts";
 import { useArbitration, useConflict } from "@/lib/conflicts-queries";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -56,6 +57,7 @@ export function ConflictPanel({ id, onClose }: { id: string; onClose: () => void
     <aside
       aria-label={fill(c.panel.label, { title })}
       data-testid="conflict-panel"
+      onKeyDown={closeOnEscape(onClose)}
       className="flex flex-col gap-4 self-start rounded-xl border border-shell-line bg-white p-4 xl:sticky xl:top-4"
     >
       <header className="flex items-start gap-3">

@@ -15,6 +15,7 @@ import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
+import { closeOnEscape } from "@/components/interactions/escape";
 import { routes } from "@/config/routes";
 import type { CandidateDetail } from "@/lib/enrichment";
 import { useCandidate, useDecisions } from "@/lib/enrichment-queries";
@@ -64,6 +65,7 @@ export function CandidatePanel({ id, onClose }: { id: string; onClose: () => voi
     <aside
       aria-label={fill(p.label, { title })}
       data-testid="candidate-panel"
+      onKeyDown={closeOnEscape(onClose)}
       className="flex flex-col gap-4 self-start rounded-xl border border-shell-line bg-white p-4 xl:sticky xl:top-4"
     >
       <header className="flex items-start gap-3">

@@ -58,6 +58,7 @@ import {
 } from "@/components/environment/parts";
 import { TONES } from "@/components/knowledge/status";
 import { hasSourceLogo, sourceTitle } from "@/components/sources/source-logo";
+import { closeOnEscape } from "@/components/interactions/escape";
 import { routes } from "@/config/routes";
 import { useEntitySheet } from "@/lib/environment-queries";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -1414,6 +1415,7 @@ export function DetailPanel({
       aria-label={p.label}
       className="flex min-w-0 flex-col gap-2.5 self-start rounded-xl border border-shell-line bg-white p-3.5 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto"
       data-testid="architecture-panel"
+      onKeyDown={closeOnEscape(onClose)}
     >
       <div className="flex items-center gap-2.5">
         <IconTile
