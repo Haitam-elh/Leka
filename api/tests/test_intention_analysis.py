@@ -547,6 +547,31 @@ def test_what_happened_everywhere_says_where_it_looked() -> None:
     }
 
 
+def test_what_it_finds_elsewhere_is_never_the_cause_of_what_leka_does_not_know() -> None:
+    """« Pourquoi billing-gateway est en panne ? », billing-gateway unknown:
+    payment-api's incident is said, never its cause (LEKA-440)."""
+    stranger = asked("explain_cause", "diagnose", subjects=(), unknown=("billing-gateway",))
+    broke = incidents(material(asked=stranger, incidents=(_incident(),)))
+    assert [f.code for f in broke.findings] == ["incident.seen"]
+    assert broke.causes == ()
+    assert [n.code for n in broke.uncertainties] == ["analysis.not_its_cause"]
+    assert broke.summary is not None and "likeliest cause" not in broke.summary.text
+    changed = changes(material(asked=stranger, changes=(_footprint(),)))
+    assert [f.code for f in changed.findings] == ["change.made"]
+    assert changed.causes == ()
+    # Asked who owns it: said unknown by its name.
+    whose = asked("find_owner", "ownership", subjects=(), unknown=("billing-gateway",))
+    [missing] = standing(material(asked=whose)).missing
+    assert (missing.code, missing.params) == (
+        "analysis.unknown_subject",
+        {"names": ["billing-gateway"]},
+    )
+    # Named alongside something known: what it knows is answered.
+    both = asked("explain_cause", "diagnose", unknown=("billing-gateway",))
+    known = incidents(material(asked=both, incidents=(_incident(),)))
+    assert "analysis.not_its_cause" not in {n.code for n in known.uncertainties}
+
+
 def test_what_leka_learned_in_the_period() -> None:
     cache = brief("redis-cache", "infra_resource")
     learned = (

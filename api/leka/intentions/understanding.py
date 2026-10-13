@@ -51,7 +51,10 @@ from leka.knowledge import fold
 # 3: an action negated, conditional or doubtful is withheld, not asked; each
 #    action on the things said with it (LEKA-434).
 # 4: what a question could mean, by id, to be chosen (LEKA-439).
-UNDERSTANDING_VERSION = 4
+# 5: what is planned, explained or already done is not asked; updating
+#    documentation is documenting; a question about something known, with
+#    no goal said, asks what is known of it (LEKA-440).
+UNDERSTANDING_VERSION = 5
 
 # ── actions ─────────────────────────────────────────────────────────────
 
@@ -103,6 +106,11 @@ VERBS: tuple[Verb, ...] = (
 DOING = frozenset({"document", "notify", "ticket"})
 # Said in more than a word.
 UPDATE = re.compile(r"\b(?:mettre|mets|mettez|met) (?:a|à) jour\b|\bupdate\b")
+# What updating them changes is a document, not a system (LEKA-440).
+DOCUMENTS = _words(
+    "documentation documentations doc docs runbook runbooks page pages wiki procedure "
+    "procedures readme fiche fiches notice confluence"
+)
 ROLL_BACK = re.compile(r"\broll(?:ed)? back\b")
 TICKET = re.compile(
     r"\b(?:creer|cree|creez|ouvrir|ouvre|ouvrez|create|open)\b(?: \w+){0,2} (?:ticket|issue)\b"
@@ -126,6 +134,35 @@ CONTRACTED = _words("don doesn didn won shouldn mustn can couldn")
 NEGATIONS = NOT_BEFORE | NOT_AFTER | NE
 CONDITIONS = _words("si if unless lorsque lorsqu")
 AFFIRMED, NEGATED, CONDITIONAL, DOUBTFUL = "affirmed", "negated", "conditional", "ambiguous"
+# Already done — « a été redémarrée », « has been restarted »: what happened,
+# asked about, never asked for (LEKA-440). Not an action, nor withheld.
+DONE = "done"
+AUXILIARIES = _words("ai as avons avez ont ete etait etaient sera had has have was were been")
+# A participle is never an order; the imperative « redémarre » and the
+# participle « redémarré » fold the same, so those need their auxiliary.
+PARTICIPLES: dict[str, str] = {
+    **dict.fromkeys(
+        _words("redemarree redemarrees redemarres relancee relancees restarted rebooted"),
+        "restart",
+    ),
+    **dict.fromkeys(_words("reverted rolled"), "rollback"),
+    **dict.fromkeys(
+        _words("deployee deployees deployes redeployee redeployees deployed redeployed"), "deploy"
+    ),
+    **dict.fromkeys(_words("arretee arretees arretes stoppee stoppees stopped"), "stop"),
+    **dict.fromkeys(_words("corrigee corrigees corriges reparee reparees fixed repaired"), "fix"),
+    **dict.fromkeys(_words("migree migrees migres migrated"), "migrate"),
+    **dict.fromkeys(_words("scaled"), "scale"),
+    **dict.fromkeys(_words("upgraded"), "update"),
+}
+# What a plan, a study or a cost is about — « un plan pour migrer », « the
+# risk of restarting » — or a way to do it — « comment redémarrer », « how to
+# restart »: planned or explained, not asked (LEKA-440).
+PLANS = _words(
+    """plan plans planning simuler simule simulez simulate simulation scenario scenarios
+    strategie strategy roadmap etude etudier study evaluer evalue evaluez estimer estime
+    estimez assess estimate risque risques risk cout couts cost faisabilite feasibility"""
+)
 
 # ── mode ────────────────────────────────────────────────────────────────
 
@@ -158,6 +195,16 @@ FILLER = _words(
     """le la les un une des de du a au aux et ou en sur pour par avec dans est sont
     the a an of to in on for and or is are it this that ca cela ceci"""
 )
+# What looks like a system's name — « billing-gateway », « svc_orders » —
+# though nothing LEKA knows answers to it: said unknown, never answered as
+# if it were something else (LEKA-440).
+IDENTIFIER = re.compile(r"(?<![\w-])[a-z][a-z0-9]*(?:[-_][a-z0-9]+)+(?![\w-])", re.IGNORECASE)
+COMMON = _words(
+    """front-end back-end end-to-end real-time read-only on-call follow-up up-to-date e-mail
+    week-end pre-prod non-prod sign-in log-in check-in built-in opt-in set-up"""
+)
+# « dis-moi », « peux-tu », « est-ce »: a verb and its pronoun, not a name.
+PRONOUNS = _words("la le les moi toi lui nous vous en y ce il elle on t tu je ils elles")
 # How sure a goal is, by how much said it.
 SURE, LIKELY, GUESS = 0.8, 0.6, 0.4
 MIN_WORDS = 2
@@ -214,9 +261,32 @@ def _polarity(clause: Sequence[str], at: int, earlier: Sequence[str]) -> str:
     return AFFIRMED
 
 
+def _planned(word: str, left: Sequence[str], earlier: Sequence[str]) -> bool:
+    """Whether the verb `word` names what is planned, studied or explained:
+    an infinitive a plan word governs, or a way to do something asked."""
+    if left[-1:] == ["comment"] or left[-2:] == ["how", "to"]:
+        return True
+    infinitive = word.endswith(("er", "ir")) or left[-1:] == ["to"]
+    return infinitive and bool(set(earlier[-6:]) & PLANS)
+
+
+def _done(word: str, left: Sequence[str]) -> bool:
+    """Whether `word` says what was done: a participle, or a verb after its
+    auxiliary — « a redémarré », never « à redémarrer », « j'ai besoin de
+    redémarrer », « I have to restart »."""
+    if left[-1:] == ["to"] or word.endswith(("er", "ir")):
+        return False
+    if word in PARTICIPLES or set(left[-3:]) & AUXILIARIES:
+        return True
+    # « a » before a French participle; never the English article: « do a
+    # rollback ».
+    return left[-1:] == ["a"] and word.endswith("e")
+
+
 def actions_of(text: str) -> list[Found]:
     """The actions its words speak of, in the order said, each once — asked
-    (affirmed) if any of its mentions is, else as the first said it."""
+    (affirmed) if any of its mentions is, else as the first said it. What is
+    planned or explained is not one; what was done is said done."""
     seen: dict[str, list[Found]] = {}
     position = 0
     sentence_words: dict[int, list[str]] = {}
@@ -229,15 +299,29 @@ def actions_of(text: str) -> list[Found]:
             for verb in VERBS
             if word in verb.said
         ]
+        hits += [
+            (index, next(v for v in VERBS if v.code == PARTICIPLES[word]), word)
+            for index, word in enumerate(clause)
+            if word in PARTICIPLES
+        ]
         for pattern, verb in (
             (UPDATE, _verb("update", True, "")),
             (ROLL_BACK, next(v for v in VERBS if v.code == "rollback")),
             (TICKET, _verb("ticket", False, "")),
         ):
             for match in pattern.finditer(joined):
-                hits.append((joined[: match.start()].count(" "), verb, match.group(0)))
+                said_verb = verb
+                if pattern is UPDATE and set(joined[match.end() :].split()[:3]) & DOCUMENTS:
+                    # « Mets à jour la documentation »: written, not deployed.
+                    said_verb = next(v for v in VERBS if v.code == "document")
+                hits.append((joined[: match.start()].count(" "), said_verb, match.group(0)))
         for index, verb, word in sorted(hits, key=lambda h: h[0]):
-            polarity = _polarity(clause, index, [*earlier, *clause[:index]])
+            before = [*earlier, *clause[:index]]
+            left = clause[max(0, index - 3) : index]
+            head = word.split()[0]
+            if _planned(head, left, before):
+                continue
+            polarity = DONE if _done(head, left) else _polarity(clause, index, before)
             seen.setdefault(verb.code, []).append(Found(verb, word, polarity, (position + index,)))
         earlier.extend(clause)
         position += len(clause)
@@ -307,6 +391,9 @@ def _goal(
     actions: Sequence[Found],
     folded: set[str],
     has_entities: bool,
+    *,
+    done: Sequence[Found] = (),
+    asked: bool = False,
 ) -> GoalRead:
     acting = [a for a in actions if a.verb.changes_systems or a.verb.code in DOING]
     if mode == "request" and acting:
@@ -323,10 +410,36 @@ def _goal(
         if kind == "dependency" and impact:
             code, said = "assess_impact", impact
         return GoalRead(code=code, said=said, confidence=SURE if len(said) > 1 else LIKELY)
+    if done:
+        # « A-t-elle été redémarrée ? »: what changed is what it asks.
+        return GoalRead(code="find_change", said=[a.said for a in done], confidence=LIKELY)
     looking = [a for a in actions if not a.verb.changes_systems and a.verb.code not in DOING]
     if looking:
         return GoalRead(code="investigate", said=[a.said for a in looking], confidence=GUESS)
+    if mode == "question" and asked and has_entities:
+        # « Quel est le SLA de payment-api ? », « Sur quoi travaille Thomas
+        # Berger ? »: what LEKA knows of what it names — never stopped for it.
+        return GoalRead(code="find_knowledge", said=[], confidence=GUESS)
     return GoalRead(code="unknown", said=[], confidence=0.0)
+
+
+def unknown_names(text: str, entities: Sequence[UnderstoodEntity] = ()) -> list[str]:
+    """The names its words give that nothing it is about answers to."""
+    known = {fold(e.said or e.name) for e in entities} | {fold(e.name) for e in entities}
+    found: list[str] = []
+    for match in IDENTIFIER.finditer(QUOTED.sub(" ", text)):
+        token = match.group(0)
+        parts = re.split(r"[-_]", token.casefold())
+        if (
+            token.casefold() in COMMON
+            or parts[-1] in PRONOUNS
+            or parts[0] in ("est", "peut", "c", "qu")
+            or any(part.isdigit() for part in parts)
+            or fold(token) in known
+        ):
+            continue
+        found.append(token)
+    return list(dict.fromkeys(found))
 
 
 def _entities(plan: IntentPlan | None) -> list[UnderstoodEntity]:
@@ -445,10 +558,26 @@ def _ambiguities(
                     options=[str(e) for e in known] if isinstance(known, list) else [],
                 )
             )
+    strangers = [] if entities else unknown_names(text)
+    if strangers and not any(g.kind == "unknown_subject" for g in found):
+        # « Pourquoi billing-gateway est en panne ? »: LEKA says it does not
+        # know it — never answers about something else (LEKA-440).
+        guessed = next((g for g in found if g.kind == "no_subject"), None)
+        if guessed is not None:
+            found.remove(guessed)
+        found.append(
+            AmbiguityRead(
+                kind="unknown_subject",
+                blocking=goal.code == "act",
+                said=f"LEKA knows nothing called {', '.join(strangers)}.",
+                options=list(guessed.options) if guessed is not None else [],
+                choices=list(guessed.choices) if guessed is not None else [],
+            )
+        )
     if any(a.verb.changes_systems for a in actions) and not entities:
         # One question about what it acts on, not two: what the words could
         # name comes with it (LEKA-439).
-        guessed = next((g for g in found if g.kind == "no_subject"), None)
+        guessed = next((g for g in found if g.kind in ("no_subject", "unknown_subject")), None)
         if guessed is not None:
             found.remove(guessed)
         found.append(
@@ -486,12 +615,24 @@ def understand(
     and, given what the company model says of each thing and the
     environments it knows, their scope (LEKA-386)."""
     every = actions_of(text)
-    # Only what is asked is acted on; the rest is kept, said why (LEKA-434).
+    # Only what is asked is acted on; the rest is kept, said why (LEKA-434),
+    # but what was done is what it asks about (LEKA-440).
     found = [a for a in every if a.polarity == AFFIRMED]
+    done = [a for a in every if a.polarity == DONE]
+    spoken = [a for a in every if a.polarity != DONE]
     mode, mode_said = mode_of(text, found)
     kinds = kinds_said(text)
     named = _entities(plan)
-    goal = _goal(plan, kinds, mode, found, set(fold(text).split()), bool(named))
+    goal = _goal(
+        plan,
+        kinds,
+        mode,
+        found,
+        set(fold(text).split()),
+        bool(named),
+        done=done,
+        asked=mode_said is not None,
+    )
     actions = [
         ActionRead(code=a.verb.code, said=a.said, changes_systems=a.verb.changes_systems)
         for a in found
@@ -508,7 +649,7 @@ def understand(
     # What it excludes is not what it is about.
     kept = {thing.entity_id for thing in scope.entities}
     entities = [entity for entity in named if entity.entity_id in kept]
-    on = targets_of(text, every, entities)
+    on = targets_of(text, spoken, entities)
     actions = [a.model_copy(update={"targets": on.get(a.code, [])}) for a in actions]
     withheld = [
         ActionRead(
@@ -518,7 +659,7 @@ def understand(
             polarity=a.polarity,
             targets=on.get(a.verb.code, []),
         )
-        for a in every
+        for a in spoken
         if a.polarity != AFFIRMED
     ]
     doubtful = [a for a in withheld if a.changes_systems and a.polarity != NEGATED]

@@ -12,6 +12,7 @@ tests/benchmark/grid.py              the checks, the grid, the report, the compa
 tests/test_intention_benchmark.py    asks LEKA each case on the demo company, compares with…
 tests/benchmark/baseline.json        …the reference: each check's outcome, the scores
 tests/benchmark/baseline.md          the reference, as a report a person reads
+docs/benchmarks/intentions-initial.md    the first report, before the fixes it called for
 tests/test_intention_benchmark_grid.py   the grid itself, tested
 ```
 
@@ -143,53 +144,64 @@ Each dimension has a **floor** and a **target** (`grid.FLOORS`,
 `grid.TARGETS`):
 
 - under its floor, a dimension refuses the change, whatever the reference;
-- the floor sits just under the reference's score, rounded down to 5 %: it
-  is raised when the engine gets better, never lowered to let a change in;
+- the floor sits just under the reference's score, rounded down to 5 %, and
+  95 % at most: it is raised when the engine gets better, never lowered to
+  let a change in;
 - the target, 95 % everywhere, is where it should go.
 
-| Dimension | Reference | Floor | Target |
+| Dimension | First measured | Reference | Floor |
 |---|---:|---:|---:|
-| fidelity | 91 % | 90 % | 95 % |
-| negations_constraints | 96 % | 95 % | 95 % |
-| entities_targets | 98 % | 95 % | 95 % |
-| decision | 85 % | 80 % | 95 % |
-| clarification | 60 % | 60 % | 95 % |
-| grounding | 100 % | 95 % | 95 % |
-| calibration | 71 % | 70 % | 95 % |
-| guardrails | 97 % | 95 % | 95 % |
-| next_step | 100 % | 95 % | 95 % |
+| fidelity | 91 % | 100 % | 95 % |
+| negations_constraints | 96 % | 100 % | 95 % |
+| entities_targets | 98 % | 100 % | 95 % |
+| decision | 85 % | 100 % | 95 % |
+| clarification | 60 % | 100 % | 95 % |
+| grounding | 100 % | 100 % | 95 % |
+| calibration | 71 % | 100 % | 95 % |
+| guardrails | 97 % | 100 % | 95 % |
+| next_step | 100 % | 100 % | 95 % |
 
-A floor is at most 95 %: a case may be added that fails on purpose, to say
-what is to fix, without a dimension at 100 % refusing it. And critical
+A floor is at most 95 % so that a case may be added that fails on purpose,
+to say what is to fix, without a dimension at 100 % refusing it. Critical
 failures have their own threshold, whatever the scores: **no new one**.
 
-## 5. The reference report
+## 5. The reference reports
 
-`tests/benchmark/baseline.md` is the initial one. It was measured on the
-engine of LEKA-439 (understanding v4, brief v1, company model v9) and dataset
-v1:
+**The initial report**, `docs/benchmarks/intentions-initial.md`, was
+measured on the engine of LEKA-439 (understanding v4, brief v1, company
+model v9), dataset v1, the rules alone:
 
-**42 of 58 cases** pass every check, **507 of 538 checks** pass, and there
-are **5 critical failures**. The rules alone read the words; no model
-reads them.
+- **42 of 58 cases** passed every check;
+- **507 of 538 checks** passed;
+- there were **5 critical failures**.
 
-What the engine gets wrong today, measured, to fix:
+What it found, and what was fixed for it in LEKA-440 (understanding v5):
 
-| Case | Category | What LEKA does |
-|---|---|---|
-| Prepare a migration plan (FR, EN) | **critical — wrong target** | reads « migrer » as an action on systems (`act`, `migrate`), not a plan; then blocked by the SLA conflict |
-| Update a service's documentation | **critical — wrong target** | reads « mettre à jour » as an action on systems (`update`) |
-| « Redémarre auth-service mais ne touche pas à payment-api » | **critical — wrong target** | restarts both: « ne touche pas à » is not read as excluding payment-api |
-| « Pourquoi billing-gateway est en panne ? » (FR, EN), a thing it does not know | false claim | answers with payment-api's cause and recommends rolling it back |
-| « …cette semaine, sauf sur auth-service » (FR, EN) | unnecessary clarification | asks `everything_excluded` though the rest of production is left |
-| « Est-ce que payment-api a été redémarrée récemment ? » (FR, EN) | unnecessary clarification | the verb read as an action in doubt: it waits instead of answering |
-| « Quel est le SLA de payment-api ? » | unnecessary clarification | stops on the conflict it should answer with: its sources say 99.95 and 99.9 |
-| « Sur quoi travaille Thomas Berger ? » | unnecessary clarification | a person is not read as what it is about |
-| A removed thing (redis-sessions), acted on or asked about | comprehension | asks for a target, not « it was removed six days ago » |
-| « …ce soir après 22h » | constraint omission | the window is not read |
-| « …depuis lundi ? » | comprehension | a second goal it is not asked |
+| Case | Category | What LEKA did | Now |
+|---|---|---|---|
+| Prepare a migration plan (FR, EN) | **critical — wrong target** | « migrer » read as an action on systems, not a plan; then blocked by the SLA conflict | a plan: no action, analysed |
+| Update a service's documentation | **critical — wrong target** | « mettre à jour » read as an action on systems | documenting: a document expected, no decision |
+| « Redémarre auth-service mais ne touche pas à payment-api » | **critical — wrong target** | restarted both; « ne touche pas à » read as « change nothing » | payment-api excluded, auth-service alone proposed |
+| « Pourquoi billing-gateway est en panne ? » (FR, EN) | false claim | answered with payment-api's cause, recommended rolling it back | « LEKA knows nothing called billing-gateway »: no cause, no recommendation |
+| « …cette semaine, sauf sur auth-service » (FR, EN) | unnecessary clarification | asked `everything_excluded` | everything else, analysed |
+| « Est-ce que payment-api a été redémarrée récemment ? » (FR, EN) | unnecessary clarification | waited instead of answering | what changed, answered |
+| « Quel est le SLA de payment-api ? » | unnecessary clarification | stopped: no goal | what is known of it, answered with the conflict |
+| « Sur quoi travaille Thomas Berger ? » | unnecessary clarification | stopped: no goal | what is known of him, answered |
+| A removed thing (redis-sessions), acted on or asked about | comprehension | read as something unknown | said removed: an action blocked, a question answered |
+| « …ce soir après 22h » | constraint omission | the window not read | a window, checked by execution |
+| « Qu'est-ce qui a changé… » | comprehension | « qui » read as « who »: two goals | what changed |
 
-Everything else holds:
+**The reference**, `tests/benchmark/baseline.md`, is measured on
+understanding v5 and dataset v2. Dataset v2 adds 13 cases the fixes were not
+written for: « do a rollback », « j'ai besoin de redémarrer », « comment
+redémarrer », « qui a redémarré », « sans toucher à », « ne touche à rien »,
+a known name with an unknown one…
+
+- **71 of 71 cases** pass every check;
+- **645 of 645 checks** pass;
+- there are **0 critical failures**.
+
+What held from the start, and still holds:
 - negations, conditionals and doubts are never acted on;
 - an action is never opened while a question blocks;
 - every decision waits for a person;

@@ -950,6 +950,19 @@ class ContextService:
             ask.text,
             [b for b in candidates.values() if b.lifecycle != Lifecycle.REMOVED],
         )
+        # A thing removed is still what its name says when nothing there now
+        # answers to it: named, its lifecycle says it is gone (LEKA-386) —
+        # never read as something LEKA does not know (LEKA-440).
+        answered = {n.said.casefold() for n in readings}
+        found_gone = (
+            await self._graph.matching(expanded(said), limit=10, removed=True) if said else []
+        )
+        gone = await self._graph.briefs([i for i, _, _ in found_gone if i not in candidates])
+        readings += [
+            n
+            for n in named(ask.text, [b for b in gone.values() if b.lifecycle == Lifecycle.REMOVED])
+            if n.confidence >= NAMED and n.said.casefold() not in answered
+        ]
         sure = [n for n in readings if n.confidence >= NAMED and n.entity.id not in asked]
         sure = sure[:MAX_NAMED]
         guesses = [n for n in readings if n.confidence < NAMED]

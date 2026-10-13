@@ -113,6 +113,9 @@ class Asked:
     until: datetime | None = None
     environment: str | None = None
     constraints: tuple[tuple[str, object, bool], ...] = ()
+    # Names it gives that nothing LEKA knows answers to (LEKA-440): with
+    # nothing else it is about, what LEKA reads is never their cause.
+    unknown: tuple[str, ...] = ()
     # The language the answer is written in: the asker's, else the
     # workspace's (identity.spoken_language). None: the question's.
     language: str | None = None

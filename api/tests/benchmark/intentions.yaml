@@ -58,7 +58,10 @@
 # (« depuis hier »): the demo's deployment, 26 hours ago, must be in it at
 # any hour.
 
-version: 1
+# 1: 58 cases, measured on understanding v4 — docs/benchmarks/intentions-initial.md.
+# 2: 13 more — what a verb says without asking it, a thing left untouched, a
+#    name known with one unknown, an action said as a noun (LEKA-440).
+version: 2
 fixture: demo-seed
 
 cases:
@@ -333,6 +336,143 @@ cases:
       next: [ready, prerequisites]
       needs: [application-architecture]
       forbid: [system_action]
+
+  # ── what is not asked, though a verb says it ──────────────────────────
+  - id: who-restarted-fr
+    lang: fr
+    tags: [question-not-action, temporal]
+    input: { text: "Qui a redémarré payment-api cette semaine ?" }
+    expect:
+      mode: question
+      entities: [payment-api]
+      actions: {}
+      final: [completed]
+      forbid: [decision, system_action]
+
+  - id: rolled-back-en
+    lang: en
+    tags: [question-not-action]
+    input: { text: "Has payment-api been rolled back since the incident?" }
+    expect:
+      mode: question
+      entities: [payment-api]
+      actions: {}
+      forbid: [decision, system_action]
+
+  - id: how-to-restart-fr
+    lang: fr
+    tags: [question-not-action, explanation]
+    input: { text: "Comment redémarrer auth-service proprement ?" }
+    expect:
+      mode: question
+      entities: [auth-service]
+      actions: {}
+      final: [completed]
+      forbid: [decision, system_action]
+
+  - id: risk-of-migrating-fr
+    lang: fr
+    tags: [question-not-action, plan]
+    input: { text: "Évalue le risque de migrer payment-api vers Kubernetes" }
+    expect:
+      entities: [payment-api]
+      forbid: [decision, system_action]
+
+  - id: need-to-restart-fr
+    lang: fr
+    tags: [action, clear]
+    input: { text: "J'ai besoin de redémarrer auth-service en production" }
+    expect:
+      actions: { restart: [auth-service] }
+      environment: production
+      final: [awaiting_decision]
+      decides: true
+      proposals: { restart: [auth-service] }
+
+  - id: do-a-rollback-en
+    lang: en
+    tags: [action, clear]
+    input: { text: "Do a rollback of auth-service in production" }
+    expect:
+      actions: { rollback: [auth-service] }
+      environment: production
+      decides: true
+      proposals: { rollback: [auth-service] }
+
+  - id: plan-then-act-fr
+    lang: fr
+    tags: [action, several]
+    input: { text: "Fais un plan de migration, puis redémarre auth-service en production" }
+    expect:
+      actions: { restart: [auth-service] }
+
+  - id: update-a-system-fr
+    lang: fr
+    tags: [action]
+    input: { text: "Mets à jour auth-service en production" }
+    expect:
+      actions: { update: [auth-service] }
+      environment: production
+      final: [awaiting_decision]
+      decides: true
+
+  - id: leave-untouched-without-fr
+    lang: fr
+    tags: [negation, exclusion, action]
+    input: { text: "Redémarre auth-service en production sans toucher à user-service" }
+    expect:
+      actions: { restart: [auth-service] }
+      excluded: [user-service]
+      proposals: { restart: [auth-service] }
+
+  - id: leave-untouched-en
+    lang: en
+    tags: [negation, exclusion, action]
+    input: { text: "Restart auth-service in production but don't touch user-service" }
+    expect:
+      actions: { restart: [auth-service] }
+      excluded: [user-service]
+      proposals: { restart: [auth-service] }
+
+  - id: touch-nothing-fr
+    lang: fr
+    tags: [negation, diagnostic]
+    input: { text: "Ne touche à rien, dis-moi seulement pourquoi payment-api est lente" }
+    expect:
+      mode: question
+      goal: [explain_cause]
+      actions: {}
+      constraints: [read_only]
+      final: [completed]
+      forbid: [decision, system_action]
+
+  - id: known-and-unknown-fr
+    lang: fr
+    tags: [unknown-entity, diagnostic]
+    input: { text: "Pourquoi payment-api et billing-gateway sont lents depuis 2 jours ?" }
+    expect:
+      mode: question
+      entities: [payment-api]
+      actions: {}
+      final: [completed]
+      findings: [incident.seen]
+      cites: [payment-api v2.8.4]
+      forbid: [decision, system_action]
+
+  - id: what-changed-en
+    lang: en
+    tags: [clear, temporal]
+    input: { text: "What changed on payment-api in the last 2 days?" }
+    expect:
+      mode: question
+      goal: [find_change]
+      entities: [payment-api]
+      period_said: true
+      actions: {}
+      decision: [analyse]
+      final: [completed]
+      findings: [change.made]
+      forbid: [decision, system_action]
 
   # ── vague or incomplete ───────────────────────────────────────────────
   - id: vague-too-short-fr

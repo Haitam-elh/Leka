@@ -5630,6 +5630,9 @@ const fr = {
       },
       said: {
         "analysis.no_subject": "Elle ne nomme rien que LEKA connaisse : rien à lire.",
+        "analysis.unknown_subject": "LEKA ne connaît rien qui s'appelle {names} : rien à lire.",
+        "analysis.not_its_cause":
+          "LEKA ne connaît rien qui s'appelle {names} : ce qu'il a trouvé ailleurs n'en est pas la cause.",
         "standing.state": "{name} ({type}) est {lifecycle}{status}{criticality}.",
         "standing.inactive": "{name} est {lifecycle} : ce qui en est dit peut être dépassé.",
         "standing.quality": "Ce que LEKA sait de {name} : qualité {level} ({score} %).",
@@ -11457,6 +11460,9 @@ const en: Dictionary = {
       },
       said: {
         "analysis.no_subject": "It names nothing LEKA knows: nothing to read.",
+        "analysis.unknown_subject": "LEKA knows nothing called {names}: nothing to read.",
+        "analysis.not_its_cause":
+          "LEKA knows nothing called {names}: what it found elsewhere is not its cause.",
         "standing.state": "{name} ({type}) is {lifecycle}{status}{criticality}.",
         "standing.inactive": "{name} is {lifecycle}: what is said of it may be out of date.",
         "standing.quality": "What LEKA knows of {name}: {level} quality ({score} %).",
