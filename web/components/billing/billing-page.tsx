@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Database, Headset, Layers, Play, ReceiptText, Sparkles, Users, Waypoints, Workflow } from "lucide-react";
+import { Bot, Database, Layers, Play, ReceiptText, Sparkles, Users, Waypoints, Workflow } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { IconTile, TILE_TONES } from "@/components/environment/parts";
@@ -113,13 +113,6 @@ export function BillingScreen() {
               <p className="text-[0.8125rem] text-shell-muted">{w.invoicesNone}</p>
             </section>
           </div>
-          <section className="flex flex-wrap items-center gap-4 rounded-xl bg-brand-violet-soft/60 px-5 py-4">
-            <Headset className="size-6 shrink-0 text-shell-nav-active" aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-brand-navy">{w.questionTitle}</p>
-              <p className="text-[0.8125rem] text-shell-muted">{w.questionBody}</p>
-            </div>
-          </section>
         </div>
       )}
     </PageContainer>

@@ -117,16 +117,35 @@ describe("the team", () => {
     expect(rows[0]).toHaveTextContent("haitam@leka.example");
     expect(rows[1]).toHaveTextContent("Nora");
     expect(rows[1]).toHaveTextContent("Jamais");
-    expect(screen.getByTestId("team-stat-members")).toHaveTextContent("2");
-    expect(await screen.findByText("Utilisateurs", { selector: "p" })).toBeInTheDocument();
+    // How many people: the tab says it, no figure repeats it (LEKA-438).
+    expect(screen.getByTestId("team-tab-members")).toHaveTextContent("Utilisateurs 2");
+    expect(screen.queryByTestId("team-stat-members")).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("team-stat-teams")).toHaveTextContent("2"));
     expect(screen.getByTestId("team-stat-invitations")).toHaveTextContent("1");
-    expect(screen.getByTestId("team-split")).toHaveTextContent("Propriétaire1");
+    // Two people: no split to read yet (LEKA-438).
+    expect(screen.queryByTestId("team-split")).not.toBeInTheDocument();
     expect(screen.getByTestId("team-security")).toHaveTextContent(
       "Mot de passe : 12 caractères minimum",
     );
     // One's own seat is not changed from here.
     expect(within(rows[0]).queryByTestId("team-role")).not.toBeInTheDocument();
+  });
+
+  it("leaves out a 0 that calls for nothing, and splits by role from four people", async () => {
+    api.members.mockResolvedValue([
+      member(),
+      NORA,
+      { ...NORA, id: "m3", user_id: "u3", email: "a@leka.example" },
+      { ...NORA, id: "m4", user_id: "u4", email: "b@leka.example" },
+    ]);
+    api.invitations.mockResolvedValue([]);
+    show();
+    await screen.findAllByTestId("team-member");
+    expect(await screen.findByTestId("team-split")).toHaveTextContent("Propriétaire1");
+    expect(screen.getByTestId("team-tab-members")).toHaveTextContent("Utilisateurs 4");
+    // Loading, it says "…"; read, its 0 goes.
+    await waitFor(() => expect(screen.queryByTestId("team-stat-invitations")).not.toBeInTheDocument());
+    expect(screen.queryByTestId("team-stat-roles")).not.toBeInTheDocument();
   });
 
   it("lets an admin invite, the link also shown", async () => {

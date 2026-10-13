@@ -904,8 +904,6 @@ const fr = {
       exhaustedSoft: "Les crédits IA du mois sont épuisés.",
       how: "Pour continuer, ajoutez un pack de crédits ou passez à une offre supérieure : contactez votre interlocuteur LEKA. Aucun dépassement n'est jamais facturé.",
     },
-    questionTitle: "Une question sur votre offre ?",
-    questionBody: "Votre interlocuteur LEKA vous accompagne pour choisir l'offre adaptée à votre organisation.",
   },
   /** Équipe & accès (mockup 15). */
   /** Sécurité & gouvernance (LEKA-402). */
@@ -1226,9 +1224,6 @@ const fr = {
     subtitle: "Gérez les utilisateurs, les rôles et les accès à votre environnement LEKA.",
     invite: "Inviter un utilisateur",
     stats: {
-      members: "Utilisateurs",
-      roles: "Rôles",
-      rolesFoot: "propriétaire, admin, membre",
       teams: "Équipes",
       teamsFoot: "dans votre modèle d'entreprise",
       invitations: "Invitations en attente",
@@ -1273,8 +1268,6 @@ const fr = {
     copy: "Copier",
     copied: "Copié",
     readOnly: "Seuls les admins invitent, changent un rôle ou retirent quelqu'un.",
-    bannerTitle: "Collaborez en toute sécurité",
-    bannerBody: "Chacun voit ce que son rôle permet ; chaque décision et chaque action gardent qui l'a prise.",
     permissions: "Voir les permissions",
   },
   /** Accepting an invitation. */
@@ -6892,8 +6885,6 @@ const en: Dictionary = {
       exhaustedSoft: "This month's AI credits are spent.",
       how: "To go on, add a credit pack or move to a higher plan: contact your LEKA contact. Overage is never billed.",
     },
-    questionTitle: "A question about your plan?",
-    questionBody: "Your LEKA contact helps you choose the plan that fits your organisation.",
   },
   governance: {
     overview: {
@@ -7211,9 +7202,6 @@ const en: Dictionary = {
     subtitle: "Manage the users, roles and access to your LEKA environment.",
     invite: "Invite a user",
     stats: {
-      members: "Users",
-      roles: "Roles",
-      rolesFoot: "owner, admin, member",
       teams: "Teams",
       teamsFoot: "in your company model",
       invitations: "Pending invitations",
@@ -7258,8 +7246,6 @@ const en: Dictionary = {
     copy: "Copy",
     copied: "Copied",
     readOnly: "Only admins invite, change a role or remove someone.",
-    bannerTitle: "Collaborate safely",
-    bannerBody: "Everyone sees what their role allows; every decision and action keeps who took it.",
     permissions: "See the permissions",
   },
   invitation: {
