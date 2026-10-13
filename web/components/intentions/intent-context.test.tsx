@@ -205,7 +205,7 @@ describe("the context an intention asks for", () => {
         name: "payment-api p99 latency above 2s",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("intent-sources")).toHaveTextContent("acme/backend2 élément(s)");
+    expect(screen.getByTestId("intent-sources")).toHaveTextContent("acme/backend2 éléments");
   });
 
   it("says when nothing is missing, and names nothing when nothing was named", () => {
@@ -255,11 +255,11 @@ describe("the context an intention asks for", () => {
       "nature : Responsabilité → Diagnostic",
     ]);
     expect(again).toHaveTextContent(
-      "Contexte : 2 élément(s) ajouté(s), 1 retiré(s), 0 modifié(s).",
+      "Contexte : 2 éléments ajoutés, 1 retiré, 0 modifié.",
     );
   });
 
-  it("says how sure LEKA can be, and what is missing beside the intention's gaps", () => {
+  it("says how sure LEKA can be, and what is missing beside the intention's gaps", async () => {
     show(
       assembled({
         quality: {
@@ -316,12 +316,14 @@ describe("the context an intention asks for", () => {
       }),
     );
 
+    // Folded under the context's detail (LEKA-438): opened, it says it.
+    await userEvent.click(screen.getByText("Détail du contexte"));
     const sure = screen.getByTestId("intelligence-confidence");
     expect(within(sure).getByRole("heading", { name: "Niveau de confiance" })).toBeVisible();
     expect(within(sure).getByTestId("confidence")).toHaveTextContent("Faible");
-    expect(within(sure).getByTestId("support")).toHaveTextContent("1 source(s) analysée(s)");
+    expect(within(sure).getByTestId("support")).toHaveTextContent("1 source analysée");
     expect(within(sure).getByTestId("support")).toHaveTextContent(
-      "0 contradiction(s) détectée(s)",
+      "0 contradiction détectée",
     );
     expect(screen.getAllByTestId("intent-gap").map((gap) => gap.textContent)).toEqual([
       "CritiquePersonne n'est connu comme responsable de payment-api.",

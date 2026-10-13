@@ -81,7 +81,7 @@ test.describe("the context engine", () => {
     await expect(conflicts).toContainText("Nadia Kowalski · email");
 
     // Jira's "Nadia K." is folded into Nadia Kowalski, said where it went.
-    await expect(elements).toContainText("+1 doublon(s)");
+    await expect(elements).toContainText("+1 doublon");
     await expect(elements).not.toContainText("Nadia K.");
     const left = page.getByTestId("context-left-out");
     await left.getByRole("button", { name: "Voir la liste" }).click();
@@ -138,7 +138,7 @@ test.describe("the context engine", () => {
     await expect(page.getByTestId("quality-score")).toContainText(
       "plafonné : un désaccord critique",
     );
-    await expect(quality.getByTestId("support")).toContainText("source(s) analysée(s)");
+    await expect(quality.getByTestId("support")).toContainText(/sources? analysées?/);
     const conflict = page.getByTestId("quality-conflict").first();
     await expect(conflict).toHaveAttribute("data-severity", "critical");
     await expect(conflict).toContainText("payment-api · sla");
@@ -151,7 +151,7 @@ test.describe("the context engine", () => {
       .getByRole("group", { name: "Cet élément vous sert-il ?" })
       .getByRole("button", { name: "Utile", exact: true })
       .click();
-    await expect(page.getByTestId("quality-feedback-counts")).toContainText("1 utile(s)");
+    await expect(page.getByTestId("quality-feedback-counts")).toContainText("1 utile");
   });
 
   test("streams what happens to it, and inspects an element down to its records", async ({

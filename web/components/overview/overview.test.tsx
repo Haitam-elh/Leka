@@ -191,7 +191,7 @@ describe("the overview", () => {
     mount();
 
     expect(screen.getByRole("heading", { level: 1, name: "Bonjour Nora," })).toBeVisible();
-    expect(await screen.findByText("1 source(s) demandent votre attention.")).toBeVisible();
+    expect(await screen.findByText("1 source demande votre attention.")).toBeVisible();
   });
 
   it("greets by the first name given at registration, not the address", async () => {
@@ -204,7 +204,7 @@ describe("the overview", () => {
       currentUser = { id: "u1", email: "nora@acme.example" };
     }
     // Let the page's own loading settle before the next test mounts.
-    expect(await screen.findByText("1 source(s) demandent votre attention.")).toBeVisible();
+    expect(await screen.findByText("1 source demande votre attention.")).toBeVisible();
   });
 
   it("counts the connected sources, and only them", async () => {
@@ -264,14 +264,14 @@ describe("the overview", () => {
     // Deduced from what runs them, said so; the external ones apart — as
     // the architecture counts them.
     expect(services).toHaveTextContent(
-      "sur 4 service(s) · état déduit de leur hébergement, non mesuré · 1 externe(s) à part",
+      "sur 4 services · état déduit de leur hébergement, non mesuré · 1 externe à part",
     );
     // An incident is a point; services nothing measures are worth knowing,
     // not an alarm.
     expect(within(attention).getByTestId("kpi-attention")).toHaveTextContent("1");
     expect(attention).toHaveTextContent("Billing API");
     expect(within(incidents).getByTestId("kpi-incidents")).toHaveTextContent("1");
-    expect(incidents).toHaveTextContent("1 service(s) touché(s)");
+    expect(incidents).toHaveTextContent("1 service touché");
     // This week's events, and no open contradiction.
     expect(await screen.findByText("42")).toBeVisible();
   });
@@ -293,7 +293,7 @@ describe("the overview", () => {
     const [services, attention] = await screen.findAllByTestId("kpi-tile");
     expect(within(services).getByTestId("kpi-services")).toHaveTextContent("6");
     expect(within(attention).getByTestId("kpi-attention")).toHaveTextContent("0");
-    expect(attention).toHaveTextContent("Rien d'urgent · 6 service(s) sans monitoring");
+    expect(attention).toHaveTextContent("Rien d'urgent · 6 services sans monitoring");
   });
 
   it("says a state nothing tells as unknown, never as zero", async () => {
@@ -311,7 +311,7 @@ describe("the overview", () => {
     const [services] = await screen.findAllByTestId("kpi-tile");
     // Not « — »: that is « not loaded yet ».
     expect(within(services).getByTestId("kpi-services")).toHaveTextContent("?");
-    expect(services).toHaveTextContent("sur 3 service(s) · 3 d'état inconnu");
+    expect(services).toHaveTextContent("sur 3 services · 3 d'état inconnu");
   });
 
   it("says a workspace with no service, and nothing open", async () => {
@@ -372,7 +372,7 @@ describe("the overview", () => {
     );
     expect(within(lines[0]).getByRole("link")).toHaveAttribute("href", `/approvals/${owner.id}`);
     expect(lines[1]).toHaveTextContent("acme/user-service est le code de user-service");
-    expect(screen.getByText("4 élément(s) en attente")).toBeVisible();
+    expect(screen.getByText("4 éléments en attente")).toBeVisible();
     expect(screen.queryByText("Rien à valider pour le moment.")).not.toBeInTheDocument();
   });
 });

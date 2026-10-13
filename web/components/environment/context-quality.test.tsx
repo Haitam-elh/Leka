@@ -221,10 +221,10 @@ describe("the quality of a context", () => {
     );
     const support = within(screen.getByTestId("support")).getAllByRole("listitem");
     expect(support.map((item) => [item.textContent, item.dataset.established])).toEqual([
-      ["3 source(s) analysée(s)", "true"],
-      ["2 événement(s) corrélé(s)", "true"],
-      ["1 élément(s) sur 4 confirmé(s) par deux sources", "false"],
-      ["1 contradiction(s) détectée(s), dont 1 critique(s)", "false"],
+      ["3 sources analysées", "true"],
+      ["2 événements corrélés", "true"],
+      ["1 élément sur 4 confirmé par deux sources", "false"],
+      ["1 contradiction détectée, dont 1 critique", "false"],
     ]);
     const measures = screen.getByTestId("quality-measures");
     expect(measures).toHaveTextContent("Complétude93 %");
@@ -243,7 +243,7 @@ describe("the quality of a context", () => {
       "Connu du modèle · inconnu",
     ]);
     expect(screen.getByTestId("quality-retrieval")).toHaveTextContent(
-      "Graphe5 trouvé(s) · 3 gardé(s) · 1 seule · 3 en tête",
+      "Graphe5 trouvés · 3 gardés · 1 seule · 3 en tête",
     );
   });
 
@@ -254,7 +254,7 @@ describe("the quality of a context", () => {
     expect(gaps.map((gap) => gap.textContent)).toEqual([
       "CritiquePersonne n'est connu comme responsable de payment-api.",
       "À noterAucune source lue ne sait lire ce dont parle la demande : incidents.",
-      "Pour info3 élément(s) pertinent(s) laissé(s) de côté par son budget de 100 : élargissez-le.",
+      "Pour info3 éléments pertinents laissés de côté par son budget de 100 : élargissez-le.",
     ]);
     const [conflict] = within(screen.getByTestId("quality-conflicts")).getAllByTestId(
       "quality-conflict",
@@ -269,7 +269,7 @@ describe("the quality of a context", () => {
     show(<QualityPanel assembled={assembled()} canMake />);
 
     expect(
-      await screen.findByText("2 utile(s) · 0 pas utile(s) · 1 faux · 0 manque(s)"),
+      await screen.findByText("2 utiles · 0 pas utile · 1 faux · 0 manque"),
     ).toHaveAttribute("data-testid", "quality-feedback-counts");
     expect(api.quality).toHaveBeenCalledWith(CONTEXT, 2);
     await user.type(screen.getByLabelText("Il manque quelque chose ?"), "Le runbook de paiement");

@@ -17,13 +17,22 @@ import type { IntentionStatus } from "@/lib/intentions/api";
  * opens its view when given an address (`href`); one to come does not.
  */
 
-export const STEPS = ["intention", "analysis", "results", "decision", "action"] as const;
+export const STEPS = [
+  "intention",
+  "analysis",
+  "results",
+  "decision",
+  "action",
+] as const;
 export type Step = (typeof STEPS)[number];
 
 /** Where an intention stands: the step it is at, and the last one it can
  * reach. A question answered ends at its results: deciding and acting are
  * not needed. */
-export function stepOf(status: IntentionStatus, decides = true): { at: Step; reached: number } {
+export function stepOf(
+  status: IntentionStatus,
+  decides = true,
+): { at: Step; reached: number } {
   switch (status) {
     case "needs_clarification":
       return { at: "intention", reached: 0 };
@@ -40,7 +49,9 @@ export function stepOf(status: IntentionStatus, decides = true): { at: Step; rea
     case "rejected":
       return { at: "decision", reached: 3 };
     case "completed":
-      return decides ? { at: "action", reached: 4 } : { at: "results", reached: 2 };
+      return decides
+        ? { at: "action", reached: 4 }
+        : { at: "results", reached: 2 };
     default:
       // failed, cancelled: where they stopped is said by the page.
       return { at: "analysis", reached: 1 };
@@ -74,7 +85,11 @@ export function IntentionStepper({
   const t = useDictionary().intentions.steps;
   const at = STEPS.indexOf(current);
   return (
-    <nav aria-label={t.label} className="mb-6 overflow-x-auto" data-testid="intention-stepper">
+    <nav
+      aria-label={t.label}
+      className="mb-6 overflow-x-auto"
+      data-testid="intention-stepper"
+    >
       <ol className="flex min-w-[42rem] items-start">
         {STEPS.map((step, i) => {
           const skipped = last !== undefined && i > last;
@@ -93,7 +108,7 @@ export function IntentionStepper({
                     : skipped
                       ? "border border-dashed border-shell-line bg-shell-canvas text-shell-muted"
                       : "border border-shell-line bg-white text-shell-muted",
-                open && !here ? "ring-2 ring-brand-violet/40" : "",
+                open && !here ? "ring-2 ring-brand-violet" : "",
               ].join(" ")}
               aria-hidden="true"
             >
@@ -103,7 +118,10 @@ export function IntentionStepper({
           const label = (
             <span className="mt-2 flex flex-col items-center text-center">
               <span
-                className={`text-[0.875rem] font-semibold ${here || open ? "text-brand-navy" : finished ? "text-brand-navy" : "text-shell-muted"}`}
+                // The step on screen reads as an open tab — violet, underlined —
+                // apart from where the intention stands, the filled disc
+                // (LEKA-438: on Analyse, the disc at Décision read as "here").
+                className={`text-[0.875rem] font-semibold ${open ? "text-brand-violet underline decoration-2 underline-offset-[6px]" : here || finished ? "text-brand-navy" : "text-shell-muted"}`}
               >
                 {t[step].title}
               </span>
@@ -117,7 +135,15 @@ export function IntentionStepper({
               key={step}
               className="relative flex flex-1 flex-col items-center"
               data-testid={`intention-step-${step}`}
-              data-state={finished ? "done" : here ? "current" : skipped ? "skipped" : "todo"}
+              data-state={
+                finished
+                  ? "done"
+                  : here
+                    ? "current"
+                    : skipped
+                      ? "skipped"
+                      : "todo"
+              }
               aria-current={here ? "step" : undefined}
             >
               {/* The line to the next step: violet as far as it got. */}
@@ -160,7 +186,9 @@ export function StepBadge({ step }: { step: Step }) {
       className="inline-flex h-10 items-center rounded-lg bg-shell-canvas px-4 text-[0.875rem] text-shell-muted"
       data-testid="intention-step-badge"
     >
-      {t.of.replace("{n}", String(STEPS.indexOf(step) + 1)).replace("{total}", String(STEPS.length))}
+      {t.of
+        .replace("{n}", String(STEPS.indexOf(step) + 1))
+        .replace("{total}", String(STEPS.length))}
     </span>
   );
 }

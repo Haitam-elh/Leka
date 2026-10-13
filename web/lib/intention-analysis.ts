@@ -44,7 +44,8 @@ import type {
 export type IntentionAnalysis = components["schemas"]["IntentionAnalysisRead"];
 export type AnalysisResult = components["schemas"]["IntentionAnalysisResult"];
 export type AnalysisEvidence = components["schemas"]["AnalysisEvidence"];
-export type AnalysisRecommendation = components["schemas"]["AnalysisRecommendation"];
+export type AnalysisRecommendation =
+  components["schemas"]["AnalysisRecommendation"];
 type Note = components["schemas"]["AnalysisNote"];
 type Params = Record<string, unknown>;
 
@@ -79,7 +80,9 @@ function percent(value: unknown): string {
 
 /** A capability's name, in words. */
 export function capabilityName(t: Dictionary, name: string): string {
-  return (t.intentions.analysis.capabilities as Record<string, string>)[name] ?? name;
+  return (
+    (t.intentions.analysis.capabilities as Record<string, string>)[name] ?? name
+  );
 }
 
 /** The values a sentence's template reads: lists joined, codes worded,
@@ -122,7 +125,9 @@ function values(t: Dictionary, code: string, params: Params, links: Links) {
       said.risk = words(w.recommendRisks, p.risk);
       break;
     case "incident.summary":
-      said.cause = p.cause ? fill(w.parts.likeliest, { cause: text(p.cause) }) : "";
+      said.cause = p.cause
+        ? fill(w.parts.likeliest, { cause: text(p.cause) })
+        : "";
       break;
     case "change.made":
       said.kind = words(w.changeKinds, p.kind);
@@ -130,14 +135,20 @@ function values(t: Dictionary, code: string, params: Params, links: Links) {
       said.environment = p.environment
         ? fill(w.parts.inEnvironment, { environment: text(p.environment) })
         : "";
-      said.incidents = p.incidents ? fill(w.parts.followed, { count: text(p.incidents) }) : "";
+      said.incidents = p.incidents
+        ? fill(w.parts.followed, { count: text(p.incidents) })
+        : "";
       break;
     case "change.summary":
-      said.followed = p.followed ? fill(w.parts.followedSome, { count: text(p.followed) }) : "";
+      said.followed = p.followed
+        ? fill(w.parts.followedSome, { count: text(p.followed) })
+        : "";
       break;
     case "dependency.risk":
       said.critical = p.critical ? w.parts.someCritical : "";
-      said.business = p.business ? fill(w.parts.business, { count: text(p.business) }) : "";
+      said.business = p.business
+        ? fill(w.parts.business, { count: text(p.business) })
+        : "";
       break;
     case "compliance.check":
       said.check = words(w.checks, p.check);
@@ -158,7 +169,9 @@ function values(t: Dictionary, code: string, params: Params, links: Links) {
     case "action.constraint":
       said.kind = words(t.intentions.understanding.scope.kinds, p.kind);
       said.value =
-        p.value !== null && p.value !== undefined && p.value !== true ? ` (${text(p.value)})` : "";
+        p.value !== null && p.value !== undefined && p.value !== true
+          ? ` (${text(p.value)})`
+          : "";
       break;
     case "support.context":
       said.readiness = words(w.readiness, p.readiness);
@@ -184,7 +197,8 @@ export function noteSaid(
   let code = note.code;
   const params = note.params ?? {};
   // One code, two sentences: where it moves to, said or missing.
-  if (code === "migration.summary" && !params.target) code = "migration.summary_missing";
+  if (code === "migration.summary" && !params.target)
+    code = "migration.summary_missing";
   const template = templates[code];
   return template ? fill(template, values(t, code, params, links)) : note.text;
 }
@@ -199,13 +213,22 @@ function recommendationWhy(
   const params = (item.why.params ?? {}) as Params;
   const of = typeof params.of === "string" ? params.of : null;
   const templates = t.intentions.analysis.said as Record<string, string>;
-  if (of && templates[of]) return noteSaid(t, { code: of, text: item.why.text, params }, links);
+  if (of && templates[of])
+    return noteSaid(t, { code: of, text: item.why.text, params }, links);
   return noteSaid(t, item.why, links);
 }
 
 /** Why a cause is one, in words: its source said so, or LEKA's rule. */
-function causeWhy(t: Dictionary, cause: AnalysisResult["causes"][number], links: Links): string {
-  return noteSaid(t, { code: cause.code, text: cause.why, params: cause.params }, links);
+function causeWhy(
+  t: Dictionary,
+  cause: AnalysisResult["causes"][number],
+  links: Links,
+): string {
+  return noteSaid(
+    t,
+    { code: cause.code, text: cause.why, params: cause.params },
+    links,
+  );
 }
 
 /** A piece of evidence, as the evidence components draw it. */
@@ -223,8 +246,14 @@ export function evidenceRef(
     : "";
   const tie = item.id.startsWith("tie:") && params.from && params.to;
   const concluded =
-    item.ref_type === "finding" && links.finding && typeof params.code === "string"
-      ? links.finding(params.code, (params.params ?? {}) as Record<string, unknown>, item.label)
+    item.ref_type === "finding" &&
+    links.finding &&
+    typeof params.code === "string"
+      ? links.finding(
+          params.code,
+          (params.params ?? {}) as Record<string, unknown>,
+          item.label,
+        )
       : null;
   const label = tie
     ? `${text(params.from)} ${verb} ${text(params.to)}`
@@ -240,16 +269,21 @@ export function evidenceRef(
   if (item.confidence !== null && item.confidence !== undefined) {
     facts.push({ label: w.confidence, value: `${percent(item.confidence)} %` });
   }
-  if (item.records.length) facts.push({ label: w.records, value: item.records.join(", ") });
+  if (item.records.length)
+    facts.push({ label: w.records, value: item.records.join(", ") });
   if (others.length) {
     facts.push({
       label: w.alsoFrom,
       value: others.map((s) => s.name ?? w.gone).join(", "),
     });
   }
-  if (first && first.name === null) facts.push({ label: w.source, value: w.gone });
+  if (first && first.name === null)
+    facts.push({ label: w.source, value: w.gone });
   if (citedBy.length) {
-    facts.push({ label: w.citedBy, value: citedBy.map((c) => capabilityName(t, c)).join(", ") });
+    facts.push({
+      label: w.citedBy,
+      value: citedBy.map((c) => capabilityName(t, c)).join(", "),
+    });
   }
   const typed = item.ref_type && !tie ? links.typeName(item.ref_type) : null;
   const happened = item.detail
@@ -299,7 +333,9 @@ export function analysisEvidence(
   links: Links,
 ): EvidenceRef[] {
   const cited = citations(result);
-  return result.evidence.map((item) => evidenceRef(t, item, links, cited.get(item.id) ?? []));
+  return result.evidence.map((item) =>
+    evidenceRef(t, item, links, cited.get(item.id) ?? []),
+  );
 }
 
 const STATUSES: Record<IntentionAnalysis["status"], AnalysisStatus> = {
@@ -334,33 +370,51 @@ export function intentionAnalysis(
   const say = (note: Note) => noteSaid(t, note, links);
   const cited = citations(result);
   const evidence = new Map(
-    result.evidence.map((item) => [item.id, evidenceRef(t, item, links, cited.get(item.id) ?? [])]),
+    result.evidence.map((item) => [
+      item.id,
+      evidenceRef(t, item, links, cited.get(item.id) ?? []),
+    ]),
   );
   const refs = (ids: readonly string[]) =>
-    ids.map((id) => evidence.get(id)).filter((item): item is EvidenceRef => Boolean(item));
-  const findings = result.findings.map(
-    (statement): Finding => ({
-      id: statement.id,
-      title: capabilityName(t, statement.capability),
-      statement: noteSaid(t, statement, links),
-      evidence: refs(statement.evidence),
-    }),
-  );
-  const causes = result.causes.map(
-    (cause): ProbableCause => ({
-      id: cause.id,
-      label: cause.label,
-      kind: cause.ref_type ? links.typeName(cause.ref_type) : null,
-      href:
-        cause.ref_id && cause.ref_type
-          ? links.href({ id: cause.ref_id, type: cause.ref_type })
-          : null,
-      confidence: cause.confidence,
-      basis: cause.basis,
-      why: causeWhy(t, cause, links),
-      evidence: refs(cause.evidence),
-    }),
-  );
+    ids
+      .map((id) => evidence.get(id))
+      .filter((item): item is EvidenceRef => Boolean(item));
+  const findings = result.findings.map((statement): Finding => ({
+    id: statement.id,
+    title: capabilityName(t, statement.capability),
+    statement: noteSaid(t, statement, links),
+    evidence: refs(statement.evidence),
+  }));
+  // Two capabilities can reach the same cause — "changes" and "incidents"
+  // both read a deployment its incident names: one cause, the surest
+  // reading of it, its evidence put together.
+  const sameCause = new Map<string, AnalysisResult["causes"][number]>();
+  for (const cause of result.causes) {
+    const seen = sameCause.get(cause.id);
+    if (!seen) {
+      sameCause.set(cause.id, cause);
+      continue;
+    }
+    const surest =
+      (cause.confidence ?? 0) > (seen.confidence ?? 0) ? cause : seen;
+    sameCause.set(cause.id, {
+      ...surest,
+      evidence: [...new Set([...seen.evidence, ...cause.evidence])],
+    });
+  }
+  const causes = [...sameCause.values()].map((cause): ProbableCause => ({
+    id: cause.id,
+    label: cause.label,
+    kind: cause.ref_type ? links.typeName(cause.ref_type) : null,
+    href:
+      cause.ref_id && cause.ref_type
+        ? links.href({ id: cause.ref_id, type: cause.ref_type })
+        : null,
+    confidence: cause.confidence,
+    basis: cause.basis,
+    why: causeWhy(t, cause, links),
+    evidence: refs(cause.evidence),
+  }));
   const areas = t.intentions.analysis.areas;
   const impact: Impact | null =
     result.impact.length || result.risk !== "unknown"

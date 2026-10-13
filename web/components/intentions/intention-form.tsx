@@ -23,10 +23,15 @@ import { DecisionStep } from "@/components/intentions/decision-step";
 import { FeasibilityPanel } from "@/components/intentions/feasibility";
 import { ControlNotice } from "@/components/intelligence";
 import { IntentContext } from "@/components/intentions/intent-context";
+import type { Step } from "@/components/intentions/intention-stepper";
 import { useCurrentWorkspace } from "@/components/shell/shell-provider";
 import { SourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { routes } from "@/config/routes";
 import { useEnvironment } from "@/lib/environment-queries";
 import { useLekaForm } from "@/lib/forms/use-leka-form";
@@ -48,7 +53,10 @@ import { intentionKeys, useIntention } from "@/lib/intentions/queries";
 import { notify } from "@/lib/notify";
 import { KIND_CATEGORY, type Source } from "@/lib/sources";
 import { useSources } from "@/lib/sources-queries";
-import { type IntentionRequest, intentionRequestSchema } from "@/lib/validation/intentions";
+import {
+  type IntentionRequest,
+  intentionRequestSchema,
+} from "@/lib/validation/intentions";
 
 /**
  * Step 1 of "Nouvelle intention": what to ask, and what to read to answer.
@@ -83,11 +91,22 @@ function readable(source: Source): boolean {
  * cloud, observability… — as mockup 02 lists them: the first few rows say
  * what LEKA reads, not three repositories in a row. Alphabetical within a
  * kind. */
-const KINDS_FIRST = ["code", "project", "docs", "cloud", "observability", "data", "chat", "custom"];
+const KINDS_FIRST = [
+  "code",
+  "project",
+  "docs",
+  "cloud",
+  "observability",
+  "data",
+  "chat",
+  "custom",
+];
 
 export function oneOfEach(sources: readonly Source[]): Source[] {
   const kinds = new Map<string, Source[]>();
-  for (const source of [...sources].sort((a, b) => a.display_name.localeCompare(b.display_name))) {
+  for (const source of [...sources].sort((a, b) =>
+    a.display_name.localeCompare(b.display_name),
+  )) {
     const kind = KIND_CATEGORY[source.type] ?? "other";
     kinds.set(kind, [...(kinds.get(kind) ?? []), source]);
   }
@@ -96,7 +115,9 @@ export function oneOfEach(sources: readonly Source[]): Source[] {
     return at === -1 ? KINDS_FIRST.length : at;
   };
   const ordered: Source[] = [];
-  const queues = [...kinds.entries()].sort(([a], [b]) => rank(a) - rank(b)).map(([, queue]) => queue);
+  const queues = [...kinds.entries()]
+    .sort(([a], [b]) => rank(a) - rank(b))
+    .map(([, queue]) => queue);
   for (let round = 0; ordered.length < sources.length; round++) {
     for (const queue of queues) if (queue[round]) ordered.push(queue[round]);
   }
@@ -109,7 +130,12 @@ interface ScopeOptions {
   services: { value: string; label: string }[];
 }
 
-export function IntentionForm() {
+export function IntentionForm({
+  onStep,
+}: {
+  /** The step it is on: "analysis" once sent, so the page's steps say so. */
+  onStep?: (step: Step) => void;
+} = {}) {
   const t = useDictionary();
   const confirm = useConfirm();
   const workspace = useCurrentWorkspace();
@@ -124,6 +150,9 @@ export function IntentionForm() {
   const onDecision = params.get("step") === "decision";
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [assembled, setAssembled] = useState<AssembledContext | null>(null);
+  useEffect(() => {
+    onStep?.(assembled ? "analysis" : "intention");
+  }, [assembled, onStep]);
   // Edited after step 2: the same intention is asked again (LEKA-374) —
   // its id, kept (LEKA-384). Opened with ?intention=<id> — an intention
   // LEKA needs clarified (LEKA-385) — it is that one, asked again.
@@ -154,10 +183,15 @@ export function IntentionForm() {
     onSubmit: async (values) => {
       const ask = { ...askOf(values), answers };
       try {
-        const made = reasking ? await reaskIntention(reasking, ask) : await submitIntention(ask);
+        const made = reasking
+          ? await reaskIntention(reasking, ask)
+          : await submitIntention(ask);
         clearDraft(workspace?.id);
         // What every list and page says of it is now this.
-        client.setQueryData(intentionKeys.one(made.intention.id), made.intention);
+        client.setQueryData(
+          intentionKeys.one(made.intention.id),
+          made.intention,
+        );
         void client.invalidateQueries({ queryKey: intentionKeys.all });
         setIntention(made.intention);
         setAssembled(made.context);
@@ -235,7 +269,8 @@ export function IntentionForm() {
     const known = environment.data;
     const services = new Map<string, string>();
     for (const node of known?.nodes ?? []) {
-      if (node.type === "service" && node.entity_id) services.set(node.entity_id, node.name);
+      if (node.type === "service" && node.entity_id)
+        services.set(node.entity_id, node.name);
     }
     return {
       environments: [
@@ -257,7 +292,10 @@ export function IntentionForm() {
   const { getFieldState, setValue } = form;
   useEffect(() => {
     if (sourceItems.length === 0 || getFieldState("sources").isDirty) return;
-    setValue("sources", sourceItems.map((item) => item.value));
+    setValue(
+      "sources",
+      sourceItems.map((item) => item.value),
+    );
   }, [sourceItems, getFieldState, setValue]);
   useEffect(() => {
     if (getFieldState("environment").isDirty) return;
@@ -308,7 +346,10 @@ export function IntentionForm() {
   }
 
   return (
-    <Form form={form} className="grid gap-6 lg:grid-cols-[1fr_20rem] lg:items-start">
+    <Form
+      form={form}
+      className="grid gap-6 lg:grid-cols-[1fr_20rem] lg:items-start"
+    >
       <div className="space-y-4">
         <FormAlert />
         <IntentionComposer
@@ -364,7 +405,12 @@ export function IntentionForm() {
             </div>
           </section>
         ) : null}
-        <Button type="button" variant="ghost" size="sm" onClick={() => void abandon()}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => void abandon()}
+        >
           {t.forms.cancel}
         </Button>
       </div>
@@ -372,9 +418,15 @@ export function IntentionForm() {
       <aside aria-label={t.composer.sidePanel} className="space-y-4">
         <Panel title={t.composer.contextTitle} aside={<WhySources />}>
           {sources.isPending ? (
-            <div className="h-24 animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />
+            <div
+              className="h-24 animate-pulse rounded-lg bg-shell-canvas"
+              aria-hidden="true"
+            />
           ) : sourceItems.length === 0 ? (
-            <div className="space-y-2 text-sm" data-testid="intention-no-sources">
+            <div
+              className="space-y-2 text-sm"
+              data-testid="intention-no-sources"
+            >
               <p className="text-shell-muted">{t.composer.noSources}</p>
               <Link
                 href={routes.sources()}
@@ -436,7 +488,9 @@ function WhySources() {
       <PopoverTrigger className="text-xs whitespace-nowrap text-brand-violet underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40">
         {t.composer.whySources}
       </PopoverTrigger>
-      <PopoverContent className="max-w-xs text-sm">{t.composer.whySourcesBody}</PopoverContent>
+      <PopoverContent className="max-w-xs text-sm">
+        {t.composer.whySourcesBody}
+      </PopoverContent>
     </Popover>
   );
 }
@@ -457,7 +511,8 @@ function ScopePanel({ options }: { options: ScopeOptions }) {
 
   if (!editing) {
     const environment =
-      options.environments.find((option) => option.value === values.environment)?.label ?? "—";
+      options.environments.find((option) => option.value === values.environment)
+        ?.label ?? "—";
     const period =
       values.period.preset === "24h"
         ? t.forms.period24h
@@ -479,7 +534,12 @@ function ScopePanel({ options }: { options: ScopeOptions }) {
         <Line label={t.composer.environment} value={environment} />
         <Line label={t.composer.period} value={period} />
         <Line label={t.composer.services} value={services} />
-        <Button type="button" variant="link" size="sm" onClick={() => setEditing(true)}>
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          onClick={() => setEditing(true)}
+        >
           {t.composer.edit}
         </Button>
       </div>
@@ -500,7 +560,12 @@ function ScopePanel({ options }: { options: ScopeOptions }) {
         optional
         options={options.services}
       />
-      <Button type="button" variant="outline" size="sm" onClick={() => setEditing(false)}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setEditing(false)}
+      >
         {t.forms.save}
       </Button>
     </div>

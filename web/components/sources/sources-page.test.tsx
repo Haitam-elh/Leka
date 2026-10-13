@@ -147,7 +147,7 @@ describe("what the sync read", () => {
 
     const tile = screen.getByText("Éléments synchronisés").closest("[data-testid^='sources-stat-']") as HTMLElement;
     expect(within(tile).getByText("12 500")).toBeInTheDocument();
-    expect(within(tile).getByText("lus dans 2 source(s)")).toBeInTheDocument();
+    expect(within(tile).getByText("lus dans 2 sources")).toBeInTheDocument();
     // Running is what a worker holds, not what a source's status says.
     const running = screen.getByText("Synchronisations en cours").closest("[data-testid^='sources-stat-']") as HTMLElement;
     expect(within(running).getByText("1")).toBeInTheDocument();

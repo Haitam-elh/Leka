@@ -134,6 +134,8 @@ test.describe("a new intention, read", () => {
     await expect(page.getByTestId("intention-review")).toBeVisible();
     await expectNoViolations(page);
     await page.getByTestId("intention-launch").click();
+    // The context in detail, opened (LEKA-438 folds it): all of it checked.
+    await page.getByText("Détail du contexte").click();
     await expect(page.getByTestId("intent-scope")).toBeVisible();
     await page.getByRole("button", { name: "Voir tous les éléments" }).click();
 

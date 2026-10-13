@@ -77,7 +77,7 @@ it("says its plan, its credits, and the consumption counted", async () => {
   expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "24");
   expect(screen.queryByTestId("billing-credits-state")).toBeNull();
   expect(screen.getByTestId("billing-sources")).toHaveTextContent("4");
-  expect(screen.getByTestId("billing-sources")).toHaveTextContent("sur 5 déclarée(s)");
+  expect(screen.getByTestId("billing-sources")).toHaveTextContent("sur 5 déclarées");
   expect(screen.getByTestId("billing-entities")).toHaveTextContent("1 240");
   expect(screen.getByTestId("billing-row-capability_runs")).toHaveTextContent("96");
   expect(screen.getByTestId("billing-row-capability_runs")).toHaveTextContent("60 le mois dernier");

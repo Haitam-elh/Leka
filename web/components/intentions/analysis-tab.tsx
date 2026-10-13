@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertOctagon,
   ArrowRight,
+  ChevronDown,
   CircleCheck,
   CircleDashed,
   CircleX,
@@ -44,9 +45,12 @@ import {
   Pill,
 } from "@/components/intelligence";
 import { exactDate, timeAgo } from "@/components/knowledge/time";
-import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
+import {
+  useCurrentUser,
+  usePermissions,
+} from "@/components/shell/shell-provider";
 import { ErrorState } from "@/components/states/error-state";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import { ApiError } from "@/lib/api";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -104,8 +108,11 @@ function useLinks(): Links {
       typeName: (type: string) => typeLabel(t, type),
       date: (iso: string) => exactDate(locale, iso),
       // What LEKA concluded, said as Insights says it (LEKA-377 to 383).
-      finding: (code: string, params: Record<string, unknown>, statement: string) =>
-        word(t, { code, params, statement } as unknown as Finding),
+      finding: (
+        code: string,
+        params: Record<string, unknown>,
+        statement: string,
+      ) => word(t, { code, params, statement } as unknown as Finding),
     }),
     [t, locale],
   );
@@ -113,7 +120,10 @@ function useLinks(): Links {
 
 /** Whether one is on its way: the intention analysing, and no analysis
  * finished on its current context yet. */
-function onItsWay(intention: IntentionDetail, analysis: IntentionAnalysis | null | undefined) {
+function onItsWay(
+  intention: IntentionDetail,
+  analysis: IntentionAnalysis | null | undefined,
+) {
   if (intention.status !== "analysing" || intention.archived_at) return false;
   if (!analysis) return true;
   const currentVersion = intention.readiness?.version;
@@ -140,27 +150,44 @@ function useMayAnalyse(intention: IntentionDetail): boolean {
  * intention — which it moved — read again too. */
 function useAnalysisOf(intention: IntentionDetail) {
   const client = useQueryClient();
-  const analysis = useIntentionAnalysis(intention.id, (data) => onItsWay(intention, data));
+  const analysis = useIntentionAnalysis(intention.id, (data) =>
+    onItsWay(intention, data),
+  );
   const live = onItsWay(intention, analysis.data);
   // Which analysis it is, and whether finished: once read, a change to a
   // finished one is an analysis that just ended.
   const seen = useRef<string | undefined>(undefined);
   const data = analysis.data;
   const finished = data?.finished_at ?? null;
-  const state = data === undefined ? undefined : `${data?.id ?? "none"}:${finished ?? "on its way"}`;
+  const state =
+    data === undefined
+      ? undefined
+      : `${data?.id ?? "none"}:${finished ?? "on its way"}`;
   useEffect(() => {
     if (state === undefined) return;
     if (seen.current !== undefined && seen.current !== state && finished) {
-      void client.invalidateQueries({ queryKey: intentionKeys.one(intention.id) });
-      void client.invalidateQueries({ queryKey: intentionKeys.history(intention.id) });
-      void client.invalidateQueries({ queryKey: intentionKeys.analyses(intention.id) });
+      void client.invalidateQueries({
+        queryKey: intentionKeys.one(intention.id),
+      });
+      void client.invalidateQueries({
+        queryKey: intentionKeys.history(intention.id),
+      });
+      void client.invalidateQueries({
+        queryKey: intentionKeys.analyses(intention.id),
+      });
     }
     seen.current = state;
   }, [state, finished, client, intention.id]);
   return { analysis, live };
 }
 
-function AgainButton({ intention, label }: { intention: IntentionDetail; label: string }) {
+function AgainButton({
+  intention,
+  label,
+}: {
+  intention: IntentionDetail;
+  label: string;
+}) {
   const t = useDictionary();
   const w = t.intentions.analysis;
   const again = useAnalyseAgain(intention.id);
@@ -176,7 +203,9 @@ function AgainButton({ intention, label }: { intention: IntentionDetail; label: 
           const { queued } = await again.mutateAsync();
           notify.success({ title: queued ? w.queued : w.already });
         } catch (error) {
-          notify.error({ title: error instanceof ApiError ? error.message : String(error) });
+          notify.error({
+            title: error instanceof ApiError ? error.message : String(error),
+          });
         }
       }}
     >
@@ -199,7 +228,9 @@ const RESULT_TONES: Record<IntentionAnalysis["status"], TileTone> = {
 
 function seconds(analysis: IntentionAnalysis): string | null {
   if (!analysis.finished_at) return null;
-  const ms = new Date(analysis.finished_at).getTime() - new Date(analysis.started_at).getTime();
+  const ms =
+    new Date(analysis.finished_at).getTime() -
+    new Date(analysis.started_at).getTime();
   return (Math.max(ms, 0) / 1000).toFixed(1);
 }
 
@@ -215,29 +246,45 @@ function MetaLine({ analysis }: { analysis: IntentionAnalysis }) {
     w.triggers[analysis.trigger],
     timeAgo(t, analysis.started_at),
     took ? fill(w.took, { seconds: took }) : null,
-    analysis.context_version ? fill(w.context, { version: analysis.context_version }) : null,
+    analysis.context_version
+      ? fill(w.context, { version: analysis.context_version })
+      : null,
   ].filter(Boolean);
   return (
-    <p className="text-[0.8125rem] text-shell-muted" data-testid="analysis-meta">
-      <time dateTime={analysis.started_at} title={exactDate(locale, analysis.started_at)}>
+    <p
+      className="text-[0.8125rem] text-shell-muted"
+      data-testid="analysis-meta"
+    >
+      <time
+        dateTime={analysis.started_at}
+        title={exactDate(locale, analysis.started_at)}
+      >
         {parts.join(" · ")}
       </time>
     </p>
   );
 }
 
-const STEP_LOOK: Record<Step["status"], { icon: LucideIcon; tone: TileTone }> = {
-  succeeded: { icon: CircleCheck, tone: "success" },
-  failed: { icon: CircleX, tone: "danger" },
-  timed_out: { icon: Clock, tone: "warning" },
-  skipped: { icon: CircleDashed, tone: "neutral" },
-};
+const STEP_LOOK: Record<Step["status"], { icon: LucideIcon; tone: TileTone }> =
+  {
+    succeeded: { icon: CircleCheck, tone: "success" },
+    failed: { icon: CircleX, tone: "danger" },
+    timed_out: { icon: Clock, tone: "warning" },
+    skipped: { icon: CircleDashed, tone: "neutral" },
+  };
 
 /** Where each capability stood in the plan (LEKA-399): planned by the
  * analysis, else read off its step — an analysis kept before has none. */
-function levelOf(analysis: IntentionAnalysis, name: string, step: Step | undefined): number {
-  const planned = (analysis.detail?.orchestration as { steps?: Record<string, { level?: number }> })
-    ?.steps?.[name]?.level;
+function levelOf(
+  analysis: IntentionAnalysis,
+  name: string,
+  step: Step | undefined,
+): number {
+  const planned = (
+    analysis.detail?.orchestration as {
+      steps?: Record<string, { level?: number }>;
+    }
+  )?.steps?.[name]?.level;
   return typeof planned === "number" ? planned : (step?.level ?? 0);
 }
 
@@ -248,12 +295,22 @@ function StepsCard({ analysis }: { analysis: IntentionAnalysis }) {
   const t = useDictionary();
   const w = t.intentions.analysis.steps;
   const ran = new Map(analysis.steps.map((step) => [step.name, step]));
-  const chosen = analysis.selection.filter((choice) => choice.chosen || ran.has(choice.name));
+  const chosen = analysis.selection.filter(
+    (choice) => choice.chosen || ran.has(choice.name),
+  );
   // A fallback ran in another's place: shown beside it.
   const standIns = analysis.steps.filter((step) => step.fallback_of);
   const rows = [
-    ...chosen.map((choice) => ({ name: choice.name, reason: choice.reason, method: choice.method })),
-    ...standIns.map((step) => ({ name: step.name, reason: "fallback", method: "rules" })),
+    ...chosen.map((choice) => ({
+      name: choice.name,
+      reason: choice.reason,
+      method: choice.method,
+    })),
+    ...standIns.map((step) => ({
+      name: step.name,
+      reason: "fallback",
+      method: "rules",
+    })),
   ];
   const levels = new Map<number, typeof rows>();
   for (const row of rows) {
@@ -262,92 +319,142 @@ function StepsCard({ analysis }: { analysis: IntentionAnalysis }) {
   }
   const ordered = [...levels.entries()].sort(([a], [b]) => a - b);
   const last = ordered.length ? ordered[ordered.length - 1][0] : 0;
-  const names = (list: readonly string[]) => list.map((n) => capabilityName(t, n)).join(", ");
+  const names = (list: readonly string[]) =>
+    list.map((n) => capabilityName(t, n)).join(", ");
+  // How LEKA worked is there on asking: open by itself when a step did not
+  // succeed — the one time it is what to read (LEKA-438).
+  const allDone =
+    analysis.steps.length > 0 &&
+    analysis.steps.every((step) => step.status === "succeeded");
   return (
-    <Card title={w.title} icon={<Layers className="size-4 text-shell-muted" aria-hidden="true" />}>
-      <div className="flex flex-col gap-3" data-testid="analysis-steps">
-        {ordered.map(([level, members]) => (
-          <section key={level} data-testid="analysis-level" data-level={level}>
-            {ordered.length > 1 ? (
-              <p className="text-xs font-semibold tracking-wide text-shell-nav uppercase">
-                {level === last && members.every((m) => m.method === "model")
-                  ? w.conclusion
-                  : fill(w.level, { n: level + 1 }) + (members.length > 1 ? ` · ${w.together}` : "")}
-              </p>
-            ) : null}
-            <ul className="mt-2 grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
-              {members.map((row) => {
-                const step = ran.get(row.name);
-                const look = step ? STEP_LOOK[step.status] : null;
-                const Icon = look?.icon ?? LoaderCircle;
-                const reason = step?.reason ?? row.reason;
-                const notes = [
-                  step?.fallback_of
-                    ? fill(w.fallbackOf, { name: capabilityName(t, step.fallback_of) })
-                    : null,
-                  step?.handed?.length ? fill(w.handed, { names: names(step.handed) }) : null,
-                  step?.degraded?.length ? fill(w.degraded, { names: names(step.degraded) }) : null,
-                  step?.reason === "upstream" && step.error
-                    ? fill(w.waitedOn, { names: names(step.error.split(", ")) })
-                    : null,
-                ].filter(Boolean);
-                return (
-                  <li
-                    key={row.name}
-                    className="flex flex-col gap-2 rounded-lg border border-shell-line p-3 text-[0.8125rem]"
-                    data-testid="analysis-step"
-                    data-name={row.name}
-                    data-status={step?.status ?? "running"}
-                  >
-                    <span className="flex min-w-0 items-start gap-2">
-                    <Icon
-                      className={cn(
-                        "mt-0.5 size-4 shrink-0",
-                        step ? undefined : "text-shell-nav-active motion-safe:animate-spin",
-                        look?.tone === "success" && "text-state-success",
-                        look?.tone === "danger" && "text-state-danger",
-                        look?.tone === "warning" && "text-state-warning",
-                        look?.tone === "neutral" && "text-shell-muted",
-                      )}
-                      aria-hidden="true"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="font-medium text-brand-navy">
-                        {capabilityName(t, row.name)}
+    <Card
+      title={w.title}
+      icon={<Layers className="size-4 text-shell-muted" aria-hidden="true" />}
+    >
+      <details
+        open={!allDone}
+        className="group"
+        data-testid="analysis-steps-fold"
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded text-[0.8125rem] text-shell-muted outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40">
+          <span>
+            {allDone ? fill(w.allDone, { count: rows.length }) : w.someNot}
+          </span>
+          <span className="flex items-center gap-1 font-medium text-shell-nav-active">
+            {w.show}
+            <ChevronDown
+              className="size-3.5 transition-transform group-open:rotate-180"
+              aria-hidden="true"
+            />
+          </span>
+        </summary>
+        <div className="mt-3 flex flex-col gap-3" data-testid="analysis-steps">
+          {ordered.map(([level, members]) => (
+            <section
+              key={level}
+              data-testid="analysis-level"
+              data-level={level}
+            >
+              {ordered.length > 1 ? (
+                <p className="text-xs font-semibold tracking-wide text-shell-nav uppercase">
+                  {level === last && members.every((m) => m.method === "model")
+                    ? w.conclusion
+                    : fill(w.level, { n: level + 1 }) +
+                      (members.length > 1 ? ` · ${w.together}` : "")}
+                </p>
+              ) : null}
+              <ul className="mt-2 grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
+                {members.map((row) => {
+                  const step = ran.get(row.name);
+                  const look = step ? STEP_LOOK[step.status] : null;
+                  const Icon = look?.icon ?? LoaderCircle;
+                  const reason = step?.reason ?? row.reason;
+                  const notes = [
+                    step?.fallback_of
+                      ? fill(w.fallbackOf, {
+                          name: capabilityName(t, step.fallback_of),
+                        })
+                      : null,
+                    step?.handed?.length
+                      ? fill(w.handed, { names: names(step.handed) })
+                      : null,
+                    step?.degraded?.length
+                      ? fill(w.degraded, { names: names(step.degraded) })
+                      : null,
+                    step?.reason === "upstream" && step.error
+                      ? fill(w.waitedOn, {
+                          names: names(step.error.split(", ")),
+                        })
+                      : null,
+                  ].filter(Boolean);
+                  return (
+                    <li
+                      key={row.name}
+                      className="flex flex-col gap-2 rounded-lg border border-shell-line p-3 text-[0.8125rem]"
+                      data-testid="analysis-step"
+                      data-name={row.name}
+                      data-status={step?.status ?? "running"}
+                    >
+                      <span className="flex min-w-0 items-start gap-2">
+                        <Icon
+                          className={cn(
+                            "mt-0.5 size-4 shrink-0",
+                            step
+                              ? undefined
+                              : "text-shell-nav-active motion-safe:animate-spin",
+                            look?.tone === "success" && "text-state-success",
+                            look?.tone === "danger" && "text-state-danger",
+                            look?.tone === "warning" && "text-state-warning",
+                            look?.tone === "neutral" && "text-shell-muted",
+                          )}
+                          aria-hidden="true"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="font-medium text-brand-navy">
+                            {capabilityName(t, row.name)}
+                          </span>
+                          {reason !== "fallback" ? (
+                            <span className="text-shell-muted">
+                              {" · "}
+                              {(w.reasons as Record<string, string>)[reason] ??
+                                reason}
+                            </span>
+                          ) : null}
+                          {notes.length ? (
+                            <span
+                              className="block text-xs text-shell-muted"
+                              data-testid="analysis-step-notes"
+                            >
+                              {notes.join(" · ")}
+                            </span>
+                          ) : null}
+                          {step?.error && step.reason !== "upstream" ? (
+                            <span className="block text-xs text-state-danger">
+                              {fill(w.error, { error: step.error })}
+                            </span>
+                          ) : null}
+                        </span>
                       </span>
-                      {reason !== "fallback" ? (
-                        <span className="text-shell-muted">
-                          {" · "}
-                          {(w.reasons as Record<string, string>)[reason] ?? reason}
-                        </span>
-                      ) : null}
-                      {notes.length ? (
-                        <span className="block text-xs text-shell-muted" data-testid="analysis-step-notes">
-                          {notes.join(" · ")}
-                        </span>
-                      ) : null}
-                      {step?.error && step.reason !== "upstream" ? (
-                        <span className="block text-xs text-state-danger">
-                          {fill(w.error, { error: step.error })}
-                        </span>
-                      ) : null}
-                    </span>
-                    </span>
-                    <span className="mt-auto flex items-center justify-between gap-2">
-                      <Pill tone={look?.tone ?? "violet"}>{w.statuses[step?.status ?? "running"]}</Pill>
-                      {step && step.status !== "skipped" ? (
-                        <span className="text-xs tabular-nums text-shell-muted">
-                          {step.duration_ms ? fill(w.ms, { ms: step.duration_ms }) : w.instant}
-                        </span>
-                      ) : null}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))}
-      </div>
+                      <span className="mt-auto flex items-center justify-between gap-2">
+                        <Pill tone={look?.tone ?? "violet"}>
+                          {w.statuses[step?.status ?? "running"]}
+                        </Pill>
+                        {step && step.status !== "skipped" ? (
+                          <span className="text-xs tabular-nums text-shell-muted">
+                            {step.duration_ms
+                              ? fill(w.ms, { ms: step.duration_ms })
+                              : w.instant}
+                          </span>
+                        ) : null}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
+      </details>
     </Card>
   );
 }
@@ -361,15 +468,22 @@ function PreviousCard({ intentionId }: { intentionId: string }) {
   return (
     <Card
       title={w.previous}
-      icon={<ScanSearch className="size-4 text-shell-muted" aria-hidden="true" />}
+      icon={
+        <ScanSearch className="size-4 text-shell-muted" aria-hidden="true" />
+      }
     >
-      <ol className="space-y-1.5 text-[0.8125rem]" data-testid="analysis-previous">
+      <ol
+        className="space-y-1.5 text-[0.8125rem]"
+        data-testid="analysis-previous"
+      >
         {analyses.data.map((analysis) => (
           <li key={analysis.id} className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-brand-navy">
               {fill(w.number, { number: analysis.number })}
             </span>
-            <Pill tone={RESULT_TONES[analysis.status]}>{w.statuses[analysis.status]}</Pill>
+            <Pill tone={RESULT_TONES[analysis.status]}>
+              {w.statuses[analysis.status]}
+            </Pill>
             <span className="text-shell-muted">
               {w.triggers[analysis.trigger]} · {timeAgo(t, analysis.started_at)}
             </span>
@@ -396,9 +510,11 @@ function Head({
   const running = live && analysis?.status === "running";
   const waiting = live && !running;
   const title = running ? w.running : waiting ? w.waiting : w.title;
-  const tone: TileTone = analysis && !live ? RESULT_TONES[analysis.status] : "violet";
+  const tone: TileTone =
+    analysis && !live ? RESULT_TONES[analysis.status] : "violet";
   const again =
-    may && (intention.status === "failed" || (!live && analysis?.status === "blocked"))
+    may &&
+    (intention.status === "failed" || (!live && analysis?.status === "blocked"))
       ? w.again
       : may && waiting && !analysis
         ? w.now
@@ -409,7 +525,11 @@ function Head({
       data-testid="analysis-head"
       data-live={live ? "true" : "false"}
     >
-      <IconTile icon={running ? LoaderCircle : ShieldCheck} tone={tone} className="size-11" />
+      <IconTile
+        icon={running ? LoaderCircle : ShieldCheck}
+        tone={tone}
+        className="size-11"
+      />
       <div className="min-w-0 flex-1">
         <h2 className="text-[1.0625rem] font-semibold tracking-[-0.01em] text-brand-navy">
           {title}
@@ -437,7 +557,13 @@ function Head({
 
 /** What its analysis came to, in the reader's words — the intention's own
  * summary, as kept, until it is read; none, said so. */
-export function SummarySaid({ intention, none }: { intention: IntentionDetail; none: string }) {
+export function SummarySaid({
+  intention,
+  none,
+}: {
+  intention: IntentionDetail;
+  none: string;
+}) {
   const t = useDictionary();
   const links = useLinks();
   const { analysis } = useAnalysisOf(intention);
@@ -451,7 +577,9 @@ export function SummarySaid({ intention, none }: { intention: IntentionDetail; n
   return (
     <p
       className={
-        summary ? "text-[0.9375rem] text-brand-navy" : "text-[0.875rem] text-shell-muted"
+        summary
+          ? "text-[0.9375rem] text-brand-navy"
+          : "text-[0.875rem] text-shell-muted"
       }
       data-testid="intention-summary"
     >
@@ -474,11 +602,17 @@ function AnswerSaid({ answer }: { answer: AnalysisAnswer }) {
       {answer.points.length ? (
         <ul className="flex flex-col gap-1.5 text-[0.8125rem] text-brand-navy">
           {answer.points.map((point) => (
-            <li key={point.text} className="flex flex-wrap items-baseline gap-2" data-testid="answer-point">
+            <li
+              key={point.text}
+              className="flex flex-wrap items-baseline gap-2"
+              data-testid="answer-point"
+            >
               <span className="min-w-0 flex-1" dir="auto">
                 {point.text}
               </span>
-              <Pill tone="neutral">{fill(w.rests, { count: String(point.cites.length) })}</Pill>
+              <Pill tone="neutral">
+                {fill(w.rests, { count: String(point.cites.length) })}
+              </Pill>
             </li>
           ))}
         </ul>
@@ -493,7 +627,9 @@ function AnswerSaid({ answer }: { answer: AnalysisAnswer }) {
           </ul>
         </div>
       ) : null}
-      <p className="text-xs text-shell-muted">{fill(w.by, { model: modelTitle(answer.model) })}</p>
+      <p className="text-xs text-shell-muted">
+        {fill(w.by, { model: modelTitle(answer.model) })}
+      </p>
     </div>
   );
 }
@@ -501,7 +637,12 @@ function AnswerSaid({ answer }: { answer: AnalysisAnswer }) {
 // ── the tabs ─────────────────────────────────────────────────────────────
 
 function Loading() {
-  return <div className="h-64 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
+  return (
+    <div
+      className="h-64 animate-pulse rounded-xl bg-shell-canvas"
+      aria-hidden="true"
+    />
+  );
 }
 
 function Nothing({ title, body }: { title: string; body: string }) {
@@ -521,18 +662,31 @@ function Nothing({ title, body }: { title: string; body: string }) {
  * it found; on the right what it reads — what it consulted, how far its
  * context can ground it, the scope — and its earlier analyses. Its
  * conclusions are step 3's (AnalysisResults). */
-export function AnalysisProgress({ intention }: { intention: IntentionDetail }) {
+export function AnalysisProgress({
+  intention,
+}: {
+  intention: IntentionDetail;
+}) {
   const t = useDictionary();
   const w = t.intentions.analysis;
   const links = useLinks();
   const { analysis, live } = useAnalysisOf(intention);
   const data = analysis.data;
-  const shown = useMemo(() => (data ? intentionAnalysis(t, data, links) : null), [data, t, links]);
+  const shown = useMemo(
+    () => (data ? intentionAnalysis(t, data, links) : null),
+    [data, t, links],
+  );
   if (analysis.isError) {
-    return <ErrorState error={analysis.error} onRetry={() => void analysis.refetch()} />;
+    return (
+      <ErrorState
+        error={analysis.error}
+        onRetry={() => void analysis.refetch()}
+      />
+    );
   }
   if (data === undefined) return <Loading />;
-  if (data === null && !live) return <Nothing title={w.none} body={w.noneBody} />;
+  if (data === null && !live)
+    return <Nothing title={w.none} body={w.noneBody} />;
   return (
     <div
       className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start"
@@ -547,13 +701,18 @@ export function AnalysisProgress({ intention }: { intention: IntentionDetail }) 
               className="flex items-start gap-3 rounded-xl bg-state-danger-soft px-4 py-3 text-[0.8125rem]"
               data-testid="analysis-blocked"
             >
-              <AlertOctagon className="mt-0.5 size-4 shrink-0 text-state-danger" aria-hidden="true" />
+              <AlertOctagon
+                className="mt-0.5 size-4 shrink-0 text-state-danger"
+                aria-hidden="true"
+              />
               <div className="min-w-0 text-brand-navy">
                 <p className="font-semibold">{w.blocked}</p>
                 <p className="text-shell-muted">{w.blockedBody}</p>
               </div>
             </div>
-            {intention.readiness ? <ReadinessPanel readiness={intention.readiness} /> : null}
+            {intention.readiness ? (
+              <ReadinessPanel readiness={intention.readiness} />
+            ) : null}
           </>
         ) : data ? (
           <>
@@ -564,7 +723,10 @@ export function AnalysisProgress({ intention }: { intention: IntentionDetail }) 
               // What stopped it, said where it stopped: there are no results.
               <AnalysisState status="failed" missing={shown.missing} />
             ) : shown && shown.findings.length ? (
-              <FirstFindings intentionId={intention.id} findings={shown.findings} />
+              <FirstFindings
+                intentionId={intention.id}
+                findings={shown.findings}
+              />
             ) : null}
           </>
         ) : null}
@@ -596,7 +758,11 @@ function FirstFindings({
     <IntelligenceSection
       kind="fact"
       title={w.firstFindings}
-      count={findings.length > 3 ? fill(t.intelligence.findings.count, { count: findings.length }) : undefined}
+      count={
+        findings.length > 3
+          ? fill(t.intelligence.findings.count, { count: findings.length })
+          : undefined
+      }
       level={2}
       action={
         <Link
@@ -623,9 +789,17 @@ export function AnalysisResults({ intention }: { intention: IntentionDetail }) {
   const links = useLinks();
   const { analysis, live } = useAnalysisOf(intention);
   const data = analysis.data;
-  const shown = useMemo(() => (data ? intentionAnalysis(t, data, links) : null), [data, t, links]);
+  const shown = useMemo(
+    () => (data ? intentionAnalysis(t, data, links) : null),
+    [data, t, links],
+  );
   if (analysis.isError) {
-    return <ErrorState error={analysis.error} onRetry={() => void analysis.refetch()} />;
+    return (
+      <ErrorState
+        error={analysis.error}
+        onRetry={() => void analysis.refetch()}
+      />
+    );
   }
   if (data === undefined) return <Loading />;
   if (!data || data.status === "running" || live) {
@@ -636,13 +810,50 @@ export function AnalysisResults({ intention }: { intention: IntentionDetail }) {
       {shown ? (
         <AnalysisView
           analysis={shown}
-          said={data.result?.answer ? <AnswerSaid answer={data.result.answer} /> : undefined}
+          said={
+            data.result?.answer ? (
+              <AnswerSaid answer={data.result.answer} />
+            ) : undefined
+          }
+          next={<ActOn intention={intention} analysis={shown} />}
           proposals={shown.recommendations.length > 0}
           level={2}
         />
       ) : (
         <Nothing title={w.none} body={w.noneBody} />
       )}
+    </div>
+  );
+}
+
+/** A question answered whose analysis recommends acting: the way to act,
+ * as a request of its own — analysed, then decided, as any other. Nothing
+ * runs from here (LEKA-438: the results had no way on). */
+function ActOn({
+  intention,
+  analysis,
+}: {
+  intention: IntentionDetail;
+  analysis: Analysis;
+}) {
+  const w = useDictionary().intentions.analysis;
+  const rank = { high: 0, medium: 1, low: 2 } as const;
+  const first = [...analysis.recommendations].sort(
+    (a, b) => rank[a.priority ?? "low"] - rank[b.priority ?? "low"],
+  )[0];
+  if (intention.status !== "completed" || !first) return null;
+  return (
+    <div className="space-y-1.5">
+      <Link
+        href={`${routes.intentionNew()}?q=${encodeURIComponent(first.title)}`}
+        className={buttonVariants({ className: "w-full" })}
+        data-testid="results-act"
+      >
+        {w.act}
+      </Link>
+      <p className="text-xs text-shell-muted">
+        {fill(w.actBody, { title: first.title })}
+      </p>
     </div>
   );
 }
@@ -654,16 +865,31 @@ export function DecisionAside({ intention }: { intention: IntentionDetail }) {
   const links = useLinks();
   const { analysis } = useAnalysisOf(intention);
   const data = analysis.data;
-  const shown = useMemo(() => (data ? intentionAnalysis(t, data, links) : null), [data, t, links]);
+  const shown = useMemo(
+    () => (data ? intentionAnalysis(t, data, links) : null),
+    [data, t, links],
+  );
   const said = shown && shown.status !== "failed" && shown.status !== "pending";
   return (
-    <aside className="min-w-0 space-y-4" aria-label={t.decision.aside} data-testid="decision-aside">
+    <aside
+      className="min-w-0 space-y-4"
+      aria-label={t.decision.aside}
+      data-testid="decision-aside"
+    >
       {said ? (
         <>
-          <IntelligenceSection kind="impact" title={t.intelligence.impact.global} level={2}>
+          <IntelligenceSection
+            kind="impact"
+            title={t.intelligence.impact.global}
+            level={2}
+          >
             <ImpactPanel impact={shown.impact} />
           </IntelligenceSection>
-          <ConfidencePanel score={shown.confidence} support={shown.support} level={2} />
+          <ConfidencePanel
+            score={shown.confidence}
+            support={shown.support}
+            level={2}
+          />
         </>
       ) : null}
       {/* What it takes to carry it through here (LEKA-439). */}
@@ -684,17 +910,28 @@ export function EvidenceTab({ intention }: { intention: IntentionDetail }) {
     [result, t, links],
   );
   if (analysis.isError) {
-    return <ErrorState error={analysis.error} onRetry={() => void analysis.refetch()} />;
+    return (
+      <ErrorState
+        error={analysis.error}
+        onRetry={() => void analysis.refetch()}
+      />
+    );
   }
   if (analysis.data === undefined) return <Loading />;
   return (
     <Card
       title={w.title}
-      icon={<ShieldCheck className="size-4 text-shell-muted" aria-hidden="true" />}
-      action={items.length ? <Pill tone="neutral">{items.length}</Pill> : undefined}
+      icon={
+        <ShieldCheck className="size-4 text-shell-muted" aria-hidden="true" />
+      }
+      action={
+        items.length ? <Pill tone="neutral">{items.length}</Pill> : undefined
+      }
     >
       <div className="space-y-3" data-testid="intention-evidence">
-        <p className="text-[0.8125rem] text-shell-muted">{result ? w.body : w.noAnalysis}</p>
+        <p className="text-[0.8125rem] text-shell-muted">
+          {result ? w.body : w.noAnalysis}
+        </p>
         {result ? <EvidenceList items={items} /> : null}
       </div>
     </Card>

@@ -78,13 +78,13 @@ function confidence(badge: HTMLElement) {
 describe("what each statement is", () => {
   it("is a section named by its title, holding what its kind says", () => {
     show(
-      <IntelligenceSection kind="fact" title="Constats" count="2 constat(s)" subtitle="Lus">
+      <IntelligenceSection kind="fact" title="Constats" count="2 constats" subtitle="Lus">
         <p>x</p>
       </IntelligenceSection>,
     );
     const section = screen.getByRole("region", { name: "Constats" });
     expect(section).toHaveAttribute("data-kind", "fact");
-    expect(section).toHaveTextContent("2 constat(s)");
+    expect(section).toHaveTextContent("2 constats");
     expect(section).toHaveTextContent("Lus");
   });
 
@@ -162,7 +162,7 @@ describe("confidence", () => {
       <ConfidencePanel
         score={0.83}
         support={[
-          { id: "s", label: "2 source(s) lue(s)", established: true },
+          { id: "s", label: "2 sources lues", established: true },
           { id: "m", label: "Manque : ce qu'il touche", established: false },
         ]}
       />,
@@ -174,7 +174,7 @@ describe("confidence", () => {
     );
     const lines = within(panel).getAllByRole("listitem");
     expect(lines.map((line) => [line.textContent, line.dataset.established])).toEqual([
-      ["2 source(s) lue(s)", "true"],
+      ["2 sources lues", "true"],
       ["Manque : ce qu'il touche", "false"],
     ]);
   });
@@ -380,7 +380,7 @@ describe("impact", () => {
     const impact = screen.getByTestId("impact");
     expect(screen.getByTestId("impact-level")).toHaveTextContent("Moyen");
     expect(impact).toHaveTextContent(
-      "1 élément(s) concerné(s) · d'après la gravité déclarée (sev2)",
+      "1 élément concerné · d'après la gravité déclarée (sev2)",
     );
     const touched = screen.getByRole("list", { name: "Touché" });
     expect(within(touched).getByRole("link")).toHaveAttribute("href", "/environment/services/p");
@@ -483,7 +483,7 @@ describe("how an analysis went", () => {
   const PARTIAL: Analysis = {
     status: "partial",
     summary: "OPS-1841 : clos, sev2. Sa cause n'est pas connue.",
-    support: [{ id: "s", label: "1 source(s) lue(s)", established: true }],
+    support: [{ id: "s", label: "1 source lue", established: true }],
     missing: ["ce qu'il touche"],
     findings: [{ id: "f", statement: "OPS-1841 : clos, sev2.", evidence: [RECORD] }],
     causes: [],
@@ -512,9 +512,9 @@ describe("how an analysis went", () => {
     expect(summary).toHaveTextContent("Synthèse de l'analyse");
     expect(summary).toHaveTextContent("Sa cause n'est pas connue.");
     expect(summary).toHaveTextContent("Confiance inconnue");
-    expect(summary).toHaveTextContent("1 source(s) lue(s)");
+    expect(summary).toHaveTextContent("1 source lue");
     expect(screen.getByText("Aucune cause n'est déclarée ni soupçonnée.")).toBeInTheDocument();
-    expect(screen.getByTestId("intelligence-evidence")).toHaveTextContent("1 preuve(s)");
+    expect(screen.getByTestId("intelligence-evidence")).toHaveTextContent("1 preuve");
     expect(screen.getByTestId("intelligence-proposal")).toHaveTextContent(
       "LEKA ne propose pas encore de recommandation",
     );
