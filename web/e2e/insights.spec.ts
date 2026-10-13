@@ -82,7 +82,7 @@ test.describe("Insights LEKA", () => {
     const lines = page.getByTestId("insights-findings").getByRole("listitem");
     await expect(lines).toHaveCount(3);
     await expect(lines.nth(1)).toContainText("redis-sessions a disparu de vos sources");
-    await expect(lines.nth(1)).toContainText("auth-service en dépendai(en)t encore");
+    await expect(lines.nth(1)).toContainText("auth-service en dépendait encore");
     await expect(lines.nth(2)).toContainText("La source Runbooks space est en erreur");
     await expect(lines.nth(2)).toContainText("Jamais lue");
     await expect(page.getByText(/^Dernière analyse · /)).toBeVisible();

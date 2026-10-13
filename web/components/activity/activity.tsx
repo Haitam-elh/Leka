@@ -81,7 +81,7 @@ const ALL = 50;
 const ORIGINS = ["leka", "person", "policy", "source"] as const;
 type Origin = (typeof ORIGINS)[number];
 
-const KIND_ICON: Record<ActivityItem["kind"], LucideIcon> = {
+export const KIND_ICON: Record<ActivityItem["kind"], LucideIcon> = {
   model_built: RefreshCw,
   entity_removed: PackageMinus,
   incident: TriangleAlert,
@@ -100,14 +100,14 @@ const KIND_ICON: Record<ActivityItem["kind"], LucideIcon> = {
   source_event: Waypoints,
 };
 
-const CATEGORY_TONE: Record<ActivityCategory, TileTone> = {
+export const CATEGORY_TONE: Record<ActivityCategory, TileTone> = {
   information: "info",
   action: "success",
   alert: "warning",
   incident: "danger",
 };
 
-const CHIP: Record<ActivityCategory, string> = {
+export const CHIP: Record<ActivityCategory, string> = {
   information: "bg-state-info-soft text-state-info",
   action: "bg-state-success-soft text-state-success",
   alert: "bg-state-warning-soft text-state-warning",
