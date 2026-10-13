@@ -1353,6 +1353,9 @@ No model, or no agent offered: nothing is started, and the analysis answers as b
   outcomes linked in code; the history refused an UPDATE, allowed `by`
   forgotten; another workspace's 404.
 - LEKA-439: the brief, its questions and answers, what it takes — § 9 bis.
+- LEKA-440: the whole engine, measured on a versioned set of cases against
+  a reference — a regression, or a critical failure it does not know,
+  refuses a change: `docs/benchmarks/intentions.md`.
 
 ## Not yet
 
