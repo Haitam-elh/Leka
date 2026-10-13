@@ -491,7 +491,7 @@ function TroubleCard() {
                 {fill(w.alertsFrom, {
                   plan: (entitlement.alerts_from ?? "").replace(/^./, (c) => c.toUpperCase()),
                 })}{" "}
-                <Link href={routes.billing()} className="text-shell-nav-active hover:underline">
+                <Link href={routes.billing()} className="text-shell-nav-active underline underline-offset-2">
                   {w.seePlans}
                 </Link>
               </p>
@@ -594,7 +594,7 @@ export function Overview() {
 
   // What needs someone first — a decision, something in trouble, a request
   // under way — then what moved and whether what LEKA sees can be trusted
-  // (LEKA-442: docs/frontend/overview.md says each card's question).
+  // (LEKA-442: docs/frontend/overview-and-twin.md says each card's question).
   return (
     <PageContainer>
       <Greeting load={load} />
