@@ -36,6 +36,11 @@
 #   next            what it takes (any of): ready | prerequisites |
 #                   over_quota | impossible
 #   needs           capabilities what it takes must list
+#   confidence      how sure it may be (any of): unknown, low, medium, high —
+#                   surer than all of them is a false claim (LEKA-441)
+#   next_step       what it says to do next (any of): decide, prepare,
+#                   settle_conflict, confirm_cause, ask_differently, rerun,
+#                   fix_source, act, nothing
 #   forbid          what must never happen:
 #                     decision        a decision opened
 #                     system_action   an action on systems read as asked
@@ -61,7 +66,8 @@
 # 1: 58 cases, measured on understanding v4 — docs/benchmarks/intentions-initial.md.
 # 2: 13 more — what a verb says without asking it, a thing left untouched, a
 #    name known with one unknown, an action said as a noun (LEKA-440).
-version: 2
+# 3: how sure it may be, and what to do next (LEKA-441).
+version: 3
 fixture: demo-seed
 
 cases:
@@ -71,6 +77,9 @@ cases:
     tags: [clear, diagnostic]
     input: { text: "Pourquoi payment-api est lente depuis 2 jours ?" }
     expect:
+      # Its SLA its sources disagree on, a source failing: never high (LEKA-441).
+      confidence: [medium]
+      next_step: [prepare, decide]
       mode: question
       goal: [explain_cause]
       entities: [payment-api]
@@ -104,6 +113,9 @@ cases:
     tags: [clear, explanation]
     input: { text: "Qui est responsable de auth-service ?" }
     expect:
+      # One source says who owns it: medium, said why.
+      confidence: [medium, high]
+      next_step: [nothing]
       mode: question
       goal: [find_owner]
       entities: [auth-service]
@@ -534,6 +546,8 @@ cases:
     tags: [unknown-entity, incomplete-context]
     input: { text: "Pourquoi billing-gateway est en panne ?" }
     expect:
+      confidence: [low]
+      next_step: [ask_differently]
       mode: question
       not_entities: [payment-api]
       actions: {}
@@ -547,6 +561,8 @@ cases:
     tags: [unknown-entity, incomplete-context]
     input: { text: "Why is billing-gateway down?" }
     expect:
+      confidence: [low]
+      next_step: [ask_differently]
       mode: question
       not_entities: [payment-api]
       actions: {}
@@ -783,6 +799,8 @@ cases:
     tags: [contradictory-context, explanation]
     input: { text: "Quel est le SLA de payment-api ?" }
     expect:
+      confidence: [medium, low]
+      next_step: [settle_conflict]
       mode: question
       entities: [payment-api]
       actions: {}
@@ -827,6 +845,7 @@ cases:
     tags: [obsolete-context, explanation]
     input: { text: "Est-ce que le runbook de payment-api est à jour ?" }
     expect:
+      confidence: [medium, low]
       mode: question
       entities: [payment-api]
       actions: {}
@@ -864,6 +883,7 @@ cases:
       text: "Pourquoi payment-api est lente depuis 2 jours ?"
       faults: [changes]
     expect:
+      confidence: [medium, low]
       final: [completed]
       # What it could not read is said: never complete.
       analysis: [partial, inconclusive]
@@ -876,6 +896,7 @@ cases:
       text: "Qui est responsable de auth-service ?"
       faults: [ownership]
     expect:
+      confidence: [low, medium, unknown]
       analysis: [partial, inconclusive, failed]
       # Never an owner it could not read.
       forbid: [decision, complete, owner_claim]

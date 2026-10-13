@@ -679,6 +679,12 @@ class AnalysisCause(BaseModel):
     ref_id: uuid.UUID | None
     params: dict[str, JsonValue]
     evidence: list[str]
+    strength: Literal["confirmed", "probable", "correlated"] | None = Field(
+        default=None,
+        description="confirmed — its source says so; probable — LEKA infers it with enough to "
+        "go on; correlated — only time ties it to what happened, never called a cause "
+        "(LEKA-441). None on an analysis made before.",
+    )
 
 
 class AnalysisImpactItem(BaseModel):
@@ -725,6 +731,21 @@ class RecommendationTarget(BaseModel):
     name: str
 
 
+class AnalysisPrecondition(BaseModel):
+    """What must hold before a recommendation can be carried out (LEKA-441)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: str = Field(
+        description="precondition.version_to_restore, precondition.environment, "
+        "precondition.cause_confirmed, precondition.approved — worded by the interface."
+    )
+    text: str
+    met: bool | None = Field(description="None: not known yet — an approval to come.")
+    blocking: bool = Field(description="Unmet, it cannot be carried out as it stands.")
+    params: dict[str, JsonValue] = Field(default_factory=dict)
+
+
 class AnalysisRecommendation(BaseModel):
     """What LEKA proposes to do (LEKA-389) — a proposal, never a fact: from
     the findings and causes it names (`basis`), on the evidence they rest
@@ -752,6 +773,142 @@ class AnalysisRecommendation(BaseModel):
     basis: list[str] = Field(description="The ids of the findings and causes it follows from.")
     evidence: list[str] = Field(description="The ids of the evidence they rest on.")
     target: RecommendationTarget | None
+    preconditions: list[AnalysisPrecondition] = Field(
+        default_factory=list, description="What must hold first (LEKA-441)."
+    )
+    assumptions: list[str] = Field(
+        default_factory=list,
+        description="The causes it rests on that are not confirmed: what it assumes.",
+    )
+    executable: bool | None = Field(
+        default=None,
+        description="Every blocking precondition met; None on an analysis made before.",
+    )
+
+
+# ── what an analysis rests on, said (LEKA-441) ─────────────────────────────
+
+
+class ExplainedSource(BaseModel):
+    """A source behind what the analysis read — and in what state it was
+    when it read: never shown as read when it was not."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_id: uuid.UUID
+    kind: str | None
+    name: str | None
+    elements: int = Field(description="What of its context came from it.")
+    state: Literal["read", "error", "degraded", "stale", "syncing", "disabled", "gone"] = Field(
+        description="read — synced and well; error, degraded — failing, what it said is as of "
+        "its last sync; stale — not synced for STALE_DAYS; syncing — still reading when the "
+        "analysis ran; disabled; gone — deleted since."
+    )
+    last_synced_at: datetime | None
+    said: str = Field(description="In English, for what reads it without a dictionary.")
+
+
+class ExplainedCapability(BaseModel):
+    """A capability chosen, how it went — and, when it did not answer, what
+    is not known because of it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    status: Literal["succeeded", "failed", "timed_out", "skipped"]
+    reason: str | None
+    leaves: AnalysisNote | None = Field(description="What is not known because it did not answer.")
+
+
+class ConfidenceReason(BaseModel):
+    """One reason for how sure it is: what it starts from, what raises or
+    lowers it, what caps it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: str
+    effect: Literal["base", "raises", "lowers", "caps"]
+    text: str
+    params: dict[str, JsonValue] = Field(default_factory=dict)
+
+
+class ExplainedConfidence(BaseModel):
+    """How sure the analysis is — in words, with why; never a bare figure."""
+
+    model_config = ConfigDict(frozen=True)
+
+    level: Literal["high", "medium", "low", "unknown"]
+    reasons: list[ConfidenceReason]
+
+
+class AnalysisClaim(BaseModel):
+    """A figure the screen may say — « 3 sources à l'appui », « 2
+    événements corrélés », « 0 contradiction » — what it counts, and what it
+    is read from: none said that is not counted."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: Literal["sources", "correlated_events", "contradictions", "impacted_users"]
+    count: int
+    holds: bool = Field(description="It supports the conclusion: sources behind it, no conflict.")
+    definition: str = Field(description="What it counts, in English.")
+    refs: list[str] = Field(
+        description="What it was counted from: source ids, evidence ids, conflict ids."
+    )
+
+
+class ExplainedConflict(BaseModel):
+    """What its sources disagree on, about what it asks: every side, who
+    says it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    label: str
+    about: str
+    values: list[dict[str, JsonValue]] = Field(description="Each {value, by}.")
+    said: str
+
+
+class AnalysisNextStep(BaseModel):
+    """What to do next, and why that."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: Literal[
+        "decide",
+        "prepare",
+        "settle_conflict",
+        "confirm_cause",
+        "ask_differently",
+        "rerun",
+        "fix_source",
+        "act",
+        "nothing",
+    ]
+    text: str
+    why: AnalysisNote
+    params: dict[str, JsonValue] = Field(default_factory=dict)
+
+
+class AnalysisExplanation(BaseModel):
+    """On what an analysis rests (LEKA-441): what LEKA understood, what it
+    really read and in what state, what failed and what that leaves unknown,
+    how sure it is and why, the figures it may say with what they count,
+    what disagrees, what is stale, its limits, and what to do next."""
+
+    model_config = ConfigDict(frozen=True)
+
+    understood: AnalysisNote
+    consulted: list[ExplainedSource]
+    capabilities: list[ExplainedCapability]
+    confidence: ExplainedConfidence
+    claims: list[AnalysisClaim]
+    conflicts: list[ExplainedConflict]
+    stale: list[AnalysisNote]
+    limits: list[AnalysisNote]
+    next: AnalysisNextStep
+    context_version: int | None = Field(description="The version of its context it read.")
 
 
 class IntentionAnalysisResult(BaseModel):
@@ -777,6 +934,10 @@ class IntentionAnalysisResult(BaseModel):
     recommendations: list[AnalysisRecommendation] = Field(
         default_factory=list,
         description="What LEKA proposes, apart from what it found (LEKA-389).",
+    )
+    explanation: AnalysisExplanation | None = Field(
+        default=None,
+        description="On what it rests (LEKA-441); none on an analysis made before.",
     )
 
 
@@ -839,6 +1000,12 @@ class IntentionAnalysisRead(BaseModel):
     result: IntentionAnalysisResult | None
     error: str | None
     detail: dict[str, JsonValue]
+    context_now: int | None = Field(
+        default=None,
+        description="The version its intention's context is at now: newer than "
+        "`context_version`, the analysis read an older one — said, never silently kept "
+        "(LEKA-441).",
+    )
 
 
 class IntentionAnalysisRequested(BaseModel):

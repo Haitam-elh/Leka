@@ -15,6 +15,15 @@ import {
 } from "@/components/intelligence/confidence";
 import { EvidenceList } from "@/components/intelligence/evidence";
 import {
+  AnalysisLimits,
+  ConfidenceExplained,
+  ConflictList,
+  FreshnessNotice,
+  NextStepPanel,
+  SourcesConsulted,
+  UnderstoodLine,
+} from "@/components/intelligence/explained";
+import {
   FindingList,
   ProbableCauseList,
 } from "@/components/intelligence/findings";
@@ -87,7 +96,11 @@ export function AnalysisSummary({
         </div>
       </div>
       <div className="space-y-3 md:border-s md:border-shell-line md:ps-4">
-        <ConfidenceBadge score={analysis.confidence} />
+        <ConfidenceBadge
+          score={analysis.confidence}
+          // How sure, as the analysis says it and why (LEKA-441): a word.
+          level={analysis.explanation?.confidence.level ?? null}
+        />
         <SupportList items={analysis.support ?? []} />
         {action}
       </div>
@@ -102,9 +115,12 @@ export function AnalysisView({
   synthesis = true,
   said,
   next,
+  again,
   level = 3,
 }: {
   analysis: Analysis;
+  /** The way to analyse again, when its context moved on since (LEKA-441). */
+  again?: React.ReactNode;
   /** The way on from what it proposes, under its proposals — apart from
    * what it found, as the proposals are: the one primary action. */
   next?: React.ReactNode;
@@ -122,6 +138,7 @@ export function AnalysisView({
   const t = useDictionary();
   const w = t.intelligence;
   const evidence = evidenceOf(analysis);
+  const explained = analysis.explanation ?? null;
   // "0 hypothèse(s)" beside a title says what its empty section already
   // says, and takes the room a side column does not have.
   const count = (said: string, n: number) =>
@@ -132,12 +149,28 @@ export function AnalysisView({
       data-testid="analysis"
       data-status={analysis.status}
     >
+      {explained?.freshness ? (
+        <FreshnessNotice
+          read={explained.freshness.read}
+          now={explained.freshness.now}
+          action={again}
+        />
+      ) : null}
+      {explained?.understood ? <UnderstoodLine text={explained.understood} /> : null}
       <AnalysisState
         status={analysis.status}
         missing={analysis.missing}
         onRetry={onRetry}
       />
-      {analysis.status === "failed" || analysis.status === "pending" ? null : (
+      {analysis.status === "failed" || analysis.status === "pending" ? (
+        explained ? (
+          // What stopped it, and what to do: never a bare « failed ».
+          <div className="grid gap-4 xl:grid-cols-2">
+            <NextStepPanel next={explained.next} level={level} />
+            <AnalysisLimits explanation={explained} level={level} />
+          </div>
+        ) : null
+      ) : (
         <>
           {synthesis ? (
             <AnalysisSummary analysis={analysis} level={level} said={said} />
@@ -170,7 +203,12 @@ export function AnalysisView({
               </IntelligenceSection>
             </div>
             <div className="min-w-0 space-y-4">
-              {synthesis ? null : (
+              {explained ? (
+                <>
+                  <NextStepPanel next={explained.next} level={level} />
+                  <ConfidenceExplained confidence={explained.confidence} level={level} />
+                </>
+              ) : synthesis ? null : (
                 <ConfidencePanel
                   score={analysis.confidence}
                   support={analysis.support}
@@ -201,6 +239,13 @@ export function AnalysisView({
                   />
                   {next ? <div className="mt-3">{next}</div> : null}
                 </IntelligenceSection>
+              ) : null}
+              {explained ? (
+                <>
+                  <ConflictList conflicts={explained.conflicts} level={level} />
+                  <AnalysisLimits explanation={explained} level={level} />
+                  <SourcesConsulted sources={explained.consulted} level={level} />
+                </>
               ) : null}
               <UncertaintyList items={analysis.uncertainties} />
             </div>

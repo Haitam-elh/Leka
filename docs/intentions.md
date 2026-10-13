@@ -969,6 +969,193 @@ platform's and Shop's teams; a known owner proposes no owner.
 `web/components/intentions/analysis-tab.test.tsx`: proposals apart, worded,
 their why, approval said, evidence opened; inconclusive; partial.
 
+### On what it rests, said (LEKA-441)
+
+An analysis says what LEKA understood, what it really read and in what
+state, what is certain and what is only thought, how sure it is and why,
+what is missing or contradictory, its limits, and what to do next, and why.
+Nothing on screen is persuasive decoration: every figure is counted from the
+result, defined, and opens on what it was counted from.
+
+`api/leka/intentions/explain.py`, pure, after `recommend`: the result's
+`explanation` (`AnalysisExplanation`), kept with it. The result's status and
+confidence are held to it:
+- **never `complete`** while a source it read from was failing, degraded or
+  still syncing: it is `partial`, with `analysis.sources_pending` in
+  `missing`;
+- **never a figure surer than its level**: low ≤ 0.59, medium ≤ 0.84;
+  unknown, none.
+
+| Field | What it holds |
+| --- | --- |
+| `understood` | What LEKA understood: goal, the things, the unknown names, where, what is excluded, the period said, the actions. Worded by the interface from its values. |
+| `consulted` | Each source behind what it read, with how much it brought and its **state** when it read: `read`, `error`, `degraded`, `stale` (not synced for 7 days), `syncing`, `disabled`, `gone`. Never shown read when it was not. |
+| `capabilities` | Each capability chosen and how it went. One that did not answer says **what that leaves unknown** (`limit.capability.<name>`), e.g. « what changed is not known: a cause may be missing ». |
+| `confidence` | `{level, reasons}`: high, medium, low or unknown, and why (below). Never a bare percentage. |
+| `claims` | The figures a screen may say, each `{code, count, holds, definition, refs}` (below). |
+| `conflicts` | What its sources disagree on **about what it asks**, every side with who says it. Disagreements about other things in its context do not weigh on it. |
+| `stale` | Sources out of date or failing, documents not current. |
+| `limits` | What did not answer, sources failing or syncing, a context lacking something. |
+| `next` | What to do next and **why** (below). |
+| `context_version` | The version of its context it read. `GET …/analysis` adds `context_now`, the version its intention's context is at now: newer, the screen says it read an older one, with the way to analyse again. |
+
+**Causes, by strength** (`analysis.strength_of`, kept as `causes[].strength`):
+- `confirmed`: its source states it is the cause;
+- `probable`: LEKA infers it with enough to go on (≥ 0.6: a change within 6 hours on what it affects, an enrichment rule);
+- `correlated`: only time ties it to what happened. It is tagged « Corrélation, pas une cause », with no percentage, and never shown as a cause.
+
+**How sure — defined criteria.**
+
+| What it rests on | Level |
+| --- | --- |
+| a cause its source states | high |
+| a cause LEKA infers, probable | medium |
+| only a correlation in time | low |
+| findings from two sources or more | high |
+| findings from a single source | medium |
+| a name LEKA does not know, nothing else asked about | low |
+| nothing found | low |
+| it could not run | unknown |
+
+**Capped at medium** by:
+- a capability that did not answer (the written synthesis excepted);
+- a context lacking something it needs;
+- a contradiction on what it asks;
+- a source failing, degraded, syncing or out of date.
+
+Each cap is a reason, said.
+
+**The figures (claims).** Each one is counted, never estimated:
+
+| Code | Counts | Shown |
+| --- | --- | --- |
+| `sources` | distinct sources the evidence of its findings and causes was read from | « 3 sources à l'appui des constats » |
+| `correlated_events` | changes tied to an incident by time or inference, none confirmed by a source | « 1 événement corrélé, non confirmé comme cause » |
+| `contradictions` | conflicts on what it asks | « Aucune contradiction sur ce qui est demandé » |
+| `impacted_users` | **only when a source states it** (`impacted_users`, `users_affected`…) | « 2400 utilisateurs touchés, selon la source ». Absent otherwise: never « 2 400 utilisateurs impactés » from nothing. |
+
+**Recommendations, with what they need first** (`preconditions`,
+`assumptions`, `executable`):
+- undoing a change needs:
+  - the **version to go back to**, from its source (`previous_version`, `previous`, `from_version`, `rollback_to`), never guessed;
+  - **where** it ran;
+  - non-blocking: that the change is **confirmed** as the cause, and a person's **approval**.
+- What it rests on that is not confirmed is what it **assumes**.
+- A blocking precondition unmet makes it « Pas exécutable en l'état », with what to settle first.
+
+**Next step** (`next.code`), the first that applies:
+1. it could not run: `fix_source` or `rerun`;
+2. a source was still syncing: `rerun` once it has synced;
+3. it names something LEKA does not know: `ask_differently`;
+4. its sources disagree on what it asks (« le SLA »): `settle_conflict`;
+5. its first recommendation:
+   - changes systems and can be carried out: `decide`;
+   - cannot be carried out as it stands: `prepare`, with what it needs;
+   - otherwise `confirm_cause`, `ask_differently` or `act`;
+6. a disagreement: `settle_conflict`;
+7. a capability that did not answer: `rerun`;
+8. inconclusive: `ask_differently`;
+9. otherwise `nothing`.
+
+**On screen** (`components/intelligence/explained.tsx`, reusable):
+- above the results:
+  - `UnderstoodLine`;
+  - `FreshnessNotice`, with « Relancer »;
+- in the synthesis: the confidence **level in words**, and the claims, each opening on what it counts and what it was counted from;
+- on the right:
+  - `NextStepPanel` with its why;
+  - `ConfidenceExplained` with its reasons;
+  - impact;
+  - recommendations, with their preconditions, assumptions and « Pas exécutable en l'état »;
+  - `ConflictList`;
+  - `AnalysisLimits` (what did not answer and what that leaves unknown, what may be out of date);
+  - `SourcesConsulted`, each source in its state;
+- when the analysis could not run: what to do next and its limits, never a bare « échec ».
+
+An analysis made before LEKA-441 has no explanation: it draws as it did.
+
+#### The scenarios (`tests/test_intention_explain.py`)
+
+**1. Several sources really agreeing**
+- **Input**: a cause stated by its source; evidence from GitHub and Jira, both read.
+- **Evidence**: the incident, the deployment, two sources.
+- **Confidence**: high, `cause_confirmed`.
+- **Forbidden**: none.
+- **Shown**: « Confiance élevée », « 2 sources à l'appui », « Aucune contradiction ».
+
+**2. A source partial or unavailable**
+- **Input**: Jira in error; `changes` failed.
+- **Evidence**: what GitHub said.
+- **Confidence**: medium at most, with `capability_failed` and `sources_unsure`.
+- **Forbidden**:
+  - Jira shown « Lue »;
+  - « Analyse terminée »;
+  - « Confiance élevée ».
+- **Shown**:
+  - partial;
+  - Jira « En échec »;
+  - « Changements n'a pas répondu — une cause peut manquer ».
+
+**3. Sources contradicting each other**
+- **Input**: « Quel est le SLA de payment-api ? », with 99.95 against 99.9.
+- **Evidence**: both values, and who says each.
+- **Confidence**: medium at most, with `conflicts`.
+- **Forbidden**:
+  - a single SLA stated as a fact;
+  - « 0 contradiction ».
+- **Shown**:
+  - both sides and their sources;
+  - next: « Trancher : payment-api · sla ».
+
+**4. Data out of date**
+- **Input**: Jira not synced for 30 days.
+- **Evidence**: what it said 30 days ago.
+- **Confidence**: medium at most, with `sources_unsure`.
+- **Forbidden**: Jira shown « Lue ».
+- **Shown**:
+  - Jira « Pas à jour » under « Ce qui peut être daté »;
+  - complete, since out of date is not failing.
+
+**5. A correlation in time, no proof of cause**
+- **Input**: a change 26 hours before the incident (0.55).
+- **Evidence**: the two events.
+- **Confidence**: low, `cause_correlated`.
+- **Forbidden**:
+  - « cause » for it;
+  - « 55 % »;
+  - a rollback proposed first.
+- **Shown**:
+  - « Corrélation, pas une cause »;
+  - « 1 événement corrélé, non confirmé comme cause »;
+  - next: confirm the cause.
+
+**6. A plausible recommendation, not executable for lack of preconditions**
+- **Input**: a rollback whose sources do not say the version it replaced (the demo company's case).
+- **Evidence**: the stated cause.
+- **Confidence**: as its cause.
+- **Forbidden**: an invented « Revenir à la version v2.7.9 ».
+- **Shown**:
+  - « Pas exécutable en l'état — À régler d'abord : version à restaurer inconnue »;
+  - next: « Préparer ».
+
+**7. An analysis finished before its sources did**
+- **Input**: Jira still syncing.
+- **Evidence**: what was read.
+- **Confidence**: medium at most.
+- **Forbidden**: « Analyse terminée ».
+- **Shown**:
+  - partial;
+  - Jira « Synchro en cours »;
+  - next: rerun once the sync is done.
+
+**8. Also checked**
+- An analysis that could not run has confidence `unknown`, no figure, and next `rerun`.
+- An unknown name: confidence low, next `ask_differently`.
+- A figure no source states is never said.
+- A result made before reads without its explanation.
+
+On screen: `web/components/intelligence/explained.test.tsx` covers complete, partial, uncertain, contradictory, failed, not executable and a context moved on. `web/lib/intention-analysis.test.ts` covers the wording, in French and in English.
+
 ## 13. Its decision (LEKA-390)
 
 What it asks to do is never LEKA's to decide: once analysed (§ 12), an

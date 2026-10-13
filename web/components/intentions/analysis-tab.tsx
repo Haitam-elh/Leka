@@ -787,6 +787,7 @@ export function AnalysisResults({ intention }: { intention: IntentionDetail }) {
   const t = useDictionary();
   const w = t.intentions.analysis;
   const links = useLinks();
+  const may = useMayAnalyse(intention);
   const { analysis, live } = useAnalysisOf(intention);
   const data = analysis.data;
   const shown = useMemo(
@@ -816,6 +817,9 @@ export function AnalysisResults({ intention }: { intention: IntentionDetail }) {
             ) : undefined
           }
           next={<ActOn intention={intention} analysis={shown} />}
+          // Its context moved on since it read it: the way to read the
+          // latest, said beside it (LEKA-441).
+          again={may ? <AgainButton intention={intention} label={w.again} /> : undefined}
           proposals={shown.recommendations.length > 0}
           level={2}
         />

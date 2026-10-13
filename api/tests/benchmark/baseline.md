@@ -1,8 +1,8 @@
 # Intention engine benchmark — report
 
-Dataset v2 (`cb9cf01136cc`) · understanding v5 · brief v1 · read by rules · commit `84b6190`
+Dataset v3 (`eaf82f7ba72d`) · understanding v5 · brief v1 · read by rules · commit `a05591b`
 
-**71 / 71 cases** pass every check · **645 / 645 checks** · **0 critical failure(s)**
+**71 / 71 cases** pass every check · **658 / 658 checks** · **0 critical failure(s)**
 
 ## The grid
 
@@ -14,9 +14,9 @@ Dataset v2 (`cb9cf01136cc`) · understanding v5 · brief v1 · read by rules · 
 | decision | 100 % | 95 % | 95 % | 87 / 87 |
 | clarification | 100 % | 95 % | 95 % | 10 / 10 |
 | grounding | 100 % | 95 % | 95 % | 74 / 74 |
-| calibration | 100 % | 95 % | 95 % | 14 / 14 |
+| calibration | 100 % | 95 % | 95 % | 22 / 22 |
 | guardrails | 100 % | 95 % | 95 % | 121 / 121 |
-| next_step | 100 % | 95 % | 95 % | 74 / 74 |
+| next_step | 100 % | 95 % | 95 % | 79 / 79 |
 
 ## Errors by category
 
