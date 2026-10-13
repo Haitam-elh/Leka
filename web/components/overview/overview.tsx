@@ -2,16 +2,13 @@
 
 import {
   ArrowRight,
-  CircleAlert,
   CircleCheck,
   Lightbulb,
   type LucideIcon,
-  Plus,
   ScanSearch,
   ShieldCheck,
   Sparkle,
   TriangleAlert,
-  Waypoints,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -26,18 +23,26 @@ import { CompactIntentionComposer } from "@/components/intentions/compact-compos
 import { PageContainer } from "@/components/shell/page-container";
 import { useCurrentUser } from "@/components/shell/shell-provider";
 import { exactDate, shortWhen } from "@/components/knowledge/time";
-import { attentionRows } from "@/components/environment/parts";
-import { ConnectedSources } from "@/components/sources/connected-sources";
+import { entityHref } from "@/components/environment/parts";
+import {
+  askAbout,
+  FreshnessLine,
+  intentionHref,
+  TwinBadge,
+  twinHow,
+} from "@/components/environment/twin";
+import { StatusPill } from "@/components/intentions/intentions-list";
 import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useConflicts } from "@/lib/conflicts-queries";
 import { useDecisionQueue } from "@/lib/decisions-queries";
 import { useCandidates } from "@/lib/enrichment-queries";
-import { useEnvironment } from "@/lib/environment-queries";
+import { useEnvironment, useMonitoring } from "@/lib/environment-queries";
+import { useIntentions } from "@/lib/intentions/queries";
+import { byState, TROUBLE } from "@/lib/twin";
 import { useActivity } from "@/lib/evolution-queries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import {
-  isConnected,
   type Source,
   sourceTone,
   sources as sourcesApi,
@@ -64,7 +69,6 @@ type Load =
   | { status: "failed" }
   | { status: "ready"; sources: Source[] };
 
-const SOURCE_ROWS = 5;
 
 function useOverviewData(): Load {
   const [load, setLoad] = useState<Load>({ status: "loading" });
@@ -202,13 +206,19 @@ function Greeting({ load }: { load: Load }) {
     }).format(new Date()),
   );
 
+  const environment = useEnvironment();
+  const env = environment.data;
   let status = "";
   if (load.status === "failed") status = t.overview.loadFailed;
   if (load.status === "ready") {
     const needing = load.sources.filter((source) =>
       ["attention", "error"].includes(sourceTone(source)),
     ).length;
+    const trouble = (env?.states?.unavailable ?? 0) + (env?.states?.degraded ?? 0);
     if (load.sources.length === 0) status = t.overview.statusNoSources;
+    // What is in trouble first, then late reads, then sources: the twin's word.
+    else if (trouble > 0) status = fill(t.overview.twin.statusTrouble, { count: trouble });
+    else if (env?.freshness?.late) status = t.overview.twin.statusLate;
     else if (needing > 0) status = fill(t.overview.statusAttention, { count: needing });
     else status = t.overview.statusSynced;
   }
@@ -228,156 +238,6 @@ function Greeting({ load }: { load: Load }) {
       </p>
       <p className="mt-1 text-[0.9375rem] text-shell-muted">{t.overview.tagline}</p>
     </div>
-  );
-}
-
-function StateCard({ load, className }: { load: Load; className?: string }) {
-  const t = useDictionary();
-  const w = t.overview;
-  const list = load.status === "ready" ? load.sources : [];
-  const connected = list.filter(isConnected).length;
-  // The environment as enrichment made it (LEKA-359, LEKA-369): services
-  // and their state — a monitoring tool's word, or deduced from what runs
-  // them — open incidents, what needs attention.
-  const environment = useEnvironment();
-  const env = environment.data;
-  const attention = env ? attentionRows(t, env.attention) : [];
-  // What needs someone: incidents, resources failed or stopped, work left
-  // waiting. What is only worth knowing — nothing measures a service —
-  // is said, not counted as an alarm.
-  const pressing = attention.filter((row) => row.level !== "info");
-  const points = env
-    ? env.attention
-        .filter((point) => point.level !== "info")
-        .reduce((sum, point) => sum + point.count, 0)
-    : null;
-  const known = attention.find((row) => row.level === "info");
-  const tiles = [
-    {
-      key: "services",
-      icon: CircleCheck,
-      tone: "success" as const,
-      label: w.servicesUp,
-      filled: true,
-      // Nothing says how any of them is: not « 0 », which reads « all
-      // down », nor « — », which reads « not loaded yet » — said in words,
-      // not a « ? » (LEKA-438).
-      value: !env
-        ? null
-        : env.services > 0 && env.services_unknown === env.services
-          ? w.notMeasured
-          : String(env.services_operational),
-      foot: !env
-        ? null
-        : env.services === 0
-          ? w.noServices
-          : [
-              fill(w.servicesOf, { total: env.services }),
-              env.services_deduced ? w.deduced : null,
-              env.services_unknown ? fill(w.unknown, { count: env.services_unknown }) : null,
-              env.services_external
-                ? fill(w.external, { count: env.services_external })
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" · "),
-    },
-    {
-      key: "attention",
-      icon: CircleAlert,
-      tone: "warning" as const,
-      label: w.attentionPoints,
-      value: points === null ? null : String(points),
-      foot: !env
-        ? null
-        : pressing[0]
-          ? pressing[0].detail || pressing[0].title
-          : known
-            ? fill(w.onlyKnown, { detail: known.detail || known.title })
-            : w.noAttention,
-    },
-    {
-      key: "incidents",
-      icon: TriangleAlert,
-      tone: "danger" as const,
-      label: w.activeIncidents,
-      value: env ? String(env.incidents_open) : null,
-      foot: !env
-        ? null
-        : env.services_impacted
-          ? fill(w.impacted, { count: env.services_impacted })
-          : env.incidents_open
-            ? null
-            : w.noIncident,
-    },
-  ];
-
-  return (
-    <Card
-      title={t.overview.stateTitle}
-      action={{ label: t.overview.seeDetail, href: routes.environment() }}
-      className={className}
-    >
-      {/* Each tile as tall as what it says (LEKA-438): stretched to the
-          row, they were figures over a blank band. */}
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        {tiles.map(({ key, icon, tone, label, filled, value, foot }) => (
-          <div
-            key={key}
-            className="flex flex-col rounded-lg border border-shell-line px-3 py-3.5"
-            data-testid="kpi-tile"
-            data-kpi={key}
-          >
-            <div className="flex items-start gap-3">
-              <IconTile
-                icon={icon}
-                tone={tone}
-                iconClassName={filled ? "fill-current [&>path]:stroke-white" : undefined}
-              />
-              <div className="min-w-0">
-                <p
-                  className={cn(
-                    "font-bold text-brand-navy",
-                    // A sentence ("Pas encore mesuré") on one line, not a figure's size.
-                    value && !/^\d/.test(value) ? "text-sm leading-7" : "text-[1.375rem] leading-7",
-                  )}
-                  data-testid={`kpi-${key}`}
-                >
-                  {value ?? "—"}
-                </p>
-                <p className="text-[0.78rem] leading-4 tracking-[-0.01em] text-shell-muted">
-                  {label}
-                </p>
-              </div>
-            </div>
-            <p className="line-clamp-2 pt-3 text-xs text-shell-muted">
-              {environment.isError ? w.notRead : foot}
-            </p>
-          </div>
-        ))}
-        <div className="flex flex-col rounded-lg border border-shell-line px-3 py-3.5" data-testid="kpi-tile">
-          <div className="flex items-start gap-3">
-            <IconTile icon={Waypoints} tone="info" />
-            <div className="min-w-0">
-              <p
-                className="text-[1.375rem] leading-7 font-bold text-brand-navy"
-                data-testid="kpi-sources"
-              >
-                {load.status === "ready" ? connected : "—"}
-              </p>
-              <p className="text-[0.78rem] leading-4 tracking-[-0.01em] text-shell-muted">
-                {t.overview.connectedSources}
-              </p>
-            </div>
-          </div>
-          <p className="pt-3 text-xs text-shell-muted">
-            {load.status === "ready"
-              ? fill(t.overview.sourcesRatio, { connected, total: list.length })
-              : t.overview.notMeasured}
-          </p>
-        </div>
-      </div>
-    </Card>
   );
 }
 
@@ -555,51 +415,201 @@ function ApprovalsCard() {
   );
 }
 
-function SourcesCard({ load }: { load: Load }) {
+/** « Qu'est-ce qui ne va pas, maintenant ? » — what the twin says is
+ * unavailable or degraded, the worst first, each its state, how it is
+ * known and the way to analyse it; what nothing says is said apart, never
+ * « sain » (LEKA-442). The alerts the plan includes — or the plan that
+ * would. */
+function TroubleCard() {
   const t = useDictionary();
-  const list = load.status === "ready" ? load.sources : [];
-
+  const w = t.overview.twin;
+  const environment = useEnvironment();
+  const monitoring = useMonitoring();
+  const env = environment.data;
+  const trouble = byState((env?.nodes ?? []).filter((n) => n.twin && TROUBLE.has(n.twin.state)));
+  const silent = (env?.states?.unknown ?? 0) + (env?.states?.not_covered ?? 0);
+  const entitlement = monitoring.data?.entitlement;
   return (
     <Card
-      title={t.overview.sourcesTitle}
-      action={{ label: t.overview.seeAllSources, href: routes.sources() }}
+      title={w.troubleTitle}
+      action={{ label: t.overview.seeAll, href: routes.environment() }}
     >
-      {load.status === "ready" && list.length === 0 ? (
-        <p className="py-4 text-center text-[0.8125rem] text-shell-muted">
-          {t.overview.sourcesEmpty}
-        </p>
+      {!env ? (
+        <div className="h-24 animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />
       ) : (
-        <ConnectedSources sources={list} max={SOURCE_ROWS} />
+        <div className="flex flex-col gap-2" data-testid="overview-trouble">
+          {trouble.length === 0 ? (
+            <Empty icon={CircleCheck} title={w.troubleNone} />
+          ) : (
+            <ul className="divide-y divide-shell-line">
+              {trouble.slice(0, 4).map((node) => (
+                <li key={node.id} className="flex items-center gap-3 py-2" data-state={node.twin?.state}>
+                  {node.twin ? <TwinBadge state={node.twin.state} size="sm" /> : null}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-brand-navy">
+                      {node.entity_id ? (
+                        <Link
+                          href={entityHref({ id: node.entity_id, type: node.type })}
+                          className="hover:underline"
+                        >
+                          {node.name}
+                        </Link>
+                      ) : (
+                        node.name
+                      )}
+                    </span>
+                    {node.twin ? (
+                      <span className="block truncate text-xs text-shell-muted">
+                        {twinHow(t, node.twin)}
+                      </span>
+                    ) : null}
+                  </span>
+                  {node.twin ? (
+                    <Link
+                      href={intentionHref(askAbout(t, node.name, node.twin.state))}
+                      className="shrink-0 text-xs font-medium text-shell-nav-active hover:underline"
+                    >
+                      {w.analyse}
+                    </Link>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+          {silent > 0 ? (
+            <p className="text-xs text-shell-muted" data-testid="overview-silent">
+              {fill(w.silent, { count: silent })}
+            </p>
+          ) : null}
+          {entitlement ? (
+            entitlement.proactive ? (
+              <p className="text-xs text-shell-muted" data-testid="overview-alerts">
+                {fill(w.alertsOpen, { count: monitoring.data?.open.length ?? 0 })}
+              </p>
+            ) : (
+              <p className="text-xs text-shell-muted" data-testid="overview-alerts-limit">
+                {fill(w.alertsFrom, {
+                  plan: (entitlement.alerts_from ?? "").replace(/^./, (c) => c.toUpperCase()),
+                })}{" "}
+                <Link href={routes.billing()} className="text-shell-nav-active hover:underline">
+                  {w.seePlans}
+                </Link>
+              </p>
+            )
+          ) : null}
+        </div>
       )}
-      <Link
-        href={routes.sources()}
-        className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-shell-line px-4 py-2 text-sm font-medium text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-      >
-        <Plus className="size-4" aria-hidden="true" />
-        {t.overview.addSource}
-      </Link>
     </Card>
   );
 }
 
+/** « Où en sont mes demandes ? » — the intentions under way, each its
+ * status, the way to it. */
+function IntentionsCard() {
+  const t = useDictionary();
+  const w = t.overview.twin;
+  const list = useIntentions("active", "");
+  const rows = (list.data?.pages ?? []).flatMap((page) => page.data).slice(0, 4);
+  return (
+    <Card title={w.intentionsTitle} action={{ label: t.overview.seeAll, href: routes.intentions() }}>
+      {list.data && rows.length === 0 ? (
+        <Empty icon={Sparkle} title={w.intentionsNone} />
+      ) : (
+        <ul className="divide-y divide-shell-line" data-testid="overview-intentions">
+          {rows.map((intention) => (
+            <li key={intention.id}>
+              <Link
+                href={routes.intention(intention.id)}
+                className="-mx-1.5 flex items-center gap-3 rounded-lg px-1.5 py-2 outline-none hover:bg-shell-canvas focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-brand-navy">
+                  {intention.title}
+                </span>
+                <StatusPill status={intention.status} />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+/** « Puis-je me fier à ce que LEKA voit ? » — when the sources were read,
+ * those failing, late or never read, and what no source covers; nothing
+ * when all is read and covered, said so. */
+function FreshnessCard() {
+  const t = useDictionary();
+  const w = t.overview.twin;
+  const environment = useEnvironment();
+  const env = environment.data;
+  const unwell = (env?.sources ?? []).filter((s) => s.state !== "read" && s.state !== "syncing");
+  const uncovered = (env?.coverage ?? []).filter((c) => !c.covered);
+  const parts = t.environment.twin.coverage.parts;
+  return (
+    <Card title={w.freshnessTitle} action={{ label: t.overview.seeAllSources, href: routes.sources() }}>
+      {!env ? (
+        <div className="h-24 animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />
+      ) : (
+        <div className="flex flex-col gap-2 text-[0.8125rem]" data-testid="overview-freshness">
+          {(env.sources ?? []).length === 0 ? (
+            // Nothing connected: nothing read, nothing covered — said once.
+            <p className="text-shell-muted">{t.overview.sourcesEmpty}</p>
+          ) : (
+            <FreshnessLine freshness={env.freshness} />
+          )}
+          {(env.sources ?? []).length > 0 && unwell.length === 0 && uncovered.length === 0 ? (
+            <p className="text-shell-muted">{w.allRead}</p>
+          ) : null}
+          {unwell.length ? (
+            <ul className="space-y-1">
+              {unwell.slice(0, 4).map((source) => (
+                <li key={source.id} className="flex items-center gap-2" data-state={source.state}>
+                  <TriangleAlert className="size-4 shrink-0 text-state-warning" aria-hidden="true" />
+                  <span className="min-w-0 truncate">
+                    <span className="font-medium text-brand-navy">{source.name}</span>{" "}
+                    <span className="text-shell-muted">
+                      {t.environment.twin.coverage.states[source.state].toLowerCase()}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {uncovered.length && (env.sources ?? []).length > 0 ? (
+            <p className="text-shell-muted">
+              {fill(w.notCovered, { parts: uncovered.map((c) => parts[c.part]).join(", ") })}
+            </p>
+          ) : null}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 // ── The page ───────────────────────────────────────────────────────────────
 
 export function Overview() {
   const load = useOverviewData();
 
+  // What needs someone first — a decision, something in trouble, a request
+  // under way — then what moved and whether what LEKA sees can be trusted
+  // (LEKA-442: docs/frontend/overview.md says each card's question).
   return (
     <PageContainer>
       <Greeting load={load} />
       <div className="mt-5">
         <CompactIntentionComposer />
       </div>
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.66fr)]">
-        <StateCard load={load} className="xl:col-span-2 xl:self-start" />
-        <InsightsCard />
-        <ActivityCard />
+      <div className="mt-4 grid gap-4 xl:grid-cols-3" data-testid="overview-now">
         <ApprovalsCard />
-        <SourcesCard load={load} />
+        <TroubleCard />
+        <IntentionsCard />
+      </div>
+      <div className="mt-4 grid gap-4 xl:grid-cols-3" data-testid="overview-context">
+        <ActivityCard />
+        <FreshnessCard />
+        <InsightsCard />
       </div>
     </PageContainer>
   );

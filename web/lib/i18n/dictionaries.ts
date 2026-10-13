@@ -338,6 +338,23 @@ const fr = {
    * than showing the mockup's number (decided 2026-09-25).
    */
   overview: {
+    /** What needs someone first, and whether what LEKA sees can be trusted (LEKA-442). */
+    twin: {
+      statusTrouble: "{count} {count|élément est|éléments sont} en difficulté.",
+      statusLate: "Vos sources n'ont pas été lues depuis plus de 2 h.",
+      troubleTitle: "Ce qui ne va pas",
+      troubleNone: "Rien d'indisponible ni de dégradé selon les sources lues.",
+      silent: "{count} {count|élément n'a|éléments n'ont} aucun signal : leur état n'est pas connu — ce n'est pas « sain ».",
+      analyse: "Analyser",
+      alertsOpen: "{count} {count|alerte ouverte|alertes ouvertes}.",
+      alertsFrom: "Les alertes proactives sont incluses dès {plan}.",
+      seePlans: "Voir les plans",
+      intentionsTitle: "Mes intentions en cours",
+      intentionsNone: "Aucune intention en cours.",
+      freshnessTitle: "Fraîcheur et couverture",
+      allRead: "Toutes les sources sont lues et chaque partie de l'environnement est couverte.",
+      notCovered: "Non couvert : {parts}.",
+    },
     greeting: "Bonjour {name},",
     statusNoSources: "Connectez une première source pour commencer.",
     statusSynced: "Vos sources sont à jour.",
@@ -6453,6 +6470,22 @@ const en: Dictionary = {
     connectSource: "Connect a source",
   },
   overview: {
+    twin: {
+      statusTrouble: "{count} {count|element is|elements are} in trouble.",
+      statusLate: "Your sources have not been read for over 2 hours.",
+      troubleTitle: "What is wrong",
+      troubleNone: "Nothing unavailable or degraded, as the sources read say.",
+      silent: "{count} {count|element has|elements have} no signal: their state is not known — that is not « healthy ».",
+      analyse: "Analyse",
+      alertsOpen: "{count} {count|open alert|open alerts}.",
+      alertsFrom: "Proactive alerts are included from {plan}.",
+      seePlans: "See plans",
+      intentionsTitle: "My intentions under way",
+      intentionsNone: "No intention under way.",
+      freshnessTitle: "Freshness and coverage",
+      allRead: "Every source is read and every part of the environment is covered.",
+      notCovered: "Not covered: {parts}.",
+    },
     greeting: "Hello {name},",
     statusNoSources: "Connect a first source to get started.",
     statusSynced: "Your sources are up to date.",

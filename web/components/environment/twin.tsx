@@ -53,6 +53,12 @@ const STATE_TONE: Record<TwinStateName, keyof typeof TONES> = {
   operational: "success",
 };
 
+/** « il y a 7 min », inside a sentence. */
+function ago(t: ReturnType<typeof useDictionary>, iso: string): string {
+  const said = timeAgo(t, iso);
+  return said.charAt(0).toLowerCase() + said.slice(1);
+}
+
 /** A link to a new intention, its words written for the person. */
 export function intentionHref(words: string): string {
   return `${routes.intentionNew()}?q=${encodeURIComponent(words)}`;
@@ -99,7 +105,7 @@ export function FreshnessLine({ freshness }: { freshness: TwinFreshness | null |
       />
       <span>
         <span className="block font-medium text-brand-navy">
-          {read ? fill(w.read, { ago: timeAgo(t, read) }) : w.never}
+          {read ? fill(w.read, { ago: ago(t, read) }) : w.never}
           {freshness.late ? (
             <span className="ms-2 text-state-warning" data-testid="twin-late">
               {w.late}
@@ -358,7 +364,7 @@ export function SourcesCoverage({
                   {w.states[source.state]}
                   {" · "}
                   {source.last_synced_at
-                    ? fill(w.lastRead, { ago: timeAgo(t, source.last_synced_at) })
+                    ? fill(w.lastRead, { ago: ago(t, source.last_synced_at) })
                     : w.neverRead}
                 </span>
                 {source.error ? (
@@ -405,8 +411,8 @@ function AlertRow({ alert }: { alert: Alert }) {
         <p className="text-xs text-shell-muted">
           {[
             t.environment.twin.certainty[alert.certainty],
-            fill(w.since, { ago: timeAgo(t, alert.opened_at) }),
-            alert.status === "open" ? fill(w.seen, { ago: timeAgo(t, alert.last_seen_at) }) : null,
+            fill(w.since, { ago: ago(t, alert.opened_at) }),
+            alert.status === "open" ? fill(w.seen, { ago: ago(t, alert.last_seen_at) }) : null,
             alert.status === "resolved"
               ? fill(w.resolvedBy, {
                   signal: ((alert.resolution?.signal as string[] | undefined) ?? []).join(", ") || "—",
@@ -517,7 +523,7 @@ export function TwinProvenance({
         <TwinBadge state={twin.state} size="sm" />
         <span>{twinHow(t, twin)}</span>
         {twin.observed_at ? (
-          <span>· {fill(w.observed, { ago: timeAgo(t, twin.observed_at) })}</span>
+          <span>· {fill(w.observed, { ago: ago(t, twin.observed_at) })}</span>
         ) : null}
       </p>
       {sources.length ? (
