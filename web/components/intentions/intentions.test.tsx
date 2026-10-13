@@ -169,12 +169,32 @@ describe("Mes intentions", () => {
     expect(screen.getByTestId("intentions-tab-finished")).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("says when nothing was asked yet", async () => {
+  it("says when nothing was asked yet, and the way to ask", async () => {
     api.list.mockResolvedValue({ data: [], next_cursor: null });
     show(<IntentionsList />);
-    expect(await screen.findByTestId("intentions-empty")).toHaveTextContent(
-      "Vous n'avez encore rien demandé à LEKA.",
+    const empty = await screen.findByTestId("intentions-empty");
+    expect(empty).toHaveTextContent("Vous n'avez encore rien demandé à LEKA.");
+    expect(within(empty).getByRole("link", { name: /Nouvelle intention/ })).toHaveAttribute(
+      "href",
+      "/intentions/new",
     );
+  });
+
+  it("on a wide screen, a row is shown beside the list rather than left", async () => {
+    const other = intention({ id: "1c3bc5ff-a12e-5e92-a5ae-ad6da2029a41", title: "Qui maintient Billing API ?" });
+    api.list.mockResolvedValue({ data: [intention(), other], next_cursor: null });
+    api.one.mockImplementation(async (id: string) => (id === other.id ? other : intention()));
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true });
+    const user = userEvent.setup();
+    show(<IntentionsList />);
+
+    const rows = await screen.findAllByTestId("intention-row");
+    await user.click(within(rows[1]).getByRole("link"));
+    const preview = await screen.findByTestId("intention-preview");
+    await waitFor(() => expect(preview).toHaveTextContent("Qui maintient Billing API ?"));
+    expect(preview).toHaveTextContent("Sélectionnée");
+    expect(within(rows[1]).getByRole("link")).toHaveAttribute("aria-current", "true");
+    delete (window as Partial<Window>).matchMedia;
   });
 });
 
