@@ -44,7 +44,7 @@ agents:
 
   - path: development/build-fixer/SKILL.md
     name: build-fixer
-    version: 1.0.0
+    version: 1.1.0
     status: active
 
   - path: development/code-change/SKILL.md
