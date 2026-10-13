@@ -29,7 +29,7 @@ agents:
 
   - path: architecture/architecture-analysis/SKILL.md
     name: architecture-analysis
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: codebase/map-service-ownership/SKILL.md
