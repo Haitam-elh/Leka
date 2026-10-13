@@ -86,6 +86,19 @@ test.describe("a detail panel closes on Escape", () => {
     await expect(panel).toBeHidden();
   });
 
+  test("Sources: a row opened, then closed, gets the focus back", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/sources");
+    const row = page.getByRole("table").locator("tbody tr[data-clickable]").last();
+    await row.click();
+    const panel = page.locator("aside").filter({ has: page.getByRole("button", { name: /^Fermer/ }) }).first();
+    await panel.getByRole("button", { name: /^Fermer/ }).focus();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    // Back on the row it came from, not on the page's top (LEKA-438).
+    await expect(row).toBeFocused();
+  });
+
   test("Mon environnement: the card chosen on the architecture", async ({ page }) => {
     await signIn(page);
     await page.goto("/environment");

@@ -15,7 +15,7 @@ import { ErrorState } from "@/components/states/error-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
-import { closeOnEscape } from "@/components/interactions/escape";
+import { closeOnEscape, useReturnFocus } from "@/components/interactions/escape";
 import { routes } from "@/config/routes";
 import type { CandidateDetail } from "@/lib/enrichment";
 import { useCandidate, useDecisions } from "@/lib/enrichment-queries";
@@ -39,6 +39,7 @@ type SourceKind = Parameters<typeof sourceTitle>[0];
  * the undoing of this one.
  */
 export function CandidatePanel({ id, onClose }: { id: string; onClose: () => void }) {
+  useReturnFocus(id);
   const t = useDictionary();
   const p = t.approvals.panel;
   const found = useCandidate(id);
