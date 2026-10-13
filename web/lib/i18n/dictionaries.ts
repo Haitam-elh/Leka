@@ -904,12 +904,18 @@ const fr = {
       exhaustedSoft: "Les crédits IA du mois sont épuisés.",
       how: "Pour continuer, ajoutez un pack de crédits ou passez à une offre supérieure : contactez votre interlocuteur LEKA. Aucun dépassement n'est jamais facturé.",
     },
-    questionTitle: "Une question sur votre offre ?",
-    questionBody: "Votre interlocuteur LEKA vous accompagne pour choisir l'offre adaptée à votre organisation.",
   },
   /** Équipe & accès (mockup 15). */
   /** Sécurité & gouvernance (LEKA-402). */
   governance: {
+    /** The overview's figures (LEKA-438): each opens the tab it counts. */
+    overview: {
+      refusals: "Refus d'accès, 7 derniers jours",
+      roles: "Rôles de l'espace",
+      policies: "Politiques",
+      restricted: "Entités restreintes",
+      awaiting: "Exécutions à approuver",
+    },
     matrix: "Qui peut faire quoi",
     yourRole: "Votre rôle : {role}",
     permission: "Permission",
@@ -949,6 +955,7 @@ const fr = {
     onBase: "sur {base}",
     holders: "{count} {count|personne|personnes}",
     newRole: "Nouveau rôle",
+    name: "Nom",
     roleNamePlaceholder: "ex. « Tech Lead »",
     base: "Base",
     adds: "Ajoute",
@@ -1177,6 +1184,7 @@ const fr = {
     noRestriction: "Aucune entité restreinte.",
     gone: "Entité retirée du modèle",
     restrictOne: "Restreindre une entité",
+    entity: "Entité",
     searchPlaceholder: "Chercher par nom, ex. « payment-api »",
     change: "changer",
     reason: "Pourquoi",
@@ -1216,9 +1224,6 @@ const fr = {
     subtitle: "Gérez les utilisateurs, les rôles et les accès à votre environnement LEKA.",
     invite: "Inviter un utilisateur",
     stats: {
-      members: "Utilisateurs",
-      roles: "Rôles",
-      rolesFoot: "propriétaire, admin, membre",
       teams: "Équipes",
       teamsFoot: "dans votre modèle d'entreprise",
       invitations: "Invitations en attente",
@@ -1263,8 +1268,6 @@ const fr = {
     copy: "Copier",
     copied: "Copié",
     readOnly: "Seuls les admins invitent, changent un rôle ou retirent quelqu'un.",
-    bannerTitle: "Collaborez en toute sécurité",
-    bannerBody: "Chacun voit ce que son rôle permet ; chaque décision et chaque action gardent qui l'a prise.",
     permissions: "Voir les permissions",
   },
   /** Accepting an invitation. */
@@ -1472,19 +1475,19 @@ const fr = {
     views: { available: "Disponibles", mine: "Mes capacités", configuration: "Configuration" },
     subtitle: "Des agents spécialisés pour comprendre, analyser et agir sur votre environnement.",
     ask: "Demander une capacité",
-    askTitle: "Une capacité à la demande ?",
-    askBody:
-      "Dites à LEKA ce dont vous avez besoin : votre demande est analysée avec les capacités disponibles.",
-    stats: {
-      available: "Capacités disponibles",
-      availableFoot: "sur {total} · +{added} ce mois-ci",
-      categories: "Catégories",
-      categoriesFoot: "Tout votre cycle IT",
-      runs: "Exécutions / semaine",
-      analysis: "Temps moyen d'analyse",
-      noRuns: "Aucune exécution cette semaine",
-      versus: "vs semaine précédente",
+    /** Said once, above the list: what keeps many from running here. */
+    wide: {
+      no_model:
+        "Aucun modèle de langage n'est configuré : {count} {count|capacité ne peut|capacités ne peuvent} pas s'exécuter ici.",
+      no_runtime:
+        "L'exécution des agents n'est pas disponible ici : {count} {count|capacité ne peut|capacités ne peuvent} pas s'exécuter.",
+      configure: "Configurer un modèle",
     },
+    need: "Que voulez-vous faire ?",
+    allNeeds: "Tout",
+    allCategories: "Toutes les catégories",
+    category: "Catégorie",
+    versus: "vs semaine précédente",
     all: "Toutes",
     search: "Rechercher une capacité…",
     sort: "Tri",
@@ -2059,7 +2062,7 @@ const fr = {
     voteFor: "Au nom de {name}",
     lent: "Vous votez avec l'autorité qui vous a été déléguée.",
     governance: {
-      tabs: { access: "Accès", approvals: "Approbations" },
+      tabs: { overview: "Synthèse", access: "Accès", ai: "IA", journal: "Journal", approvals: "Approbations" },
       policy: "Politique d'approbation",
       policySaid:
         "Pour chaque niveau de risque : combien de validations, si le demandeur peut en être, le rôle requis, combien de temps une validation tient, quand une décision qui attend est escaladée.",
@@ -2877,21 +2880,6 @@ const fr = {
         visibility: "Visibilité",
         language: "Langage",
         code_files: "Fichiers",
-      },
-      widgets: {
-        byStatus: "Services par statut",
-        services: "services",
-        types: "Types de ressources",
-        typeRows: {
-          services: "Services",
-          cloud: "Ressources cloud",
-          tables: "Tables",
-          repositories: "Repositories",
-        },
-        activity: "Activité récente",
-        top: "Top dépendances",
-        topEmpty: "Aucune dépendance connue pour l'instant.",
-        seeAll: "Voir tout",
       },
       dossier: {
         title: "Architecture applicative",
@@ -6897,10 +6885,15 @@ const en: Dictionary = {
       exhaustedSoft: "This month's AI credits are spent.",
       how: "To go on, add a credit pack or move to a higher plan: contact your LEKA contact. Overage is never billed.",
     },
-    questionTitle: "A question about your plan?",
-    questionBody: "Your LEKA contact helps you choose the plan that fits your organisation.",
   },
   governance: {
+    overview: {
+      refusals: "Access refusals, last 7 days",
+      roles: "Workspace roles",
+      policies: "Policies",
+      restricted: "Restricted entities",
+      awaiting: "Runs to approve",
+    },
     matrix: "Who may do what",
     yourRole: "Your role: {role}",
     permission: "Permission",
@@ -6940,6 +6933,7 @@ const en: Dictionary = {
     onBase: "on {base}",
     holders: "{count} {count|person|persons}",
     newRole: "New role",
+    name: "Name",
     roleNamePlaceholder: "e.g. “Tech Lead”",
     base: "Base",
     adds: "Adds",
@@ -7168,6 +7162,7 @@ const en: Dictionary = {
     noRestriction: "No restricted entity.",
     gone: "Entity removed from the model",
     restrictOne: "Restrict an entity",
+    entity: "Entity",
     searchPlaceholder: "Search by name, e.g. “payment-api”",
     change: "change",
     reason: "Why",
@@ -7207,9 +7202,6 @@ const en: Dictionary = {
     subtitle: "Manage the users, roles and access to your LEKA environment.",
     invite: "Invite a user",
     stats: {
-      members: "Users",
-      roles: "Roles",
-      rolesFoot: "owner, admin, member",
       teams: "Teams",
       teamsFoot: "in your company model",
       invitations: "Pending invitations",
@@ -7254,8 +7246,6 @@ const en: Dictionary = {
     copy: "Copy",
     copied: "Copied",
     readOnly: "Only admins invite, change a role or remove someone.",
-    bannerTitle: "Collaborate safely",
-    bannerBody: "Everyone sees what their role allows; every decision and action keeps who took it.",
     permissions: "See the permissions",
   },
   invitation: {
@@ -7458,18 +7448,17 @@ const en: Dictionary = {
     views: { available: "Available", mine: "My capabilities", configuration: "Configuration" },
     subtitle: "Specialised agents to understand, analyse and act on your environment.",
     ask: "Ask for a capability",
-    askTitle: "A capability on demand?",
-    askBody: "Tell LEKA what you need: your request is analysed with the capabilities available.",
-    stats: {
-      available: "Capabilities available",
-      availableFoot: "of {total} · +{added} this month",
-      categories: "Categories",
-      categoriesFoot: "Your whole IT lifecycle",
-      runs: "Runs / week",
-      analysis: "Average analysis time",
-      noRuns: "No run this week",
-      versus: "vs previous week",
+    /** Said once, above the list: what keeps many from running here. */
+    wide: {
+      no_model: "No language model is configured: {count} {count|capability cannot|capabilities cannot} run here.",
+      no_runtime: "Agents cannot run here: {count} {count|capability cannot|capabilities cannot} run.",
+      configure: "Configure a model",
     },
+    need: "What do you want to do?",
+    allNeeds: "Everything",
+    allCategories: "All categories",
+    category: "Category",
+    versus: "vs previous week",
     all: "All",
     search: "Search a capability…",
     sort: "Sort",
@@ -8025,7 +8014,7 @@ const en: Dictionary = {
     voteFor: "On behalf of {name}",
     lent: "You vote with the authority lent to you.",
     governance: {
-      tabs: { access: "Access", approvals: "Approvals" },
+      tabs: { overview: "Overview", access: "Access", ai: "AI", journal: "Log", approvals: "Approvals" },
       policy: "Approval policy",
       policySaid:
         "For each risk level: how many approvals, whether the asker may be one, the role required, how long an approval holds, when a decision still waiting is escalated.",
@@ -8784,21 +8773,6 @@ const en: Dictionary = {
         visibility: "Visibility",
         language: "Language",
         code_files: "Files",
-      },
-      widgets: {
-        byStatus: "Services by status",
-        services: "services",
-        types: "Resource types",
-        typeRows: {
-          services: "Services",
-          cloud: "Cloud resources",
-          tables: "Tables",
-          repositories: "Repositories",
-        },
-        activity: "Recent activity",
-        top: "Top dependencies",
-        topEmpty: "No known dependency yet.",
-        seeAll: "See all",
       },
       dossier: {
         title: "Application architecture",

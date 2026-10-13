@@ -117,8 +117,18 @@ describe("the figures", () => {
     const connected = (await screen.findByText("sur 3 au total")).closest("[data-testid^='sources-stat-']") as HTMLElement;
     // Two switched on (active, and in error) of three.
     expect(within(connected).getByText("2")).toBeInTheDocument();
-    expect(screen.getByText("Comptés dès la première synchronisation")).toBeInTheDocument();
+    // Nothing counted yet: no tile, no column of « — » (LEKA-438).
+    expect(screen.queryByTestId("sources-stat-items")).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /Éléments/ })).not.toBeInTheDocument();
     expect(screen.queryByText("48 320")).not.toBeInTheDocument();
+  });
+
+  it("opens the source in error on a wide screen, the address left the list's", async () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true });
+    renderPage();
+    expect(await screen.findByRole("complementary", { name: "Détail de Acme GitLab" })).toBeVisible();
+    expect(window.location.search).toBe("");
+    delete (window as Partial<Window>).matchMedia;
   });
 });
 

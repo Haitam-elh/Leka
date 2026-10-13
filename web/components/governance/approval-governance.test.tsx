@@ -39,7 +39,13 @@ const people = vi.hoisted(() => ({ members: vi.fn() }));
 const access = vi.hoisted(() => ({ permissions: [] as string[] }));
 const notices = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/governance" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/governance",
+  useSearchParams: () => new URLSearchParams(route.search),
+  useRouter: () => ({ replace, push: vi.fn() }),
+}));
+const route = vi.hoisted(() => ({ search: "" }));
+const replace = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/decisions", async (original) => ({
   ...(await original<typeof import("@/lib/decisions")>()),
   decisions: api,
@@ -341,7 +347,8 @@ describe("the approvals' governance", () => {
     expect(screen.queryByTestId("risk-rule-form")).not.toBeInTheDocument();
   });
 
-  it("is the page's second tab, beside access", async () => {
+  it("is a tab of its own, in the URL", async () => {
+    route.search = "tab=access";
     accessApi.model.mockResolvedValue({
       roles: [{ role: "admin", permissions: ["access:read"] }],
       permissions: ["access:read"],
@@ -362,7 +369,6 @@ describe("the approvals' governance", () => {
     expect(screen.queryByTestId("approval-governance")).not.toBeInTheDocument();
     const user = userEvent.setup();
     await user.click(screen.getByRole("tab", { name: "Approbations" }));
-    expect(await screen.findByTestId("approval-policy")).toBeVisible();
-    expect(screen.getByRole("tab", { name: "Approbations" })).toHaveAttribute("aria-selected", "true");
+    expect(replace).toHaveBeenCalledWith("/governance?tab=approvals", { scroll: false });
   });
 });

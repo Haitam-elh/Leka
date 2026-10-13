@@ -46,10 +46,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { cn } from "cn";
 
 import {
-  Card,
   CardLink,
   EventList,
-  type EventRow,
   entityHref,
   eventRows,
   IconTile,
@@ -438,14 +436,7 @@ export function firstCard(cards: readonly ArchitectureCard[]): ArchitectureCard 
  * The architecture: its canvas, the chosen card's panel beside it, and the
  * four widgets under them.
  */
-export function ArchitectureBoard({
-  data,
-  events,
-}: {
-  data: Architecture;
-  /** Recent activity, from the environment screen (GET /ingestion/enrichment/environment). */
-  events?: readonly EventRow[];
-}) {
+export function ArchitectureBoard({ data }: { data: Architecture }) {
   const byId = useMemo(() => new Map(data.cards.map((card) => [card.id, card])), [data.cards]);
   const first = useMemo(() => firstCard(data.cards), [data.cards]);
   const [chosen, setChosen] = useState<string | null | undefined>(undefined);
@@ -470,7 +461,6 @@ export function ArchitectureBoard({
           />
         ) : null}
       </div>
-      <Widgets data={data} byId={byId} events={events ?? []} onSelect={setChosen} />
     </div>
   );
 }
@@ -1834,174 +1824,4 @@ function Events({ card }: { card: ArchitectureCard }) {
     return <div className="h-24 animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />;
   }
   return <EventList rows={rows} empty={t.environment.architecture.panel.eventsEmpty} />;
-}
-
-// ── the widgets ───────────────────────────────────────────────────────────
-
-function Widgets({
-  data,
-  byId,
-  events,
-  onSelect,
-}: {
-  data: Architecture;
-  byId: ReadonlyMap<string, ArchitectureCard>;
-  events: readonly EventRow[];
-  onSelect: (id: string) => void;
-}) {
-  const t = useDictionary();
-  const w = t.environment.architecture.widgets;
-  const figures = data.figures;
-  const types = [
-    { id: "services", value: figures.services + figures.applications, bar: "bg-state-info" },
-    { id: "cloud", value: figures.cloud_resources, bar: "bg-state-warning" },
-    { id: "tables", value: figures.tables, bar: "bg-brand-violet" },
-    { id: "repositories", value: figures.repositories, bar: "bg-shell-muted" },
-  ] as const;
-  const most = Math.max(1, ...types.map((row) => row.value));
-  const top = Math.max(1, ...data.top_dependencies.map((row) => row.count));
-
-  return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)]">
-      <Card title={w.byStatus} className="min-w-0 p-3">
-        <Donut counts={data.services_by_status} />
-      </Card>
-      <Card title={w.types} className="min-w-0 p-3">
-        <ul className="flex flex-col gap-2" data-testid="architecture-types">
-          {types.map((row) => (
-            <li
-              key={row.id}
-              className="grid grid-cols-[7rem_minmax(0,1fr)_2.25rem] items-center gap-2 text-[0.78125rem]"
-            >
-              <span className="truncate text-brand-navy">{w.typeRows[row.id]}</span>
-              <span className="h-2 overflow-hidden rounded-full bg-shell-canvas">
-                <span
-                  className={cn("block h-full rounded-full", row.bar)}
-                  style={{ width: `${(row.value / most) * 100}%` }}
-                />
-              </span>
-              <span className="text-end font-medium text-brand-navy tabular-nums">
-                {row.value}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </Card>
-      <Card
-        title={w.activity}
-        className="min-w-0 p-3"
-        action={<CardLink href={routes.activity()}>{w.seeAll}</CardLink>}
-      >
-        <EventList rows={events.slice(0, 4)} empty={t.environment.events.empty} />
-      </Card>
-      <Card title={w.top} className="min-w-0 p-3">
-        {data.top_dependencies.length === 0 ? (
-          <p className="py-4 text-center text-[0.8125rem] text-shell-muted">{w.topEmpty}</p>
-        ) : (
-          <ul className="flex flex-col gap-1.5" data-testid="architecture-top">
-            {data.top_dependencies.map((row) => {
-              const card = byId.get(row.card_id);
-              const Icon = kindIcon(row.kind);
-              return (
-                <li
-                  key={row.card_id}
-                  className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_2rem] items-center gap-2 text-[0.78125rem]"
-                >
-                  <button
-                    type="button"
-                    onClick={() => card && onSelect(card.id)}
-                    disabled={!card}
-                    className="flex min-w-0 items-center gap-1.5 text-start text-brand-navy outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40 disabled:no-underline"
-                  >
-                    <Icon className="size-3.5 shrink-0 text-shell-muted" aria-hidden="true" />
-                    <span className="truncate">{card ? cardName(card) : row.name}</span>
-                  </button>
-                  <span className="h-2 overflow-hidden rounded-full bg-shell-canvas">
-                    <span
-                      className="block h-full rounded-full bg-state-info"
-                      style={{ width: `${(row.count / top) * 100}%` }}
-                    />
-                  </span>
-                  <span className="text-end font-medium text-brand-navy tabular-nums">
-                    {row.count}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function Donut({ counts }: { counts: Record<string, number> }) {
-  const t = useDictionary();
-  const w = t.environment.architecture;
-  const states = ["operational", "attention", "incident", "unmonitored"] as const;
-  const total = states.reduce((n, state) => n + (counts[state] ?? 0), 0);
-  const radius = 34;
-  const length = 2 * Math.PI * radius;
-  let offset = 0;
-  return (
-    <div className="flex items-center gap-4" data-testid="architecture-donut">
-      <svg
-        viewBox="0 0 88 88"
-        className="size-20 shrink-0"
-        role="img"
-        aria-label={`${total} ${w.widgets.services}`}
-      >
-        <circle
-          cx="44"
-          cy="44"
-          r={radius}
-          fill="none"
-          stroke="var(--shell-canvas)"
-          strokeWidth="10"
-        />
-        {total > 0
-          ? states.map((state) => {
-              const share = (counts[state] ?? 0) / total;
-              if (share === 0) return null;
-              const arc = (
-                <circle
-                  key={state}
-                  cx="44"
-                  cy="44"
-                  r={radius}
-                  fill="none"
-                  stroke={TONES[STATUS_TONE[state]].stroke}
-                  strokeWidth="10"
-                  strokeDasharray={`${share * length} ${length}`}
-                  strokeDashoffset={-offset * length}
-                  transform="rotate(-90 44 44)"
-                />
-              );
-              offset += share;
-              return arc;
-            })
-          : null}
-        <text x="44" y="44" textAnchor="middle" className="fill-brand-navy text-[18px] font-bold">
-          {total}
-        </text>
-        <text x="44" y="58" textAnchor="middle" className="fill-shell-muted text-[9px]">
-          {w.widgets.services}
-        </text>
-      </svg>
-      <ul className="flex min-w-0 flex-1 flex-col gap-1">
-        {states
-          .filter((state) => state !== "unmonitored" || (counts[state] ?? 0) > 0)
-          .map((state) => (
-            <li key={state} className="flex items-center gap-2 text-[0.78125rem] text-brand-navy">
-              <span
-                aria-hidden="true"
-                className={cn("size-2.5 rounded-full", TONES[STATUS_TONE[state]].dot)}
-              />
-              <span className="min-w-0 flex-1 truncate">{w.health[state]}</span>
-              <span className="font-semibold tabular-nums">{counts[state] ?? 0}</span>
-            </li>
-          ))}
-      </ul>
-    </div>
-  );
 }

@@ -139,8 +139,12 @@ describe("roles of the workspace's own", () => {
   it("creates one from a name, among what its base lacks", async () => {
     const user = userEvent.setup();
     show(<RolesCard model={MODEL} canManage />);
+    // Out of the page until asked for (LEKA-438).
+    expect(screen.queryByTestId("role-form")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Nouveau rôle" }));
     const form = await screen.findByTestId("role-form");
-    await user.type(within(form).getByLabelText("Nouveau rôle"), "Sécurité Ops");
+    expect(screen.getByRole("dialog", { name: "Nouveau rôle" })).toContainElement(form);
+    await user.type(within(form).getByLabelText("Nom"), "Sécurité Ops");
     const adds = within(form).getByTestId("role-added");
     expect(adds).not.toHaveTextContent("Supprimer l'espace");
     await user.click(within(adds).getByLabelText("Approuver une action"));
@@ -153,6 +157,7 @@ describe("roles of the workspace's own", () => {
         removed: [],
       }),
     );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });
 
@@ -173,8 +178,9 @@ describe("policies", () => {
   it("creates one: what it refuses, for whom, from what risk", async () => {
     const user = userEvent.setup();
     show(<PoliciesCard canManage roles={[]} />);
+    await user.click(screen.getByRole("button", { name: "Nouvelle politique" }));
     const form = await screen.findByTestId("policy-form");
-    await user.type(within(form).getByLabelText("Nouvelle politique"), "Admins seulement");
+    await user.type(within(form).getByLabelText("Nom"), "Admins seulement");
     await user.selectOptions(within(form).getByLabelText("Risque"), "high");
     await user.click(within(within(form).getByTestId("policy-roles")).getByLabelText("Membre"));
     await user.click(within(form).getByRole("button", { name: "Créer la politique" }));

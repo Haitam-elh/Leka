@@ -1,7 +1,7 @@
 "use client";
 
-import { EyeOff, History, Lock, ShieldCheck } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { Clock, EyeOff, FileText, History, Lock, ShieldCheck, ShieldX, Users } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { cn } from "cn";
@@ -13,18 +13,20 @@ import { Pill } from "@/components/intelligence/pill";
 import { useConfirm } from "@/components/interactions/confirm";
 import { exactDate } from "@/components/knowledge/time";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
+import { StatCard, StatGrid } from "@/components/shell/stat-card";
 import { ErrorState } from "@/components/states/error-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AccessDecision, AccessModel, EntityHit } from "@/lib/access";
 import { AIAuditCard, AIControlsCard, ApprovalsCard } from "@/components/governance/ai-controls";
 import { AuditLogCard, AuditRetentionCard } from "@/components/governance/audit-log";
-import { HistoryCard, PoliciesCard, RolesCard } from "@/components/governance/roles-policies";
+import { FormDialog, HistoryCard, PoliciesCard, RolesCard } from "@/components/governance/roles-policies";
 import {
   useAccessModel,
   useCustomRoles,
   useDecisions,
   useEntitySearch,
+  usePolicies,
   useRestrictionChange,
   useRestrictions,
 } from "@/lib/access-queries";
@@ -35,6 +37,7 @@ import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { notify } from "@/lib/notify";
 import { personName } from "@/lib/team";
 import { useTeamMembers } from "@/lib/team-queries";
+import { useAwaitingRuns } from "@/lib/ai-governance-queries";
 
 /**
  * Sécurité & gouvernance (LEKA-402): who may do what — every role's
@@ -120,6 +123,7 @@ function Restrictions({ canRestrict }: { canRestrict: boolean }) {
   const [q, setQ] = useState("");
   const [chosen, setChosen] = useState<EntityHit | null>(null);
   const [reason, setReason] = useState("");
+  const [creating, setCreating] = useState(false);
   const found = useEntitySearch(chosen ? "" : q);
 
   async function submit(event: React.FormEvent) {
@@ -131,6 +135,7 @@ function Restrictions({ canRestrict }: { canRestrict: boolean }) {
       setChosen(null);
       setQ("");
       setReason("");
+      setCreating(false);
     } catch (error) {
       notify.error({ title: error instanceof ApiError ? error.message : w.failed });
     }
@@ -151,8 +156,73 @@ function Restrictions({ canRestrict }: { canRestrict: boolean }) {
     }
   }
 
+  const form = (
+    <form className="flex flex-col gap-2" onSubmit={(e) => void submit(e)} data-testid="restrict-form">
+      <label htmlFor="restrict-search" className="text-[0.8125rem] font-medium text-brand-navy">
+        {w.entity}
+      </label>
+      {chosen ? (
+        <div className="flex flex-wrap items-center gap-2 text-[0.8125rem]">
+          <Pill tone="violet">{chosen.entity.name}</Pill>
+          <button type="button" className="text-xs text-shell-muted hover:underline" onClick={() => setChosen(null)}>
+            {w.change}
+          </button>
+        </div>
+      ) : (
+        <>
+          <Input
+            id="restrict-search"
+            placeholder={w.searchPlaceholder}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          {found.data?.entities.length ? (
+            <ul className="flex flex-col gap-1" data-testid="restrict-results">
+              {found.data.entities.slice(0, 6).map((hit) => (
+                <li key={hit.entity.id}>
+                  <button
+                    type="button"
+                    className="text-start text-[0.8125rem] text-brand-navy hover:underline"
+                    onClick={() => setChosen(hit)}
+                  >
+                    {hit.entity.name} <span className="text-shell-muted">· {hit.entity.type}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      )}
+      <label htmlFor="restrict-reason" className="text-[0.8125rem] font-medium text-brand-navy">
+        {w.reason}
+      </label>
+      <Input
+        id="restrict-reason"
+        placeholder={w.reasonPlaceholder}
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+      />
+      <div>
+        <Button type="submit" disabled={!chosen || reason.trim().length < 3 || restrict.isPending}>
+          <Lock className="size-4" aria-hidden="true" />
+          {w.restrict}
+        </Button>
+      </div>
+    </form>
+  );
+
   return (
-    <Card title={w.restrictions} icon={<EyeOff className="size-4 text-shell-muted" aria-hidden="true" />}>
+    <Card
+      title={w.restrictions}
+      icon={<EyeOff className="size-4 text-shell-muted" aria-hidden="true" />}
+      action={
+        canRestrict ? (
+          <FormDialog label={w.restrictOne} open={creating} onOpenChange={setCreating}>
+            {form}
+          </FormDialog>
+        ) : null
+      }
+    >
       <p className="mb-3 text-[0.8125rem] text-shell-muted">{w.restrictionsSaid}</p>
       {data?.length ? (
         <ul className="mb-4 flex flex-col gap-2" data-testid="restrictions">
@@ -186,60 +256,6 @@ function Restrictions({ canRestrict }: { canRestrict: boolean }) {
       ) : (
         <p className="mb-4 text-[0.8125rem] text-shell-muted">{w.noRestriction}</p>
       )}
-      {canRestrict ? (
-        <form className="flex flex-col gap-2" onSubmit={(e) => void submit(e)} data-testid="restrict-form">
-          <label htmlFor="restrict-search" className="text-[0.8125rem] font-medium text-brand-navy">
-            {w.restrictOne}
-          </label>
-          {chosen ? (
-            <div className="flex flex-wrap items-center gap-2 text-[0.8125rem]">
-              <Pill tone="violet">{chosen.entity.name}</Pill>
-              <button type="button" className="text-xs text-shell-muted hover:underline" onClick={() => setChosen(null)}>
-                {w.change}
-              </button>
-            </div>
-          ) : (
-            <>
-              <Input
-                id="restrict-search"
-                placeholder={w.searchPlaceholder}
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-              {found.data?.entities.length ? (
-                <ul className="flex flex-col gap-1" data-testid="restrict-results">
-                  {found.data.entities.slice(0, 6).map((hit) => (
-                    <li key={hit.entity.id}>
-                      <button
-                        type="button"
-                        className="text-start text-[0.8125rem] text-brand-navy hover:underline"
-                        onClick={() => setChosen(hit)}
-                      >
-                        {hit.entity.name} <span className="text-shell-muted">· {hit.entity.type}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </>
-          )}
-          <label htmlFor="restrict-reason" className="text-[0.8125rem] font-medium text-brand-navy">
-            {w.reason}
-          </label>
-          <Input
-            id="restrict-reason"
-            placeholder={w.reasonPlaceholder}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-          <div>
-            <Button type="submit" disabled={!chosen || reason.trim().length < 3 || restrict.isPending}>
-              <Lock className="size-4" aria-hidden="true" />
-              {w.restrict}
-            </Button>
-          </div>
-        </form>
-      ) : null}
     </Card>
   );
 }
@@ -317,6 +333,84 @@ function Decisions() {
   );
 }
 
+const TABS = ["overview", "access", "ai", "journal", "approvals", "data"] as const;
+type Tab = (typeof TABS)[number];
+
+function tabHref(pathname: string, tab: Tab): string {
+  return tab === "overview" ? pathname : `${pathname}?tab=${tab}`;
+}
+
+function useTab(): [Tab, (next: Tab) => void] {
+  const router = useRouter();
+  const pathname = usePathname() ?? "/governance";
+  const asked = useSearchParams()?.get("tab");
+  const tab: Tab = (TABS as readonly string[]).includes(asked ?? "") ? (asked as Tab) : "overview";
+  return [tab, (next) => router.replace(tabHref(pathname, next), { scroll: false })];
+}
+
+const WEEK = 7 * 24 * 3600 * 1000;
+
+/** What is true of the workspace's governance now, each figure opening what
+ * it counts (LEKA-438) — no score: nothing computes one. */
+function Overview({ mine }: { mine: Set<string> }) {
+  const pathname = usePathname() ?? "/governance";
+  const t = useDictionary();
+  const w = t.governance.overview;
+  const reads = mine.has("access:read");
+  const roles = useCustomRoles();
+  const policies = usePolicies();
+  const awaiting = useAwaitingRuns();
+  const restrictions = useRestrictions();
+  const refusals = useDecisions("deny");
+  // The trail sends its latest 100: a full page this week is "100+", not 100.
+  const lately = (refusals.data ?? []).filter((d) => Date.now() - new Date(d.at).getTime() < WEEK).length;
+  const count = (n: number | undefined, more = false) => (n === undefined ? "…" : `${n}${more ? "+" : ""}`);
+  const tiles = [
+    reads && {
+      key: "refusals",
+      icon: ShieldX,
+      tone: "danger" as const,
+      value: count(refusals.data && lately, lately >= 100),
+      label: w.refusals,
+      tab: null,
+    },
+    { key: "roles", icon: Users, tone: "violet" as const, value: count(roles.data?.length), label: w.roles, tab: "access" as const },
+    { key: "policies", icon: FileText, tone: "info" as const, value: count(policies.data?.length), label: w.policies, tab: "access" as const },
+    reads && {
+      key: "restricted",
+      icon: EyeOff,
+      tone: "neutral" as const,
+      value: count(restrictions.data?.length),
+      label: w.restricted,
+      tab: "access" as const,
+    },
+    { key: "awaiting", icon: Clock, tone: "warning" as const, value: count(awaiting.data?.length), label: w.awaiting, tab: "ai" as const },
+  ].filter((tile) => !!tile);
+  return (
+    <div className="flex flex-col gap-4" data-testid="governance-overview">
+      <StatGrid count={tiles.length}>
+        {tiles.map((tile) => (
+          <StatCard
+            key={tile.key}
+            icon={tile.icon}
+            tone={tile.tone}
+            value={tile.value}
+            label={tile.label}
+            href={tile.tab ? tabHref(pathname, tile.tab) : undefined}
+            testId={`governance-stat-${tile.key}`}
+          />
+        ))}
+      </StatGrid>
+      {reads ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Decisions />
+          <HistoryCard />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function GovernanceScreen() {
   const t = useDictionary();
   const pathname = usePathname() ?? "/governance";
@@ -324,7 +418,10 @@ export function GovernanceScreen() {
   const model = useAccessModel();
   const roles = useCustomRoles();
   const mine = new Set<string>(model.data?.mine ?? []);
-  const [tab, setTab] = useState<"access" | "approvals" | "data">("access");
+  const [tab, setTab] = useTab();
+  // The journal is for who may read the audit trail.
+  const tabs = TABS.filter((name) => name !== "journal" || mine.has("audit:read"));
+  const manage = mine.has("policy:manage");
 
   let body: React.ReactNode;
   if (tab === "approvals") {
@@ -335,41 +432,47 @@ export function GovernanceScreen() {
     body = <ErrorState error={model.error} onRetry={() => void model.refetch()} />;
   } else if (!model.data) {
     body = <div className="h-96 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
-  } else {
+  } else if (tab === "access") {
     body = (
-      <div className="flex flex-col gap-4">
-        {/* The audit trail (LEKA-407): everything that matters, searched. */}
-        {mine.has("audit:read") ? (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <AuditLogCard />
-            <AuditRetentionCard canChange={mine.has("audit:manage")} />
-          </div>
-        ) : null}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-2">
         <div className="flex flex-col gap-4">
           <AccessMatrix model={model.data} />
-          {/* Roles and policies of the workspace's own (LEKA-403). */}
-          <RolesCard model={model.data} canManage={mine.has("policy:manage")} />
-          <PoliciesCard canManage={mine.has("policy:manage")} roles={roles.data ?? []} />
-          {/* The workspace's AI, governed (LEKA-406). */}
-          <AIControlsCard canManage={mine.has("policy:manage")} roles={roles.data ?? []} />
         </div>
         <div className="flex flex-col gap-4">
+          {/* Roles and policies of the workspace's own (LEKA-403). */}
+          <RolesCard model={model.data} canManage={manage} />
+          <PoliciesCard canManage={manage} roles={roles.data ?? []} />
           {mine.has("access:read") ? <Restrictions canRestrict={mine.has("entity:restrict")} /> : null}
-          {mine.has("access:read") ? <Decisions /> : null}
-          <ApprovalsCard canApprove={mine.has("intention:approve")} />
-          {mine.has("access:read") ? <AIAuditCard /> : null}
-          {mine.has("access:read") ? <HistoryCard /> : null}
         </div>
       </div>
+    );
+  } else if (tab === "ai") {
+    // The workspace's AI, governed (LEKA-406).
+    body = (
+      <div className="grid gap-4 xl:grid-cols-2">
+        <AIControlsCard canManage={manage} roles={roles.data ?? []} />
+        <div className="flex flex-col gap-4">
+          <ApprovalsCard canApprove={mine.has("intention:approve")} />
+          {mine.has("access:read") ? <AIAuditCard /> : null}
+        </div>
       </div>
     );
+  } else if (tab === "journal" && mine.has("audit:read")) {
+    // The audit trail (LEKA-407): everything that matters, searched.
+    body = (
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <AuditLogCard />
+        <AuditRetentionCard canChange={mine.has("audit:manage")} />
+      </div>
+    );
+  } else {
+    body = <Overview mine={mine} />;
   }
   return (
     <PageContainer>
       <PageHeader title={t.nav.governance} breadcrumb={crumbs} />
-      <div className="mb-4 flex gap-1 border-b border-shell-line" role="tablist">
-        {(["access", "approvals", "data"] as const).map((name) => (
+      <div className="mb-4 flex gap-1 overflow-x-auto border-b border-shell-line" role="tablist">
+        {tabs.map((name) => (
           <button
             key={name}
             type="button"
@@ -378,7 +481,7 @@ export function GovernanceScreen() {
             onClick={() => setTab(name)}
             data-testid={`governance-tab-${name}`}
             className={cn(
-              "-mb-px border-b-2 px-3 py-2 text-[0.875rem] font-medium",
+              "-mb-px shrink-0 border-b-2 px-3 py-2 text-[0.875rem] font-medium",
               tab === name
                 ? "border-shell-nav-active text-shell-nav-active"
                 : "border-transparent text-shell-muted hover:text-brand-navy",

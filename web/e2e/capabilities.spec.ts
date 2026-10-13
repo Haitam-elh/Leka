@@ -19,7 +19,9 @@ test.describe("Capabilities", () => {
     await signIn(page);
     await page.goto("/capabilities");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Les capacités de LEKA");
-    await expect(page.getByTestId("catalogue-stat-available")).toContainText("Capacités disponibles");
+    // A model answers here: nothing holds the catalogue back (LEKA-438).
+    await expect(page.getByTestId("catalogue-grid")).toBeVisible();
+    await expect(page.getByTestId("catalogue-wide")).toHaveCount(0);
 
     const owner = page.locator('[data-testid="capability-card"][data-key="ownership"]');
     await expect(owner).toContainText("Responsabilités");

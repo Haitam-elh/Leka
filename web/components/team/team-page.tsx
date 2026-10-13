@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   Timer,
   UserCheck,
-  Users,
   UsersRound,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -318,6 +317,8 @@ function Invitations() {
   );
 }
 
+const SPLIT_FROM = 3;
+
 export function TeamScreen() {
   const t = useDictionary();
   const pathname = usePathname();
@@ -338,8 +339,6 @@ export function TeamScreen() {
   const total = members.data?.length ?? 0;
 
   const tiles = [
-    { key: "members", icon: Users, tone: "violet" as const, value: members.data ? String(total) : "…", label: w.stats.members, foot: null },
-    { key: "roles", icon: ShieldCheck, tone: "success" as const, value: "3", label: w.stats.roles, foot: w.stats.rolesFoot },
     { key: "teams", icon: UsersRound, tone: "violet" as const, value: teams === undefined ? "…" : String(teams), label: w.stats.teams, foot: w.stats.teamsFoot },
     {
       key: "invitations",
@@ -349,7 +348,8 @@ export function TeamScreen() {
       label: w.stats.invitations,
       foot: w.stats.invitationsFoot,
     },
-  ];
+    // A 0 that calls for nothing is not said (LEKA-438); how many people is the tab's.
+  ].filter((tile) => tile.value !== "0" && tile.value !== "—");
 
   return (
     <PageContainer>
@@ -368,6 +368,7 @@ export function TeamScreen() {
       />
 
       <div className="flex flex-col gap-4">
+        {tiles.length ? (
         <StatGrid count={tiles.length} testId="team-stats">
           {tiles.map((tile) => (
             <StatCard
@@ -381,6 +382,7 @@ export function TeamScreen() {
             />
           ))}
         </StatGrid>
+        ) : null}
 
         {inviting ? <Invite onClose={() => setInviting(false)} /> : null}
 
@@ -421,25 +423,28 @@ export function TeamScreen() {
           </section>
 
           <div className="flex flex-col gap-4">
-            <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="team-split">
-              <h2 className="mb-3 font-semibold text-brand-navy">{w.split}</h2>
-              <ul className="space-y-2.5">
-                {byRole.map(({ role, count }) => (
-                  <li key={role} className="text-[0.8125rem]">
-                    <div className="mb-1 flex justify-between">
-                      <span className="text-brand-navy">{w.roles[role]}</span>
-                      <span className="text-shell-muted tabular-nums">{count}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-shell-canvas">
-                      <div
-                        className="h-2 rounded-full bg-shell-nav-active"
-                        style={{ width: `${total ? (count / total) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            {/* A split says something once there are a few people. */}
+            {total > SPLIT_FROM ? (
+              <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="team-split">
+                <h2 className="mb-3 font-semibold text-brand-navy">{w.split}</h2>
+                <ul className="space-y-2.5">
+                  {byRole.map(({ role, count }) => (
+                    <li key={role} className="text-[0.8125rem]">
+                      <div className="mb-1 flex justify-between">
+                        <span className="text-brand-navy">{w.roles[role]}</span>
+                        <span className="text-shell-muted tabular-nums">{count}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-shell-canvas">
+                        <div
+                          className="h-2 rounded-full bg-shell-nav-active"
+                          style={{ width: `${total ? (count / total) * 100 : 0}%` }}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
             <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="team-security">
               <h2 className="mb-3 font-semibold text-brand-navy">{w.security}</h2>
               <ul className="space-y-2.5 text-[0.8125rem]">
@@ -461,13 +466,6 @@ export function TeamScreen() {
           </div>
         </div>
 
-        <section className="flex flex-wrap items-center gap-4 rounded-xl bg-brand-violet-soft/60 px-5 py-4">
-          <ShieldCheck className="size-6 shrink-0 text-shell-nav-active" aria-hidden="true" />
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-brand-navy">{w.bannerTitle}</p>
-            <p className="text-[0.8125rem] text-shell-muted">{w.bannerBody}</p>
-          </div>
-        </section>
       </div>
     </PageContainer>
   );
