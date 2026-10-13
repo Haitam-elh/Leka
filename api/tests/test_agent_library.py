@@ -27,7 +27,7 @@ from leka.capabilities.skills import agent_skill_tools
 from leka.capabilities.tools import NAMES
 from leka.knowledge import EntityType
 
-VERSIONS = {"build-fixer": "1.0.0", "code-review": "1.2.0"}
+VERSIONS = {"build-fixer": "1.0.0", "code-review": "1.2.0", "security-review": "1.2.0"}
 
 LIBRARY = {
     "architecture-analysis",
@@ -269,3 +269,21 @@ def test_the_code_review_reviews_by_a_method_it_can_prove() -> None:
     assert "Un avis, jamais une décision" in said
     # Credited, as their licence asks.
     assert "affaan-m/ECC" in said and "garrytan/gstack" in said
+
+
+def test_the_security_review_separates_what_it_proves_from_what_it_suspects() -> None:
+    # LEKA-447: gstack's cso and ECC's security-reviewer, rewritten for the
+    # company model — the model first, three judgements kept apart, a
+    # supported finding against a hypothesis, the unknown kept unknown.
+    said = {d.key: d for d in catalogue()}["security-review"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "Le modèle d'abord",
+        "Trois jugements, séparés",
+        "Un constat appuyé",
+        "L'inconnu reste inconnu",
+    ):
+        assert step in said, step
+    assert "Hypothèses" in said
+    assert "Aucun constat appuyé dans le périmètre" in said
+    assert "garrytan/gstack" in said and "affaan-m/ECC" in said
