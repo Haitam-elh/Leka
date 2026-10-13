@@ -33,6 +33,7 @@ from leka.api import (
     intentions,
     knowledge,
     model_gateway,
+    monitoring,
     ops,
     outcomes,
     platform,
@@ -58,6 +59,7 @@ api_router.include_router(governance.router)
 api_router.include_router(access.router)
 api_router.include_router(ai_governance.router)
 api_router.include_router(audit.router)
+api_router.include_router(monitoring.router)
 api_router.include_router(protection.router)
 api_router.include_router(ops.router)
 api_router.include_router(connectors.router)

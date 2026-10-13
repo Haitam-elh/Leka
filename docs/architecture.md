@@ -111,6 +111,7 @@ written.
 | `governance` | permissions, the request principal, audit | `platform`, `identity` | permissions built, audit skeleton; **LEKA-406** — AI controls: model access, usage limits, output checks, approval of risky agents, enforced at the model gateway and where an agent is asked to run, every outcome kept; see [ai-governance.md](ai-governance.md); **LEKA-407** — the audit trail: one record per event that matters, in one shape, searched, exported, kept as the owner says, changed by no one; see [audit.md](audit.md) |
 | `ops` | operations (LEKA-408): metrics, the health report, the alerts, backups proven to restore | every module, as operating data | see [operations.md](operations.md) |
 | `metering` | usage and cost metering (LEKA-430): each execution's usage and cost to LEKA, derived from the calls and runs; an intention's cost, end to end | `capabilities`, `intentions` | see [metering.md](metering.md) |
+| `monitoring` | watching the environment (LEKA-442): alerts on what the Digital Twin finds in trouble, deduplicated, resolved only by a fresh signal, for the plans that include them | `ingestion`, `billing`, `governance`, `identity` | see [enrichment.md](enrichment.md) § 12 bis |
 | `api` | HTTP routes, one file per module | all of the above | health + 11 tenancy routes; other routers mounted and empty |
 
 ### The dependency rule

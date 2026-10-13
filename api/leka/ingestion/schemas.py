@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -471,6 +472,74 @@ class EnrichmentStatus(BaseModel):
 # ── the environment screens (LEKA-359, mockups 10 and 11) ───────────────────
 
 
+TwinStateName = Literal["unavailable", "degraded", "stale", "unknown", "not_covered", "operational"]
+
+
+class TwinSourceRead(BaseModel):
+    """A source, in the state it is in now (LEKA-442): never « lue » when
+    it is failing, late or never read."""
+
+    id: uuid.UUID
+    kind: str
+    name: str
+    category: str = Field(description="code, project, docs, cloud, observability, data, chat.")
+    state: Literal["read", "error", "degraded", "stale", "syncing", "disabled", "never"]
+    last_synced_at: datetime | None
+    error: str | None = Field(description="What its last check or read said, cleaned.")
+    webhooks: bool = Field(description="It receives what its system sends, as it is sent.")
+
+
+class TwinIncidentRead(BaseModel):
+    """The open incident a state rests on: its record, how bad."""
+
+    id: uuid.UUID
+    key: str
+    name: str
+    severity: str | None
+
+
+class TwinStateRead(BaseModel):
+    """A thing's state in the Digital Twin (LEKA-442), with where it comes
+    from and how fresh — « inconnu » never meaning « sain »."""
+
+    state: TwinStateName
+    basis: Literal["measured", "declared", "deduced", "none"] = Field(
+        description="measured — a monitoring tool or an incident record; declared — its "
+        "provider's word; deduced — from what runs it; none — nothing says."
+    )
+    reason: str = Field(
+        description="incident_open, resource_failed, resource_paused, resource_running, "
+        "monitored_quiet, deduced_health, no_monitoring_source, no_signal, sources_stale, "
+        "sources_failing."
+    )
+    observed_at: datetime | None = Field(description="When a source last read it.")
+    signal: list[str] = Field(description="The sources it rests on, by name.")
+    fresh: bool = Field(description="Read by at least one source within STALE_AFTER.")
+    was: TwinStateName | None = Field(description="What it was, when stale.")
+    certainty: Literal["confirmed", "suspected", "unverified"]
+    incident: TwinIncidentRead | None
+
+
+class TwinCoverageRead(BaseModel):
+    """A part of the twin, covered or not, and by which sources."""
+
+    part: Literal[
+        "applications", "services", "health", "incidents", "data", "infrastructure", "teams"
+    ]
+    covered: bool
+    sources: list[uuid.UUID]
+
+
+class TwinFreshnessRead(BaseModel):
+    """When the twin was last observed, how often it is — never « temps
+    réel » when it is not."""
+
+    last_read_at: datetime | None = Field(description="The latest read of a connected source.")
+    every_minutes: int = Field(description="How often sources are read.")
+    late: bool = Field(description="No connected source read within twice that.")
+    webhooks: bool = Field(description="A source receives what its system sends, as it is sent.")
+
+
 class EnvironmentNodeRead(BaseModel):
     """A box of the map: an entity, or a provider's cloud resources together."""
 
@@ -487,6 +556,10 @@ class EnvironmentNodeRead(BaseModel):
     count: int = Field(description="A provider's resources; 1 for an entity.")
     environment: str | None
     team: EntityRef | None
+    twin: TwinStateRead | None = Field(
+        default=None,
+        description="Its state in the Digital Twin (LEKA-442); a provider's box: its worst.",
+    )
 
 
 class EnvironmentEdgeRead(BaseModel):
@@ -542,6 +615,13 @@ class EnvironmentRead(BaseModel):
     changes_24h: int
     attention: list[AttentionPointRead]
     events: list[EnvironmentEventRead]
+    states: dict[str, int] = Field(
+        default_factory=dict,
+        description="How many things with a state are in each (LEKA-442), every state said.",
+    )
+    freshness: TwinFreshnessRead | None = None
+    coverage: list[TwinCoverageRead] = Field(default_factory=list)
+    sources: list[TwinSourceRead] = Field(default_factory=list)
 
 
 class EntityActivityEvent(EnvironmentEventRead):
@@ -621,6 +701,12 @@ class EntitySheetRead(BaseModel):
     status: str | None
     deduced: bool = Field(
         default=False, description="Its state is deduced from what runs it, no tool measuring it."
+    )
+    twin: TwinStateRead | None = Field(
+        default=None, description="Its state, where it comes from, how fresh (LEKA-442)."
+    )
+    sources: list[TwinSourceRead] = Field(
+        default_factory=list, description="The sources that show it, each in its state."
     )
     environment: str | None
     owner: SheetPersonRead | None
