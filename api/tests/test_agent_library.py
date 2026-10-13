@@ -30,6 +30,7 @@ from leka.knowledge import EntityType
 VERSIONS = {
     "architecture-analysis": "1.2.0",
     "code-review": "1.2.0",
+    "debug-assistant": "1.2.0",
     "documentation-assistant": "1.2.0",
     "security-review": "1.2.0",
     "test-analysis": "1.2.0",
@@ -363,3 +364,22 @@ def test_the_test_analysis_plans_by_behaviour() -> None:
         assert step in said, step
     assert "ne dis jamais qu'un test manque" in said
     assert "affaan-m/ECC" in said and "garrytan/gstack" in said
+
+
+def test_the_debug_assistant_finds_the_root_cause_before_a_remedy() -> None:
+    # LEKA-447: gstack's investigate, rewritten for what LEKA sees — no
+    # remedy without a root cause, what changed, known patterns, what keeps
+    # coming back, three unsupported hypotheses and it stops.
+    said = {d.key: d for d in catalogue()}["debug-assistant"].instructions or ""
+    assert "## Sa méthode" in said
+    assert "Pas de remède sans cause racine" in said
+    for step in (
+        "Le symptôme, borné",
+        "Ce qui a changé",
+        "Les motifs connus",
+        "Ce qui revient",
+        "Chaque hypothèse, avec sa vérification",
+    ):
+        assert step in said, step
+    assert "Après trois hypothèses" in said
+    assert "garrytan/gstack" in said

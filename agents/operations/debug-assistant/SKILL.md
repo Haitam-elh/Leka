@@ -2,7 +2,7 @@
 name: debug-assistant
 title: "Aide au débogage"
 description: "Use when a service misbehaves now — errors, slowness, failures — and someone wants the likely causes ranked: what changed, what it depends on, what happened around it."
-version: 1.1.0
+version: 1.2.0
 category: operations
 entity_types: [service, incident, deployment, change, commit, infra_resource, database, application, team, person]
 requires: []
@@ -45,13 +45,37 @@ lis (`read_entity`), suis les dépendances (`dependencies`), regarde ce qui s'es
 Quand la demande ne dit pas sur quoi travailler et que le contexte ne le montre pas,
 dis-le et arrête-toi : ne devine pas.
 
+## Sa méthode
+
+**Pas de remède sans cause racine.** Soigner le symptôme fait revenir la
+panne ailleurs. « Redémarrer », « augmenter le délai » ou « relancer » ne
+sont pas des hypothèses. Avant d'écrire, dans cet ordre :
+
+1. **Le symptôme, borné.** Ce qui se passe, depuis quand, pour qui, où — et
+   où ça ne se passe pas : ce qui marche encore à côté est un indice.
+2. **Ce qui a changé.** Est-ce que ça marchait avant ? Un déploiement, une
+   configuration, une dépendance changés juste avant le début ([id]) : une
+   régression a sa cause dans ce qui a changé.
+3. **Les motifs connus.** Intermittent : concurrence ou dépendance instable.
+   Délai dépassé, réponse inattendue : la frontière avec un autre service.
+   Marche ailleurs mais pas en production : la configuration. Données
+   anciennes : un cache. Données incohérentes : un état à moitié écrit. Un
+   motif oriente, il ne prouve rien.
+4. **Ce qui revient.** Les incidents passés de la même zone
+   (`incident-history`) : une panne qui revient au même endroit signale un
+   problème de structure, pas une coïncidence. Dis-le.
+5. **Chaque hypothèse, avec sa vérification.** Ce qui l'appuie ([id]), ce qui
+   l'affaiblit, et la vérification qui la trancherait. Après trois hypothèses
+   sans appui, arrête-toi : dis que le problème dépasse une panne isolée et
+   nomme qui connaît le système.
+
 ## Ce qu'il produit
 
 Un document markdown, dans la langue de la demande :
 
 1. **Le symptôme** — reformulé, avec son périmètre.
 2. **Causes probables, classées** — chacune avec ce qui l'appuie (un déploiement juste avant, une dépendance en incident…) et ce qui l'affaiblit.
-3. **Vérifications à faire** — dans l'ordre, chacune avec ce qu'elle trancherait.
+3. **Vérifications à faire** — dans l'ordre, chacune avec ce qu'elle trancherait. Un remède seulement pour une cause appuyée, jamais « ça devrait régler le problème ».
 4. **Ce qui manque** — les signaux que LEKA ne voit pas (métriques, journaux non connectés).
 
 ## Ce qu'il ne doit jamais faire
@@ -66,3 +90,6 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler la compétence `incident-history` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : l'historique des incidents d'une chose : combien, quelle gravité, le temps de résolution, les causes qui reviennent. Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
+
+<sub>Méthode adaptée du skill `investigate` de [gstack](https://github.com/garrytan/gstack) @ `945ac30`
+(MIT, © 2026 Garry Tan), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>

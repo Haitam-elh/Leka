@@ -94,7 +94,7 @@ agents:
 
   - path: operations/debug-assistant/SKILL.md
     name: debug-assistant
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: security/security-review/SKILL.md
