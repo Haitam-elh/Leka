@@ -910,6 +910,14 @@ const fr = {
   /** Équipe & accès (mockup 15). */
   /** Sécurité & gouvernance (LEKA-402). */
   governance: {
+    /** The overview's figures (LEKA-438): each opens the tab it counts. */
+    overview: {
+      refusals: "Refus d'accès, 7 derniers jours",
+      roles: "Rôles de l'espace",
+      policies: "Politiques",
+      restricted: "Entités restreintes",
+      awaiting: "Exécutions à approuver",
+    },
     matrix: "Qui peut faire quoi",
     yourRole: "Votre rôle : {role}",
     permission: "Permission",
@@ -2059,7 +2067,7 @@ const fr = {
     voteFor: "Au nom de {name}",
     lent: "Vous votez avec l'autorité qui vous a été déléguée.",
     governance: {
-      tabs: { access: "Accès", approvals: "Approbations" },
+      tabs: { overview: "Synthèse", access: "Accès", ai: "IA", journal: "Journal", approvals: "Approbations" },
       policy: "Politique d'approbation",
       policySaid:
         "Pour chaque niveau de risque : combien de validations, si le demandeur peut en être, le rôle requis, combien de temps une validation tient, quand une décision qui attend est escaladée.",
@@ -6765,6 +6773,13 @@ const en: Dictionary = {
     questionBody: "Your LEKA contact helps you choose the plan that fits your organisation.",
   },
   governance: {
+    overview: {
+      refusals: "Access refusals, last 7 days",
+      roles: "Workspace roles",
+      policies: "Policies",
+      restricted: "Restricted entities",
+      awaiting: "Runs to approve",
+    },
     matrix: "Who may do what",
     yourRole: "Your role: {role}",
     permission: "Permission",
@@ -7888,7 +7903,7 @@ const en: Dictionary = {
     voteFor: "On behalf of {name}",
     lent: "You vote with the authority lent to you.",
     governance: {
-      tabs: { access: "Access", approvals: "Approvals" },
+      tabs: { overview: "Overview", access: "Access", ai: "AI", journal: "Log", approvals: "Approvals" },
       policy: "Approval policy",
       policySaid:
         "For each risk level: how many approvals, whether the asker may be one, the role required, how long an approval holds, when a decision still waiting is escalated.",

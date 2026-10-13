@@ -93,8 +93,12 @@ test.describe("the information architecture", () => {
     // "not built yet" and "not on this plan" states stay covered by
     // route-views.test.tsx.
     await page.goto("/governance");
-    await expect(page.getByTestId("access-matrix")).toContainText("Restreindre une entité");
+    // The overview first (LEKA-438): real figures, the trail of decisions.
+    await expect(page.getByTestId("governance-overview")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Journal des accès" })).toBeVisible();
+    await page.getByRole("tab", { name: "Accès" }).click();
+    await expect(page).toHaveURL(/\/governance\?tab=access$/);
+    await expect(page.getByTestId("access-matrix")).toContainText("Restreindre une entité");
   });
 
   test("keeps the shell around an address that matches nothing", async ({ page }) => {
