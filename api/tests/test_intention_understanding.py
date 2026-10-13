@@ -23,9 +23,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from leka.context import IntentGap, IntentPlan
+from leka.context import IntentGap, IntentPlan, kinds_said
 from leka.context.schemas import IntentKind, IntentPeriod, IntentSubject
 from leka.intentions import UNDERSTANDING_VERSION, Understanding, understand
+from leka.intentions.understanding import unknown_names
 from leka.knowledge import fold
 
 NOW = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
@@ -393,3 +394,107 @@ def test_without_lekas_reading_it_still_understands_what_it_can() -> None:
     assert understood.goal.code == "explain_cause"
     assert understood.entities == []
     assert understood.period is None
+
+
+# ── what a verb says without asking it (LEKA-440) ─────────────────────────
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Prépare un plan pour migrer Billing API vers AWS",
+        "Prepare a plan to migrate Billing API to AWS",
+        "Évalue le risque de migrer Billing API vers AWS",
+        "Comment redémarrer Billing API proprement ?",
+        "How to restart Billing API without downtime?",
+    ],
+)
+def test_what_is_planned_or_explained_is_not_asked(text: str) -> None:
+    understood = understand(text, plan(text, "general", []))
+    # Evaluating is asked; migrating, what is evaluated, is not.
+    assert not [a for a in understood.actions if a.changes_systems]
+    assert understood.withheld == []
+    assert understood.goal.code != "act"
+
+
+def test_a_plan_does_not_hide_an_action_asked_with_it() -> None:
+    text = "Fais un plan de migration, puis redémarre Billing API"
+    understood = understand(text, plan(text, "migration", ["plan", "migration"]))
+    assert [a.code for a in understood.actions] == ["restart"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Est-ce que Billing API a été redémarrée récemment ?",
+        "Qui a redémarré Billing API ?",
+        "Has Billing API been restarted this week?",
+        "Has Billing API been rolled back?",
+    ],
+)
+def test_what_was_done_is_asked_about_never_asked(text: str) -> None:
+    understood = understand(text, plan(text, "general", []))
+    assert understood.actions == []
+    assert understood.withheld == []
+    assert understood.mode == "question"
+    assert understood.goal.code in ("find_change", "find_owner")
+    assert understood.clear
+
+
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("J'ai besoin de redémarrer Billing API", "restart"),
+        ("I have to restart Billing API", "restart"),
+        ("Do a rollback of Billing API", "rollback"),
+        ("Pense à redémarrer Billing API", "restart"),
+    ],
+)
+def test_an_infinitive_or_a_noun_after_an_article_is_still_asked(text: str, code: str) -> None:
+    understood = understand(text, plan(text, "general", []))
+    assert [a.code for a in understood.actions] == [code]
+
+
+def test_updating_documentation_is_writing_it_not_changing_a_system() -> None:
+    text = "Mets à jour la documentation de Billing API"
+    understood = understand(text, plan(text, "knowledge", ["documentation"]))
+    [action] = understood.actions
+    assert (action.code, action.changes_systems) == ("document", False)
+    system = "Mets à jour Billing API"
+    [update] = understand(system, plan(system, "general", [])).actions
+    assert (update.code, update.changes_systems) == ("update", True)
+
+
+def test_a_question_about_something_known_asks_what_is_known_of_it() -> None:
+    for text in ("Quel est le SLA de Billing API ?", "Sur quoi travaille Billing API ?"):
+        understood = understand(text, plan(text, "general", []))
+        assert understood.goal.code == "find_knowledge"
+        assert understood.clear
+    # Nothing that says it is a question: still asked what is wanted.
+    vague = "Billing API, voilà"
+    assert "unclear_goal" in blocking(understand(vague, plan(vague, "general", [])))
+
+
+def test_a_name_nothing_answers_to_is_said_unknown_never_read_as_another() -> None:
+    text = "Pourquoi billing-gateway est en panne ?"
+    understood = understand(
+        text,
+        plan(text, "diagnose", ["pourquoi", "panne"], subjects=[], gaps=[gap("no_subject")]),
+    )
+    [unknown] = [a for a in understood.ambiguities if a.kind == "unknown_subject"]
+    assert "billing-gateway" in unknown.said
+    assert not unknown.blocking
+    assert "no_subject" not in {a.kind for a in understood.ambiguities}
+    # A verb and its pronoun, a common word, a version: not names.
+    assert unknown_names("Dis-moi, peux-tu voir si le front-end en v2.8.4 est lent ?") == []
+    assert unknown_names("Pourquoi billing-gateway et svc_orders sont lents ?") == [
+        "billing-gateway",
+        "svc_orders",
+    ]
+
+
+def test_what_changed_is_not_who() -> None:
+    """« Qu'est-ce qui a changé »: what, not « qui » — no owner to find."""
+    assert [kind for kind, _ in kinds_said("Qu'est-ce qui a changé sur Billing API ?")] == [
+        "change"
+    ]

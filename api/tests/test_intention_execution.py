@@ -94,6 +94,25 @@ def test_a_window_is_read_in_the_plans_time_zone() -> None:
     assert scheduled_for(plan_of([proposal()], [OPS]), WEDNESDAY, PARIS) is None
 
 
+def test_a_window_said_by_its_hours_is_read_in_the_plans_time_zone() -> None:
+    """« Ce soir après 22h », « between 9pm and 11pm » (LEKA-440)."""
+    evening = datetime(2026, 10, 7, 20, 30, tzinfo=UTC)  # 22:30 Paris
+    assert in_window("ce soir apres 22h", WEDNESDAY, PARIS) is False
+    assert in_window("ce soir apres 22h", evening, PARIS) is True
+    # After midnight, still the night it was said for; the morning, not.
+    assert in_window("after 10pm", datetime(2026, 10, 7, 23, 0, tzinfo=UTC), PARIS) is True
+    assert in_window("after 10pm", datetime(2026, 10, 8, 6, 0, tzinfo=UTC), PARIS) is False
+    assert in_window("entre 22h et 23h30", evening, PARIS) is True
+    assert (
+        in_window("between 9pm and 11pm", datetime(2026, 10, 7, 21, 30, tzinfo=UTC), PARIS) is False
+    )
+    assert in_window("ce soir", evening, PARIS) is True
+    # Next: 22:00 Paris, 20:00 UTC.
+    assert next_window("ce soir apres 22h", WEDNESDAY, PARIS) == datetime(
+        2026, 10, 7, 20, 0, tzinfo=UTC
+    )
+
+
 def test_a_deadline_is_the_end_of_its_day() -> None:
     assert deadline_of("2026-10-08", PARIS) == datetime(2026, 10, 8, 22, 0, tzinfo=UTC)
     assert deadline_of(None, PARIS) is None

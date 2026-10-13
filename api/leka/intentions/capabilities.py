@@ -96,13 +96,34 @@ ABOUT_ONE = frozenset(
 
 
 def _none(material: Material) -> Output:
+    unknown = material.asked.unknown
     return Output(
         missing=(
             Note(
+                "analysis.unknown_subject",
+                f"LEKA knows nothing called {', '.join(unknown)}: nothing to read.",
+                {"names": list(unknown)},
+            )
+            if unknown
+            else Note(
                 "analysis.no_subject",
                 "It names nothing the company model holds: nothing to read.",
             ),
         )
+    )
+
+
+def _elsewhere(material: Material) -> Note | None:
+    """What it names, LEKA does not know, and nothing else it is about: what
+    it reads around is not its cause (LEKA-440)."""
+    asked = material.asked
+    if asked.subjects or not asked.unknown:
+        return None
+    said = ", ".join(asked.unknown)
+    return Note(
+        "analysis.not_its_cause",
+        f"LEKA knows nothing called {said}: what it found elsewhere is not its cause.",
+        {"names": list(asked.unknown)},
     )
 
 
@@ -591,6 +612,9 @@ def incidents(material: Material) -> Output:
             confidence=0.6,
             evidence=proofs.all,
         )
+    elsewhere = _elsewhere(material)
+    if elsewhere is not None:
+        ordered = []
     top = ordered[0] if ordered else None
     return Output(
         findings=tuple(findings),
@@ -598,7 +622,9 @@ def incidents(material: Material) -> Output:
         impact=tuple(ImpactArea(code, tuple(items.values())) for code, items in areas.items()),
         risk=risk,
         risk_basis=Note("incident.risk", "Read from the severity its source declares.", {}),
-        uncertainties=()
+        uncertainties=(elsewhere,)
+        if elsewhere is not None
+        else ()
         if top
         else (Note("incident.no_cause", "Nothing is said or suspected to have caused it.", {}),),
         summary=Note(
@@ -720,6 +746,9 @@ def changes(material: Material) -> Output:
             evidence=proofs.all,
         )
     unique = list({c.id: c for c in causes}.values())
+    elsewhere = _elsewhere(material)
+    if elsewhere is not None:
+        unique = []
     return Output(
         findings=tuple(findings),
         causes=tuple(unique),

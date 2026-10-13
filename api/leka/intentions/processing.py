@@ -97,6 +97,7 @@ from leka.intentions.schemas import (
     Understanding,
 )
 from leka.intentions.service import IntentionService
+from leka.intentions.understanding import unknown_names
 from leka.intentions.writing import NEEDS as WRITING
 from leka.intentions.writing import write
 from leka.knowledge import (
@@ -254,6 +255,7 @@ def asked_of(intention: Intention, understood: Understanding | None, now: dateti
         constraints=tuple(
             (c.kind, c.value, c.hard) for c in (scope.constraints if scope is not None else [])
         ),
+        unknown=tuple(unknown_names(understood.text)) if understood and not entities else (),
     )
 
 

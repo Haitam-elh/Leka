@@ -19,6 +19,8 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from leka.context import IntentGap, IntentPlan
 from leka.context.schemas import IntentConstraint, IntentKind, IntentPeriod, IntentSubject
 from leka.intentions import Understanding, understand
@@ -235,11 +237,17 @@ def test_a_thing_removed_is_not_acted_on_a_dormant_one_only_said() -> None:
     assert {a.kind for a in dormant.ambiguities} == {"subject_dormant"}
 
 
-def test_everything_named_and_excluded_leaves_nothing_to_look_at() -> None:
-    text = "Pourquoi tout est lent, sauf Billing API ?"
-    understood = read(text, plan(text, "diagnose"))
+def test_everything_named_and_excluded_leaves_nothing_to_act_on() -> None:
+    text = "Redémarre Billing API en production, sauf Billing API"
+    understood = read(text, plan(text, environment="production"))
     assert understood.scope is not None and understood.scope.entities == []
     assert "everything_excluded" in blocking(understood)
+    # A question about everything else is about everything else (LEKA-440).
+    question = "Pourquoi tout est lent, sauf Billing API ?"
+    rest = read(question, plan(question, "diagnose"))
+    assert rest.scope is not None and [e.name for e in rest.scope.excluded] == ["Billing API"]
+    assert rest.clear
+    assert "everything_excluded" not in {a.kind for a in rest.ambiguities}
 
 
 def test_without_the_model_s_word_the_scope_is_still_read() -> None:
@@ -248,4 +256,41 @@ def test_without_the_model_s_word_the_scope_is_still_read() -> None:
     scope = understood.scope
     assert scope is not None
     assert scope.entities[0].lifecycle is None
+    assert understood.clear
+
+
+def test_leaving_a_thing_untouched_excludes_it_rather_than_everything() -> None:
+    text = "Redémarre Billing API en production mais ne touche pas à auth-service"
+    understood = read(
+        text, plan(text, environment="production", subjects=[BILLING_SAID, AUTH_SAID])
+    )
+    scope = understood.scope
+    assert scope is not None
+    assert [e.name for e in scope.excluded] == ["auth-service"]
+    assert "read_only" not in {c.kind for c in scope.constraints}
+    [restart] = understood.actions
+    assert restart.targets == [BILLING]
+    assert understood.clear
+    nothing = "Ne touche à rien, dis-moi pourquoi Billing API est lente"
+    held = read(nothing, plan(nothing, "diagnose"))
+    assert held.scope is not None and "read_only" in {c.kind for c in held.scope.constraints}
+
+
+@pytest.mark.parametrize(
+    "said", ["ce soir après 22h", "after 10pm", "entre 22h et 23h30", "between 9pm and 11pm"]
+)
+def test_a_window_said_by_its_hours_is_held_to(said: str) -> None:
+    text = f"Redémarre Billing API en production {said}"
+    understood = read(text, plan(text, environment="production"))
+    assert understood.scope is not None
+    [window] = [c for c in understood.scope.constraints if c.kind == "window"]
+    # Every word of it held: its hours are when it runs.
+    assert window.value == said.replace("è", "e")
+
+
+def test_a_question_about_a_thing_removed_is_answered_with_it() -> None:
+    text = "Qu'est-ce qui dépend encore de Billing API ?"
+    understood = read(text, plan(text, "dependency"), lifecycles={BILLING: "removed"})
+    [gone] = [a for a in understood.ambiguities if a.kind == "subject_gone"]
+    assert not gone.blocking
     assert understood.clear

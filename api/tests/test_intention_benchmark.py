@@ -37,6 +37,7 @@ from types import ModuleType
 from typing import Any
 
 import pytest
+import redis.asyncio as redis
 from httpx import AsyncClient
 from sqlalchemy import select
 
@@ -273,7 +274,10 @@ async def observe(client: AsyncClient, workspace_id: uuid.UUID, case: Case) -> O
             )
         except Exception as error:  # a crash is what is measured
             seen["crashed"] = f"analysis: {type(error).__name__}: {error}"
-    detail = (await client.get(f"{API}/{intention_id}")).json()
+    read = await client.get(f"{API}/{intention_id}")
+    if read.status_code != 200:
+        return Observation(crashed=f"read: {read.status_code} {read.text[:200]}")
+    detail = read.json()
     analysis = await client.get(f"{API}/{intention_id}/analysis")
     decisions = await client.get(f"{API}/{intention_id}/decisions")
     if analysis.status_code not in (200, 404) or decisions.status_code != 200:
@@ -291,6 +295,18 @@ async def observe(client: AsyncClient, workspace_id: uuid.UUID, case: Case) -> O
 
 
 # ── the run ──────────────────────────────────────────────────────────────────
+
+
+async def _unthrottled() -> None:
+    """Forget the throttling counters: a case is one person asking once, not
+    the seventieth request of the minute from the same address."""
+    client = redis.from_url(str(settings.redis_url))
+    try:
+        keys = [key async for key in client.scan_iter("leka:ratelimit:*")]
+        if keys:
+            await client.delete(*keys)
+    finally:
+        await client.aclose()
 
 
 def _write(path: Path, content: str) -> None:
@@ -320,6 +336,7 @@ async def test_the_intention_engine_holds_its_reference(
     checks: list[grid.Check] = []
     read_by: set[str] = set()
     for case in dataset.cases:
+        await _unthrottled()
         seen = await observe(client, workspace.id, case)
         read_by.add(seen.read_by)
         checks += grid.check(case, seen)

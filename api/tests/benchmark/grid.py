@@ -89,13 +89,13 @@ LAYERS: tuple[Layer, ...] = ("reasoning", "context", "ux", "technical")
 # (docs/benchmarks/intentions.md § 4): raised with it, never lowered to let
 # a change in.
 FLOORS: dict[Dimension, float] = {
-    "fidelity": 0.90,
+    "fidelity": 0.95,
     "negations_constraints": 0.95,
     "entities_targets": 0.95,
-    "decision": 0.80,
-    "clarification": 0.60,
+    "decision": 0.95,
+    "clarification": 0.95,
     "grounding": 0.95,
-    "calibration": 0.70,
+    "calibration": 0.95,
     "guardrails": 0.95,
     "next_step": 0.95,
 }

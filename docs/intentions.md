@@ -223,7 +223,7 @@ things named, the period, the environment, the gaps), never redone.
 | `mode`, `mode_said` | `question` — to answer — or `request` — to act on — and what said it: « ? », an interrogative first word (pourquoi, qui, comment, why, who…), a polite or wanting request (peux-tu, je veux, il faut, can you, please…) with an action, or an action verb |
 | `kind` | LEKA-373's: diagnose, change, ownership, dependency, compliance, migration, knowledge, general |
 | `goal` | `{code, said, confidence}` (below) |
-| `actions` | each `{code, said, changes_systems}` — the verbs asked, never the nouns: « déploie » is asked, « le déploiement » happened |
+| `actions` | each `{code, said, changes_systems}` — the verbs asked, never the nouns: « déploie » is asked, « le déploiement » happened. Nor what is planned, studied or explained (« un plan pour migrer », « le risque de migrer », « comment redémarrer », « how to restart »), nor what was done (« a été redémarrée », « qui a redémarré », « has been rolled back »: its goal is `find_change`) — LEKA-440. « Mettre à jour » a documentation, a runbook, a page is `document`, which changes no system |
 | `withheld` | the actions spoken of but not asked (LEKA-434), each with its `polarity`: `negated` (« ne redémarre pas », « don't restart », « never »), `conditional` (« si Billing API tombe, redémarre-la »), `ambiguous` (a negation before it, not on it: « je ne sais pas s'il faut redémarrer »). Never acted on, never proposed. What is quoted (« … », " … ") is cited, not asked |
 | `entities` | what it is about: `{entity_id, name, type, how (asked, named, business), said, confidence}` — LEKA-373's subjects |
 | `period`, `environment` | as LEKA-373 reads them, with their origin and words |
@@ -253,7 +253,7 @@ things named, the period, the environment, the gaps), never redone.
 | `too_short` | yes | fewer than two words that say something |
 | `unclear_goal` | yes | no goal can be told — options: the goals |
 | `no_subject` | yes | its kind is about something, and it names nothing LEKA knows (LEKA-373's `no_subject`) — options: what it may have meant |
-| `unknown_subject` | yes | a thing asked for is not in the model |
+| `unknown_subject` | **when acting**, else a warning | a thing asked for is not in the model — or a name its words give (« billing-gateway », « svc_orders ») that nothing it is about answers to (LEKA-440): the answer says LEKA does not know it, and states no cause found elsewhere |
 | `action_without_target` | yes | an action on systems, on nothing named |
 | `ambiguous_subject` | **when acting**, else a warning | the same words name several things — options: those things. Read each to answer a question; never act on a guess |
 | `competing_goals` | no | two kinds said as much: read as the first — options: both goals |
@@ -310,6 +310,22 @@ requests, an unknown environment; every part's words in the text.
 `tests/test_intentions_api.py`: understood and kept; « Redémarre le
 service » flagged, asked, clarified; still unclear, asked again; a dry run
 keeps nothing.
+
+**What a verb says without asking it (LEKA-440).** Measured by the
+benchmark (`docs/benchmarks/intentions.md`), the rules no longer read as an
+action:
+- an infinitive a plan, a study, a risk or a cost governs — « Prépare un
+  plan pour migrer payment-api », « Évalue le risque de migrer » — nor a way
+  to do it asked — « Comment redémarrer », « How to restart »; « Fais un
+  plan, puis redémarre auth-service » still asks the restart;
+- what was done: a participle (« redémarrée », « restarted ») or a verb
+  after its auxiliary (« a redémarré », « has been rolled back »), never an
+  infinitive (« j'ai besoin de redémarrer », « I have to restart ») nor a
+  noun after an article (« do a rollback »);
+- a question about something it knows, with no goal said (« Quel est le SLA
+  de payment-api ? », « Sur quoi travaille Thomas Berger ? »): what is known
+  of it (`find_knowledge`), never stopped for it.
+And « qu'est-ce qui a changé » is what changed, not « qui ».
 
 **Each action on its own targets (LEKA-434).** An action is on the things
 said after it, before the next one: « Redémarre Billing API et rollback
@@ -489,7 +505,7 @@ the same way: what is missing blocks, and goes to clarification first.
 | Field | |
 | --- | --- |
 | `entities` | what it is about: LEKA-373's subjects, **resolved against the company model**, each with its `lifecycle` there now (active, dormant, archived, removed; none when unread) |
-| `excluded` | what it names to set apart: after « sauf », « hors », « à part », « except », « excluding », « sans » — not its subjects |
+| `excluded` | what it names to set apart: after « sauf », « hors », « à part », « except », « excluding », « sans », « ne touche pas à », « don't touch » (LEKA-440) — not its subjects |
 | `environments`, `environment_origin` | where it is held to: `asked` (the form), `text` (« en prod »), `constraint` (« uniquement en staging ») — none: everywhere |
 | `period` | `{since, until, origin, said, explicit}` — explicit when asked, read from the words or the model (« depuis le déploiement »), not its kind's default |
 | `sources` | the sources the form held it to; none: every one |
@@ -500,11 +516,11 @@ the same way: what is missing blocks, and goes to clarification first.
 
 | Kind | Said by | Value | Hard |
 | --- | --- | --- | --- |
-| `exclude` | sauf, hors, except… + a thing named | its id | yes |
-| `read_only` | sans rien modifier, lecture seule, read only, without changing… | true | yes |
+| `exclude` | sauf, hors, except, ne touche pas à, don't touch… + a thing named | its id | yes |
+| `read_only` | sans rien modifier, lecture seule, ne touche à rien, read only, without changing… — not « ne touche pas à payment-api », which excludes it | true | yes |
 | `no_downtime` | sans interruption, sans coupure, zero downtime… | true | yes |
 | `deadline` | avant / d'ici / by / before + demain, ce soir, a weekday, la fin de la semaine | the day, when it can be told | yes |
-| `window` | hors heures ouvrées, la nuit, ce week-end, outside business hours, tonight… | the words | yes |
+| `window` | hors heures ouvrées, la nuit, ce soir, ce week-end, après 22h, entre 22h et 23h30, outside business hours, tonight, after 10pm, between 9pm and 11pm… — read by execution in the plan's time zone (LEKA-440: by its hours too) | the words | yes |
 | `urgency` | urgent, urgence, asap, au plus vite, immédiatement… | high | no — it weighs |
 | `environment_only` | uniquement / seulement / only + en / in + an environment | the environment | yes |
 | `target` | a migration's « vers … » / « to … » | the word | yes |
@@ -517,8 +533,8 @@ the same way: what is missing blocks, and goes to clarification first.
 | `missing_environment` | yes | an action on systems, no environment held, and the model knows several — options: those |
 | `missing_target` | yes | a migration, and not where to |
 | `conflicting_constraints` | yes | an action on systems, and read only |
-| `subject_gone` | yes | a thing it is about is removed or archived in the model |
-| `everything_excluded` | yes | every thing it names, it excludes |
+| `subject_gone` | **when acting**, else a warning | a thing it is about is removed or archived in the model — a removed thing named is found again when nothing there now answers to its name (LEKA-440): « Qu'est-ce qui dépend encore de redis-sessions ? » is answered with it |
+| `everything_excluded` | **when acting** | every thing it names, it excludes — a question about everything else is about everything else (LEKA-440) |
 | `subject_dormant` | no | a thing it is about has been inactive 180 days: is it still what is used? |
 
 **Read with the model now.** At creation and each time it is asked again,
