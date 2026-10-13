@@ -8,6 +8,7 @@ import { cn } from "cn";
 
 import type { TileTone } from "@/components/environment/parts";
 import { SummarySaid } from "@/components/intentions/analysis-tab";
+import { JourneyPill } from "@/components/intentions/journey";
 import { Pill } from "@/components/intelligence/pill";
 import { timeAgo } from "@/components/knowledge/time";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
@@ -19,6 +20,7 @@ import { routes } from "@/config/routes";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { Intention, IntentionPhase, IntentionStatus } from "@/lib/intentions/api";
+import { type Journey, journeyWhy } from "@/lib/intentions/journey";
 import { useIntention, useIntentionCounts, useIntentions } from "@/lib/intentions/queries";
 
 /**
@@ -50,8 +52,11 @@ export const STATUS_TONES: Record<IntentionStatus, TileTone> = {
 
 const TABS = [null, "active", "finished", "scheduled", "archived"] as const;
 
-export function StatusPill({ status }: { status: IntentionStatus }) {
+/** Where it stands: its journey's state when it is given — the same on
+ * every screen (LEKA-443) — else, from before, its lifecycle's. */
+export function StatusPill({ status, journey }: { status: IntentionStatus; journey?: Journey }) {
   const t = useDictionary();
+  if (journey) return <JourneyPill journey={journey} status={status} />;
   return (
     <Pill tone={STATUS_TONES[status]} dot data-testid="intention-status" data-status={status}>
       {t.intentions.statuses[status]}
@@ -103,7 +108,7 @@ function Row({
           {kind ? <span className="block text-[0.8125rem] text-shell-muted">{kind}</span> : null}
         </span>
         <span>
-          <StatusPill status={intention.status} />
+          <StatusPill status={intention.status} journey={intention.journey} />
         </span>
         <span className="col-span-2 text-[0.8125rem] text-shell-muted md:col-span-1">
           {timeAgo(t, intention.updated_at)}
@@ -123,6 +128,7 @@ function Preview({ id, chosen }: { id: string; chosen: boolean }) {
   const { data } = useIntention(id);
   if (!data) return <div className="h-64 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
   const ago = timeAgo(t, data.created_at);
+  const why = journeyWhy(t, data.journey);
   return (
     <aside
       aria-label={w.title}
@@ -137,11 +143,18 @@ function Preview({ id, chosen }: { id: string; chosen: boolean }) {
           {data.title}
         </h2>
         <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-shell-muted">
-          <StatusPill status={data.status} />
+          <StatusPill status={data.status} journey={data.journey} />
           {fill(t.intentions.created, {
             when: ago.charAt(0).toLocaleLowerCase(locale) + ago.slice(1),
           })}
         </p>
+        {/* What happened, as its page says it: an error, a partial result,
+            stays in sight here too (LEKA-443). */}
+        {why ? (
+          <p className="mt-1.5 text-[0.8125rem] text-brand-navy" data-testid="preview-why">
+            {why}
+          </p>
+        ) : null}
       </div>
       <div>
         <h3 className="mb-1 text-[0.875rem] font-semibold text-brand-navy">{w.summary}</h3>

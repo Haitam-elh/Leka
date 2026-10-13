@@ -101,7 +101,9 @@ def test_analysing_is_said_only_while_an_analysis_of_this_attempt_runs() -> None
     )
     queued = journey(earlier, NOW)
     assert (queued.state, queued.reason, queued.next) == (J.READY, "queued", "wait")
-    assert "analyse_again" not in queued.controls
+    # Queued, it may be asked for now: the same job if one is on its way.
+    assert "analyse_again" in queued.controls
+    assert not queued.late
 
 
 def test_queued_or_running_too_long_is_said_late_and_can_be_asked_for_again() -> None:

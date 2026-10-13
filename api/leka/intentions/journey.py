@@ -354,8 +354,10 @@ def journey(facts: Facts, now: datetime) -> Journey:
                 late=late,
                 at=analysis.started_at,
             )
+        # Queued: it may be asked for now rather than waited for — the same
+        # job if one is on its way (the queue's concurrency key).
         late = now - since > QUEUE_PATIENCE
-        return said(J.READY, "queued", "wait", LEKA, {ANALYSE_AGAIN} if late else set(), late=late)
+        return said(J.READY, "queued", "wait", LEKA, {ANALYSE_AGAIN}, late=late)
     if status == S.FAILED:
         if last is not None and _from_actions(last):
             return said(

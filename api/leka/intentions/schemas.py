@@ -1560,7 +1560,6 @@ class IntentionPlanRead(BaseModel):
     controls: list[
         Literal["start", "schedule", "cancel", "unschedule", "stop", "confirm_step", "plan"]
     ] = Field(
-        default_factory=list,
         description="What may be done with it now — the rules its routes apply; only the latest "
         "plan is acted on (LEKA-443).",
     )

@@ -277,15 +277,19 @@ describe("the new intention's context and scope", () => {
     expect(await screen.findByTestId("intention-step-2")).toBeInTheDocument();
     // Kept: its analysis followed on its page.
     expect(screen.getByTestId("intention-follow")).toHaveAttribute("href", "/intentions/i1");
-    expect(intentionsApi.create).toHaveBeenLastCalledWith({
-      text: "Pourquoi acme/backend est lent depuis hier ?",
-      services: [],
-      // Every readable source ticked: no narrowing.
-      sources: [],
-      limit: 100,
-      environment: "production",
-      answers: [],
-    });
+    expect(intentionsApi.create).toHaveBeenLastCalledWith(
+      {
+        text: "Pourquoi acme/backend est lent depuis hier ?",
+        services: [],
+        // Every readable source ticked: no narrowing.
+        sources: [],
+        limit: 100,
+        environment: "production",
+        answers: [],
+      },
+      // With its key: sent again, the same intention (LEKA-443).
+      expect.stringMatching(/^[0-9a-f-]{36}$/),
+    );
   });
 
   it("asks what a request lacks before it is launched, and launches it with the answer", async () => {
@@ -340,6 +344,7 @@ describe("the new intention's context and scope", () => {
         expect.objectContaining({
           answers: [{ question: "missing_environment", value: "staging", unknown: false }],
         }),
+        expect.any(String),
       ),
     );
   });

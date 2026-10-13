@@ -5117,6 +5117,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/intentions/{intention_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop
+         * @description « Arrêter l'analyse » (LEKA-443): its analysis stopped — the intention
+         *     kept, ready to analyse again (POST …/analyse resumes it); what the
+         *     analysis running finds is kept, never its result. Stopped twice, the
+         *     same. 409 when it is not being analysed.
+         */
+        post: operations["stop_api_v1_intentions__intention_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/intentions/{intention_id}/archive": {
         parameters: {
             query?: never;
@@ -5250,9 +5273,9 @@ export interface paths {
         put?: never;
         /**
          * Analyse
-         * @description Analysed again, as it now stands — failed, it is retried first. 409
-         *     in any other state than analysing or failed; `queued` false when one is
-         *     already on its way.
+         * @description Analysed again, as it now stands — failed, it is retried first;
+         *     stopped, resumed (LEKA-443). 409 in any other state than analysing,
+         *     stopped or failed; `queued` false when one is already on its way.
          */
         post: operations["analyse_api_v1_intentions__intention_id__analyse_post"];
         delete?: never;
@@ -14976,13 +14999,24 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "running" | "complete" | "partial" | "inconclusive" | "failed" | "blocked";
+            status: "running" | "complete" | "partial" | "inconclusive" | "failed" | "blocked" | "stopped";
             /** Requested By */
             requested_by: string | null;
             /** Context Id */
             context_id: string | null;
             /** Context Version */
             context_version: number | null;
+            /**
+             * Intention Version
+             * @description The version of the intention it analysed (LEKA-443).
+             */
+            intention_version?: number | null;
+            /**
+             * Current
+             * @description Of the intention as it now stands: false once it was asked again, or the analysis stopped — said replaced, never shown as its result (LEKA-443).
+             * @default true
+             */
+            current: boolean;
             /** Readiness */
             readiness: ("ready" | "limited" | "blocked") | null;
             /**
@@ -15231,6 +15265,12 @@ export interface components {
              * @description What it wants to achieve, as understood (LEKA-385).
              */
             goal: ("explain_cause" | "find_change" | "find_owner" | "map_dependencies" | "assess_impact" | "check_compliance" | "plan_migration" | "find_knowledge" | "investigate" | "act" | "unknown") | null;
+            /**
+             * Version
+             * @description Which version of what was asked: one more each time it is asked again (LEKA-443).
+             */
+            version: number;
+            journey: components["schemas"]["JourneyRead"];
             /** Links */
             links: components["schemas"]["IntentionLinkRead"][];
             understanding: components["schemas"]["Understanding"] | null;
@@ -15423,6 +15463,11 @@ export interface components {
             steps: components["schemas"]["IntentionPlanStepRead"][];
             /** Events */
             events: components["schemas"]["IntentionPlanEventRead"][];
+            /**
+             * Controls
+             * @description What may be done with it now — the rules its routes apply; only the latest plan is acted on (LEKA-443).
+             */
+            controls: ("start" | "schedule" | "cancel" | "unschedule" | "stop" | "confirm_step" | "plan")[];
         };
         /**
          * IntentionPlanStepRead
@@ -15554,6 +15599,12 @@ export interface components {
              * @description What it wants to achieve, as understood (LEKA-385).
              */
             goal: ("explain_cause" | "find_change" | "find_owner" | "map_dependencies" | "assess_impact" | "check_compliance" | "plan_migration" | "find_knowledge" | "investigate" | "act" | "unknown") | null;
+            /**
+             * Version
+             * @description Which version of what was asked: one more each time it is asked again (LEKA-443).
+             */
+            version: number;
+            journey: components["schemas"]["JourneyRead"];
         };
         /**
          * IntentionRequest
@@ -15816,6 +15867,82 @@ export interface components {
          * @enum {string}
          */
         JobStatus: "queued" | "running" | "retrying" | "succeeded" | "failed";
+        /**
+         * JourneyRead
+         * @description Where it stands as a person reads it (LEKA-443): one state, the same
+         *     on every screen — why, since when, what next and by whom, what may be
+         *     done now. Read from what was kept (journey.py), never a progress made
+         *     up.
+         */
+        JourneyRead: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "draft" | "needs_clarification" | "ready" | "analysing" | "analysis_partial" | "analysis_failed" | "result_available" | "decision_required" | "approved" | "rejected" | "action_running" | "action_failed" | "to_verify" | "done" | "cancelled" | "superseded";
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * Reason
+             * @description Why it is there: queued, stopped, interrupted, partial, step_failed…
+             */
+            reason: string | null;
+            /**
+             * Next
+             * @description What comes next: answer, wait, resume, decide…
+             */
+            next: string;
+            /**
+             * By
+             * @description Who moves it on from here.
+             */
+            by: ("asker" | "approver" | "leka") | null;
+            /**
+             * Controls
+             * @description What a person may do now, as its state allows — each route checks it again.
+             */
+            controls: ("answer" | "ask_again" | "stop" | "resume" | "analyse_again" | "cancel" | "decide" | "modify_decision" | "start_actions" | "unschedule" | "stop_actions" | "retry_actions" | "report_outcome" | "archive" | "restore")[];
+            step: components["schemas"]["JourneyStepRead"];
+            /**
+             * Late
+             * @description Past what it should take: queued, or running, too long.
+             */
+            late: boolean;
+            /**
+             * Technical
+             * @description The error as kept, for whoever diagnoses it — never the words a person reads.
+             */
+            technical: string | null;
+        };
+        /**
+         * JourneyStepRead
+         * @description Where the five steps put it (LEKA-443).
+         */
+        JourneyStepRead: {
+            /**
+             * At
+             * @enum {string}
+             */
+            at: "intention" | "analysis" | "results" | "decision" | "action";
+            /**
+             * Reached
+             * @description The last step it reached (0-4): what may be opened.
+             */
+            reached: number;
+            /**
+             * Done
+             * @description The step it is at is itself done.
+             */
+            done: boolean;
+            /**
+             * Last
+             * @description The last step it goes through: 2 for a question answered.
+             */
+            last: number;
+        };
         JsonValue: unknown;
         /**
          * KindCoverageRead
@@ -21232,6 +21359,11 @@ export interface components {
             detail?: {
                 [key: string]: components["schemas"]["JsonValue"];
             };
+            /**
+             * Version
+             * @description The version of the intention it belongs to: one more each time it was asked again (LEKA-443).
+             */
+            version?: number | null;
         };
         /**
          * TimelineStep
@@ -46706,7 +46838,10 @@ export interface operations {
     create_api_v1_intentions_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The same key sent again — a click twice, a request retried — answers the intention it made, never a second one (LEKA-443). */
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -47862,6 +47997,100 @@ export interface operations {
                 "application/json": components["schemas"]["Withdrawal"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    stop_api_v1_intentions__intention_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

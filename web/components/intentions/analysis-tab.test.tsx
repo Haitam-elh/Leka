@@ -19,6 +19,7 @@ import { ConfirmProvider } from "@/components/interactions/confirm";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import type { IntentionAnalysisRead, IntentionDetail } from "@/lib/intentions/api";
 import { makeQueryClient } from "@/lib/query";
+import { QUEUED, sampleJourney } from "@/lib/intentions/journey-sample";
 
 const ID = "0c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 const ME = "9c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
@@ -74,13 +75,14 @@ const STEP = {
 };
 
 function intention(overrides: Partial<IntentionDetail> = {}): IntentionDetail {
+  const status = overrides.status ?? "completed";
   return {
     id: ID,
     title: "Qui est responsable de Billing API ?",
     text: "Qui est responsable de Billing API ?",
     kind: "ownership",
     scope: {},
-    status: "completed",
+    status,
     phase: "finished",
     status_changed_at: ago(2),
     summary: "Billing API is owned by Payments.",
@@ -93,6 +95,8 @@ function intention(overrides: Partial<IntentionDetail> = {}): IntentionDetail {
     goal: "find_owner",
     understanding: null,
     links: [],
+    version: 1,
+    journey: sampleJourney(status),
     ...overrides,
   };
 }
@@ -107,6 +111,8 @@ function analysis(overrides: Partial<IntentionAnalysisRead> = {}): IntentionAnal
     requested_by: ME,
     context_id: "c1",
     context_version: 3,
+    intention_version: 1,
+    current: true,
     readiness: "ready",
     started_at: ago(1),
     finished_at: new Date(new Date(ago(1)).getTime() + 1_200).toISOString(),
@@ -360,7 +366,14 @@ describe("an intention's analysis", () => {
 
   it("says LEKA is analysing while one is on its way, and reads it again until done", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    api.one.mockResolvedValue(intention({ status: "analysing", phase: "active", summary: null }));
+    api.one.mockResolvedValue(
+      intention({
+        status: "analysing",
+        phase: "active",
+        summary: null,
+        journey: sampleJourney("analysing", QUEUED),
+      }),
+    );
     api.analysis
       .mockRejectedValueOnce(MISSING())
       .mockResolvedValueOnce(
@@ -381,7 +394,6 @@ describe("an intention's analysis", () => {
     expect(steps.every((s) => s.dataset.status === "running")).toBe(true);
     expect(screen.getByTestId("analysis-state")).toHaveAttribute("data-status", "running");
 
-    api.one.mockResolvedValue(intention());
     await vi.advanceTimersByTimeAsync(4_000);
     await waitFor(() =>
       expect(screen.getAllByTestId("analysis-step").map((s) => s.dataset.status)).toEqual([
@@ -390,8 +402,10 @@ describe("an intention's analysis", () => {
         "failed",
       ]),
     );
+    // Done: the intention it moved, read again — its state the API's.
+    api.one.mockResolvedValue(intention());
+    await vi.advanceTimersByTimeAsync(5_000);
     expect(screen.queryByTestId("analysis-state")).not.toBeInTheDocument();
-    // Done: the intention it moved, read again.
     await waitFor(() => expect(api.one.mock.calls.length).toBeGreaterThan(1));
     await waitFor(() =>
       expect(screen.getByTestId("analysis-head")).toHaveAttribute("data-live", "false"),
@@ -405,6 +419,7 @@ describe("an intention's analysis", () => {
         status: "analysing",
         phase: "active",
         summary: null,
+        journey: sampleJourney("analysing", QUEUED),
         readiness: {
           status: "ready",
           context_id: "c1",
@@ -432,6 +447,7 @@ describe("an intention's analysis", () => {
         status: "analysing",
         phase: "active",
         summary: null,
+        journey: sampleJourney("analysing", QUEUED),
         readiness: {
           status: "blocked",
           context_id: "c1",

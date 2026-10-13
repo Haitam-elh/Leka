@@ -22,6 +22,7 @@ import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import type { IntentionDetail } from "@/lib/intentions/api";
 import type { TimelineItem } from "@/lib/outcomes";
 import { makeQueryClient } from "@/lib/query";
+import { sampleJourney } from "@/lib/intentions/journey-sample";
 
 const ID = "0c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 const ME = "9c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
@@ -67,13 +68,14 @@ const { ApiError } = await import("@/lib/api");
 const ago = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
 
 function intention(overrides: Partial<IntentionDetail> = {}): IntentionDetail {
+  const status = overrides.status ?? "analysing";
   return {
     id: ID,
     title: "Pourquoi Billing API est lente depuis hier ?",
     text: "Pourquoi Billing API est lente depuis hier ?",
     kind: "diagnose",
     scope: { environment: "production", services: ["s1", "s2"] },
-    status: "analysing",
+    status,
     phase: "active",
     status_changed_at: ago(2),
     summary: null,
@@ -105,6 +107,8 @@ function intention(overrides: Partial<IntentionDetail> = {}): IntentionDetail {
         linked_by: ME,
       },
     ],
+    version: 1,
+    journey: sampleJourney(status),
     ...overrides,
   };
 }
@@ -153,7 +157,9 @@ describe("Mes intentions", () => {
     const [row] = await screen.findAllByTestId("intention-row");
     expect(row).toHaveTextContent("Pourquoi Billing API est lente depuis hier ?");
     expect(row).toHaveTextContent("Diagnostic");
-    expect(within(row).getByTestId("intention-status")).toHaveTextContent("En analyse");
+    // Where it stands as the API says it (LEKA-443): the same on its page.
+    expect(within(row).getByTestId("intention-status")).toHaveTextContent("Analyse en cours");
+    expect(within(row).getByTestId("intention-status")).toHaveAttribute("data-state", "analysing");
     expect(within(row).getByRole("link")).toHaveAttribute("href", `/intentions/${ID}`);
     expect(api.list).toHaveBeenLastCalledWith({ phase: null, q: "", cursor: null });
   });
@@ -217,7 +223,7 @@ describe("an intention's page", () => {
       "href",
       "/environment/services/e1",
     );
-    expect(screen.getByTestId("intention-status")).toHaveTextContent("En analyse");
+    expect(screen.getByTestId("intention-status")).toHaveTextContent("Analyse en cours");
     expect(screen.getByText(/par vous/)).toBeInTheDocument();
   });
 
@@ -523,7 +529,9 @@ describe("an intention's page", () => {
     );
     show(<IntentionScreen />);
 
-    expect(await screen.findByTestId("intention-status")).toHaveTextContent("À préciser");
+    expect(await screen.findByTestId("intention-status")).toHaveTextContent(
+      "Clarification requise",
+    );
     const [question] = screen.getAllByTestId("understanding-question");
     expect(question).toHaveTextContent("Sur quoi faut-il agir ?");
     expect(question).toHaveTextContent("Possibilités : Redémarrer");
@@ -588,7 +596,7 @@ describe("an intention's page", () => {
     api.one.mockResolvedValue(waiting);
     api.feasibility.mockRejectedValue(new ApiError(404, "/x", "No."));
     api.answer.mockResolvedValue({
-      intention: { ...waiting, status: "analysing" },
+      intention: { ...waiting, status: "analysing", journey: sampleJourney("analysing") },
       context: { context_id: "c1" },
     });
     const user = userEvent.setup();
@@ -607,7 +615,7 @@ describe("an intention's page", () => {
         { question: "action_without_target", value: "p1", unknown: false },
       ]),
     );
-    expect(await screen.findByTestId("intention-status")).toHaveTextContent("En analyse");
+    expect(await screen.findByTestId("intention-status")).toHaveTextContent("Analyse en cours");
   });
 
   it("says whether its context can ground the analysis, and what blocks it", async () => {
