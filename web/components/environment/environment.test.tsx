@@ -2,8 +2,8 @@
  * "Mon environnement" and an entity's sheet (LEKA-359, mockups 10 and 11).
  *
  * What these protect: the screen opens on the architecture (LEKA-369,
- * Haitam's mockup) — its figures above every tab, its columns, the recent
- * activity under it — none invented where the API has nothing; each other
+ * Haitam's mockup) — its figures above every tab, its columns, what moved
+ * and what needs a look under it — none invented where the API has nothing; each other
  * tab is a landscape of the company model, its map putting each thing in
  * its layer with its state in words, and the list says the same things as
  * rows; under the map, how well its kinds are known and which sources it
@@ -416,8 +416,11 @@ describe("Mon environnement", () => {
     // The overview's: a column's first cards, no flows.
     expect(graphApi.architecture).toHaveBeenCalledWith(null, false);
     expect(graphApi.view).not.toHaveBeenCalled();
-    // What moved, under it: the environment's events.
-    expect(await screen.findByText("Latence élevée sur Payment API")).toBeInTheDocument();
+    // Under it, what moved and what needs a look (LEKA-438) — no more widgets.
+    expect(await screen.findAllByText("Latence élevée sur Payment API")).toHaveLength(2);
+    expect(screen.getByRole("heading", { name: "Événements récents" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Points d'attention" })).toBeInTheDocument();
+    expect(screen.queryByText("Top dépendances")).not.toBeInTheDocument();
     // The detailed map is a page of its own.
     expect(screen.getByRole("link", { name: /Voir la cartographie détaillée/ })).toHaveAttribute(
       "href",
