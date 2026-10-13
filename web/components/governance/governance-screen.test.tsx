@@ -153,10 +153,11 @@ describe("governance", () => {
   it("restricts an entity found by name, saying why", async () => {
     const user = userEvent.setup();
     show();
+    await user.click(await screen.findByRole("button", { name: "Restreindre une entité" }));
     const form = await screen.findByTestId("restrict-form");
     const button = within(form).getByRole("button", { name: "Restreindre" });
     expect(button).toBeDisabled();
-    await user.type(within(form).getByLabelText("Restreindre une entité"), "check");
+    await user.type(within(form).getByLabelText("Entité"), "check");
     await user.click(await within(form).findByRole("button", { name: /Checkout/ }));
     await user.type(within(form).getByLabelText("Pourquoi"), "Projet confidentiel");
     await user.click(button);

@@ -99,6 +99,11 @@ test.describe("the information architecture", () => {
     await page.getByRole("tab", { name: "Accès" }).click();
     await expect(page).toHaveURL(/\/governance\?tab=access$/);
     await expect(page.getByTestId("access-matrix")).toContainText("Restreindre une entité");
+    // A creation form opens in a dialog, and Escape closes it.
+    await page.getByRole("button", { name: "Nouveau rôle" }).click();
+    await expect(page.getByRole("dialog", { name: "Nouveau rôle" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 
   test("keeps the shell around an address that matches nothing", async ({ page }) => {

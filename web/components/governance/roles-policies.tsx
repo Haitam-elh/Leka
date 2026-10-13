@@ -1,6 +1,6 @@
 "use client";
 
-import { History, Scale, UserCog } from "lucide-react";
+import { History, Plus, Scale, UserCog } from "lucide-react";
 import { useState } from "react";
 
 import { permissionSaid } from "@/components/governance/governance-screen";
@@ -9,6 +9,7 @@ import { Pill } from "@/components/intelligence/pill";
 import { useConfirm } from "@/components/interactions/confirm";
 import { exactDate } from "@/components/knowledge/time";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { AccessModel, CustomRole, GovernanceEvent, Policy, PolicyUpdate } from "@/lib/access";
 import {
@@ -43,6 +44,37 @@ function slug(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+/** A creation form, out of the page until asked for (LEKA-438): its button
+ * sits in the card's header, the form in a dialog. */
+export function FormDialog({
+  label,
+  open,
+  onOpenChange,
+  children,
+}: {
+  label: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <>
+      <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(true)}>
+        <Plus className="size-4" aria-hidden="true" />
+        {label}
+      </Button>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{label}</DialogTitle>
+          </DialogHeader>
+          {children}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 async function said<T>(t: Dictionary, work: Promise<T>, done: string): Promise<boolean> {
@@ -105,6 +137,7 @@ export function RolesCard({ model, canManage }: { model: AccessModel; canManage:
   const [base, setBase] = useState<"member" | "admin">("member");
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const [creating, setCreating] = useState(false);
   const basePermissions = new Set<string>(model.roles.find((r) => r.role === base)?.permissions ?? []);
   const holders = new Map((held ?? []).map((a) => [a.user_id, a.role]));
   const people = members.data ?? [];
@@ -124,6 +157,7 @@ export function RolesCard({ model, canManage }: { model: AccessModel; canManage:
       setName("");
       setAdded(new Set());
       setRemoved(new Set());
+      setCreating(false);
     }
   }
 
@@ -136,8 +170,66 @@ export function RolesCard({ model, canManage }: { model: AccessModel; canManage:
     void said(t, change.assign.mutateAsync({ userId: member.user_id, role: key }), w.assigned);
   }
 
+  const form = (
+    <form className="flex flex-col gap-2" onSubmit={(e) => void create(e)} data-testid="role-form">
+      <label htmlFor="role-name" className="text-[0.8125rem] font-medium text-brand-navy">
+        {w.name}
+      </label>
+      <Input id="role-name" placeholder={w.roleNamePlaceholder} value={name} onChange={(e) => setName(e.target.value)} />
+      <label htmlFor="role-base" className="text-[0.8125rem] font-medium text-brand-navy">
+        {w.base}
+      </label>
+      <select
+        id="role-base"
+        className="h-9 rounded-md border border-shell-line bg-white px-2 text-sm"
+        value={base}
+        onChange={(e) => {
+          setBase(e.target.value as "member" | "admin");
+          setAdded(new Set());
+          setRemoved(new Set());
+        }}
+      >
+        <option value="member">{w.roles.member}</option>
+        <option value="admin">{w.roles.admin}</option>
+      </select>
+      <Checks
+        id="role-added"
+        label={w.adds}
+        options={model.permissions
+          .filter((p) => !basePermissions.has(p) && !OWNER_ONLY.has(p))
+          .map((p) => ({ value: p, label: permissionSaid(t, p) }))}
+        chosen={added}
+        onChange={setAdded}
+      />
+      <Checks
+        id="role-removed"
+        label={w.takesAway}
+        options={model.permissions
+          .filter((p) => basePermissions.has(p) && p !== "workspace:read")
+          .map((p) => ({ value: p, label: permissionSaid(t, p) }))}
+        chosen={removed}
+        onChange={setRemoved}
+      />
+      <div>
+        <Button type="submit" disabled={slug(name).length < 2 || change.saveRole.isPending}>
+          {w.createRole}
+        </Button>
+      </div>
+    </form>
+  );
+
   return (
-    <Card title={w.customRoles} icon={<UserCog className="size-4 text-shell-muted" aria-hidden="true" />}>
+    <Card
+      title={w.customRoles}
+      icon={<UserCog className="size-4 text-shell-muted" aria-hidden="true" />}
+      action={
+        canManage ? (
+          <FormDialog label={w.newRole} open={creating} onOpenChange={setCreating}>
+            {form}
+          </FormDialog>
+        ) : null
+      }
+    >
       <p className="mb-3 text-[0.8125rem] text-shell-muted">{w.customRolesSaid}</p>
       {roles?.length ? (
         <ul className="mb-4 flex flex-col gap-3" data-testid="custom-roles">
@@ -187,53 +279,6 @@ export function RolesCard({ model, canManage }: { model: AccessModel; canManage:
       ) : (
         <p className="mb-4 text-[0.8125rem] text-shell-muted">{w.noCustomRole}</p>
       )}
-      {canManage ? (
-        <form className="flex flex-col gap-2" onSubmit={(e) => void create(e)} data-testid="role-form">
-          <label htmlFor="role-name" className="text-[0.8125rem] font-medium text-brand-navy">
-            {w.newRole}
-          </label>
-          <Input id="role-name" placeholder={w.roleNamePlaceholder} value={name} onChange={(e) => setName(e.target.value)} />
-          <label htmlFor="role-base" className="text-[0.8125rem] font-medium text-brand-navy">
-            {w.base}
-          </label>
-          <select
-            id="role-base"
-            className="h-9 rounded-md border border-shell-line bg-white px-2 text-sm"
-            value={base}
-            onChange={(e) => {
-              setBase(e.target.value as "member" | "admin");
-              setAdded(new Set());
-              setRemoved(new Set());
-            }}
-          >
-            <option value="member">{w.roles.member}</option>
-            <option value="admin">{w.roles.admin}</option>
-          </select>
-          <Checks
-            id="role-added"
-            label={w.adds}
-            options={model.permissions
-              .filter((p) => !basePermissions.has(p) && !OWNER_ONLY.has(p))
-              .map((p) => ({ value: p, label: permissionSaid(t, p) }))}
-            chosen={added}
-            onChange={setAdded}
-          />
-          <Checks
-            id="role-removed"
-            label={w.takesAway}
-            options={model.permissions
-              .filter((p) => basePermissions.has(p) && p !== "workspace:read")
-              .map((p) => ({ value: p, label: permissionSaid(t, p) }))}
-            chosen={removed}
-            onChange={setRemoved}
-          />
-          <div>
-            <Button type="submit" disabled={slug(name).length < 2 || change.saveRole.isPending}>
-              {w.createRole}
-            </Button>
-          </div>
-        </form>
-      ) : null}
     </Card>
   );
 }
@@ -261,6 +306,7 @@ export function PoliciesCard({ canManage, roles }: { canManage: boolean; roles: 
   const [risk, setRisk] = useState<"" | "low" | "medium" | "high" | "critical">("");
   const [who, setWho] = useState<Set<string>>(new Set());
   const [priority, setPriority] = useState("50");
+  const [creating, setCreating] = useState(false);
 
   async function create(event: React.FormEvent) {
     event.preventDefault();
@@ -277,6 +323,7 @@ export function PoliciesCard({ canManage, roles }: { canManage: boolean; roles: 
     if (await said(t, change.createPolicy.mutateAsync(body), fill(w.policySaved, { name: body.name }))) {
       setName("");
       setWho(new Set());
+      setCreating(false);
     }
   }
 
@@ -312,8 +359,67 @@ export function PoliciesCard({ canManage, roles }: { canManage: boolean; roles: 
     ...roles.map((r) => ({ value: r.key, label: r.name })),
   ];
 
+  const form = (
+    <form className="flex flex-col gap-2" onSubmit={(e) => void create(e)} data-testid="policy-form">
+      <label htmlFor="policy-name" className="text-[0.8125rem] font-medium text-brand-navy">
+        {w.name}
+      </label>
+      <Input id="policy-name" placeholder={w.policyNamePlaceholder} value={name} onChange={(e) => setName(e.target.value)} />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-[0.8125rem] text-brand-navy">
+          {w.effect}
+          <select className="h-9 rounded-md border border-shell-line bg-white px-2 text-sm" value={effect} onChange={(e) => setEffect(e.target.value as "deny" | "allow")}>
+            <option value="deny">{w.refuses}</option>
+            <option value="allow">{w.exception}</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-[0.8125rem] text-brand-navy">
+          {w.action}
+          <select className="h-9 rounded-md border border-shell-line bg-white px-2 text-sm" value={action} onChange={(e) => setAction(e.target.value)}>
+            {ACTIONS.map((a) => (
+              <option key={a} value={a}>
+                {permissionSaid(t, a)}
+              </option>
+            ))}
+            <option value="intention:create">{permissionSaid(t, "intention:create")}</option>
+            <option value="intention:approve">{permissionSaid(t, "intention:approve")}</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-[0.8125rem] text-brand-navy">
+          {w.riskLabel}
+          <select className="h-9 rounded-md border border-shell-line bg-white px-2 text-sm" value={risk} onChange={(e) => setRisk(e.target.value as "" | "low" | "medium" | "high" | "critical")}>
+            <option value="">{w.anyRisk}</option>
+            <option value="medium">{fill(w.riskAtLeast, { risk: w.risks.medium })}</option>
+            <option value="high">{fill(w.riskAtLeast, { risk: w.risks.high })}</option>
+            <option value="critical">{fill(w.riskAtLeast, { risk: w.risks.critical })}</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-[0.8125rem] text-brand-navy">
+          {w.priorityLabel}
+          <Input type="number" min={0} max={100} value={priority} onChange={(e) => setPriority(e.target.value)} />
+        </label>
+      </div>
+      <Checks id="policy-roles" label={w.appliesTo} options={roleChoices} chosen={who} onChange={setWho} />
+      <div>
+        <Button type="submit" disabled={name.trim().length < 2 || change.createPolicy.isPending}>
+          {w.createPolicy}
+        </Button>
+      </div>
+    </form>
+  );
+
   return (
-    <Card title={w.policies} icon={<Scale className="size-4 text-shell-muted" aria-hidden="true" />}>
+    <Card
+      title={w.policies}
+      icon={<Scale className="size-4 text-shell-muted" aria-hidden="true" />}
+      action={
+        canManage ? (
+          <FormDialog label={w.newPolicy} open={creating} onOpenChange={setCreating}>
+            {form}
+          </FormDialog>
+        ) : null
+      }
+    >
       <p className="mb-3 text-[0.8125rem] text-shell-muted">{w.policiesSaid}</p>
       {data?.length ? (
         <ul className="mb-4 flex flex-col gap-2" data-testid="policies">
@@ -342,54 +448,6 @@ export function PoliciesCard({ canManage, roles }: { canManage: boolean; roles: 
       ) : (
         <p className="mb-4 text-[0.8125rem] text-shell-muted">{w.noPolicy}</p>
       )}
-      {canManage ? (
-        <form className="flex flex-col gap-2" onSubmit={(e) => void create(e)} data-testid="policy-form">
-          <label htmlFor="policy-name" className="text-[0.8125rem] font-medium text-brand-navy">
-            {w.newPolicy}
-          </label>
-          <Input id="policy-name" placeholder={w.policyNamePlaceholder} value={name} onChange={(e) => setName(e.target.value)} />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-[0.8125rem] text-brand-navy">
-              {w.effect}
-              <select className="h-9 rounded-md border border-shell-line bg-white px-2 text-sm" value={effect} onChange={(e) => setEffect(e.target.value as "deny" | "allow")}>
-                <option value="deny">{w.refuses}</option>
-                <option value="allow">{w.exception}</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-[0.8125rem] text-brand-navy">
-              {w.action}
-              <select className="h-9 rounded-md border border-shell-line bg-white px-2 text-sm" value={action} onChange={(e) => setAction(e.target.value)}>
-                {ACTIONS.map((a) => (
-                  <option key={a} value={a}>
-                    {permissionSaid(t, a)}
-                  </option>
-                ))}
-                <option value="intention:create">{permissionSaid(t, "intention:create")}</option>
-                <option value="intention:approve">{permissionSaid(t, "intention:approve")}</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-[0.8125rem] text-brand-navy">
-              {w.riskLabel}
-              <select className="h-9 rounded-md border border-shell-line bg-white px-2 text-sm" value={risk} onChange={(e) => setRisk(e.target.value as "" | "low" | "medium" | "high" | "critical")}>
-                <option value="">{w.anyRisk}</option>
-                <option value="medium">{fill(w.riskAtLeast, { risk: w.risks.medium })}</option>
-                <option value="high">{fill(w.riskAtLeast, { risk: w.risks.high })}</option>
-                <option value="critical">{fill(w.riskAtLeast, { risk: w.risks.critical })}</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-[0.8125rem] text-brand-navy">
-              {w.priorityLabel}
-              <Input type="number" min={0} max={100} value={priority} onChange={(e) => setPriority(e.target.value)} />
-            </label>
-          </div>
-          <Checks id="policy-roles" label={w.appliesTo} options={roleChoices} chosen={who} onChange={setWho} />
-          <div>
-            <Button type="submit" disabled={name.trim().length < 2 || change.createPolicy.isPending}>
-              {w.createPolicy}
-            </Button>
-          </div>
-        </form>
-      ) : null}
     </Card>
   );
 }

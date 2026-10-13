@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import type { AccessDecision, AccessModel, EntityHit } from "@/lib/access";
 import { AIAuditCard, AIControlsCard, ApprovalsCard } from "@/components/governance/ai-controls";
 import { AuditLogCard, AuditRetentionCard } from "@/components/governance/audit-log";
-import { HistoryCard, PoliciesCard, RolesCard } from "@/components/governance/roles-policies";
+import { FormDialog, HistoryCard, PoliciesCard, RolesCard } from "@/components/governance/roles-policies";
 import {
   useAccessModel,
   useCustomRoles,
@@ -123,6 +123,7 @@ function Restrictions({ canRestrict }: { canRestrict: boolean }) {
   const [q, setQ] = useState("");
   const [chosen, setChosen] = useState<EntityHit | null>(null);
   const [reason, setReason] = useState("");
+  const [creating, setCreating] = useState(false);
   const found = useEntitySearch(chosen ? "" : q);
 
   async function submit(event: React.FormEvent) {
@@ -134,6 +135,7 @@ function Restrictions({ canRestrict }: { canRestrict: boolean }) {
       setChosen(null);
       setQ("");
       setReason("");
+      setCreating(false);
     } catch (error) {
       notify.error({ title: error instanceof ApiError ? error.message : w.failed });
     }
@@ -154,8 +156,73 @@ function Restrictions({ canRestrict }: { canRestrict: boolean }) {
     }
   }
 
+  const form = (
+    <form className="flex flex-col gap-2" onSubmit={(e) => void submit(e)} data-testid="restrict-form">
+      <label htmlFor="restrict-search" className="text-[0.8125rem] font-medium text-brand-navy">
+        {w.entity}
+      </label>
+      {chosen ? (
+        <div className="flex flex-wrap items-center gap-2 text-[0.8125rem]">
+          <Pill tone="violet">{chosen.entity.name}</Pill>
+          <button type="button" className="text-xs text-shell-muted hover:underline" onClick={() => setChosen(null)}>
+            {w.change}
+          </button>
+        </div>
+      ) : (
+        <>
+          <Input
+            id="restrict-search"
+            placeholder={w.searchPlaceholder}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          {found.data?.entities.length ? (
+            <ul className="flex flex-col gap-1" data-testid="restrict-results">
+              {found.data.entities.slice(0, 6).map((hit) => (
+                <li key={hit.entity.id}>
+                  <button
+                    type="button"
+                    className="text-start text-[0.8125rem] text-brand-navy hover:underline"
+                    onClick={() => setChosen(hit)}
+                  >
+                    {hit.entity.name} <span className="text-shell-muted">· {hit.entity.type}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      )}
+      <label htmlFor="restrict-reason" className="text-[0.8125rem] font-medium text-brand-navy">
+        {w.reason}
+      </label>
+      <Input
+        id="restrict-reason"
+        placeholder={w.reasonPlaceholder}
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+      />
+      <div>
+        <Button type="submit" disabled={!chosen || reason.trim().length < 3 || restrict.isPending}>
+          <Lock className="size-4" aria-hidden="true" />
+          {w.restrict}
+        </Button>
+      </div>
+    </form>
+  );
+
   return (
-    <Card title={w.restrictions} icon={<EyeOff className="size-4 text-shell-muted" aria-hidden="true" />}>
+    <Card
+      title={w.restrictions}
+      icon={<EyeOff className="size-4 text-shell-muted" aria-hidden="true" />}
+      action={
+        canRestrict ? (
+          <FormDialog label={w.restrictOne} open={creating} onOpenChange={setCreating}>
+            {form}
+          </FormDialog>
+        ) : null
+      }
+    >
       <p className="mb-3 text-[0.8125rem] text-shell-muted">{w.restrictionsSaid}</p>
       {data?.length ? (
         <ul className="mb-4 flex flex-col gap-2" data-testid="restrictions">
@@ -189,60 +256,6 @@ function Restrictions({ canRestrict }: { canRestrict: boolean }) {
       ) : (
         <p className="mb-4 text-[0.8125rem] text-shell-muted">{w.noRestriction}</p>
       )}
-      {canRestrict ? (
-        <form className="flex flex-col gap-2" onSubmit={(e) => void submit(e)} data-testid="restrict-form">
-          <label htmlFor="restrict-search" className="text-[0.8125rem] font-medium text-brand-navy">
-            {w.restrictOne}
-          </label>
-          {chosen ? (
-            <div className="flex flex-wrap items-center gap-2 text-[0.8125rem]">
-              <Pill tone="violet">{chosen.entity.name}</Pill>
-              <button type="button" className="text-xs text-shell-muted hover:underline" onClick={() => setChosen(null)}>
-                {w.change}
-              </button>
-            </div>
-          ) : (
-            <>
-              <Input
-                id="restrict-search"
-                placeholder={w.searchPlaceholder}
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-              {found.data?.entities.length ? (
-                <ul className="flex flex-col gap-1" data-testid="restrict-results">
-                  {found.data.entities.slice(0, 6).map((hit) => (
-                    <li key={hit.entity.id}>
-                      <button
-                        type="button"
-                        className="text-start text-[0.8125rem] text-brand-navy hover:underline"
-                        onClick={() => setChosen(hit)}
-                      >
-                        {hit.entity.name} <span className="text-shell-muted">· {hit.entity.type}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </>
-          )}
-          <label htmlFor="restrict-reason" className="text-[0.8125rem] font-medium text-brand-navy">
-            {w.reason}
-          </label>
-          <Input
-            id="restrict-reason"
-            placeholder={w.reasonPlaceholder}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-          <div>
-            <Button type="submit" disabled={!chosen || reason.trim().length < 3 || restrict.isPending}>
-              <Lock className="size-4" aria-hidden="true" />
-              {w.restrict}
-            </Button>
-          </div>
-        </form>
-      ) : null}
     </Card>
   );
 }
