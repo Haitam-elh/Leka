@@ -176,6 +176,10 @@ function optionsOf(question: BriefQuestion): string[] {
     case "unknown_environment":
     case "missing_environment":
       return question.options;
+    case "action_without_target":
+    case "missing_target":
+      // What is asked to be done, not what it is done on: no answer.
+      return [];
     default:
       // Names without ids (things it may mean): their words.
       return question.choices.length ? [] : question.options;

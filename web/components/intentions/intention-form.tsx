@@ -317,6 +317,7 @@ export function IntentionForm() {
           onSubmit={() => void review()}
           submitting={reviewing}
           submitLabel={preview ? t.intentions.brief.read : t.intentions.brief.review}
+          suggested={preview === null}
         />
         {reviewing && !preview ? (
           <p className="text-[0.8125rem] text-shell-muted" role="status">

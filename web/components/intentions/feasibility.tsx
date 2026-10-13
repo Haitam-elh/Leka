@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { cn } from "cn";
 
+import { titleOf } from "@/components/capabilities/catalogue";
 import { Card } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { useConfirm } from "@/components/interactions/confirm";
@@ -35,7 +36,7 @@ import { usePayment } from "@/lib/subscription-queries";
  */
 
 /** A source kind's name — its own word when LEKA has no mark for it. */
-function titleOf(kind: string): string {
+function sourceNameOf(kind: string): string {
   try {
     return sourceTitle(kind as SourceKind);
   } catch {
@@ -83,7 +84,9 @@ export function FeasibilityPanel({ feasibility }: { feasibility: Feasibility }) 
               data-key={n.key}
               data-offer={n.offer}
             >
-              <span className="min-w-0 flex-1 font-medium text-brand-navy">{n.title}</span>
+              <span className="min-w-0 flex-1 font-medium text-brand-navy">
+                {titleOf(t, { key: n.key, title: n.title, kind: n.kind as never })}
+              </span>
               <Pill tone={OFFER_TONES[n.offer]}>{w.offers[n.offer]}</Pill>
               <Pill tone={n.available ? "success" : "warning"}>
                 {n.available ? (n.essential ? w.available : w.always) : w.unavailable}
@@ -134,7 +137,7 @@ function StepItem({ step }: { step: PathStep }) {
   const plan = typeof detail.plan === "string" ? detail.plan : "";
   const planName = (w.plans as Record<string, string>)[plan] ?? plan;
   const sources = Array.isArray(detail.sources)
-    ? detail.sources.map((kind) => titleOf(String(kind))).join(t.catalogue.or)
+    ? detail.sources.map((kind) => sourceNameOf(String(kind))).join(t.catalogue.or)
     : "";
   const said = fill((w.steps as Record<string, string>)[step.kind] ?? step.kind, {
     sources,
