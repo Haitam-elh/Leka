@@ -21,7 +21,8 @@ const WIDTHS = [1024, 1280, 1440, 1920] as const;
 /** Each screen, and the one control that must be usable on it. */
 const SCREENS: readonly [path: string, primary: (page: Page) => ReturnType<Page["getByRole"]>][] = [
   ["/overview", (page) => page.getByRole("button", { name: "Lancer l'analyse" })],
-  ["/intentions/new", (page) => page.getByRole("button", { name: "Lancer l'analyse" })],
+  // What LEKA understood comes first (LEKA-439): « Continuer », then launched.
+  ["/intentions/new", (page) => page.getByRole("button", { name: "Continuer" })],
   ["/intentions/new?step=decision", (page) => page.getByRole("checkbox").first()],
   ["/settings", (page) => page.getByRole("button", { name: "Enregistrer" })],
   ["/sources", (page) => page.getByRole("heading", { level: 1 })],
