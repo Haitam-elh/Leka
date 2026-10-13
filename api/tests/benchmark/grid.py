@@ -624,16 +624,16 @@ class _Checker:
                 "wrong_action",
             )
         if "confidence" in expect:
-            wanted = list(expect["confidence"])
+            levels = list(expect["confidence"])
             surer = seen.confidence is not None and all(
-                SURENESS.index(seen.confidence) > SURENESS.index(level) for level in wanted
+                SURENESS.index(seen.confidence) > SURENESS.index(level) for level in levels
             )
             self.add(
                 "confidence",
                 "calibration",
                 "reasoning",
-                seen.confidence in wanted,
-                wanted,
+                seen.confidence in levels,
+                levels,
                 seen.confidence,
                 "false_claim" if surer else "missing_evidence",
             )
