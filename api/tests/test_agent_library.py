@@ -27,6 +27,8 @@ from leka.capabilities.skills import agent_skill_tools
 from leka.capabilities.tools import NAMES
 from leka.knowledge import EntityType
 
+VERSIONS = {"build-fixer": "1.0.0", "code-review": "1.2.0"}
+
 LIBRARY = {
     "architecture-analysis",
     "code-review",
@@ -48,12 +50,13 @@ def test_the_library_is_registered_each_agent_to_the_runtime_s_contract() -> Non
     types = {t.value for t in EntityType}
     for key in sorted(LIBRARY):
         d = found[key]
-        # Given their skills (LEKA-401): a new version each.
+        # Given their skills (LEKA-401): a new version each; the code
+        # review again for its method (LEKA-447).
         assert (d.kind, d.lifecycle, d.model, d.version) == (
             Kind.AGENT,
             Lifecycle.ACTIVE,
             True,
-            "1.0.0" if key == "build-fixer" else "1.1.0",
+            VERSIONS.get(key, "1.1.0"),
         ), key
         assert set(d.entity_types) <= types, key
         assert {"search_entities", "read_entity"} <= set(d.tools) <= NAMES, key
@@ -247,3 +250,22 @@ def test_a_question_never_goes_to_an_agent_that_acts() -> None:
     acting = {d.key for d in every if d.mode == "proposes_action"}
     assert acting >= {"build-fixer", "code-change"}
     assert not acting & {c.key for c in routed.selected}
+
+
+def test_the_code_review_reviews_by_a_method_it_can_prove() -> None:
+    # LEKA-447: ECC's code-reviewer and gstack's review, rewritten for what
+    # LEKA sees — the scope said against the scope touched, a gate before
+    # each finding, a severity that needs its proof, zero findings allowed.
+    said = {d.key: d for d in catalogue()}["code-review"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "périmètre annoncé",
+        "La porte avant chaque constat",
+        "La sévérité",
+        "La confiance",
+    ):
+        assert step in said, step
+    assert "Zéro constat est une revue valide" in said
+    assert "Un avis, jamais une décision" in said
+    # Credited, as their licence asks.
+    assert "affaan-m/ECC" in said and "garrytan/gstack" in said
