@@ -31,6 +31,7 @@ from leka.capabilities.gateway import service
 from leka.core.config import settings
 from leka.db import session_factory, workspace_scope
 from leka.intentions import dispatch as dispatch_module
+from leka.intentions import feasibility as feasibility_module
 from leka.intentions.dispatch import Dispatched, checked
 from tests.conftest import FakeIdentity
 from tests.test_agent_runs_api import _ready
@@ -194,6 +195,43 @@ async def test_a_deck_asked_for_starts_the_architect_with_the_request_s_own_word
     await _analysed(acme, intention)
     assert len(await _runs(acme["acme"])) == 1
     assert started == [run.id]
+
+
+async def test_an_agent_its_credits_would_stop_midway_is_not_started(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+    queued: list[tuple[uuid.UUID, str]],
+    gemini: Callable[..., Gemini],
+    started: list[uuid.UUID],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # LEKA-439: 30 credits left, a deck has cost 120 here, LEKA's models stop
+    # once spent — never started to stop midway.
+    await _ready(acme)
+    gemini(
+        {
+            "agent": ARCHITECT,
+            "inputs": {"parcours": "De l'intention à l'action", "perimetre": "Plateforme LEKA"},
+            "why": "Un deck.",
+        }
+    )
+
+    async def few(*args: Any, **kwargs: Any) -> Any:
+        return SimpleNamespace(enforced=True, state="warning", remaining=30.0)
+
+    async def costly(*args: Any, **kwargs: Any) -> dict[str, float]:
+        return {ARCHITECT: 120.0}
+
+    monkeypatch.setattr(feasibility_module, "credits_left", few)
+    monkeypatch.setattr(feasibility_module, "run_costs", costly)
+    _as(identity, acme, "member")
+    intention = await _ask(client, ASKED)
+    await _analysed(acme, intention)
+
+    assert await _runs(acme["acme"]) == []
+    assert started == []
 
 
 async def test_a_question_starts_no_agent(

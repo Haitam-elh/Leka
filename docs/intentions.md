@@ -319,6 +319,163 @@ proposals). An action said with nothing after it takes what the next one is
 on (« redémarre et scale Billing API »); a thing not found in the words, every
 action.
 
+## 9 bis. Its brief: what LEKA must know, asks, and what follows (LEKA-439)
+
+Someone writes what they need, however incompletely. Before anything is
+analysed, LEKA says what it understood, asks only what it truly lacks, lets
+it be corrected, says what it will read — then it is launched.
+
+**The contract** (`intentions/brief.py`, `IntentionBrief`). Five parts, each
+with a state — **known** (said, or answered), **assumed** (LEKA's reading:
+a model's goal, a default period — never shown as a fact), **missing**,
+**unknown** (its asker said « je ne sais pas ») — and how much LEKA needs it:
+
+| Part | What it is | Needed |
+| --- | --- | --- |
+| goal | explain, find, assess, act… (`understanding.goal`) | blocking |
+| target | the things of the company model it is about | blocking for an action; useful for a question (LEKA looks across everything) |
+| scope | where and when: environment, period | blocking for an action (production is not staging); optional otherwise |
+| expected | an answer, a document (PDF, deck…), a plan, an action on systems | useful |
+| constraints | read only, no downtime, a deadline… | optional |
+
+**The questions** are what understanding cannot tell (`ambiguities`, § 9) —
+never a generic « précisez »: the blocking first, then by part (target,
+goal, expected, scope, constraints). Each says why it is asked
+(`intentions.brief.whys`) and what it could be: the things it may mean **by
+id** (`choices` — two services both called « Billing API »; what the words
+may name), the environments LEKA knows, the goals, « oui / non » for a
+doubtful action, « seulement regarder » for a contradiction — their own
+words when that helps, and always « je ne sais pas ». An action on nothing
+known asks once on what (`action_without_target`), with what the words may
+name — not twice.
+
+**The answers** (`intentions.answers`, `IntentionAnswer`: a question, a
+value, unknown) are kept with the intention, one per question, the latest,
+and read again every time it is understood (`answered_ask`, `answered`):
+
+- a thing chosen by id narrows its scope (the context's roots);
+- an environment chosen holds it there;
+- a goal chosen is the one meant;
+- a doubtful action, « oui », is asked — never one its asker said not to do;
+  « non », withheld (LEKA-434);
+- a contradiction, « seulement regarder », withholds what would change
+  systems; « agir », drops « read only »;
+- their words are read with the rest of what they asked; still unclear,
+  asked again.
+
+The words kept with the intention are its asker's, never rewritten; the
+scope it is kept with is theirs, an answer is not written into it.
+
+**The decision** (`IntentionBrief.decision`):
+
+| Decision | When | What follows |
+| --- | --- | --- |
+| analyse | nothing is missing | launched |
+| clarify | a blocking question is unanswered | not launched; on its page, `needs_clarification` |
+| continue | only what is useful is missing, or not known | launched, its limits said (`limits`) |
+| block | an action on systems whose blocking question its asker cannot answer | never acted on a guess: `needs_clarification`, said why |
+
+A clear intention — short or long — has no question: it is launched in one
+more click, its reading shown. An action is never proposed from a request
+still ambiguous, negated or contradictory (§ 9, § 13).
+
+**Before it is asked** — `POST /intentions/brief` (an `IntentionRequest`:
+the words, the scope, the answers): what LEKA understood, its brief, the
+sources it would read, and what it takes (below). Nothing is kept.
+`POST /intentions` and `…/ask` take the answers too.
+
+**After** — `POST /intentions/{id}/answers` (`{answers}`), by its asker or
+who may approve: kept with those answered before, the latest for each; it
+is asked again with them (`asked_again`, its history says which were
+answered); analysing, its analysis queued. 409 once cancelled, archived, or
+while its actions run.
+
+**In the app.** Nouvelle intention: « Continuer » reads it — what LEKA
+understood, part by part; its questions, each with why and what it could
+be; what it will read; what it takes — each answer read again at once;
+« Lancer l'analyse » only once nothing blocks, its limits said. Changed
+since it was read: read again first. Its page (step 1): the same, its
+questions answered there while it waits — no more rewriting the whole
+request.
+
+### What it takes to carry it through (LEKA-439)
+
+`intentions/feasibility.py`, `GET /intentions/{id}/feasibility` (and in the
+preview). It reads; it never buys nor changes anything.
+
+- **The capabilities** it needs: what the router sends it to (LEKA-398),
+  what always runs with an analysis, and — a document expected — what makes
+  one. Each **offered**:
+  - included: LEKA's own, and the core agents every plan has
+    (`billing/catalogue.yaml`);
+  - beta: a specialist agent while it is not on sale — usable by every
+    plan, its future price said (decided 2026-10-13);
+  - add_on: on sale, bought;
+  - planned: not ready, never offered as usable.
+
+  Each is **usable here or not**, and why: a source to connect, a language
+  model, a permission, turned off.
+- **The credits** this month (metering, LEKA-430): left, and what it should
+  cost — the median of the agent's runs here, unknown before any.
+- **The verdict**:
+  - ready;
+  - prerequisites: something to connect or allow first — only what it is
+    routed to counts, what always runs only adds;
+  - over_quota: spent, or too few for what it should cost;
+  - impossible: a document expected and nothing LEKA has makes it — LEKA can
+    still analyse and answer.
+- **The least it takes**, cheapest first:
+  1. what to connect or allow;
+  2. a capacity pack that is enough;
+  3. an add-on, or a bundle when it costs less than its agents one by one;
+  4. the cheapest plan whose credits are enough — never the dearest by
+     default;
+  5. past Business, Enterprise by contract.
+
+  Anything that costs money is consented to first. In the app, changing plan
+  says its price, its credits and its launch offer, then opens the secure
+  payment page (Stripe, LEKA-431). Only who may pay for the workspace
+  (`workspace:update`) sees that button; a member is told to ask an
+  administrator.
+
+Shown before it is asked, on its step 1, and beside its decision (step 4).
+
+### Scenarios, and what is expected
+
+Pure (`tests/test_intention_brief.py`, `tests/test_intention_feasibility.py`),
+through the API (`tests/test_intention_brief_api.py`), on screen
+(`components/intentions/brief.test.tsx`, `intention-form.test.tsx`,
+`intentions.test.tsx`), in a browser (`e2e/intentions.spec.ts`,
+`e2e/forms.spec.ts`).
+
+| Intention | Expected |
+| --- | --- |
+| « Pourquoi Billing API est lente depuis hier ? » (short, clear) | analyse; no question |
+| A long paragraph, clear (several sentences, one need) | analyse or continue; no blocking question |
+| « Why is Billing API slow since yesterday? » (English) | analyse, goal explain_cause |
+| « Fais-moi un deck PDF de l'architecture de Billing API » | expected: document, said |
+| « Billing » (too short) | clarify, asked in their words; answered « Qui est responsable de Billing API ? » → analyse, find_owner |
+| « Redémarre Billing API en production », two Billing API | clarify, choices by id; one chosen → scope narrowed to it → analyse |
+| « Redémarre le service en production » (nothing known) | clarify — one question on what, with what the words may name |
+| the same, « je ne sais pas » | block; not analysed |
+| « Pourquoi c'est lent ? », target « je ne sais pas » | continue, limit: everything LEKA knows is read |
+| « Redémarre Billing API », environments production and staging | clarify, the environments as options; « staging » → analyse, scope staging |
+| « Ne redémarre pas Billing API, dis-moi pourquoi elle est lente » | no action; analyse |
+| « Je ne sais pas s'il faut redémarrer Billing API » | clarify; « non » → no action; « oui » → restart asked |
+| « Redémarre … sans rien modifier » (contradictory) | clarify; « seulement regarder » → no action; « agir » → read only dropped |
+| « Pourquoi … ? Et qui en est responsable ? » (several) | continue, limit: the first request first |
+| A goal a model read | assumed, never known |
+| Free, credits left, LEKA's own analysis | ready, nothing to buy |
+| Free, credits spent | over_quota → Starter (not Business), asked first |
+| A run that costs more than Starter's month | over_quota → Growth |
+| Past Business | Enterprise by contract, no checkout |
+| A capacity pack that is enough | buy_pack before any plan |
+| A security review (specialist agent) | beta, usable, nothing to buy |
+| Two specialist agents on sale, a bundle cheaper | buy_bundle; one alone cheaper → buy_add_on |
+| A document nothing makes | impossible, rephrase |
+| The architect without Confluence nor GitHub | prerequisites: connect a source |
+| A draft agent the only one that would make it | never usable: impossible |
+
 ## 10. Its scope and constraints (LEKA-386)
 
 Exactly what an intention is about and within which boundaries it must be
@@ -1195,6 +1352,7 @@ No model, or no agent offered: nothing is started, and the analysis answers as b
   links checked, twice the same, the context kept; decisions, actions,
   outcomes linked in code; the history refused an UPDATE, allowed `by`
   forgotten; another workspace's 404.
+- LEKA-439: the brief, its questions and answers, what it takes — § 9 bis.
 
 ## Not yet
 

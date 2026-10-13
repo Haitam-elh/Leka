@@ -30,6 +30,7 @@ import json
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -78,6 +79,21 @@ plainly imply. A boolean input is true only when the request asks for it.
 - Give every required input you can; one you cannot, leave out and say so \
 in `missing`.
 Answer with the JSON object only."""
+
+
+async def _short(session: AsyncSession, workspace_id: uuid.UUID, key: str) -> bool:
+    """Whether this month's credits are short of what this agent has cost
+    here — and LEKA's models stop once they are spent."""
+    # Looked up when used: the dispatch is imported where feasibility's
+    # own imports are not ready yet.
+    from leka.intentions.feasibility import credits_left, run_costs
+
+    now = datetime.now(UTC)
+    month = await credits_left(session, workspace_id, now=now)
+    if not month.enforced:
+        return False
+    cost = (await run_costs(session, [key], now=now)).get(key)
+    return month.state == "exhausted" or (cost is not None and month.remaining < cost)
 
 
 class Dispatched(BaseModel):
@@ -230,6 +246,12 @@ async def dispatch(
         return Handed(said.agent, why="missing_inputs" if said.missing else "not_offered")
     agent, inputs = found
     definition = agent.definition
+    if await _short(session, workspace_id, definition.key):
+        # What it has cost here is more than is left, and LEKA's models stop
+        # once credits are spent: never started to be stopped midway — what
+        # it takes is said on the intention (LEKA-439).
+        logger.info("intention_not_dispatched", intention=str(intention.id), credits="short")
+        return Handed(definition.key, title=definition.title, why="credits")
     seat = await MembershipRepository(session, workspace_id).get_for_user(asker)
     actor = Actor(user_id=asker, roles=frozenset({seat.role.value})) if seat else None
     held = holding(

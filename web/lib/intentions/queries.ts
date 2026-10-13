@@ -5,6 +5,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { ApiError } from "@/lib/api";
 import {
   type IntentionAnalysisRead,
+  type IntentionAnswer,
   type IntentionDetail,
   type IntentionPhase,
   intentions,
@@ -19,6 +20,7 @@ export const intentionKeys = {
   analysis: (id: string) => ["intentions", "analysis", id] as const,
   analyses: (id: string) => ["intentions", "analyses", id] as const,
   routing: (id: string) => ["intentions", "routing", id] as const,
+  feasibility: (id: string) => ["intentions", "feasibility", id] as const,
 };
 
 /** How often an analysis on its way is read again. */
@@ -127,5 +129,30 @@ export function useRouteAgain(id: string) {
   return useMutation({
     mutationFn: () => intentions.route(id),
     onSuccess: (routing) => client.setQueryData(intentionKeys.routing(id), routing),
+  });
+}
+
+/** What it takes to carry it through here (LEKA-439). */
+export function useIntentionFeasibility(id: string, enabled = true) {
+  return useQuery({
+    queryKey: intentionKeys.feasibility(id),
+    queryFn: () => intentions.feasibility(id),
+    enabled: Boolean(id) && enabled,
+  });
+}
+
+/** Its asker answers LEKA's questions (LEKA-439): asked again with them —
+ * the intention, its history and what it takes, read again. */
+export function useAnswer(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (answers: IntentionAnswer[]) => intentions.answer(id, answers),
+    onSuccess: (asked) => {
+      client.setQueryData(intentionKeys.one(id), asked.intention);
+      void client.invalidateQueries({ queryKey: intentionKeys.history(id) });
+      void client.invalidateQueries({ queryKey: intentionKeys.feasibility(id) });
+      void client.invalidateQueries({ queryKey: intentionKeys.analysis(id) });
+      void client.invalidateQueries({ queryKey: intentionKeys.counts });
+    },
   });
 }

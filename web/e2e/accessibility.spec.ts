@@ -129,7 +129,11 @@ test.describe("a new intention, read", () => {
     await page
       .getByTestId("intention-input")
       .fill("Qu'est-ce qui a changé sur payment-api cette semaine ?");
+    // What LEKA understood, before it is launched (LEKA-439).
     await page.getByTestId("intention-submit").click();
+    await expect(page.getByTestId("intention-review")).toBeVisible();
+    await expectNoViolations(page);
+    await page.getByTestId("intention-launch").click();
     // The context in detail, opened (LEKA-438 folds it): all of it checked.
     await page.getByText("Détail du contexte").click();
     await expect(page.getByTestId("intent-scope")).toBeVisible();

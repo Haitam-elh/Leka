@@ -47,6 +47,8 @@ const api = vi.hoisted(() => ({
   archive: vi.fn(),
   restore: vi.fn(),
   analysis: vi.fn(),
+  answer: vi.fn(),
+  feasibility: vi.fn(),
 }));
 vi.mock("@/lib/intentions/api", async (original) => ({
   ...(await original<typeof import("@/lib/intentions/api")>()),
@@ -529,6 +531,83 @@ describe("an intention's page", () => {
       "href",
       `/intentions/new?intention=${ID}`,
     );
+  });
+
+  it("asks what it needs on its page, with why, and sends the answer (LEKA-439)", async () => {
+    route.pathname = `/intentions/${ID}/overview`;
+    const understanding = {
+      version: 4,
+      text: "Redémarre le service en production",
+      mode: "request" as const,
+      mode_said: "redemarre",
+      kind: "general",
+      goal: { code: "act" as const, said: ["redemarre"], confidence: 0.9 },
+      actions: [
+        { code: "restart", said: "redemarre", changes_systems: true, polarity: "affirmed" as const, targets: [] },
+      ],
+      withheld: [],
+      entities: [],
+      period: null,
+      environment: "production",
+      ambiguities: [],
+      clear: false,
+      scope: null,
+    };
+    const waiting = intention({
+      status: "needs_clarification",
+      goal: "act",
+      moves: ["analysing", "cancelled"],
+      understanding,
+      brief: {
+        version: 1,
+        decision: "clarify",
+        restated: null,
+        acting: true,
+        slots: [
+          { slot: "goal", state: "known", need: "blocking", value: "act", values: [], origin: "words" },
+          { slot: "target", state: "missing", need: "blocking", value: null, values: [], origin: null },
+          { slot: "scope", state: "known", need: "blocking", value: "production", values: ["production"], origin: "words" },
+          { slot: "expected", state: "known", need: "useful", value: "action", values: [], origin: "words" },
+          { slot: "constraints", state: "missing", need: "optional", value: null, values: [], origin: null },
+        ],
+        questions: [
+          {
+            kind: "action_without_target",
+            slot: "target",
+            blocking: true,
+            said: "On what?",
+            options: ["restart"],
+            choices: [{ value: "p1", label: "Payment API", type: "service" }],
+            free: true,
+            answer: null,
+          },
+        ],
+        limits: [],
+      },
+    });
+    api.one.mockResolvedValue(waiting);
+    api.feasibility.mockRejectedValue(new ApiError(404, "/x", "No."));
+    api.answer.mockResolvedValue({
+      intention: { ...waiting, status: "analysing" },
+      context: { context_id: "c1" },
+    });
+    const user = userEvent.setup();
+    show(<IntentionScreen />);
+
+    const question = await screen.findByTestId("brief-question");
+    expect(question).toHaveTextContent("Sur quoi faut-il agir ?");
+    expect(question).toHaveTextContent(
+      "Pourquoi : Une action sur vos systèmes doit savoir exactement ce qu'elle touche.",
+    );
+    // Not the old way round: rewriting the whole request.
+    expect(screen.queryByTestId("understanding-clarify")).not.toBeInTheDocument();
+    await user.click(within(question).getByRole("button", { name: "Payment API" }));
+    await waitFor(() =>
+      expect(api.answer).toHaveBeenCalledWith(ID, [
+        { question: "action_without_target", value: "p1", unknown: false },
+      ]),
+    );
+    expect(await screen.findByTestId("intention-status")).toHaveTextContent("En analyse");
   });
 
   it("says whether its context can ground the analysis, and what blocks it", async () => {

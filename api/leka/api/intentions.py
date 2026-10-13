@@ -44,6 +44,7 @@ payload (rule 3).
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, status
@@ -58,7 +59,6 @@ from leka.context import (
     ContextRefusedError,
     ContextRepository,
     ContextService,
-    IntentAsk,
 )
 from leka.core.errors import ErrorCode
 from leka.db import SortableField
@@ -67,10 +67,12 @@ from leka.ingestion import ContentRepository, ResolutionRepository
 from leka.intelligence import IntelligenceRepository
 from leka.intentions import (
     Actor,
+    FeasibilityRead,
     IllegalTransitionError,
     Intention,
     IntentionAnalysisRead,
     IntentionAnalysisRequested,
+    IntentionAnswers,
     IntentionArchivedError,
     IntentionAsked,
     IntentionContext,
@@ -81,20 +83,25 @@ from leka.intentions import (
     IntentionFilters,
     IntentionLinkCreate,
     IntentionLinkRead,
+    IntentionPreview,
     IntentionRead,
     IntentionRepository,
+    IntentionRequest,
     IntentionService,
     IntentionStatus,
     LinkRefusedError,
     ModelReading,
     NothingToStartError,
     NotYoursError,
+    SourceToReadRead,
     Understanding,
     Withdrawal,
     intention_read,
     queue_analysis,
     route_intention,
 )
+from leka.intentions.brief import brief_of, tidy
+from leka.intentions.feasibility import Feasibility, feasibility_of
 from leka.knowledge import GraphRepository, GraphService
 
 router = APIRouter(prefix="/intentions", tags=["intentions"])
@@ -190,13 +197,14 @@ REFUSED = (
 
 @router.post("", response_model=IntentionCreated, status_code=status.HTTP_201_CREATED)
 async def create(
-    body: IntentAsk, service: Asking, principal: Asker, session: SessionDep
+    body: IntentionRequest, service: Asking, principal: Asker, session: SessionDep
 ) -> IntentionCreated:
     """Ask LEKA: the intention kept — submitted, then analysing — and the
     context it asks for assembled, its subject the intention (LEKA-373).
     `intention_id` in the body is ignored: it is the new intention's. 422
     when nothing can start it — and nothing is kept. Analysing, its
-    analysis is queued (LEKA-388)."""
+    analysis is queued (LEKA-388). `answers`: what its asker answered to
+    LEKA's questions before asking (LEKA-439), kept and read with it."""
     try:
         intention, context = await service.create(body, by=principal.user_id)
     except REFUSED as error:
@@ -219,11 +227,70 @@ async def _analyse(
 
 
 @router.post("/understand", response_model=Understanding)
-async def understand(body: IntentAsk, service: Asking) -> Understanding:
+async def understand(body: IntentionRequest, service: Asking) -> Understanding:
     """What LEKA would understand of these words (LEKA-385) — its goal,
     whether it asks or requests, the actions, the things it is about, what
     is ambiguous, each with the words it came from. Nothing is kept."""
     return await service.understand(body)
+
+
+def feasibility_read(found: Feasibility) -> FeasibilityRead:
+    return FeasibilityRead.model_validate(
+        {
+            "verdict": found.verdict,
+            "needed": [
+                {**n.__dict__, "reasons": [dict(r) for r in n.reasons]} for n in found.needed
+            ],
+            "credits": found.credits,
+            "estimate": found.estimate,
+            "path": [
+                {"kind": step.kind, "detail": dict(step.detail), "consent": step.consent}
+                for step in found.path
+            ],
+        }
+    )
+
+
+async def _sources(
+    session: SessionDep, workspace_id: uuid.UUID, chosen: list[uuid.UUID]
+) -> list[SourceToReadRead]:
+    """What LEKA would read: the sources chosen, else every one it can."""
+    rows = await session.scalars(SourceRepository(session, workspace_id).list_statement())
+    return [
+        SourceToReadRead(id=s.id, name=s.name, kind=s.kind.value, status=s.status.value)
+        for s in rows.all()
+        if (s.id in chosen if chosen else s.status.value in ("active", "degraded"))
+    ]
+
+
+@router.post("/brief", response_model=IntentionPreview)
+async def brief(
+    body: IntentionRequest, service: Asking, principal: Asker, session: SessionDep
+) -> IntentionPreview:
+    """Before it is asked (LEKA-439): what LEKA understood, its brief — each
+    part of what it must know, its questions, what follows (analyse,
+    clarify, continue with its limits, block) — what it would read, and
+    what it takes to carry it through here: the capabilities, the credits,
+    the least it takes. Nothing is kept."""
+    try:
+        understood, _plan = await service.read(body)
+    except REFUSED as error:
+        raise _refused(error) from error
+    briefed = brief_of(understood, tidy(body.answers))
+    found = await feasibility_of(
+        session,
+        principal.workspace_id,
+        understood,
+        briefed,
+        permissions=frozenset(p.value for p in principal.permissions),
+        now=datetime.now(UTC),
+    )
+    return IntentionPreview(
+        understanding=understood,
+        brief=briefed,
+        sources=await _sources(session, principal.workspace_id, list(body.sources)),
+        feasibility=feasibility_read(found),
+    )
 
 
 @router.get("", response_model=PageEnvelope[IntentionRead])
@@ -347,7 +414,7 @@ async def route_again(
 @router.post("/{intention_id}/ask", response_model=IntentionAsked)
 async def ask_again(
     intention_id: uuid.UUID,
-    body: IntentAsk,
+    body: IntentionRequest,
     service: Asking,
     principal: Asker,
     session: SessionDep,
@@ -368,6 +435,55 @@ async def ask_again(
     asked = IntentionAsked(intention=await service.detail_now(intention), context=context)
     await _analyse(session, principal, intention, trigger="asked_again")
     return asked
+
+
+@router.post("/{intention_id}/answers", response_model=IntentionAsked)
+async def answer(
+    intention_id: uuid.UUID,
+    body: IntentionAnswers,
+    service: Asking,
+    principal: Asker,
+    session: SessionDep,
+) -> IntentionAsked:
+    """What its asker answers to LEKA's questions (LEKA-439) — a choice,
+    their words, « je ne sais pas » — kept with what they answered before,
+    the latest for each: it is asked again with them, its words and scope as
+    they are; analysing, its analysis queued. 409 when cancelled, archived,
+    or while its actions run."""
+    try:
+        found = await service.answer(
+            intention_id, body.answers, by=principal.user_id, steward=_steward(principal)
+        )
+    except REFUSED as error:
+        raise _refused(error) from error
+    if found is None:
+        raise _missing()
+    intention, context = found
+    asked = IntentionAsked(intention=await service.detail_now(intention), context=context)
+    await _analyse(session, principal, intention, trigger="asked_again")
+    return asked
+
+
+@router.get("/{intention_id}/feasibility", response_model=FeasibilityRead)
+async def feasibility(
+    intention_id: uuid.UUID, service: Asking, principal: Reader, session: SessionDep
+) -> FeasibilityRead:
+    """What it takes to carry it through here, now (LEKA-439): the
+    capabilities it needs and how each is offered — included, beta, add-on,
+    planned — whether each is usable, the credits left and what it should
+    cost, and the least it takes when it cannot."""
+    detail = await service.detail(intention_id)
+    if detail is None or detail.understanding is None or detail.brief is None:
+        raise _missing()
+    found = await feasibility_of(
+        session,
+        principal.workspace_id,
+        detail.understanding,
+        detail.brief,
+        permissions=frozenset(p.value for p in principal.permissions),
+        now=datetime.now(UTC),
+    )
+    return feasibility_read(found)
 
 
 @router.post("/{intention_id}/cancel", response_model=IntentionDetail)

@@ -118,6 +118,8 @@ export function IntentionComposer({
   onSubmit,
   onAttachRequest,
   submitting = false,
+  submitLabel,
+  suggested = true,
   className,
 }: {
   /** The field in the surrounding form. */
@@ -129,6 +131,10 @@ export function IntentionComposer({
   /** Compact only: the paperclip. Files are attached on the full step. */
   onAttachRequest?: () => void;
   submitting?: boolean;
+  /** What the button says: « Lancer l'analyse » by default. */
+  submitLabel?: string;
+  /** Its suggestions, under it: not once LEKA has read what was asked. */
+  suggested?: boolean;
   className?: string;
 }) {
   const t = useDictionary();
@@ -497,7 +503,7 @@ export function IntentionComposer({
                 data-testid="intention-submit"
               >
                 <Send className="size-4" aria-hidden="true" />
-                {t.composer.submit}
+                {submitLabel ?? t.composer.submit}
               </Button>
             </div>
           </div>
@@ -505,53 +511,55 @@ export function IntentionComposer({
 
       </section>
 
-      <section
-        aria-labelledby={`${ids}-suggestions`}
-        className="rounded-xl border border-shell-line bg-white p-4"
-      >
-        <h2
-          id={`${ids}-suggestions`}
-          className="mb-3 flex items-center gap-2 text-[1rem] font-semibold text-brand-navy"
+      {suggested ? (
+        <section
+          aria-labelledby={`${ids}-suggestions`}
+          className="rounded-xl border border-shell-line bg-white p-4"
         >
-          <Sparkles className="size-4 text-brand-violet" aria-hidden="true" />
-          {t.composer.suggestionsTitle}
-        </h2>
-        <ul className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-          {suggestions.map(({ icon, tone, label, hint, template }, index) => (
-            <li key={label}>
-              <button
-                type="button"
-                onClick={() => void applySuggestion(template)}
-                // Named by its label, described by its hint: a test, or a
-                // screen reader, finds « Analyser un incident récent ».
-                aria-labelledby={`${ids}-s${index}`}
-                aria-describedby={`${ids}-h${index}`}
-                className="group flex h-full w-full flex-col items-start gap-2 rounded-xl border border-shell-line bg-white p-4 text-start transition-colors outline-none hover:border-brand-violet/40 hover:bg-brand-violet-soft/30 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-              >
-                <IconTile icon={icon} tone={tone} className="size-10" />
-                <span
-                  id={`${ids}-s${index}`}
-                  className="text-[0.875rem] font-semibold text-brand-navy"
+          <h2
+            id={`${ids}-suggestions`}
+            className="mb-3 flex items-center gap-2 text-[1rem] font-semibold text-brand-navy"
+          >
+            <Sparkles className="size-4 text-brand-violet" aria-hidden="true" />
+            {t.composer.suggestionsTitle}
+          </h2>
+          <ul className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+            {suggestions.map(({ icon, tone, label, hint, template }, index) => (
+              <li key={label}>
+                <button
+                  type="button"
+                  onClick={() => void applySuggestion(template)}
+                  // Named by its label, described by its hint: a test, or a
+                  // screen reader, finds « Analyser un incident récent ».
+                  aria-labelledby={`${ids}-s${index}`}
+                  aria-describedby={`${ids}-h${index}`}
+                  className="group flex h-full w-full flex-col items-start gap-2 rounded-xl border border-shell-line bg-white p-4 text-start transition-colors outline-none hover:border-brand-violet/40 hover:bg-brand-violet-soft/30 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
                 >
-                  {label}
-                </span>
-                <span className="flex w-full items-end gap-2">
+                  <IconTile icon={icon} tone={tone} className="size-10" />
                   <span
-                    id={`${ids}-h${index}`}
-                    className="min-w-0 flex-1 text-[0.8125rem] text-shell-muted"
+                    id={`${ids}-s${index}`}
+                    className="text-[0.875rem] font-semibold text-brand-navy"
                   >
-                    {hint}
+                    {label}
                   </span>
-                  <ChevronRight
-                    className="size-4 shrink-0 text-shell-muted transition-transform group-hover:translate-x-0.5 rtl:-scale-x-100"
-                    aria-hidden="true"
-                  />
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+                  <span className="flex w-full items-end gap-2">
+                    <span
+                      id={`${ids}-h${index}`}
+                      className="min-w-0 flex-1 text-[0.8125rem] text-shell-muted"
+                    >
+                      {hint}
+                    </span>
+                    <ChevronRight
+                      className="size-4 shrink-0 text-shell-muted transition-transform group-hover:translate-x-0.5 rtl:-scale-x-100"
+                      aria-hidden="true"
+                    />
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }

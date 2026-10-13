@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, JsonValue
 
 from leka.connectors import PublicHttpsUrl
-from leka.context import AssembledContext
+from leka.context import AssembledContext, IntentAsk
 from leka.intentions.lifecycle import IntentionStatus
 
 Goal = Literal[
@@ -138,6 +138,17 @@ class UnderstoodEntity(BaseModel):
     confidence: float
 
 
+class AmbiguityChoice(BaseModel):
+    """One thing an answer may name, by id (LEKA-439): a thing of the company
+    model the words could mean."""
+
+    model_config = ConfigDict(frozen=True)
+
+    value: str = Field(description="What the answer gives back: the thing's id.")
+    label: str
+    type: str | None = None
+
+
 class AmbiguityRead(BaseModel):
     """What LEKA cannot tell, and what it would ask to tell it."""
 
@@ -148,6 +159,11 @@ class AmbiguityRead(BaseModel):
     said: str = Field(description="What is ambiguous, in English.")
     options: list[str] = Field(
         default_factory=list, description="What it could mean: things, goals."
+    )
+    choices: list[AmbiguityChoice] = Field(
+        default_factory=list,
+        description="The things it could mean, by id — chosen, the answer narrows it to "
+        "one (LEKA-439).",
     )
 
 
@@ -353,6 +369,185 @@ class IntentionEventRead(BaseModel):
     detail: dict[str, JsonValue]
 
 
+# ── its brief (LEKA-439) ─────────────────────────────────────────────────
+# What LEKA must know to work on an intention, what it knows of it, what it
+# asks — docs/intentions.md § 9 bis.
+
+Slot = Literal["goal", "target", "scope", "expected", "constraints"]
+SlotState = Literal["known", "assumed", "missing", "unknown"]
+SlotNeed = Literal["blocking", "useful", "optional"]
+BriefDecision = Literal["analyse", "clarify", "continue", "block"]
+Expected = Literal["answer", "document", "plan", "action"]
+
+
+class IntentionAnswer(BaseModel):
+    """What its asker answered to one of LEKA's questions (LEKA-439): a
+    choice, their own words, or « je ne sais pas »."""
+
+    model_config = ConfigDict(frozen=True)
+
+    question: AmbiguityKind
+    value: str | None = Field(
+        default=None, max_length=300, description="A choice's value, or their words."
+    )
+    unknown: bool = Field(default=False, description="« Je ne sais pas »: said, never guessed.")
+
+
+class IntentionRequest(IntentAsk):
+    """An intention asked, with what its asker answered to LEKA's questions
+    (LEKA-439): kept, and read again with it."""
+
+    answers: list[IntentionAnswer] = Field(default_factory=list, max_length=20)
+
+
+class BriefSlotRead(BaseModel):
+    """One part of what LEKA must know (LEKA-439), and what it knows of it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    slot: Slot
+    state: SlotState = Field(
+        description="known: said or answered; assumed: LEKA's reading, never a fact; "
+        "missing: not said; unknown: its asker does not know."
+    )
+    need: SlotNeed = Field(description="Whether LEKA can go on without it.")
+    value: str | None = Field(description="A code — a goal, what is expected — or a word.")
+    values: list[str] = Field(default_factory=list, description="Things, constraints.")
+    origin: Literal["words", "answer", "model", "company_model", "default"] | None
+
+
+class BriefQuestionRead(BaseModel):
+    """What LEKA asks (LEKA-439): about which part, whether it stops it, what
+    it could be — and what was answered."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: AmbiguityKind
+    slot: Slot
+    blocking: bool
+    said: str = Field(description="What is ambiguous, in English: the screen says it in words.")
+    options: list[str]
+    choices: list[AmbiguityChoice]
+    free: bool = Field(description="Its asker may answer in their own words.")
+    answer: IntentionAnswer | None
+
+
+class IntentionBrief(BaseModel):
+    """An intention's brief (LEKA-439): the contract of what LEKA must know,
+    each part's state, its questions in order, and what follows — analyse,
+    clarify, continue with its limits said, or block."""
+
+    model_config = ConfigDict(frozen=True)
+
+    version: int
+    decision: BriefDecision
+    restated: str | None
+    acting: bool = Field(description="It asks to change systems: never on a doubt.")
+    slots: list[BriefSlotRead]
+    questions: list[BriefQuestionRead]
+    limits: list[AmbiguityKind] = Field(
+        description="What it goes on without, said: unanswered, or not known."
+    )
+
+
+# ── what it takes to carry it through (LEKA-439) ─────────────────────────
+
+OfferStatus = Literal["included", "beta", "add_on", "planned"]
+Verdict = Literal["ready", "prerequisites", "over_quota", "impossible"]
+PathKind = Literal[
+    "connect_source",
+    "configure_model",
+    "ask_admin",
+    "enable",
+    "buy_pack",
+    "buy_add_on",
+    "buy_bundle",
+    "change_plan",
+    "contact_sales",
+    "rephrase",
+]
+
+
+class NeededRead(BaseModel):
+    """A capability it needs, as this workspace may use it (LEKA-439)."""
+
+    key: str
+    title: str
+    kind: str
+    offer: OfferStatus = Field(
+        description="included; beta — usable, sold later; add_on — bought; planned — not yet."
+    )
+    available: bool = Field(description="Usable here, by this person, now.")
+    reasons: list[dict[str, JsonValue]] = Field(description="Why not: code and detail.")
+    delivers: str = Field(description="finding, analysis, document, proposal.")
+    selected: bool = Field(description="It will run: routed to, or always.")
+    essential: bool = Field(
+        description="Routed to: without it, it is not carried through. What always runs only "
+        "adds to it."
+    )
+    credits: float | None = Field(description="What one run of it has cost here, median.")
+    price: int | None = Field(default=None, description="An add-on's monthly price, cents.")
+
+
+class PathStepRead(BaseModel):
+    """One thing it takes — cheapest first; never done without a yes when it
+    costs money (LEKA-439)."""
+
+    kind: PathKind
+    detail: dict[str, JsonValue]
+    consent: bool = Field(description="It costs money or changes a plan: asked first.")
+
+
+class CreditsLeftRead(BaseModel):
+    """A workspace's AI credits this month, as it bears on carrying an
+    intention through (metering, LEKA-430)."""
+
+    plan: Literal["free", "starter", "growth", "business", "enterprise"]
+    allowance: int
+    used: float
+    remaining: float
+    state: Literal["ok", "warning", "exhausted"]
+    enforced: bool = Field(description="Spent, LEKA's models are refused until the month ends.")
+    period_end: datetime
+
+
+class FeasibilityRead(BaseModel):
+    """What it takes to carry it through (LEKA-439): the capabilities, the
+    credits, the verdict, the least it takes."""
+
+    verdict: Verdict
+    needed: list[NeededRead]
+    credits: CreditsLeftRead
+    estimate: float | None = Field(description="What it should cost, credits; none: not known.")
+    path: list[PathStepRead]
+
+
+class SourceToReadRead(BaseModel):
+    """A source LEKA will read for it."""
+
+    id: uuid.UUID
+    name: str
+    kind: str
+    status: str
+
+
+class IntentionPreview(BaseModel):
+    """What LEKA would make of an intention before it is asked (LEKA-439):
+    what it understood, its brief, what it would read, what it takes —
+    nothing kept."""
+
+    understanding: Understanding
+    brief: IntentionBrief
+    sources: list[SourceToReadRead]
+    feasibility: FeasibilityRead
+
+
+class IntentionAnswers(BaseModel):
+    """What its asker answers to LEKA's questions (LEKA-439)."""
+
+    answers: list[IntentionAnswer] = Field(min_length=1, max_length=20)
+
+
 class IntentionDetail(IntentionRead):
     """An intention with what it is linked to, and what LEKA understood."""
 
@@ -360,6 +555,12 @@ class IntentionDetail(IntentionRead):
     understanding: Understanding | None
     readiness: ContextReadiness | None = Field(
         default=None, description="Whether its context can ground its analysis (LEKA-387)."
+    )
+    answers: list[IntentionAnswer] = Field(
+        default_factory=list, description="What its asker answered to LEKA (LEKA-439)."
+    )
+    brief: IntentionBrief | None = Field(
+        default=None, description="What LEKA knows and asks of it (LEKA-439)."
     )
 
 

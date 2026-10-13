@@ -36,6 +36,7 @@ from itertools import pairwise
 from leka.context import IntentPlan, kinds_said
 from leka.intentions.schemas import (
     ActionRead,
+    AmbiguityChoice,
     AmbiguityRead,
     GoalRead,
     Understanding,
@@ -49,7 +50,8 @@ from leka.knowledge import fold
 #    (LEKA-386).
 # 3: an action negated, conditional or doubtful is withheld, not asked; each
 #    action on the things said with it (LEKA-434).
-UNDERSTANDING_VERSION = 3
+# 4: what a question could mean, by id, to be chosen (LEKA-439).
+UNDERSTANDING_VERSION = 4
 
 # ── actions ─────────────────────────────────────────────────────────────
 
@@ -343,6 +345,17 @@ def _entities(plan: IntentPlan | None) -> list[UnderstoodEntity]:
     ]
 
 
+def _choices(things: object) -> list[AmbiguityChoice]:
+    """Things a gap names by id — the context planner's — as choices."""
+    if not isinstance(things, list):
+        return []
+    return [
+        AmbiguityChoice(value=str(t["id"]), label=str(t.get("name", "")), type=t.get("type"))
+        for t in things
+        if isinstance(t, dict) and t.get("id")
+    ]
+
+
 def _ambiguities(
     text: str,
     plan: IntentPlan | None,
@@ -393,6 +406,7 @@ def _ambiguities(
                     blocking=goal.code == "act",
                     said="It names nothing LEKA knows: which service, application or data?",
                     options=[str(m) for m in maybe] if isinstance(maybe, list) else [],
+                    choices=_choices(detail.get("maybe_things")),
                 )
             )
         elif gap.kind == "unknown_service":
@@ -418,6 +432,7 @@ def _ambiguities(
                     blocking=goal.code == "act",
                     said=f"« {detail.get('said', '')} » names several things.",
                     options=names,
+                    choices=_choices(things),
                 )
             )
         elif gap.kind == "unknown_environment":
@@ -431,12 +446,18 @@ def _ambiguities(
                 )
             )
     if any(a.verb.changes_systems for a in actions) and not entities:
+        # One question about what it acts on, not two: what the words could
+        # name comes with it (LEKA-439).
+        guessed = next((g for g in found if g.kind == "no_subject"), None)
+        if guessed is not None:
+            found.remove(guessed)
         found.append(
             AmbiguityRead(
                 kind="action_without_target",
                 blocking=True,
                 said="An action is asked, on nothing LEKA knows: on what?",
                 options=[a.verb.code for a in actions if a.verb.changes_systems],
+                choices=list(guessed.choices) if guessed is not None else [],
             )
         )
     if text.count("?") > 1 or (

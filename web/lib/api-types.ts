@@ -4857,7 +4857,8 @@ export interface paths {
          *     context it asks for assembled, its subject the intention (LEKA-373).
          *     `intention_id` in the body is ignored: it is the new intention's. 422
          *     when nothing can start it — and nothing is kept. Analysing, its
-         *     analysis is queued (LEKA-388).
+         *     analysis is queued (LEKA-388). `answers`: what its asker answered to
+         *     LEKA's questions before asking (LEKA-439), kept and read with it.
          */
         post: operations["create_api_v1_intentions_post"];
         delete?: never;
@@ -4882,6 +4883,30 @@ export interface paths {
          *     is ambiguous, each with the words it came from. Nothing is kept.
          */
         post: operations["understand_api_v1_intentions_understand_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intentions/brief": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Brief
+         * @description Before it is asked (LEKA-439): what LEKA understood, its brief — each
+         *     part of what it must know, its questions, what follows (analyse,
+         *     clarify, continue with its limits, block) — what it would read, and
+         *     what it takes to carry it through here: the capabilities, the credits,
+         *     the least it takes. Nothing is kept.
+         */
+        post: operations["brief_api_v1_intentions_brief_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5018,6 +5043,53 @@ export interface paths {
          *     run.
          */
         post: operations["ask_again_api_v1_intentions__intention_id__ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intentions/{intention_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer
+         * @description What its asker answers to LEKA's questions (LEKA-439) — a choice,
+         *     their words, « je ne sais pas » — kept with what they answered before,
+         *     the latest for each: it is asked again with them, its words and scope as
+         *     they are; analysing, its analysis queued. 409 when cancelled, archived,
+         *     or while its actions run.
+         */
+        post: operations["answer_api_v1_intentions__intention_id__answers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intentions/{intention_id}/feasibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Feasibility
+         * @description What it takes to carry it through here, now (LEKA-439): the
+         *     capabilities it needs and how each is offered — included, beta, add-on,
+         *     planned — whether each is usable, the credits left and what it should
+         *     cost, and the least it takes when it cannot.
+         */
+        get: operations["feasibility_api_v1_intentions__intention_id__feasibility_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6711,6 +6783,22 @@ export interface components {
             cost_usd: number | null;
         };
         /**
+         * AmbiguityChoice
+         * @description One thing an answer may name, by id (LEKA-439): a thing of the company
+         *     model the words could mean.
+         */
+        AmbiguityChoice: {
+            /**
+             * Value
+             * @description What the answer gives back: the thing's id.
+             */
+            value: string;
+            /** Label */
+            label: string;
+            /** Type */
+            type?: string | null;
+        };
+        /**
          * AmbiguityRead
          * @description What LEKA cannot tell, and what it would ask to tell it.
          */
@@ -6735,6 +6823,11 @@ export interface components {
              * @description What it could mean: things, goals.
              */
             options?: string[];
+            /**
+             * Choices
+             * @description The things it could mean, by id — chosen, the answer narrows it to one (LEKA-439).
+             */
+            choices?: components["schemas"]["AmbiguityChoice"][];
         };
         /**
          * AnalysisAnswer
@@ -7864,6 +7957,75 @@ export interface components {
             url: string | null;
             /** Contact Url */
             contact_url: string;
+        };
+        /**
+         * BriefQuestionRead
+         * @description What LEKA asks (LEKA-439): about which part, whether it stops it, what
+         *     it could be — and what was answered.
+         */
+        BriefQuestionRead: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "too_short" | "unclear_goal" | "competing_goals" | "no_subject" | "unknown_subject" | "ambiguous_subject" | "action_without_target" | "several_requests" | "unknown_environment" | "missing_environment" | "missing_target" | "conflicting_constraints" | "subject_gone" | "subject_dormant" | "everything_excluded" | "ambiguous_action";
+            /**
+             * Slot
+             * @enum {string}
+             */
+            slot: "goal" | "target" | "scope" | "expected" | "constraints";
+            /** Blocking */
+            blocking: boolean;
+            /**
+             * Said
+             * @description What is ambiguous, in English: the screen says it in words.
+             */
+            said: string;
+            /** Options */
+            options: string[];
+            /** Choices */
+            choices: components["schemas"]["AmbiguityChoice"][];
+            /**
+             * Free
+             * @description Its asker may answer in their own words.
+             */
+            free: boolean;
+            answer: components["schemas"]["IntentionAnswer"] | null;
+        };
+        /**
+         * BriefSlotRead
+         * @description One part of what LEKA must know (LEKA-439), and what it knows of it.
+         */
+        BriefSlotRead: {
+            /**
+             * Slot
+             * @enum {string}
+             */
+            slot: "goal" | "target" | "scope" | "expected" | "constraints";
+            /**
+             * State
+             * @description known: said or answered; assumed: LEKA's reading, never a fact; missing: not said; unknown: its asker does not know.
+             * @enum {string}
+             */
+            state: "known" | "assumed" | "missing" | "unknown";
+            /**
+             * Need
+             * @description Whether LEKA can go on without it.
+             * @enum {string}
+             */
+            need: "blocking" | "useful" | "optional";
+            /**
+             * Value
+             * @description A code — a goal, what is expected — or a word.
+             */
+            value: string | null;
+            /**
+             * Values
+             * @description Things, constraints.
+             */
+            values?: string[];
+            /** Origin */
+            origin: ("words" | "answer" | "model" | "company_model" | "default") | null;
         };
         /**
          * BusinessContext
@@ -10615,6 +10777,39 @@ export interface components {
             };
         };
         /**
+         * CreditsLeftRead
+         * @description A workspace's AI credits this month, as it bears on carrying an
+         *     intention through (metering, LEKA-430).
+         */
+        CreditsLeftRead: {
+            /**
+             * Plan
+             * @enum {string}
+             */
+            plan: "free" | "starter" | "growth" | "business" | "enterprise";
+            /** Allowance */
+            allowance: number;
+            /** Used */
+            used: number;
+            /** Remaining */
+            remaining: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "ok" | "warning" | "exhausted";
+            /**
+             * Enforced
+             * @description Spent, LEKA's models are refused until the month ends.
+             */
+            enforced: boolean;
+            /**
+             * Period End
+             * Format: date-time
+             */
+            period_end: string;
+        };
+        /**
          * CreditsRead
          * @description A workspace's AI credits this month (LEKA-430): its plan's and its
          *     packs', what its work on LEKA's models used, what is left — and whether
@@ -13323,6 +13518,28 @@ export interface components {
             /** Failed */
             failed: number;
         };
+        /**
+         * FeasibilityRead
+         * @description What it takes to carry it through (LEKA-439): the capabilities, the
+         *     credits, the verdict, the least it takes.
+         */
+        FeasibilityRead: {
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "ready" | "prerequisites" | "over_quota" | "impossible";
+            /** Needed */
+            needed: components["schemas"]["NeededRead"][];
+            credits: components["schemas"]["CreditsLeftRead"];
+            /**
+             * Estimate
+             * @description What it should cost, credits; none: not known.
+             */
+            estimate: number | null;
+            /** Path */
+            path: components["schemas"]["PathStepRead"][];
+        };
         /** FeedbackCounts */
         FeedbackCounts: {
             /**
@@ -14607,12 +14824,74 @@ export interface components {
             recommendations?: components["schemas"]["AnalysisRecommendation"][];
         };
         /**
+         * IntentionAnswer
+         * @description What its asker answered to one of LEKA's questions (LEKA-439): a
+         *     choice, their own words, or « je ne sais pas ».
+         */
+        IntentionAnswer: {
+            /**
+             * Question
+             * @enum {string}
+             */
+            question: "too_short" | "unclear_goal" | "competing_goals" | "no_subject" | "unknown_subject" | "ambiguous_subject" | "action_without_target" | "several_requests" | "unknown_environment" | "missing_environment" | "missing_target" | "conflicting_constraints" | "subject_gone" | "subject_dormant" | "everything_excluded" | "ambiguous_action";
+            /**
+             * Value
+             * @description A choice's value, or their words.
+             */
+            value?: string | null;
+            /**
+             * Unknown
+             * @description « Je ne sais pas »: said, never guessed.
+             * @default false
+             */
+            unknown: boolean;
+        };
+        /**
+         * IntentionAnswers
+         * @description What its asker answers to LEKA's questions (LEKA-439).
+         */
+        IntentionAnswers: {
+            /** Answers */
+            answers: components["schemas"]["IntentionAnswer"][];
+        };
+        /**
          * IntentionAsked
          * @description An intention asked again: as it now stands, its context's new version.
          */
         IntentionAsked: {
             intention: components["schemas"]["IntentionDetail"];
             context: components["schemas"]["AssembledContext"];
+        };
+        /**
+         * IntentionBrief
+         * @description An intention's brief (LEKA-439): the contract of what LEKA must know,
+         *     each part's state, its questions in order, and what follows — analyse,
+         *     clarify, continue with its limits said, or block.
+         */
+        IntentionBrief: {
+            /** Version */
+            version: number;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "analyse" | "clarify" | "continue" | "block";
+            /** Restated */
+            restated: string | null;
+            /**
+             * Acting
+             * @description It asks to change systems: never on a doubt.
+             */
+            acting: boolean;
+            /** Slots */
+            slots: components["schemas"]["BriefSlotRead"][];
+            /** Questions */
+            questions: components["schemas"]["BriefQuestionRead"][];
+            /**
+             * Limits
+             * @description What it goes on without, said: unanswered, or not known.
+             */
+            limits: ("too_short" | "unclear_goal" | "competing_goals" | "no_subject" | "unknown_subject" | "ambiguous_subject" | "action_without_target" | "several_requests" | "unknown_environment" | "missing_environment" | "missing_target" | "conflicting_constraints" | "subject_gone" | "subject_dormant" | "everything_excluded" | "ambiguous_action")[];
         };
         /**
          * IntentionContext
@@ -14719,6 +14998,13 @@ export interface components {
             understanding: components["schemas"]["Understanding"] | null;
             /** @description Whether its context can ground its analysis (LEKA-387). */
             readiness?: components["schemas"]["ContextReadiness"] | null;
+            /**
+             * Answers
+             * @description What its asker answered to LEKA (LEKA-439).
+             */
+            answers?: components["schemas"]["IntentionAnswer"][];
+            /** @description What LEKA knows and asks of it (LEKA-439). */
+            brief?: components["schemas"]["IntentionBrief"] | null;
         };
         /**
          * IntentionEventRead
@@ -14952,6 +15238,19 @@ export interface components {
             };
         };
         /**
+         * IntentionPreview
+         * @description What LEKA would make of an intention before it is asked (LEKA-439):
+         *     what it understood, its brief, what it would read, what it takes —
+         *     nothing kept.
+         */
+        IntentionPreview: {
+            understanding: components["schemas"]["Understanding"];
+            brief: components["schemas"]["IntentionBrief"];
+            /** Sources */
+            sources: components["schemas"]["SourceToReadRead"][];
+            feasibility: components["schemas"]["FeasibilityRead"];
+        };
+        /**
          * IntentionRead
          * @description An intention, where it stands.
          */
@@ -15017,6 +15316,59 @@ export interface components {
              * @description What it wants to achieve, as understood (LEKA-385).
              */
             goal: ("explain_cause" | "find_change" | "find_owner" | "map_dependencies" | "assess_impact" | "check_compliance" | "plan_migration" | "find_knowledge" | "investigate" | "act" | "unknown") | null;
+        };
+        /**
+         * IntentionRequest
+         * @description An intention asked, with what its asker answered to LEKA's questions
+         *     (LEKA-439): kept, and read again with it.
+         */
+        IntentionRequest: {
+            /**
+             * Text
+             * @description The intention, in its words.
+             */
+            text: string;
+            /**
+             * Intention Id
+             * @description The intention it is for, when there is one (LEKA-384): the context's subject.
+             */
+            intention_id?: string | null;
+            /** Title */
+            title?: string | null;
+            /**
+             * Environment
+             * @description Where to look; read from the words when none.
+             */
+            environment?: string | null;
+            /**
+             * Since
+             * @description The period asked; read from the words when none.
+             */
+            since?: string | null;
+            /** Until */
+            until?: string | null;
+            /**
+             * Services
+             * @description What the asker narrowed it to: the context's roots, first.
+             */
+            services?: string[];
+            /**
+             * Sources
+             * @description What to read; every source when none.
+             */
+            sources?: string[];
+            /**
+             * Exclude
+             * @description What it is not about (LEKA-387, « sauf … »): never a root, never held.
+             */
+            exclude?: string[];
+            /**
+             * Limit
+             * @default 100
+             */
+            limit: number;
+            /** Answers */
+            answers?: components["schemas"]["IntentionAnswer"][];
         };
         /**
          * IntentionStatus
@@ -16345,6 +16697,61 @@ export interface components {
             per_intention_usd?: number | null;
         };
         /**
+         * NeededRead
+         * @description A capability it needs, as this workspace may use it (LEKA-439).
+         */
+        NeededRead: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Offer
+             * @description included; beta — usable, sold later; add_on — bought; planned — not yet.
+             * @enum {string}
+             */
+            offer: "included" | "beta" | "add_on" | "planned";
+            /**
+             * Available
+             * @description Usable here, by this person, now.
+             */
+            available: boolean;
+            /**
+             * Reasons
+             * @description Why not: code and detail.
+             */
+            reasons: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+            /**
+             * Delivers
+             * @description finding, analysis, document, proposal.
+             */
+            delivers: string;
+            /**
+             * Selected
+             * @description It will run: routed to, or always.
+             */
+            selected: boolean;
+            /**
+             * Essential
+             * @description Routed to: without it, it is not carried through. What always runs only adds to it.
+             */
+            essential: boolean;
+            /**
+             * Credits
+             * @description What one run of it has cost here, median.
+             */
+            credits: number | null;
+            /**
+             * Price
+             * @description An add-on's monthly price, cents.
+             */
+            price?: number | null;
+        };
+        /**
          * Neighbourhood
          * @description One entity and what surrounds it.
          *
@@ -17032,6 +17439,27 @@ export interface components {
             entities: components["schemas"]["EntityBrief"][];
             /** Relationships */
             relationships: components["schemas"]["RelationshipRead"][];
+        };
+        /**
+         * PathStepRead
+         * @description One thing it takes — cheapest first; never done without a yes when it
+         *     costs money (LEKA-439).
+         */
+        PathStepRead: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "connect_source" | "configure_model" | "ask_admin" | "enable" | "buy_pack" | "buy_add_on" | "buy_bundle" | "change_plan" | "contact_sales" | "rephrase";
+            /** Detail */
+            detail: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Consent
+             * @description It costs money or changes a plan: asked first.
+             */
+            consent: boolean;
         };
         /**
          * PathsRead
@@ -20020,6 +20448,23 @@ export interface components {
             result?: components["schemas"]["ConnectionTestResult"] | null;
             diagnostic?: components["schemas"]["Diagnostic"] | null;
             source: components["schemas"]["SourceRead"];
+        };
+        /**
+         * SourceToReadRead
+         * @description A source LEKA will read for it.
+         */
+        SourceToReadRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Kind */
+            kind: string;
+            /** Status */
+            status: string;
         };
         /** SourceUpdate */
         SourceUpdate: {
@@ -46029,7 +46474,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IntentAsk"];
+                "application/json": components["schemas"]["IntentionRequest"];
             };
         };
         responses: {
@@ -46125,7 +46570,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IntentAsk"];
+                "application/json": components["schemas"]["IntentionRequest"];
             };
         };
         responses: {
@@ -46136,6 +46581,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Understanding"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    brief_api_v1_intentions_brief_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntentionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionPreview"];
                 };
             };
             /** @description The request could not be understood. */
@@ -46790,7 +47331,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IntentAsk"];
+                "application/json": components["schemas"]["IntentionRequest"];
             };
         };
         responses: {
@@ -46801,6 +47342,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntentionAsked"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    answer_api_v1_intentions__intention_id__answers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntentionAnswers"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntentionAsked"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    feasibility_api_v1_intentions__intention_id__feasibility_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intention_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeasibilityRead"];
                 };
             };
             /** @description The request could not be understood. */
