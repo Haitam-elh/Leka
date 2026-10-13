@@ -5074,6 +5074,7 @@ const fr = {
     preview: {
       title: "Aperçu",
       latest: "La plus récente",
+      chosen: "Sélectionnée",
       summary: "Résumé",
       open: "Voir l'analyse complète",
     },
@@ -5125,6 +5126,7 @@ const fr = {
     retry: "Réessayer",
     empty: "Aucune intention ici.",
     emptyAll: "Vous n'avez encore rien demandé à LEKA.",
+    emptyAllBody: "Posez une question sur votre environnement, ou demandez une action : LEKA l'analyse, dit ce qu'il trouve et sur quoi, et rien ne change sans votre accord.",
     caption: "Intentions, la dernière modifiée en premier",
     more: "Afficher plus",
     phases: {
@@ -5164,7 +5166,7 @@ const fr = {
       services: "{count} {count|service|services} {count|choisi|choisis}",
       sources: "{count} {count|source|sources} {count|choisie|choisies}",
       summary: "Ce que LEKA en conclut",
-      noSummary: "LEKA n'a pas encore conclu : l'analyse viendra avec son moteur d'analyse.",
+      noSummary: "LEKA n'a pas encore conclu : son analyse dira ce qu'il trouve, et sur quoi.",
       links: "Liée à",
       noLinks: "Rien pour l'instant.",
       openContext: "Voir le contexte",
@@ -10797,6 +10799,7 @@ const en: Dictionary = {
     preview: {
       title: "Preview",
       latest: "The latest",
+      chosen: "Selected",
       summary: "Summary",
       open: "See the full analysis",
     },
@@ -10846,6 +10849,7 @@ const en: Dictionary = {
     retry: "Retry",
     empty: "No intention here.",
     emptyAll: "You have not asked LEKA anything yet.",
+    emptyAllBody: "Ask a question about your environment, or ask for an action: LEKA analyses it, says what it finds and on what, and nothing changes without your say.",
     caption: "Intentions, the latest changed first",
     more: "Show more",
     phases: {
@@ -10885,7 +10889,7 @@ const en: Dictionary = {
       services: "{count} {count|service|services} chosen",
       sources: "{count} {count|source|sources} chosen",
       summary: "What LEKA concludes",
-      noSummary: "LEKA has not concluded yet: the analysis comes with its analysis engine.",
+      noSummary: "LEKA has not concluded yet: its analysis will say what it finds, and on what.",
       links: "Linked to",
       noLinks: "Nothing yet.",
       openContext: "See the context",
