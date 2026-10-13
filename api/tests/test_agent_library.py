@@ -10,7 +10,10 @@ it as asked; delivering markdown; its instructions saying what it looks at,
 what it produces and what it must never do. And realistic requests go to
 the right one — an incident to the investigation, a security question to
 the security review, a broken build, asked to be fixed, to the build fixer
-(never a mere question about it).
+(never a mere question about it). Each agent offered for sale has its case
+(LEKA-447); and the router weighs what is asked, not a name in it: an agent
+whose source is not connected, or that the asker may not use, is excluded,
+never proposed; a question never goes to an agent that acts.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from __future__ import annotations
 import pytest
 
 import leka.schema  # noqa: F401 — every module provides its capabilities
-from leka.capabilities import Availability, Kind, Lifecycle, RouteQuery, route
+from leka.capabilities import Availability, Kind, Lifecycle, Reason, RouteQuery, route
 from leka.capabilities.registry import catalogue
 from leka.capabilities.skills import agent_skill_tools
 from leka.capabilities.tools import NAMES
@@ -121,6 +124,47 @@ ASKED = [
         ),
         "build-fixer",
     ),
+    # The agents offered for sale had no case (LEKA-447).
+    (
+        RouteQuery(
+            text="Fais la revue de la dernière PR de payment-api",
+            goal="investigate",
+            kind="change",
+        ),
+        "code-review",
+    ),
+    (
+        RouteQuery(
+            text="Explique-moi l'architecture de checkout",
+            goal="map_dependencies",
+            kind="dependency",
+        ),
+        "architecture-analysis",
+    ),
+    (
+        RouteQuery(
+            text="Est-ce que payment-api est bien documenté ?",
+            goal="find_knowledge",
+            kind="knowledge",
+        ),
+        "documentation-assistant",
+    ),
+    (
+        RouteQuery(
+            text="payment-api renvoie des erreurs 500 depuis ce matin, pourquoi ?",
+            goal="explain_cause",
+            kind="diagnose",
+        ),
+        "debug-assistant",
+    ),
+    (
+        RouteQuery(
+            text="Sur quelle infrastructure tourne checkout ?",
+            goal="map_dependencies",
+            kind="dependency",
+        ),
+        "infrastructure-analysis",
+    ),
 ]
 
 
@@ -142,3 +186,64 @@ def test_a_question_about_a_broken_build_never_goes_to_the_fixer() -> None:
     routed = route(asked, every, {d.key: Availability(True) for d in every})
     assert "build-fixer" not in [c.key for c in routed.selected]
     assert "build-fixer" in [c.key for c in routed.excluded]
+
+
+@pytest.mark.parametrize(
+    ("asked", "key", "why"),
+    [
+        (
+            RouteQuery(
+                text="Est-ce que payment-api est bien documenté ?",
+                goal="find_knowledge",
+                kind="knowledge",
+            ),
+            "documentation-assistant",
+            Reason("missing_source", {"any_of": ["confluence"]}),
+        ),
+        (
+            RouteQuery(
+                text="Fais une revue de sécurité de payment-api",
+                goal="check_compliance",
+                kind="compliance",
+            ),
+            "security-review",
+            Reason("not_permitted"),
+        ),
+    ],
+    ids=["no-source", "not-permitted"],
+)
+def test_an_agent_that_cannot_run_here_is_excluded_never_proposed(
+    asked: RouteQuery, key: str, why: Reason
+) -> None:
+    every = catalogue()
+    able = {d.key: Availability(True) for d in every}
+    able[key] = Availability(False, (why,))
+    routed = route(asked, every, able)
+    # The request is still answered — by what can run here.
+    assert routed.outcome == "routed"
+    assert key not in [c.key for c in routed.selected]
+    assert key in [c.key for c in routed.excluded]
+
+
+def test_a_name_in_the_request_is_not_enough() -> None:
+    every = catalogue()
+    asked = RouteQuery(
+        text="Qui fait la revue de code sur payment-api ?", goal="find_owner", kind="ownership"
+    )
+    routed = route(asked, every, {d.key: Availability(True) for d in every})
+    # « Revue de code » is in the words; who owns it is what is asked.
+    assert "code-review" not in [c.key for c in routed.selected]
+    assert "ownership" in [c.key for c in routed.selected]
+
+
+def test_a_question_never_goes_to_an_agent_that_acts() -> None:
+    every = catalogue()
+    asked = RouteQuery(
+        text="Pourquoi la dernière PR de checkout a cassé la prod ?",
+        goal="explain_cause",
+        kind="diagnose",
+    )
+    routed = route(asked, every, {d.key: Availability(True) for d in every})
+    acting = {d.key for d in every if d.mode == "proposes_action"}
+    assert acting >= {"build-fixer", "code-change"}
+    assert not acting & {c.key for c in routed.selected}
