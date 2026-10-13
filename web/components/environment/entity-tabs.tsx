@@ -132,7 +132,14 @@ function Delta({ now, before, goodWhenDown = false }: { now: number; before: num
 }
 
 /** Four figures of its activity, each against the period before. */
-export function ActivityTiles({ activity }: { activity: EntityActivity }) {
+export function ActivityTiles({
+  activity,
+  quiet = false,
+}: {
+  activity: EntityActivity;
+  /** Leaves out a figure at 0 now and before: nothing to say (LEKA-438). */
+  quiet?: boolean;
+}) {
   const t = useDictionary();
   const w = t.environment.sheet.activity;
   const tiles: { key: Bucket; icon: LucideIcon; label: string; value: number; note: string; goodWhenDown?: boolean }[] = [
@@ -148,9 +155,10 @@ export function ActivityTiles({ activity }: { activity: EntityActivity }) {
     },
     { key: "work", icon: Ticket, label: w.work, value: activity.work, note: fill(w.workNote, { open: activity.work_open }) },
   ];
+  const shown = quiet ? tiles.filter((tile) => tile.value || activity.previous[tile.key]) : tiles;
   return (
     <>
-      {tiles.map((tile) => (
+      {shown.map((tile) => (
         <div
           key={tile.key}
           className="rounded-xl border border-shell-line bg-white p-4"
@@ -546,7 +554,7 @@ export function OverviewTiles({ entityId, days }: { entityId: string; days: Peri
       </>
     );
   }
-  return <ActivityTiles activity={query.data} />;
+  return <ActivityTiles activity={query.data} quiet />;
 }
 
 /** The overview's chart: its activity day by day — what monitoring would

@@ -631,6 +631,27 @@ describe("an entity's sheet", () => {
     expect(screen.getByText("Non identifié")).toBeInTheDocument();
   });
 
+  it("leaves out a figure with nothing to say, says once what is not known, and no promised analysis", async () => {
+    pathname.value = `/environment/services/${SERVICE_ID}`;
+    params.value = { entityType: "services", entityId: SERVICE_ID };
+    api.sheet.mockResolvedValue(sheet({ environment: null }));
+    api.activity.mockImplementation(async (_id: string, days: number) => {
+      const activity = activityOf(days);
+      return { ...activity, deployments: 0, previous: { ...activity.previous, deployments: 0 } };
+    });
+    mount(<EntitySheetScreen />);
+
+    // 0 now and 0 before: no tile (LEKA-438). 0 now but 1 before: said.
+    expect(await screen.findByTestId("activity-changes")).toBeInTheDocument();
+    expect(screen.queryByTestId("activity-deployments")).not.toBeInTheDocument();
+    expect(screen.getByTestId("activity-incidents")).toBeInTheDocument();
+    // An unknown is said once, in words — not a row of « Non renseigné ».
+    expect(await screen.findByTestId("general-unknown")).toHaveTextContent(/^Pas encore connu : environnement/);
+    expect(screen.queryByText("Non renseigné")).not.toBeInTheDocument();
+    // « Demander à LEKA » asks; no banner promising an analysis to come.
+    expect(screen.queryByRole("link", { name: /Lancer une intention/ })).not.toBeInTheDocument();
+  });
+
   it("says a deduced state as such, and what is only worth knowing apart", async () => {
     pathname.value = `/environment/services/${SERVICE_ID}`;
     params.value = { entityType: "services", entityId: SERVICE_ID };

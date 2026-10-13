@@ -45,7 +45,8 @@ export function RouteTabs() {
               aria-current={active ? "page" : undefined}
               data-testid={`tab-${tab}`}
               className={cn(
-                "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
+                // 10 tabs on an element's sheet fit at 1280 px with 2.5 (LEKA-438); a narrower screen scrolls.
+                "-mb-px border-b-2 px-2.5 py-2 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-brand-violet/40",
                 active
                   ? "border-brand-violet text-brand-violet"
                   : "border-transparent text-shell-muted hover:text-shell-nav",
