@@ -38,7 +38,7 @@ test.describe("Activité", () => {
     await expect(
       page.getByTestId("activity-top").getByRole("link", { name: /payment-api/ }),
     ).toBeVisible();
-    // What the model's course says, in the banner.
+    // What the model's course says.
     await expect(page.getByTestId("activity-trends")).toContainText(
       "redis-sessions a disparu de vos sources",
     );
