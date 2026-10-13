@@ -52,7 +52,7 @@ def need(
     reasons: tuple[dict[str, object], ...] = (),
     delivers: str = "finding",
     selected: bool = True,
-    credits: float | None = None,
+    cost: float | None = None,
     price: int | None = None,
 ) -> Needed:
     return Needed(
@@ -64,7 +64,7 @@ def need(
         reasons=reasons,
         delivers=delivers,
         selected=selected,
-        credits=credits,
+        credits=cost,
         price=price,
     )
 
@@ -87,7 +87,7 @@ def test_past_its_credits_the_cheapest_plan_that_is_enough_asked_first() -> None
     assert (step.kind, step.detail["plan"], step.consent) == ("change_plan", "starter", True)
     assert step.detail["monthly_price"] == sold_now().plan("starter").monthly_price
     # A run that costs more than Starter's month: Growth, still not Business.
-    agent = need("application-architecture", credits=3000, delivers="document")
+    agent = need("application-architecture", cost=3000, delivers="document")
     verdict, path = path_of(
         [agent], month("free", 150), 3000, sold_now(), CREDITS, expected="document"
     )
@@ -114,7 +114,7 @@ def test_a_capacity_pack_that_is_enough_comes_before_a_plan() -> None:
         }
     )
     verdict, path = path_of(
-        [need("x", credits=400)], month("free", 100), 400, with_packs, CREDITS, expected="answer"
+        [need("x", cost=400)], month("free", 100), 400, with_packs, CREDITS, expected="answer"
     )
     assert verdict == "over_quota"
     [step] = path
@@ -169,14 +169,20 @@ def test_specialist_agents_on_sale_a_bundle_when_it_costs_less_each_otherwise() 
     ]
     # One alone costs less than the bundle: that one.
     verdict, path = path_of(
-        [need("security-review", offer="add_on")], month("growth"), None, on_sale, CREDITS,
+        [need("security-review", offer="add_on")],
+        month("growth"),
+        None,
+        on_sale,
+        CREDITS,
         expected="answer",
     )
     assert [(s.kind, s.detail.get("agent")) for s in path] == [("buy_add_on", "security-review")]
 
 
 def test_what_nothing_leka_has_makes_is_said_impossible() -> None:
-    verdict, path = path_of([ANALYSIS], month("growth"), None, sold_now(), CREDITS, expected="document")
+    verdict, path = path_of(
+        [ANALYSIS], month("growth"), None, sold_now(), CREDITS, expected="document"
+    )
     assert verdict == "impossible"
     assert [s.kind for s in path] == ["rephrase"]
 
@@ -188,8 +194,9 @@ def test_a_source_to_connect_comes_first_never_offered_as_ready() -> None:
         delivers="document",
         reasons=({"code": "missing_source", "sources": ["confluence", "github"]},),
     )
-    verdict, path = path_of([ANALYSIS, architect], month("free"), None, sold_now(), CREDITS,
-                            expected="document")
+    verdict, path = path_of(
+        [ANALYSIS, architect], month("free"), None, sold_now(), CREDITS, expected="document"
+    )
     assert verdict == "prerequisites"
     [step] = path
     assert step.kind == "connect_source"
@@ -202,6 +209,7 @@ def test_a_capability_not_ready_yet_is_never_offered_as_usable() -> None:
     assert draft is not None and draft.lifecycle is Lifecycle.DRAFT
     assert offer_of(draft, sold_now()) == "planned"
     only = need("map-service-ownership", offer="planned", available=False, delivers="document")
-    verdict, _ = path_of([ANALYSIS, only], month("growth"), None, sold_now(), CREDITS,
-                         expected="document")
+    verdict, _ = path_of(
+        [ANALYSIS, only], month("growth"), None, sold_now(), CREDITS, expected="document"
+    )
     assert verdict == "impossible"

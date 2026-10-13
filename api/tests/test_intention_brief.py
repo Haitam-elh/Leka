@@ -58,7 +58,7 @@ def read(
     """Read as the service reads it: answers applied to what is asked, the
     words understood, the answers taken, the brief."""
     asked = answered_ask(IntentAsk(text=text, environment=environment), answers)
-    chosen = [s for s in asked.services]
+    chosen = list(asked.services)
     if chosen and subjects is None:
         subjects = [subject("Billing API", chosen[0])]
     understood = understand(
@@ -144,7 +144,7 @@ def test_an_action_on_one_of_two_things_asks_which_by_id_then_acts_on_it() -> No
         {"id": str(BILLING), "name": "Billing API", "type": "service"},
         {"id": str(BILLING_V1), "name": "Billing API v1", "type": "service"},
     ]
-    understood, brief = read(
+    _, brief = read(
         text,
         environment="production",
         gaps=[gap("ambiguous_subject", "warning", said="billing api", things=things)],
@@ -194,7 +194,11 @@ def test_a_question_whose_target_its_asker_does_not_know_goes_on_its_limit_said(
     text = "Pourquoi c'est lent depuis hier ?"
     unknown = IntentionAnswer(question="no_subject", unknown=True)
     understood, brief = read(
-        text, "diagnose", ["pourquoi", "lent"], subjects=[], gaps=[gap("no_subject")],
+        text,
+        "diagnose",
+        ["pourquoi", "lent"],
+        subjects=[],
+        gaps=[gap("no_subject")],
         answers=[unknown],
     )
     assert brief.decision == "continue"
@@ -209,7 +213,7 @@ def test_where_an_action_runs_is_asked_from_the_environments_known() -> None:
     assert question.blocking and question.slot == "scope"
     assert set(question.options) == set(ENVIRONMENTS)
     chose = IntentionAnswer(question="missing_environment", value="staging")
-    understood, after = read(text, environments=ENVIRONMENTS, answers=[chose])
+    _, after = read(text, environments=ENVIRONMENTS, answers=[chose])
     assert after.decision == "analyse"
     assert slot(after, "scope")[2] == "staging"
 

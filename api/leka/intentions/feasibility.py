@@ -246,10 +246,18 @@ def path_of(
             plan = _plan_enough(sold, plan_credits, need)
             current = PLANS.index(month.plan)
             if plan is not None and PLANS.index(plan) > current:
-                price = sold.plan(plan).monthly_price
-                steps.append(
-                    Step("change_plan", {"plan": plan, "monthly_price": price}, consent=True)
-                )
+                offered = sold.plan(plan)
+                detail: dict[str, object] = {
+                    "plan": plan,
+                    "monthly_price": offered.monthly_price,
+                    "credits": plan_credits.get(plan),
+                }
+                if offered.launch_offer and sold.launch_open(month.period_end.date()):
+                    detail |= {
+                        "launch_percent": sold.launch_offer.percent,
+                        "launch_months": sold.launch_offer.months,
+                    }
+                steps.append(Step("change_plan", detail, consent=True))
             else:
                 steps.append(Step("contact_sales", {"plan": "enterprise"}))
         return "over_quota", tuple(steps)
