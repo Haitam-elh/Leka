@@ -1,12 +1,12 @@
 /**
  * Capacités (LEKA-393, mockup 13).
  *
- * What these protect: the catalogue's figures are the API's — available of
- * how many, categories, this week's runs against the last, the analysis
- * time; each capability in words — LEKA's own in French, an agent as its
- * file says it — with whether it can be used here and why not, in words:
- * the source to connect, named, the model to come; filtered by category and
- * by words, sorted; kept at hand; the configuration, for admins only —
+ * What these protect: each capability in words — LEKA's own in French, an
+ * agent as its file says it — with whether it can be used here and why not,
+ * in words: the source to connect, named, on the card; what holds them all
+ * back — no model — said once above the list (LEKA-438); chosen by need, by
+ * category and by words, sorted; the week's usage only when something ran;
+ * kept at hand; the configuration, for admins only —
  * turning one off only saying why; a capability's sheet says what it takes,
  * delivers and needs, its versions and history.
  */
@@ -108,6 +108,7 @@ const ARCHITECT = capability({
     { name: "perimetre", type: "text", required: true, description: "Le périmètre.", choices: [], entity_types: [] },
   ],
   sources: [{ any_of: ["confluence", "microsoft_365"], connected: false }],
+  goals: ["map_dependencies"],
   available: false,
   reasons: [
     { code: "missing_source", detail: { any_of: ["confluence", "microsoft_365"] } },
@@ -166,15 +167,8 @@ beforeEach(() => {
 });
 
 describe("the catalogue", () => {
-  it("says its figures and each capability, with why one cannot run", async () => {
+  it("says each capability, with why one cannot run — the model once, above", async () => {
     show(<CatalogueScreen />);
-    const stats = await screen.findByTestId("catalogue-stats");
-    expect(within(stats).getByTestId("catalogue-stat-available")).toHaveTextContent("9");
-    expect(within(stats).getByTestId("catalogue-stat-available")).toHaveTextContent("sur 10 · +10 ce mois-ci");
-    expect(within(stats).getByTestId("catalogue-stat-runs")).toHaveTextContent("24");
-    expect(within(stats).getByTestId("catalogue-stat-runs")).toHaveTextContent("+20 %");
-    expect(within(stats).getByTestId("catalogue-stat-analysis")).toHaveTextContent("1,5 min");
-
     const [owner, architect] = await screen.findAllByTestId("capability-card");
     // LEKA's own, in French.
     expect(owner).toHaveTextContent("Responsabilités");
@@ -187,24 +181,31 @@ describe("the catalogue", () => {
     expect(architect).not.toHaveTextContent("Use when");
     expect(architect).toHaveAttribute("data-available", "false");
     expect(within(architect).getByTestId("capability-reasons")).toHaveTextContent(
-      "Source à connecter : Confluence ou Microsoft 365 · Aucun modèle de langage ne peut l'exécuter ici",
+      "Source à connecter : Confluence ou Microsoft 365",
     );
+    expect(within(architect).getByTestId("capability-reasons")).not.toHaveTextContent("modèle");
+    expect(screen.getByTestId("catalogue-wide")).toHaveTextContent(
+      "Aucun modèle de langage n'est configuré : 1 capacité ne peut pas s'exécuter ici.",
+    );
+    // Not run yet: nothing said about it.
+    expect(architect).not.toHaveTextContent("Pas encore exécutée");
+    expect(screen.queryByTestId("catalogue-stats")).not.toBeInTheDocument();
     expect(screen.getByTestId("catalogue-top")).toHaveTextContent("Responsabilités");
     expect(screen.getByTestId("catalogue-latest")).toHaveTextContent("Architecte applicatif");
     expect(screen.getByTestId("catalogue-latest")).not.toHaveTextContent("Use when");
     expect(screen.getByTestId("catalogue-ask")).toHaveAttribute("href", "/intentions/new");
   });
 
-  it("filters by category and words, and keeps one at hand", async () => {
+  it("chooses by need and by words, and keeps one at hand", async () => {
     const user = userEvent.setup();
     show(<CatalogueScreen />);
     await screen.findAllByTestId("capability-card");
-    await user.click(screen.getByTestId("catalogue-category-architecture"));
-    await waitFor(() =>
-      expect(api.list).toHaveBeenLastCalledWith(
-        expect.objectContaining({ category: "architecture", view: "all" }),
-      ),
-    );
+    await user.click(screen.getByTestId("catalogue-need-map_dependencies"));
+    expect(screen.getByTestId("catalogue-need-map_dependencies")).toHaveTextContent("Comprendre les dépendances1");
+    expect(screen.getAllByTestId("capability-card")).toHaveLength(1);
+    expect(screen.getByTestId("capability-card")).toHaveAttribute("data-key", "application-architecture");
+    await user.click(screen.getByTestId("catalogue-need-map_dependencies"));
+    expect(screen.getAllByTestId("capability-card")).toHaveLength(2);
     await user.type(screen.getByTestId("catalogue-search"), "archi");
     await waitFor(() =>
       expect(api.list).toHaveBeenLastCalledWith(expect.objectContaining({ q: "archi" })),
@@ -212,6 +213,16 @@ describe("the catalogue", () => {
     const [owner] = screen.getAllByTestId("capability-card");
     await user.click(within(owner).getByTestId("capability-favourite"));
     await waitFor(() => expect(api.favourite).toHaveBeenCalledWith("ownership", true));
+  });
+
+  it("leaves the usage out when nothing ran, and says the model only when it holds one back", async () => {
+    api.summary.mockResolvedValue({ ...SUMMARY, runs: 0, runs_previous: 0 });
+    api.list.mockResolvedValue([capability()]);
+    show(<CatalogueScreen />);
+    await screen.findAllByTestId("capability-card");
+    await waitFor(() => expect(api.summary).toHaveBeenCalled());
+    expect(screen.queryByTestId("catalogue-usage")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("catalogue-wide")).not.toBeInTheDocument();
   });
 
   it("shows « Mes capacités », and says when none is kept", async () => {
