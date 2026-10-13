@@ -6,19 +6,20 @@ after, stays within what was meant.
                  LEKA-373 — and what the model says of each now: a thing
                  removed or archived is no longer there to act on; one
                  dormant may not be what is used. Excluded ones apart:
-                 « sauf auth-service »
+                 « sauf auth-service », « ne touche pas à payment-api »
     where        the environment asked, read from its words, or held to:
                  « uniquement en staging »
     when         the period, and whether the asker said it — or it is its
                  kind's default; a deadline, « avant vendredi »; a window,
-                 « hors heures ouvrées »
+                 « hors heures ouvrées », « ce soir après 22h »
     constraints  read only — « sans rien modifier »; no downtime; urgent;
                  a migration's target, « vers AWS »; the services and
                  sources the form held it to
     missing      the critical information a goal needs and the words do
                  not give: where to act when the company runs several
                  environments, where to migrate to; constraints at odds —
-                 acting, read only; every thing excluded
+                 acting, read only; every thing excluded, or removed, from
+                 an action — a question about them is answered with it
 
 What is missing is an ambiguity of the understanding (understanding.py):
 blocking, it is routed to clarification before any analysis.
@@ -50,7 +51,9 @@ GONE = frozenset({"removed", "archived"})
 DORMANT = "dormant"
 
 EXCLUDE = re.compile(
-    r"\b(?:sauf|hors|a part|excepte|except|excluding|other than|sans)\s+((?:\S+\s+){0,3})"
+    r"\b(?:sauf|hors|a part|excepte|except|excluding|other than|sans|"
+    r"ne touchez? (?:pas|jamais)(?: a| au| aux)?|(?:do not|don t|never) touch)"
+    r"\s+((?:\S+\s+){0,3})"
 )
 READ_ONLY = re.compile(
     r"\b(?:sans (?:rien )?(?:modifier|toucher|changer)|lecture seule|ne (?:rien )?"
@@ -65,8 +68,12 @@ URGENCY = re.compile(
     r"\b(?:urgent|urgente|urgence|asap|au plus vite|immediatement|tout de suite|"
     r"right now|immediately)\b"
 )
+HOUR = r"\d{1,2}(?: ?h(?:\d{2})?|(?::\d{2})? ?(?:am|pm))"
+# The hours first: « ce soir après 22h » is after 22h, not the whole evening.
 WINDOW = re.compile(
-    r"\b(?:(?:en dehors des|hors) heures ouvrees|cette nuit|la nuit|ce week ?end|"
+    rf"\b(?:(?:(?:ce soir|cette nuit|tonight) )?(?:apres|after) {HOUR}|"
+    rf"(?:entre|between) {HOUR} (?:et|and) {HOUR}|"
+    r"(?:en dehors des|hors) heures ouvrees|cette nuit|la nuit|ce soir|ce week ?end|"
     r"le week ?end|outside (?:of )?business hours|tonight|at night|this weekend)\b"
 )
 _DAYS = {
@@ -145,6 +152,16 @@ def _excluded(text: str, said: str | None) -> bool:
     return False
 
 
+def _leaves_out(text: str, said: str, things: Sequence[ScopedEntity]) -> bool:
+    """Whether « ne touche pas » is said of things it excludes — « ne
+    touche pas à payment-api » — rather than of everything: « ne touche à
+    rien »."""
+    folded = fold(text)
+    at = folded.find(said)
+    following = folded[at + len(said) : at + len(said) + 60] if at >= 0 else ""
+    return any(fold(t.said or t.name) in following for t in things)
+
+
 def _target(text: str) -> str | None:
     for match in TARGET.finditer(fold(text)):
         if match.group(1) not in NOT_TARGETS:
@@ -191,6 +208,12 @@ def scope_of(
             lifecycle=lifecycles.get(subject.entity_id),
         )
         (excluded if _excluded(text, subject.said) else subjects).append(scoped)
+    if excluded:
+        constraints = [
+            c
+            for c in constraints
+            if not (c.kind == "read_only" and _leaves_out(text, c.said, excluded))
+        ]
     for thing in excluded:
         constraints.append(
             ScopeConstraint(
@@ -263,7 +286,9 @@ def scope_of(
         missing.append(
             AmbiguityRead(
                 kind="subject_gone",
-                blocking=True,
+                # Nothing is done to what is gone; what still relies on it
+                # is asked about, and answered with it (LEKA-440).
+                blocking=acting,
                 said="What it is about is no longer in the company: removed or archived.",
                 options=[s.name for s in gone],
             )
@@ -278,7 +303,9 @@ def scope_of(
                 options=[s.name for s in dormant],
             )
         )
-    if excluded and not subjects:
+    if excluded and not subjects and acting:
+        # A question about everything else is about everything else: « ce
+        # qui a changé, sauf sur auth-service » (LEKA-440).
         missing.append(
             AmbiguityRead(
                 kind="everything_excluded",

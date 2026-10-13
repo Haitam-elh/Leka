@@ -72,6 +72,7 @@ from leka.intentions.analysis import (
     StepOutcome,
     Subject,
     assemble,
+    strength_of,
 )
 from leka.intentions.analysis import (
     select as choose,
@@ -82,6 +83,7 @@ from leka.intentions.approval import DecisionService
 from leka.intentions.capabilities import CAPABILITIES
 from leka.intentions.decisions import Target
 from leka.intentions.dispatch import dispatch
+from leka.intentions.explain import ContextRead, SourceState, explain
 from leka.intentions.grounding import side
 from leka.intentions.lifecycle import Actor
 from leka.intentions.lifecycle import IntentionStatus as S
@@ -97,6 +99,7 @@ from leka.intentions.schemas import (
     Understanding,
 )
 from leka.intentions.service import IntentionService
+from leka.intentions.understanding import unknown_names
 from leka.intentions.writing import NEEDS as WRITING
 from leka.intentions.writing import write
 from leka.knowledge import (
@@ -254,6 +257,7 @@ def asked_of(intention: Intention, understood: Understanding | None, now: dateti
         constraints=tuple(
             (c.kind, c.value, c.hard) for c in (scope.constraints if scope is not None else [])
         ),
+        unknown=tuple(unknown_names(understood.text)) if understood and not entities else (),
     )
 
 
@@ -294,6 +298,7 @@ def result_of(result: Result) -> dict[str, object]:
                     "ref_id": c.ref_id,
                     "params": {k: ref(v) for k, v in c.params.items()},
                     "evidence": list(c.evidence),
+                    "strength": strength_of(c),
                 }
                 for name, c in result.causes
             ],
@@ -339,6 +344,7 @@ def result_of(result: Result) -> dict[str, object]:
                 if result.answer is not None
                 else None
             ),
+            "explanation": result.explanation,
         }
     )
     return said.model_dump(mode="json")
@@ -529,7 +535,7 @@ async def _analyse_intention(
             background=frozenset(c.name for c in rules if c.always),
         )
         # What LEKA proposes, apart from what it found (LEKA-389).
-        result = replace(result, recommendations=recommend(result, asked))
+        result = replace(result, recommendations=recommend(result, asked, material.changes))
         for capability in writers:
             at = max(0, round((time.monotonic() - started) * 1000))
             outcome, answer, read = await _write(
@@ -546,6 +552,18 @@ async def _analyse_intention(
             )
             if answer is not None:
                 result = answered(result, answer, read)
+        # On what it rests, said (LEKA-441): the sources' state as it read.
+        result = await _explained(
+            workspace_id,
+            result,
+            asked,
+            understood,
+            outcomes,
+            context,
+            readiness=ready.status if ready is not None else "limited",
+            now=moment,
+            background=frozenset(c.name for c in rules if c.always),
+        )
         return await _finish(
             workspace_id,
             intention_id,
@@ -875,6 +893,57 @@ async def _sources(
             refs.append(SourceRef(source, kind, name))
         found[ident] = tuple({r.id: r for r in refs}.values())
     return found
+
+
+async def _explained(
+    workspace_id: uuid.UUID,
+    result: Result,
+    asked: Asked,
+    understood: Understanding | None,
+    outcomes: Sequence[StepOutcome],
+    context: AssembledContext | None,
+    *,
+    readiness: str,
+    now: datetime,
+    background: frozenset[str],
+) -> Result:
+    """The result with what it rests on — held to it (explain.py)."""
+    ids = [s.source_id for s in context.sources] if context is not None else []
+    states: dict[uuid.UUID, SourceState] = {}
+    if ids:
+        with workspace_scope(workspace_id):
+            async with session_factory() as session:
+                rows = (await session.scalars(select(Source).where(Source.id.in_(ids)))).all()
+        states = {
+            row.id: SourceState(
+                status=str(row.status),
+                sync_status=str(row.sync_status),
+                health=str(row.health_status),
+                last_synced_at=row.last_synced_at,
+            )
+            for row in rows
+        }
+    read = (
+        ContextRead(
+            version=context.version,
+            sources=[(s.source_id, s.kind, s.name, s.elements) for s in context.sources],
+            conflicts=[c.model_dump(mode="json") for c in context.conflicts],
+        )
+        if context is not None
+        else None
+    )
+    held, explanation = explain(
+        result,
+        asked,
+        understood,
+        outcomes,
+        context=read,
+        states=states,
+        readiness=readiness,
+        now=now,
+        background=background,
+    )
+    return replace(held, explanation=explanation.model_dump(mode="json"))
 
 
 async def _finish(

@@ -6968,6 +6968,41 @@ export interface components {
             };
             /** Evidence */
             evidence: string[];
+            /**
+             * Strength
+             * @description confirmed — its source says so; probable — LEKA infers it with enough to go on; correlated — only time ties it to what happened, never called a cause (LEKA-441). None on an analysis made before.
+             */
+            strength?: ("confirmed" | "probable" | "correlated") | null;
+        };
+        /**
+         * AnalysisClaim
+         * @description A figure the screen may say — « 3 sources à l'appui », « 2
+         *     événements corrélés », « 0 contradiction » — what it counts, and what it
+         *     is read from: none said that is not counted.
+         */
+        AnalysisClaim: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "sources" | "correlated_events" | "contradictions" | "impacted_users";
+            /** Count */
+            count: number;
+            /**
+             * Holds
+             * @description It supports the conclusion: sources behind it, no conflict.
+             */
+            holds: boolean;
+            /**
+             * Definition
+             * @description What it counts, in English.
+             */
+            definition: string;
+            /**
+             * Refs
+             * @description What it was counted from: source ids, evidence ids, conflict ids.
+             */
+            refs: string[];
         };
         /**
          * AnalysisEvidence
@@ -7025,6 +7060,35 @@ export interface components {
                 [key: string]: components["schemas"]["JsonValue"];
             };
         };
+        /**
+         * AnalysisExplanation
+         * @description On what an analysis rests (LEKA-441): what LEKA understood, what it
+         *     really read and in what state, what failed and what that leaves unknown,
+         *     how sure it is and why, the figures it may say with what they count,
+         *     what disagrees, what is stale, its limits, and what to do next.
+         */
+        AnalysisExplanation: {
+            understood: components["schemas"]["AnalysisNote"];
+            /** Consulted */
+            consulted: components["schemas"]["ExplainedSource"][];
+            /** Capabilities */
+            capabilities: components["schemas"]["ExplainedCapability"][];
+            confidence: components["schemas"]["ExplainedConfidence"];
+            /** Claims */
+            claims: components["schemas"]["AnalysisClaim"][];
+            /** Conflicts */
+            conflicts: components["schemas"]["ExplainedConflict"][];
+            /** Stale */
+            stale: components["schemas"]["AnalysisNote"][];
+            /** Limits */
+            limits: components["schemas"]["AnalysisNote"][];
+            next: components["schemas"]["AnalysisNextStep"];
+            /**
+             * Context Version
+             * @description The version of its context it read.
+             */
+            context_version: number | null;
+        };
         /** AnalysisImpactArea */
         AnalysisImpactArea: {
             /**
@@ -7046,6 +7110,24 @@ export interface components {
             ref_id: string;
             /** Name */
             name: string;
+        };
+        /**
+         * AnalysisNextStep
+         * @description What to do next, and why that.
+         */
+        AnalysisNextStep: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "decide" | "prepare" | "settle_conflict" | "confirm_cause" | "ask_differently" | "rerun" | "fix_source" | "act" | "nothing";
+            /** Text */
+            text: string;
+            why: components["schemas"]["AnalysisNote"];
+            /** Params */
+            params?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
         };
         /**
          * AnalysisNote
@@ -7071,6 +7153,33 @@ export interface components {
              * @description The findings, causes and evidence it rests on (ids).
              */
             cites: string[];
+        };
+        /**
+         * AnalysisPrecondition
+         * @description What must hold before a recommendation can be carried out (LEKA-441).
+         */
+        AnalysisPrecondition: {
+            /**
+             * Code
+             * @description precondition.version_to_restore, precondition.environment, precondition.cause_confirmed, precondition.approved — worded by the interface.
+             */
+            code: string;
+            /** Text */
+            text: string;
+            /**
+             * Met
+             * @description None: not known yet — an approval to come.
+             */
+            met: boolean | null;
+            /**
+             * Blocking
+             * @description Unmet, it cannot be carried out as it stands.
+             */
+            blocking: boolean;
+            /** Params */
+            params?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
         };
         /**
          * AnalysisRecommendation
@@ -7134,6 +7243,21 @@ export interface components {
              */
             evidence: string[];
             target: components["schemas"]["RecommendationTarget"] | null;
+            /**
+             * Preconditions
+             * @description What must hold first (LEKA-441).
+             */
+            preconditions?: components["schemas"]["AnalysisPrecondition"][];
+            /**
+             * Assumptions
+             * @description The causes it rests on that are not confirmed: what it assumes.
+             */
+            assumptions?: string[];
+            /**
+             * Executable
+             * @description Every blocking precondition met; None on an analysis made before.
+             */
+            executable?: boolean | null;
         };
         /**
          * AnalysisRequest
@@ -9613,6 +9737,26 @@ export interface components {
             status: "ok" | "degraded" | "down";
             /** Detail */
             detail: string | null;
+        };
+        /**
+         * ConfidenceReason
+         * @description One reason for how sure it is: what it starts from, what raises or
+         *     lowers it, what caps it.
+         */
+        ConfidenceReason: {
+            /** Code */
+            code: string;
+            /**
+             * Effect
+             * @enum {string}
+             */
+            effect: "base" | "raises" | "lowers" | "caps";
+            /** Text */
+            text: string;
+            /** Params */
+            params?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
         };
         /** ConflictDetail */
         ConflictDetail: {
@@ -13589,6 +13733,93 @@ export interface components {
             last_at: string | null;
         };
         /**
+         * ExplainedCapability
+         * @description A capability chosen, how it went — and, when it did not answer, what
+         *     is not known because of it.
+         */
+        ExplainedCapability: {
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "succeeded" | "failed" | "timed_out" | "skipped";
+            /** Reason */
+            reason: string | null;
+            /** @description What is not known because it did not answer. */
+            leaves: components["schemas"]["AnalysisNote"] | null;
+        };
+        /**
+         * ExplainedConfidence
+         * @description How sure the analysis is — in words, with why; never a bare figure.
+         */
+        ExplainedConfidence: {
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "high" | "medium" | "low" | "unknown";
+            /** Reasons */
+            reasons: components["schemas"]["ConfidenceReason"][];
+        };
+        /**
+         * ExplainedConflict
+         * @description What its sources disagree on, about what it asks: every side, who
+         *     says it.
+         */
+        ExplainedConflict: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** About */
+            about: string;
+            /**
+             * Values
+             * @description Each {value, by}.
+             */
+            values: {
+                [key: string]: components["schemas"]["JsonValue"];
+            }[];
+            /** Said */
+            said: string;
+        };
+        /**
+         * ExplainedSource
+         * @description A source behind what the analysis read — and in what state it was
+         *     when it read: never shown as read when it was not.
+         */
+        ExplainedSource: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Kind */
+            kind: string | null;
+            /** Name */
+            name: string | null;
+            /**
+             * Elements
+             * @description What of its context came from it.
+             */
+            elements: number;
+            /**
+             * State
+             * @description read — synced and well; error, degraded — failing, what it said is as of its last sync; stale — not synced for STALE_DAYS; syncing — still reading when the analysis ran; disabled; gone — deleted since.
+             * @enum {string}
+             */
+            state: "read" | "error" | "degraded" | "stale" | "syncing" | "disabled" | "gone";
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /**
+             * Said
+             * @description In English, for what reads it without a dictionary.
+             */
+            said: string;
+        };
+        /**
          * ExtractionFailureRead
          * @description One record extraction could not make sense of.
          */
@@ -14881,6 +15112,11 @@ export interface components {
             detail: {
                 [key: string]: components["schemas"]["JsonValue"];
             };
+            /**
+             * Context Now
+             * @description The version its intention's context is at now: newer than `context_version`, the analysis read an older one — said, never silently kept (LEKA-441).
+             */
+            context_now?: number | null;
         };
         /**
          * IntentionAnalysisRequested
@@ -14931,6 +15167,8 @@ export interface components {
              * @description What LEKA proposes, apart from what it found (LEKA-389).
              */
             recommendations?: components["schemas"]["AnalysisRecommendation"][];
+            /** @description On what it rests (LEKA-441); none on an analysis made before. */
+            explanation?: components["schemas"]["AnalysisExplanation"] | null;
         };
         /**
          * IntentionAnswer

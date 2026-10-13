@@ -837,11 +837,16 @@ class IntentionService:
     async def analyses(
         self, intention_id: uuid.UUID, *, limit: int = 20
     ) -> list[IntentionAnalysisRead] | None:
-        """Its analyses, the latest first; None when it does not exist."""
-        if await self._repository.intention(intention_id) is None:
+        """Its analyses, the latest first, each with the version its context
+        is at now (LEKA-441); None when it does not exist."""
+        intention = await self._repository.intention(intention_id)
+        if intention is None:
             return None
+        ready = intention.readiness or {}
+        now = ready.get("version") if isinstance(ready.get("version"), int) else None
         return [
-            analysis_read(row) for row in await self._repository.analyses(intention_id, limit=limit)
+            analysis_read(row, context_now=now)  # type: ignore[arg-type]
+            for row in await self._repository.analyses(intention_id, limit=limit)
         ]
 
     async def analyse_again(
@@ -874,8 +879,11 @@ class IntentionService:
         return intention
 
 
-def analysis_read(row: IntentionAnalysis) -> IntentionAnalysisRead:
-    """One analysis, as it is read (LEKA-388)."""
+def analysis_read(
+    row: IntentionAnalysis, *, context_now: int | None = None
+) -> IntentionAnalysisRead:
+    """One analysis, as it is read (LEKA-388) — with the version its
+    intention's context is at now: a newer one says it read an older one."""
     return IntentionAnalysisRead.model_validate(
         {
             "id": row.id,
@@ -894,5 +902,6 @@ def analysis_read(row: IntentionAnalysis) -> IntentionAnalysisRead:
             "result": row.result,
             "error": row.error,
             "detail": row.detail,
+            "context_now": context_now,
         }
     )

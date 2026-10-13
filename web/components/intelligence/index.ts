@@ -9,6 +9,15 @@
 export { AnalysisSummary, AnalysisView } from "@/components/intelligence/analysis";
 export { AnalysisState } from "@/components/intelligence/analysis-state";
 export {
+  AnalysisLimits,
+  ConfidenceExplained,
+  ConflictList,
+  FreshnessNotice,
+  NextStepPanel,
+  SourcesConsulted,
+  UnderstoodLine,
+} from "@/components/intelligence/explained";
+export {
   ConfidenceBadge,
   ConfidencePanel,
   SupportList,

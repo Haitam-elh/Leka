@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 import { DICTIONARIES } from "@/lib/i18n/dictionaries";
 import {
   analysisEvidence,
+  capabilityName,
   evidenceRef,
   type IntentionAnalysis,
   intentionAnalysis,
@@ -469,5 +470,201 @@ describe("an intention's analysis", () => {
     expect(blocked.findings).toEqual([]);
     const running = analysisFixture({ status: "running", result: null });
     expect(intentionAnalysis(fr, running, links).status).toBe("running");
+  });
+});
+
+describe("an intention's analysis, explained (LEKA-441)", () => {
+  function explained(): IntentionAnalysis {
+    const base = analysisFixture();
+    const result = base.result as NonNullable<IntentionAnalysis["result"]>;
+    const cause = result.causes[0];
+    return {
+      ...base,
+      context_version: 2,
+      context_now: 3,
+      result: {
+        ...result,
+        causes: result.causes.map((c) => ({ ...c, strength: "correlated" as const })),
+        recommendations: [
+          {
+            id: "rollback:x",
+            code: "recommend.rollback",
+            text: "Undo billing-api v2.8.4.",
+            params: { change: "billing-api v2.8.4", incident: "p99" },
+            action: "rollback",
+            changes_systems: true,
+            priority: "high",
+            risk: "medium",
+            reversible: true,
+            confidence: 0.9,
+            why: {
+              code: "recommend.why.cause",
+              text: "Its source says so.",
+              params: { cause: "billing-api v2.8.4", basis: "stated" },
+            },
+            basis: [cause.id],
+            evidence: [],
+            target: null,
+            preconditions: [
+              {
+                code: "precondition.version_to_restore",
+                text: "No source says which version it replaced.",
+                met: false,
+                blocking: true,
+                params: { version: null },
+              },
+              {
+                code: "precondition.environment",
+                text: "In production.",
+                met: true,
+                blocking: true,
+                params: { environment: "production" },
+              },
+            ],
+            assumptions: [cause.id],
+            executable: false,
+          },
+        ],
+        explanation: {
+          understood: {
+            code: "explanation.understood",
+            text: "Explain cause about Billing API.",
+            params: {
+              goal: "explain_cause",
+              names: ["Billing API"],
+              unknown: [],
+              environment: "production",
+              excluded: ["Checkout"],
+              period_said: false,
+            },
+          },
+          consulted: [
+            {
+              source_id: CATALOGUE,
+              kind: "backstage",
+              name: "Catalogue",
+              elements: 3,
+              state: "error",
+              last_synced_at: "2026-10-01T09:00:00Z",
+              said: "Failing: what it said is as of its last sync.",
+            },
+          ],
+          capabilities: [
+            {
+              name: "changes",
+              status: "failed",
+              reason: "RuntimeError",
+              leaves: {
+                code: "limit.capability.changes",
+                text: "What changed in the period is not known: a cause may be missing.",
+                params: { capability: "changes" },
+              },
+            },
+          ],
+          confidence: {
+            level: "low",
+            reasons: [
+              {
+                code: "confidence.cause_correlated",
+                effect: "base",
+                text: "Only time ties its likeliest cause to what happened.",
+                params: {},
+              },
+              {
+                code: "confidence.capability_failed",
+                effect: "caps",
+                text: "changes did not answer.",
+                params: { capabilities: ["changes"] },
+              },
+            ],
+          },
+          claims: [
+            { code: "sources", count: 1, holds: true, definition: "…", refs: [CATALOGUE] },
+            { code: "contradictions", count: 0, holds: true, definition: "…", refs: [] },
+          ],
+          conflicts: [],
+          stale: [{ code: "stale.source", text: "Catalogue: …", params: { source: "Catalogue" } }],
+          limits: [
+            {
+              code: "limit.source_error",
+              text: "Catalogue: failing.",
+              params: { source: "Catalogue", state: "error" },
+            },
+            {
+              code: "limit.capability.changes",
+              text: "What changed in the period is not known.",
+              params: { capability: "changes" },
+            },
+          ],
+          next: {
+            code: "prepare",
+            text: "Before deciding, settle what recommend.rollback needs.",
+            why: {
+              code: "why.preconditions",
+              text: "It cannot be carried out as it stands.",
+              params: { preconditions: ["precondition.version_to_restore"] },
+            },
+            params: {
+              recommendation: "rollback:x",
+              preconditions: ["precondition.version_to_restore"],
+            },
+          },
+          context_version: 2,
+        },
+      },
+    };
+  }
+
+  it("words what it rests on from its codes, in the interface's language", () => {
+    const shown = intentionAnalysis(fr, explained(), links);
+    const said = shown.explanation;
+    expect(said).toBeTruthy();
+    if (!said) return;
+    expect(said.understood).toBe(
+      "Expliquer une cause · sur Billing API · en production · sauf Checkout",
+    );
+    expect(said.consulted[0]).toMatchObject({ name: "Catalogue", state: "error" });
+    expect(said.consulted[0].said).toContain("En échec");
+    expect(said.silent).toEqual([
+      {
+        id: "changes",
+        name: capabilityName(fr, "changes"),
+        leaves: "Ce qui a changé sur la période n'est pas connu : une cause peut manquer.",
+      },
+    ]);
+    expect(said.confidence.level).toBe("low");
+    expect(said.confidence.reasons.map((r) => r.label)).toEqual([
+      "Seul le temps relie sa cause la plus probable à ce qui s'est passé.",
+      `${capabilityName(fr, "changes")} n'a pas répondu.`,
+    ]);
+    // What did not answer is said once, under its own heading.
+    expect(said.limits).toEqual([
+      "Catalogue est en échec : ce qu'elle disait date de sa dernière synchro.",
+    ]);
+    expect(said.next.title).toMatch(/^Préparer « .+ » avant d'en décider\.$/);
+    expect(said.next.why).toBe(
+      "Version à restaurer inconnue : aucune source ne dit laquelle tournait avant.",
+    );
+    expect(said.freshness).toEqual({ read: 2, now: 3 });
+    expect(shown.causes[0].strength).toBe("correlated");
+    const [rollback] = shown.recommendations;
+    expect(rollback.executable).toBe(false);
+    expect(rollback.preconditions?.map((p) => p.label)).toEqual([
+      "Version à restaurer inconnue : aucune source ne dit laquelle tournait avant.",
+      "En production.",
+    ]);
+    expect(rollback.assumptions).toHaveLength(1);
+    expect(shown.support?.map((s) => s.label)).toEqual([
+      "1 source à l'appui des constats",
+      "Aucune contradiction sur ce qui est demandé",
+    ]);
+    expect(shown.support?.[0].refs).toEqual([{ id: CATALOGUE, label: "Catalogue", href: null }]);
+    expect(shown.support?.[0].definition).toContain("sources distinctes");
+  });
+
+  it("says it in English too", () => {
+    const said = intentionAnalysis(en, explained(), links).explanation;
+    expect(said?.understood).toBe("Explain a cause · about Billing API · in production · except Checkout");
+    expect(said?.next.why).toBe("Version to restore unknown: no source says which one ran before.");
   });
 });

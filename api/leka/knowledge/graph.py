@@ -1290,18 +1290,18 @@ class GraphService:
         )
 
     async def matching(
-        self, words: Sequence[str], *, limit: int = MAX_HITS
+        self, words: Sequence[str], *, limit: int = MAX_HITS, removed: bool = False
     ) -> list[tuple[uuid.UUID, float, list[str]]]:
         """The entities whose words hold any of `words` — a sentence's, not
         a name typed (LEKA-371) — the best first: the very name, then the
         most words, a name's weighing most; each with the words it holds.
-        The removed left out."""
+        The removed left out, unless asked for."""
         tsquery = any_of(words)
         if tsquery is None:
             return []
         folded = [w for word in words for w in fold(word).split()]
         found = await self._graph.search(
-            tsquery, " ".join(folded), types=(), removed=False, limit=min(limit, MAX_HITS)
+            tsquery, " ".join(folded), types=(), removed=removed, limit=min(limit, MAX_HITS)
         )
         matches: list[tuple[uuid.UUID, float, list[str]]] = []
         for entity, score in found:

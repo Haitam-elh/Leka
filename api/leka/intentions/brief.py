@@ -251,6 +251,9 @@ def _expected(understanding: Understanding, words: set[str]) -> tuple[str, bool]
     """What they expect back, and whether their words say it."""
     if acting(understanding):
         return "action", True
+    if any(a.code == "document" for a in understanding.actions):
+        # « Documente », « mets à jour la documentation »: a document, written.
+        return "document", True
     if words & DOCUMENT_WORDS:
         return "document", True
     if words & PLAN_WORDS:

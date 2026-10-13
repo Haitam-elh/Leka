@@ -72,6 +72,9 @@ export interface ProbableCause {
   confidence: number | null;
   /** A source said so, or LEKA inferred it. */
   basis: "stated" | "inferred";
+  /** How far it is shown (LEKA-441): its source confirms it; LEKA infers it,
+   * probable; only time ties it — a correlation, never called a cause. */
+  strength?: CauseStrength | null;
   /** Why it is a cause: who said so, or the rule. */
   why: string;
   evidence: readonly EvidenceRef[];
@@ -112,6 +115,20 @@ export interface Recommendation {
   action?: RecommendationAction | null;
   confidence: number | null;
   evidence: readonly EvidenceRef[];
+  /** What must hold first (LEKA-441): met, not met, or still to come. */
+  preconditions?: readonly Precondition[];
+  /** What it assumes: the causes it rests on that are not confirmed. */
+  assumptions?: readonly string[];
+  /** Whether it can be carried out as it stands; none when not said. */
+  executable?: boolean | null;
+}
+
+export interface Precondition {
+  id: string;
+  label: string;
+  met: boolean | null;
+  /** Unmet, it cannot be carried out as it stands. */
+  blocking: boolean;
 }
 
 /** What a confidence rests on, one line each (mockups 03 to 05: "12
@@ -121,6 +138,58 @@ export interface Support {
   id: string;
   label: string;
   established: boolean;
+  /** What the figure counts — a figure nothing defines is not said (LEKA-441). */
+  definition?: string | null;
+  /** What it was counted from, each openable when it can be. */
+  refs?: readonly { id: string; label: string; href?: string | null }[];
+}
+
+export type CauseStrength = "confirmed" | "probable" | "correlated";
+
+/** A source an analysis read from, and in what state it was then (LEKA-441):
+ * never shown read when it was failing, syncing or out of date. */
+export type SourceState =
+  | "read"
+  | "error"
+  | "degraded"
+  | "stale"
+  | "syncing"
+  | "disabled"
+  | "gone";
+
+/** On what an analysis rests (LEKA-441): what LEKA understood, what it read
+ * and in what state, what did not answer and what that leaves unknown, how
+ * sure it is and why, what disagrees, what is stale, its limits, what next. */
+export interface Explanation {
+  understood: string;
+  consulted: readonly {
+    id: string;
+    name: string;
+    kind: string | null;
+    state: SourceState;
+    said: string;
+    elements: number;
+  }[];
+  /** The capabilities that did not answer, and what that leaves unknown. */
+  silent: readonly { id: string; name: string; leaves: string }[];
+  confidence: {
+    level: ConfidenceLevel;
+    reasons: readonly {
+      id: string;
+      effect: "base" | "raises" | "lowers" | "caps";
+      label: string;
+    }[];
+  };
+  conflicts: readonly {
+    id: string;
+    label: string;
+    values: readonly { value: string; by: readonly string[] }[];
+  }[];
+  stale: readonly string[];
+  limits: readonly string[];
+  next: { code: string; title: string; why: string };
+  /** The context version it read, and the one its intention is at now. */
+  freshness?: { read: number | null; now: number | null } | null;
 }
 
 /** An analysis, whole. */
@@ -140,6 +209,8 @@ export interface Analysis {
   confidence: number | null;
   /** What that confidence rests on. */
   support?: readonly Support[];
+  /** On what it rests, said (LEKA-441); none for an analysis made before. */
+  explanation?: Explanation | null;
 }
 
 /** A confidence in words: high from 85 %, medium from 60 %, low below —
@@ -167,10 +238,15 @@ export function riskOf(said: string | null | undefined): RiskLevel {
 /** How a probable cause is tagged (mockup 03: "Probable cause", "À
  * confirmer"): a source said it; LEKA thinks it, fairly sure; LEKA only
  * suspects it, and someone should check. */
-export type CauseTag = "stated" | "probable" | "toConfirm";
+export type CauseTag = "stated" | "probable" | "toConfirm" | "correlated";
 
-export function causeTag(cause: Pick<ProbableCause, "basis" | "confidence">): CauseTag {
-  if (cause.basis === "stated") return "stated";
+export function causeTag(
+  cause: Pick<ProbableCause, "basis" | "confidence" | "strength">,
+): CauseTag {
+  // Said by the API (LEKA-441): only time ties it — never called a cause.
+  if (cause.strength === "correlated") return "correlated";
+  if (cause.strength === "confirmed" || cause.basis === "stated") return "stated";
+  if (cause.strength === "probable") return "probable";
   const level = confidenceLevel(cause.confidence);
   return level === "high" || level === "medium" ? "probable" : "toConfirm";
 }

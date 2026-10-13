@@ -54,7 +54,7 @@ agents:
 
   - path: development/code-review/SKILL.md
     name: code-review
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: development/release-analysis/SKILL.md
@@ -99,5 +99,5 @@ agents:
 
   - path: security/security-review/SKILL.md
     name: security-review
-    version: 1.1.0
+    version: 1.2.0
     status: active

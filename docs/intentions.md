@@ -223,7 +223,7 @@ things named, the period, the environment, the gaps), never redone.
 | `mode`, `mode_said` | `question` — to answer — or `request` — to act on — and what said it: « ? », an interrogative first word (pourquoi, qui, comment, why, who…), a polite or wanting request (peux-tu, je veux, il faut, can you, please…) with an action, or an action verb |
 | `kind` | LEKA-373's: diagnose, change, ownership, dependency, compliance, migration, knowledge, general |
 | `goal` | `{code, said, confidence}` (below) |
-| `actions` | each `{code, said, changes_systems}` — the verbs asked, never the nouns: « déploie » is asked, « le déploiement » happened |
+| `actions` | each `{code, said, changes_systems}` — the verbs asked, never the nouns: « déploie » is asked, « le déploiement » happened. Nor what is planned, studied or explained (« un plan pour migrer », « le risque de migrer », « comment redémarrer », « how to restart »), nor what was done (« a été redémarrée », « qui a redémarré », « has been rolled back »: its goal is `find_change`) — LEKA-440. « Mettre à jour » a documentation, a runbook, a page is `document`, which changes no system |
 | `withheld` | the actions spoken of but not asked (LEKA-434), each with its `polarity`: `negated` (« ne redémarre pas », « don't restart », « never »), `conditional` (« si Billing API tombe, redémarre-la »), `ambiguous` (a negation before it, not on it: « je ne sais pas s'il faut redémarrer »). Never acted on, never proposed. What is quoted (« … », " … ") is cited, not asked |
 | `entities` | what it is about: `{entity_id, name, type, how (asked, named, business), said, confidence}` — LEKA-373's subjects |
 | `period`, `environment` | as LEKA-373 reads them, with their origin and words |
@@ -253,7 +253,7 @@ things named, the period, the environment, the gaps), never redone.
 | `too_short` | yes | fewer than two words that say something |
 | `unclear_goal` | yes | no goal can be told — options: the goals |
 | `no_subject` | yes | its kind is about something, and it names nothing LEKA knows (LEKA-373's `no_subject`) — options: what it may have meant |
-| `unknown_subject` | yes | a thing asked for is not in the model |
+| `unknown_subject` | **when acting**, else a warning | a thing asked for is not in the model — or a name its words give (« billing-gateway », « svc_orders ») that nothing it is about answers to (LEKA-440): the answer says LEKA does not know it, and states no cause found elsewhere |
 | `action_without_target` | yes | an action on systems, on nothing named |
 | `ambiguous_subject` | **when acting**, else a warning | the same words name several things — options: those things. Read each to answer a question; never act on a guess |
 | `competing_goals` | no | two kinds said as much: read as the first — options: both goals |
@@ -310,6 +310,22 @@ requests, an unknown environment; every part's words in the text.
 `tests/test_intentions_api.py`: understood and kept; « Redémarre le
 service » flagged, asked, clarified; still unclear, asked again; a dry run
 keeps nothing.
+
+**What a verb says without asking it (LEKA-440).** Measured by the
+benchmark (`docs/benchmarks/intentions.md`), the rules no longer read as an
+action:
+- an infinitive a plan, a study, a risk or a cost governs — « Prépare un
+  plan pour migrer payment-api », « Évalue le risque de migrer » — nor a way
+  to do it asked — « Comment redémarrer », « How to restart »; « Fais un
+  plan, puis redémarre auth-service » still asks the restart;
+- what was done: a participle (« redémarrée », « restarted ») or a verb
+  after its auxiliary (« a redémarré », « has been rolled back »), never an
+  infinitive (« j'ai besoin de redémarrer », « I have to restart ») nor a
+  noun after an article (« do a rollback »);
+- a question about something it knows, with no goal said (« Quel est le SLA
+  de payment-api ? », « Sur quoi travaille Thomas Berger ? »): what is known
+  of it (`find_knowledge`), never stopped for it.
+And « qu'est-ce qui a changé » is what changed, not « qui ».
 
 **Each action on its own targets (LEKA-434).** An action is on the things
 said after it, before the next one: « Redémarre Billing API et rollback
@@ -489,7 +505,7 @@ the same way: what is missing blocks, and goes to clarification first.
 | Field | |
 | --- | --- |
 | `entities` | what it is about: LEKA-373's subjects, **resolved against the company model**, each with its `lifecycle` there now (active, dormant, archived, removed; none when unread) |
-| `excluded` | what it names to set apart: after « sauf », « hors », « à part », « except », « excluding », « sans » — not its subjects |
+| `excluded` | what it names to set apart: after « sauf », « hors », « à part », « except », « excluding », « sans », « ne touche pas à », « don't touch » (LEKA-440) — not its subjects |
 | `environments`, `environment_origin` | where it is held to: `asked` (the form), `text` (« en prod »), `constraint` (« uniquement en staging ») — none: everywhere |
 | `period` | `{since, until, origin, said, explicit}` — explicit when asked, read from the words or the model (« depuis le déploiement »), not its kind's default |
 | `sources` | the sources the form held it to; none: every one |
@@ -500,11 +516,11 @@ the same way: what is missing blocks, and goes to clarification first.
 
 | Kind | Said by | Value | Hard |
 | --- | --- | --- | --- |
-| `exclude` | sauf, hors, except… + a thing named | its id | yes |
-| `read_only` | sans rien modifier, lecture seule, read only, without changing… | true | yes |
+| `exclude` | sauf, hors, except, ne touche pas à, don't touch… + a thing named | its id | yes |
+| `read_only` | sans rien modifier, lecture seule, ne touche à rien, read only, without changing… — not « ne touche pas à payment-api », which excludes it | true | yes |
 | `no_downtime` | sans interruption, sans coupure, zero downtime… | true | yes |
 | `deadline` | avant / d'ici / by / before + demain, ce soir, a weekday, la fin de la semaine | the day, when it can be told | yes |
-| `window` | hors heures ouvrées, la nuit, ce week-end, outside business hours, tonight… | the words | yes |
+| `window` | hors heures ouvrées, la nuit, ce soir, ce week-end, après 22h, entre 22h et 23h30, outside business hours, tonight, after 10pm, between 9pm and 11pm… — read by execution in the plan's time zone (LEKA-440: by its hours too) | the words | yes |
 | `urgency` | urgent, urgence, asap, au plus vite, immédiatement… | high | no — it weighs |
 | `environment_only` | uniquement / seulement / only + en / in + an environment | the environment | yes |
 | `target` | a migration's « vers … » / « to … » | the word | yes |
@@ -517,8 +533,8 @@ the same way: what is missing blocks, and goes to clarification first.
 | `missing_environment` | yes | an action on systems, no environment held, and the model knows several — options: those |
 | `missing_target` | yes | a migration, and not where to |
 | `conflicting_constraints` | yes | an action on systems, and read only |
-| `subject_gone` | yes | a thing it is about is removed or archived in the model |
-| `everything_excluded` | yes | every thing it names, it excludes |
+| `subject_gone` | **when acting**, else a warning | a thing it is about is removed or archived in the model — a removed thing named is found again when nothing there now answers to its name (LEKA-440): « Qu'est-ce qui dépend encore de redis-sessions ? » is answered with it |
+| `everything_excluded` | **when acting** | every thing it names, it excludes — a question about everything else is about everything else (LEKA-440) |
 | `subject_dormant` | no | a thing it is about has been inactive 180 days: is it still what is used? |
 
 **Read with the model now.** At creation and each time it is asked again,
@@ -952,6 +968,193 @@ model: « Qu'est-ce qui dépend de Billing API ? » proposes telling Billing
 platform's and Shop's teams; a known owner proposes no owner.
 `web/components/intentions/analysis-tab.test.tsx`: proposals apart, worded,
 their why, approval said, evidence opened; inconclusive; partial.
+
+### On what it rests, said (LEKA-441)
+
+An analysis says what LEKA understood, what it really read and in what
+state, what is certain and what is only thought, how sure it is and why,
+what is missing or contradictory, its limits, and what to do next, and why.
+Nothing on screen is persuasive decoration: every figure is counted from the
+result, defined, and opens on what it was counted from.
+
+`api/leka/intentions/explain.py`, pure, after `recommend`: the result's
+`explanation` (`AnalysisExplanation`), kept with it. The result's status and
+confidence are held to it:
+- **never `complete`** while a source it read from was failing, degraded or
+  still syncing: it is `partial`, with `analysis.sources_pending` in
+  `missing`;
+- **never a figure surer than its level**: low ≤ 0.59, medium ≤ 0.84;
+  unknown, none.
+
+| Field | What it holds |
+| --- | --- |
+| `understood` | What LEKA understood: goal, the things, the unknown names, where, what is excluded, the period said, the actions. Worded by the interface from its values. |
+| `consulted` | Each source behind what it read, with how much it brought and its **state** when it read: `read`, `error`, `degraded`, `stale` (not synced for 7 days), `syncing`, `disabled`, `gone`. Never shown read when it was not. |
+| `capabilities` | Each capability chosen and how it went. One that did not answer says **what that leaves unknown** (`limit.capability.<name>`), e.g. « what changed is not known: a cause may be missing ». |
+| `confidence` | `{level, reasons}`: high, medium, low or unknown, and why (below). Never a bare percentage. |
+| `claims` | The figures a screen may say, each `{code, count, holds, definition, refs}` (below). |
+| `conflicts` | What its sources disagree on **about what it asks**, every side with who says it. Disagreements about other things in its context do not weigh on it. |
+| `stale` | Sources out of date or failing, documents not current. |
+| `limits` | What did not answer, sources failing or syncing, a context lacking something. |
+| `next` | What to do next and **why** (below). |
+| `context_version` | The version of its context it read. `GET …/analysis` adds `context_now`, the version its intention's context is at now: newer, the screen says it read an older one, with the way to analyse again. |
+
+**Causes, by strength** (`analysis.strength_of`, kept as `causes[].strength`):
+- `confirmed`: its source states it is the cause;
+- `probable`: LEKA infers it with enough to go on (≥ 0.6: a change within 6 hours on what it affects, an enrichment rule);
+- `correlated`: only time ties it to what happened. It is tagged « Corrélation, pas une cause », with no percentage, and never shown as a cause.
+
+**How sure — defined criteria.**
+
+| What it rests on | Level |
+| --- | --- |
+| a cause its source states | high |
+| a cause LEKA infers, probable | medium |
+| only a correlation in time | low |
+| findings from two sources or more | high |
+| findings from a single source | medium |
+| a name LEKA does not know, nothing else asked about | low |
+| nothing found | low |
+| it could not run | unknown |
+
+**Capped at medium** by:
+- a capability that did not answer (the written synthesis excepted);
+- a context lacking something it needs;
+- a contradiction on what it asks;
+- a source failing, degraded, syncing or out of date.
+
+Each cap is a reason, said.
+
+**The figures (claims).** Each one is counted, never estimated:
+
+| Code | Counts | Shown |
+| --- | --- | --- |
+| `sources` | distinct sources the evidence of its findings and causes was read from | « 3 sources à l'appui des constats » |
+| `correlated_events` | changes tied to an incident by time or inference, none confirmed by a source | « 1 événement corrélé, non confirmé comme cause » |
+| `contradictions` | conflicts on what it asks | « Aucune contradiction sur ce qui est demandé » |
+| `impacted_users` | **only when a source states it** (`impacted_users`, `users_affected`…) | « 2400 utilisateurs touchés, selon la source ». Absent otherwise: never « 2 400 utilisateurs impactés » from nothing. |
+
+**Recommendations, with what they need first** (`preconditions`,
+`assumptions`, `executable`):
+- undoing a change needs:
+  - the **version to go back to**, from its source (`previous_version`, `previous`, `from_version`, `rollback_to`), never guessed;
+  - **where** it ran;
+  - non-blocking: that the change is **confirmed** as the cause, and a person's **approval**.
+- What it rests on that is not confirmed is what it **assumes**.
+- A blocking precondition unmet makes it « Pas exécutable en l'état », with what to settle first.
+
+**Next step** (`next.code`), the first that applies:
+1. it could not run: `fix_source` or `rerun`;
+2. a source was still syncing: `rerun` once it has synced;
+3. it names something LEKA does not know: `ask_differently`;
+4. its sources disagree on what it asks (« le SLA »): `settle_conflict`;
+5. its first recommendation:
+   - changes systems and can be carried out: `decide`;
+   - cannot be carried out as it stands: `prepare`, with what it needs;
+   - otherwise `confirm_cause`, `ask_differently` or `act`;
+6. a disagreement: `settle_conflict`;
+7. a capability that did not answer: `rerun`;
+8. inconclusive: `ask_differently`;
+9. otherwise `nothing`.
+
+**On screen** (`components/intelligence/explained.tsx`, reusable):
+- above the results:
+  - `UnderstoodLine`;
+  - `FreshnessNotice`, with « Relancer »;
+- in the synthesis: the confidence **level in words**, and the claims, each opening on what it counts and what it was counted from;
+- on the right:
+  - `NextStepPanel` with its why;
+  - `ConfidenceExplained` with its reasons;
+  - impact;
+  - recommendations, with their preconditions, assumptions and « Pas exécutable en l'état »;
+  - `ConflictList`;
+  - `AnalysisLimits` (what did not answer and what that leaves unknown, what may be out of date);
+  - `SourcesConsulted`, each source in its state;
+- when the analysis could not run: what to do next and its limits, never a bare « échec ».
+
+An analysis made before LEKA-441 has no explanation: it draws as it did.
+
+#### The scenarios (`tests/test_intention_explain.py`)
+
+**1. Several sources really agreeing**
+- **Input**: a cause stated by its source; evidence from GitHub and Jira, both read.
+- **Evidence**: the incident, the deployment, two sources.
+- **Confidence**: high, `cause_confirmed`.
+- **Forbidden**: none.
+- **Shown**: « Confiance élevée », « 2 sources à l'appui », « Aucune contradiction ».
+
+**2. A source partial or unavailable**
+- **Input**: Jira in error; `changes` failed.
+- **Evidence**: what GitHub said.
+- **Confidence**: medium at most, with `capability_failed` and `sources_unsure`.
+- **Forbidden**:
+  - Jira shown « Lue »;
+  - « Analyse terminée »;
+  - « Confiance élevée ».
+- **Shown**:
+  - partial;
+  - Jira « En échec »;
+  - « Changements n'a pas répondu — une cause peut manquer ».
+
+**3. Sources contradicting each other**
+- **Input**: « Quel est le SLA de payment-api ? », with 99.95 against 99.9.
+- **Evidence**: both values, and who says each.
+- **Confidence**: medium at most, with `conflicts`.
+- **Forbidden**:
+  - a single SLA stated as a fact;
+  - « 0 contradiction ».
+- **Shown**:
+  - both sides and their sources;
+  - next: « Trancher : payment-api · sla ».
+
+**4. Data out of date**
+- **Input**: Jira not synced for 30 days.
+- **Evidence**: what it said 30 days ago.
+- **Confidence**: medium at most, with `sources_unsure`.
+- **Forbidden**: Jira shown « Lue ».
+- **Shown**:
+  - Jira « Pas à jour » under « Ce qui peut être daté »;
+  - complete, since out of date is not failing.
+
+**5. A correlation in time, no proof of cause**
+- **Input**: a change 26 hours before the incident (0.55).
+- **Evidence**: the two events.
+- **Confidence**: low, `cause_correlated`.
+- **Forbidden**:
+  - « cause » for it;
+  - « 55 % »;
+  - a rollback proposed first.
+- **Shown**:
+  - « Corrélation, pas une cause »;
+  - « 1 événement corrélé, non confirmé comme cause »;
+  - next: confirm the cause.
+
+**6. A plausible recommendation, not executable for lack of preconditions**
+- **Input**: a rollback whose sources do not say the version it replaced (the demo company's case).
+- **Evidence**: the stated cause.
+- **Confidence**: as its cause.
+- **Forbidden**: an invented « Revenir à la version v2.7.9 ».
+- **Shown**:
+  - « Pas exécutable en l'état — À régler d'abord : version à restaurer inconnue »;
+  - next: « Préparer ».
+
+**7. An analysis finished before its sources did**
+- **Input**: Jira still syncing.
+- **Evidence**: what was read.
+- **Confidence**: medium at most.
+- **Forbidden**: « Analyse terminée ».
+- **Shown**:
+  - partial;
+  - Jira « Synchro en cours »;
+  - next: rerun once the sync is done.
+
+**8. Also checked**
+- An analysis that could not run has confidence `unknown`, no figure, and next `rerun`.
+- An unknown name: confidence low, next `ask_differently`.
+- A figure no source states is never said.
+- A result made before reads without its explanation.
+
+On screen: `web/components/intelligence/explained.test.tsx` covers complete, partial, uncertain, contradictory, failed, not executable and a context moved on. `web/lib/intention-analysis.test.ts` covers the wording, in French and in English.
 
 ## 13. Its decision (LEKA-390)
 

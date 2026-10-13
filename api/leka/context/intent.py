@@ -245,6 +245,8 @@ def kinds_said(text: str) -> list[tuple[IntentKind, list[str]]]:
     on a tie — with the words that said each (LEKA-385: two kinds said as
     much are two goals to choose between)."""
     said = fold(text).split()
+    # « Qu'est-ce qui a changé », « ce qui dépend »: what, not who (LEKA-440).
+    said = [w for i, w in enumerate(said) if not (w == "qui" and i and said[i - 1] == "ce")]
     found: list[tuple[IntentKind, list[str]]] = []
     for kind, words_of in KIND_WORDS.items():
         words_found = list(dict.fromkeys(word for word in said if word in words_of))

@@ -203,6 +203,13 @@ describe("the language model", () => {
     expect(screen.getByTestId("model-default")).toHaveTextContent("Clé non configurée");
   });
 
+  it("says no call in a sentence, not in four 0", async () => {
+    api.usage.mockResolvedValue(usage({ total: { ...TALLY } }));
+    show();
+    expect(await screen.findByText("Aucun appel sur la période.")).toBeInTheDocument();
+    expect(screen.queryByTestId("model-usage-calls")).not.toBeInTheDocument();
+  });
+
   it("lets an admin plug in the company's Azure OpenAI, test it, remove it", async () => {
     const user = userEvent.setup();
     const own = {

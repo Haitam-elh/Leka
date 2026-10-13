@@ -32,6 +32,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -126,16 +127,46 @@ def plan_of(
 # When each window said opens and closes, in the plan's time zone.
 NIGHT = (time(22, 0), time(6, 0))
 BUSINESS = (time(8, 0), time(19, 0))
+EVENING = time(18, 0)
+# An hour said: « 22h », « 22h30 », « 10pm », « 9:30 am » (LEKA-440).
+HOUR = re.compile(r"(\d{1,2})(?: ?h(\d{2})?|(?::(\d{2}))? ?(am|pm))")
+
+
+def _hours(said: str) -> list[time]:
+    found: list[time] = []
+    for match in HOUR.finditer(said.casefold()):
+        hour, minutes = int(match.group(1)), int(match.group(2) or match.group(3) or 0)
+        if match.group(4) == "pm" and hour < 12:
+            hour += 12
+        elif match.group(4) == "am" and hour == 12:
+            hour = 0
+        if hour < 24 and minutes < 60:
+            found.append(time(hour, minutes))
+    return found
+
+
+def _between(at: time, opens: time, closes: time) -> bool:
+    """Within [opens, closes), across midnight when it closes earlier."""
+    if opens <= closes:
+        return opens <= at < closes
+    return at >= opens or at < closes
 
 
 def _window_kind(said: str) -> str | None:
     folded = said.casefold()
+    hours = _hours(folded)
+    if len(hours) >= 2 and ("entre" in folded or "between" in folded):
+        return "between"
+    if hours and ("apres" in folded or "après" in folded or "after" in folded):
+        return "after"
     if "week" in folded:
         return "weekend"
     if "nuit" in folded or "night" in folded or "tonight" in folded:
         return "night"
     if "heures ouvr" in folded or "business hours" in folded:
         return "off_hours"
+    if "ce soir" in folded:
+        return "evening"
     return None
 
 
@@ -153,6 +184,15 @@ def in_window(said: str, moment: datetime, zone: ZoneInfo) -> bool | None:
     night = at >= NIGHT[0] or at < NIGHT[1]
     if kind == "night":
         return night
+    if kind == "between":
+        opens, closes = _hours(said)[:2]
+        return _between(at, opens, closes)
+    if kind == "after":
+        # « Après 22h »: until the night ends — never the next morning's.
+        opens = _hours(said)[0]
+        return _between(at, opens, NIGHT[1] if opens >= EVENING else time(23, 59, 59))
+    if kind == "evening":
+        return _between(at, EVENING, time(23, 59, 59))
     return weekend or not (BUSINESS[0] <= at < BUSINESS[1])
 
 

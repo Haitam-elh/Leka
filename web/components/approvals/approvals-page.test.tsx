@@ -425,6 +425,16 @@ describe("À valider", () => {
 
     await user.click(within(screen.getByTestId("conflict-panel")).getByRole("button", { name: "Fermer" }));
     expect(window.location.pathname).toBe("/approvals");
+
+    // Escape closes it as ✕ does, from inside it (LEKA-438).
+    await user.click(within(await screen.findByRole("table")).getByText(/SLA de payment-api/));
+    within(screen.getByTestId("conflict-panel")).getByRole("button", { name: "Fermer" }).focus();
+    await user.keyboard("{Escape}");
+    expect(window.location.pathname).toBe("/approvals");
+    expect(screen.queryByTestId("conflict-panel")).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("table")).getByText(/SLA de payment-api/).closest("tr"),
+    ).toHaveFocus();
   });
 
   it("opens the first thing waiting on a wide screen, the address left the list's", async () => {

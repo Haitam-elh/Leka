@@ -40,11 +40,14 @@ from leka.intentions.analysis import (
     Cause,
     ImpactItem,
     Note,
+    Precondition,
     Recommendation,
     Result,
     Statement,
     Subject,
+    strength_of,
 )
+from leka.knowledge import ChangeFootprint
 
 # What changed and can be undone: a cause of these kinds is proposed undone.
 UNDOABLE = frozenset({"deployment", "change", "release", "pull_request", "commit"})
@@ -52,6 +55,9 @@ UNDOABLE = frozenset({"deployment", "change", "release", "pull_request", "commit
 # — LEKA-388 calls an inference at 0.7 « probable, to confirm ».
 SURE = 0.8
 PRIORITIES = {"high": 0, "medium": 1, "low": 2}
+# What its source calls the version a change replaced: what undoing it
+# goes back to — never guessed (LEKA-441).
+PREVIOUS = ("previous_version", "previous", "from_version", "rollback_to")
 # What a compliance check that failed proposes.
 CHECKS = {
     "owner": "recommend.assign_owner",
@@ -101,7 +107,55 @@ class _Proposals:
         )
 
 
-def _for_causes(result: Result, out: _Proposals) -> None:
+def _undoing(
+    cause: Cause, footprint: ChangeFootprint | None, asked: Asked
+) -> tuple[tuple[Precondition, ...], tuple[str, ...]]:
+    """What undoing a change needs first, and what it assumes: the version
+    to go back to — its source's word, never guessed — where, and whether
+    the change is confirmed as the cause (LEKA-441)."""
+    details = footprint.details if footprint is not None else {}
+    previous = next((details[k] for k in PREVIOUS if details.get(k)), None)
+    where = (footprint.environment if footprint is not None else None) or asked.environment
+    confirmed = strength_of(cause) == "confirmed"
+    return (
+        Precondition(
+            "precondition.version_to_restore",
+            f"Go back to {previous}." if previous else "No source says which version it replaced.",
+            met=previous is not None,
+            blocking=True,
+            params={"version": previous},
+        ),
+        Precondition(
+            "precondition.environment",
+            f"In {where}." if where else "Where it ran is not known.",
+            met=where is not None,
+            blocking=True,
+            params={"environment": where},
+        ),
+        Precondition(
+            "precondition.cause_confirmed",
+            "Its source says it caused it."
+            if confirmed
+            else "It is not confirmed as the cause: undoing it may change nothing.",
+            met=confirmed,
+            blocking=False,
+            params={"cause": cause.label, "strength": strength_of(cause)},
+        ),
+        Precondition(
+            "precondition.approved",
+            "A person approves it before anything is done.",
+            met=None,
+            blocking=False,
+        ),
+    ), (() if confirmed else (cause.id,))
+
+
+def _for_causes(
+    result: Result,
+    out: _Proposals,
+    asked: Asked,
+    footprints: Mapping[object, ChangeFootprint],
+) -> None:
     acted_on = any(area.items for area in result.impact)
     for capability, cause in result.causes:
         _ = capability
@@ -109,6 +163,7 @@ def _for_causes(result: Result, out: _Proposals) -> None:
         stated = cause.basis == "stated"
         sure = stated or (cause.confidence or 0.0) >= SURE
         if cause.ref_type in UNDOABLE:
+            preconditions, assumptions = _undoing(cause, footprints.get(cause.ref_id), asked)
             out.add(
                 Recommendation(
                     id=f"rollback:{cause.ref_id}",
@@ -131,6 +186,8 @@ def _for_causes(result: Result, out: _Proposals) -> None:
                     basis=(cause.id,),
                     evidence=cause.evidence,
                     target=target,
+                    preconditions=preconditions,
+                    assumptions=assumptions,
                 )
             )
         if not sure:
@@ -350,14 +407,17 @@ def _for_impact(result: Result, out: _Proposals) -> None:
     )
 
 
-def recommend(result: Result, asked: Asked) -> tuple[Recommendation, ...]:
+def recommend(
+    result: Result, asked: Asked, changes: Sequence[ChangeFootprint] = ()
+) -> tuple[Recommendation, ...]:
     """What LEKA proposes, from what this analysis found — none from an
     analysis that failed; asking differently from one that could not
-    conclude."""
+    conclude. `changes`: what the analysis read of them, for what undoing
+    one needs."""
     if result.status == "failed":
         return ()
     out = _Proposals()
-    _for_causes(result, out)
+    _for_causes(result, out, asked, {f.change.id: f for f in changes})
     _for_findings(result.findings, asked.subjects, out)
     _for_notes((*result.uncertainties, *result.missing), result.findings, asked.subjects, out)
     _for_impact(result, out)
@@ -419,4 +479,16 @@ def as_mapping(recommendation: Recommendation) -> Mapping[str, object]:
         "target": None
         if target is None
         else {"ref_type": target.ref_type, "ref_id": str(target.ref_id), "name": target.name},
+        "preconditions": [
+            {
+                "code": p.code,
+                "text": p.text,
+                "met": p.met,
+                "blocking": p.blocking,
+                "params": _json(p.params),
+            }
+            for p in recommendation.preconditions
+        ],
+        "assumptions": list(recommendation.assumptions),
+        "executable": recommendation.executable,
     }

@@ -30,12 +30,15 @@ const TONES: Record<ConfidenceLevel, TileTone> = {
 
 export function ConfidenceBadge({
   score,
+  level: said,
   basis,
   short = false,
   detail = true,
   className,
 }: {
   score: number | null | undefined;
+  /** The level the analysis says, with why (LEKA-441): then no figure. */
+  level?: ConfidenceLevel | null;
   /** A source's word, or LEKA's inference. */
   basis?: "stated" | "inferred" | null;
   /** "Élevée" alone, under a heading that already says "Confiance". */
@@ -46,9 +49,9 @@ export function ConfidenceBadge({
 }) {
   const t = useDictionary();
   const w = t.intelligence.confidence;
-  const level = confidenceLevel(score);
-  const said = [
-    level === "unknown" ? null : `${Math.round((score ?? 0) * 100)} %`,
+  const level = said ?? confidenceLevel(score);
+  const shown = [
+    said || level === "unknown" ? null : `${Math.round((score ?? 0) * 100)} %`,
     basis ? w[basis] : null,
   ].filter(Boolean);
   return (
@@ -60,8 +63,8 @@ export function ConfidenceBadge({
       <Pill tone={TONES[level]} dot>
         {short ? w.levels[level] : w[level]}
       </Pill>
-      {detail && said.length > 0 ? (
-        <span className="text-shell-muted">{said.join(" · ")}</span>
+      {detail && shown.length > 0 ? (
+        <span className="text-shell-muted">{shown.join(" · ")}</span>
       ) : null}
     </span>
   );
@@ -74,7 +77,12 @@ export function SupportList({ items }: { items: readonly Support[] }) {
   return (
     <ul className="space-y-1.5 text-[0.8125rem]" data-testid="support">
       {items.map((item) => (
-        <li key={item.id} className="flex items-start gap-2" data-established={item.established}>
+        <li
+          key={item.id}
+          className="flex items-start gap-2"
+          data-established={item.established}
+          data-claim={item.id}
+        >
           {item.established ? (
             <CircleCheck className="mt-0.5 size-4 shrink-0 text-state-success" aria-hidden="true" />
           ) : (
@@ -83,12 +91,48 @@ export function SupportList({ items }: { items: readonly Support[] }) {
               className="mt-1 ms-0.5 size-3 shrink-0 rounded-full bg-shell-line"
             />
           )}
-          <span className={item.established ? "text-brand-navy" : "text-shell-muted"}>
-            {item.label}
-          </span>
+          <SupportLine item={item} />
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A figure, and — when the API says it — what it counts and what it was
+ * counted from, opened in place (LEKA-441): never a figure to believe. */
+function SupportLine({ item }: { item: Support }) {
+  const t = useDictionary();
+  const label = (
+    <span className={item.established ? "text-brand-navy" : "text-shell-muted"}>
+      {item.label}
+    </span>
+  );
+  if (!item.definition) return label;
+  return (
+    <details className="group min-w-0">
+      <summary className="cursor-pointer list-none outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40 [&::-webkit-details-marker]:hidden">
+        {label}{" "}
+        <span className="text-xs text-brand-violet underline-offset-2 group-open:hidden hover:underline">
+          {t.intelligence.explained.claims.how}
+        </span>
+      </summary>
+      <p className="mt-1 text-xs text-shell-muted">{item.definition}</p>
+      {item.refs?.length ? (
+        <ul className="mt-1 flex flex-wrap gap-1.5 text-xs" aria-label={t.intelligence.explained.claims.from}>
+          {item.refs.map((ref) => (
+            <li key={ref.id}>
+              {ref.href ? (
+                <a href={ref.href} className="text-brand-violet hover:underline">
+                  {ref.label}
+                </a>
+              ) : (
+                <Pill tone="neutral">{ref.label}</Pill>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </details>
   );
 }
 
