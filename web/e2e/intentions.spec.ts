@@ -24,6 +24,7 @@ test.describe("Intentions", () => {
     const asked = `Qui est responsable de payment-api ? (${Date.now()})`;
     await page.getByTestId("intention-input").fill(asked);
     await page.getByTestId("intention-submit").click();
+    await page.getByTestId("intention-launch").click();
     await expect(page.getByTestId("intention-step-2")).toBeVisible();
     // Its scope (LEKA-386): no environment held — the demo's form chose
     // none, the words say none — and the period its kind's default.
@@ -78,43 +79,62 @@ test.describe("Intentions", () => {
     await expect(row.getByTestId("intention-status")).toContainText("Annulée");
   });
 
-  test("not understood enough, it is asked, then clarified (LEKA-385)", async ({ page }) => {
+  test("what a request lacks is asked before it is launched, answered, launched (LEKA-439)", async ({
+    page,
+  }) => {
     await signIn(page);
     await page.goto("/intentions/new");
     await expect(page.getByRole("checkbox", { name: "acme/backend" })).toBeChecked();
 
-    // An action on nothing named: LEKA asks on what.
-    await page.getByTestId("intention-input").fill("Redémarre le service");
+    // An action on nothing named: LEKA asks on what — with why — and launches
+    // nothing on a doubt.
+    await page.getByTestId("intention-input").fill(`Redémarre le service (${Date.now()})`);
     await page.getByTestId("intention-submit").click();
-    await expect(page.getByTestId("intention-step-2")).toBeVisible();
-    await expect(page.getByTestId("understanding-needs")).toContainText(
-      "LEKA a besoin d'une précision",
+    const question = page.locator(
+      '[data-testid="brief-question"][data-kind="action_without_target"]',
     );
-    await expect(
-      page.locator('[data-testid="understanding-question"][data-kind="action_without_target"]'),
-    ).toContainText("Sur quoi faut-il agir ?");
-
-    await page.getByTestId("intention-follow").click();
-    await expect(page.getByTestId("intention-status")).toContainText("À préciser");
-    await expect(page.getByTestId("understanding-action").first()).toContainText(
-      "validation requise",
+    await expect(question).toContainText("Sur quoi faut-il agir ?");
+    await expect(question.getByTestId("brief-why")).toContainText(
+      "doit savoir exactement ce qu'elle touche",
     );
+    await expect(page.getByTestId("intention-launch")).toBeDisabled();
 
-    // Clarified: the same intention, its words said better.
-    await page.getByTestId("understanding-clarify").click();
-    await expect(page).toHaveURL(/\/intentions\/new\?intention=/);
-    const input = page.getByTestId("intention-input");
-    await expect(input).toHaveValue("Redémarre le service");
-    await input.fill("Redémarre payment-api");
-    await page.getByTestId("intention-submit").click();
+    // Answered in their words: read again, nothing left to ask.
+    await question.getByTestId("brief-words").fill("payment-api");
+    await question.getByTestId("brief-send").click();
+    await expect(page.getByTestId("intention-brief")).toHaveAttribute("data-decision", "analyse");
+    await expect(page.getByTestId("brief-answers")).toContainText("payment-api");
+    await page.getByTestId("intention-launch").click();
     await expect(page.getByTestId("intention-step-2")).toBeVisible();
-    await expect(page.getByTestId("understanding-needs")).toHaveCount(0);
-    await expect(page.getByTestId("understanding-goal")).toContainText("Agir");
 
     await page.getByTestId("intention-follow").click();
     await expect(page.getByTestId("intention-status")).toContainText("En analyse");
+    // Its answer kept with it.
+    await page.getByTestId("tab-overview").click();
+    await expect(page.getByTestId("brief-answers")).toContainText("payment-api");
+  });
+
+  test("waiting for an answer, it is answered on its page (LEKA-439)", async ({ page }) => {
+    await signIn(page);
+    // Asked elsewhere — the API — without what it acts on: it waits.
+    const csrf = (await page.context().cookies()).find((c) => c.name === "leka_csrf")?.value ?? "";
+    const response = await page.request.post("http://localhost:8000/api/v1/intentions", {
+      data: { text: `Redémarre le service (${Date.now()})` },
+      headers: { "X-CSRF-Token": csrf },
+    });
+    expect(response.ok()).toBe(true);
+    const { intention } = (await response.json()) as { intention: { id: string; status: string } };
+    expect(intention.status).toBe("needs_clarification");
+
+    await page.goto(`/intentions/${intention.id}/overview`);
+    await expect(page.getByTestId("intention-status")).toContainText("À préciser");
+    const question = page.locator(
+      '[data-testid="brief-question"][data-kind="action_without_target"]',
+    );
+    await question.getByTestId("brief-words").fill("payment-api");
+    await question.getByTestId("brief-send").click();
+    await expect(page.getByTestId("intention-status")).toContainText("En analyse");
     await page.getByTestId("tab-history").click();
-    // What happened to the intention itself (its whole story: LEKA-392).
     await page.getByTestId("timeline-category-intention").click();
     await expect(page.getByTestId("intention-event").last()).toContainText("Précisée");
   });

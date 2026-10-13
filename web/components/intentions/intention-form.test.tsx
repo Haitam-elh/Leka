@@ -16,7 +16,7 @@
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -47,12 +47,73 @@ vi.mock("@/lib/environment", async (original) => ({
 
 // What submitting asks (LEKA-384): the intention kept, with the context it
 // needs (LEKA-373).
-const intentionsApi = { create: vi.fn(), ask: vi.fn() };
-vi.mock("@/lib/intentions/api", async (original) => ({
-  ...(await original<typeof import("@/lib/intentions/api")>()),
-  submitIntention: intentionsApi.create,
-  reaskIntention: intentionsApi.ask,
-}));
+const intentionsApi = { create: vi.fn(), ask: vi.fn(), brief: vi.fn() };
+vi.mock("@/lib/intentions/api", async (original) => {
+  const real = await original<typeof import("@/lib/intentions/api")>();
+  return {
+    ...real,
+    submitIntention: intentionsApi.create,
+    reaskIntention: intentionsApi.ask,
+    intentions: { ...real.intentions, brief: intentionsApi.brief },
+  };
+});
+
+/** What POST /intentions/brief answers (LEKA-439): what LEKA understood,
+ * its brief, what it reads, what it takes. */
+function preview(
+  decision: "analyse" | "clarify" | "continue" | "block" = "analyse",
+  questions: Record<string, unknown>[] = [],
+) {
+  return {
+    understanding: {
+      version: 4,
+      text: "x",
+      mode: "question",
+      mode_said: null,
+      kind: "diagnose",
+      goal: { code: "explain_cause", said: ["pourquoi"], confidence: 0.9 },
+      actions: [],
+      withheld: [],
+      entities: [],
+      period: null,
+      environment: null,
+      ambiguities: [],
+      clear: decision !== "clarify" && decision !== "block",
+      scope: null,
+    },
+    brief: {
+      version: 1,
+      decision,
+      restated: null,
+      acting: false,
+      slots: [
+        { slot: "goal", state: "known", need: "blocking", value: "explain_cause", values: [], origin: "words" },
+        { slot: "target", state: "known", need: "useful", value: null, values: ["acme/backend"], origin: "company_model" },
+        { slot: "scope", state: "assumed", need: "optional", value: null, values: [], origin: "default" },
+        { slot: "expected", state: "known", need: "useful", value: "answer", values: [], origin: "words" },
+        { slot: "constraints", state: "missing", need: "optional", value: null, values: [], origin: null },
+      ],
+      questions,
+      limits: [],
+    },
+    sources: [{ id: "s1", name: "acme/backend", kind: "github", status: "active" }],
+    feasibility: {
+      verdict: "ready",
+      needed: [],
+      credits: {
+        plan: "free",
+        allowance: 200,
+        used: 12,
+        remaining: 188,
+        state: "ok",
+        enforced: true,
+        period_end: "2026-11-01T00:00:00Z",
+      },
+      estimate: null,
+      path: [],
+    },
+  };
+}
 
 /** What POST /intentions answers: the intention, and its context. */
 function created(context: Record<string, unknown>) {
@@ -79,6 +140,7 @@ function node(id: string, name: string, type = "service") {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  intentionsApi.brief.mockResolvedValue(preview());
   sourcesApi.list.mockResolvedValue({
     data: [
       { id: "s1", type: "github", display_name: "acme/backend", status: "active" },
@@ -201,14 +263,17 @@ describe("the new intention's context and scope", () => {
       screen.getByTestId("intention-input"),
       "Pourquoi acme/backend est lent depuis hier ?",
     );
+    // What LEKA understood, first — then launched.
     await user.click(screen.getByTestId("intention-submit"));
+    expect(await screen.findByTestId("intention-review")).toBeInTheDocument();
+    await user.click(screen.getByTestId("intention-launch"));
     expect(
       await screen.findByText(
         "Votre demande ne nomme rien du modèle et ne contient aucun mot à chercher : précisez-la.",
       ),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByTestId("intention-submit"));
+    await user.click(screen.getByTestId("intention-launch"));
     expect(await screen.findByTestId("intention-step-2")).toBeInTheDocument();
     // Kept: followed from Mes intentions.
     expect(screen.getByTestId("intention-follow")).toHaveAttribute("href", "/intentions/i1");
@@ -219,7 +284,64 @@ describe("the new intention's context and scope", () => {
       sources: [],
       limit: 100,
       environment: "production",
+      answers: [],
     });
+  });
+
+  it("asks what a request lacks before it is launched, and launches it with the answer", async () => {
+    // LEKA-439: an action that does not say where — asked, with the
+    // environments LEKA knows, why, and « je ne sais pas »; answered, read
+    // again; launched with the answer.
+    intentionsApi.brief.mockResolvedValueOnce(
+      preview("clarify", [
+        {
+          kind: "missing_environment",
+          slot: "scope",
+          blocking: true,
+          said: "Several environments.",
+          options: ["production", "staging"],
+          choices: [],
+          free: false,
+          answer: null,
+        },
+      ]),
+    );
+    intentionsApi.create.mockResolvedValueOnce(
+      created({ context_id: "c1", purpose: "x", elements: [], sources: [], intent: null }),
+    );
+    const user = userEvent.setup();
+    show();
+    await screen.findByRole("checkbox", { name: "acme/backend" });
+    await user.type(screen.getByTestId("intention-input"), "Redémarre acme/backend maintenant");
+    await user.click(screen.getByTestId("intention-submit"));
+
+    const question = await screen.findByTestId("brief-question");
+    expect(question).toHaveTextContent("dans lequel agir ?");
+    expect(within(question).getByTestId("brief-why")).toHaveTextContent(
+      "Pourquoi : Une action doit savoir où elle s'applique",
+    );
+    expect(within(question).getByTestId("brief-unknown")).toHaveTextContent("Je ne sais pas");
+    // Blocked until it is answered: nothing launched on a doubt.
+    expect(screen.getByTestId("intention-launch")).toBeDisabled();
+    expect(screen.getByTestId("brief-decision")).toHaveTextContent("Répondez à la question");
+
+    await user.click(within(question).getByRole("button", { name: "staging" }));
+    await waitFor(() =>
+      expect(intentionsApi.brief).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          answers: [{ question: "missing_environment", value: "staging", unknown: false }],
+        }),
+      ),
+    );
+    await waitFor(() => expect(screen.getByTestId("intention-launch")).toBeEnabled());
+    await user.click(screen.getByTestId("intention-launch"));
+    await waitFor(() =>
+      expect(intentionsApi.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          answers: [{ question: "missing_environment", value: "staging", unknown: false }],
+        }),
+      ),
+    );
   });
 
   it("asks the same intention again once it is edited", async () => {
@@ -252,11 +374,13 @@ describe("the new intention's context and scope", () => {
 
     await user.type(screen.getByTestId("intention-input"), "Pourquoi acme/backend est lent ?");
     await user.click(screen.getByTestId("intention-submit"));
+    await user.click(await screen.findByTestId("intention-launch"));
     await user.click(await screen.findByRole("button", { name: "Modifier" }));
     const input = await screen.findByTestId("intention-input");
     await user.clear(input);
     await user.type(input, "Qui est responsable de acme/backend ?");
     await user.click(screen.getByTestId("intention-submit"));
+    await user.click(await screen.findByTestId("intention-launch"));
 
     expect(await screen.findByTestId("intent-asked-again")).toHaveTextContent(
       "Version 2 de ce contexte : votre demande a changé, LEKA l'a relue.",

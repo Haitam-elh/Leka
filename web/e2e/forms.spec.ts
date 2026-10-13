@@ -30,7 +30,15 @@ test.describe("the intention journey", () => {
     // The workspace's own sources, ticked once they arrive (scripts/seed.py).
     await expect(page.getByRole("checkbox", { name: "acme/backend" })).toBeChecked();
 
+    // What LEKA understood first (LEKA-439): its goal, what it is about, what
+    // it will read, what it takes — then launched.
     await page.getByTestId("intention-submit").click();
+    const brief = page.getByTestId("intention-brief");
+    await expect(brief).toHaveAttribute("data-decision", /analyse|continue/);
+    await expect(brief.locator('[data-testid="brief-slot"][data-slot="goal"]')).toBeVisible();
+    await expect(page.getByTestId("intention-reads")).toContainText("acme/backend");
+    await expect(page.getByTestId("feasibility")).toBeVisible();
+    await page.getByTestId("intention-launch").click();
 
     // Step 2: the context it asks for, as LEKA read it (LEKA-373).
     await expect(page.getByTestId("intention-step-2")).toBeVisible();
@@ -50,6 +58,7 @@ test.describe("the intention journey", () => {
     await page.getByRole("button", { name: "Modifier" }).click();
     await page.getByTestId("intention-input").fill("Qui est responsable de payment-api ?");
     await page.getByTestId("intention-submit").click();
+    await page.getByTestId("intention-launch").click();
     const again = page.getByTestId("intent-asked-again");
     await expect(again).toContainText("Version 2 de ce contexte");
     await expect(again).toContainText("nature : Diagnostic → Responsabilité");

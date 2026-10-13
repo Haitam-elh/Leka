@@ -30,6 +30,7 @@ import {
 import { word } from "@/components/insights/leka-insights";
 import { ReadinessPanel } from "@/components/intentions/readiness";
 import { NextSteps } from "@/components/intentions/decision-step";
+import { FeasibilityCard } from "@/components/intentions/feasibility";
 import { ReadsCard } from "@/components/intentions/reads-card";
 import { ScopeCard } from "@/components/intentions/scope";
 import {
@@ -665,6 +666,8 @@ export function DecisionAside({ intention }: { intention: IntentionDetail }) {
           <ConfidencePanel score={shown.confidence} support={shown.support} level={2} />
         </>
       ) : null}
+      {/* What it takes to carry it through here (LEKA-439). */}
+      <FeasibilityCard intentionId={intention.id} />
       <NextSteps />
     </aside>
   );

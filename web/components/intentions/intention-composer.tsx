@@ -118,6 +118,7 @@ export function IntentionComposer({
   onSubmit,
   onAttachRequest,
   submitting = false,
+  submitLabel,
   className,
 }: {
   /** The field in the surrounding form. */
@@ -129,6 +130,8 @@ export function IntentionComposer({
   /** Compact only: the paperclip. Files are attached on the full step. */
   onAttachRequest?: () => void;
   submitting?: boolean;
+  /** What the button says: « Lancer l'analyse » by default. */
+  submitLabel?: string;
   className?: string;
 }) {
   const t = useDictionary();
@@ -497,7 +500,7 @@ export function IntentionComposer({
                 data-testid="intention-submit"
               >
                 <Send className="size-4" aria-hidden="true" />
-                {t.composer.submit}
+                {submitLabel ?? t.composer.submit}
               </Button>
             </div>
           </div>

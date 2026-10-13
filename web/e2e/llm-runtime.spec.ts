@@ -30,14 +30,12 @@ test.describe("LLM runtime", () => {
     // Read by the model: its goal settled, not stopped for a question —
     // what LEKA understood is step 1's.
     await page.getByTestId("tab-overview").click();
-    const understood = page.getByTestId("intention-understanding");
-    await expect(understood.getByTestId("understanding-goal")).toContainText(
+    const understood = page.getByTestId("intention-brief");
+    await expect(understood.locator('[data-testid="brief-slot"][data-slot="goal"]')).toContainText(
       "Trouver le responsable",
     );
-    await expect(understood.getByTestId("understanding-restated")).toContainText(
-      "Lu par Gemini 3.8 Flash",
-    );
-    await expect(understood.getByTestId("understanding-needs")).toHaveCount(0);
+    await expect(understood.getByTestId("brief-restated")).toContainText("Lu par Gemini 3.8 Flash");
+    await expect(understood.getByTestId("brief-questions")).toHaveCount(0);
 
     analyse(id);
 

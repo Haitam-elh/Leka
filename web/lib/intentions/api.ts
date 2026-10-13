@@ -71,6 +71,18 @@ export type IntentionStatus = Intention["status"];
 export type Routing = components["schemas"]["RoutingRead"];
 export type RoutedCandidate = components["schemas"]["RoutedCandidateRead"];
 export type IntentionPhase = "active" | "scheduled" | "finished" | "archived";
+/** What LEKA must know, knows and asks of an intention (LEKA-439). */
+export type IntentionBrief = components["schemas"]["IntentionBrief"];
+export type BriefSlot = components["schemas"]["BriefSlotRead"];
+export type BriefQuestion = components["schemas"]["BriefQuestionRead"];
+export type IntentionAnswer = components["schemas"]["IntentionAnswer"];
+/** Before it is asked: what LEKA understood, read, and what it takes. */
+export type IntentionPreview = components["schemas"]["IntentionPreview"];
+/** What it takes to carry it through here (LEKA-439). */
+export type Feasibility = components["schemas"]["FeasibilityRead"];
+export type PathStep = components["schemas"]["PathStepRead"];
+/** An intention asked, with what its asker answered. */
+export type AskWithAnswers = IntentAsk & { answers?: IntentionAnswer[] };
 
 export interface IntentionPage {
   data: Intention[];
@@ -128,9 +140,20 @@ export const intentions = {
   /** Analysed again: queued — false when one is already on its way. */
   analyse: (id: string) =>
     apiFetch<{ queued: boolean }>(`${BASE}/${id}/analyse`, { method: "POST" }),
+  /** Before it is asked (LEKA-439): what LEKA would make of it — nothing kept. */
+  brief: (ask: AskWithAnswers) =>
+    apiFetch<IntentionPreview>(`${BASE}/brief`, { method: "POST", body: JSON.stringify(ask) }),
+  /** What its asker answers to LEKA's questions: it is asked again with them. */
+  answer: (id: string, answers: IntentionAnswer[]) =>
+    apiFetch<IntentionCreated>(`${BASE}/${id}/answers`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+    }),
+  /** What it takes to carry it through here, now. */
+  feasibility: (id: string) => apiFetch<Feasibility>(`${BASE}/${id}/feasibility`),
 };
 
-export function submitIntention(ask: IntentAsk): Promise<IntentionCreated> {
+export function submitIntention(ask: AskWithAnswers): Promise<IntentionCreated> {
   return intentions.create(ask);
 }
 

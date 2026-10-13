@@ -32,6 +32,8 @@ import {
   STEPS,
   stepOf,
 } from "@/components/intentions/intention-stepper";
+import { BriefView } from "@/components/intentions/brief";
+import { FeasibilityCard } from "@/components/intentions/feasibility";
 import { kindOf, StatusPill } from "@/components/intentions/intentions-list";
 import { ReadinessPanel } from "@/components/intentions/readiness";
 import { linkedLabel } from "@/components/intentions/link-words";
@@ -43,7 +45,7 @@ import { useConfirm } from "@/components/interactions/confirm";
 import { Pill } from "@/components/intelligence/pill";
 import { timeAgo } from "@/components/knowledge/time";
 import { PageContainer, PageHeader } from "@/components/shell/page-container";
-import { useCurrentUser } from "@/components/shell/shell-provider";
+import { useCurrentUser, usePermissions } from "@/components/shell/shell-provider";
 import { ErrorState } from "@/components/states/error-state";
 import { StatePanel } from "@/components/states/state-panel";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -52,7 +54,7 @@ import { ApiError } from "@/lib/api";
 import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { IntentionDetail, IntentionLink } from "@/lib/intentions/api";
-import { useIntention, useIntentionChange } from "@/lib/intentions/queries";
+import { useAnswer, useIntention, useIntentionChange } from "@/lib/intentions/queries";
 import { buildBreadcrumb } from "@/lib/navigation/breadcrumb";
 import { matchRoute } from "@/lib/navigation/active";
 import { useNamePage } from "@/lib/navigation/page-name";
@@ -414,7 +416,11 @@ function Overview({ intention }: { intention: IntentionDetail }) {
       <div className="flex flex-col gap-4">
         {/* What it asks to do, put to a decision (LEKA-390). */}
         <IntentionDecision intentionId={intention.id} />
-        {intention.understanding ? (
+        {/* What LEKA understood and still asks, answered here (LEKA-439);
+            an intention kept before its brief: what LEKA understood. */}
+        {intention.brief && intention.understanding ? (
+          <BriefPanel intention={intention} />
+        ) : intention.understanding ? (
           <UnderstandingPanel
             understanding={intention.understanding}
             intentionId={intention.status === "needs_clarification" ? intention.id : undefined}
@@ -437,6 +443,8 @@ function Overview({ intention }: { intention: IntentionDetail }) {
         </Card>
       </div>
       <div className="flex flex-col gap-4">
+        {/* What it takes to carry it through here (LEKA-439). */}
+        <FeasibilityCard intentionId={intention.id} />
         {/* Whether its context can ground its analysis (LEKA-387). */}
         {intention.readiness ? <ReadinessPanel readiness={intention.readiness} /> : null}
         {/* The capability it goes to, and why (LEKA-398). */}
@@ -467,5 +475,39 @@ function Overview({ intention }: { intention: IntentionDetail }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** Its brief, its questions answered here by its asker or who may approve,
+ * while it waits for them — answered, it is asked again (LEKA-439). */
+function BriefPanel({ intention }: { intention: IntentionDetail }) {
+  const t = useDictionary();
+  const me = useCurrentUser();
+  const steward = usePermissions()?.includes("intention:approve") ?? false;
+  const answer = useAnswer(intention.id);
+  const yours = Boolean(me?.id) && intention.created_by === me?.id;
+  const open =
+    !intention.archived_at &&
+    (intention.status === "needs_clarification" || intention.status === "analysing");
+  if (!intention.brief || !intention.understanding) return null;
+  return (
+    <BriefView
+      brief={intention.brief}
+      understanding={intention.understanding}
+      answers={intention.answers ?? []}
+      pending={answer.isPending}
+      onAnswer={
+        (yours || steward) && open
+          ? (given) =>
+              answer.mutate([given], {
+                onSuccess: () => notify.success({ title: t.intentions.brief.send }),
+                onError: (error) =>
+                  notify.error({
+                    title: error instanceof ApiError ? error.message : String(error),
+                  }),
+              })
+          : undefined
+      }
+    />
   );
 }

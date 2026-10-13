@@ -45,7 +45,9 @@ export async function ask(page: Page, words: string): Promise<string> {
   await page.goto("/intentions/new");
   await expect(page.getByRole("checkbox", { name: "acme/backend" })).toBeChecked();
   await page.getByTestId("intention-input").fill(words);
+  // What LEKA understood first (LEKA-439), then launched.
   await page.getByTestId("intention-submit").click();
+  await page.getByTestId("intention-launch").click();
   await expect(page.getByTestId("intention-step-2")).toBeVisible();
   await page.getByTestId("intention-follow").click();
   await expect(page).toHaveURL(/\/intentions\/[0-9a-f-]{36}$/);
