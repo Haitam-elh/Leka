@@ -32,6 +32,7 @@ VERSIONS = {
     "code-review": "1.2.0",
     "debug-assistant": "1.2.0",
     "documentation-assistant": "1.2.0",
+    "infrastructure-analysis": "1.2.0",
     "release-analysis": "1.2.0",
     "security-review": "1.2.0",
     "test-analysis": "1.2.0",
@@ -401,4 +402,22 @@ def test_the_release_analysis_caps_its_verdict() -> None:
     ):
         assert step in said, step
     assert "Une CI verte ne prouve pas" in said
+    assert "affaan-m/ECC" in said
+
+
+def test_the_infrastructure_analysis_finds_what_falls_together() -> None:
+    # LEKA-447: ECC's kubernetes-patterns reliability and security lists,
+    # rewritten at the level of the resources LEKA sees — environments kept
+    # apart, redundancy, least sharing, labelling, the unknown kept unknown.
+    said = {d.key: d for d in catalogue()}["infrastructure-analysis"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "Par environnement",
+        "La redondance des critiques",
+        "Le moindre partage",
+        "L'étiquetage",
+        "Ce que le modèle ne dit pas",
+    ):
+        assert step in said, step
+    assert "c'est inconnu, pas" in said
     assert "affaan-m/ECC" in said
