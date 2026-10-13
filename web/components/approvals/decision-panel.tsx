@@ -7,6 +7,7 @@ import { wordDecision } from "@/components/approvals/items";
 import { DecisionCard } from "@/components/decisions/decision-card";
 import { timeAgo } from "@/components/knowledge/time";
 import { useCurrentUser } from "@/components/shell/shell-provider";
+import { closeOnEscape } from "@/components/interactions/escape";
 import { routes } from "@/config/routes";
 import type { DecisionItem } from "@/lib/decisions";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -27,6 +28,7 @@ export function DecisionPanel({ item, onClose }: { item: DecisionItem; onClose: 
     <aside
       aria-label={fill(t.approvals.conflict.panel.label, { title })}
       data-testid="decision-panel"
+      onKeyDown={closeOnEscape(onClose)}
       className="flex flex-col gap-4 self-start rounded-xl border border-shell-line bg-white p-4 xl:sticky xl:top-4"
     >
       <header className="flex items-start gap-3">

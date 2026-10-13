@@ -177,7 +177,9 @@ describe("the board", () => {
     const chosen = within(screen.getByTestId("architecture-panel"));
     expect(chosen.getByRole("heading")).toHaveTextContent("leka");
 
-    await user.click(screen.getByRole("button", { name: "Fermer le détail" }));
+    // Escape closes it as ✕ does, from inside it (LEKA-438).
+    screen.getByRole("button", { name: "Fermer le détail" }).focus();
+    await user.keyboard("{Escape}");
     expect(screen.queryByTestId("architecture-panel")).not.toBeInTheDocument();
   });
 

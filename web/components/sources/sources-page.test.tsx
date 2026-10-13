@@ -265,6 +265,15 @@ describe("the panel", () => {
     expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
   });
 
+  it("closes the panel on Escape, from inside it (LEKA-438)", async () => {
+    renderPage();
+    await userEvent.click(await screen.findByText("Acme GitLab"));
+    const panel = screen.getByRole("complementary", { name: "Détail de Acme GitLab" });
+    within(panel).getByRole("button", { name: "Fermer le détail" }).focus();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
+  });
+
   it("keeps the open source in the address, and opens it from there", async () => {
     renderPage();
     await userEvent.click(await screen.findByText("Acme GitLab"));
