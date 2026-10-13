@@ -2,7 +2,7 @@
 name: code-review
 title: "Revue de code"
 description: "Use when someone asks for a review of a pull request or a recent change to a repository — what it touches, what it risks, who should look at it — from what the code hosting sources say."
-version: 1.1.0
+version: 1.2.0
 category: development
 entity_types: [repository, pull_request, commit, service, person, team, change, deployment, release, application, incident, business_capability, business_process]
 requires: ["github|gitlab|bitbucket"]
@@ -45,15 +45,52 @@ lis (`read_entity`), regarde ce qui s'est passé (`what_happened`).
 Quand la demande ne dit pas sur quoi travailler et que le contexte ne le montre pas,
 dis-le et arrête-toi : ne devine pas.
 
+## Sa méthode
+
+Une revue utile dit peu, et le prouve. Avant d'écrire, dans cet ordre :
+
+1. **Le périmètre annoncé contre le périmètre réel.** Ce que la pull request dit
+   faire (son titre, sa description, le ticket lié) contre ce qu'elle touche
+   d'après les sources (services, dépôts, commits). Ce qui déborde — un service
+   que rien n'annonçait — ou ce qui manque — un ticket qui demandait plus —
+   est un constat ; un écart que les sources ne montrent pas n'en est pas un.
+2. **La porte avant chaque constat.** Quatre questions ; une seule réponse
+   « non » ou « je ne sais pas », et le constat baisse d'un cran ou disparaît :
+   - puis-je citer ce sur quoi il repose ([id]) ?
+   - puis-je dire le scénario concret — ce qui se passe, pour qui, quand ?
+   - ai-je regardé autour : ses dépendances, ses incidents récents, ses responsables ?
+   - la sévérité se défend-elle devant le responsable du service ?
+3. **La sévérité**, une par constat :
+   - **critique** — un service critique ou des données sensibles touchés sans
+     relecteur, ou juste après un incident de la même zone ;
+   - **élevé** — un risque réel et nommé que rien dans les sources ne couvre ;
+   - **moyen** — à regarder, sans urgence ;
+   - **faible** — une remarque.
+   Un constat **critique** ou **élevé** donne les trois : ce qu'il cite ([id]),
+   le scénario, et pourquoi rien ne l'empêche déjà. Sinon, il descend à moyen.
+4. **La confiance**, de 1 à 10. Sous 5, le constat va dans les limites, pas
+   dans la revue.
+
+Ne signale pas ce qu'un relecteur expérimenté de l'équipe ne changerait pas :
+la seule taille d'un changement, un test que tu ne vois pas (que tu ne voies
+pas un test ne prouve pas qu'il manque), une convention que les sources ne
+montrent pas. Regroupe ce qui se ressemble : un constat, pas cinq.
+
+**Zéro constat est une revue valide.** Ne fabrique rien pour paraître rigoureux.
+
 ## Ce qu'il produit
 
 Un document markdown, dans la langue de la demande :
 
 1. **Ce que fait le changement** — en une phrase, d'après ce que disent les sources.
-2. **Ce qu'il touche** — services, dépôts, équipes concernées.
-3. **Risques** — taille, zones sensibles, absence de relecteur, changement proche d'un incident récent.
-4. **Qui devrait relire** — d'après les responsables et contributeurs connus.
-5. **Limites** — LEKA ne lit pas le diff ligne à ligne : ce qui ne peut pas être jugé sans lui est dit.
+2. **Ce qu'il touche** — services, dépôts, équipes concernées ; l'écart avec ce qui était annoncé.
+3. **Constats** — un tableau : sévérité, confiance, constat, ce qu'il cite ([id]).
+   Vide s'il n'y a rien : dis-le.
+4. **Avis** — favorable, prudence (un constat élevé) ou à revoir (un constat
+   critique). Un avis, jamais une décision : la pull request reste à ses relecteurs.
+5. **Qui devrait relire** — d'après les responsables et contributeurs connus.
+6. **Limites** — LEKA ne lit pas le diff ligne à ligne : ce qui ne peut pas être
+   jugé sans lui est dit, avec les constats de faible confiance.
 
 ## Ce qu'il ne doit jamais faire
 
@@ -67,3 +104,7 @@ Un document markdown, dans la langue de la demande :
 ## Ses compétences
 
 Il peut aussi appeler les compétences `change-review`, `repository-profile` de la bibliothèque LEKA (LEKA-401, docs/skills.md) : la revue d'un changement (ce qu'il a touché, ce qui est critique, jusqu'où il porte) et le profil du dépôt (qui le tient, ce qu'il construit, son activité). Chacune est une lecture vérifiée, faite avec les droits de la personne qui demande, et gardée. Il s'appuie sur leurs signaux (`signals`) et cite ce qu'elles ont lu ; ce qu'une compétence ne dit pas, il ne l'invente pas.
+
+<sub>Méthode adaptée de l'agent `code-reviewer` d'[ECC](https://github.com/affaan-m/ECC) @ `b92f181`
+(MIT, © 2026 Affaan Mustafa) et du skill `review` de [gstack](https://github.com/garrytan/gstack)
+@ `945ac30` (MIT, © 2026 Garry Tan), réécrite pour ce que LEKA voit. Voir `THIRD_PARTY_LICENSES.md`.</sub>
