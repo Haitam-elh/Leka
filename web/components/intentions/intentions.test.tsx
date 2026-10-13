@@ -187,7 +187,7 @@ describe("an intention's page", () => {
       "Pourquoi Billing API est lente depuis hier ?",
     );
     expect(screen.getByText("Environnement · production")).toBeInTheDocument();
-    expect(screen.getByText("2 service(s) choisi(s)")).toBeInTheDocument();
+    expect(screen.getByText("2 services choisis")).toBeInTheDocument();
     expect(screen.getByText(/LEKA n'a pas encore conclu/)).toBeInTheDocument();
     const links = screen.getAllByTestId("intention-link");
     expect(links[0]).toHaveTextContent("Pourquoi Billing API est lente depuis hier ? · v2");
@@ -558,7 +558,7 @@ describe("an intention's page", () => {
     expect(within(panel).getByTestId("readiness-status")).toHaveTextContent(
       "Bloqué avant l'analyse",
     );
-    expect(panel).toHaveTextContent("6 élément(s) · 2 source(s) · version 2");
+    expect(panel).toHaveTextContent("6 éléments · 2 sources · version 2");
     expect(within(panel).getByTestId("readiness-facets")).toHaveTextContent("métier · 1");
     const critical = within(panel).getByTestId("readiness-critical");
     expect(critical).not.toHaveTextContent("None of the sources");

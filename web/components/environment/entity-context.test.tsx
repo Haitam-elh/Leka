@@ -428,7 +428,7 @@ describe("the context tab", () => {
       strategy: "hybrid",
       min_relevance: 0.05,
     }, expect.anything());
-    expect(notify.success).toHaveBeenCalledWith({ title: "Contexte assemblé : 5 élément(s)." });
+    expect(notify.success).toHaveBeenCalledWith({ title: "Contexte assemblé : 5 éléments." });
     expect(await screen.findByTestId("entity-context")).toBeInTheDocument();
   });
 
@@ -489,7 +489,7 @@ describe("the context tab", () => {
     expect(rows[1]).toHaveTextContent("62 %");
     expect(rows[3]).toHaveTextContent("Trouvé par Chronologie");
     const report = screen.getByTestId("context-retrieval");
-    expect(report).toHaveTextContent("Recherche · 2 trouvé(s)");
+    expect(report).toHaveTextContent("Recherche · 2 trouvés");
     expect(report).toHaveTextContent("Contenu · en échec");
     expect(report).toHaveTextContent("Chemins · sans objet");
     expect(within(report).getByText(/Contenu/)).toHaveAttribute(
@@ -519,7 +519,7 @@ describe("the context tab", () => {
     const diff = await screen.findByTestId("context-diff");
     expect(api.diff).toHaveBeenCalledWith(CONTEXT, 1, 2);
     expect(diff).toHaveTextContent(
-      "1 ajouté(s) · 1 retiré(s) · 1 modifié(s) · 3 inchangé(s)",
+      "1 ajouté · 1 retiré · 1 modifié · 3 inchangés",
     );
     expect(diff).toHaveTextContent("+ Ledger DB");
     expect(diff).toHaveTextContent("− Payments");
@@ -694,7 +694,7 @@ describe("the context tab", () => {
     const rows = await screen.findAllByTestId("context-element");
     expect(within(rows[0]).getByTestId("element-score")).toHaveTextContent("96 %");
     expect(within(rows[0]).getByTestId("element-disputed")).toHaveTextContent("Conflit");
-    expect(rows[1]).toHaveTextContent("+1 doublon(s)");
+    expect(rows[1]).toHaveTextContent("+1 doublon");
     expect(within(rows[1]).queryByTestId("element-disputed")).toBeNull();
 
     await user.click(within(rows[0]).getByRole("button", { name: "Provenance de Billing API" }));
@@ -724,7 +724,7 @@ describe("the context tab", () => {
     const left = screen.getByRole("region", { name: "Laissés de côté (2)" });
     expect(left).toHaveTextContent("Seuil 5 % · la fiabilité pèse jusqu'à 40 % du score");
     expect(left).toHaveTextContent("Doublon1Peu pertinent1Au-delà du budget0");
-    expect(left).toHaveTextContent("2 lien(s) partis avec une extrémité");
+    expect(left).toHaveTextContent("2 liens partis avec une extrémité");
     await user.click(within(left).getByRole("button", { name: "Voir la liste" }));
     expect(within(left).getByTestId("left-out-list")).toHaveTextContent(
       "checkout-web · Doublon · 42 % · doublon de Checkout",
@@ -732,10 +732,10 @@ describe("the context tab", () => {
 
     // The figures say why, and what is disputed is said uncertain.
     expect(screen.getByTestId("context-used")).toHaveTextContent(
-      "1 doublon(s) · 1 peu pertinent(s) · 0 au-delà du budget",
+      "1 doublon · 1 peu pertinent · 0 au-delà du budget",
     );
     expect(screen.getByTestId("uncertainties")).toHaveTextContent(
-      "Ses sources se contredisent sur 1 point(s) : voir les conflits.",
+      "Ses sources se contredisent sur 1 point : voir les conflits.",
     );
   });
 
@@ -779,7 +779,7 @@ describe("the context tab", () => {
     const panel = await screen.findByTestId("context-freshness");
     expect(panel).toHaveAttribute("data-state", "stale");
     expect(panel).toHaveTextContent("Plus à jour : le modèle a changé");
-    expect(panel).toHaveTextContent("2 changement(s) du modèle touchent ce qu'il contient.");
+    expect(panel).toHaveTextContent("2 changements du modèle touchent ce qu'il contient.");
     await user.click(within(panel).getByRole("button", { name: "Voir les changements (2)" }));
     const pending = within(screen.getByTestId("context-pending")).getAllByRole("listitem");
     expect(pending.map((item) => item.textContent)).toEqual([
@@ -892,12 +892,12 @@ describe("the context tab", () => {
     );
     expect(latest).toHaveTextContent(/v2 · mise à jour par LEKA/);
     expect(within(latest).getByTestId("context-version-why")).toHaveTextContent(
-      "après 3 changement(s) du modèle · +1 −2 ~0",
+      "après 3 changements du modèle · +1 −2 ~0",
     );
     const checks = within(await screen.findByTestId("context-checks")).findAllByRole("listitem");
     const [followed, asked] = await checks;
     expect(followed).toHaveTextContent(/Le modèle a changé .* · par LEKA/);
-    expect(followed).toHaveTextContent("version 2 créée · après 3 changement(s)");
+    expect(followed).toHaveTextContent("version 2 créée · après 3 changements");
     expect(asked).toHaveTextContent("rien de changé : la version 1 tient");
     expect(asked).not.toHaveTextContent("par LEKA");
   });

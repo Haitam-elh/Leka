@@ -62,12 +62,12 @@ test("a new account is confirmed from its email, then signs in", async ({ page }
   // The tools chosen open the wizard at their connection, one by one.
   await page.getByRole("button", { name: /^GitHub/ }).click();
   await page.getByRole("button", { name: /^Splunk/ }).click();
-  await expect(page.getByText("2 outil(s) choisi(s)")).toBeVisible();
+  await expect(page.getByText("2 outils choisis")).toBeVisible();
   await page.getByRole("button", { name: "Connecter mes outils" }).click();
   const wizard = page.getByRole("dialog");
   await expect(wizard.getByLabel(/Token d'accès/)).toBeVisible();
   await wizard.getByRole("button", { name: "Fermer" }).click();
-  await expect(page.getByText("0 sur 2 connecté(s)")).toBeVisible();
+  await expect(page.getByText("0 sur 2 connectés")).toBeVisible();
   await page.getByRole("link", { name: "Terminer" }).click();
   await expect(page).toHaveURL(/\/sources$/);
 });

@@ -145,7 +145,7 @@ describe("a decision's governance", () => {
     const card = await screen.findByTestId("decision");
     expect(screen.getByTestId("decision-risk")).toHaveTextContent("Risque critique");
     expect(screen.getByTestId("decision-requirement")).toHaveTextContent(
-      "2 validation(s) requise(s) par une autre personne que le demandeur, dont un propriétaire",
+      "2 validations requises par une autre personne que le demandeur, dont un propriétaire",
     );
     const reasons = within(card).getByTestId("decision-reasons");
     expect(reasons).toHaveTextContent("L'analyse l'estime faible");

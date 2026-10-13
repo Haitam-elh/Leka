@@ -32,7 +32,7 @@ test.describe("Insights LEKA", () => {
     const lines = page.getByTestId("insights-findings").getByRole("listitem");
     await expect(lines).toHaveCount(2);
     await expect(lines.nth(0)).toContainText(
-      "Déploiement « payment-api v2.8.4 » : 1 incident(s) ensuite",
+      "Déploiement « payment-api v2.8.4 » : 1 incident ensuite",
     );
     await expect(lines.nth(1)).toContainText("redis-sessions a disparu de vos sources");
   });

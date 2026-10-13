@@ -147,8 +147,8 @@ describe("an incident's analysis", () => {
     );
     const sure = screen.getByRole("region", { name: "Confiance de l'analyse" });
     expect(sure).toHaveTextContent("Moyenne");
-    expect(sure).toHaveTextContent("1 source(s) lue(s)");
-    expect(sure).toHaveTextContent("1 changement(s) juste avant lui");
+    expect(sure).toHaveTextContent("1 source lue");
+    expect(sure).toHaveTextContent("1 changement juste avant lui");
     expect(screen.getByTestId("impact-level")).toHaveTextContent("Moyen");
     expect(screen.getByTestId("impact")).toHaveTextContent("d'après la gravité déclarée (sev2)");
     expect(screen.getByTestId("intelligence-proposal")).toHaveTextContent(

@@ -27,7 +27,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
-import type { Dictionary, Locale } from "@/lib/i18n/dictionaries";
+import { type Dictionary, type Locale, setPluralLocale } from "@/lib/i18n/dictionaries";
 import { type Direction, direction, formatLocale, isListed, regionOf } from "@/lib/i18n/languages";
 import { isPseudo } from "@/lib/i18n/pseudo";
 import {
@@ -121,6 +121,9 @@ export function LocaleProvider({
   const words = useMemo(() => wordsFor(language, workspaceLanguage), [language, workspaceLanguage]);
   const dir: Direction = language === "ar-XB" ? "rtl" : direction(words.shown);
   const format = isPseudo(words.shown) ? "en" : formatLocale(words.shown, region ?? heardRegion);
+  // fill() picks "1 source" or "2 sources" by these rules — set while
+  // rendering, so the first paint already speaks them.
+  setPluralLocale(isPseudo(words.shown) ? "en" : words.shown);
 
   // The document says what it is written in, for screen readers, fonts,
   // hyphenation and spelling — and which way it reads.

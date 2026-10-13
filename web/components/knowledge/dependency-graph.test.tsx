@@ -73,7 +73,7 @@ describe("DependencyGraph", () => {
     expect(text).toHaveTextContent("Payment DB est déployé sur AWS");
     expect(text).not.toHaveTextContent("ghost");
     expect(
-      screen.getByRole("heading", { name: "Graphe des dépendances — 5 entité(s), 4 relation(s)" }),
+      screen.getByRole("heading", { name: "Graphe des dépendances — 5 entités, 4 relations" }),
     ).toBeInTheDocument();
   });
 

@@ -380,7 +380,7 @@ describe("its passes", () => {
       await screen.findByRole("heading", { name: "Historique des synchronisations" })
     ).closest("section") as HTMLElement;
     const progress = await within(section).findByText(/Lecture des commits/);
-    expect(progress).toHaveTextContent("Lecture des commits : 1 500 élément(s) jusqu'ici");
+    expect(progress).toHaveTextContent("Lecture des commits : 1 500 éléments jusqu'ici");
     expect(progress).toHaveAttribute("role", "status");
     const rows = within(section).getAllByRole("row").slice(1);
     expect(within(rows[1]).getByText("Un administrateur")).toBeInTheDocument();
@@ -488,7 +488,7 @@ describe("its reception, for a source its system sends to", () => {
       within(rows[0]).getByText("« tickets », record 0: no id at « id »."),
     ).toBeInTheDocument();
     expect(within(rows[1]).getByText("Enregistrée")).toBeInTheDocument();
-    expect(within(rows[1]).getByText("1 · 1 supprimé(s)")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("1 · 1 supprimé")).toBeInTheDocument();
     expect(within(rows[2]).getByText("Ignorée")).toBeInTheDocument();
     expect(
       within(rows[2]).getByText("Aucune ressource de la définition ne la reconnaît."),

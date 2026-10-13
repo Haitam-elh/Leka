@@ -69,16 +69,16 @@ export const RECOMMENDATIONS: Recommendation[] = [
 ];
 
 export const SUPPORT: Support[] = [
-  { id: "sources", label: "1 source(s) lue(s)", established: true },
-  { id: "steps", label: "3 étape(s) dans sa chronologie", established: true },
-  { id: "before", label: "1 changement(s) juste avant lui", established: true },
+  { id: "sources", label: "1 source lue", established: true },
+  { id: "steps", label: "3 étapes dans sa chronologie", established: true },
+  { id: "before", label: "1 changement juste avant lui", established: true },
 ];
 
 export const COMPLETE: Analysis = {
   status: "complete",
   summary:
     "payment-api p99 latency above 2s : clos, sev2. Il a duré 4 h. Il touche payment-api. " +
-    "Cause déclarée par sa source : payment-api v2.8.4. 2 élément(s) en dépendent.",
+    "Cause déclarée par sa source : payment-api v2.8.4. 2 éléments en dépendent.",
   support: SUPPORT,
   missing: [],
   findings: [
@@ -149,7 +149,7 @@ export const COMPLETE: Analysis = {
     riskBasis: "d'après la gravité déclarée (sev2)",
   },
   recommendations: RECOMMENDATIONS,
-  uncertainties: ["1 changement(s) juste avant lui, sans lien établi avec lui."],
+  uncertainties: ["1 changement juste avant lui, sans lien établi avec lui."],
   confidence: 0.83,
 };
 

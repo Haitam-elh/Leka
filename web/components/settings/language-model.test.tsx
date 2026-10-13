@@ -176,17 +176,17 @@ describe("the language model", () => {
     const used = await screen.findByTestId("model-usage");
     expect(screen.getByTestId("model-usage-calls")).toHaveTextContent("12");
     expect(screen.getByTestId("model-usage-tokens")).toHaveTextContent("12");
-    expect(used).toHaveTextContent("2 appel(s) à un modèle sans prix publié non comptés");
+    expect(used).toHaveTextContent("2 appels à un modèle sans prix publié non comptés");
     expect(used).toHaveTextContent("Comprendre une demande");
     expect(screen.getByTestId("model-call")).toHaveTextContent("Rédiger une réponse");
     expect(screen.getByTestId("model-call")).toHaveTextContent("gemini-3.8-flash-001");
     // What the runtime had models do, by how it ended (LEKA-429).
     expect(screen.getByTestId("model-runs")).toHaveTextContent(
-      "Exécutions : 9 réussie(s) · 1 hors délai",
+      "Exécutions : 9 réussies · 1 hors délai",
     );
     // What one intention costs, measured — and what a budget buys.
     expect(screen.getByTestId("model-per-intention")).toHaveTextContent(
-      "Une intention coûte en moyenne 1,1 ¢, mesuré sur 4 intention(s) : environ 892 intentions pour 10 $.",
+      "Une intention coûte en moyenne 1,1 ¢, mesuré sur 4 intentions : environ 892 intentions pour 10 $.",
     );
     expect(screen.getByTestId("model-cached")).toHaveTextContent("50 % des tokens envoyés relus");
     // Where the money goes, by use.
