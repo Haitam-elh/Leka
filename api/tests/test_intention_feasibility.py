@@ -34,11 +34,11 @@ END = datetime(2026, 11, 1, tzinfo=UTC)
 def month(plan: str = "free", used: float = 20, state: str = "ok") -> CreditsLeftRead:
     allowance = CREDITS[plan]
     return CreditsLeftRead(
-        plan=plan,  # type: ignore[arg-type]
+        plan=plan,
         allowance=allowance,
         used=used,
         remaining=max(allowance - used, 0),
-        state=state,  # type: ignore[arg-type]
+        state=state,
         enforced=True,
         period_end=END,
     )

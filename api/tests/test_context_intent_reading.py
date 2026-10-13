@@ -209,7 +209,9 @@ def test_before_anything_is_read_what_is_missing_is_said() -> None:
     detail = gaps[0].detail
     assert (detail["tried"], detail["maybe"]) == (["api", "paiement"], ["Payment API runbook"])
     # The same, by id, to be chosen (LEKA-439).
-    assert [t["name"] for t in detail["maybe_things"]] == ["Payment API runbook"]  # type: ignore[union-attr,index]
+    things = detail["maybe_things"]
+    assert isinstance(things, list)
+    assert [t["name"] for t in things] == ["Payment API runbook"]
     # A kind that needs no subject, sources that can read it: nothing.
     assert (
         plan_gaps(
