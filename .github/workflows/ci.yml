@@ -280,7 +280,18 @@ jobs:
           df -h /
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
             /opt/hostedtoolcache/CodeQL
+          # The self-hosted runner keeps its disk between jobs, and CD builds
+          # there too: on 2026-10-13 it filled, and the databases below could
+          # no longer write. What no container uses goes — volumes, LEKA's
+          # own release images (in the registry already), build cache a day
+          # old — and what is left is said, so a full disk shows what filled it.
+          docker volume prune -f > /dev/null
+          docker image prune -af \
+            --filter "label=org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            > /dev/null
+          docker builder prune -f --filter until=24h > /dev/null || true
           df -h /
+          docker system df
 
       - name: Start Oracle
         # A customer's Oracle, for tests/test_oracle_connector.py (LEKA-349).
@@ -294,7 +305,7 @@ jobs:
         # a cancelled run left behind holds the name and the ports.
         working-directory: .
         run: |
-          docker rm -f oracle > /dev/null 2>&1 || true
+          docker rm -f -v oracle > /dev/null 2>&1 || true
           docker run -d --name oracle -p 1521:1521 -p 2484:2484 \
             -e ORACLE_PASSWORD=Leka-local-1 \
             -v "$PWD/api/tests/oracle:/container-entrypoint-startdb.d:ro" \
@@ -329,7 +340,7 @@ jobs:
         # or none. Tests only; nothing in production uses it.
         working-directory: .
         run: |
-          docker rm -f minio > /dev/null 2>&1 || true
+          docker rm -f -v minio > /dev/null 2>&1 || true
           docker run -d --name minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
@@ -354,7 +365,8 @@ jobs:
         # and ports through the next jobs.
         if: always()
         working-directory: .
-        run: docker rm -f oracle minio > /dev/null 2>&1 || true
+        # -v: MinIO's /data is a volume of its own, left behind otherwise.
+        run: docker rm -f -v oracle minio > /dev/null 2>&1 || true
 
   web:
     name: web — lint, types, build

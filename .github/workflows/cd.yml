@@ -161,6 +161,19 @@ jobs:
           cache-to: ${{ !vars.CI_RUNS_ON && 'type=gha,mode=max,scope=web' || '' }}
           provenance: ${{ vars.CI_RUNS_ON && 'false' || '' }}
 
+      # Docker's own builder keeps what it built on the self-hosted runner:
+      # every release's two images, and their build cache, on a 19 GB disk
+      # that CI's databases share. On 2026-10-13 they could no longer write
+      # (No space left on device). The images are in the registry once
+      # pushed; the cache keeps what the next build reuses, for a day.
+      - name: Leave the runner its disk
+        if: always() && vars.CI_RUNS_ON
+        run: |
+          docker image rm "${{ steps.what.outputs.registry }}/api:${{ steps.what.outputs.release }}" \
+            "${{ steps.what.outputs.registry }}/web:${{ steps.what.outputs.release }}" > /dev/null 2>&1 || true
+          docker builder prune -f --filter until=24h
+          docker system df
+
   deploy:
     name: deploy to production, and undo it if it does not come up
     runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
