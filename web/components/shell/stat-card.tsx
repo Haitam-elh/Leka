@@ -17,6 +17,8 @@ export function StatCard({
   label,
   foot,
   href,
+  onClick,
+  active,
   testId,
   valueTestId,
 }: {
@@ -26,6 +28,9 @@ export function StatCard({
   label: string;
   foot?: React.ReactNode;
   href?: string;
+  /** A figure that filters the page below it: pressed while it does. */
+  onClick?: () => void;
+  active?: boolean;
   testId?: string;
   /** For a test that reads the value alone. */
   valueTestId?: string;
@@ -50,6 +55,21 @@ export function StatCard({
     </>
   );
   const box = "flex items-start gap-3 rounded-xl border border-shell-line bg-white p-4";
+  const pressable =
+    "text-start outline-none hover:bg-shell-canvas focus-visible:ring-3 focus-visible:ring-brand-violet/40";
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className={cn(box, pressable, active && "border-brand-violet bg-brand-violet-soft/40")}
+        data-testid={testId}
+      >
+        {body}
+      </button>
+    );
+  }
   return href ? (
     <Link
       href={href}

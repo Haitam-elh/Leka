@@ -2,7 +2,7 @@
 
 import { CircleCheck, CircleSlash, CircleX, Clock, ShieldCheck, Sparkles } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "cn";
 import { CandidatePanel } from "@/components/approvals/candidate-panel";
@@ -30,7 +30,7 @@ import { routes } from "@/config/routes";
 import { useConflicts, useConflictSummary } from "@/lib/conflicts-queries";
 import type { DecisionSummary } from "@/lib/decisions";
 import { useDecisionQueue, useDecisionSummary } from "@/lib/decisions-queries";
-import { type CandidateStatus, FAMILIES, STATUSES } from "@/lib/enrichment";
+import { type CandidateStatus, FAMILIES } from "@/lib/enrichment";
 import { useCandidates, useEnrichmentSummary } from "@/lib/enrichment-queries";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -97,6 +97,18 @@ export function ApprovalsPage({
     (item) => (type === "all" || item.family === type) && matches(t, item, search),
   );
   const figures = figuresOf(proposals.data, disputes.data, choices.data);
+  // As mockup 09: on a wide screen, the first thing waiting is open beside
+  // the list on arrival — the decision to take is in view. Once, and the
+  // address stays the list's until a person picks one.
+  const arrived = useRef(initialId !== null);
+  const first = status === "proposed" ? shown[0] : undefined;
+  useEffect(() => {
+    if (arrived.current || !first) return;
+    arrived.current = true;
+    if (window.matchMedia?.("(min-width: 1280px)").matches) {
+      setOpened({ kind: first.kind, id: first.id });
+    }
+  }, [first]);
   const pending = proposals.isPending || disputes.isPending || choices.isPending;
   const failed = proposals.isError
     ? proposals
@@ -125,13 +137,15 @@ export function ApprovalsPage({
         <StatePanel icon={ShieldCheck} title={a.empty.title} description={a.empty.body} size="page" />
       ) : (
         <div className="flex flex-col gap-5">
-          <Stats figures={figures} />
-          <Filters
+          <Stats
+            figures={figures}
             status={status}
             onStatus={(next) => {
               setStatus(next);
               setType("all");
             }}
+          />
+          <Filters
             items={all}
             type={type}
             onType={setType}
@@ -153,11 +167,8 @@ export function ApprovalsPage({
                 selected={selected}
                 compact={selected !== null}
                 empty={all.length === 0 ? a.none : a.noMatch}
-                onSelect={(item) =>
-                  setSelected(
-                    selected?.id === item.id ? null : { kind: item.kind, id: item.id },
-                  )
-                }
+                // A row opens; the panel's own button closes it.
+                onSelect={(item) => setSelected({ kind: item.kind, id: item.id })}
               />
             )}
             {selected?.kind === "candidate" ? (
@@ -222,26 +233,39 @@ function figuresOf(
 }
 
 
-function Stats({ figures }: { figures: Figures }) {
+/** The figures are the states' own switch (LEKA-438): a row of chips said
+ * the same four states again under them. */
+function Stats({
+  figures,
+  status,
+  onStatus,
+}: {
+  figures: Figures;
+  status: CandidateStatus;
+  onStatus: (next: CandidateStatus) => void;
+}) {
   const t = useDictionary();
   const s = t.approvals.stats;
+  const at = (key: CandidateStatus) => ({ onClick: () => onStatus(key), active: status === key });
   return (
     <StatGrid count={4} testId="approvals-stats">
-      <StatCard icon={Clock} tone="warning" value={figures.waiting} label={s.proposed} />
+      <StatCard icon={Clock} tone="warning" value={figures.waiting} label={s.proposed} {...at("proposed")} />
       <StatCard
         icon={CircleCheck}
         tone="success"
         value={figures.decided}
         label={s.accepted}
         foot={figures.byPolicy ? fill(s.byPolicy, { count: figures.byPolicy }) : undefined}
+        {...at("accepted")}
       />
-      <StatCard icon={CircleX} tone="danger" value={figures.refused} label={s.rejected} />
+      <StatCard icon={CircleX} tone="danger" value={figures.refused} label={s.rejected} {...at("rejected")} />
       <StatCard
         icon={CircleSlash}
         tone="neutral"
         value={figures.withdrawn}
         label={s.withdrawn}
         foot={figures.withdrawn ? s.withdrawnNote : undefined}
+        {...at("withdrawn")}
       />
     </StatGrid>
   );
@@ -251,16 +275,12 @@ function Stats({ figures }: { figures: Figures }) {
 // ── Filters ─────────────────────────────────────────────────────────────────
 
 function Filters({
-  status,
-  onStatus,
   items,
   type,
   onType,
   search,
   onSearch,
 }: {
-  status: CandidateStatus;
-  onStatus: (next: CandidateStatus) => void;
   items: Item[];
   type: Type | "all";
   onType: (next: Type | "all") => void;
@@ -275,16 +295,6 @@ function Filters({
   }
   return (
     <div className="flex flex-col gap-3">
-      <div role="group" aria-label={a.statusLabel} className="flex flex-wrap gap-2">
-        {STATUSES.map((key) => (
-          <Chip
-            key={key}
-            active={status === key}
-            onClick={() => onStatus(key)}
-            label={a.status[key]}
-          />
-        ))}
-      </div>
       <div className="flex flex-wrap items-center gap-2">
         <div role="group" aria-label={a.familiesLabel} className="flex flex-wrap gap-2">
           <Chip
