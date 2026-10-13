@@ -39,7 +39,7 @@ test.describe("Intention decisions", () => {
     await expect(panel.getByTestId("decision-status")).toHaveText("À valider");
     await expect(panel.getByTestId("decision-risk")).toHaveText("Risque moyen");
     await expect(panel.getByTestId("decision-requirement")).toHaveText(
-      "1 validation(s) requise(s) · 0 sur 1",
+      "1 validation requise · 0 sur 1",
     );
     const proposal = panel.getByTestId("decision-proposal");
     await expect(proposal).toContainText("Redémarrer");

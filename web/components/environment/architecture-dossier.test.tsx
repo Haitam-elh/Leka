@@ -43,7 +43,7 @@ describe("the dossier", () => {
 
     expect(screen.getByRole("heading", { name: "Architecture applicative" })).toBeInTheDocument();
     expect(
-      screen.getByText(/^Périmètre : 1 dépôt\(s\) · 1 module\(s\) de code · 4 service\(s\)/),
+      screen.getByText(/^Périmètre : 1 dépôt · 1 module de code · 4 services/),
     ).toBeInTheDocument();
     const layer = (name: string) => within(screen.getByTestId(`dossier-layer-${name}`));
     expect(layer("code").getByRole("button", { name: "Leka/api, Backend" })).toBeInTheDocument();

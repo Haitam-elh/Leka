@@ -85,7 +85,7 @@ describe("data protection", () => {
       "Amazon S3, chiffrés à l'écriture (AES256)",
     );
     const credentials = screen.getByTestId("protection-credentials");
-    expect(credentials).toHaveTextContent("Chiffrés (Fernet) · 2 clé(s) en service");
+    expect(credentials).toHaveTextContent("Chiffrés (Fernet) · 2 clés en service");
     expect(credentials).toHaveTextContent("Secrets à renouveler : s3_secret_access_key");
     expect(screen.getByTestId("protection-cookie")).toHaveTextContent("Cookie sécurisé");
   });

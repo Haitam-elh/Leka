@@ -155,7 +155,7 @@ function analysis(overrides: Partial<IntentionAnalysisRead> = {}): IntentionAnal
       support: [
         {
           code: "support.sources",
-          text: "1 source(s) behind its context.",
+          text: "1 source behind its context.",
           params: { count: 1, established: true },
         },
       ],
@@ -256,7 +256,7 @@ describe("an intention's analysis", () => {
     expect(screen.getByTestId("analysis-summary")).toHaveTextContent(
       "Billing API appartient à Payments.",
     );
-    expect(view).toHaveTextContent("1 source(s) derrière son contexte");
+    expect(view).toHaveTextContent("1 source derrière son contexte");
     // Nothing proposed (LEKA-389): no proposals' section, no empty promise.
     expect(screen.queryByText("Recommandations de LEKA")).not.toBeInTheDocument();
   });
@@ -552,7 +552,7 @@ describe("its answer, written by a model (LEKA-394)", () => {
     const answer = await screen.findByTestId("analysis-answer");
     expect(answer).toHaveTextContent("Payments est responsable de Billing API.");
     expect(within(answer).getByTestId("answer-point")).toHaveTextContent(
-      "Le catalogue de services le dit.2 élément(s) cité(s)",
+      "Le catalogue de services le dit.2 éléments cités",
     );
     expect(answer).toHaveTextContent("Une seule source le dit.");
     expect(answer).toHaveTextContent(
@@ -627,14 +627,14 @@ describe("what LEKA read to answer (LEKA-396)", () => {
     expect(skillApi.runs).toHaveBeenCalledWith(`intention:${ID}`);
     const reads = within(card).getAllByTestId("analysis-read");
     expect(reads.map((r) => r.dataset.key)).toEqual(["find", "dependencies", "happened", "describe"]);
-    expect(reads[0]).toHaveTextContent("Recherche · « billing »2 élément(s) lu(s)12 ms");
+    expect(reads[0]).toHaveTextContent("Recherche · « billing »2 éléments lus12 ms");
     expect(reads[1]).toHaveTextContent("Dépendances · Billing API · ce qui en dépend · production");
     expect(reads[2]).toHaveTextContent("Événements");
     expect(reads[2]).toHaveTextContent("demande mal formée : le modèle l'a reformulée");
     expect(reads[2]).toHaveTextContent("Refusée");
     // A date the model wrote that LEKA could not read: not said, nothing breaks.
     expect(reads[2]).not.toHaveTextContent("depuis");
-    expect(reads[3]).toHaveTextContent("Fiche · Billing API3 élément(s) lu(s)");
+    expect(reads[3]).toHaveTextContent("Fiche · Billing API3 éléments lus");
   });
 
   it("names a skill of the library as it read (LEKA-401)", async () => {
@@ -656,7 +656,7 @@ describe("what LEKA read to answer (LEKA-396)", () => {
     );
     expect(delivery).toHaveTextContent("Indicateurs de livraison · Billing API · production");
     expect(delivery).toHaveTextContent("depuis le 10 sept.");
-    expect(delivery).toHaveTextContent("2 élément(s) lu(s)");
+    expect(delivery).toHaveTextContent("2 éléments lus");
   });
 
   it("is not shown when LEKA read nothing: the rules alone answered", async () => {

@@ -159,7 +159,7 @@ describe("an incident, read as an analysis", () => {
     ]);
     // A change before it that nothing ties to it: said, not guessed.
     expect(made.uncertainties).toEqual([
-      "1 changement(s) juste avant lui, sans lien établi avec lui.",
+      "1 changement juste avant lui, sans lien établi avec lui.",
     ]);
   });
 

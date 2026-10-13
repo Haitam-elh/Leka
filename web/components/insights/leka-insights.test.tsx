@@ -157,12 +157,12 @@ describe("Insights LEKA", () => {
     );
     // A context has no page of its own: a line, not a link.
     expect(lines[2]).toHaveTextContent("Le contexte « Payment API » est en retard sur le modèle");
-    expect(lines[2]).toHaveTextContent("6 changement(s) non pris en compte");
+    expect(lines[2]).toHaveTextContent("6 changements non pris en compte");
     expect(within(lines[2]).queryByRole("link")).not.toBeInTheDocument();
     // Never the API's English when the code is known.
     expect(screen.queryByText(/An English sentence/)).not.toBeInTheDocument();
     // The rest, counted.
-    expect(screen.getByText("+ 2 autre(s) point(s) ouvert(s)")).toBeInTheDocument();
+    expect(screen.getByText("+ 2 autres points ouverts")).toBeInTheDocument();
     expect(screen.getByText("Dernière analyse · Il y a 2 h")).toBeInTheDocument();
   });
 
@@ -178,7 +178,7 @@ describe("Insights LEKA", () => {
 
     const found = await screen.findByTestId("insights-findings");
     expect(within(found).getAllByRole("listitem")).toHaveLength(2);
-    expect(screen.getByText("+ 3 autre(s) point(s) ouvert(s)")).toBeInTheDocument();
+    expect(screen.getByText("+ 3 autres points ouverts")).toBeInTheDocument();
   });
 
   it("words a change and what followed it, leading to the service it was made to", async () => {
@@ -213,13 +213,13 @@ describe("Insights LEKA", () => {
     mount();
 
     const lines = within(await screen.findByTestId("insights-findings")).getAllByRole("listitem");
-    expect(lines[0]).toHaveTextContent("Déploiement « payment-api v2.8.4 » : 1 incident(s) ensuite");
+    expect(lines[0]).toHaveTextContent("Déploiement « payment-api v2.8.4 » : 1 incident ensuite");
     expect(lines[0]).toHaveTextContent("Important · Il y a 26 h · production");
     expect(within(lines[0]).getByRole("link")).toHaveAttribute(
       "href",
       `/environment/services/${SERVICE}`,
     );
-    expect(lines[1]).toHaveTextContent("Changement « CHG-12 » : 2 élément(s) concerné(s)");
+    expect(lines[1]).toHaveTextContent("Changement « CHG-12 » : 2 éléments concernés");
   });
 
   it("words the gaps, leading to the thing, the source, or the sources to connect", async () => {
@@ -276,7 +276,7 @@ describe("Insights LEKA", () => {
     expect(lines[1]).toHaveTextContent("Ce qu'elle montre a pu changer");
     expect(within(lines[1]).getByRole("link")).toHaveAttribute("href", `/sources/${SOURCE}`);
     expect(lines[2]).toHaveTextContent("Aucune supervision connectée");
-    expect(lines[2]).toHaveTextContent("4 service(s) non surveillé(s)");
+    expect(lines[2]).toHaveTextContent("4 services non surveillés");
     expect(within(lines[2]).getByRole("link")).toHaveAttribute("href", "/sources");
   });
 
@@ -288,7 +288,7 @@ describe("Insights LEKA", () => {
 
     expect(said("gap.missing_entity.runtime", thing)).toEqual({
       title: "On ne sait pas où tourne user-service",
-      detail: "Service · 2 élément(s) en dépendent",
+      detail: "Service · 2 éléments en dépendent",
     });
     expect(said("gap.missing_entity.code", thing).title).toBe("Le code de user-service est inconnu");
     expect(said("gap.missing_entity.data_model", { name: "postgres-prod" }).title).toBe(
@@ -306,7 +306,7 @@ describe("Insights LEKA", () => {
     );
     expect(said("gap.stale_knowledge.dormant", { ...thing, name: "ledger" })).toEqual({
       title: "ledger est inactif depuis des mois",
-      detail: "Service · 2 élément(s) en dépendent",
+      detail: "Service · 2 éléments en dépendent",
     });
     expect(said("gap.stale_source", { name: "OPS", status: "error", since: hoursAgo(30) })).toEqual({
       title: "La source OPS est en erreur",
@@ -318,7 +318,7 @@ describe("Insights LEKA", () => {
     });
     expect(said("gap.coverage.organisation", { family: "organisation", count: 6 })).toEqual({
       title: "Aucun responsable connu",
-      detail: "Personne n'est nommé pour 6 élément(s)",
+      detail: "Personne n'est nommé pour 6 éléments",
     });
     // A family the interface does not know yet: its English sentence.
     expect(said("gap.coverage.telepathy", { family: "telepathy", count: 1 }).title).toBe(
@@ -351,7 +351,7 @@ describe("Insights LEKA", () => {
     });
     expect(word(DICTIONARIES.fr, area("team"))).toEqual({
       title: "Connaissance peu fiable : Legacy",
-      detail: "Équipe · 3 élément(s) · qualité 50 %",
+      detail: "Équipe · 3 éléments · qualité 50 %",
     });
     expect(word(DICTIONARIES.fr, area("workspace")).title).toBe(
       "Ce que LEKA sait de votre environnement est peu fiable",
@@ -442,7 +442,7 @@ describe("Insights LEKA", () => {
       },
       {
         title: "Votre architecture a bougé ce mois-ci",
-        detail: "3 apparu(s), 1 disparu(s) · Revoir l'architecture",
+        detail: "3 apparus, 1 disparu · Revoir l'architecture",
       },
       {
         title: "Les incidents augmentent sur checkout",

@@ -179,7 +179,7 @@ describe("the catalogue", () => {
     // LEKA's own, in French.
     expect(owner).toHaveTextContent("Responsabilités");
     expect(owner).toHaveTextContent("Qui en est responsable");
-    expect(owner).toHaveTextContent("12 exécution(s)");
+    expect(owner).toHaveTextContent("12 exécutions");
     expect(owner).toHaveTextContent("Disponible");
     expect(architect).toHaveTextContent("Architecte applicatif");
     // What it does in the reader's words, not the description its model reads.

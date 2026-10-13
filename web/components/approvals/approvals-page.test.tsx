@@ -617,7 +617,7 @@ describe("a proposal's words", () => {
       said({ code: "enrichment.summary", params: { name: "auth-service", model: "gemini-3.8-flash", facts: 3 } }),
     ).toEqual({
       title: "Description de auth-service",
-      why: "Rédigée par Gemini 3.8 Flash d'après 3 fait(s) que LEKA connaît : à vérifier",
+      why: "Rédigée par Gemini 3.8 Flash d'après 3 faits que LEKA connaît : à vérifier",
     });
     expect(said({ code: "enrichment.unknown", statement: "What auth-service does." })).toEqual({
       title: "What auth-service does.",
@@ -632,14 +632,14 @@ describe("À valider — decisions (LEKA-390)", () => {
     mount();
     const table = await screen.findByRole("table");
     const row = within(table).getByText(/Redémarrer Billing API · production/).closest("tr");
-    expect(row).toHaveTextContent("Risque moyen · 1 validation(s) requise(s)");
+    expect(row).toHaveTextContent("Risque moyen · 1 validation requise");
     expect(row).toHaveTextContent("Moyen");
     expect(row).toHaveTextContent("À valider");
 
     const { panel } = await openDecision();
     expect(panel).toHaveTextContent("Redémarre Billing API en production");
     expect(within(panel).getByTestId("decision-requirement")).toHaveTextContent(
-      "1 validation(s) requise(s) · 0 sur 1",
+      "1 validation requise · 0 sur 1",
     );
     const [proposal] = within(panel).getAllByTestId("decision-proposal");
     expect(proposal).toHaveTextContent("Redémarrer");
@@ -716,7 +716,7 @@ describe("À valider — decisions (LEKA-390)", () => {
       "La politique demande qu'une autre personne que vous valide cette action.",
     );
     expect(within(panel).getByTestId("decision-requirement")).toHaveTextContent(
-      "2 validation(s) requise(s) par une autre personne que le demandeur · 0 sur 2",
+      "2 validations requises par une autre personne que le demandeur · 0 sur 2",
     );
   });
 });

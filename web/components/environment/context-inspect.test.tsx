@@ -172,7 +172,7 @@ describe("an element, inspected", () => {
       "Désaccord sur sla (Critique)",
     );
     expect(screen.getByTestId("element-feedback-counts")).toHaveTextContent(
-      "Retours : 2 utile(s) · 0 pas utile(s) · 1 faux",
+      "Retours : 2 utiles · 0 pas utile · 1 faux",
     );
     // The records are read only when asked.
     expect(api.evidence).not.toHaveBeenCalled();

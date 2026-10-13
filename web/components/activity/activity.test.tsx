@@ -244,7 +244,7 @@ describe("Activité", () => {
     ).toHaveAttribute("href", `/environment/incidents/${INCIDENT}`);
     expect(within(latest).getByText("Modèle mis à jour")).toBeInTheDocument();
     expect(
-      within(latest).getByText("OPS-1841 · 2 créé(s), 4 relation(s) ajoutée(s)"),
+      within(latest).getByText("OPS-1841 · 2 créés, 4 relations ajoutées"),
     ).toBeInTheDocument();
     expect(
       within(latest).getByText("redis-sessions n'apparaît plus dans vos sources"),
