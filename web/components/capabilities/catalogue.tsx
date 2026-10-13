@@ -3,7 +3,6 @@
 import {
   Activity,
   ArrowDown,
-  ArrowRight,
   ArrowUp,
   BadgeCheck,
   BookOpen,
@@ -13,17 +12,14 @@ import {
   Code,
   Database,
   FileText,
-  Gauge,
-  Layers,
   Lightbulb,
   type LucideIcon,
   Network,
-  Play,
   Plus,
   Search,
   ShieldCheck,
   Star,
-  Timer,
+  TriangleAlert,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -36,7 +32,6 @@ import { IconTile, type TileTone } from "@/components/environment/parts";
 import { Pill } from "@/components/intelligence/pill";
 import { useConfirm } from "@/components/interactions/confirm";
 import { PageContainer } from "@/components/shell/page-container";
-import { StatCard, StatGrid } from "@/components/shell/stat-card";
 import { hasSourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { usePermissions } from "@/components/shell/shell-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -178,7 +173,7 @@ function useView(): [View, (next: View) => void] {
 
 function Trend({ now, before, goodWhenDown = false }: { now: number; before: number; goodWhenDown?: boolean }) {
   const t = useDictionary();
-  if (!before) return <span className="text-xs text-shell-muted">{t.catalogue.stats.versus}</span>;
+  if (!before) return <span className="text-xs text-shell-muted">{t.catalogue.versus}</span>;
   const change = Math.round(((now - before) / before) * 100);
   const up = change >= 0;
   const good = up !== goodWhenDown;
@@ -197,80 +192,12 @@ function Trend({ now, before, goodWhenDown = false }: { now: number; before: num
   );
 }
 
-function minutes(ms: number | null | undefined, locale: string): string {
-  if (ms === null || ms === undefined) return "—";
-  if (ms < 60_000) {
-    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(ms / 1000)} s`;
-  }
-  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(ms / 60_000)} min`;
-}
+/** Why one cannot run that is the place's, not the capability's. */
+const WIDE = ["no_model", "no_runtime"] as const;
+type Wide = (typeof WIDE)[number];
 
-function Stats({ summary }: { summary: CatalogueSummary }) {
-  const t = useDictionary();
-  const { format: locale } = useLocale();
-  const s = t.catalogue.stats;
-  const tiles: { key: string; icon: LucideIcon; tone: TileTone; value: string; label: string; foot: React.ReactNode }[] = [
-    {
-      key: "available",
-      icon: Layers,
-      tone: "violet",
-      value: String(summary.available),
-      label: s.available,
-      foot: (
-        <span className="text-xs text-shell-muted">
-          {fill(s.availableFoot, { total: summary.total, added: summary.added_this_month })}
-        </span>
-      ),
-    },
-    {
-      key: "categories",
-      icon: Users,
-      tone: "violet",
-      value: String(summary.categories.length),
-      label: s.categories,
-      foot: <span className="text-xs text-shell-muted">{s.categoriesFoot}</span>,
-    },
-    {
-      key: "runs",
-      icon: Play,
-      tone: "success",
-      value: new Intl.NumberFormat(locale).format(summary.runs),
-      label: s.runs,
-      foot: summary.runs || summary.runs_previous ? (
-        <Trend now={summary.runs} before={summary.runs_previous} />
-      ) : (
-        <span className="text-xs text-shell-muted">{s.noRuns}</span>
-      ),
-    },
-    {
-      key: "analysis",
-      icon: Timer,
-      tone: "warning",
-      value: minutes(summary.analysis_ms, locale),
-      label: s.analysis,
-      foot:
-        summary.analysis_ms && summary.analysis_previous_ms ? (
-          <Trend now={summary.analysis_ms} before={summary.analysis_previous_ms} goodWhenDown />
-        ) : (
-          <span className="text-xs text-shell-muted">{s.versus}</span>
-        ),
-    },
-  ];
-  return (
-    <StatGrid count={tiles.length} testId="catalogue-stats">
-      {tiles.map((tile) => (
-        <StatCard
-          key={tile.key}
-          icon={tile.icon}
-          tone={tile.tone}
-          value={tile.value}
-          label={tile.label}
-          foot={tile.foot}
-          testId={`catalogue-stat-${tile.key}`}
-        />
-      ))}
-    </StatGrid>
-  );
+function isWide(reason: CapabilityReason): boolean {
+  return (WIDE as readonly string[]).includes(reason.code);
 }
 
 function Availability({ capability }: { capability: Capability }) {
@@ -284,9 +211,22 @@ function Availability({ capability }: { capability: Capability }) {
       </Pill>
     );
   }
+  // What holds every capability back is said once, above the list.
+  const own = capability.reasons.filter((reason) => !isWide(reason));
+  if (!own.length) {
+    return (
+      <Pill tone="neutral">
+        {t.catalogue.unavailable}
+        <span className="sr-only">
+          {" : "}
+          {capability.reasons.map((reason) => reasonSaid(t, reason)).join(" · ")}
+        </span>
+      </Pill>
+    );
+  }
   return (
     <span className="text-xs text-state-warning" data-testid="capability-reasons">
-      {capability.reasons.map((reason) => reasonSaid(t, reason)).join(" · ")}
+      {own.map((reason) => reasonSaid(t, reason)).join(" · ")}
     </span>
   );
 }
@@ -346,12 +286,16 @@ function Card({ capability }: { capability: Capability }) {
         <Pill tone={CATEGORY_TONE[capability.category] ?? "neutral"}>
           {categorySaid(t, capability.category)}
         </Pill>
-        <span className="text-xs text-shell-muted">
-          {capability.kind === "agent" ? `${t.catalogue.kinds.agent} · ` : null}
-          {capability.usage.runs
-            ? fill(t.catalogue.runs, { count: capability.usage.runs })
-            : t.catalogue.noRun}
-        </span>
+        {capability.kind === "agent" || capability.usage.runs ? (
+          <span className="text-xs text-shell-muted">
+            {[
+              capability.kind === "agent" ? t.catalogue.kinds.agent : null,
+              capability.usage.runs ? fill(t.catalogue.runs, { count: capability.usage.runs }) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        ) : null}
         {plain ? (
           <span className="sr-only">{t.catalogue.available}</span>
         ) : (
@@ -504,9 +448,18 @@ function Latest({ summary }: { summary: CatalogueSummary }) {
   );
 }
 
-function Grid({ query, empty }: { query: CatalogueQuery; empty: string }) {
+function Grid({
+  list,
+  goal,
+  empty,
+  roomy,
+}: {
+  list: ReturnType<typeof useCapabilities>;
+  goal: string | null;
+  empty: string;
+  roomy: boolean;
+}) {
   const t = useDictionary();
-  const list = useCapabilities(query);
   if (list.isError) {
     return (
       <p className="rounded-xl border border-shell-line bg-white p-4 text-sm text-shell-muted" role="alert">
@@ -518,7 +471,8 @@ function Grid({ query, empty }: { query: CatalogueQuery; empty: string }) {
     );
   }
   if (!list.data) return <div className="h-80 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
-  if (!list.data.length) {
+  const shown = goal ? list.data.filter((capability) => capability.goals.includes(goal)) : list.data;
+  if (!shown.length) {
     return (
       <p className="rounded-xl border border-shell-line bg-white px-5 py-6 text-[0.875rem] text-shell-muted" data-testid="catalogue-empty">
         {empty}
@@ -526,16 +480,61 @@ function Grid({ query, empty }: { query: CatalogueQuery; empty: string }) {
     );
   }
   return (
-    <ul className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3" data-testid="catalogue-grid">
-      {list.data.map((capability) => (
+    <ul className={cn("grid gap-3 md:grid-cols-2", roomy ? "xl:grid-cols-3" : "2xl:grid-cols-3")} data-testid="catalogue-grid">
+      {shown.map((capability) => (
         <Card key={capability.key} capability={capability} />
       ))}
     </ul>
   );
 }
 
+/** What keeps several from running here, said once (LEKA-438). */
+function WideReasons({ capabilities }: { capabilities: Capability[] }) {
+  const t = useDictionary();
+  const admin = usePermissions()?.includes("workspace:update") ?? false;
+  const held = WIDE.map((code) => ({
+    code,
+    count: capabilities.filter((c) => c.reasons.some((reason) => reason.code === code)).length,
+  })).filter((wide) => wide.count);
+  if (!held.length) return null;
+  return (
+    <ul className="flex flex-col gap-2" data-testid="catalogue-wide">
+      {held.map(({ code, count }: { code: Wide; count: number }) => (
+        <li
+          key={code}
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-state-warning/40 bg-state-warning/5 px-4 py-3 text-[0.875rem] text-brand-navy"
+        >
+          <TriangleAlert className="size-4 shrink-0 text-state-warning" aria-hidden="true" />
+          <span className="min-w-0 flex-1">{fill(t.catalogue.wide[code], { count })}</span>
+          {code === "no_model" && admin ? (
+            <Link href={routes.settings()} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              {t.catalogue.wide.configure}
+            </Link>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const GOALS = [
+  "explain_cause",
+  "investigate",
+  "find_change",
+  "assess_impact",
+  "map_dependencies",
+  "find_owner",
+  "check_compliance",
+  "plan_migration",
+  "find_knowledge",
+  "act",
+] as const;
+
 function Filters({
+  capabilities,
   summary,
+  goal,
+  setGoal,
   category,
   setCategory,
   q,
@@ -543,7 +542,10 @@ function Filters({
   sort,
   setSort,
 }: {
+  capabilities: Capability[] | undefined;
   summary: CatalogueSummary | undefined;
+  goal: string | null;
+  setGoal: (next: string | null) => void;
   category: string | null;
   setCategory: (next: string | null) => void;
   q: string;
@@ -553,6 +555,14 @@ function Filters({
 }) {
   const t = useDictionary();
   const w = t.catalogue;
+  const needs = GOALS.map((need) => ({
+    need,
+    count: (capabilities ?? []).filter((c) => c.goals.includes(need)).length,
+  })).filter((n) => n.count);
+  const categories = [
+    { value: "all", label: w.allCategories },
+    ...(summary?.categories ?? []).map((c) => ({ value: c.category, label: categorySaid(t, c.category) })),
+  ];
   const chip = (active: boolean) =>
     cn(
       "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[0.75rem] font-medium whitespace-nowrap",
@@ -561,28 +571,9 @@ function Filters({
         : "border-shell-line bg-white text-brand-navy hover:bg-shell-canvas",
     );
   return (
-    <div className="flex flex-col gap-3 xl:flex-row xl:items-center" data-testid="catalogue-filters">
-      <div className="flex min-w-0 flex-wrap gap-1.5">
-        <button type="button" className={chip(category === null)} onClick={() => setCategory(null)} aria-pressed={category === null}>
-          {w.all}
-          <span className="rounded bg-white/70 px-1 text-xs text-shell-muted">{summary?.total ?? "…"}</span>
-        </button>
-        {(summary?.categories ?? []).map((c) => (
-          <button
-            key={c.category}
-            type="button"
-            className={chip(category === c.category)}
-            onClick={() => setCategory(c.category)}
-            aria-pressed={category === c.category}
-            data-testid={`catalogue-category-${c.category}`}
-          >
-            {categorySaid(t, c.category)}
-            <span className="rounded bg-white/70 px-1 text-xs text-shell-muted">{c.count}</span>
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center gap-2 xl:ms-auto xl:shrink-0">
-        <label className="relative flex min-w-0 flex-1 items-center xl:w-52 xl:flex-none">
+    <div className="flex flex-col gap-3" data-testid="catalogue-filters">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center">
+        <label className="relative flex min-w-0 flex-1 items-center">
           <Search className="absolute start-2.5 size-4 text-shell-muted" aria-hidden="true" />
           <input
             value={q}
@@ -593,23 +584,64 @@ function Filters({
             data-testid="catalogue-search"
           />
         </label>
-        <Select
-          value={sort}
-          onValueChange={(next) => setSort((next ?? sort) as NonNullable<CatalogueQuery["sort"]>)}
-          items={(["relevant", "name", "recent"] as const).map((value) => ({ value, label: w.sorts[value] }))}
-        >
-          <SelectTrigger className="min-w-40 bg-white" aria-label={w.sort}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {(["relevant", "name", "recent"] as const).map((value) => (
-              <SelectItem key={value} value={value}>
-                {w.sorts[value]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select
+            value={category ?? "all"}
+            onValueChange={(next) => setCategory(!next || next === "all" ? null : String(next))}
+            items={categories}
+          >
+            <SelectTrigger className="min-w-44 bg-white" aria-label={w.category} data-testid="catalogue-category">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((c) => (
+                <SelectItem key={c.value} value={c.value}>
+                  {c.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={sort}
+            onValueChange={(next) => setSort((next ?? sort) as NonNullable<CatalogueQuery["sort"]>)}
+            items={(["relevant", "name", "recent"] as const).map((value) => ({ value, label: w.sorts[value] }))}
+          >
+            <SelectTrigger className="min-w-40 bg-white" aria-label={w.sort}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(["relevant", "name", "recent"] as const).map((value) => (
+                <SelectItem key={value} value={value}>
+                  {w.sorts[value]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+      {needs.length ? (
+        <div role="group" aria-labelledby="catalogue-need" className="flex flex-wrap items-center gap-1.5">
+          <span id="catalogue-need" className="me-1 text-[0.8125rem] font-medium text-brand-navy">
+            {w.need}
+          </span>
+          <button type="button" className={chip(goal === null)} onClick={() => setGoal(null)} aria-pressed={goal === null}>
+            {w.allNeeds}
+          </button>
+          {needs.map(({ need, count }) => (
+            <button
+              key={need}
+              type="button"
+              className={chip(goal === need)}
+              onClick={() => setGoal(goal === need ? null : need)}
+              aria-pressed={goal === need}
+              data-testid={`catalogue-need-${need}`}
+            >
+              {t.intentions.understanding.goals[need]}
+              <span className="rounded bg-white/70 px-1 text-xs text-shell-muted">{count}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -701,6 +733,9 @@ export function CatalogueScreen() {
   const [category, setCategory] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<NonNullable<CatalogueQuery["sort"]>>("relevant");
+  const [goal, setGoal] = useState<string | null>(null);
+  const list = useCapabilities({ view: view === "mine" ? "mine" : "all", category, q, sort });
+  const empty = view === "mine" && !category && !q && !goal ? w.mineEmpty : w.empty;
 
   return (
     <PageContainer>
@@ -740,9 +775,12 @@ export function CatalogueScreen() {
         <Configuration />
       ) : (
         <div className="flex flex-col gap-4">
-          {summary.data ? <Stats summary={summary.data} /> : <div className="h-24 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />}
+          {list.data ? <WideReasons capabilities={list.data} /> : null}
           <Filters
+            capabilities={list.data}
             summary={summary.data}
+            goal={goal}
+            setGoal={setGoal}
             category={category}
             setCategory={setCategory}
             q={q}
@@ -750,30 +788,19 @@ export function CatalogueScreen() {
             sort={sort}
             setSort={setSort}
           />
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <Grid
-              query={{ view: view === "mine" ? "mine" : "all", category, q, sort }}
-              empty={view === "mine" && !category && !q ? w.mineEmpty : w.empty}
-            />
-            {summary.data ? (
+          {/* Nothing ran this week: the usage column would only say so. */}
+          {summary.data?.runs ? (
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <Grid list={list} goal={goal} empty={empty} roomy={false} />
               <div className="flex min-w-0 flex-col gap-4">
                 <UsageChart summary={summary.data} />
                 <Top summary={summary.data} />
                 <Latest summary={summary.data} />
               </div>
-            ) : null}
-          </div>
-          <section className="flex flex-wrap items-center gap-4 rounded-xl bg-brand-violet-soft/60 px-5 py-4" data-testid="catalogue-banner">
-            <Gauge className="size-6 shrink-0 text-shell-nav-active" aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-brand-navy">{w.askTitle}</p>
-              <p className="text-[0.8125rem] text-shell-muted">{w.askBody}</p>
             </div>
-            <Link href={routes.intentionNew()} className={buttonVariants({ variant: "outline" })}>
-              {w.ask}
-              <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
-            </Link>
-          </section>
+          ) : (
+            <Grid list={list} goal={goal} empty={empty} roomy />
+          )}
         </div>
       )}
     </PageContainer>
