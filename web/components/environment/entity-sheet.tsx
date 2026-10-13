@@ -23,6 +23,7 @@ import { EntityContext } from "@/components/environment/entity-context";
 import { EntityHistory, RemovedEntity } from "@/components/environment/entity-history";
 import { IncidentAnalysis } from "@/components/environment/incident-analysis";
 import { EntityQuality } from "@/components/environment/knowledge-quality";
+import { TwinProvenance } from "@/components/environment/twin";
 import { StatusBadge } from "@/components/knowledge/status-badge";
 import { timeAgo } from "@/components/knowledge/time";
 import {
@@ -393,7 +394,12 @@ function Sheet({ model, data, tab }: { model: SheetModel; data: EntitySheet; tab
 
   return (
     <>
-      <Header model={model} period={period} onPeriod={setPeriod} />
+      <Header
+        model={model}
+        period={period}
+        onPeriod={setPeriod}
+        provenance={<TwinProvenance twin={data.twin} sources={data.sources ?? []} />}
+      />
       <RouteTabs />
       {body}
     </>
@@ -404,10 +410,13 @@ function Header({
   model,
   period,
   onPeriod,
+  provenance,
 }: {
   model: SheetModel;
   period: Period;
   onPeriod: (period: Period) => void;
+  /** Its state in the Digital Twin, where it comes from (LEKA-442). */
+  provenance?: React.ReactNode;
 }) {
   const t = useDictionary();
   const w = t.environment.sheet;
@@ -457,6 +466,7 @@ function Header({
               </span>
             ) : null}
           </div>
+          {provenance}
           {model.description ? (
             <p className="mt-2 max-w-2xl text-[0.875rem] text-shell-nav-active">
               {model.description}

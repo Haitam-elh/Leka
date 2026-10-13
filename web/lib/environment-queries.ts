@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { environment, isEntityId } from "@/lib/environment";
+import { monitoring } from "@/lib/twin";
 
 /** The environment as queries (LEKA-359): the screen, and an entity's sheet. */
 export const environmentKeys = {
@@ -32,4 +33,9 @@ export function useEntityActivity(id: string, days: number) {
     queryFn: () => environment.activity(id, days),
     enabled: isEntityId(id),
   });
+}
+
+/** The watch (LEKA-442): what the plan includes, the alerts open and ended. */
+export function useMonitoring() {
+  return useQuery({ queryKey: ["monitoring"] as const, queryFn: monitoring.get });
 }

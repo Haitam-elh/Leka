@@ -19,6 +19,7 @@ import {
   CircleHelp,
   CirclePause,
   CircleX,
+  Clock,
   EyeOff,
   Info,
   LoaderCircle,
@@ -79,6 +80,11 @@ const FAMILIES = {
     incident: ["danger", OctagonAlert],
     unmonitored: ["neutral", EyeOff],
     unknown: ["neutral", CircleHelp],
+    // The Digital Twin's (LEKA-442): « inconnu » is never « sain ».
+    degraded: ["warning", CircleAlert],
+    unavailable: ["danger", OctagonAlert],
+    stale: ["info", Clock],
+    not_covered: ["neutral", EyeOff],
   },
   /** HealthStatus, leka/connectors. */
   health: {
