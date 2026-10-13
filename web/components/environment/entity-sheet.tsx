@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ArrowRight,
   CalendarDays,
   ChartLine,
   ChevronRight,
@@ -11,7 +10,6 @@ import {
   FileText,
   type LucideIcon,
   SearchX,
-  ShieldCheck,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -580,9 +578,12 @@ function Overview({
   const w = t.environment.sheet;
   // What needs someone, apart from what is only worth knowing.
   const pressing = model.attention.filter((row) => row.level !== "info");
+  const known = model.general.filter((row) => row.value !== w.general.unknown);
+  const unknown = model.general.filter((row) => row.value === w.general.unknown);
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,1.4fr)]">
+      {/* As many columns as figures with something to say, and the incident's. */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
         <OverviewTiles entityId={model.id} days={days} />
         <ActiveIncident model={model} />
       </div>
@@ -637,37 +638,27 @@ function Overview({
         </Card>
         <Card title={w.general.title}>
           <dl className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] gap-x-3 gap-y-2.5 text-[0.8125rem]">
-            {model.general.map((row) => (
+            {known.map((row) => (
               <div key={row.label} className="contents">
                 <dt className="text-shell-muted">{row.label}</dt>
                 <dd className="min-w-0 truncate text-brand-navy">{row.value}</dd>
               </div>
             ))}
           </dl>
+          {/* What no source says yet, said once in words (LEKA-438). */}
+          {unknown.length ? (
+            <p className="mt-3 text-xs text-shell-muted" data-testid="general-unknown">
+              {fill(w.general.notYet, { fields: unknown.map((row) => row.label.toLowerCase()).join(", ") })}
+            </p>
+          ) : null}
         </Card>
       </div>
 
       {/* How far what LEKA knows of it can be trusted (LEKA-381). */}
       <EntityQuality id={model.id} />
 
-      {model.type === "incident" ? (
-        <IncidentAnalysis id={model.id} />
-      ) : (
-        <section className="flex flex-col gap-4 rounded-xl bg-shell-highlight px-6 py-5 lg:flex-row lg:items-center">
-          <IconTile icon={ShieldCheck} tone="violet" className="size-11" />
-          <div className="flex-1">
-            <h2 className="text-[1.0625rem] font-semibold text-brand-navy">{w.analysis.title}</h2>
-            <p className="text-[0.8125rem] text-shell-muted">{w.analysis.body}</p>
-          </div>
-          <Link
-            href={routes.intentionNew()}
-            className="flex items-center gap-2 rounded-lg border border-brand-navy/20 bg-white px-4 py-2 text-sm font-medium text-brand-navy outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-          >
-            {w.analysis.action}
-            <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
-          </Link>
-        </section>
-      )}
+      {/* An incident's analysis; elsewhere « Demander à LEKA », above, asks. */}
+      {model.type === "incident" ? <IncidentAnalysis id={model.id} /> : null}
     </div>
   );
 }
