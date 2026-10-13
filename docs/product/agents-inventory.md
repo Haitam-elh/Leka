@@ -13,7 +13,7 @@ Chaque import retenu se fera dans sa propre PR : relu ligne par ligne
 
 | Dépôt | Commit examiné | Date | Version | Licence |
 | --- | --- | --- | --- | --- |
-| [affaan-m/ECC](https://github.com/affaan-m/ECC) | `b92f181` | 2026-10-11 | 2.2.3 | MIT — © 2026 Affaan Mustafa |
+| [affaan-m/ECC](https://github.com/affaan-m/ECC) | `b92f181` | 2026-10-11 | 2.2.3 | MIT — © 2026 Affaan Mustafa ; exceptions skill par skill, ci-dessous |
 | [garrytan/gstack](https://github.com/garrytan/gstack) | `945ac30` | 2026-10-13 | 1.91.97.0 | MIT — © 2026 Garry Tan ; quelques fichiers de design dérivés d'œuvres Apache-2.0 (impeccable, DESIGN.md), listés dans son NOTICE.md |
 | [emilkowalski/skills](https://github.com/emilkowalski/skills) | `2d22863` | 2026-10-11 | — (pas de version publiée) | MIT — © 2026 Emil Kowalski |
 
@@ -26,7 +26,19 @@ Ce qui a été compté comme un élément :
   `openclaw/`, `capy/`, `browser-skills/` et `test/fixtures/` sont des variantes ou des fixtures.
 - **emilkowalski/skills** : les 15 `skills/*/SKILL.md`.
 
-Licences : les trois sont MIT. L'usage commercial est permis, à condition de garder la
+**Exceptions à la MIT dans ECC**, déclarées skill par skill dans leur front matter :
+
+- `osint-investigation` : **CC BY-SA 4.0** (avec son propre `LICENSE.txt`) — toute adaptation
+  resterait CC BY-SA ; à ne jamais reprendre dans LEKA.
+- **Apache-2.0** : `carrier-relationship-management`, `customs-trade-compliance`,
+  `energy-procurement`, `inventory-demand-planning`, `logistics-exception-management`,
+  `production-scheduling`, `quality-nonconformance`, `returns-reverse-logistics`,
+  `healthcare-cdss-patterns`. Une reprise imposerait la notice de modification d'Apache.
+- gstack : `design-review` et quelques fichiers de design dérivés d'œuvres Apache-2.0 (son `NOTICE.md`).
+
+Aucun de ces éléments n'est retenu (tous « non retenu »). Pour le reste :
+
+Licences : MIT. L'usage commercial est permis, à condition de garder la
 notice de copyright de toute « portion substantielle » reprise. Une méthode réécrite dans
 nos mots et citée suffit ; un passage repris tel quel garde sa notice. Les fichiers
 Apache-2.0 de gstack (design) ne sont pas retenus.
