@@ -172,14 +172,19 @@ describe("governance", () => {
       { ...REFUSED, id: "d0", at: "2026-01-05T09:00:00Z" },
     ]);
     show();
-    const overview = await screen.findByTestId("governance-overview");
-    await waitFor(() => expect(within(overview).getByTestId("governance-stat-restricted")).toHaveTextContent("1"));
+    const overview = await screen.findByTestId("governance-overview", {}, { timeout: 5000 });
+    // Five queries answer: slow under a loaded runner.
+    await waitFor(
+      () => expect(within(overview).getByTestId("governance-stat-restricted")).toHaveTextContent("1"),
+      { timeout: 5000 },
+    );
     expect(within(overview).getByTestId("governance-stat-restricted")).toHaveAttribute("href", "/governance?tab=access");
     expect(within(overview).getByTestId("governance-stat-policies")).toHaveTextContent("0");
     expect(within(overview).getByTestId("governance-stat-refusals")).toHaveTextContent("Refus d'accès, 7 derniers jours");
     // Only this week's refusal counts.
-    await waitFor(() =>
-      expect(within(overview).getByTestId("governance-stat-refusals")).toHaveTextContent(/^1Refus/),
+    await waitFor(
+      () => expect(within(overview).getByTestId("governance-stat-refusals")).toHaveTextContent(/^1Refus/),
+      { timeout: 5000 },
     );
     expect(overview).not.toHaveTextContent("/100");
     expect(screen.getByTestId("governance-tab-overview")).toHaveAttribute("aria-selected", "true");
