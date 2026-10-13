@@ -70,13 +70,28 @@ const HINT_LOGOS: Record<string, SourceKind[]> = {
 /** Boxes a row shows before "+N": five fit the mockup's width. */
 const PER_ROW = 5;
 
-const ORDER: Record<string, number> = { incident: 0, attention: 1, operational: 2, unmonitored: 3 };
+const ORDER: Record<string, number> = {
+  unavailable: 0,
+  incident: 0,
+  degraded: 1,
+  attention: 1,
+  stale: 2,
+  operational: 3,
+  unknown: 4,
+  not_covered: 4,
+  unmonitored: 4,
+};
 
-const EDGE_TONE: Record<EnvironmentStatus, keyof typeof TONES> = {
+const EDGE_TONE: Record<string, keyof typeof TONES> = {
   operational: "success",
   attention: "warning",
   incident: "danger",
   unmonitored: "neutral",
+  degraded: "warning",
+  unavailable: "danger",
+  stale: "info",
+  unknown: "neutral",
+  not_covered: "neutral",
 };
 
 const TILE: Record<string, TileTone> = {
@@ -214,7 +229,7 @@ export function Cartography({
         id: `${edge.from_id}->${edge.to_id}`,
         d: `M ${x1} ${y1} C ${x1} ${middle}, ${x2} ${middle}, ${x2} ${y2}`,
         stroke:
-          TONES[EDGE_TONE[(edge.status ?? "unmonitored") as EnvironmentStatus] ?? "neutral"]
+          TONES[EDGE_TONE[edge.status ?? "unmonitored"] ?? "neutral"]
             .stroke,
       });
     }

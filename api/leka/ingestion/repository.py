@@ -2033,6 +2033,30 @@ class EnrichmentRepository(WorkspaceScopedRepository):
             found[entity_id].add(str(kind.value if hasattr(kind, "value") else kind))
         return dict(found)
 
+    async def sources_of(self, entity_ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, set[uuid.UUID]]:
+        """The sources that show each entity (LEKA-442): what its state rests on."""
+        if not entity_ids:
+            return {}
+        rows = await self._session.execute(
+            select(ResolvedKey.entity_id, ResolvedKey.source_id)
+            .where(
+                ResolvedKey.workspace_id == self.workspace_id,
+                ResolvedKey.entity_id.in_(list(set(entity_ids))),
+            )
+            .distinct()
+        )
+        found: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
+        for entity_id, source_id in rows.all():
+            found[entity_id].add(source_id)
+        return dict(found)
+
+    async def workspace_sources(self) -> Sequence[Source]:
+        """The workspace's sources, as the connectors hold them now."""
+        rows = await self._session.scalars(
+            select(Source).where(Source.workspace_id == self.workspace_id).order_by(Source.name)
+        )
+        return list(rows.all())
+
     async def links_among(
         self, types: Sequence[str], edge_types: Sequence[str]
     ) -> Sequence[tuple[uuid.UUID, uuid.UUID, str]]:

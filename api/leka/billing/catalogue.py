@@ -50,6 +50,26 @@ class Allowance(_Model):
     contractual: bool = False
 
 
+class Monitoring(_Model):
+    """What a plan watches for its workspace (LEKA-442). Every plan shows
+    the states, their freshness and what covers them; watching proactively
+    — alerts opened, deduplicated, kept to what the data supports — and
+    telling (in LEKA, by e-mail) are a paid plan's. `provisional`: decided
+    for the launch, to revisit."""
+
+    proactive: bool
+    alerts: tuple[Literal["in_app", "email"], ...] = ()
+    contractual: bool = False
+    provisional: bool = False
+
+    @model_validator(mode="after")
+    def _coherent(self) -> Monitoring:
+        if self.alerts and not self.proactive:
+            msg = "alerts need proactive monitoring"
+            raise ValueError(msg)
+        return self
+
+
 class Plan(_Model):
     key: Literal["free", "starter", "growth", "business", "enterprise"]
     name: str
@@ -65,6 +85,7 @@ class Plan(_Model):
     own_llm: bool
     launch_offer: bool
     annual: bool
+    monitoring: Monitoring = Monitoring(proactive=False)
 
     @model_validator(mode="after")
     def _coherent(self) -> Plan:
@@ -76,6 +97,9 @@ class Plan(_Model):
             raise ValueError(msg)
         if (self.launch_offer or self.annual) and not self.monthly_price:
             msg = f"{self.key}: a discount needs a price to apply to"
+            raise ValueError(msg)
+        if self.monitoring.proactive and not (self.monthly_price or self.key == "enterprise"):
+            msg = f"{self.key}: proactive monitoring is a paid plan's"
             raise ValueError(msg)
         return self
 

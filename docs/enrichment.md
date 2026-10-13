@@ -442,3 +442,101 @@ week's events (Activité, LEKA-383) and the open contradictions (LEKA-382).
   across runs.
 - **The users and the metrics** on the screens: they wait for sources and
   models that read them (§ 12).
+
+## 12 bis. The Digital Twin: states, freshness, coverage — and alerts by plan (LEKA-442)
+
+Since LEKA-442 every screen, from the overview to the map, its list and a
+sheet, says each thing's state in **the same six words**. They are read
+from the signals that really exist, never from silence: « inconnu » is
+never « sain ». See `leka/ingestion/enrichment/twin.py`.
+
+| State | When | Where it comes from (`basis`) |
+|---|---|---|
+| `unavailable` | an open incident of high severity affects it (sev0, sev1, P0, P1, critical, highest, blocker, urgent); its provider says it `failed` | measured (the incident's record), declared |
+| `degraded` | an open incident of lower severity affects it; its provider says it is starting, stopping, stopped or deleting; its health deduced from what runs it is degraded | measured, declared, deduced (then only *suspected*) |
+| `operational` | a monitoring source (category `observability`) shows it, read recently, and raises nothing; its provider says it is `running`; its health deduced from what runs it is good | measured, declared, deduced: always said which |
+| `stale` | every source showing it was last read more than **3 hours** ago (three missed reads), or is failing: what it was then is said (`was`), *unverified* | as it was |
+| `unknown` | a connected source could tell (a monitoring tool is connected), and says nothing of it | none |
+| `not_covered` | no connected source could tell: no monitoring tool for a service | none |
+
+An incident read from a stale source stays an incident, said *unverified*.
+A closed incident is not health. It resolves nothing until a fresh signal
+says the thing is well.
+
+**Each state carries:**
+- `reason`, worded by the screens;
+- `observed_at`: the latest read of a source showing it;
+- `signal`: the sources it rests on, by name, read from `resolved_keys`;
+- `fresh`;
+- `certainty`: confirmed, suspected or unverified;
+- the open `incident` it rests on.
+
+**Freshness, as it really is.** Sources are read every hour
+(`leka.ingestion.sync.SYNC_INTERVAL`), and the twin says so: « Sources lues
+toutes les 60 min — pas en temps réel ».
+- A read is **late** when no connected source has been read for two hours.
+- A source that receives what its system sends (a webhook connector) is said so.
+- Each source is shown in its state: `read`, `error`, `degraded`, `stale`, `syncing`, `disabled` or `never`, with its last error, cleaned.
+
+**Coverage.** Each part of the twin is covered by the connected sources of
+the categories that describe it, or it is not:
+
+| Part | Covered by |
+|---|---|
+| applications | code |
+| services | code, observability or custom sources |
+| health | observability |
+| incidents | project or observability |
+| data | data or cloud |
+| infrastructure | cloud |
+| teams | code, project or chat |
+
+**Reads.** `GET /ingestion/enrichment/environment` adds to each node its
+`twin`, plus:
+- `states`: every state counted, 0 included;
+- `freshness`;
+- `coverage`;
+- `sources`.
+
+`GET …/environment/{id}` adds the thing's `twin` and the sources that
+show it, each in its state.
+
+A provider's box takes the worst state of its resources. The company
+model's views (architecture, landscapes) keep their own states. The
+screen draws the twin's over them, by entity id (`web/lib/twin.ts`), so the
+same thing has one state everywhere.
+
+**Alerts (`leka/monitoring`), for the plans that include them.** The
+catalogue decides who gets them (`plans[].monitoring`, provisional,
+decided 2026-10-13):
+- **Free** sees the states, their freshness and coverage, and is never alerted;
+- **Starter** is alerted in LEKA;
+- **Growth** and **Business** are alerted in LEKA and by e-mail;
+- **Enterprise**: by contract.
+
+The `monitoring-sweep` job runs every 15 minutes after the sources are
+read (`judge()`, pure):
+- `unavailable` or `degraded` opens an alert: **one per thing and family of trouble**. The same trouble seen again moves its last sighting, worse or milder, and never opens a second (a partial unique index);
+- a connected source failing opens a `source_failing` alert;
+- the certainty follows the data: confirmed by a record, suspected from a deduction, unverified while what it rests on is stale;
+- **only a fresh signal resolves an alert**: a monitoring tool's measure or a provider's word, kept in `resolution`. Silence, staleness, `unknown`, `not_covered` or a deduction keep it open, made *unverified*;
+- a thing gone from the model closes its alert, said why (`subject_gone`).
+
+What just opened is e-mailed once to the workspace's owners and admins,
+in their language, when the plan includes e-mail (`notified`).
+
+`GET /monitoring` returns:
+- what the plan includes, and the cheapest plan that includes alerts and e-mail;
+- the alerts open;
+- those ended in the last 7 days.
+
+A Free workspace reads its limit, never an alert simulated.
+
+**Tested:**
+- `tests/test_twin.py`, pure: a normal state, a confirmed incident (severe, mild), a suspected anomaly, an unknown thing, one not covered, a stale source (and an incident read from it), a failing one, a cloud resource, freshness, coverage, counting;
+- `tests/test_monitoring_alerts.py`, pure: the plans, opening, deduplicating, resolving only on a signal, closing, the e-mail;
+- `tests/test_monitoring_api.py`, on the demo company:
+  - provenance and freshness;
+  - Free never alerted;
+  - Growth alerted once, with one e-mail, resolved by Datadog;
+  - Starter never e-mailed.

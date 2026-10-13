@@ -50,6 +50,8 @@ LAYERS: dict[str, int] = {
     "intentions": 10,
     # Operations (LEKA-408): reads every module's tables as operating data.
     "ops": 11,
+    # Watching the environment (LEKA-442): reads the twin, the plan.
+    "monitoring": 11,
     # Metering (LEKA-430): derives the usage ledger from the calls and runs.
     "metering": 11,
     "api": 12,

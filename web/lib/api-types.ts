@@ -981,6 +981,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/monitoring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Monitoring */
+        get: operations["monitoring_api_v1_monitoring_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/governance/data-protection": {
         parameters: {
             query?: never;
@@ -6781,6 +6798,77 @@ export interface components {
              * @description At list price; none when a price is not known.
              */
             cost_usd: number | null;
+        };
+        /**
+         * AlertRead
+         * @description An alert: on what, what is wrong, how sure, from when to when, and
+         *     what ended it.
+         */
+        AlertRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Subject Type
+             * @enum {string}
+             */
+            subject_type: "entity" | "source";
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Subject Name */
+            subject_name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "unavailable" | "degraded" | "source_failing";
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "high" | "medium" | "low";
+            /**
+             * Certainty
+             * @enum {string}
+             */
+            certainty: "confirmed" | "suspected" | "unverified";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "resolved" | "closed";
+            /**
+             * Opened At
+             * Format: date-time
+             */
+            opened_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Resolved At */
+            resolved_at: string | null;
+            /** Detail */
+            detail: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Resolution
+             * @description The signal that verified it ended — or why it was closed without one.
+             */
+            resolution: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Notified */
+            notified: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
         };
         /**
          * AmbiguityChoice
@@ -13081,6 +13169,13 @@ export interface components {
              * @default false
              */
             deduced: boolean;
+            /** @description Its state, where it comes from, how fresh (LEKA-442). */
+            twin?: components["schemas"]["TwinStateRead"] | null;
+            /**
+             * Sources
+             * @description The sources that show it, each in its state.
+             */
+            sources?: components["schemas"]["TwinSourceRead"][];
             /** Environment */
             environment: string | null;
             owner: components["schemas"]["SheetPersonRead"] | null;
@@ -13203,6 +13298,8 @@ export interface components {
             /** Environment */
             environment: string | null;
             team: components["schemas"]["EntityRef"] | null;
+            /** @description Its state in the Digital Twin (LEKA-442); a provider's box: its worst. */
+            twin?: components["schemas"]["TwinStateRead"] | null;
         };
         /**
          * EnvironmentRead
@@ -13268,6 +13365,18 @@ export interface components {
             attention: components["schemas"]["AttentionPointRead"][];
             /** Events */
             events: components["schemas"]["EnvironmentEventRead"][];
+            /**
+             * States
+             * @description How many things with a state are in each (LEKA-442), every state said.
+             */
+            states?: {
+                [key: string]: number;
+            };
+            freshness?: components["schemas"]["TwinFreshnessRead"] | null;
+            /** Coverage */
+            coverage?: components["schemas"]["TwinCoverageRead"][];
+            /** Sources */
+            sources?: components["schemas"]["TwinSourceRead"][];
         };
         /**
          * ErrorBody
@@ -16933,6 +17042,57 @@ export interface components {
              * @description What one of them cost, on average: every call made for it, understanding and answer, at list price.
              */
             per_intention_usd?: number | null;
+        };
+        /**
+         * MonitoringEntitlementRead
+         * @description What the workspace's plan includes of the watch — and, when it does
+         *     not, the cheapest plan that does: never an alert simulated.
+         */
+        MonitoringEntitlementRead: {
+            /** Plan */
+            plan: string;
+            /**
+             * Proactive
+             * @description Its states are watched and alerts opened.
+             */
+            proactive: boolean;
+            /**
+             * Alerts
+             * @description How it is told.
+             */
+            alerts: ("in_app" | "email")[];
+            /** Contractual */
+            contractual: boolean;
+            /**
+             * Provisional
+             * @description Decided for the launch, to revisit.
+             */
+            provisional: boolean;
+            /**
+             * Alerts From
+             * @description The cheapest plan that watches proactively.
+             */
+            alerts_from: string | null;
+            /**
+             * Email From
+             * @description The cheapest plan that tells by e-mail.
+             */
+            email_from: string | null;
+        };
+        /**
+         * MonitoringRead
+         * @description The watch, as the screens show it: what the plan includes, what is
+         *     open, what ended lately.
+         */
+        MonitoringRead: {
+            entitlement: components["schemas"]["MonitoringEntitlementRead"];
+            /** Open */
+            open: components["schemas"]["AlertRead"][];
+            /**
+             * Ended
+             * @description Resolved or closed in the last 7 days.
+             */
+            ended: components["schemas"]["AlertRead"][];
         };
         /**
          * NeededRead
@@ -21261,6 +21421,152 @@ export interface components {
              * @enum {string}
              */
             origin: "source" | "model";
+        };
+        /**
+         * TwinCoverageRead
+         * @description A part of the twin, covered or not, and by which sources.
+         */
+        TwinCoverageRead: {
+            /**
+             * Part
+             * @enum {string}
+             */
+            part: "applications" | "services" | "health" | "incidents" | "data" | "infrastructure" | "teams";
+            /** Covered */
+            covered: boolean;
+            /** Sources */
+            sources: string[];
+        };
+        /**
+         * TwinFreshnessRead
+         * @description When the twin was last observed, how often it is — never « temps
+         *     réel » when it is not.
+         */
+        TwinFreshnessRead: {
+            /**
+             * Last Read At
+             * @description The latest read of a connected source.
+             */
+            last_read_at: string | null;
+            /**
+             * Every Minutes
+             * @description How often sources are read.
+             */
+            every_minutes: number;
+            /**
+             * Late
+             * @description No connected source read within twice that.
+             */
+            late: boolean;
+            /**
+             * Webhooks
+             * @description A source receives what its system sends, as it is sent.
+             */
+            webhooks: boolean;
+        };
+        /**
+         * TwinIncidentRead
+         * @description The open incident a state rests on: its record, how bad.
+         */
+        TwinIncidentRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Severity */
+            severity: string | null;
+        };
+        /**
+         * TwinSourceRead
+         * @description A source, in the state it is in now (LEKA-442): never « lue » when
+         *     it is failing, late or never read.
+         */
+        TwinSourceRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /**
+             * Category
+             * @description code, project, docs, cloud, observability, data, chat.
+             */
+            category: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "read" | "error" | "degraded" | "stale" | "syncing" | "disabled" | "never";
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /**
+             * Error
+             * @description What its last check or read said, cleaned.
+             */
+            error: string | null;
+            /**
+             * Webhooks
+             * @description It receives what its system sends, as it is sent.
+             */
+            webhooks: boolean;
+        };
+        /**
+         * TwinStateRead
+         * @description A thing's state in the Digital Twin (LEKA-442), with where it comes
+         *     from and how fresh — « inconnu » never meaning « sain ».
+         */
+        TwinStateRead: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "unavailable" | "degraded" | "stale" | "unknown" | "not_covered" | "operational";
+            /**
+             * Basis
+             * @description measured — a monitoring tool or an incident record; declared — its provider's word; deduced — from what runs it; none — nothing says.
+             * @enum {string}
+             */
+            basis: "measured" | "declared" | "deduced" | "none";
+            /**
+             * Reason
+             * @description incident_open, resource_failed, resource_paused, resource_running, monitored_quiet, deduced_health, no_monitoring_source, no_signal, sources_stale, sources_failing.
+             */
+            reason: string;
+            /**
+             * Observed At
+             * @description When a source last read it.
+             */
+            observed_at: string | null;
+            /**
+             * Signal
+             * @description The sources it rests on, by name.
+             */
+            signal: string[];
+            /**
+             * Fresh
+             * @description Read by at least one source within STALE_AFTER.
+             */
+            fresh: boolean;
+            /**
+             * Was
+             * @description What it was, when stale.
+             */
+            was: ("unavailable" | "degraded" | "stale" | "unknown" | "not_covered" | "operational") | null;
+            /**
+             * Certainty
+             * @enum {string}
+             */
+            certainty: "confirmed" | "suspected" | "unverified";
+            incident: components["schemas"]["TwinIncidentRead"] | null;
         };
         /**
          * Understanding
@@ -27497,6 +27803,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditEventDetail"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    monitoring_api_v1_monitoring_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringRead"];
                 };
             };
             /** @description The request could not be understood. */

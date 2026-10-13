@@ -179,7 +179,20 @@ export const STATUS_TONE: Record<string, keyof typeof TONES> = {
   attention: "warning",
   incident: "danger",
   unmonitored: "neutral",
+  // The Digital Twin's (LEKA-442): the states every screen says the same.
+  degraded: "warning",
+  unavailable: "danger",
+  stale: "info",
+  unknown: "neutral",
+  not_covered: "neutral",
 };
+
+/** What a state's colour says: in trouble, worth a look, or nothing. */
+const SEVERE_STATES = new Set(["incident", "unavailable"]);
+const WATCHED_STATES = new Set(["attention", "degraded"]);
+/** The order states are said in: the twin's when the data is the twin's. */
+const TWIN_ORDER = ["unavailable", "degraded", "stale", "unknown", "not_covered", "operational"];
+const LEGACY_ORDER = ["operational", "attention", "incident", "unmonitored"];
 
 /** An engine, by the name its card says, as a source's logo. */
 const ENGINE_LOGOS: Record<string, SourceKind> = {
@@ -362,13 +375,14 @@ export function ArchitectureFigures({ data }: { data: Architecture | undefined }
     },
   ];
   const health = data?.health;
-  const total = health
-    ? health.operational + health.attention + health.incident + (health.unmonitored ?? 0)
-    : 0;
+  const total = health ? Object.values(health).reduce((sum, count) => sum + count, 0) : 0;
   const percent = new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 });
-  const lines = (["operational", "attention", "incident", "unmonitored"] as const).filter(
-    (state) => state !== "unmonitored" || (health?.unmonitored ?? 0) > 0,
-  );
+  // The twin's states once the screen has them (LEKA-442); each said when
+  // it counts something.
+  const twin = health ? TWIN_ORDER.some((state) => state in health && state !== "operational") : false;
+  const lines = (twin ? TWIN_ORDER : LEGACY_ORDER).filter(
+    (state) => (health?.[state] ?? 0) > 0 || (!twin && state !== "unmonitored"),
+  ) as (keyof Words["health"])[];
 
   return (
     <ul className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -644,7 +658,17 @@ export function ownArrows(
 }
 
 function worst(states: readonly (string | null)[]): string | null {
-  const order = ["incident", "attention", "operational", "unmonitored"];
+  const order = [
+    "unavailable",
+    "incident",
+    "degraded",
+    "attention",
+    "stale",
+    "operational",
+    "unknown",
+    "not_covered",
+    "unmonitored",
+  ];
   return states.reduce<string | null>((found, state) => {
     if (!state) return found;
     if (!found) return state;
@@ -753,9 +777,9 @@ export function useArrows(
       const faded = selected !== null && !arrow.own;
       const tone: Drawn["tone"] = arrow.own
         ? "violet"
-        : arrow.status === "incident"
+        : SEVERE_STATES.has(arrow.status ?? "")
           ? "danger"
-          : arrow.status === "attention"
+          : WATCHED_STATES.has(arrow.status ?? "")
             ? "warning"
             : "neutral";
       const label =
@@ -1064,7 +1088,7 @@ export function Legend() {
       aria-label={t.environment.legend}
       className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.75rem] text-brand-navy"
     >
-      {(["operational", "attention", "incident", "unmonitored"] as const).map((state) => (
+      {(TWIN_ORDER as (keyof Words["health"])[]).map((state) => (
         <li key={state} className="flex items-center gap-1.5">
           <span aria-hidden="true" className={cn("size-2 rounded-full", TONES[STATUS_TONE[state]].dot)} />
           {w.health[state]}
@@ -1354,9 +1378,9 @@ export function CardBox({
         "relative z-20 flex w-full min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 text-start outline-none transition focus-visible:ring-3 focus-visible:ring-brand-violet/40",
         selected
           ? "border-brand-violet/60 bg-white ring-2 ring-brand-violet/30"
-          : card.status === "incident"
+          : SEVERE_STATES.has(card.status ?? "")
             ? "border-state-danger/50 bg-state-danger-soft"
-            : card.status === "attention"
+            : WATCHED_STATES.has(card.status ?? "")
               ? "border-state-warning/50 bg-state-warning-soft"
               : "border-shell-line bg-white hover:border-brand-violet/40",
       )}

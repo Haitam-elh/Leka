@@ -18,7 +18,6 @@ import { cn } from "cn";
 
 import { KnowledgeTable, type KnowledgeColumn } from "@/components/knowledge/knowledge-table";
 import { StatusBadge } from "@/components/knowledge/status-badge";
-import { TONES } from "@/components/knowledge/status";
 import { timeAgo } from "@/components/knowledge/time";
 import { ArchitectureBoard, ArchitectureFigures } from "@/components/environment/architecture";
 import { LekaInsights } from "@/components/insights/leka-insights";
@@ -54,7 +53,16 @@ import {
 } from "@/components/ui/select";
 import { ENVIRONMENT_VIEWS, routes } from "@/config/routes";
 import type { Environment, EnvironmentStatus } from "@/lib/environment";
-import { useEnvironment } from "@/lib/environment-queries";
+import { useEnvironment, useMonitoring } from "@/lib/environment-queries";
+import { type TwinStateName, twinOf, withTwin } from "@/lib/twin";
+import {
+  AlertsCard,
+  FreshnessLine,
+  SourcesCoverage,
+  TwinCounts,
+  TwinLegend,
+  TwinList,
+} from "@/components/environment/twin";
 import type { LandscapeView, ViewName, ViewNode } from "@/lib/knowledge-graph";
 import { useArchitecture, useLandscapeView } from "@/lib/knowledge-graph-queries";
 import { useDictionary } from "@/lib/i18n/locale-provider";
@@ -117,14 +125,6 @@ const VIEWS_OF: Partial<Record<Tab, ViewName>> = {
   domains: "domains",
 };
 
-const LEGEND = ["operational", "attention", "incident", "unmonitored"] as const;
-const LEGEND_TONE = {
-  operational: "success",
-  attention: "warning",
-  incident: "danger",
-  unmonitored: "neutral",
-} as const;
-
 const GLOBAL = "global";
 const SOURCE_ROWS = 5;
 
@@ -176,16 +176,40 @@ export function EnvironmentScreen() {
   const [tab, setTab] = useTab();
   const [view, setView] = useState<"map" | "list">("map");
   const [scope, setScope] = useState(GLOBAL);
+  const [only, setOnly] = useState<TwinStateName | null>(null);
   const viewName = VIEWS_OF[tab] ?? null;
   const landscape = useLandscapeView(viewName);
-  const architecture = useArchitecture(scope === GLOBAL ? null : scope);
+  const architectureRead = useArchitecture(scope === GLOBAL ? null : scope);
+  // The Digital Twin (LEKA-442): one state per thing on every view — the
+  // map, its list, a sheet.
+  const environment = useEnvironment();
+  const monitoring = useMonitoring();
+  const twin = useMemo(() => twinOf(environment.data), [environment.data]);
+  const architecture = {
+    ...architectureRead,
+    data: useMemo(() => withTwin(architectureRead.data, twin), [architectureRead.data, twin]),
+  };
 
   const nodes = useMemo(() => {
-    const all = landscape.data?.nodes ?? [];
+    const all = (landscape.data?.nodes ?? []).map((node) => {
+      const found = node.entity_id ? twin.get(node.entity_id) : undefined;
+      return found ? { ...node, status: found.state } : node;
+    });
     return scope === GLOBAL
       ? all
       : all.filter((node) => !node.environment || node.environment === scope);
-  }, [landscape.data, scope]);
+  }, [landscape.data, scope, twin]);
+  const tracked = useMemo(
+    () =>
+      (environment.data?.nodes ?? []).filter(
+        (node) => scope === GLOBAL || !node.environment || node.environment === scope,
+      ),
+    [environment.data, scope],
+  );
+  function pick(state: TwinStateName | null) {
+    setOnly(state);
+    if (state) setView("list");
+  }
   const environments = useMemo(
     () => [
       ...new Set([...(model?.environments ?? []), ...(architecture.data?.environments ?? [])]),
@@ -199,7 +223,27 @@ export function EnvironmentScreen() {
       <ErrorState error={architecture.error} onRetry={() => void architecture.refetch()} />
     ) : architecture.data ? (
       <div className="flex flex-col gap-3">
-        <ArchitectureBoard data={architecture.data} />
+        {/* How many things in each state — each the way to the list of them. */}
+        <Card title={t.environment.twin.counts.title}>
+          <TwinCounts states={environment.data?.states ?? {}} active={only} onPick={pick} />
+        </Card>
+        {view === "list" ? (
+          // The readable alternative to the map (LEKA-442).
+          <Card title={t.environment.twin.list.caption}>
+            <TwinList nodes={tracked} filter={only} />
+          </Card>
+        ) : (
+          <ArchitectureBoard data={architecture.data} />
+        )}
+        <div className="grid gap-4 xl:grid-cols-2">
+          <AlertsCard monitoring={monitoring.data} />
+          {environment.data ? (
+            <SourcesCoverage
+              coverage={environment.data.coverage ?? []}
+              sources={environment.data.sources ?? []}
+            />
+          ) : null}
+        </div>
         {/* What moved and what needs a look, as the mockup's foot (LEKA-438). */}
         <Recent model={model} />
       </div>
@@ -253,9 +297,10 @@ export function EnvironmentScreen() {
     <PageContainer>
       <Header
         model={model}
+        freshness={environment.data?.freshness}
         environments={environments}
         view={view}
-        onView={viewName ? setView : null}
+        onView={viewName || tab === "architecture" ? setView : null}
         scope={scope}
         onScope={setScope}
       />
@@ -287,17 +332,8 @@ export function EnvironmentScreen() {
             <DetailedLink />
           </div>
         ) : (
-          <ul aria-label={w.legend} className="flex flex-wrap gap-x-5 gap-y-1 px-2.5 2xl:ms-auto 2xl:pe-2">
-            {LEGEND.map((state) => (
-              <li key={state} className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
-                <span
-                  aria-hidden="true"
-                  className={cn("size-2.5 rounded-full", TONES[LEGEND_TONE[state]].dot)}
-                />
-                {t.knowledge.status.entity[state]}
-              </li>
-            ))}
-          </ul>
+          // The six states, each defined (LEKA-442).
+          <TwinLegend className="px-2.5 2xl:ms-auto 2xl:pe-2" />
         )}
       </div>
 
@@ -342,6 +378,7 @@ function DetailedLink() {
 
 function Header({
   model,
+  freshness,
   environments,
   view,
   onView,
@@ -349,6 +386,7 @@ function Header({
   onScope,
 }: {
   model: Model | undefined;
+  freshness: Environment["freshness"] | undefined;
   environments: readonly string[];
   view: "map" | "list";
   /** None: the tab has no list to switch to. */
@@ -379,21 +417,28 @@ function Header({
         <p className="text-[0.9375rem] text-shell-accent-muted">{w.subtitle}</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <p className="flex items-center gap-2 text-xs text-shell-muted" aria-live="polite">
-          <span
-            aria-hidden="true"
-            className={cn(
-              "size-2.5 rounded-full",
-              model?.updatedAt ? "bg-state-success" : "bg-shell-muted",
-            )}
-          />
-          <span>
-            <span className="block">{w.updated}</span>
-            <span className="block font-medium text-brand-navy">
-              {model?.updatedAt ? timeAgo(t, model.updatedAt) : w.neverUpdated}
+        {freshness ? (
+          // When it was really read, how often — never « temps réel » (LEKA-442).
+          <div aria-live="polite">
+            <FreshnessLine freshness={freshness} />
+          </div>
+        ) : (
+          <p className="flex items-center gap-2 text-xs text-shell-muted" aria-live="polite">
+            <span
+              aria-hidden="true"
+              className={cn(
+                "size-2.5 rounded-full",
+                model?.updatedAt ? "bg-state-success" : "bg-shell-muted",
+              )}
+            />
+            <span>
+              <span className="block">{w.updated}</span>
+              <span className="block font-medium text-brand-navy">
+                {model?.updatedAt ? timeAgo(t, model.updatedAt) : w.neverUpdated}
+              </span>
             </span>
-          </span>
-        </p>
+          </p>
+        )}
         <Select
           value={scope}
           onValueChange={(value) => onScope((value as string | null) ?? GLOBAL)}
