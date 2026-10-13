@@ -155,11 +155,38 @@ def _step_plan(step: IntentionPlanStep) -> StepPlan:
     )
 
 
+def plan_controls(
+    status: str, steps: Sequence[str], intention_status: str | None, *, latest: bool
+) -> list[str]:
+    """What may be done with a plan now (LEKA-443) — the rules start(),
+    cancel(), report() and plan() apply, said once for the screens. Only the
+    latest plan is acted on.
+
+        planned     start it now or at a time; cancel it
+        scheduled   unschedule it
+        running     stop it; confirm a step that waits on a person
+        over        a new plan of what did not succeed (failed), or of all
+                    of it (approved again)"""
+    if not latest or intention_status is None:
+        return []
+    if status == "planned":
+        return ["start", "schedule", "cancel"]
+    if status == "scheduled":
+        return ["unschedule"]
+    if status == "running":
+        return ["stop", "confirm_step"] if "awaiting" in steps else ["stop"]
+    if intention_status in (S.FAILED.value, S.APPROVED.value):
+        return ["plan"]
+    return []
+
+
 def plan_read(
     plan: IntentionPlan,
     steps: Sequence[IntentionPlanStep],
     events: Sequence[IntentionPlanEvent],
     now: datetime | None = None,
+    *,
+    controls: Sequence[str] = (),
 ) -> IntentionPlanRead:
     suggested = (
         scheduled_for([_step_plan(s) for s in steps], _now(now), _zone(plan.timezone))
@@ -186,6 +213,7 @@ def plan_read(
         error=plan.error,
         steps=[IntentionPlanStepRead.model_validate(s) for s in steps],
         events=[IntentionPlanEventRead.model_validate(e) for e in events],
+        controls=list(controls),
     )
 
 
@@ -289,7 +317,16 @@ class ActionService:
         )
 
     async def read(self, plan: IntentionPlan, now: datetime | None = None) -> IntentionPlanRead:
-        return plan_read(plan, await self._steps(plan.id), await self._events(plan.id), now)
+        steps = await self._steps(plan.id)
+        intention = await self._intentions.intention(plan.intention_id)
+        latest = await self._latest(plan.intention_id)
+        controls = plan_controls(
+            plan.status,
+            [s.status for s in steps],
+            intention.status if intention is not None and intention.archived_at is None else None,
+            latest=latest is not None and latest.id == plan.id,
+        )
+        return plan_read(plan, steps, await self._events(plan.id), now, controls=controls)
 
     async def plans(self, intention_id: uuid.UUID) -> list[IntentionPlanRead] | None:
         if await self._intentions.intention(intention_id) is None:

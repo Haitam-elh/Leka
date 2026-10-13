@@ -11,6 +11,8 @@ move it, and who.
 
     submitted, analysing ──▶ needs_clarification ──▶ analysing   (LEKA-385:
                              not understood enough; clarified by asking again)
+    analysing ──▶ submitted ──▶ analysing   (LEKA-443: its analysis stopped by
+                  a person — kept, ready to analyse — and resumed)
     any state not closed ──▶ cancelled     (the asker withdraws it)
     failed ──▶ analysing | executing        (tried again)
     completed | rejected ──▶ analysing      (asked again)
@@ -36,7 +38,9 @@ from dataclasses import dataclass
 
 
 class IntentionStatus(enum.StrEnum):
-    # Asked: its words and scope kept, nothing read yet.
+    # Asked: its words and scope kept, nothing being read — before its
+    # analysis starts, or once a person stopped it (LEKA-443): ready to
+    # analyse.
     SUBMITTED = "submitted"
     # Not understood enough to go on (LEKA-385): what LEKA would ask is
     # said; asked again, it is read again.
@@ -91,6 +95,8 @@ TRANSITIONS: Mapping[IntentionStatus, tuple[Move, ...]] = {
         _move(S.ANALYSING, "analysis_started", SYS),
         _move(S.NEEDS_CLARIFICATION, "clarification_asked", SYS),
         _move(S.FAILED, "failed", SYS),
+        # Stopped, then resumed by a person (LEKA-443).
+        _move(S.ANALYSING, "resumed", P),
     ),
     S.NEEDS_CLARIFICATION: (_move(S.ANALYSING, "clarified", P),),
     S.ANALYSING: (
@@ -101,6 +107,8 @@ TRANSITIONS: Mapping[IntentionStatus, tuple[Move, ...]] = {
         _move(S.FAILED, "failed", SYS),
         # Asked again while being analysed: analysed again.
         _move(S.ANALYSING, "asked_again", P),
+        # Its analysis stopped by a person: kept, ready to analyse (LEKA-443).
+        _move(S.SUBMITTED, "stopped", P),
     ),
     S.AWAITING_DECISION: (
         _move(S.APPROVED, "approved", P),

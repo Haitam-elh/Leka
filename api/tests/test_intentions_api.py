@@ -267,8 +267,12 @@ async def test_cancelled_archived_restored_by_its_asker_or_an_approver(
     assert cancelled.status_code == 200, cancelled.text
     assert cancelled.json()["status"] == "cancelled"
     assert cancelled.json()["moves"] == []
+    # Withdrawn twice — a click twice, a request retried — the same: nothing
+    # moved twice (LEKA-443).
     again = await client.post(f"{API}/{mine['id']}/cancel", json={})
-    assert again.status_code == 409
+    assert again.status_code == 200, again.text
+    assert again.json()["journey"]["state"] == "cancelled"
+    assert [e["name"] for e in await _history(client, mine["id"])].count("cancelled") == 1
     # Cancelled is final: not asked again.
     reask = await client.post(f"{API}/{mine['id']}/ask", json={"text": ASKED})
     assert reask.status_code == 409

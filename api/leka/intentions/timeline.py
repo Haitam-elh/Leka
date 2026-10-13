@@ -110,6 +110,8 @@ async def timeline(
     # Within its kind, at the same instant: an intention's events by their
     # sequence, an analysis' start before its end, a plan's as its run goes.
     within: dict[str, int] = {}
+    # The version each analysis read (LEKA-443).
+    analysed: dict[uuid.UUID, int] = {}
 
     if "intention" in f.categories:
         events = select(IntentionEvent).where(IntentionEvent.workspace_id == workspace_id)
@@ -162,6 +164,8 @@ async def timeline(
                 )
             )
         ).all():
+            if a.intention_version is not None:
+                analysed[a.id] = a.intention_version
             detail = {"number": a.number, "trigger": a.trigger, "analysis_id": str(a.id)}
             items.append(
                 TimelineItem(
@@ -297,6 +301,7 @@ async def timeline(
     ]
     items.sort(key=lambda i: (i.at, RANKS[i.category], within.get(i.id, 0), i.id), reverse=True)
     items = items[: f.limit]
+    items = await _versioned(session, items, analysed)
     names = await _names(session, {i.by for i in items if i.by is not None})
     if names:
         items = [i.model_copy(update={"by_name": names.get(i.by)}) if i.by else i for i in items]
@@ -314,6 +319,50 @@ async def timeline(
         )
         items = [i.model_copy(update={"title": titles.get(i.intention_id)}) for i in items]
     return items
+
+
+# The moves by which a person asked it again, before versions were kept.
+ASKED = ("asked_again", "clarified")
+
+
+async def _versioned(
+    session: AsyncSession, items: list[TimelineItem], analysed: dict[uuid.UUID, int]
+) -> list[TimelineItem]:
+    """Each moment with the version of the intention it belongs to
+    (LEKA-443): an analysis, the one it read; anything else, the version
+    asked when it happened — each time it was asked again, one more."""
+    if not items:
+        return items
+    asked = (
+        await session.execute(
+            select(IntentionEvent.intention_id, IntentionEvent.at, IntentionEvent.detail)
+            .where(
+                IntentionEvent.intention_id.in_({i.intention_id for i in items}),
+                IntentionEvent.kind == "moved",
+                IntentionEvent.detail.has_key("intention_version") | IntentionEvent.name.in_(ASKED),
+            )
+            .order_by(IntentionEvent.intention_id, IntentionEvent.sequence)
+        )
+    ).tuples()
+    changes: dict[uuid.UUID, list[tuple[datetime, int]]] = {}
+    for intention_id, at, detail in asked:
+        seen = changes.setdefault(intention_id, [])
+        version = detail.get("intention_version") if isinstance(detail, dict) else None
+        before = seen[-1][1] if seen else 1
+        seen.append((at, version if isinstance(version, int) else before + 1))
+
+    def version_of(item: TimelineItem) -> int:
+        if item.category == "analysis":
+            found = item.detail.get("analysis_id")
+            if isinstance(found, str) and uuid.UUID(found) in analysed:
+                return analysed[uuid.UUID(found)]
+        version = 1
+        for at, then in changes.get(item.intention_id, []):
+            if at <= item.at:
+                version = then
+        return version
+
+    return [i.model_copy(update={"version": version_of(i)}) for i in items]
 
 
 async def _names(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:

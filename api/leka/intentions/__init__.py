@@ -38,6 +38,7 @@ from leka.intentions.approval import (
 )
 from leka.intentions.decisions import Change, PolicyError, Verdict
 from leka.intentions.grounding import readiness, refined
+from leka.intentions.journey import MATRIX, JourneyState, journey
 from leka.intentions.lifecycle import (
     CLOSED,
     PHASES,
@@ -106,6 +107,7 @@ from leka.intentions.schemas import (
     IntentionRead,
     IntentionRequest,
     IntentionVerificationRead,
+    JourneyRead,
     PlanCancelRequest,
     PlanStartRequest,
     PolicyProbe,
@@ -147,6 +149,7 @@ from leka.intentions.workflow_steps import rules_step
 __all__ = [
     "CATEGORIES",
     "CLOSED",
+    "MATRIX",
     "PHASES",
     "SKILLS",
     "TRANSITIONS",
@@ -215,6 +218,8 @@ __all__ = [
     "IntentionService",
     "IntentionStatus",
     "IntentionVerificationRead",
+    "JourneyRead",
+    "JourneyState",
     "LinkRefusedError",
     "ModelReading",
     "Move",
@@ -248,6 +253,7 @@ __all__ = [
     "categories_of",
     "endpoint_read",
     "intention_read",
+    "journey",
     "moves",
     "phase",
     "policy_read",

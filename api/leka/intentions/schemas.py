@@ -316,6 +316,81 @@ class ContextReadiness(BaseModel):
     warnings: list[ReadinessIssue]
 
 
+JourneyStateName = Literal[
+    "draft",
+    "needs_clarification",
+    "ready",
+    "analysing",
+    "analysis_partial",
+    "analysis_failed",
+    "result_available",
+    "decision_required",
+    "approved",
+    "rejected",
+    "action_running",
+    "action_failed",
+    "to_verify",
+    "done",
+    "cancelled",
+    "superseded",
+]
+JourneyControl = Literal[
+    "answer",
+    "ask_again",
+    "stop",
+    "resume",
+    "analyse_again",
+    "cancel",
+    "decide",
+    "modify_decision",
+    "start_actions",
+    "unschedule",
+    "stop_actions",
+    "retry_actions",
+    "report_outcome",
+    "archive",
+    "restore",
+]
+
+
+class JourneyStepRead(BaseModel):
+    """Where the five steps put it (LEKA-443)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    at: Literal["intention", "analysis", "results", "decision", "action"]
+    reached: int = Field(description="The last step it reached (0-4): what may be opened.")
+    done: bool = Field(description="The step it is at is itself done.")
+    last: int = Field(description="The last step it goes through: 2 for a question answered.")
+
+
+class JourneyRead(BaseModel):
+    """Where it stands as a person reads it (LEKA-443): one state, the same
+    on every screen — why, since when, what next and by whom, what may be
+    done now. Read from what was kept (journey.py), never a progress made
+    up."""
+
+    model_config = ConfigDict(frozen=True)
+
+    state: JourneyStateName
+    since: datetime
+    reason: str | None = Field(
+        description="Why it is there: queued, stopped, interrupted, partial, step_failed…"
+    )
+    next: str = Field(description="What comes next: answer, wait, resume, decide…")
+    by: Literal["asker", "approver", "leka"] | None = Field(
+        description="Who moves it on from here."
+    )
+    controls: list[JourneyControl] = Field(
+        description="What a person may do now, as its state allows — each route checks it again."
+    )
+    step: JourneyStepRead
+    late: bool = Field(description="Past what it should take: queued, or running, too long.")
+    technical: str | None = Field(
+        description="The error as kept, for whoever diagnoses it — never the words a person reads."
+    )
+
+
 class IntentionRead(BaseModel):
     """An intention, where it stands."""
 
@@ -337,6 +412,11 @@ class IntentionRead(BaseModel):
     archived_at: datetime | None
     moves: list[IntentionStatus] = Field(description="The states it may go to next.")
     goal: Goal | None = Field(description="What it wants to achieve, as understood (LEKA-385).")
+    version: int = Field(
+        description="Which version of what was asked: one more each time it is asked again "
+        "(LEKA-443)."
+    )
+    journey: JourneyRead
 
 
 class IntentionLinkRead(BaseModel):
@@ -988,10 +1068,20 @@ class IntentionAnalysisRead(BaseModel):
     intention_id: uuid.UUID
     number: int
     trigger: Literal["created", "asked_again", "requested", "sweep"]
-    status: Literal["running", "complete", "partial", "inconclusive", "failed", "blocked"]
+    status: Literal[
+        "running", "complete", "partial", "inconclusive", "failed", "blocked", "stopped"
+    ]
     requested_by: uuid.UUID | None
     context_id: uuid.UUID | None
     context_version: int | None
+    intention_version: int | None = Field(
+        default=None, description="The version of the intention it analysed (LEKA-443)."
+    )
+    current: bool = Field(
+        default=True,
+        description="Of the intention as it now stands: false once it was asked again, or "
+        "the analysis stopped — said replaced, never shown as its result (LEKA-443).",
+    )
     readiness: Literal["ready", "limited", "blocked"] | None
     started_at: datetime
     finished_at: datetime | None
@@ -1467,6 +1557,13 @@ class IntentionPlanRead(BaseModel):
     error: str | None
     steps: list[IntentionPlanStepRead]
     events: list[IntentionPlanEventRead]
+    controls: list[
+        Literal["start", "schedule", "cancel", "unschedule", "stop", "confirm_step", "plan"]
+    ] = Field(
+        default_factory=list,
+        description="What may be done with it now — the rules its routes apply; only the latest "
+        "plan is acted on (LEKA-443).",
+    )
 
 
 class PlanStartRequest(BaseModel):
@@ -1571,3 +1668,8 @@ class TimelineItem(BaseModel):
     )
     reason: str | None = None
     detail: dict[str, JsonValue] = Field(default_factory=dict)
+    version: int | None = Field(
+        default=None,
+        description="The version of the intention it belongs to: one more each time it was "
+        "asked again (LEKA-443).",
+    )

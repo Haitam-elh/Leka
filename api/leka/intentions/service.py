@@ -12,7 +12,11 @@ is the reason this module exists.
                then analysing. One transaction: nothing to start from
                (no thing named, no word to search) keeps nothing
     ask_again  its words or scope changed: its context made again, a new
-               version (LEKA-374) — analysed again
+               version (LEKA-374) — analysed again, the intention one version
+               more (LEKA-443); the same words again while it is analysed:
+               the same, nothing done twice
+    stop       its analysis stopped by a person: kept, ready to analyse
+               again (LEKA-443)
     move       a transition the lifecycle allows, by the actor it allows
                (lifecycle.py) — what the analysis, a decision, an action
                (LEKA-388 to 392) call
@@ -30,6 +34,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import asdict
 from datetime import UTC, datetime
 
 from leka.context import (
@@ -43,6 +48,7 @@ from leka.core.sensitive import guarded
 from leka.intelligence import IntelligenceRepository
 from leka.intentions.brief import answered, answered_ask, brief_of, tidy
 from leka.intentions.grounding import acting, readiness, refined
+from leka.intentions.journey import AnalysisSeen, Facts, Journey, LastMove, journey
 from leka.intentions.lifecycle import (
     CLOSED,
     Actor,
@@ -58,7 +64,7 @@ from leka.intentions.models import (
     IntentionEvent,
     IntentionLink,
 )
-from leka.intentions.repository import IntentionRepository
+from leka.intentions.repository import AnalysisBrief, IntentionRepository
 from leka.intentions.schemas import (
     ContextReadiness,
     IntentionAnalysisRead,
@@ -70,6 +76,7 @@ from leka.intentions.schemas import (
     IntentionLinkRead,
     IntentionRead,
     IntentionRequest,
+    JourneyRead,
     Understanding,
 )
 from leka.intentions.understanding import understand
@@ -164,7 +171,65 @@ def _scope(ask: IntentAsk) -> dict[str, object]:
     return {key: value for key, value in said.items() if value not in ([], None)}
 
 
-def intention_read(intention: Intention) -> IntentionRead:
+def facts_of(
+    intention: Intention,
+    last: IntentionEvent | None,
+    analysis: IntentionAnalysis | AnalysisBrief | None,
+) -> Facts:
+    """What its journey is read from (LEKA-443): where it stands, the move
+    that brought it there, its latest analysis."""
+    understood = (
+        Understanding.model_validate(intention.understanding) if intention.understanding else None
+    )
+    return Facts(
+        status=S(intention.status),
+        version=intention.version or 1,
+        changed_at=intention.status_changed_at,
+        archived=intention.archived_at is not None,
+        last=(
+            LastMove(
+                name=last.name or "",
+                actor=last.actor,
+                at=last.at,
+                from_status=last.from_status,
+                reason=last.reason,
+                detail=last.detail or {},
+            )
+            if last is not None
+            else None
+        ),
+        analysis=(
+            AnalysisSeen(
+                number=analysis.number,
+                status=analysis.status,
+                started_at=analysis.started_at,
+                intention_version=analysis.intention_version,
+                error=analysis.error,
+            )
+            if analysis is not None
+            else None
+        ),
+        acting=acting(understood),
+    )
+
+
+def journey_read(found: Journey) -> JourneyRead:
+    return JourneyRead.model_validate(
+        {
+            "state": found.state.value,
+            "since": found.since,
+            "reason": found.reason,
+            "next": found.next,
+            "by": found.by,
+            "controls": list(found.controls),
+            "step": asdict(found.step),
+            "late": found.late,
+            "technical": found.technical,
+        }
+    )
+
+
+def intention_read(intention: Intention, found: Journey) -> IntentionRead:
     status = S(intention.status)
     return IntentionRead.model_validate(
         {
@@ -189,6 +254,8 @@ def intention_read(intention: Intention) -> IntentionRead:
             "phase": phase(status),
             "moves": [m.to for m in moves(status)] if intention.archived_at is None else [],
             "goal": intention.goal,
+            "version": intention.version or 1,
+            "journey": journey_read(found),
         }
     )
 
@@ -285,12 +352,32 @@ class IntentionService:
 
     # ── asking ──────────────────────────────────────────────────────────
 
+    async def replayed(
+        self, by: uuid.UUID | None, request_key: str
+    ) -> tuple[Intention, AssembledContext] | None:
+        """The intention a request with this key already made, and its
+        context — the same request sent twice is one intention (LEKA-443).
+        Held until the transaction ends: the second of two at once waits for
+        the first, then finds it."""
+        if self._contexts is None:
+            msg = "Replaying a request reads its context: a ContextService is needed."
+            raise RuntimeError(msg)
+        await self._repository.hold(f"intention-request:{by}:{request_key}")
+        found = await self._repository.by_request_key(by, request_key)
+        if found is None or found.context_id is None:
+            return None
+        context = await self._contexts.assembled(found.context_id)
+        if context is None:
+            raise NothingToStartError
+        return found, context
+
     async def create(
         self,
         ask: IntentAsk | IntentionRequest,
         *,
         by: uuid.UUID | None,
         now: datetime | None = None,
+        request_key: str | None = None,
     ) -> tuple[Intention, AssembledContext]:
         """An intention kept, its context assembled and linked — analysing.
         NothingToStartError when nothing can start it: the caller's
@@ -313,6 +400,8 @@ class IntentionService:
             status_changed_at=at,
             created_by=by,
             events_count=0,
+            version=1,
+            request_key=request_key,
         )
         self._repository.add(intention)
         self._record(
@@ -381,6 +470,19 @@ class IntentionService:
         # Its answers (LEKA-439): those given now; none given, the ones kept
         # while its words are the same — new words, new questions.
         given = _answers(ask) or (_kept(intention) if ask.text == intention.text else [])
+        if (
+            intention.status == S.ANALYSING.value
+            and intention.context_id is not None
+            and ask.text == intention.text
+            and (ask.title or ask.text)[:TITLE] == intention.title
+            and _scope(ask) == intention.scope
+            and [a.model_dump(mode="json") for a in given] == list(intention.answers or [])
+        ):
+            # The same, asked again while it is analysed — a click twice, a
+            # request sent again: nothing done twice (LEKA-443).
+            current = await self._contexts.assembled(intention.context_id)
+            if current is not None:
+                return intention, current
         asked = answered_ask(ask, given).model_copy(update={"intention_id": str(intention.id)})
         understood = answered(
             await self._understand(asked.text, await self._contexts.plan_intent(asked), at=at),
@@ -401,6 +503,9 @@ class IntentionService:
         intention.title = (ask.title or ask.text)[:TITLE]
         intention.scope = _scope(ask)
         intention.answers = [a.model_dump(mode="json") for a in given]
+        # A new version of what was asked: what came of the earlier one is
+        # said replaced (LEKA-443).
+        intention.version = (intention.version or 1) + 1
         await self._follow(intention, context, by=by, at=at)
         ready = self._keep(intention, understood, context)
         self._move(
@@ -410,6 +515,7 @@ class IntentionService:
             by=by,
             at=at,
             detail={
+                "intention_version": intention.version,
                 "before": before,
                 "scope": intention.scope,
                 "context_id": str(context.context_id),
@@ -593,7 +699,44 @@ class IntentionService:
         if intention is None:
             return None
         _yours(intention, by, steward)
+        if intention.status == S.CANCELLED.value:
+            # Withdrawn twice — a click twice: the same (LEKA-443).
+            return intention
         self._move(intention, S.CANCELLED, actor=Actor.PERSON, by=by, at=_now(now), reason=reason)
+        return intention
+
+    async def stop(
+        self,
+        intention_id: uuid.UUID,
+        *,
+        by: uuid.UUID,
+        steward: bool = False,
+        now: datetime | None = None,
+    ) -> Intention | None:
+        """Its analysis stopped by its asker, or by someone who may approve
+        (LEKA-443): the intention kept, ready to analyse again; the analysis
+        running said stopped — what it finds is kept, never its result.
+        Stopped twice, the same."""
+        intention = await self._repository.intention(intention_id, lock=True)
+        if intention is None:
+            return None
+        _yours(intention, by, steward)
+        if intention.status == S.SUBMITTED.value:
+            return intention
+        at = _now(now)
+        running = await self._repository.running_analyses(intention.id)
+        self._move(
+            intention,
+            S.SUBMITTED,
+            actor=Actor.PERSON,
+            by=by,
+            at=at,
+            reason="Its analysis stopped.",
+            detail={"analyses": [str(row.id) for row in running]},
+        )
+        for row in running:
+            row.status = "stopped"
+            row.detail = {**row.detail, "stopped_at": at.isoformat(), "stopped_by": str(by)}
         return intention
 
     async def archive(
@@ -781,16 +924,39 @@ class IntentionService:
 
     # ── reads ───────────────────────────────────────────────────────────
 
+    async def journeys(
+        self, intentions: Sequence[Intention], *, now: datetime | None = None
+    ) -> dict[uuid.UUID, Journey]:
+        """Where each stands as a person reads it (LEKA-443) — read together:
+        the move that brought each there, each one's latest analysis."""
+        ids = [i.id for i in intentions]
+        last = await self._repository.last_moves(ids)
+        analyses = await self._repository.latest_analyses(ids)
+        at = _now(now)
+        return {
+            i.id: journey(facts_of(i, last.get(i.id), analyses.get(i.id)), at) for i in intentions
+        }
+
+    async def reads(self, intentions: Sequence[Intention]) -> list[IntentionRead]:
+        """A page of them, each with its journey."""
+        found = await self.journeys(intentions)
+        return [intention_read(i, found[i.id]) for i in intentions]
+
     async def detail(self, intention_id: uuid.UUID) -> IntentionDetail | None:
         intention = await self._repository.intention(intention_id)
         if intention is None:
             return None
-        return self.detail_of(intention, await self._repository.links(intention.id))
+        found = await self.journeys([intention])
+        return self.detail_of(
+            intention, await self._repository.links(intention.id), found[intention.id]
+        )
 
     @staticmethod
-    def detail_of(intention: Intention, links: Sequence[IntentionLink]) -> IntentionDetail:
+    def detail_of(
+        intention: Intention, links: Sequence[IntentionLink], found: Journey
+    ) -> IntentionDetail:
         return IntentionDetail(
-            **intention_read(intention).model_dump(),
+            **intention_read(intention, found).model_dump(),
             links=[IntentionLinkRead.model_validate(link) for link in links],
             understanding=(
                 Understanding.model_validate(intention.understanding)
@@ -809,7 +975,10 @@ class IntentionService:
     async def detail_now(self, intention: Intention) -> IntentionDetail:
         """As it now is, once written: what a route answers after a change."""
         await self._repository.refresh(intention)
-        return self.detail_of(intention, await self._repository.links(intention.id))
+        found = await self.journeys([intention])
+        return self.detail_of(
+            intention, await self._repository.links(intention.id), found[intention.id]
+        )
 
     async def history(self, intention_id: uuid.UUID) -> list[IntentionEventRead] | None:
         intention = await self._repository.intention(intention_id)
@@ -845,7 +1014,7 @@ class IntentionService:
         ready = intention.readiness or {}
         now = ready.get("version") if isinstance(ready.get("version"), int) else None
         return [
-            analysis_read(row, context_now=now)  # type: ignore[arg-type]
+            analysis_read(row, context_now=now, version_now=intention.version)  # type: ignore[arg-type]
             for row in await self._repository.analyses(intention_id, limit=limit)
         ]
 
@@ -858,12 +1027,14 @@ class IntentionService:
         now: datetime | None = None,
     ) -> Intention | None:
         """Analysed again, as it now stands: analysing, it is run again;
-        failed, it is retried first. IllegalTransitionError otherwise."""
+        failed, it is retried first; stopped, resumed. IllegalTransitionError
+        otherwise."""
         intention = await self._repository.intention(intention_id, lock=True)
         if intention is None:
             return None
         _yours(intention, by, steward)
-        if intention.status == S.FAILED.value:
+        if intention.status in (S.FAILED.value, S.SUBMITTED.value):
+            # Failed, retried; stopped, resumed (LEKA-443).
             self._move(
                 intention,
                 S.ANALYSING,
@@ -879,11 +1050,24 @@ class IntentionService:
         return intention
 
 
+def analysis_current(row: IntentionAnalysis, version_now: int | None) -> bool:
+    """Whether it is of the intention as it now stands (LEKA-443): not of an
+    earlier version, not stopped, not finished once it had moved on."""
+    if row.status == "stopped" or (row.detail or {}).get("superseded"):
+        return False
+    return (
+        row.intention_version is None
+        or version_now is None
+        or (row.intention_version == version_now)
+    )
+
+
 def analysis_read(
-    row: IntentionAnalysis, *, context_now: int | None = None
+    row: IntentionAnalysis, *, context_now: int | None = None, version_now: int | None = None
 ) -> IntentionAnalysisRead:
     """One analysis, as it is read (LEKA-388) — with the version its
-    intention's context is at now: a newer one says it read an older one."""
+    intention's context is at now: a newer one says it read an older one;
+    and whether it is of the intention as it now stands (LEKA-443)."""
     return IntentionAnalysisRead.model_validate(
         {
             "id": row.id,
@@ -894,6 +1078,8 @@ def analysis_read(
             "requested_by": row.requested_by,
             "context_id": row.context_id,
             "context_version": row.context_version,
+            "intention_version": row.intention_version,
+            "current": analysis_current(row, version_now),
             "readiness": row.readiness,
             "started_at": row.started_at,
             "finished_at": row.finished_at,
