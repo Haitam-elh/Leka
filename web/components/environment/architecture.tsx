@@ -58,7 +58,7 @@ import {
 } from "@/components/environment/parts";
 import { TONES } from "@/components/knowledge/status";
 import { hasSourceLogo, sourceTitle } from "@/components/sources/source-logo";
-import { closeOnEscape } from "@/components/interactions/escape";
+import { closeOnEscape, useReturnFocus } from "@/components/interactions/escape";
 import { routes } from "@/config/routes";
 import { useEntitySheet } from "@/lib/environment-queries";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -1410,6 +1410,7 @@ export function DetailPanel({
   const relations = useMemo(() => relationsOf(data.links, card.id), [data.links, card.id]);
   const href = card.entity_id ? entityHref({ id: card.entity_id, type: card.type }) : null;
 
+  useReturnFocus(card.id);
   return (
     <section
       aria-label={p.label}

@@ -432,6 +432,9 @@ describe("À valider", () => {
     await user.keyboard("{Escape}");
     expect(window.location.pathname).toBe("/approvals");
     expect(screen.queryByTestId("conflict-panel")).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("table")).getByText(/SLA de payment-api/).closest("tr"),
+    ).toHaveFocus();
   });
 
   it("opens the first thing waiting on a wide screen, the address left the list's", async () => {

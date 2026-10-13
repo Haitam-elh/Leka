@@ -272,6 +272,8 @@ describe("the panel", () => {
     within(panel).getByRole("button", { name: "Fermer le détail" }).focus();
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
+    // The focus goes back to the row that opened it, not to the page's top.
+    expect(screen.getByText("Acme GitLab").closest("tr")).toHaveFocus();
   });
 
   it("keeps the open source in the address, and opens it from there", async () => {

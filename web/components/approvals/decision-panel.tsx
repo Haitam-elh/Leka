@@ -7,7 +7,7 @@ import { wordDecision } from "@/components/approvals/items";
 import { DecisionCard } from "@/components/decisions/decision-card";
 import { timeAgo } from "@/components/knowledge/time";
 import { useCurrentUser } from "@/components/shell/shell-provider";
-import { closeOnEscape } from "@/components/interactions/escape";
+import { closeOnEscape, useReturnFocus } from "@/components/interactions/escape";
 import { routes } from "@/config/routes";
 import type { DecisionItem } from "@/lib/decisions";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -24,6 +24,7 @@ export function DecisionPanel({ item, onClose }: { item: DecisionItem; onClose: 
   const { title, why } = wordDecision(t, item);
   const { intention, decision } = item;
   const asked = intention.created_by && intention.created_by === me?.id;
+  useReturnFocus(item.decision.id);
   return (
     <aside
       aria-label={fill(t.approvals.conflict.panel.label, { title })}

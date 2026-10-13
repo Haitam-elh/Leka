@@ -10,7 +10,7 @@ import { exactDate, timeAgo } from "@/components/knowledge/time";
 import { CustomBadge } from "@/components/sources/custom-badge";
 import { SourceLogo, sourceTitle } from "@/components/sources/source-logo";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
-import { closeOnEscape } from "@/components/interactions/escape";
+import { closeOnEscape, useReturnFocus } from "@/components/interactions/escape";
 import { routes } from "@/config/routes";
 import { isCustom } from "@/lib/custom-connectors";
 import { type Dictionary, fill } from "@/lib/i18n/dictionaries";
@@ -40,6 +40,7 @@ export function SourcePanel({
 }) {
   const t = useDictionary();
   const s = t.sources.panel;
+  useReturnFocus(source.id);
   return (
     <aside
       aria-label={fill(s.label, { name: source.display_name })}
