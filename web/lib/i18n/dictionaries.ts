@@ -4691,8 +4691,9 @@ const fr = {
   },
   /** The workspace settings form, and the decision step's actions. */
   settings: {
-    generalTitle: "Général du workspace",
-    name: "Nom du workspace",
+    subtitle: "Votre langue, votre espace, le modèle qui répond et les systèmes par lesquels LEKA agit.",
+    generalTitle: "Votre espace",
+    name: "Nom de l'espace",
     slug: "Identifiant",
     slugHint: "Minuscules, chiffres et tirets. Il apparaît dans les URL.",
     timezone: "Fuseau horaire",
@@ -10433,7 +10434,8 @@ const en: Dictionary = {
     },
   },
   settings: {
-    generalTitle: "Workspace general",
+    subtitle: "Your language, your workspace, the model that answers and the systems LEKA acts through.",
+    generalTitle: "Your workspace",
     name: "Workspace name",
     slug: "Identifier",
     slugHint: "Lowercase, digits and dashes. It appears in URLs.",

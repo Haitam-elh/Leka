@@ -49,7 +49,7 @@ Verdict : **conserver**, **simplifier**, **fusionner**, **repenser**,
 | **Sécurité & gouvernance** `/governance` — 14 | Contrôler qui peut faire quoi et ce qui s'est passé | Selon l'onglet | **Repenser** | Toutes les fonctions (journal d'audit, matrice des droits, entités restreintes, rôles, politiques, conservation) — elles sont réelles | **L'écran le plus éloigné de la maquette et le plus dense** : formulaires de création de rôle et de politique ouverts en permanence, matrice de 22 lignes, 7 blocs empilés. Proposer : une page de synthèse (état réel : nombre de rôles, politiques, refus récents, alertes) puis chaque outil dans son onglet, les formulaires dans un dialogue. **Pas de score « 92/100 » inventé** comme dans la maquette : aucun calcul ne le produit | Membre sans droit (lecture seule), aucune politique |
 | **Équipe & accès** `/team` — 15 | Inviter et gérer les membres | Inviter un utilisateur | **Simplifier** | Tableau, onglets utilisateurs / invitations, paramètres de sécurité | 4 KPI dont 2 à 0 ; bandeau bas (T2) ; carte *Répartition par rôle* utile seulement au-delà de quelques membres | Seul membre (inviter), invitation expirée |
 | **Facturation** `/billing` — 16 | Savoir ce que j'ai, ce que je consomme | Voir les tarifs / contacter (pas de paiement en ligne, LEKA-446) | **Conserver** | Honnête : offre réelle, crédits, consommation, pas de fausse facture | Bandeau bas (T2) | Crédits épuisés, offre à changer (LEKA-446) |
-| **Paramètres** `/settings` | Régler l'espace et mon profil | Enregistrer | **À auditer** | — | — | — |
+| **Paramètres** `/settings` | Régler l'espace et mon profil | Enregistrer | **Simplifier** (audité le 13/10) | Langue et région, formulaire de l'espace, modèle de langage, actions autorisées | Sous-titre « Général du workspace » qui ne dit pas la page → une phrase qui la dit ; le formulaire de l'espace, seul bloc sans carte et seul à dire « workspace » → une carte « Votre espace », « Nom de l'espace » ; utilisation du modèle : 4 chiffres à 0 puis « Aucun appel sur la période » (T1) → la phrase seule | Aucun modèle prêt (déjà dit), membre sans droit (lecture seule, déjà dit) |
 | **Bienvenue** `/welcome` | Première connexion : arriver à une première intention utile | Connecter une source | **Hors 438** → LEKA-445 (onboarding) | — | — | — |
 
 ## Principes UX/UI révisés
@@ -120,5 +120,4 @@ remplacent pas.
   pas été vues en conditions réelles : l'espace de démo n'a pas d'intention et
   aucun modèle de langage n'est configuré en local. À faire au début du lot
   « Nouvelle intention ».
-- Paramètres non audité.
 - Vu à 1440 px seulement ; 1280 px et mobile au moment de chaque page.
