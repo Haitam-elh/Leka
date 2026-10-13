@@ -281,17 +281,16 @@ describe("Activité", () => {
     expect(within(people).getByText("Propriétaire")).toBeInTheDocument();
   });
 
-  it("says what the model's course shows in the banner", async () => {
+  it("says what the model's course shows, without a banner's button", async () => {
     mount();
     const trend = await screen.findByTestId("activity-trend");
     expect(trend).toHaveTextContent("user-service a changé de responsable");
     expect(trend).toHaveTextContent(
       "Nadia Kowalski → Thomas Berger · Confirmer le nouveau responsable",
     );
-    expect(screen.getByRole("link", { name: /Créer une intention/ })).toHaveAttribute(
-      "href",
-      "/intentions/new",
-    );
+    // One primary action per page (LEKA-438): the trends carry none.
+    expect(screen.queryByRole("link", { name: /Créer une intention/ })).not.toBeInTheDocument();
+    expect(screen.getByTestId("activity-stat-people")).toHaveTextContent("1");
   });
 
   it("lets who may approve ask a rebuild, and nobody else", async () => {
@@ -311,7 +310,11 @@ describe("Activité", () => {
   it("says when nothing happened, and when it cannot be read", async () => {
     api.read.mockResolvedValueOnce({
       ...ACTIVITY,
-      stats: { ...ACTIVITY.stats, events: { value: 0, previous: 0 } },
+      stats: {
+        ...ACTIVITY.stats,
+        events: { value: 0, previous: 0 },
+        people: { value: 0, previous: 0 },
+      },
       latest: [],
       top: [],
       people: [],
@@ -320,7 +323,10 @@ describe("Activité", () => {
     const { unmount } = mount();
     expect(await screen.findAllByText("Rien ne s'est passé sur cette période.")).toHaveLength(2);
     expect(screen.getByText(/Personne n'a encore décidé/)).toBeInTheDocument();
-    expect(await screen.findByText(/Aucune tendance notable/)).toBeInTheDocument();
+    // No trend, nobody active: nothing said about either (LEKA-438).
+    await waitFor(() => expect(api.trends).toHaveBeenCalled());
+    expect(screen.queryByTestId("activity-trends")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("activity-stat-people")).not.toBeInTheDocument();
     unmount();
 
     // Down twice: once, and once more when asked again.

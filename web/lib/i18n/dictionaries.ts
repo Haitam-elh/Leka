@@ -684,10 +684,8 @@ const fr = {
       team: "Voir l'équipe",
     },
     trends: {
-      title: "Des insights en continu",
-      body: "LEKA analyse l'évolution de votre environnement pour détecter des tendances, anticiper les incidents et proposer des actions.",
-      none: "Aucune tendance notable pour l'instant : LEKA continue de suivre l'évolution de votre environnement.",
-      cta: "Créer une intention",
+      title: "Tendances repérées par LEKA",
+      body: "Ce qui est apparu, a changé ou a disparu dans votre environnement.",
     },
     items: {
       model_built: "Modèle mis à jour",
@@ -6670,10 +6668,8 @@ const en: Dictionary = {
       team: "See the team",
     },
     trends: {
-      title: "Continuous insights",
-      body: "LEKA follows how your environment changes to spot trends, anticipate incidents and suggest actions.",
-      none: "No notable trend for now: LEKA keeps following how your environment changes.",
-      cta: "Create an intention",
+      title: "Trends LEKA spotted",
+      body: "What appeared, changed or disappeared in your environment.",
     },
     items: {
       model_built: "Model updated",
