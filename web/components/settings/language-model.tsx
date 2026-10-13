@@ -382,18 +382,21 @@ function Usage({ usage }: { usage: ModelUsage }) {
   return (
     <div className="flex flex-col gap-2" data-testid="model-usage">
       <p className="text-sm font-semibold text-brand-navy">{w.usageTitle}</p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {tiles.map((tile) => (
-          <div
-            key={tile.key}
-            className="rounded-lg bg-shell-canvas px-3 py-2"
-            data-testid={`model-usage-${tile.key}`}
-          >
-            <p className="text-xs text-shell-muted">{tile.label}</p>
-            <p className="text-lg font-semibold text-brand-navy tabular-nums">{tile.value}</p>
-          </div>
-        ))}
-      </div>
+      {/* No call: four 0 would say what the sentence below says (LEKA-438). */}
+      {total.calls ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {tiles.map((tile) => (
+            <div
+              key={tile.key}
+              className="rounded-lg bg-shell-canvas px-3 py-2"
+              data-testid={`model-usage-${tile.key}`}
+            >
+              <p className="text-xs text-shell-muted">{tile.label}</p>
+              <p className="text-lg font-semibold text-brand-navy tabular-nums">{tile.value}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {total.calls ? (
         <>
           <p className="text-xs text-shell-muted">

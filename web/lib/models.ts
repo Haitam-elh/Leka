@@ -36,9 +36,12 @@ export function dollars(value: number, locale: string): string {
   }).format(value);
 }
 
-/** A cost under a dollar as people say it, in cents: « 1,1 ¢ ». */
+/** A cost under a dollar as people say it, in cents: « 1,1 ¢ ». Under a
+ * cent, its first two figures — « 0,02 ¢ », never a rounded « 0 ¢ ». */
 export function cents(value: number, locale: string): string {
-  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value * 100)} ¢`;
+  const said = value * 100;
+  const digits = said > 0 && said < 1 ? { maximumSignificantDigits: 2 } : { maximumFractionDigits: 1 };
+  return `${new Intl.NumberFormat(locale, digits).format(said)} ¢`;
 }
 
 /** A model's name as people say it: « gemini-3.8-flash » → « Gemini 3.8 Flash ». */

@@ -114,7 +114,7 @@ test.describe("the settings form", () => {
     await signIn(page);
     await page.goto("/settings");
 
-    const name = page.getByLabel("Nom du workspace");
+    const name = page.getByLabel("Nom de l'espace");
     await name.fill("");
     await page.getByTestId("settings-save").click();
 
@@ -144,7 +144,7 @@ test.describe("the settings form", () => {
     await signIn(page);
     await page.goto("/settings");
 
-    await page.getByLabel("Nom du workspace").fill("Quelque chose d'autre");
+    await page.getByLabel("Nom de l'espace").fill("Quelque chose d'autre");
     await page.getByTestId("nav-overview").click();
 
     const dialog = page.getByRole("alertdialog");

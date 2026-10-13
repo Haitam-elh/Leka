@@ -1,8 +1,10 @@
 "use client";
 
+import { Building2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
+import { IconTile } from "@/components/environment/parts";
 import { ActionEndpoints } from "@/components/settings/action-endpoints";
 import { LanguageModel } from "@/components/settings/language-model";
 import { LanguageSettings } from "@/components/settings/language-settings";
@@ -17,11 +19,18 @@ function Settings() {
   const failOnce = useSearchParams().get("fail") === "1";
   return (
     <PageContainer>
-      <PageHeader title={t.nav.settings} subtitle={t.settings.generalTitle} />
+      <PageHeader title={t.nav.settings} subtitle={t.settings.subtitle} />
       <div className="flex flex-col gap-6">
         {/* The person's language and region, and the workspace's language. */}
         <LanguageSettings />
-        <WorkspaceGeneralForm failOnce={failOnce} />
+        {/* A card like the others (LEKA-438): it was the one block without. */}
+        <section className="rounded-xl border border-shell-line bg-white p-4" data-testid="workspace-settings">
+          <div className="mb-3 flex items-center gap-3">
+            <IconTile icon={Building2} tone="violet" />
+            <h2 className="font-semibold text-brand-navy">{t.settings.generalTitle}</h2>
+          </div>
+          <WorkspaceGeneralForm failOnce={failOnce} />
+        </section>
         {/* The model that reads and answers (LEKA-394). */}
         <LanguageModel />
         {/* The systems LEKA may act through (LEKA-391). */}
