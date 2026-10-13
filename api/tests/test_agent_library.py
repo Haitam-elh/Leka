@@ -27,7 +27,7 @@ from leka.capabilities.skills import agent_skill_tools
 from leka.capabilities.tools import NAMES
 from leka.knowledge import EntityType
 
-VERSIONS = {"build-fixer": "1.0.0", "code-review": "1.2.0", "security-review": "1.2.0"}
+VERSIONS = {"code-review": "1.2.0", "security-review": "1.2.0"}
 
 LIBRARY = {
     "architecture-analysis",
@@ -51,7 +51,7 @@ def test_the_library_is_registered_each_agent_to_the_runtime_s_contract() -> Non
     for key in sorted(LIBRARY):
         d = found[key]
         # Given their skills (LEKA-401): a new version each; the code
-        # review again for its method (LEKA-447).
+        # reviews and the build fixer again for their method (LEKA-447).
         assert (d.kind, d.lifecycle, d.model, d.version) == (
             Kind.AGENT,
             Lifecycle.ACTIVE,
@@ -287,3 +287,20 @@ def test_the_security_review_separates_what_it_proves_from_what_it_suspects() ->
     assert "Hypothèses" in said
     assert "Aucun constat appuyé dans le périmètre" in said
     assert "garrytan/gstack" in said and "affaan-m/ECC" in said
+
+
+def test_the_build_fixer_proposes_the_smallest_fix() -> None:
+    # LEKA-447: ECC's build-error-resolver, rewritten for what LEKA sees —
+    # the last green against the first red, suspects ranked, the smallest
+    # fix and nothing more, what that fix risks.
+    said = {d.key: d for d in catalogue()}["build-fixer"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "Le moment de la casse",
+        "Les suspects, triés",
+        "Le plus petit correctif",
+        "Ce que le correctif risque",
+    ):
+        assert step in said, step
+    assert "Pas de refonte, pas" in said
+    assert "affaan-m/ECC" in said
