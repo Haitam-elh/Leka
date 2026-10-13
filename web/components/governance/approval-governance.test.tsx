@@ -247,7 +247,7 @@ describe("the approvals' governance", () => {
     );
     const verdict = await screen.findByTestId("policy-verdict");
     expect(verdict).toHaveTextContent("Risque critique");
-    expect(verdict).toHaveTextContent("2 validation(s) par une autre personne que le demandeur, dont un propriétaire");
+    expect(verdict).toHaveTextContent("2 validations par une autre personne que le demandeur, dont un propriétaire");
     expect(verdict).toHaveTextContent("L'analyse ne dit pas son risque : moyen par défaut");
     expect(verdict).toHaveTextContent("Irréversible en production : au moins critique");
     expect(verdict).toHaveTextContent("Un gel la couvre");

@@ -152,8 +152,8 @@ describe("the tab Qualité", () => {
     expect(await screen.findByTestId("quality-workspace-score")).toHaveTextContent("72 %");
     expect(screen.getAllByTestId("quality-level")[0]).toHaveTextContent("À consolider");
     expect(screen.getByTestId("quality-change")).toHaveTextContent("+5 pts en 7 jours");
-    expect(screen.getByTestId("quality-levels")).toHaveTextContent("1 élément(s) peu fiable");
-    expect(screen.getByTestId("quality-levels")).toHaveTextContent("7 élément(s) fiable");
+    expect(screen.getByTestId("quality-levels")).toHaveTextContent("1 élément peu fiable");
+    expect(screen.getByTestId("quality-levels")).toHaveTextContent("7 éléments fiable");
     expect(screen.getByTestId("quality-dimension-completeness")).toHaveTextContent("60 %");
     // Nothing measured its confidence: said so, not 0.
     expect(screen.getByTestId("quality-dimension-confidence")).toHaveTextContent("Non mesurée");

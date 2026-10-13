@@ -208,18 +208,18 @@ describe("its runs", () => {
     const [failed, done] = await screen.findAllByTestId("agent-run");
     expect(failed).toHaveTextContent("Échouée · aucun modèle de langage n'a répondu");
     expect(done).toHaveTextContent("Terminée");
-    expect(done).toHaveTextContent("2 appel(s) d'outil");
+    expect(done).toHaveTextContent("2 appels d'outil");
 
     await user.click(within(done).getByRole("button", { name: /Paiement CB/ }));
     const detail = await screen.findByTestId("agent-run-detail");
     expect(within(detail).getByTestId("agent-run-output")).toHaveTextContent("# Architecture — Paiement CB");
     expect(detail).toHaveTextContent("PPTX, PDF : pas encore générés");
     const steps = within(detail).getByTestId("agent-run-steps");
-    expect(steps).toHaveTextContent("Contexte : 12 élément(s) fournis, 2 écartés");
+    expect(steps).toHaveTextContent("Contexte : 12 éléments fournis, 2 écartés");
     expect(steps).toHaveTextContent("Outil non proposé : restart_service (il agirait)");
     expect(steps).toHaveTextContent("Outil search_entities : lu");
     expect(within(detail).getByTestId("agent-run-usage")).toHaveTextContent(
-      "3 appel(s) au modèle · 3900 tokens",
+      "3 appels au modèle · 3900 tokens",
     );
   });
 

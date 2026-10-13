@@ -155,7 +155,7 @@ function analysisFixture(
           code: "cause.changed_before",
           label: "billing-api v2.8.4",
           basis: "inferred",
-          why: "billing-api v2.8.4 changed 2.5 hour(s) before p99 opened, on what it affects.",
+          why: "billing-api v2.8.4 changed 2.5 hours before p99 opened, on what it affects.",
           confidence: 0.7,
           ref_type: "deployment",
           ref_id: DEPLOY,
@@ -172,7 +172,7 @@ function analysisFixture(
       risk: "high",
       risk_basis: {
         code: "dependency.risk",
-        text: "1 thing(s) rely on it, some critical.",
+        text: "1 thing rely on it, some critical.",
         params: { relying: 1, critical: true, business: 0 },
       },
       uncertainties: [
@@ -193,12 +193,12 @@ function analysisFixture(
       support: [
         {
           code: "support.sources",
-          text: "2 source(s) behind its context.",
+          text: "2 sources behind its context.",
           params: { count: 2, established: true },
         },
         {
           code: "support.contradictions",
-          text: "1 contradiction(s) between them.",
+          text: "1 contradiction between them.",
           params: { count: 1, established: false },
         },
         {
@@ -309,7 +309,7 @@ describe("an intention's analysis", () => {
         links,
       ),
     ).toBe(
-      "Déploiement v2.8.4 le 2026-10-08 en production : touche 3 élément(s), suivi de 1 incident(s).",
+      "Déploiement v2.8.4 le 2026-10-08 en production : touche 3 éléments, suivi de 1 incident.",
     );
   });
 
@@ -426,7 +426,7 @@ describe("an intention's analysis", () => {
         },
       ],
       risk: "high",
-      riskBasis: "1 élément(s) en dépendent, dont des éléments critiques.",
+      riskBasis: "1 élément en dépend, dont des éléments critiques.",
     });
     expect(analysis.missing).toEqual([
       "Changements n'a pas abouti : délai dépassé.",
@@ -435,21 +435,9 @@ describe("an intention's analysis", () => {
       "Plusieurs responsables sont nommés pour Billing API (Payments, Platform) : qui décide n'est pas dit.",
     ]);
     expect(analysis.support).toEqual([
-      {
-        id: "support.sources",
-        label: "2 source(s) derrière son contexte",
-        established: true,
-      },
-      {
-        id: "support.contradictions",
-        label: "1 contradiction(s) entre elles",
-        established: false,
-      },
-      {
-        id: "support.context",
-        label: "Contexte prêt, qualité élevée",
-        established: true,
-      },
+      { id: "support.sources", label: "2 sources derrière son contexte", established: true },
+      { id: "support.contradictions", label: "1 contradiction entre elles", established: false },
+      { id: "support.context", label: "Contexte prêt, qualité élevée", established: true },
     ]);
     expect(analysis.confidence).toBe(0.9);
     // Proposals are LEKA-389's: none here.

@@ -524,7 +524,7 @@ describe("what came of it", () => {
     expect(within(screen.getByTestId("plan-stages")).getByText("En vérification")).toBeInTheDocument();
     const [healthy, checkout] = within(card).getAllByTestId("verification-result");
     expect(healthy).toHaveAttribute("data-seen", "not_met");
-    expect(healthy).toHaveTextContent("1 incident(s) ouvert(s) dessus");
+    expect(healthy).toHaveTextContent("1 incident ouvert dessus");
     expect(checkout).toHaveTextContent("Une personne confirme : « Le paiement passe de bout en bout »");
     expect(within(checkout).getByTestId("verification-seen")).toHaveTextContent("À confirmer");
 

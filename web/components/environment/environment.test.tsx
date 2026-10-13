@@ -462,7 +462,7 @@ describe("Mon environnement", () => {
     // A repository by its own name, its full name in the tooltip.
     const layer = (id: string) => within(screen.getByTestId(`layer-${id}`));
     expect(layer("applications").getByTitle("acme/payment-api")).toHaveTextContent("payment-api");
-    expect(layer("infrastructure").getByText("eu-west-1 · 4 ressource(s)")).toBeInTheDocument();
+    expect(layer("infrastructure").getByText("eu-west-1 · 4 ressources")).toBeInTheDocument();
     // No source describes the users: the row says so rather than inventing them.
     expect(layer("users").getByText(/ne décrit encore vos utilisateurs/)).toBeInTheDocument();
     // The architecture's figures stay above every tab.
@@ -477,8 +477,8 @@ describe("Mon environnement", () => {
     const resources = await screen.findByTestId("layer-resources");
     expect(graphApi.view).toHaveBeenCalledWith("infrastructure");
     expect(screen.queryByTestId("layer-services")).not.toBeInTheDocument();
-    expect(within(resources).getByText("4 ressource(s)")).toBeInTheDocument();
-    expect(within(resources).getByText("eu-west-1 · 4 ressource(s)")).toBeInTheDocument();
+    expect(within(resources).getByText("4 ressources")).toBeInTheDocument();
+    expect(within(resources).getByText("eu-west-1 · 4 ressources")).toBeInTheDocument();
     // An empty row names what would fill it.
     expect(
       within(screen.getByTestId("layer-accounts")).getByText(/vos comptes et abonnements/),
@@ -487,12 +487,12 @@ describe("Mon environnement", () => {
     // The business domains are rows of the model, empty until declared.
     await user.click(screen.getByTestId("env-tab-domains"));
     const capabilities = await screen.findByTestId("layer-capabilities");
-    expect(within(capabilities).getByText("0 capacité(s)")).toBeInTheDocument();
+    expect(within(capabilities).getByText("0 capacité")).toBeInTheDocument();
     expect(within(capabilities).getByText(/Déclarez vos capacités métier/)).toBeInTheDocument();
     // Its applications are those the business relies on: the row says so,
     // not "connect GitHub" to someone whose GitHub is connected.
     const applications = within(screen.getByTestId("layer-applications"));
-    expect(applications.getByText("0 élément(s)")).toBeInTheDocument();
+    expect(applications.getByText("0 élément")).toBeInTheDocument();
     expect(applications.getByText(/sur lesquels s'appuient vos capacités/)).toBeInTheDocument();
     expect(applications.queryByText(/Connectez GitHub/)).not.toBeInTheDocument();
 
@@ -525,7 +525,7 @@ describe("Mon environnement", () => {
     // The source by its own name, and how much of the view it shows.
     const sources = within(coverage).getByRole("list", { name: "Sources de cette vue" });
     expect(await within(sources).findByText("acme-eu")).toBeInTheDocument();
-    expect(within(sources).getByText("1 élément(s)")).toBeInTheDocument();
+    expect(within(sources).getByText("1 élément")).toBeInTheDocument();
   });
 
   it("says on Événements what needs attention and what moved", async () => {
@@ -537,7 +537,7 @@ describe("Mon environnement", () => {
     expect(incident).toHaveTextContent("Latence élevée sur Payment API");
     expect(incident).toHaveTextContent("Impacte Payment API");
     expect(incident).toHaveTextContent("Risque élevé");
-    expect(unmonitored).toHaveTextContent("2 service(s) sans monitoring");
+    expect(unmonitored).toHaveTextContent("2 services sans monitoring");
     const [event] = screen.getAllByTestId("event-row");
     expect(event).toHaveTextContent("Latence élevée sur Payment API");
     expect(event).toHaveTextContent("Incident");
@@ -588,7 +588,7 @@ describe("an entity's sheet", () => {
     expect(screen.getByText("Service · production")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Sara Martin" })).toBeInTheDocument();
     expect(screen.getByText("Mainteneur · 76 % de confiance")).toBeInTheDocument();
-    expect(screen.getByText("8 membre(s)")).toBeInTheDocument();
+    expect(screen.getByText("8 membres")).toBeInTheDocument();
     const incident = screen.getByTestId("active-incident");
     expect(within(incident).getByText("Incident actif")).toBeInTheDocument();
     expect(within(incident).getByRole("link", { name: /Voir l'incident/ })).toHaveAttribute(
@@ -606,7 +606,7 @@ describe("an entity's sheet", () => {
     expect(await screen.findByTestId("activity-changes")).toHaveTextContent("1");
     expect(screen.getByTestId("activity-changes")).toHaveTextContent("-50 %");
     expect(screen.getByTestId("activity-deployments")).toHaveTextContent("+1");
-    expect(screen.getByTestId("activity-work")).toHaveTextContent("1 ouvert(s)");
+    expect(screen.getByTestId("activity-work")).toHaveTextContent("1 ouvert");
     expect(screen.getByTestId("activity-chart")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Runbook Payment API" })).toBeInTheDocument();
     // The trail names the entity, not its identifier.

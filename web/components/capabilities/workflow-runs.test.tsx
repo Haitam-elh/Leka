@@ -163,7 +163,7 @@ describe("a workflow", () => {
     show();
     const steps = await screen.findByTestId("workflow-steps");
     expect(steps).toHaveTextContent("1. Ce qui s'est passé · Incidents");
-    expect(steps).toHaveTextContent("2 essai(s) · son échec arrête le workflow");
+    expect(steps).toHaveTextContent("2 essais · son échec arrête le workflow");
     expect(steps).toHaveTextContent(
       "après incidents · si « incidents » a trouvé incident.no_cause ou si « incidents » est en échec · son échec ne l'arrête pas",
     );
@@ -196,7 +196,7 @@ describe("a workflow", () => {
     await user.click(within(failed).getByRole("button", { expanded: false }));
     const detail = await screen.findByTestId("workflow-run-detail");
     expect(detail).toHaveTextContent("en échec");
-    expect(detail).toHaveTextContent("2 essai(s)");
+    expect(detail).toHaveTextContent("2 essais");
     expect(detail).toHaveTextContent("non atteinte");
     expect(detail).toHaveTextContent("le workflow s'est arrêté avant");
     await user.click(within(failed).getByRole("button", { name: "Reprendre" }));

@@ -457,7 +457,7 @@ function Usage({ usage }: { usage: ModelUsage }) {
               <span className="font-semibold text-shell-nav">{w.runsTitle} : </span>
               {(["succeeded", "invalid", "no_model", "timed_out", "failed"] as const)
                 .filter((status) => usage.runs[status])
-                .map((status) => `${usage.runs[status]} ${w.runStatuses[status]}`)
+                .map((status) => fill(w.runStatuses[status], { count: usage.runs[status] }))
                 .join(" · ")}
             </p>
           ) : null}

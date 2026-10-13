@@ -103,7 +103,7 @@ describe("the board", () => {
 
     const column = (name: string) => within(screen.getByTestId(`arch-column-${name}`));
     expect(column("code").getByText("GitHub")).toBeInTheDocument();
-    expect(column("code").getByText("1 dépôt(s)")).toBeInTheDocument();
+    expect(column("code").getByText("1 dépôt")).toBeInTheDocument();
     expect(column("cloud").getByText("AWS (eu-central-1)")).toBeInTheDocument();
     expect(column("services").getByText("Applications & Services")).toBeInTheDocument();
     // A repository by its own name, its owner under it.
@@ -111,11 +111,11 @@ describe("the board", () => {
       column("code").getByRole("button", { name: "Leka, Dépôt de code" }),
     ).toBeInTheDocument();
     expect(
-      column("code").getByText("Haitam-elh · 247 commit(s) · 12 pull request(s)"),
+      column("code").getByText("Haitam-elh · 247 commits · 12 pull requests"),
     ).toBeInTheDocument();
     // Its modules under it: the API's code, what it is in, how big.
     const code = column("code").getByRole("button", { name: "Leka/api, Backend" });
-    expect(code).toHaveTextContent("Backend · Python · 470 fichier(s)");
+    expect(code).toHaveTextContent("Backend · Python · 470 fichiers");
     expect(
       column("services").getByRole("button", { name: "Leka Worker, Tâches de fond, Incident" }),
     ).toBeInTheDocument();
@@ -158,7 +158,7 @@ describe("the board", () => {
 
     await user.click(screen.getByRole("button", { name: /^PostgreSQL, Base de données/ }));
     const panel = within(screen.getByTestId("architecture-panel"));
-    expect(panel.getByText("36 table(s) · 2,3 Mo")).toBeInTheDocument();
+    expect(panel.getByText("36 tables · 2,3 Mo")).toBeInTheDocument();
     expect(panel.getByRole("link", { name: /Voir ses tables/ })).toHaveAttribute(
       "href",
       `/environment/graph?entity=${POSTGRES}`,
@@ -236,7 +236,7 @@ describe("the board", () => {
     await user.click(screen.getByRole("button", { name: "Leka/api, Backend" }));
     const parts = within(screen.getByTestId("architecture-parts"));
     expect(parts.getByText("Parties du code (2)")).toBeInTheDocument();
-    expect(parts.getByText("90 fichier(s) · 31 sous-partie(s)")).toBeInTheDocument();
+    expect(parts.getByText("90 fichiers · 31 sous-parties")).toBeInTheDocument();
     expect(parts.getByText("github")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /^leka-prod, EC2/ }));
