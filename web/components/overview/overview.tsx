@@ -2,23 +2,14 @@
 
 import {
   ArrowRight,
-  ChartColumn,
   CircleAlert,
   CircleCheck,
-  CircleOff,
-  HeartPulse,
-  KeyRound,
   Lightbulb,
   type LucideIcon,
   Plus,
-  Power,
   ScanSearch,
-  Settings2,
-  SlidersHorizontal,
   ShieldCheck,
   Sparkle,
-  Sparkles,
-  Trash2,
   TriangleAlert,
   Waypoints,
 } from "lucide-react";
@@ -28,6 +19,8 @@ import { useEffect, useState } from "react";
 import { cn } from "cn";
 import { FAMILY_ICON } from "@/components/approvals/parts";
 import { items, wordItem } from "@/components/approvals/items";
+import { CATEGORY_TONE, CHIP, KIND_ICON } from "@/components/activity/activity";
+import { wordActivity } from "@/components/activity/items";
 import { LekaInsights } from "@/components/insights/leka-insights";
 import { CompactIntentionComposer } from "@/components/intentions/compact-composer";
 import { PageContainer } from "@/components/shell/page-container";
@@ -46,7 +39,6 @@ import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import {
   isConnected,
   type Source,
-  type SourceEvent,
   sourceTone,
   sources as sourcesApi,
 } from "@/lib/sources";
@@ -70,15 +62,8 @@ import {
 type Load =
   | { status: "loading" }
   | { status: "failed" }
-  | { status: "ready"; sources: Source[]; events: TimedEvent[] };
+  | { status: "ready"; sources: Source[] };
 
-interface TimedEvent extends SourceEvent {
-  source: Source;
-}
-
-/** The activity card shows five; asking each source for five is enough. */
-const EVENTS_PER_SOURCE = 5;
-const ACTIVITY_ROWS = 5;
 const SOURCE_ROWS = 5;
 
 function useOverviewData(): Load {
@@ -90,23 +75,7 @@ function useOverviewData(): Load {
     async function run() {
       try {
         const { data: list } = await sourcesApi.list();
-        // One call per source, in parallel. A source whose history cannot
-        // be read costs its lines in the activity, not the whole page.
-        const histories = await Promise.all(
-          list.map(async (source) => {
-            try {
-              const { data } = await sourcesApi.events(source.id, EVENTS_PER_SOURCE);
-              return data.map((event) => ({ ...event, source }));
-            } catch {
-              return [];
-            }
-          }),
-        );
-        const events = histories
-          .flat()
-          .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
-          .slice(0, ACTIVITY_ROWS);
-        if (!cancelled) setLoad({ status: "ready", sources: list, events });
+        if (!cancelled) setLoad({ status: "ready", sources: list });
       } catch {
         if (!cancelled) setLoad({ status: "failed" });
       }
@@ -176,6 +145,7 @@ const TONE_TILE = {
   danger: "bg-state-danger-soft text-state-danger",
   info: "bg-state-info-soft text-state-info",
   violet: "bg-brand-violet-soft text-shell-nav-active",
+  neutral: "bg-shell-canvas text-shell-muted",
 } as const;
 
 type TileTone = keyof typeof TONE_TILE;
@@ -290,11 +260,12 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
       label: w.servicesUp,
       filled: true,
       // Nothing says how any of them is: not « 0 », which reads « all
-      // down », nor « — », which reads « not loaded yet » — unknown.
+      // down », nor « — », which reads « not loaded yet » — said in words,
+      // not a « ? » (LEKA-438).
       value: !env
         ? null
         : env.services > 0 && env.services_unknown === env.services
-          ? "?"
+          ? w.notMeasured
           : String(env.services_operational),
       foot: !env
         ? null
@@ -347,9 +318,9 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
       action={{ label: t.overview.seeDetail, href: routes.environment() }}
       className={className}
     >
-      {/* The tiles fill the card down to the row's height: no empty band
-          under them beside a taller Insights. */}
-      <div className="grid flex-1 grid-cols-2 gap-2.5 lg:grid-cols-4">
+      {/* Each tile as tall as what it says (LEKA-438): stretched to the
+          row, they were figures over a blank band. */}
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         {tiles.map(({ key, icon, tone, label, filled, value, foot }) => (
           <div
             key={key}
@@ -365,7 +336,11 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
               />
               <div className="min-w-0">
                 <p
-                  className="text-[1.375rem] leading-7 font-bold text-brand-navy"
+                  className={cn(
+                    "font-bold text-brand-navy",
+                    // A sentence ("Pas encore mesuré") on one line, not a figure's size.
+                    value && !/^\d/.test(value) ? "text-sm leading-7" : "text-[1.375rem] leading-7",
+                  )}
                   data-testid={`kpi-${key}`}
                 >
                   {value ?? "—"}
@@ -375,7 +350,7 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
                 </p>
               </div>
             </div>
-            <p className="mt-auto line-clamp-2 pt-4 text-xs text-shell-muted">
+            <p className="line-clamp-2 pt-3 text-xs text-shell-muted">
               {environment.isError ? w.notRead : foot}
             </p>
           </div>
@@ -395,7 +370,7 @@ function StateCard({ load, className }: { load: Load; className?: string }) {
               </p>
             </div>
           </div>
-          <p className="mt-auto pt-4 text-xs text-shell-muted">
+          <p className="pt-3 text-xs text-shell-muted">
             {load.status === "ready"
               ? fill(t.overview.sourcesRatio, { connected, total: list.length })
               : t.overview.notMeasured}
@@ -423,62 +398,73 @@ function InsightsCard() {
   );
 }
 
-const EVENT_LOOK: Record<SourceEvent["type"], { icon: LucideIcon; tone: TileTone }> = {
-  created: { icon: Plus, tone: "violet" },
-  test_succeeded: { icon: CircleCheck, tone: "success" },
-  test_failed: { icon: CircleAlert, tone: "danger" },
-  activated: { icon: Power, tone: "success" },
-  reconfigured: { icon: Settings2, tone: "info" },
-  credentials_rotated: { icon: KeyRound, tone: "info" },
-  health_changed: { icon: HeartPulse, tone: "warning" },
-  disabled: { icon: CircleOff, tone: "warning" },
-  deleted: { icon: Trash2, tone: "danger" },
-  sync_failed: { icon: TriangleAlert, tone: "danger" },
-  sync_recovered: { icon: CircleCheck, tone: "success" },
-  settings_changed: { icon: SlidersHorizontal, tone: "info" },
-};
 
-function ActivityCard({ load }: { load: Load }) {
+/** Mockup 01's "Activité récente": the last of what Activité tells — the
+ * same events, worded the same way. It read the sources' sync history
+ * only, and said "no activity" beside a page counting 36 (LEKA-438). */
+function ActivityCard() {
   const t = useDictionary();
   const { format: locale } = useLocale();
-  const events = load.status === "ready" ? load.events : [];
+  const week = useActivity(7);
+  const latest = (week.data?.latest ?? []).slice(0, 5);
 
   return (
     <Card
       title={t.overview.activityTitle}
       action={{ label: t.overview.seeAll, href: routes.activity() }}
     >
-      {load.status === "ready" && events.length === 0 ? (
+      {week.data && latest.length === 0 ? (
         <Empty icon={ScanSearch} title={t.overview.activityEmpty} />
       ) : (
         <ul className="divide-y divide-shell-line">
-          {events.map((event) => {
-            const look = EVENT_LOOK[event.type];
-            return (
-              <li
-                key={event.id}
-                className="flex items-center gap-4 py-2"
-                data-testid="activity-row"
-              >
-                <IconTile icon={look.icon} tone={look.tone} className="size-9" />
+          {latest.map((item) => {
+            const worded = wordActivity(t, item);
+            const row = (
+              <>
+                <IconTile
+                  icon={KIND_ICON[item.kind] ?? ScanSearch}
+                  tone={CATEGORY_TONE[item.category]}
+                  className="size-9"
+                />
                 <time
-                  dateTime={event.created_at}
-                  title={exactDate(locale, event.created_at)}
+                  dateTime={item.at}
+                  title={exactDate(locale, item.at)}
                   className="w-12 shrink-0 text-[0.8125rem] text-shell-muted tabular-nums"
                 >
-                  {shortWhen(locale, event.created_at)}
+                  {shortWhen(locale, item.at)}
                 </time>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-brand-navy">
-                    {t.overview.events[event.type]}
+                    {worded.title}
                   </span>
-                  <span className="block truncate text-[0.8125rem] text-shell-accent-muted">
-                    {event.source.display_name}
-                  </span>
+                  {worded.detail ? (
+                    <span className="block truncate text-[0.8125rem] text-shell-accent-muted">
+                      {worded.detail}
+                    </span>
+                  ) : null}
                 </span>
-                <span className="rounded-md bg-state-success-soft px-2 py-0.5 text-xs font-medium text-state-success">
-                  {t.overview.eventKind}
+                <span
+                  className={cn(
+                    "shrink-0 rounded-md px-2 py-0.5 text-xs font-medium",
+                    CHIP[item.category],
+                  )}
+                >
+                  {t.activity.category[item.category]}
                 </span>
+              </>
+            );
+            return (
+              <li key={item.id} data-testid="activity-row">
+                {worded.href ? (
+                  <Link
+                    href={worded.href}
+                    className="-mx-1.5 flex items-center gap-4 rounded-lg px-1.5 py-2 outline-none hover:bg-shell-canvas focus-visible:ring-2 focus-visible:ring-brand-violet/40"
+                  >
+                    {row}
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-4 py-2">{row}</div>
+                )}
               </li>
             );
           })}
@@ -596,63 +582,6 @@ function SourcesCard({ load }: { load: Load }) {
   );
 }
 
-function Banner({ load }: { load: Load }) {
-  const t = useDictionary();
-  const connected = load.status === "ready" ? load.sources.filter(isConnected).length : null;
-  // What happened this week, as Activité counts it (LEKA-383); what the
-  // sources disagree on, open (LEKA-382).
-  const week = useActivity(7);
-  const disagreements = useConflicts("open");
-  const events = week.data?.stats.events.value;
-  const open = disagreements.data?.data.length;
-  const stats: { icon: LucideIcon; value: string; label: string }[] = [
-    {
-      icon: ChartColumn,
-      value: connected === null ? "—" : String(connected),
-      label: t.overview.statSources,
-    },
-    {
-      icon: ScanSearch,
-      value: events === undefined ? "—" : String(events),
-      label: t.overview.statEvents,
-    },
-    {
-      icon: Sparkles,
-      value: open === undefined ? "—" : String(open),
-      label: t.overview.statContradictions,
-    },
-  ];
-
-  return (
-    <section className="mt-6 flex flex-col gap-4 rounded-xl bg-shell-highlight px-6 py-4 lg:flex-row lg:items-center">
-      <div className="flex flex-1 items-start gap-4">
-        <Sparkles className="mt-0.5 size-8 shrink-0 text-shell-nav-active" aria-hidden="true" />
-        <div>
-          <p className="text-[0.9375rem] font-semibold text-brand-navy">
-            {connected
-              ? fill(t.overview.bannerTitle, { count: connected })
-              : t.overview.bannerTitleNone}
-          </p>
-          <p className="text-[0.8125rem] text-shell-muted">{t.overview.bannerBody}</p>
-        </div>
-      </div>
-      {/* A plain list: value then label, read in that order. */}
-      <ul className="flex divide-x divide-shell-line">
-        {stats.map(({ icon: Icon, value, label }) => (
-          <li key={label} className="flex items-center gap-3 px-5 first:ps-0 last:pe-0">
-            <span className="flex size-10 items-center justify-center rounded-lg bg-white">
-              <Icon className="size-5 text-shell-nav-active" aria-hidden="true" />
-            </span>
-            <p>
-              <span className="block text-lg leading-6 font-bold text-brand-navy">{value}</span>
-              <span className="block text-xs text-shell-muted">{label}</span>
-            </p>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 // ── The page ───────────────────────────────────────────────────────────────
 
@@ -666,13 +595,12 @@ export function Overview() {
         <CompactIntentionComposer />
       </div>
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.66fr)]">
-        <StateCard load={load} className="xl:col-span-2" />
+        <StateCard load={load} className="xl:col-span-2 xl:self-start" />
         <InsightsCard />
-        <ActivityCard load={load} />
+        <ActivityCard />
         <ApprovalsCard />
         <SourcesCard load={load} />
       </div>
-      <Banner load={load} />
     </PageContainer>
   );
 }

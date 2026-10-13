@@ -38,7 +38,26 @@ vi.mock("@/lib/environment", async (original) => ({
 }));
 vi.mock("@/lib/activity", async (original) => ({
   ...(await original<typeof import("@/lib/activity")>()),
-  activity: { read: async () => ({ stats: { events: { value: 42, previous: 30 } } }) },
+  activity: {
+    read: async () => ({
+      stats: { events: { value: 42, previous: 30 } },
+      // The same events Activité tells (LEKA-438), newest first.
+      latest: [
+        {
+          id: "e1",
+          at: new Date(Date.now() - 2 * 60_000).toISOString(),
+          category: "information",
+          kind: "model_built",
+          count: 1,
+          subject: null,
+          params: {},
+          by: null,
+          by_name: null,
+          via: "source",
+        },
+      ],
+    }),
+  },
 }));
 
 vi.mock("@/lib/sources", async (original) => ({
@@ -231,17 +250,13 @@ describe("the overview", () => {
     expect(within(rows[2]).getByText("Pas encore")).toBeVisible();
   });
 
-  it("tells the sources' recent history, newest first", async () => {
+  it("tells what Activité tells, the same events worded the same way", async () => {
     mount();
 
-    const rows = await screen.findAllByTestId("activity-row");
-    expect(rows.map((row) => row.textContent)).toEqual([
-      expect.stringContaining("Échec du test de connexion"),
-      expect.stringContaining("Source activée"),
-      expect.stringContaining("Connexion vérifiée"),
-    ]);
+    const [row] = await screen.findAllByTestId("activity-row");
+    expect(row).toHaveTextContent("Information");
     // The moment itself, machine-readable, as the knowledge timeline gives it.
-    const time = rows[0].querySelector("time");
+    const time = row.querySelector("time");
     expect(time).not.toBeNull();
     expect(Date.parse(time?.getAttribute("dateTime") ?? "")).toBeGreaterThan(Date.now() - 6 * 60_000);
     expect(time).toHaveAttribute("title");
@@ -272,8 +287,6 @@ describe("the overview", () => {
     expect(attention).toHaveTextContent("Billing API");
     expect(within(incidents).getByTestId("kpi-incidents")).toHaveTextContent("1");
     expect(incidents).toHaveTextContent("1 service touché");
-    // This week's events, and no open contradiction.
-    expect(await screen.findByText("42")).toBeVisible();
   });
 
   it("says what is only worth knowing apart from what needs someone", async () => {
@@ -310,7 +323,7 @@ describe("the overview", () => {
     mount();
     const [services] = await screen.findAllByTestId("kpi-tile");
     // Not « — »: that is « not loaded yet ».
-    expect(within(services).getByTestId("kpi-services")).toHaveTextContent("?");
+    expect(within(services).getByTestId("kpi-services")).toHaveTextContent("Pas encore mesuré");
     expect(services).toHaveTextContent("sur 3 services · 3 d'état inconnu");
   });
 
@@ -347,7 +360,6 @@ describe("the overview", () => {
 
     expect(await screen.findByText("Connectez une première source pour commencer.")).toBeVisible();
     expect(screen.getByText("Aucune source connectée pour l'instant.")).toBeVisible();
-    expect(screen.getByText("Aucune source n'est encore suivie.")).toBeVisible();
   });
 
   it("lists what LEKA proposes, waiting on someone, each leading to it", async () => {

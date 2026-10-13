@@ -184,7 +184,12 @@ function wordEvolution(t: Dictionary, finding: Finding): Worded | null {
     case "evolution.removed_relied":
       return {
         title: fill(e.removed, { name }),
-        detail: detail(fill(e.removedDetail, { names: listed("names") })),
+        detail: detail(
+          fill(e.removedDetail, {
+            names: listed("names"),
+            count: Array.isArray(p.names) ? p.names.length : 0,
+          }),
+        ),
       };
     case "evolution.architecture_moved":
       return {
