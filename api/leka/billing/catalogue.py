@@ -92,12 +92,23 @@ class CoreAgent(_Model):
     name: Words
 
 
+class Bundle(_Model):
+    """Specialist agents sold together (LEKA-439): cheaper than each alone."""
+
+    key: str
+    name: Words
+    agents: tuple[str, ...] = Field(min_length=2)
+    monthly_price: int = Field(gt=0)
+
+
 class AddOns(_Model):
     """Specialist agents: optional — offered only once available."""
 
     available: bool
     agents: tuple[str, ...]
-    bundles: tuple[dict[str, object], ...] = ()
+    # Each agent's monthly price, once decided: absent, never guessed.
+    prices: dict[str, int] = Field(default_factory=dict)
+    bundles: tuple[Bundle, ...] = ()
 
 
 class Pack(_Model):

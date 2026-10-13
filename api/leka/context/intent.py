@@ -565,6 +565,11 @@ def plan_gaps(
                 detail={
                     "tried": list(tried),
                     "maybe": [g.entity.name for g in guesses[:3]],
+                    # By id, to be chosen (LEKA-439).
+                    "maybe_things": [
+                        {"id": str(g.entity.id), "name": g.entity.name, "type": g.entity.type.value}
+                        for g in guesses[:3]
+                    ],
                 },
             )
         )

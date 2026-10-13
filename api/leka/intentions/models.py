@@ -87,6 +87,11 @@ class Intention(Base, WorkspaceScopedMixin):
     # Whether its context can ground an analysis (LEKA-387): ready, limited,
     # blocked — the critical gaps and conflicts in the way.
     readiness: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    # What its asker answered to LEKA's questions (LEKA-439): one per
+    # question, the latest — read again with it every time it is understood.
+    answers: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
     # What LEKA concluded, in a sentence, once it did (LEKA-389).
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(

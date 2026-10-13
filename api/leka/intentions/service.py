@@ -41,6 +41,7 @@ from leka.context import (
 )
 from leka.core.sensitive import guarded
 from leka.intelligence import IntelligenceRepository
+from leka.intentions.brief import answered, answered_ask, brief_of, tidy
 from leka.intentions.grounding import acting, readiness, refined
 from leka.intentions.lifecycle import (
     CLOSED,
@@ -61,11 +62,14 @@ from leka.intentions.repository import IntentionRepository
 from leka.intentions.schemas import (
     ContextReadiness,
     IntentionAnalysisRead,
+    IntentionAnswer,
+    IntentionBrief,
     IntentionCounts,
     IntentionDetail,
     IntentionEventRead,
     IntentionLinkRead,
     IntentionRead,
+    IntentionRequest,
     Understanding,
 )
 from leka.intentions.understanding import understand
@@ -106,6 +110,28 @@ def _flagged(understood: Understanding) -> dict[str, object]:
         "goal": understood.goal.code,
         "ambiguities": [a.kind for a in understood.ambiguities if a.blocking],
     }
+
+
+# What `_scope` keeps of what was asked, to ask it again.
+ASKED_SCOPE = frozenset({"environment", "since", "until", "services", "sources"})
+
+
+def _answers(ask: IntentAsk | IntentionRequest) -> list[IntentionAnswer]:
+    """What was answered with it (LEKA-439): one per question, the latest."""
+    return tidy(ask.answers) if isinstance(ask, IntentionRequest) else []
+
+
+def _kept(intention: Intention) -> list[IntentionAnswer]:
+    """Its answers, as kept."""
+    return [IntentionAnswer.model_validate(a) for a in (intention.answers or [])]
+
+
+def _brief(intention: Intention) -> IntentionBrief | None:
+    """What LEKA knows and asks of it (LEKA-439) — from its understanding,
+    which already holds its answers, and the answers themselves."""
+    if not intention.understanding:
+        return None
+    return brief_of(Understanding.model_validate(intention.understanding), _kept(intention))
 
 
 def _ready(ready: ContextReadiness) -> dict[str, object]:
@@ -260,7 +286,11 @@ class IntentionService:
     # ── asking ──────────────────────────────────────────────────────────
 
     async def create(
-        self, ask: IntentAsk, *, by: uuid.UUID | None, now: datetime | None = None
+        self,
+        ask: IntentAsk | IntentionRequest,
+        *,
+        by: uuid.UUID | None,
+        now: datetime | None = None,
     ) -> tuple[Intention, AssembledContext]:
         """An intention kept, its context assembled and linked — analysing.
         NothingToStartError when nothing can start it: the caller's
@@ -270,6 +300,7 @@ class IntentionService:
             raise RuntimeError(msg)
         # A secret typed in it is never kept, nor read by a model (LEKA-405).
         ask = _guarded(ask)
+        given = _answers(ask)
         at = _now(now)
         intention = Intention(
             workspace_id=self._repository.workspace_id,
@@ -277,6 +308,7 @@ class IntentionService:
             text=ask.text,
             title=(ask.title or ask.text)[:TITLE],
             scope=_scope(ask),
+            answers=[a.model_dump(mode="json") for a in given],
             status=S.SUBMITTED.value,
             status_changed_at=at,
             created_by=by,
@@ -293,11 +325,14 @@ class IntentionService:
             detail={"scope": intention.scope},
         )
         await self._repository.flush()
-        asked = ask.model_copy(update={"intention_id": str(intention.id)})
+        # Read with what its asker answered (LEKA-439): their words with the
+        # rest, a thing chosen, an environment.
+        asked = answered_ask(ask, given).model_copy(update={"intention_id": str(intention.id)})
         # Understood first (LEKA-385, 386), then its context assembled from
         # its scope (LEKA-387): what it excludes is never held.
-        understood = await self._understand(
-            ask.text, await self._contexts.plan_intent(asked), at=at
+        understood = answered(
+            await self._understand(asked.text, await self._contexts.plan_intent(asked), at=at),
+            given,
         )
         context = await self._contexts.assemble_intent(refined(asked, understood), by=by)
         if context is None:
@@ -319,7 +354,7 @@ class IntentionService:
     async def ask_again(
         self,
         intention_id: uuid.UUID,
-        ask: IntentAsk,
+        ask: IntentAsk | IntentionRequest,
         *,
         by: uuid.UUID | None,
         steward: bool = False,
@@ -343,9 +378,13 @@ class IntentionService:
             raise IntentionArchivedError
         to, actor = S.ANALYSING, Actor.PERSON
         move(S(intention.status), to, actor)
-        asked = ask.model_copy(update={"intention_id": str(intention.id)})
-        understood = await self._understand(
-            ask.text, await self._contexts.plan_intent(asked), at=at
+        # Its answers (LEKA-439): those given now; none given, the ones kept
+        # while its words are the same — new words, new questions.
+        given = _answers(ask) or (_kept(intention) if ask.text == intention.text else [])
+        asked = answered_ask(ask, given).model_copy(update={"intention_id": str(intention.id)})
+        understood = answered(
+            await self._understand(asked.text, await self._contexts.plan_intent(asked), at=at),
+            given,
         )
         scoped = refined(asked, understood)
         context: AssembledContext | None
@@ -361,6 +400,7 @@ class IntentionService:
         intention.text = ask.text
         intention.title = (ask.title or ask.text)[:TITLE]
         intention.scope = _scope(ask)
+        intention.answers = [a.model_dump(mode="json") for a in given]
         await self._follow(intention, context, by=by, at=at)
         ready = self._keep(intention, understood, context)
         self._move(
@@ -375,6 +415,7 @@ class IntentionService:
                 "context_id": str(context.context_id),
                 "version": context.version,
             }
+            | ({"answers": [a.question for a in given]} if given else {})
             | _ready(ready),
         )
         if not understood.clear:
@@ -442,12 +483,51 @@ class IntentionService:
             understood = await self._reading(text, understood)
         return understood
 
-    async def understand(self, ask: IntentAsk, *, now: datetime | None = None) -> Understanding:
+    async def understand(
+        self, ask: IntentAsk | IntentionRequest, *, now: datetime | None = None
+    ) -> Understanding:
         """What LEKA would understand of these words — nothing kept."""
+        understood, _plan = await self.read(ask, now=now)
+        return understood
+
+    async def read(
+        self, ask: IntentAsk | IntentionRequest, *, now: datetime | None = None
+    ) -> tuple[Understanding, IntentPlan | None]:
+        """What LEKA would understand of these words, its answers taken
+        (LEKA-439), and what it would read for them — nothing kept."""
         if self._contexts is None:
             msg = "Understanding reads the company model: a ContextService is needed."
             raise RuntimeError(msg)
-        return await self._understand(ask.text, await self._contexts.plan_intent(ask), at=_now(now))
+        given = _answers(ask)
+        asked = answered_ask(_guarded(ask), given)
+        plan = await self._contexts.plan_intent(asked)
+        return answered(await self._understand(asked.text, plan, at=_now(now)), given), plan
+
+    async def answer(
+        self,
+        intention_id: uuid.UUID,
+        answers: Sequence[IntentionAnswer],
+        *,
+        by: uuid.UUID | None,
+        steward: bool = False,
+        now: datetime | None = None,
+    ) -> tuple[Intention, AssembledContext] | None:
+        """What its asker answered to LEKA's questions (LEKA-439), with those
+        answered before — the latest for each: it is asked again with them,
+        its words and scope as they are."""
+        intention = await self._repository.intention(intention_id)
+        if intention is None:
+            return None
+        scope = {k: v for k, v in (intention.scope or {}).items() if k in ASKED_SCOPE}
+        ask = IntentionRequest.model_validate(
+            {
+                "text": intention.text,
+                "title": intention.title,
+                **scope,
+                "answers": [*_kept(intention), *answers],
+            }
+        )
+        return await self.ask_again(intention_id, ask, by=by, steward=steward, now=now)
 
     async def _follow(
         self, intention: Intention, context: AssembledContext, *, by: uuid.UUID | None, at: datetime
@@ -722,6 +802,8 @@ class IntentionService:
                 if intention.readiness
                 else None
             ),
+            answers=_kept(intention),
+            brief=_brief(intention),
         )
 
     async def detail_now(self, intention: Intention) -> IntentionDetail:
