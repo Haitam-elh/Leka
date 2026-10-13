@@ -125,11 +125,17 @@ EXPECTATIONS = frozenset(
         "proposals",
         "next",
         "needs",
+        "confidence",
+        "next_step",
         "forbid",
     }
 )
 # What only an analysis shows: never expected of a case read before asking.
-ANALYSED = frozenset({"final", "analysis", "findings", "cites", "decides", "proposals"})
+ANALYSED = frozenset(
+    {"final", "analysis", "findings", "cites", "decides", "proposals", "confidence", "next_step"}
+)
+# How sure, in order (LEKA-441): surer than allowed is a false claim.
+SURENESS = ("unknown", "low", "medium", "high")
 FORBIDDEN = frozenset(
     {
         "decision",
@@ -263,6 +269,9 @@ class Observation:
     ungrounded: tuple[str, ...] = ()
     decisions: tuple[DecisionSeen, ...] = ()
     read_by: str = "rules"
+    # On what it rests (LEKA-441): how sure, what to do next.
+    confidence: str | None = None
+    next_step: str | None = None
     # Something broke where nothing was made to fail: what.
     crashed: str | None = None
 
@@ -613,6 +622,30 @@ class _Checker:
                 "proposed, one approval at least, none given by LEKA",
                 [asdict(d) for d in opened],
                 "wrong_action",
+            )
+        if "confidence" in expect:
+            levels = list(expect["confidence"])
+            surer = seen.confidence is not None and all(
+                SURENESS.index(seen.confidence) > SURENESS.index(level) for level in levels
+            )
+            self.add(
+                "confidence",
+                "calibration",
+                "reasoning",
+                seen.confidence in levels,
+                levels,
+                seen.confidence,
+                "false_claim" if surer else "missing_evidence",
+            )
+        if "next_step" in expect:
+            self.add(
+                "next_step",
+                "next_step",
+                "ux",
+                seen.next_step in expect["next_step"],
+                expect["next_step"],
+                seen.next_step,
+                "comprehension",
             )
         if "proposals" in expect:
             wanted = _actions(expect["proposals"])

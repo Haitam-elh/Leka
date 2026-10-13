@@ -33,12 +33,17 @@ import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type {
   Analysis,
   AnalysisStatus,
+  CauseStrength,
+  ConfidenceLevel,
   EvidenceRef,
+  Explanation,
   Finding,
   Impact,
   ProbableCause,
   Recommendation,
   RiskLevel,
+  SourceState,
+  Support,
 } from "@/lib/intelligence";
 
 export type IntentionAnalysis = components["schemas"]["IntentionAnalysisRead"];
@@ -46,6 +51,7 @@ export type AnalysisResult = components["schemas"]["IntentionAnalysisResult"];
 export type AnalysisEvidence = components["schemas"]["AnalysisEvidence"];
 export type AnalysisRecommendation =
   components["schemas"]["AnalysisRecommendation"];
+type ApiExplanation = components["schemas"]["AnalysisExplanation"];
 type Note = components["schemas"]["AnalysisNote"];
 type Params = Record<string, unknown>;
 
@@ -181,6 +187,12 @@ function values(t: Dictionary, code: string, params: Params, links: Links) {
     case "capability.timed_out":
     case "capability.skipped":
       said.capability = capabilityName(t, text(p.capability));
+      break;
+    case "confidence.capability_failed":
+    case "why.partial":
+      said.capabilities = ((p.capabilities as unknown[]) ?? [])
+        .map((name) => capabilityName(t, text(name)))
+        .join(", ");
       break;
   }
   return said;
@@ -348,6 +360,179 @@ const STATUSES: Record<IntentionAnalysis["status"], AnalysisStatus> = {
   blocked: "pending",
 };
 
+/** A precondition, in words: met or not, as the analysis says it. */
+function preconditionSaid(
+  t: Dictionary,
+  item: NonNullable<AnalysisRecommendation["preconditions"]>[number],
+): string {
+  const words = (
+    t.intentions.analysis.explanation.preconditions as Record<
+      string,
+      { met: string; unmet: string }
+    >
+  )[item.code];
+  if (!words) return item.text;
+  return fill(item.met === true ? words.met : words.unmet, {
+    version: text(item.params?.version),
+    environment: text(item.params?.environment),
+  });
+}
+
+/** On what it rests (LEKA-441), in the interface's words: what LEKA
+ * understood, each source it read and in what state, what did not answer,
+ * how sure and why, what disagrees, what is stale, what next and why. */
+function explanationOf(
+  t: Dictionary,
+  analysis: IntentionAnalysis,
+  explained: ApiExplanation,
+  recommendations: readonly Recommendation[],
+  apiRecommendations: readonly AnalysisRecommendation[],
+  links: Links,
+): Explanation {
+  const w = t.intentions.analysis.explanation;
+  const say = (note: Note) => noteSaid(t, note, links);
+  const p = (explained.understood.params ?? {}) as Params;
+  const list = (value: unknown) => (Array.isArray(value) ? value.map(text) : []);
+  const goals = t.intentions.understanding.goals as Record<string, string>;
+  const understood = [
+    goals[text(p.goal)] ?? text(p.goal),
+    list(p.names).length ? fill(w.understood.about, { names: list(p.names).join(", ") }) : null,
+    list(p.unknown).length && !list(p.names).length
+      ? fill(w.understood.unknown, { names: list(p.unknown).join(", ") })
+      : null,
+    p.environment ? fill(w.understood.environment, { environment: text(p.environment) }) : null,
+    list(p.excluded).length
+      ? fill(w.understood.except, { names: list(p.excluded).join(", ") })
+      : null,
+    p.period_said && typeof p.since === "string"
+      ? fill(w.understood.since, { since: links.date(p.since) })
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const consulted = explained.consulted.map((source) => {
+    const at = source.last_synced_at ? links.date(source.last_synced_at) : null;
+    const states = w.states as Record<string, string>;
+    return {
+      id: source.source_id,
+      name: source.name ?? source.kind ?? t.intelligence.context.deletedSource,
+      kind: source.kind,
+      state: source.state as SourceState,
+      said: fill(states[source.state] ?? source.said, {
+        at:
+          source.state === "read" || source.state === "stale"
+            ? (at ?? w.states.never)
+            : at
+              ? fill(w.states.lastAt, { at })
+              : "",
+      }),
+      elements: source.elements,
+    };
+  });
+  const silent = explained.capabilities
+    .filter((c) => c.status !== "succeeded" && c.leaves)
+    .map((c) => ({
+      id: c.name,
+      name: capabilityName(t, c.name),
+      leaves: say(c.leaves as Note),
+    }));
+  const conflicts = explained.conflicts.map((conflict) => ({
+    id: conflict.id,
+    label: `${conflict.label} · ${conflict.about}`,
+    values: conflict.values.map((side) => ({
+      value: text(side.value),
+      by: list(side.by),
+    })),
+  }));
+  const conflictSaid = (id: unknown) => {
+    const found = conflicts.find((c) => c.id === text(id));
+    return found
+      ? `${found.label} — ${found.values.map((v) => `${v.value} (${v.by.join(", ")})`).join(" ≠ ")}`
+      : "";
+  };
+  const next = explained.next;
+  const np = (next.params ?? {}) as Params;
+  const index = apiRecommendations.findIndex((r) => r.id === text(np.recommendation));
+  const title = index >= 0 ? recommendations[index].title : "";
+  const nexts = w.next as Record<string, string>;
+  const nextTitle =
+    next.code === "rerun" && list(np.sources).length
+      ? fill(w.next.rerunSources, { sources: list(np.sources).join(", ") })
+      : fill(nexts[next.code] ?? next.text, {
+          title,
+          conflict: conflictSaid(np.conflict),
+          sources: list(np.sources).join(", "),
+        });
+  const why = (() => {
+    const wp = (next.why.params ?? {}) as Params;
+    if (next.why.code === "why.recommendation" && index >= 0)
+      return recommendations[index].rationale;
+    if (next.why.code === "why.preconditions" && index >= 0)
+      return (apiRecommendations[index].preconditions ?? [])
+        .filter((pre) => pre.blocking && pre.met === false)
+        .map((pre) => preconditionSaid(t, pre))
+        .join(" ");
+    if (next.why.code === "why.conflict" || next.why.code === "why.conflict_asked")
+      return conflictSaid(wp.conflict) || next.why.text;
+    return say(next.why);
+  })();
+  return {
+    understood: understood || say(explained.understood),
+    consulted,
+    silent,
+    confidence: {
+      level: explained.confidence.level as ConfidenceLevel,
+      reasons: explained.confidence.reasons.map((reason) => ({
+        id: reason.code,
+        effect: reason.effect,
+        label: say(reason),
+      })),
+    },
+    conflicts,
+    stale: explained.stale.map(say),
+    limits: explained.limits.filter((n) => !n.code.startsWith("limit.capability.")).map(say),
+    next: { code: next.code, title: nextTitle, why },
+    freshness: { read: analysis.context_version, now: analysis.context_now ?? null },
+  };
+}
+
+/** The figures it may say, in words — each with what it counts and what it
+ * was counted from (LEKA-441). */
+function claimsOf(
+  t: Dictionary,
+  explained: ApiExplanation,
+  result: AnalysisResult,
+  evidence: Map<string, EvidenceRef>,
+): Support[] {
+  const w = t.intentions.analysis.explanation;
+  const sources = new Map(explained.consulted.map((s) => [s.source_id, s.name ?? s.kind ?? ""]));
+  const causes = new Map(result.causes.map((c) => [c.ref_id ?? c.id, c.label]));
+  const conflicts = new Map(explained.conflicts.map((c) => [c.id, `${c.label} · ${c.about}`]));
+  return explained.claims.map((claim) => {
+    const label =
+      claim.code === "contradictions" && claim.count === 0
+        ? w.claims.noContradiction
+        : fill((w.claims as Record<string, string>)[claim.code], { count: claim.count });
+    const refs = claim.refs.map((id) => ({
+      id,
+      label:
+        sources.get(id) ??
+        causes.get(id) ??
+        conflicts.get(id) ??
+        evidence.get(id)?.label ??
+        id,
+      href: evidence.get(id)?.href ?? null,
+    }));
+    return {
+      id: claim.code,
+      label,
+      established: claim.holds,
+      definition: (w.definitions as Record<string, string>)[claim.code] ?? claim.definition,
+      refs,
+    };
+  });
+}
+
 export function intentionAnalysis(
   t: Dictionary,
   analysis: IntentionAnalysis,
@@ -412,6 +597,7 @@ export function intentionAnalysis(
         : null,
     confidence: cause.confidence,
     basis: cause.basis,
+    strength: (cause.strength ?? null) as CauseStrength | null,
     why: causeWhy(t, cause, links),
     evidence: refs(cause.evidence),
   }));
@@ -446,8 +632,19 @@ export function intentionAnalysis(
       action: item.action,
       confidence: item.confidence,
       evidence: refs(item.evidence),
+      preconditions: (item.preconditions ?? []).map((pre) => ({
+        id: pre.code,
+        label: preconditionSaid(t, pre),
+        met: pre.met,
+        blocking: pre.blocking,
+      })),
+      assumptions: (item.assumptions ?? []).map(
+        (id) => result.causes.find((c) => c.id === id)?.label ?? id,
+      ),
+      executable: item.executable ?? null,
     }),
   );
+  const explained = result.explanation ?? null;
   return {
     status: STATUSES[result.status],
     summary: result.summary.length ? result.summary.map(say).join(" ") : null,
@@ -458,10 +655,24 @@ export function intentionAnalysis(
     recommendations,
     uncertainties: result.uncertainties.map(say),
     confidence: result.confidence,
-    support: result.support.map((note) => ({
-      id: note.code,
-      label: say(note),
-      established: note.params?.established === true,
-    })),
+    // What the figures count, when the analysis says it (LEKA-441); the
+    // older three lines otherwise.
+    support: explained
+      ? claimsOf(t, explained, result, evidence)
+      : result.support.map((note) => ({
+          id: note.code,
+          label: say(note),
+          established: note.params?.established === true,
+        })),
+    explanation: explained
+      ? explanationOf(
+          t,
+          analysis,
+          explained,
+          recommendations,
+          result.recommendations ?? [],
+          links,
+        )
+      : null,
   };
 }

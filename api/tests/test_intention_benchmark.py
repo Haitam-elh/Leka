@@ -206,7 +206,10 @@ def _analysed(analysis: dict[str, Any] | None, decisions: list[dict[str, Any]]) 
         or set(r["evidence"]) - evidence
         or (r["changes_systems"] and not r["basis"])
     ]
+    explained = result.get("explanation") or {}
     return {
+        "confidence": (explained.get("confidence") or {}).get("level"),
+        "next_step": (explained.get("next") or {}).get("code"),
         "analysis": (analysis or {}).get("status"),
         "error": (analysis or {}).get("error"),
         "findings": tuple(s["code"] for s in (*result.get("findings", []), *notes)),

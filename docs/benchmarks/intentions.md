@@ -63,6 +63,9 @@ checked (the header of `intentions.yaml` lists them all):
   `proposals`;
 - **what it takes**: `next` (ready, prerequisites, over_quota, impossible),
   `needs`;
+- **how sure, and what next** (LEKA-441): `confidence` (the levels it may
+  have — surer than all of them is a false claim), `next_step` (decide,
+  prepare, settle_conflict, ask_differently…);
 - **forbidden behaviours** (`forbid`): a decision, an action on systems, a
   cause or a recommendation about something else, an analysis said complete,
   an owner it could not read.
@@ -192,13 +195,15 @@ What it found, and what was fixed for it in LEKA-440 (understanding v5):
 | « Qu'est-ce qui a changé… » | comprehension | « qui » read as « who »: two goals | what changed |
 
 **The reference**, `tests/benchmark/baseline.md`, is measured on
-understanding v5 and dataset v2. Dataset v2 adds 13 cases the fixes were not
-written for: « do a rollback », « j'ai besoin de redémarrer », « comment
+understanding v5 and dataset v3. Dataset v3 adds how sure each analysis may
+be and what it must say to do next (LEKA-441: an unknown thing low, its
+next step « reformuler »; an SLA its sources contradict, « trancher »).
+Dataset v2 added 13 cases the fixes were not written for: « do a rollback », « j'ai besoin de redémarrer », « comment
 redémarrer », « qui a redémarré », « sans toucher à », « ne touche à rien »,
 a known name with an unknown one…
 
 - **71 of 71 cases** pass every check;
-- **645 of 645 checks** pass;
+- **658 of 658 checks** pass;
 - there are **0 critical failures**.
 
 What held from the start, and still holds:

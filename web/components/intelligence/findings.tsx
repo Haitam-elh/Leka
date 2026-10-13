@@ -54,6 +54,8 @@ const CAUSE_LOOK: Record<CauseTag, { icon: LucideIcon; tone: TileTone }> = {
   stated: { icon: OctagonAlert, tone: "danger" },
   probable: { icon: TriangleAlert, tone: "danger" },
   toConfirm: { icon: CircleHelp, tone: "violet" },
+  // Only time ties it (LEKA-441): not a cause, a lead.
+  correlated: { icon: CircleHelp, tone: "neutral" },
 };
 
 function InsightRow({
@@ -184,7 +186,14 @@ export function ProbableCauseList({ causes }: { causes: readonly ProbableCause[]
             title={cause.label}
             href={cause.href}
             tag={w.tags[tag]}
-            aside={<ConfidenceBadge score={cause.confidence} basis={cause.basis} />}
+            aside={
+              // A correlation says how sure only in words: never « 55 % ».
+              <ConfidenceBadge
+                score={cause.confidence}
+                basis={cause.basis}
+                detail={tag !== "correlated"}
+              />
+            }
             description={
               <p>
                 {cause.kind ? <span className="text-brand-navy">{cause.kind} · </span> : null}

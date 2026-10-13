@@ -84,14 +84,21 @@ pretending to be results.
 |---|---|---|
 | `IntelligenceSection` | any part of an output | a card: its icon by `kind` (`fact`, `hypothesis`, `proposal`, `evidence`, `impact`, `confidence`, `context`), its title, `count`, `subtitle`, `action`; `level`: its heading's, 2 under a page title, 3 under a section's (axe checks the order) |
 | `Pill` | a tag, a priority, a chip | a word, the colour only repeating it |
-| `ConfidenceBadge` | how sure, anywhere | high ≥ 85 %, medium ≥ 60 %, low below, unknown when none (`confidenceLevel`); `basis`: stated or inferred; `short` under a heading that says *Confiance* |
-| `ConfidencePanel`, `SupportList` | how sure an analysis is, and on what | `Support`: a line, established or still missing |
+| `ConfidenceBadge` | how sure, anywhere | high ≥ 85 %, medium ≥ 60 %, low below, unknown when none (`confidenceLevel`); `basis`: stated or inferred; `short` under a heading that says *Confiance*; `level`: the level the analysis says, with why (LEKA-441) — then a word, no percentage |
+| `ConfidencePanel`, `SupportList` | how sure an analysis is, and on what | `Support`: a line, established or still missing; with a `definition` (LEKA-441) it opens on what it counts and its `refs` — a figure nothing defines is not said |
+| `UnderstoodLine` | what LEKA understood (LEKA-441) | above the results |
+| `ConfidenceExplained` | how sure, in words, and why | each reason: its starting point, what caps it |
+| `SourcesConsulted` | the sources an analysis read from | each in its state: *Lue*, *En échec*, *Dégradée*, *Pas à jour*, *Synchro en cours*, *Désactivée*, *Supprimée* — never *Lue* when it was not |
+| `ConflictList` | what the sources contradict about what is asked | every side, who says it; nothing when none |
+| `AnalysisLimits` | what did not answer and what that leaves unknown, what may be out of date | *Rien n'a manqué* when nothing did |
+| `NextStepPanel` | what to do next, and why | `action` takes the screen's way to do it |
+| `FreshnessNotice` | a context that moved on since the analysis read it | `action` takes *Relancer*; nothing when it is the latest |
 | `UncertaintyList` | what is not known | draws nothing when empty |
 | `EvidenceList`, `EvidenceStrip`, `EvidenceButton`, `EvidenceToggle` | the evidence of a statement | a piece: `record`, `entity`, `event`, `inference`; its source's logo, its date; *Voir* named by what it opens; details with `aria-expanded` |
 | `FindingList` | facts | `title` when the statement is long |
-| `ProbableCauseList` | hypotheses | tag from `causeTag()`, confidence, *Pourquoi*, evidence |
+| `ProbableCauseList` | hypotheses | tag from `causeTag()` — with `strength` (LEKA-441): *Cause déclarée* (confirmed), *Cause probable*, *Corrélation, pas une cause* (no percentage) — confidence, *Pourquoi*, evidence |
 | `ImpactPanel`, `RiskBadge` | what it reaches, how bad | `riskOf()` reads a tool's severity or priority — sev1/P1/critical high, sev2/P2/major medium, sev3–5/minor low, else unknown |
-| `RecommendationCard`, `RecommendationList` | proposals | `priority`, `action` (its icon), chips: what it touches, `effort`, *Réversible*/*Irréversible*, risk, confidence; the chevron opens what justifies it; `control` takes a checkbox — acting asks first (`components/interactions/confirm`); `compact` in a side column |
+| `RecommendationCard`, `RecommendationList` | proposals | `priority`, `action` (its icon), chips: what it touches, `effort`, *Réversible*/*Irréversible*, risk, confidence, *Pas exécutable en l'état* (LEKA-441) and *À régler d'abord*; the chevron opens what it needs first (`preconditions`), what it assumes (`assumptions`) and what justifies it; `control` takes a checkbox — acting asks first (`components/interactions/confirm`); `compact` in a side column |
 | `ControlNotice` | a screen where a yes runs something | — |
 | `AnalysisState` | how it went | running, partial, inconclusive, failed (`role="alert"`, retry), pending |
 | `AnalysisSummary` | what it comes to | — |

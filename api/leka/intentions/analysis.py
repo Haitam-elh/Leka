@@ -262,6 +262,21 @@ class Cause:
     evidence: tuple[str, ...] = ()
 
 
+# How far a cause is shown (LEKA-441): its source says so — confirmed; LEKA
+# infers it with enough to go on — probable; only time ties it to what
+# happened — a correlation, never called a cause.
+PROBABLE = 0.6
+
+
+def strength_of(cause: Cause) -> str:
+    """confirmed, probable or correlated."""
+    if cause.basis == "stated":
+        return "confirmed"
+    if (cause.confidence or 0.0) >= PROBABLE:
+        return "probable"
+    return "correlated"
+
+
 @dataclass(frozen=True)
 class ImpactItem:
     ref_type: str
@@ -376,6 +391,19 @@ class Answer:
 
 
 @dataclass(frozen=True)
+class Precondition:
+    """What must hold before a recommendation can be carried out (LEKA-441):
+    met, not met, or not known yet; blocking when, unmet, it cannot be done
+    as it stands."""
+
+    code: str
+    text: str
+    met: bool | None
+    blocking: bool
+    params: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class Recommendation:
     """What LEKA proposes to do (LEKA-389) — never a fact: a proposal, from
     the findings and causes it names, that a person decides on."""
@@ -395,6 +423,15 @@ class Recommendation:
     basis: tuple[str, ...] = ()
     evidence: tuple[str, ...] = ()
     target: ImpactItem | None = None
+    # What must hold first, and the causes it rests on that are not confirmed
+    # — what it assumes (LEKA-441).
+    preconditions: tuple[Precondition, ...] = ()
+    assumptions: tuple[str, ...] = ()
+
+    @property
+    def executable(self) -> bool:
+        """Every blocking precondition met: it can be carried out as it stands."""
+        return all(p.met for p in self.preconditions if p.blocking)
 
 
 @dataclass(frozen=True)
@@ -417,6 +454,8 @@ class Result:
     answer: Answer | None = None
     # What LEKA proposes, apart from what it found (LEKA-389, recommend.py).
     recommendations: tuple[Recommendation, ...] = ()
+    # On what it rests, as kept (LEKA-441, explain.py): AnalysisExplanation's.
+    explanation: Mapping[str, object] | None = None
 
 
 # ── selecting ────────────────────────────────────────────────────────────────

@@ -109,8 +109,16 @@ export function RecommendationCard({
       <li>
         <ConfidenceBadge score={recommendation.confidence} />
       </li>
+      {recommendation.executable === false ? (
+        <li>
+          <Pill tone="warning" data-testid="not-executable">
+            {w.notExecutable}
+          </Pill>
+        </li>
+      ) : null}
     </ul>
   );
+  const unmet = (recommendation.preconditions ?? []).filter((p) => p.blocking && p.met === false);
   return (
     <article
       aria-label={recommendation.title}
@@ -138,8 +146,52 @@ export function RecommendationCard({
           </div>
           <p className="mt-0.5 text-shell-muted">{recommendation.rationale}</p>
           {chips}
+          {unmet.length ? (
+            // What stops it, said where it is read — not behind a click.
+            <p className="mt-2 text-xs text-state-warning" data-testid="unmet">
+              {fill(w.first, { what: unmet.map((p) => p.label).join(" ; ") })}
+            </p>
+          ) : null}
           {open ? (
-            <div id={more} className="mt-3">
+            <div id={more} className="mt-3 space-y-3">
+              {recommendation.preconditions?.length ? (
+                <div>
+                  <p className="text-xs font-semibold text-brand-navy">{w.preconditions}</p>
+                  <ul className="mt-1 space-y-1 text-xs" data-testid="preconditions">
+                    {recommendation.preconditions.map((p) => (
+                      <li key={p.id} className="flex items-start gap-2" data-met={String(p.met)}>
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "mt-1 size-2 shrink-0 rounded-full",
+                            p.met === true
+                              ? "bg-state-success"
+                              : p.met === false
+                                ? "bg-state-warning"
+                                : "bg-shell-line",
+                          )}
+                        />
+                        <span className="text-shell-muted">
+                          <span className="sr-only">
+                            {p.met === true ? w.met : p.met === false ? w.unmet : w.toCome} :{" "}
+                          </span>
+                          {p.label}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {recommendation.assumptions?.length ? (
+                <div>
+                  <p className="text-xs font-semibold text-brand-navy">{w.assumes}</p>
+                  <ul className="mt-1 list-disc ps-5 text-xs text-shell-muted" data-testid="assumptions">
+                    {recommendation.assumptions.map((a) => (
+                      <li key={a}>{a}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <EvidenceStrip items={recommendation.evidence} title={w.justified} />
             </div>
           ) : null}
