@@ -259,7 +259,7 @@ describe("the context an intention asks for", () => {
     );
   });
 
-  it("says how sure LEKA can be, and what is missing beside the intention's gaps", () => {
+  it("says how sure LEKA can be, and what is missing beside the intention's gaps", async () => {
     show(
       assembled({
         quality: {
@@ -316,6 +316,8 @@ describe("the context an intention asks for", () => {
       }),
     );
 
+    // Folded under the context's detail (LEKA-438): opened, it says it.
+    await userEvent.click(screen.getByText("Détail du contexte"));
     const sure = screen.getByTestId("intelligence-confidence");
     expect(within(sure).getByRole("heading", { name: "Niveau de confiance" })).toBeVisible();
     expect(within(sure).getByTestId("confidence")).toHaveTextContent("Faible");

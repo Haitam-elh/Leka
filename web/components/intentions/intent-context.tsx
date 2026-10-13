@@ -1,20 +1,29 @@
 "use client";
 
-import { ChevronDown, FileSearch, PencilLine } from "lucide-react";
+import { ArrowRight, ChevronDown, FileSearch, PencilLine } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { cn } from "cn";
 
 import { changeSaid } from "@/components/environment/context-freshness";
-import { QualityPanel, qualityGapSaid } from "@/components/environment/context-quality";
+import {
+  QualityPanel,
+  qualityGapSaid,
+} from "@/components/environment/context-quality";
 import { gapSaid } from "@/components/intentions/gap-said";
 import { ReadinessPanel } from "@/components/intentions/readiness";
 import { UnderstandingPanel } from "@/components/intentions/understanding";
-import { entityHref, IconTile, Logo, typeIcon, typeLabel } from "@/components/environment/parts";
+import {
+  entityHref,
+  IconTile,
+  Logo,
+  typeIcon,
+  typeLabel,
+} from "@/components/environment/parts";
 import { IntelligenceSection, Pill } from "@/components/intelligence";
 import { exactDate } from "@/components/knowledge/time";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { routes } from "@/config/routes";
 import type { AssembledContext, IntentPlan, QualityGap } from "@/lib/context";
 import { fill } from "@/lib/i18n/dictionaries";
@@ -34,8 +43,8 @@ import type { IntentionDetail } from "@/lib/intentions/api";
  * pretends to be them.
  */
 
-
-const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40";
+const FOCUS =
+  "outline-none focus-visible:ring-2 focus-visible:ring-brand-violet/40";
 
 // Said where it lived (LEKA-373): its own module since LEKA-375.
 export { gapSaid };
@@ -59,49 +68,92 @@ export function IntentContext({
         <div className="flex items-start gap-3">
           <IconTile icon={FileSearch} tone="violet" className="size-11" />
           <div className="min-w-0">
-            <h2 className="text-[1.0625rem] font-semibold text-brand-navy">{w.title}</h2>
+            <h2 className="text-[1.0625rem] font-semibold text-brand-navy">
+              {w.title}
+            </h2>
             <p className="text-[0.8125rem] text-shell-muted">{w.body}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-shell-line bg-shell-canvas/60 px-4 py-3">
-          <p className="min-w-0 flex-1 text-[0.9375rem] text-brand-navy">{assembled.purpose}</p>
+          <p className="min-w-0 flex-1 text-[0.9375rem] text-brand-navy">
+            {assembled.purpose}
+          </p>
           <Button type="button" variant="outline" size="sm" onClick={onEdit}>
             <PencilLine className="size-3.5" aria-hidden="true" />
             {w.edit}
           </Button>
           {intention ? (
+            // The one way on: the analysis goes on there.
             <Link
               href={routes.intention(intention.id)}
-              className="text-[0.8125rem] font-medium text-shell-nav-active underline-offset-2 hover:underline"
+              className={buttonVariants({ size: "sm" })}
               data-testid="intention-follow"
             >
               {w.follow}
+              <ArrowRight
+                className="rtl:-scale-x-100 size-3.5"
+                aria-hidden="true"
+              />
             </Link>
           ) : null}
         </div>
-        {assembled.trigger === "reasked" ? <AskedAgain assembled={assembled} /> : null}
+        {assembled.trigger === "reasked" ? (
+          <AskedAgain assembled={assembled} />
+        ) : null}
       </section>
       {/* What LEKA understood of it (LEKA-385), and what it would ask. */}
       {intention?.understanding ? (
         <UnderstandingPanel understanding={intention.understanding} />
       ) : null}
-      {intention?.readiness ? <ReadinessPanel readiness={intention.readiness} /> : null}
+      {intention?.readiness ? (
+        <ReadinessPanel readiness={intention.readiness} />
+      ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
-        <div className="min-w-0 space-y-4">
-          {plan || assembled.quality ? <Missing assembled={assembled} /> : null}
-          <Gathered assembled={assembled} />
+      {/* The rest is what the analysis rests on: there when asked, so what
+          LEKA understood and what blocks it are read first (LEKA-438) —
+          its gaps were said three times over. */}
+      <details
+        className="group rounded-xl border border-shell-line bg-white"
+        data-testid="intent-details"
+      >
+        <summary
+          className={cn(
+            "flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-5 py-4",
+            FOCUS,
+          )}
+        >
+          <span className="min-w-0">
+            <span className="block text-[0.9375rem] font-semibold text-brand-navy">
+              {w.details}
+            </span>
+            <span className="block text-[0.8125rem] text-shell-muted">
+              {w.detailsHint}
+            </span>
+          </span>
+          <ChevronDown
+            className="size-4 shrink-0 text-shell-muted transition-transform group-open:rotate-180"
+            aria-hidden="true"
+          />
+        </summary>
+        <div className="grid gap-4 border-t border-shell-line p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start">
+          <div className="min-w-0 space-y-4">
+            {plan || assembled.quality ? (
+              <Missing assembled={assembled} />
+            ) : null}
+            <Gathered assembled={assembled} />
+          </div>
+          <div className="min-w-0 space-y-4">
+            <QualityPanel
+              assembled={assembled}
+              compact
+              level={2}
+              title={t.quality.stepTitle}
+            />
+            {plan ? <Scope plan={plan} /> : null}
+            <SourcesRead assembled={assembled} />
+          </div>
         </div>
-        <div className="min-w-0 space-y-4">
-          <QualityPanel assembled={assembled} compact level={2} title={t.quality.stepTitle} />
-          {plan ? <Scope plan={plan} /> : null}
-          <SourcesRead assembled={assembled} />
-        </div>
-      </div>
-
-      <p className="rounded-xl bg-shell-highlight px-5 py-4 text-[0.8125rem] text-shell-muted">
-        {w.next}
-      </p>
+      </details>
     </div>
   );
 }
@@ -116,7 +168,10 @@ function AskedAgain({ assembled }: { assembled: AssembledContext }) {
   );
   const delta = assembled.delta;
   return (
-    <div className="text-[0.8125rem] text-shell-muted" data-testid="intent-asked-again">
+    <div
+      className="text-[0.8125rem] text-shell-muted"
+      data-testid="intent-asked-again"
+    >
       <p className="font-medium text-brand-navy">
         {fill(t.intent.again, { version: assembled.version })}
       </p>
@@ -145,7 +200,9 @@ function AskedAgain({ assembled }: { assembled: AssembledContext }) {
 function Missing({ assembled }: { assembled: AssembledContext }) {
   const t = useDictionary();
   const w = t.intent.gaps;
-  const names = new Map(assembled.elements.map((element) => [element.ref_id, element.label]));
+  const names = new Map(
+    assembled.elements.map((element) => [element.ref_id, element.label]),
+  );
   const said: QualityGap[] =
     assembled.quality?.gaps ??
     (assembled.intent?.gaps ?? []).map((gap) => ({
@@ -155,11 +212,22 @@ function Missing({ assembled }: { assembled: AssembledContext }) {
     }));
   const rank = { critical: 0, warning: 1, info: 2 } as const;
   const ordered = [...said].sort((a, b) => rank[a.severity] - rank[b.severity]);
-  const tones = { critical: "danger", warning: "warning", info: "neutral" } as const;
+  const tones = {
+    critical: "danger",
+    warning: "warning",
+    info: "neutral",
+  } as const;
   return (
-    <IntelligenceSection kind="missing" title={fill(w.title, { count: said.length })} level={2}>
+    <IntelligenceSection
+      kind="missing"
+      title={fill(w.title, { count: said.length })}
+      level={2}
+    >
       {ordered.length === 0 ? (
-        <p className="text-[0.8125rem] text-state-success" data-testid="intent-nothing-missing">
+        <p
+          className="text-[0.8125rem] text-state-success"
+          data-testid="intent-nothing-missing"
+        >
           {w.none}
         </p>
       ) : (
@@ -172,8 +240,12 @@ function Missing({ assembled }: { assembled: AssembledContext }) {
               data-kind={gap.kind}
               data-severity={gap.severity}
             >
-              <Pill tone={tones[gap.severity]}>{t.quality.gaps.severity[gap.severity]}</Pill>
-              <span className="min-w-0 text-brand-navy">{qualityGapSaid(t, gap, names)}</span>
+              <Pill tone={tones[gap.severity]}>
+                {t.quality.gaps.severity[gap.severity]}
+              </Pill>
+              <span className="min-w-0 text-brand-navy">
+                {qualityGapSaid(t, gap, names)}
+              </span>
             </li>
           ))}
         </ul>
@@ -181,7 +253,6 @@ function Missing({ assembled }: { assembled: AssembledContext }) {
     </IntelligenceSection>
   );
 }
-
 
 function Scope({ plan }: { plan: IntentPlan }) {
   const t = useDictionary();
@@ -209,7 +280,10 @@ function Scope({ plan }: { plan: IntentPlan }) {
         <dd className="text-brand-navy">
           <span className="font-medium">{kinds[plan.kind] ?? plan.kind}</span>
           {plan.kind_said.length ? (
-            <span className="text-shell-muted"> · « {plan.kind_said.join(", ")} »</span>
+            <span className="text-shell-muted">
+              {" "}
+              · « {plan.kind_said.join(", ")} »
+            </span>
           ) : null}
         </dd>
         <dt className="text-shell-muted">{w.scope.subjects}</dt>
@@ -217,11 +291,17 @@ function Scope({ plan }: { plan: IntentPlan }) {
           {plan.subjects.length === 0 ? (
             <span className="text-shell-muted">{w.scope.none}</span>
           ) : (
-            <ul className="flex flex-wrap gap-1.5" data-testid="intent-subjects">
+            <ul
+              className="flex flex-wrap gap-1.5"
+              data-testid="intent-subjects"
+            >
               {plan.subjects.map((subject) => (
                 <li key={subject.entity_id}>
                   <Link
-                    href={entityHref({ id: subject.entity_id, type: subject.type })}
+                    href={entityHref({
+                      id: subject.entity_id,
+                      type: subject.type,
+                    })}
                     className={cn(
                       "inline-flex items-center gap-1 rounded-md border border-shell-line bg-white px-2 py-0.5 text-xs text-brand-navy hover:bg-shell-canvas",
                       FOCUS,
@@ -248,9 +328,13 @@ function Scope({ plan }: { plan: IntentPlan }) {
           <span className="block text-xs text-shell-muted">{origin}</span>
         </dd>
         <dt className="text-shell-muted">{w.scope.environment}</dt>
-        <dd className="text-brand-navy">{plan.environment ?? w.scope.everywhere}</dd>
+        <dd className="text-brand-navy">
+          {plan.environment ?? w.scope.everywhere}
+        </dd>
         <dt className="text-shell-muted">{w.scope.sources}</dt>
-        <dd className="text-brand-navy">{sources ? sources.said : w.scope.allSources}</dd>
+        <dd className="text-brand-navy">
+          {sources ? sources.said : w.scope.allSources}
+        </dd>
       </dl>
     </IntelligenceSection>
   );
@@ -281,14 +365,28 @@ function Gathered({ assembled }: { assembled: AssembledContext }) {
         <p className="text-[0.8125rem] text-shell-muted">{w.empty}</p>
       ) : (
         <>
-          <ul className="divide-y divide-shell-line/60" data-testid="intent-gathered">
+          <ul
+            className="divide-y divide-shell-line/60"
+            data-testid="intent-gathered"
+          >
             {groups.map(([type, things]) => {
               const kinds = [
-                ...new Set(things.flatMap((e) => e.provenance.sources.map((s) => s.kind))),
+                ...new Set(
+                  things.flatMap((e) =>
+                    e.provenance.sources.map((s) => s.kind),
+                  ),
+                ),
               ].filter((kind): kind is string => Boolean(kind));
               return (
-                <li key={type} className="flex items-center gap-3 py-2 text-[0.8125rem]">
-                  <IconTile icon={typeIcon(type)} tone="violet" className="size-9" />
+                <li
+                  key={type}
+                  className="flex items-center gap-3 py-2 text-[0.8125rem]"
+                >
+                  <IconTile
+                    icon={typeIcon(type)}
+                    tone="violet"
+                    className="size-9"
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium text-brand-navy">
                       {typeLabel(t, type)} · {things.length}
@@ -309,7 +407,9 @@ function Gathered({ assembled }: { assembled: AssembledContext }) {
               );
             })}
           </ul>
-          <p className="mt-2 text-xs text-shell-muted">{fill(w.ties, { count: ties })}</p>
+          <p className="mt-2 text-xs text-shell-muted">
+            {fill(w.ties, { count: ties })}
+          </p>
           <button
             type="button"
             aria-expanded={open}
@@ -320,10 +420,18 @@ function Gathered({ assembled }: { assembled: AssembledContext }) {
             )}
           >
             {open ? w.less : w.more}
-            <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
+            <ChevronDown
+              className={cn(
+                "size-3.5 transition-transform",
+                open && "rotate-180",
+              )}
+            />
           </button>
           {open ? (
-            <ul className="mt-2 flex flex-wrap gap-1.5" data-testid="intent-elements">
+            <ul
+              className="mt-2 flex flex-wrap gap-1.5"
+              data-testid="intent-elements"
+            >
               {entities.map((element) => (
                 <li key={element.ref_id}>
                   <Link
@@ -359,7 +467,9 @@ function SourcesRead({ assembled }: { assembled: AssembledContext }) {
         <ul className="space-y-2 text-[0.8125rem]" data-testid="intent-sources">
           {assembled.sources.map((source) => (
             <li key={source.source_id} className="flex items-center gap-2">
-              {source.kind ? <Logo kind={source.kind} className="size-5" /> : null}
+              {source.kind ? (
+                <Logo kind={source.kind} className="size-5" />
+              ) : null}
               <span className="min-w-0 flex-1 truncate text-brand-navy">
                 {source.name ?? t.environment.sheet.context.deletedSource}
               </span>
