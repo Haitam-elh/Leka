@@ -321,7 +321,7 @@ function Delta({
 function Stats({ data }: { data: Activity }) {
   const t = useDictionary();
   const s = t.activity.stats;
-  const tiles: {
+  const all: {
     key: string;
     icon: LucideIcon;
     tone: TileTone;
@@ -372,6 +372,8 @@ function Stats({ data }: { data: Activity }) {
       foot: <Delta count={data.stats.people} />,
     },
   ];
+  // Nobody active over the period: a 0 that calls for nothing (LEKA-438).
+  const tiles = all.filter((tile) => tile.key !== "people" || tile.value > 0);
   return (
     <StatGrid count={tiles.length} testId="activity-stats">
       {tiles.map((tile) => (
@@ -688,59 +690,49 @@ function People({ data }: { data: Activity }) {
   );
 }
 
-/** The bottom banner: what LEKA reads in the model's course — its
- * evolution insights — and the way to ask it something. */
+/** What LEKA reads in the model's course — its evolution insights. Said
+ * when there are some; no banner, no second primary button (LEKA-438). */
 function Trends() {
   const t = useDictionary();
   const w = t.activity.trends;
   const trends = useTrends();
   const found = trends.data?.data ?? [];
+  if (!found.length) return null;
   return (
     <section
-      className="mt-4 flex flex-col gap-4 rounded-xl border border-shell-line bg-brand-violet-soft/60 p-5 lg:flex-row lg:items-center"
+      className="mt-4 flex gap-4 rounded-xl border border-shell-line bg-white p-5"
       data-testid="activity-trends"
     >
-      <Sparkles className="size-8 shrink-0 text-shell-nav-active" aria-hidden="true" />
+      <Sparkles className="size-6 shrink-0 text-shell-nav-active" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <h2 className="text-[1.0625rem] font-semibold text-brand-navy">{w.title}</h2>
         <p className="text-[0.8125rem] text-shell-muted">{w.body}</p>
-        {found.length ? (
-          <ul className="mt-2 space-y-1">
-            {found.map((finding) => {
-              const worded = word(t, finding);
-              const href = hrefOf(finding);
-              const line = (
-                <>
-                  <span className="font-medium text-brand-navy">{worded.title}</span>
-                  {worded.detail ? (
-                    <span className="text-shell-muted"> · {worded.detail}</span>
-                  ) : null}
-                </>
-              );
-              return (
-                <li key={finding.id} className="text-[0.8125rem]" data-testid="activity-trend">
-                  {href ? (
-                    <Link href={href} className="rounded outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40">
-                      {line}
-                    </Link>
-                  ) : (
-                    line
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        ) : trends.data ? (
-          <p className="mt-2 text-[0.8125rem] text-shell-muted">{w.none}</p>
-        ) : null}
+        <ul className="mt-2 space-y-1">
+          {found.map((finding) => {
+            const worded = word(t, finding);
+            const href = hrefOf(finding);
+            const line = (
+              <>
+                <span className="font-medium text-brand-navy">{worded.title}</span>
+                {worded.detail ? (
+                  <span className="text-shell-muted"> · {worded.detail}</span>
+                ) : null}
+              </>
+            );
+            return (
+              <li key={finding.id} className="text-[0.8125rem]" data-testid="activity-trend">
+                {href ? (
+                  <Link href={href} className="rounded outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40">
+                    {line}
+                  </Link>
+                ) : (
+                  line
+                )}
+              </li>
+            );
+          })}
+        </ul>
       </div>
-      <Link
-        href={routes.intentionNew()}
-        className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-navy px-5 py-3 text-sm font-medium text-white outline-none hover:bg-brand-navy/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
-      >
-        {w.cta}
-        <ArrowRight className="rtl:-scale-x-100 size-4" aria-hidden="true" />
-      </Link>
     </section>
   );
 }
