@@ -210,7 +210,7 @@ describe("the new intention's context and scope", () => {
 
     await user.click(screen.getByTestId("intention-submit"));
     expect(await screen.findByTestId("intention-step-2")).toBeInTheDocument();
-    // Kept: followed from Mes intentions.
+    // Kept: its analysis followed on its page.
     expect(screen.getByTestId("intention-follow")).toHaveAttribute("href", "/intentions/i1");
     expect(intentionsApi.create).toHaveBeenLastCalledWith({
       text: "Pourquoi acme/backend est lent depuis hier ?",

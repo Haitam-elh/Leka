@@ -130,6 +130,8 @@ test.describe("a new intention, read", () => {
       .getByTestId("intention-input")
       .fill("Qu'est-ce qui a changé sur payment-api cette semaine ?");
     await page.getByTestId("intention-submit").click();
+    // The context in detail, opened (LEKA-438 folds it): all of it checked.
+    await page.getByText("Détail du contexte").click();
     await expect(page.getByTestId("intent-scope")).toBeVisible();
     await page.getByRole("button", { name: "Voir tous les éléments" }).click();
 

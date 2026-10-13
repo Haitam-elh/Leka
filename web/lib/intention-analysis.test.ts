@@ -34,7 +34,8 @@ const CATALOGUE = "4c3bc5ff-a12e-5e92-a5ae-ad6da2029a41";
 const links: Links = {
   href: ({ id, type }) => `/environment/${type}/${id}`,
   typeName: (type) =>
-    ({ service: "Service", team: "Équipe", deployment: "Déploiement" })[type] ?? type,
+    ({ service: "Service", team: "Équipe", deployment: "Déploiement" })[type] ??
+    type,
   date: (iso) => iso.slice(0, 10),
 };
 
@@ -56,7 +57,9 @@ function step(name: string, status: Step["status"], ms: number): Step {
   };
 }
 
-function analysisFixture(overrides: Partial<IntentionAnalysis> = {}): IntentionAnalysis {
+function analysisFixture(
+  overrides: Partial<IntentionAnalysis> = {},
+): IntentionAnalysis {
   return {
     id: "a1",
     intention_id: "i1",
@@ -70,10 +73,34 @@ function analysisFixture(overrides: Partial<IntentionAnalysis> = {}): IntentionA
     started_at: "2026-10-08T09:00:00Z",
     finished_at: "2026-10-08T09:00:01.200Z",
     selection: [
-      { name: "standing", version: 1, method: "rules", chosen: true, reason: "always" },
-      { name: "ownership", version: 1, method: "rules", chosen: true, reason: "goal" },
-      { name: "changes", version: 1, method: "rules", chosen: true, reason: "kind" },
-      { name: "migration", version: 1, method: "rules", chosen: false, reason: "not_called" },
+      {
+        name: "standing",
+        version: 1,
+        method: "rules",
+        chosen: true,
+        reason: "always",
+      },
+      {
+        name: "ownership",
+        version: 1,
+        method: "rules",
+        chosen: true,
+        reason: "goal",
+      },
+      {
+        name: "changes",
+        version: 1,
+        method: "rules",
+        chosen: true,
+        reason: "kind",
+      },
+      {
+        name: "migration",
+        version: 1,
+        method: "rules",
+        chosen: false,
+        reason: "not_called",
+      },
     ],
     steps: [
       step("standing", "succeeded", 12),
@@ -246,7 +273,11 @@ describe("an intention's analysis", () => {
     expect(intentionAnalysis(en, analysisFixture(), links).summary).toBe(
       "Billing API is owned by Payments.",
     );
-    const restart = { code: "action.asked", text: "…", params: { action: "restart", on: ["Billing API"] } };
+    const restart = {
+      code: "action.asked",
+      text: "…",
+      params: { action: "restart", on: ["Billing API"] },
+    };
     expect(noteSaid(fr, restart, links)).toBe(
       "Demandé : Redémarrer Billing API. Une personne doit l'approuver avant toute exécution.",
     );
@@ -254,7 +285,11 @@ describe("an intention's analysis", () => {
       "Asked: Restart Billing API. A person must approve it before anything runs.",
     );
     expect(
-      noteSaid(fr, { code: "migration.summary", text: "…", params: { target: null } }, links),
+      noteSaid(
+        fr,
+        { code: "migration.summary", text: "…", params: { target: null } },
+        links,
+      ),
     ).toBe("La destination manque.");
     expect(
       noteSaid(
@@ -314,13 +349,22 @@ describe("an intention's analysis", () => {
       confidence: null,
       detail: "organisation · high",
       at: null,
-      params: { code: "ownership.no_owner", params: { name: "postgres-prod", dependents: 3 } },
+      params: {
+        code: "ownership.no_owner",
+        params: { name: "postgres-prod", dependents: 3 },
+      },
     };
     const worded = evidenceRef(fr, concluded, {
       ...links,
-      finding: (code, params) => ({ title: `${code}: ${String(params.name)}`, detail: "worded" }),
+      finding: (code, params) => ({
+        title: `${code}: ${String(params.name)}`,
+        detail: "worded",
+      }),
     });
-    expect([worded.label, worded.detail]).toEqual(["ownership.no_owner: postgres-prod", "worded"]);
+    expect([worded.label, worded.detail]).toEqual([
+      "ownership.no_owner: postgres-prod",
+      "worded",
+    ]);
     // Without its words, its own statement.
     expect(evidenceRef(fr, concluded, links).label).toBe(concluded.label);
   });
@@ -335,7 +379,31 @@ describe("an intention's analysis", () => {
       href: `/environment/deployment/${DEPLOY}`,
       why: "Modifié 2.5 h avant l'ouverture de p99 above 2s, sur ce qu'il touche.",
     });
-    expect(cause.evidence[0]).toMatchObject({ kind: "event", detail: "Déploiement · déploiement" });
+    expect(cause.evidence[0]).toMatchObject({
+      kind: "event",
+      detail: "Déploiement · déploiement",
+    });
+  });
+
+  it("says a cause two capabilities reached once: the surer reading, all its evidence", () => {
+    const fixture = analysisFixture();
+    const [first] = fixture.result!.causes;
+    fixture.result!.causes = [
+      first,
+      {
+        ...first,
+        capability: "changes",
+        confidence: 0.9,
+        evidence: [`entity:${BILLING}`, `event:${DEPLOY}`],
+      },
+    ];
+    const causes = intentionAnalysis(fr, fixture, links).causes;
+    expect(causes).toHaveLength(1);
+    expect(causes[0].confidence).toBe(0.9);
+    expect(causes[0].evidence.map((ref) => ref.id)).toEqual([
+      `event:${DEPLOY}`,
+      `entity:${BILLING}`,
+    ]);
   });
 
   it("says what it reaches, the risk and on what; what is missing, unknown, and sure", () => {
@@ -360,14 +428,28 @@ describe("an intention's analysis", () => {
       risk: "high",
       riskBasis: "1 élément(s) en dépendent, dont des éléments critiques.",
     });
-    expect(analysis.missing).toEqual(["Changements n'a pas abouti : délai dépassé."]);
+    expect(analysis.missing).toEqual([
+      "Changements n'a pas abouti : délai dépassé.",
+    ]);
     expect(analysis.uncertainties).toEqual([
       "Plusieurs responsables sont nommés pour Billing API (Payments, Platform) : qui décide n'est pas dit.",
     ]);
     expect(analysis.support).toEqual([
-      { id: "support.sources", label: "2 source(s) derrière son contexte", established: true },
-      { id: "support.contradictions", label: "1 contradiction(s) entre elles", established: false },
-      { id: "support.context", label: "Contexte prêt, qualité élevée", established: true },
+      {
+        id: "support.sources",
+        label: "2 source(s) derrière son contexte",
+        established: true,
+      },
+      {
+        id: "support.contradictions",
+        label: "1 contradiction(s) entre elles",
+        established: false,
+      },
+      {
+        id: "support.context",
+        label: "Contexte prêt, qualité élevée",
+        established: true,
+      },
     ]);
     expect(analysis.confidence).toBe(0.9);
     // Proposals are LEKA-389's: none here.
@@ -387,7 +469,12 @@ describe("an intention's analysis", () => {
   it("draws an analysis not run, or on its way, as nothing found yet", () => {
     const blocked = intentionAnalysis(
       fr,
-      analysisFixture({ status: "blocked", result: null, steps: [], selection: [] }),
+      analysisFixture({
+        status: "blocked",
+        result: null,
+        steps: [],
+        selection: [],
+      }),
       links,
     );
     expect(blocked.status).toBe("pending");
