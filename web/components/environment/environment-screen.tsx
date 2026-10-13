@@ -198,7 +198,11 @@ export function EnvironmentScreen() {
     body = architecture.isError ? (
       <ErrorState error={architecture.error} onRetry={() => void architecture.refetch()} />
     ) : architecture.data ? (
-      <ArchitectureBoard data={architecture.data} events={model?.events ?? []} />
+      <div className="flex flex-col gap-3">
+        <ArchitectureBoard data={architecture.data} />
+        {/* What moved and what needs a look, as the mockup's foot (LEKA-438). */}
+        <Recent model={model} />
+      </div>
     ) : (
       <div className="h-96 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />
     );
@@ -234,20 +238,7 @@ export function EnvironmentScreen() {
             view={view}
             onMore={() => setView("list")}
           />
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-            <Card
-              title={w.events.title}
-              action={<CardLink href={routes.activity()}>{w.kpi.seeAll}</CardLink>}
-            >
-              <EventList rows={model?.events ?? []} empty={w.events.empty} />
-            </Card>
-            <Card
-              title={w.attention.title}
-              action={<CardLink href={routes.approvals()}>{w.kpi.seeAll}</CardLink>}
-            >
-              <AttentionList rows={model?.attention ?? []} empty={w.attention.empty} />
-            </Card>
-          </div>
+          <Recent model={model} />
         </div>
         <div className="flex flex-col gap-4">
           <Insights />
@@ -269,8 +260,9 @@ export function EnvironmentScreen() {
         onScope={setScope}
       />
 
-      <div className="mb-3 flex flex-col gap-2 rounded-xl border border-shell-line bg-white p-1.5 lg:flex-row lg:items-center">
-        <div role="group" aria-label={w.tabsLabel} className="flex flex-wrap gap-1">
+      {/* Ten tabs and the legend share a line only when there is room for both. */}
+      <div className="mb-3 flex flex-col items-start gap-2 border-b border-shell-line pb-2 2xl:flex-row 2xl:items-center">
+        <div role="group" aria-label={w.tabsLabel} className="flex flex-wrap gap-0.5">
           {TABS.map((key) => (
             <button
               key={key}
@@ -279,10 +271,10 @@ export function EnvironmentScreen() {
               onClick={() => setTab(key)}
               data-testid={`env-tab-${key}`}
               className={cn(
-                "rounded-lg border px-3 py-1 text-[0.8125rem] font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-brand-violet/40",
+                "shrink-0 rounded-lg px-2.5 py-1 text-[0.8125rem] whitespace-nowrap font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-brand-violet/40",
                 tab === key
-                  ? "border-brand-violet/30 bg-brand-violet-soft text-shell-nav-active"
-                  : "border-shell-line text-brand-navy hover:bg-shell-canvas",
+                  ? "bg-brand-violet-soft text-shell-nav-active"
+                  : "text-shell-muted hover:bg-shell-canvas hover:text-brand-navy",
               )}
             >
               {w.tabs[key]}
@@ -291,11 +283,11 @@ export function EnvironmentScreen() {
         </div>
         {tab === "architecture" ? (
           // The architecture says its states under its canvas: here, the way to the detail.
-          <div className="lg:ms-auto">
+          <div className="shrink-0 2xl:ms-auto">
             <DetailedLink />
           </div>
         ) : (
-          <ul aria-label={w.legend} className="flex flex-wrap gap-x-5 gap-y-1 lg:ms-auto lg:pe-2">
+          <ul aria-label={w.legend} className="flex flex-wrap gap-x-5 gap-y-1 px-2.5 2xl:ms-auto 2xl:pe-2">
             {LEGEND.map((state) => (
               <li key={state} className="flex items-center gap-2 text-[0.8125rem] text-brand-navy">
                 <span
@@ -321,12 +313,26 @@ export function EnvironmentScreen() {
   );
 }
 
+function Recent({ model }: { model: Model | undefined }) {
+  const w = useDictionary().environment;
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <Card title={w.events.title} action={<CardLink href={routes.activity()}>{w.kpi.seeAll}</CardLink>}>
+        <EventList rows={model?.events ?? []} empty={w.events.empty} />
+      </Card>
+      <Card title={w.attention.title} action={<CardLink href={routes.approvals()}>{w.kpi.seeAll}</CardLink>}>
+        <AttentionList rows={model?.attention ?? []} empty={w.attention.empty} />
+      </Card>
+    </div>
+  );
+}
+
 function DetailedLink() {
   const t = useDictionary();
   return (
     <Link
       href={routes.environmentGraph()}
-      className="flex items-center gap-1.5 rounded-lg bg-brand-navy px-3 py-1 text-[0.8125rem] font-medium text-white outline-none hover:bg-brand-navy/90 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
+      className="flex items-center gap-1.5 rounded-lg border border-shell-line px-3 py-1 text-[0.8125rem] font-medium whitespace-nowrap text-shell-nav-active outline-none hover:bg-brand-violet-soft/60 focus-visible:ring-3 focus-visible:ring-brand-violet/40"
     >
       {t.environment.map.detailed}
       <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />

@@ -2888,21 +2888,6 @@ const fr = {
         language: "Langage",
         code_files: "Fichiers",
       },
-      widgets: {
-        byStatus: "Services par statut",
-        services: "services",
-        types: "Types de ressources",
-        typeRows: {
-          services: "Services",
-          cloud: "Ressources cloud",
-          tables: "Tables",
-          repositories: "Repositories",
-        },
-        activity: "Activité récente",
-        top: "Top dépendances",
-        topEmpty: "Aucune dépendance connue pour l'instant.",
-        seeAll: "Voir tout",
-      },
       dossier: {
         title: "Architecture applicative",
         scope:
@@ -8802,21 +8787,6 @@ const en: Dictionary = {
         visibility: "Visibility",
         language: "Language",
         code_files: "Files",
-      },
-      widgets: {
-        byStatus: "Services by status",
-        services: "services",
-        types: "Resource types",
-        typeRows: {
-          services: "Services",
-          cloud: "Cloud resources",
-          tables: "Tables",
-          repositories: "Repositories",
-        },
-        activity: "Recent activity",
-        top: "Top dependencies",
-        topEmpty: "No known dependency yet.",
-        seeAll: "See all",
       },
       dossier: {
         title: "Application architecture",

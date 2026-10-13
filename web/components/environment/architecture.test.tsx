@@ -6,8 +6,8 @@
  * are doing, in shares; each column with its cards, each card's kind and
  * state in words, the API chosen first and its panel saying why its state
  * is deduced; another card chosen, its relations named from its side, a
- * database's tables one click away; every link in words; the widgets under
- * the canvas; nothing connected, a screen that says what to connect. And
+ * database's tables one click away; every link in words; nothing
+ * connected, a screen that says what to connect. And
  * what the canvas draws: a column's links alike as one arrow, the chosen
  * card's own over them.
  *
@@ -99,7 +99,7 @@ describe("the figures", () => {
 
 describe("the board", () => {
   it("draws each column, each card's kind and state in words, the API chosen first", () => {
-    mount(<ArchitectureBoard data={ARCHITECTURE} events={[]} />);
+    mount(<ArchitectureBoard data={ARCHITECTURE} />);
 
     const column = (name: string) => within(screen.getByTestId(`arch-column-${name}`));
     expect(column("code").getByText("GitHub")).toBeInTheDocument();
@@ -154,7 +154,7 @@ describe("the board", () => {
 
   it("names another card's relations from its side, leads to a database's tables", async () => {
     const user = userEvent.setup();
-    mount(<ArchitectureBoard data={ARCHITECTURE} events={[]} />);
+    mount(<ArchitectureBoard data={ARCHITECTURE} />);
 
     await user.click(screen.getByRole("button", { name: /^PostgreSQL, Base de données/ }));
     const panel = within(screen.getByTestId("architecture-panel"));
@@ -182,7 +182,7 @@ describe("the board", () => {
   });
 
   it("says every link in words", () => {
-    mount(<ArchitectureBoard data={ARCHITECTURE} events={[]} />);
+    mount(<ArchitectureBoard data={ARCHITECTURE} />);
 
     const words = within(screen.getByTestId("architecture-text"));
     expect(words.getByText("Leka Web appelle Leka API")).toBeInTheDocument();
@@ -192,37 +192,8 @@ describe("the board", () => {
     );
   });
 
-  it("puts the widgets under the canvas: states, kinds, what moved, the most relied on", () => {
-    mount(
-      <ArchitectureBoard
-        data={ARCHITECTURE}
-        events={[
-          {
-            key: "e1",
-            at: new Date().toISOString(),
-            tone: "change",
-            pill: "Changement",
-            title: "main to production",
-            where: "Haitam-elh/Leka",
-          },
-        ]}
-      />,
-    );
-
-    expect(screen.getByRole("img", { name: "4 services" })).toBeInTheDocument();
-    const kinds = within(screen.getByTestId("architecture-types"));
-    expect(kinds.getByText("Tables")).toBeInTheDocument();
-    expect(kinds.getByText("36")).toBeInTheDocument();
-    expect(screen.getByText("main to production")).toBeInTheDocument();
-    const top = within(screen.getByTestId("architecture-top"));
-    expect(top.getAllByRole("listitem").map((row) => row.textContent)).toEqual([
-      "leka-prod2",
-      "PostgreSQL2",
-    ]);
-  });
-
   it("says what to connect when nothing is known", () => {
-    mount(<ArchitectureBoard data={NOTHING} events={[]} />);
+    mount(<ArchitectureBoard data={NOTHING} />);
 
     expect(screen.getByText("Votre architecture n'est pas encore connue")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Connecter" })).toHaveAttribute("href", "/sources");
@@ -231,7 +202,7 @@ describe("the board", () => {
 
   it("says a module's parts and a machine's details", async () => {
     const user = userEvent.setup();
-    mount(<ArchitectureBoard data={ARCHITECTURE} events={[]} />);
+    mount(<ArchitectureBoard data={ARCHITECTURE} />);
 
     await user.click(screen.getByRole("button", { name: "Leka/api, Backend" }));
     const parts = within(screen.getByTestId("architecture-parts"));
