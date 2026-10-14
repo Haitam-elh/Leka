@@ -683,6 +683,11 @@ class AgentRunRead(BaseModel):
         description="The files LEKA drew of what it delivered (its pptx, its pdf), each to "
         "download.",
     )
+    expected: list[str] = Field(
+        default_factory=list,
+        description="The files it is to deliver (pdf, pptx), as asked when it was launched "
+        "(2026-10-14) — none when only its report.",
+    )
     error: str | None = Field(
         description="Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, "
         "invalid_output, abandoned, error."

@@ -211,8 +211,10 @@ def test_every_request_is_decided_its_agents_or_by_hand() -> None:
     asked = journey(
         _facts(S.AWAITING_DECISION, last="proposed", analysis="complete", acting=False), NOW
     )
-    assert (asked.state, asked.by, asked.step.at, asked.step.last) == (
+    assert (asked.state, asked.reason, asked.next, asked.by, asked.step.at, asked.step.last) == (
         J.DECISION_REQUIRED,
+        "choose",
+        "choose",
         "asker",
         "decision",
         4,

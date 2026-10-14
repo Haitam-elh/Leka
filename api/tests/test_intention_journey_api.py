@@ -108,7 +108,7 @@ async def test_the_list_and_its_page_say_the_same_state_and_versions_are_kept_ap
     await _analysed(acme, intention["id"])
     said = await _same(client, intention["id"])
     # Answered, then decided: its agents, or by hand (2026-10-14).
-    assert (said["state"], said["next"]) == ("decision_required", "decide")
+    assert (said["state"], said["next"]) == ("decision_required", "choose")
     assert (said["step"]["at"], said["step"]["done"], said["step"]["last"]) == (
         "decision",
         False,

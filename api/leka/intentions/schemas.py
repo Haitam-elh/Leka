@@ -1004,6 +1004,18 @@ class AnalysisExplanation(BaseModel):
     context_version: int | None = Field(description="The version of its context it read.")
 
 
+class AgentFieldRead(BaseModel):
+    """One input an agent takes, for a person to complete it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    type: str
+    required: bool
+    description: str
+    choices: list[str] = Field(default_factory=list)
+
+
 class ProposedAgentRead(BaseModel):
     """An agent the work needs (proposal.py): who, why here, what it would
     deliver and from what — and whether it can run here, said why not."""
@@ -1021,6 +1033,9 @@ class ProposedAgentRead(BaseModel):
     asked: list[str] = Field(description="The files the request asks for: drawn when launched.")
     inputs: dict[str, str | bool] = Field(description="Its inputs, from the request's words.")
     missing: list[str] = Field(description="The required inputs the request does not give.")
+    fields: list[AgentFieldRead] = Field(
+        default_factory=list, description="Every input it takes, for a person to complete."
+    )
     credits: float | None = Field(
         description="What a run of it has cost here, in credits — none before a few runs."
     )

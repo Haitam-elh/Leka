@@ -430,13 +430,15 @@ def journey(facts: Facts, now: datetime) -> Journey:
         # Its agents, or by hand — and, when it asks to change systems, the
         # decision on its actions (LEKA-390).
         ways = {LAUNCH_AGENTS, BY_HAND}
-        return said(
-            J.DECISION_REQUIRED,
-            "partial" if partial else None,
-            "decide",
-            APPROVER if facts.acting else ASKER,
-            ways | ({DECIDE, MODIFY_DECISION} if facts.acting else set()),
-        )
+        if facts.acting:
+            return said(
+                J.DECISION_REQUIRED,
+                "partial" if partial else None,
+                "decide",
+                APPROVER,
+                ways | {DECIDE, MODIFY_DECISION},
+            )
+        return said(J.DECISION_REQUIRED, "partial" if partial else "choose", "choose", ASKER, ways)
     if status == S.APPROVED:
         return said(J.APPROVED, None, "start_actions", APPROVER, {START_ACTIONS})
     if status == S.SCHEDULED:
@@ -518,7 +520,7 @@ MATRIX: tuple[Row, ...] = (
         (S.AWAITING_DECISION,),
         ("proposed",),
         (LAUNCH_AGENTS, BY_HAND, DECIDE, MODIFY_DECISION, ASK_AGAIN, CANCEL),
-        ("partial",),
+        ("partial", "choose"),
     ),
     Row(
         J.APPROVED,

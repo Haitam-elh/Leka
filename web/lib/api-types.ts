@@ -6614,6 +6614,22 @@ export interface components {
             previous: number;
         };
         /**
+         * AgentFieldRead
+         * @description One input an agent takes, for a person to complete it.
+         */
+        AgentFieldRead: {
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Required */
+            required: boolean;
+            /** Description */
+            description: string;
+            /** Choices */
+            choices?: string[];
+        };
+        /**
          * AgentLaunch
          * @description An agent a person launches from the Décision step: its inputs as they
          *     completed them, the files they want drawn.
@@ -6746,6 +6762,11 @@ export interface components {
              */
             deliverables: components["schemas"]["DeliverableRead"][];
             /**
+             * Expected
+             * @description The files it is to deliver (pdf, pptx), as asked when it was launched (2026-10-14) — none when only its report.
+             */
+            expected?: string[];
+            /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
              */
@@ -6869,6 +6890,11 @@ export interface components {
              * @description The files LEKA drew of what it delivered (its pptx, its pdf), each to download.
              */
             deliverables: components["schemas"]["DeliverableRead"][];
+            /**
+             * Expected
+             * @description The files it is to deliver (pdf, pptx), as asked when it was launched (2026-10-14) — none when only its report.
+             */
+            expected?: string[];
             /**
              * Error
              * @description Why it failed: unavailable, not_permitted, no_model, tool_rounds, timeout, invalid_output, abandoned, error.
@@ -18755,6 +18781,11 @@ export interface components {
              * @description The required inputs the request does not give.
              */
             missing: string[];
+            /**
+             * Fields
+             * @description Every input it takes, for a person to complete.
+             */
+            fields?: components["schemas"]["AgentFieldRead"][];
             /**
              * Credits
              * @description What a run of it has cost here, in credits — none before a few runs.

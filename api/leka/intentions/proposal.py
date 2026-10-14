@@ -47,6 +47,7 @@ from leka.capabilities.definition import Query, discover
 from leka.capabilities.runtime import DRAWN
 from leka.intentions.models import Intention
 from leka.intentions.schemas import (
+    AgentFieldRead,
     AgentProposalRead,
     PlanStepRead,
     ProposedAgentRead,
@@ -198,6 +199,16 @@ def agent_read(
         asked=[f for f in formats if f in CHOSEN and f in deliverables],
         inputs={k: v for k, v in inputs.items() if isinstance(v, str | bool)},
         missing=missing,
+        fields=[
+            AgentFieldRead(
+                name=i.name,
+                type=i.type,
+                required=i.required,
+                description=i.description,
+                choices=list(i.choices),
+            )
+            for i in d.contract.inputs
+        ],
         credits=cost,
         available=entry.availability.available,
         reasons=list(entry.availability.codes),
