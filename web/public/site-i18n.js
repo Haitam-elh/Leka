@@ -4,7 +4,7 @@
    l'anglais, puis sur le français du HTML (docs/languages.md). */
 (() => {
   const D = { en: {
-"Environnement":"Environment","Capacités":"Capabilities","De l'intention à l'action":"From intent to action","Contrôle":"Control","Se connecter":"Sign in","Découvrir LEKA":"Discover LEKA",
+"Environnement":"Environment","Capacités":"Capabilities","De l'intention à l'action":"From intent to action","Contrôle":"Control","Se connecter":"Sign in","Découvrir LEKA":"Discover LEKA","Essayer gratuitement":"Try it free","Essayer gratuitement →":"Try it free →","Gratuit, sans carte bancaire.":"Free, no card required.","Ou être recontacté par notre équipe pour une démonstration":"Or have our team contact you for a demo","Être recontacté pour une démonstration":"Have our team contact you for a demo",
 "Le système nerveux technologique de votre entreprise":"The technological nervous system of your company",
 "Comprenez. Décidez. Agissez. Sans perdre de temps.":"Understand. Decide. Act. Without wasting time.",
 "LEKA comprend votre environnement technologique, ses relations et ses capacités pour vous permettre d'aller directement du besoin à l'action.":"LEKA understands your technology environment, its relationships and its capabilities so you can go straight from need to action.",

@@ -77,6 +77,8 @@ class ErrorCode(enum.StrEnum):
     # bought. The screens offer the plan, or the agent and its bundles.
     PLAN_REQUIRED = "plan_required"
     AGENT_NOT_OWNED = "agent_not_owned"
+    # Its plan's sources all connected (2026-10-14): the next plan offered.
+    SOURCES_QUOTA = "sources_quota"
 
     # ── Authentication (LEKA-330, spelling preserved) ────────────────────
     INVALID_CREDENTIALS = "invalid_credentials"

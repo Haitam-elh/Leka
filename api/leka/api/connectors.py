@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.api.pagination import PageEnvelope, PageParams, SortCatalogue, serve_page
+from leka.billing import source_quota
 from leka.connectors import (
     ActivationRefusedError,
     CatalogEntry,
@@ -276,7 +277,17 @@ async def list_sources(
 async def create_source(
     body: SourceCreate, service: ManagingService, session: SessionDep, principal: Manager
 ) -> SourceRead:
-    """A new source, in draft. It reads nothing until it is tested and activated."""
+    """A new source, in draft. It reads nothing until it is tested and activated.
+    422 `sources_quota` once its plan's sources are all there — the next plan
+    said (2026-10-14); what it already has is kept."""
+    quota = await source_quota(session, principal.workspace_id)
+    if quota.full:
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.SOURCES_QUOTA,
+            f"The {quota.plan} plan holds {quota.limit} sources.",
+            details=[FieldError(field="plan", message=quota.next_plan or "enterprise")],
+        )
     try:
         source = await service.create(body.type, body.display_name, body.config, body.credentials)
     except _REFUSALS as error:

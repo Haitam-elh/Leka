@@ -435,7 +435,24 @@ function SettingsStep({
       ),
       credentials: defaultsOf(secretFields),
     },
-    onSubmit: async (values) => onSaved(await save.mutateAsync(values)),
+    onSubmit: async (values) => {
+      try {
+        onSaved(await save.mutateAsync(values));
+      } catch (caught) {
+        // Its plan's sources all connected (2026-10-14): the next plan said.
+        if (caught instanceof ApiError && caught.code === "sources_quota") {
+          const next = caught.fieldErrors?.plan ?? "starter";
+          form.setError("root", {
+            type: "server",
+            message: fill(t.sources.add.quota, {
+              plan: next.charAt(0).toUpperCase() + next.slice(1),
+            }),
+          });
+          return;
+        }
+        throw caught;
+      }
+    },
   });
   const chosen = (useWatch({ control: form.control, name: "config" }) ?? {}) as Record<
     string,

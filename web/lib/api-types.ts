@@ -1107,6 +1107,8 @@ export interface paths {
         /**
          * Create Source
          * @description A new source, in draft. It reads nothing until it is tested and activated.
+         *     422 `sources_quota` once its plan's sources are all there — the next plan
+         *     said (2026-10-14); what it already has is kept.
          */
         post: operations["create_source_api_v1_sources_post"];
         delete?: never;
@@ -6014,6 +6016,23 @@ export interface paths {
         put?: never;
         /** Stripe's customer portal */
         post: operations["open_portal_api_v1_billing_portal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/subscription/renewal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Renew at the period's end, or not */
+        post: operations["change_renewal_api_v1_billing_subscription_renewal_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13765,7 +13784,7 @@ export interface components {
          *     them and a rename would be a breaking change for nothing.
          * @enum {string}
          */
-        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "off_topic" | "agent_unavailable" | "agent_inputs_missing" | "agent_not_proposed" | "credits_short" | "plan_required" | "agent_not_owned" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed";
+        ErrorCode: "validation_failed" | "not_authenticated" | "permission_denied" | "not_found" | "conflict" | "rate_limited" | "internal_error" | "service_unavailable" | "invalid_cursor" | "invalid_sort" | "invalid_filter" | "contract_unsupported" | "off_topic" | "agent_unavailable" | "agent_inputs_missing" | "agent_not_proposed" | "credits_short" | "plan_required" | "agent_not_owned" | "sources_quota" | "invalid_credentials" | "account_unverified" | "token_invalid" | "token_expired" | "password_too_short" | "password_breached" | "session_expired" | "last_owner" | "csrf_failed";
         /**
          * ErrorEnvelope
          * @description Every error response the API returns, whatever the status.
@@ -19778,6 +19797,11 @@ export interface components {
          * @enum {string}
          */
         RelationshipType: "depends_on" | "owns" | "deployed_to" | "mentions" | "caused_by" | "member_of" | "part_of" | "owned_by" | "maintained_by" | "authored_by" | "assigned_to" | "reviewed_by" | "reported_by" | "led_by" | "affects" | "resolves" | "implements" | "merges" | "child_of" | "in_network" | "runs_in" | "references" | "reads_from" | "reports_to" | "contributes_to" | "describes" | "edited_by" | "supported_by" | "uses" | "realizes" | "deploys";
+        /** RenewalChange */
+        RenewalChange: {
+            /** Renew */
+            renew: boolean;
+        };
         /**
          * Reprocessed
          * @description A candidate sent back to its analysis: proposed again if its evidence
@@ -53530,6 +53554,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PortalRead"];
+                };
+            };
+            /** @description The request could not be understood. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not signed in, or the session has expired. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Signed in, but not allowed to do this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description No such thing, or not yours to see. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description The request is well formed but not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Something went wrong on our side. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    change_renewal_api_v1_billing_subscription_renewal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenewalChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionRead"];
                 };
             };
             /** @description The request could not be understood. */

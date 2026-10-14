@@ -16,11 +16,13 @@ from leka.billing.catalogue import (
 )
 from leka.billing.entitlements import (
     Owned,
+    SourceQuota,
     end,
     entitlements,
     grant,
     owned,
     plan_runs_agents,
+    source_quota,
 )
 from leka.billing.models import (
     EVENTS,
@@ -89,6 +91,7 @@ __all__ = [
     "SiteEvent",
     "SiteEventCount",
     "SiteEventCreate",
+    "SourceQuota",
     "Stripe",
     "StripeError",
     "StripeEvent",
@@ -115,6 +118,7 @@ __all__ = [
     "receive",
     "record",
     "renewal",
+    "source_quota",
     "stripe",
     "stripe_locale",
     "sync",

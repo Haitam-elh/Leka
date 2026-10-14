@@ -48,16 +48,22 @@ export function SiteHeader() {
         </nav>
         <div className="ms-auto flex items-center gap-4 md:ms-0">
           <LanguageButton className="h-[38px] px-2 text-[15px] font-medium text-site-slate hover:text-site-ink" />
-          {/* On a phone, as on the site: the sign-in stays, the demo folds. */}
+          {/* On a phone, as on the site: the sign-in and the sign-up stay, the
+              demo folds. Creating an account was found only under « Se
+              connecter » (2026-10-14): it is said first. */}
+          <a href="/demo.html?type=demo" className={`hidden lg:inline ${link}`}>
+            {t.demo}
+          </a>
           <Link href="/login" className={link}>
             {t.signIn}
           </Link>
-          <a
-            href="/demo.html?type=demo"
-            className="hidden h-[38px] items-center rounded-[6px] bg-site-ink sm:inline-flex px-4 text-sm font-semibold tracking-[-0.012em] text-white transition-colors hover:bg-site-violet"
+          <Link
+            href="/register"
+            className="inline-flex h-[38px] items-center rounded-[6px] bg-site-ink px-4 text-sm font-semibold tracking-[-0.012em] text-white transition-colors hover:bg-site-violet"
+            data-testid="site-signup"
           >
-            {t.demo}
-          </a>
+            {t.signUp}
+          </Link>
         </div>
       </div>
     </header>

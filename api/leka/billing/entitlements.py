@@ -21,11 +21,12 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from leka.billing.catalogue import catalogue
 from leka.billing.models import AgentEntitlement
+from leka.connectors import Source
 from leka.governance import plan_of
 
 PLANS = ("free", "starter", "growth", "business", "enterprise")
@@ -143,3 +144,40 @@ async def end(
             ended += 1
     await session.flush()
     return ended
+
+
+@dataclass(frozen=True)
+class SourceQuota:
+    """How many sources its plan holds (2026-10-14 — to validate), how many
+    it has, and the least plan that holds one more."""
+
+    plan: str
+    limit: int | None
+    used: int
+    next_plan: str | None
+
+    @property
+    def full(self) -> bool:
+        return self.limit is not None and self.used >= self.limit
+
+
+async def source_quota(session: AsyncSession, workspace_id: uuid.UUID) -> SourceQuota:
+    has = await owned(session, workspace_id)
+    used = int(
+        await session.scalar(
+            select(func.count()).select_from(Source).where(Source.workspace_id == workspace_id)
+        )
+        or 0
+    )
+    if has.every:
+        # LEKA's team's, for tests: no quota.
+        return SourceQuota(has.plan, None, used, None)
+    offer = catalogue()
+    limit = offer.plan(has.plan).quotas.sources if has.plan in PLANS else None
+    bigger = [
+        p.key
+        for p in offer.plans
+        if PLANS.index(p.key) > PLANS.index(has.plan)
+        and (p.quotas.sources is None or p.quotas.sources > used)
+    ]
+    return SourceQuota(has.plan, limit, used, bigger[0] if bigger else None)
