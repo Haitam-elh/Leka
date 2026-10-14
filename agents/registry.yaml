@@ -39,7 +39,7 @@ agents:
 
   - path: data/data-analysis/SKILL.md
     name: data-analysis
-    version: 1.1.0
+    version: 1.2.0
     status: active
 
   - path: development/build-fixer/SKILL.md

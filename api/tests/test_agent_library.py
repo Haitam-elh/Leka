@@ -30,6 +30,7 @@ from leka.knowledge import EntityType
 VERSIONS = {
     "architecture-analysis": "1.2.0",
     "code-review": "1.2.0",
+    "data-analysis": "1.2.0",
     "debug-assistant": "1.2.0",
     "documentation-assistant": "1.2.0",
     "infrastructure-analysis": "1.2.0",
@@ -420,4 +421,22 @@ def test_the_infrastructure_analysis_finds_what_falls_together() -> None:
     ):
         assert step in said, step
     assert "c'est inconnu, pas" in said
+    assert "affaan-m/ECC" in said
+
+
+def test_the_data_analysis_knows_who_writes_and_how_to_change() -> None:
+    # LEKA-447: ECC's database-reviewer and database-migrations, rewritten
+    # for the structure and lineage LEKA sees — writers and readers, the
+    # known structure, access, a change in three steps, the unseen said.
+    said = {d.key: d for d in catalogue()}["data-analysis"].instructions or ""
+    assert "## Sa méthode" in said
+    for step in (
+        "Qui écrit, qui lit",
+        "La structure, d'après ce qui est connu",
+        "Les accès",
+        "Changer sans casser",
+        "Ce qui ne se voit pas",
+    ):
+        assert step in said, step
+    assert "en trois temps" in said
     assert "affaan-m/ECC" in said
