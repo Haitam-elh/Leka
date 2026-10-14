@@ -124,7 +124,8 @@ test.describe("the shell", () => {
   test("changes language from the account menu", async ({ page }) => {
     await signIn(page);
 
-    const environment = page.getByTestId("nav-section-environment-toggle");
+    // Its name is the link to its overview (2026-10-14).
+    const environment = page.getByTestId("nav-environment-overview");
     await expect(environment).toContainText("Mon environnement");
     await expect(environment).toContainText("Le système vivant de votre entreprise.");
 

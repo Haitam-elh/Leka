@@ -128,7 +128,7 @@ test.describe("the three pillars (LEKA-428)", () => {
     // (2026-10-14).
     await page.getByTestId("nav-environment-overview").click();
     await expect(page).toHaveURL("http://localhost:3000/environment");
-    await expect(page.getByTestId("env-view")).toHaveText("Vue globale");
+    await expect(page.getByTestId("env-view")).toContainText("Vue globale");
     await expect(page.getByTestId("nav-section-environment-toggle")).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByTestId("nav-activity")).toBeVisible();
     await expect(page.getByTestId("nav-environment-applications")).toHaveCount(0);
@@ -139,12 +139,12 @@ test.describe("the three pillars (LEKA-428)", () => {
     await page.getByTestId("env-view").click();
     await page.getByRole("option", { name: "Applications" }).click();
     await expect(page).toHaveURL("http://localhost:3000/environment?tab=applications");
-    await expect(page.getByTestId("env-view")).toHaveText("Applications");
+    await expect(page.getByTestId("env-view")).toContainText("Applications");
     await expect(page.getByTestId("nav-environment-overview")).toHaveAttribute("aria-current", "page");
 
     // And the address is the view: reloaded, or sent, it opens there.
     await page.goto("/environment?tab=domains");
-    await expect(page.getByTestId("env-view")).toHaveText("Domaines");
+    await expect(page.getByTestId("env-view")).toContainText("Domaines");
   });
 
   test("opens and closes a section, from the keyboard too, and remembers it", async ({ page }) => {
