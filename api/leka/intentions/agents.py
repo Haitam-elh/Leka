@@ -143,7 +143,7 @@ async def _start(
     permissions = await permitted(session, workspace_id, by)
     catalogue = CatalogueService(session, workspace_id)
     # Asked on some sources only: its agents read those, unless told others.
-    asked_on = [uuid.UUID(str(x)) for x in (intention.scope or {}).get("sources") or []]
+    asked_on = [uuid.UUID(str(x)) for x in _list(intention.scope, "sources")]
     checked: list[tuple[str, dict[str, object], list[str], str, list[uuid.UUID]]] = []
     for each in chosen:
         entry = await catalogue.entry(each.key, permissions=permissions, user_id=by)
