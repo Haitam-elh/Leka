@@ -40,6 +40,11 @@ test.describe("Capabilities", () => {
     // A model answers here (the stand-in, LEKA-429) and agents run
     // (LEKA-395): nothing is in its way.
     await expect(architect).toHaveAttribute("data-available", "true");
+    // Its price, owned here — LEKA's demo runs every agent (2026-10-14) —
+    // and the bundles under the domains.
+    await expect(architect.getByTestId("agent-price")).toContainText("25 € / mois");
+    await expect(architect.getByTestId("agent-price")).toContainText("Actif");
+    await expect(page.getByTestId("bundle")).toHaveCount(5);
 
     // Its words find it.
     await page.getByTestId("catalogue-search").fill("architecte");

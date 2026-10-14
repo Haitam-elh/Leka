@@ -25,7 +25,7 @@ from leka.billing.catalogue import catalogue
 from leka.billing.entitlements import EVERY, end, grant
 from leka.billing.subscriptions import BillingUnavailableError, stripe
 from leka.billing.sync import sync
-from leka.db import session_factory, workspace_scope
+from leka.db import load_schema, session_factory, workspace_scope
 
 
 async def _sync() -> int:
@@ -76,4 +76,5 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    load_schema()
     raise SystemExit(main())

@@ -71,6 +71,22 @@ Each is added to the catalogue when decided, and the page shows it with nothing 
 
 **LEAD by LEKA** is not on this page: its packaging (a separate product or a module of LEKA CORE) is to be confirmed first.
 
+## 1 ter. Test accounts: any plan, on the server (2026-10-14)
+
+Every team account is on Growth, so trying Free or Starter needs another account on another plan. No route does it, only commands on the server, in dev and staging. In production they are used by LEKA's team only, the operator named:
+
+```bash
+# A workspace on a plan from now on, said who and why (kept, audited)
+docker compose exec api python -m leka.metering.cli plan <workspace> free --by "Haitam" --reason "test Free"
+docker compose exec api python -m leka.metering.cli plans <workspace>   # every plan it was on
+
+# Every agent, or no longer (LEKA's team's workspaces, for tests)
+docker compose exec api python -m leka.billing.cli grant-agents <workspace> --by "Haitam" --reason "tests"
+docker compose exec api python -m leka.billing.cli grant-agents <workspace> --by "Haitam" --reason "tests" --end
+```
+
+A workspace's id: `SELECT id, name FROM workspaces;` on its database. A new account starts on Free, with 200 credits, and runs no agent.
+
 ## 2. The rules the catalogue enforces
 
 `leka/billing/catalogue.py` refuses a catalogue that breaks any of these rules, when it reads it:
