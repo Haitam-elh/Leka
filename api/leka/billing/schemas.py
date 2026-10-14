@@ -29,11 +29,8 @@ class PlanRead(_Read):
     ai_credits_contractual: bool
     managed_llm: bool
     own_llm: bool
-
-
-class CoreAgentRead(_Read):
-    key: str
-    name: Words
+    # Days free before the first charge, a card required; None: none.
+    trial_days: int | None
 
 
 class LaunchOfferRead(_Read):
@@ -60,12 +57,10 @@ class PricingRead(_Read):
     currency: str
     annual_discount_percent: int
     launch_offer: LaunchOfferRead
-    core_agents: list[CoreAgentRead]
     plans: list[PlanRead]
     add_ons_available: bool
-    capacity_any_time: bool
+    # The AI capacity is the plan's: never sold apart, never an overage.
     automatic_overage: Literal[False] = False
-    capacity_packs_available: bool
     booking: BookingRead
 
 
@@ -107,12 +102,6 @@ class CheckoutCreate(BaseModel):
     interval: Literal["month", "year"]
 
 
-class CapacityCheckoutCreate(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    pack: str = Field(min_length=1, max_length=40)
-
-
 class CheckoutRead(_Read):
     """Where to pay — Stripe's page — and what will be charged, as the
     pricing page says it."""
@@ -135,5 +124,6 @@ class SubscriptionRead(_Read):
     current_period_end: datetime | None
     cancel_at_period_end: bool
     launch_offer_available: bool
+    trial_available: bool = Field(description="Never subscribed here: a plan's trial may be had.")
     last_invoice: str | None
     has_customer: bool

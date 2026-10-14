@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { signIn } from "./sign-in";
 
 /**
- * The pricing page (LEKA-431), as a visitor reads it: every price from the
+ * The pricing page (LEKA-431, LEKA-446), as a visitor reads it: every price from the
  * API — the catalogue's — the launch offer on monthly billing, the annual
  * discount on yearly, never both; Growth recommended; the Enterprise call
  * to action reaching the team; what the visitor chose counted. And every
@@ -45,10 +45,15 @@ test("the plans, monthly with the launch offer, yearly with the annual discount"
   await expect(growth).not.toContainText("pendant 12 mois");
   await expect(page.locator("#launchNote")).toBeHidden();
 
-  // AI capacity, the core agents, the own model on Enterprise only.
+  // AI capacity, Growth's trial, the own model on Enterprise only — and no
+  // agent in a plan, no AI capacity sold apart (LEKA-446).
   // Metering's credits (LEKA-430), as the page reads them from it.
   await expect(growth).toContainText("10 000 crédits IA / mois");
-  await expect(growth).toContainText("Architecte applicatif et QA — analyse des tests inclus");
+  await expect(growth).toContainText("Essai gratuit de 14 jours, carte requise");
+  await expect(page.locator('article.plan[data-plan="starter"]')).not.toContainText("Essai");
+  await expect(page.locator("#trialTerms")).toContainText("sauf annulation avant la fin de l'essai");
+  await expect(page.locator("#plans")).not.toContainText("inclus");
+  await expect(page.locator("main")).not.toContainText("Capacité IA supplémentaire");
   const enterprise = page.locator('article.plan[data-plan="enterprise"]');
   await expect(enterprise).toContainText("Sur devis");
   await expect(enterprise).toContainText("Connexion de votre propre modèle de langage");

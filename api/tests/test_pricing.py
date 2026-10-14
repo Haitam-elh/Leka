@@ -1,19 +1,21 @@
-"""LEKA CORE's commercial catalogue and what each plan costs (LEKA-431) —
-pure, and over HTTP.
+"""LEKA CORE's commercial catalogue and what each plan costs (LEKA-431,
+LEKA-446) — pure, and over HTTP.
 
 What these protect:
 - The catalogue LEKA ships is whole and coherent: five plans in order,
-  Growth the one recommended; Architect and QA included in every plan;
-  connecting one's own model only on Enterprise, priced per contract and
-  never self-service; AI credits a number marked provisional (Enterprise:
-  by contract); specialist add-ons and capacity packs not on sale until
-  available; never an automatic overage charge. A catalogue that breaks a
-  rule — the launch offer on yearly billing, own model below Enterprise,
-  two recommended plans — is refused when read.
+  Growth the one recommended, with a 14-day trial; no agent in any plan —
+  every agent an add-on, none on sale until available; connecting one's
+  own model only on Enterprise, priced per contract and never self-service;
+  AI credits a number marked provisional (Enterprise: by contract); no AI
+  capacity sold apart, never an automatic overage charge. A catalogue that
+  breaks a rule — the launch offer on yearly billing, own model below
+  Enterprise, two recommended plans, a trial on a plan not bought online —
+  is refused when read.
 - What a plan costs: the list price monthly; 30% off the first 12 months
   on monthly billing (the launch offer); 20% off billed yearly — never
   both; whole cents, the same on the page and at checkout. Not eligible, or
-  the offer closed: the list price.
+  the offer closed: the list price. Growth's trial: the first charge 14 days
+  after, of what the period costs; not eligible, charged the day bought.
 - GET /pricing, open to anyone, says exactly that; the booking address only
   when configured, the contact form always. A visitor's clicks are recorded
   — what, on which plan, never who — refused when they are not the page's,
@@ -59,7 +61,11 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     assert [p.key for p in offer.plans] == ["free", "starter", "growth", "business", "enterprise"]
     assert [p.monthly_price for p in offer.plans] == [0, 5900, 17900, 59900, None]
     assert [p.key for p in offer.plans if p.recommended] == ["growth"]
-    assert [a.key for a in offer.core_agents] == ["application-architecture", "test-analysis"]
+    assert [p.key for p in offer.plans if p.trial_days] == ["growth"]
+    assert offer.plan("growth").trial_days == 14
+    # No agent in a plan: the architect and QA are add-ons like the others.
+    assert {"application-architecture", "test-analysis"} <= set(offer.add_ons.agents)
+    assert "core_agents" not in _raw()
     assert [p.key for p in offer.plans if p.own_llm] == ["enterprise"]
     assert all(p.managed_llm for p in offer.plans)
     enterprise = offer.plan("enterprise")
@@ -68,8 +74,9 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
     assert all(c.provisional and not c.contractual for c in allowances.values())
     assert (offer.annual_discount_percent, offer.launch_offer.percent) == (20, 30)
     assert (offer.launch_offer.months, offer.launch_offer.intervals) == (12, ("month",))
-    assert offer.add_ons.available is False and offer.capacity.packs == ()
-    assert offer.capacity.purchase_any_time and offer.capacity.automatic_overage is False
+    assert offer.add_ons.available is False and offer.add_ons.prices == {}
+    # The AI capacity is the plan's: nothing sells it apart.
+    assert _raw()["capacity"] == {"automatic_overage": False}
 
 
 @pytest.mark.parametrize(
@@ -81,6 +88,8 @@ def test_the_catalogue_lekas_ships_is_whole() -> None:
         (lambda c: c["plans"].pop(), "the five plans"),
         (lambda c: c["capacity"].update(automatic_overage=True), "automatic_overage"),
         (lambda c: c["plans"][4].update(self_service=True), "has a price"),
+        (lambda c: c["plans"][0].update(trial_days=14), "a trial needs"),
+        (lambda c: c["capacity"].update(packs=[]), "Extra inputs"),
     ],
 )
 def test_a_catalogue_that_breaks_a_rule_is_refused(tmp_path: Path, change: Any, said: str) -> None:
@@ -130,6 +139,22 @@ def test_the_launch_offer_or_the_annual_discount_never_both(
     assert (plain.discount, plain.monthly) == (None, chosen.monthly_price)
 
 
+def test_growth_s_trial_says_when_and_what_is_first_charged() -> None:
+    offer = catalogue()
+    growth = offer.plan("growth")
+    monthly = quote(growth, "month", offer, today=TODAY)
+    # 14 days free, then the launch price — the 30% for 12 months.
+    assert (monthly.trial_days, monthly.first_charge_on) == (14, date(2026, 10, 31))
+    assert (monthly.charged, monthly.then_monthly) == (12530, 17900)
+    yearly = quote(growth, "year", offer, today=TODAY)
+    assert (yearly.first_charge_on, yearly.charged) == (date(2026, 10, 31), 171840)
+    # Had once already: charged the day it is bought.
+    again = quote(growth, "month", offer, today=TODAY, trial=False)
+    assert (again.trial_days, again.first_charge_on) == (None, None)
+    # The other plans have none.
+    assert quote(offer.plan("starter"), "month", offer, today=TODAY).trial_days is None
+
+
 def test_the_offer_closed_or_a_plan_without_it_pays_the_list_price() -> None:
     offer = catalogue()
     closed = Catalogue.model_validate(
@@ -170,8 +195,14 @@ async def test_anyone_reads_the_pricing_as_checkout_charges_it(
         False,
     )
     assert said["launch_offer"]["stacks_with_annual"] is False
-    assert (said["add_ons_available"], said["capacity_packs_available"]) == (False, False)
+    assert said["add_ons_available"] is False
     assert said["automatic_overage"] is False
+    # Nothing that sells AI capacity, nor an agent in a plan.
+    assert not {"capacity_any_time", "capacity_packs_available", "core_agents"} & set(said)
+    assert [(p["key"], p["trial_days"]) for p in said["plans"] if p["trial_days"]] == [
+        ("growth", 14)
+    ]
+    assert growth["quotes"][0]["first_charge_on"] is not None
     # No booking page configured: none guessed; the contact form always.
     assert said["booking"]["url"] is None
     assert said["booking"]["contact_url"].startswith("https://")

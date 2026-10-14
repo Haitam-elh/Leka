@@ -346,11 +346,11 @@ invoice is held by LEKA yet.
 
 ## Paying (LEKA-431)
 
-`GET /billing/subscription` takes `workspace:read`. `POST /billing/checkout`,
-`/billing/capacity/checkout` and `/billing/portal` take `workspace:update`: a
+`GET /billing/subscription` takes `workspace:read`. `POST /billing/checkout`
+and `/billing/portal` take `workspace:update`: a
 workspace's owners and admins pay. `GET /pricing` and `POST /pricing/events`
 are public — the site's pricing page; `POST /billing/stripe/webhook` is public
-and believed only when signed by Stripe. A plan or credits change only from a
+and believed only when signed by Stripe. A plan changes only from a
 verified Stripe event ([pricing.md](pricing.md) § 7).
 
 ## Agents (LEKA-395)

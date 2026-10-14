@@ -19,6 +19,12 @@ import { usePayment, usePricing, useSubscription } from "@/lib/subscription-quer
  * price the pricing page shows (GET /pricing, the one source of prices);
  * Stripe's portal once subscribed (card, invoices, plan, cancellation).
  * The plan itself changes only when Stripe confirms the payment.
+ *
+ * Before paying, all of it is said (LEKA-446): the price now, what it
+ * becomes after the launch offer, the yearly total, and for Growth's trial
+ * the first charge — how much, on which day, then each period — and that
+ * cancelling before costs nothing. The credits are said to be a launch
+ * value while metering has not settled them (LEKA-430).
  */
 
 const PAYING = new Set(["active", "trialing", "past_due"]);
@@ -63,6 +69,16 @@ export function SubscriptionSection() {
           ? ` · ${fill(w.launch, { months: quote.for_months, price: money(quote.then_monthly) })}`
           : null}
         {quote.interval === "year" ? ` · ${fill(w.yearly, { price: money(quote.charged) })}` : null}
+        {quote.trial_days && quote.first_charge_on && said?.trial_available ? (
+          <span className="mt-1 block text-brand-navy" data-testid="billing-trial">
+            {fill(w.trial, {
+              days: quote.trial_days,
+              price: money(quote.interval === "year" ? quote.charged : monthly),
+              date: day(quote.first_charge_on),
+              every: quote.interval === "year" ? w.everyYear : w.everyMonth,
+            })}
+          </span>
+        ) : null}
       </p>
     );
   }
@@ -143,7 +159,10 @@ export function SubscriptionSection() {
                   <p className="font-semibold text-brand-navy">{plan.name}</p>
                   {price(plan)}
                   {plan.ai_credits_per_month !== null ? (
-                    <p className="text-xs text-shell-muted">{fill(w.credits, { n: plan.ai_credits_per_month })}</p>
+                    <p className="text-xs text-shell-muted">
+                      {fill(w.credits, { n: plan.ai_credits_per_month })}
+                      {plan.ai_credits_provisional ? ` (${w.provisional})` : null}
+                    </p>
                   ) : null}
                   <Button
                     type="button"

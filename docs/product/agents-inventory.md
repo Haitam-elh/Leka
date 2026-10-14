@@ -157,7 +157,7 @@ Ce que disent aujourd'hui les trois endroits qui doivent dire la même chose :
 
 | | `agents/registry.yaml` | `api/leka/billing/catalogue.yaml` | Page Capacités |
 | --- | --- | --- | --- |
-| Agents actifs | 13 `active`, 3 `draft` (`map-service-ownership`, `detect-undocumented-dependency`, `correlate-deploy-with-latency`) | 2 `core_agents`, 10 agents `add_ons` | n'affiche par défaut que les cycles `active` et `deprecated` : un brouillon n'y apparaît pas |
+| Agents actifs | 13 `active`, 3 `draft` (`map-service-ownership`, `detect-undocumented-dependency`, `correlate-deploy-with-latency`) | 12 agents `add_ons`, aucun inclus (LEKA-446) | n'affiche par défaut que les cycles `active` et `deprecated` : un brouillon n'y apparaît pas |
 | Vendable | — | `add_ons.available: false` : rien n'est en vente | pas de parcours d'achat |
 | Bundles | — | `bundles: []` | aucun |
 
@@ -174,10 +174,12 @@ Constats :
 
 ## 6. Contradictions avec les règles commerciales du ticket
 
-Le ticket demande de ne pas contredire LEKA-446. Or le catalogue actuel contredit deux règles
-du ticket. Ce n'est pas à cet inventaire de trancher : **décision à prendre par Karim, dans LEKA-446**.
+Le ticket demande de ne pas contredire LEKA-446. Le catalogue contredisait deux règles
+du ticket. **Tranché par Karim dans LEKA-446** (commentaires du 12 et du 13 octobre) et
+appliqué dans `catalogue.yaml` par la PR de LEKA-446 : plus aucun agent inclus — l'Architecte
+et la QA sont des agents comme les autres —, et plus aucune capacité IA vendue à part.
 
-| Règle du ticket | Ce que dit `catalogue.yaml` aujourd'hui |
+| Règle du ticket | Ce que disait `catalogue.yaml` |
 | --- | --- |
 | « Aucun agent inclus dans un abonnement. » | `core_agents` : `application-architecture` et `test-analysis` sont « inclus dans chaque plan, dans sa capacité IA ». |
 | « La capacité IA est incluse dans le quota ; elle n'est pas vendue séparément. » | Une section décrit de la « capacité IA achetée en plus d'un plan », par packs (tailles et prix encore à décider). |
@@ -188,7 +190,7 @@ n'est proposé ici pour un skill externe : les enrichissements n'ont pas de prix
 
 ## 7. Suite
 
-1. **Décision LEKA-446** sur les deux contradictions ci-dessus.
+1. ~~Décision LEKA-446 sur les deux contradictions ci-dessus~~ : tranché et appliqué (§ 6).
 2. **Tests de routage** — en PR #251 — pour les 5 agents qui n'en avaient pas, dans `test_agent_library.py` —
    à caler sur LEKA-439 (routage par objectif, contexte, droits, prérequis et risque).
    Un cas par agent qui doit être choisi, et un cas qui ne doit pas l'être (comme

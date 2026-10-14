@@ -1,6 +1,6 @@
-"""LEKA CORE's commercial offer (LEKA-431): its plans, their prices and
-discounts, what each includes, the AI capacity that can be added — one
-catalogue (catalogue.yaml) — and the pricing page's own analytics."""
+"""LEKA CORE's commercial offer (LEKA-431, LEKA-446): its plans, their
+prices, discounts and trial, what each includes — one catalogue
+(catalogue.yaml) — and the pricing page's own analytics."""
 
 from leka.billing.catalogue import (
     INTERVALS,
@@ -15,7 +15,6 @@ from leka.billing.catalogue import (
 )
 from leka.billing.models import EVENTS, BillingAccount, SiteEvent, StripeEvent
 from leka.billing.schemas import (
-    CapacityCheckoutCreate,
     CheckoutCreate,
     CheckoutRead,
     PortalRead,
@@ -30,7 +29,6 @@ from leka.billing.subscriptions import (
     BillingUnavailableError,
     CheckoutRefusedError,
     account_of,
-    capacity,
     checkout,
     launch_eligible,
     payments_open,
@@ -45,7 +43,6 @@ __all__ = [
     "INTERVALS",
     "BillingAccount",
     "BillingUnavailableError",
-    "CapacityCheckoutCreate",
     "Catalogue",
     "CheckoutCreate",
     "CheckoutRead",
@@ -65,7 +62,6 @@ __all__ = [
     "StripeEvent",
     "SubscriptionRead",
     "account_of",
-    "capacity",
     "catalogue",
     "checkout",
     "counts",

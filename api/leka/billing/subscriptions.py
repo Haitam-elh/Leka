@@ -1,5 +1,5 @@
-"""Paying for LEKA CORE (LEKA-431): Stripe Checkout for a plan or AI
-capacity, the customer portal, and what Stripe's verified events change.
+"""Paying for LEKA CORE (LEKA-431, LEKA-446): Stripe Checkout for a plan,
+the customer portal, and what Stripe's verified events change.
 
     checkout(plan, interval)    a Stripe Checkout session for a self-service
                                 plan: the price found by its lookup key —
@@ -7,29 +7,31 @@ capacity, the customer portal, and what Stripe's verified events change.
                                 coupon when the workspace may take it: monthly,
                                 the offer open, never subscribed before.
                                 Never the annual discount and the coupon
-                                together. Already subscribed: the portal.
-    capacity(pack)              a one-time Checkout for a capacity pack, when
-                                the catalogue has one
+                                together. Its trial (Growth, 14 days) for a
+                                workspace never subscribed: a card taken, the
+                                first charge when it ends unless cancelled
+                                before. Already subscribed: the portal.
     portal()                    Stripe's customer portal: card, invoices, plan
                                 change, cancellation — as its settings say
     receive(payload, signature) a webhook: believed only when its signature
                                 holds; kept once by its id — a delivery
                                 repeated is never applied twice; then:
 
-        checkout.session.completed      subscription: its plan applied;
-                                        payment of a pack: its credits added,
-                                        once — only when paid
+        checkout.session.completed      subscription: its plan applied; a
+                                        one-time payment: nothing — the AI
+                                        capacity is never sold apart
         customer.subscription.*         the plan as Stripe says it now: active,
                                         trialing or past_due keep it; unpaid,
-                                        canceled, expired: back to Free — an
+                                        canceled, expired — a trial cancelled
+                                        before its end too: back to Free — an
                                         event older than the last applied
                                         never undoes it
         invoice.paid / payment_failed   said on the account
         charge.refunded                 kept, for a person to decide
 
-A plan, or credits, come only from a verified event — never from a browser
-coming back from Checkout. The plan itself is leka.governance's (set_plan,
-add_pack, LEKA-430): audited, its credits the plan's each month.
+A plan comes only from a verified event — never from a browser coming back
+from Checkout. The plan itself is leka.governance's (set_plan, LEKA-430):
+audited, its credits the plan's each month.
 """
 
 from __future__ import annotations
@@ -50,7 +52,7 @@ from leka.billing.stripe import SignatureError, Stripe, StripeError, verify
 from leka.billing.sync import coupon_id, lookup_key, portal_configuration
 from leka.core.config import settings
 from leka.db import session_factory, system_scope, workspace_scope
-from leka.governance import CreditPack, add_pack, plan_of, set_plan
+from leka.governance import plan_of, set_plan
 
 logger = structlog.get_logger(__name__)
 
@@ -163,7 +165,9 @@ async def checkout(
             "subscribed", "Already subscribed: change plan from the customer portal."
         )
     launch = launch_eligible(account, offer, plan.key, interval, today)
-    priced = quote(plan, interval, offer, today=today, launch=launch)
+    # Once a workspace, like the launch offer: never subscribed before.
+    trial = bool(plan.trial_days) and not account.launch_offer_used
+    priced = quote(plan, interval, offer, today=today, launch=launch, trial=trial)
     price = await _price(client, lookup_key(plan, interval, offer, today=today))
     customer = await _customer(client, account)
     marks = {
@@ -181,7 +185,16 @@ async def checkout(
             "line_items": [{"price": price, "quantity": 1}],
             # The launch offer, or nothing: never stacked, no promotion codes.
             "discounts": [{"coupon": coupon_id(offer)}] if launch else None,
-            "subscription_data": {"metadata": marks},
+            "subscription_data": {
+                "metadata": marks,
+                # The card is taken now and charged when the trial ends —
+                # cancelled before, nothing is; without a card, it ends.
+                "trial_period_days": priced.trial_days,
+                "trial_settings": {"end_behavior": {"missing_payment_method": "cancel"}}
+                if trial
+                else None,
+            },
+            "payment_method_collection": "always",
             "metadata": marks,
             "success_url": f"{settings.web_url}/billing?checkout=success",
             "cancel_url": f"{settings.web_url}/billing?checkout=cancelled",
@@ -189,40 +202,6 @@ async def checkout(
     )
     await session.commit()
     return Checkout(str(made["url"]), priced)
-
-
-async def capacity(
-    session: AsyncSession, workspace_id: uuid.UUID, pack_key: str, *, client: Stripe
-) -> Checkout:
-    """A one-time Checkout for a capacity pack the catalogue sells — at any
-    time, whatever the plan. Its credits come with the verified payment."""
-    offer = catalogue()
-    pack = next((p for p in offer.capacity.packs if p.key == pack_key), None)
-    if pack is None:
-        raise CheckoutRefusedError("unknown_pack", "No such capacity pack on sale.")
-    account = await account_of(session, workspace_id)
-    price = await _price(client, f"leka_core_pack_{pack.key}_{pack.price}")
-    customer = await _customer(client, account)
-    marks = {
-        "workspace_id": str(workspace_id),
-        "leka_pack": pack.key,
-        "leka_credits": str(pack.credits),
-    }
-    made = await client.post(
-        "/v1/checkout/sessions",
-        {
-            "mode": "payment",
-            "customer": customer,
-            "client_reference_id": str(workspace_id),
-            "line_items": [{"price": price, "quantity": 1}],
-            "metadata": marks,
-            "payment_intent_data": {"metadata": marks},
-            "success_url": f"{settings.web_url}/billing?capacity=success",
-            "cancel_url": f"{settings.web_url}/billing?capacity=cancelled",
-        },
-    )
-    await session.commit()
-    return Checkout(str(made["url"]), None)
 
 
 async def portal(session: AsyncSession, workspace_id: uuid.UUID, *, client: Stripe) -> str:
@@ -290,24 +269,6 @@ async def _apply_subscription(
     return f"plan:{wanted}"
 
 
-async def _credit_pack(session: AsyncSession, workspace_id: uuid.UUID, paid: dict[str, Any]) -> str:
-    metadata = paid.get("metadata") or {}
-    amount = int(str(metadata.get("leka_credits") or 0))
-    if amount <= 0:
-        return "no_credits"
-    reason = f"Pack {metadata.get('leka_pack')} — Stripe {paid.get('id')}"
-    # Once per payment, whatever the deliveries: the session's id says it.
-    known = await session.scalar(
-        select(CreditPack.id).where(
-            CreditPack.workspace_id == workspace_id, CreditPack.reason == reason[:300]
-        )
-    )
-    if known is not None:
-        return "already_credited"
-    await add_pack(session, workspace_id, amount, by=STRIPE, reason=reason)
-    return f"credited:{amount}"
-
-
 async def _workspace_of(session: AsyncSession, data: dict[str, Any]) -> uuid.UUID | None:
     said = data.get("client_reference_id") or (data.get("metadata") or {}).get("workspace_id")
     if said:
@@ -341,10 +302,7 @@ async def _apply(
             subscription = await client.get(f"/v1/subscriptions/{data['subscription']}")
             account.stripe_customer_id = str(data.get("customer") or "") or None
             return await _apply_subscription(session, account, subscription, made)
-        if data.get("mode") == "payment":
-            if data.get("payment_status") != "paid":
-                return "not_paid"
-            return await _credit_pack(session, workspace_id, data)
+        # A one-time payment buys nothing: no AI capacity is sold (LEKA-446).
         return "ignored"
     if kind.startswith("customer.subscription."):
         return await _apply_subscription(session, account, data, made)
@@ -430,7 +388,6 @@ __all__ = [
     "CheckoutRefusedError",
     "StripeError",
     "account_of",
-    "capacity",
     "checkout",
     "launch_eligible",
     "payments_open",

@@ -1,12 +1,10 @@
-"""Paying for LEKA CORE, over HTTP (LEKA-431).
+"""Paying for LEKA CORE, over HTTP (LEKA-431, LEKA-446).
 
     GET  /billing/subscription        the workspace's subscription, as Stripe
                                       last said it (workspace:read)
     POST /billing/checkout            a Stripe Checkout for a plan: its URL,
                                       and what will be charged — the page's
                                       price (workspace:update)
-    POST /billing/capacity/checkout   a Stripe Checkout for an AI capacity
-                                      pack, at any time (workspace:update)
     POST /billing/portal              Stripe's customer portal: card, invoices,
                                       plan change, cancellation
                                       (workspace:update)
@@ -14,9 +12,9 @@
                                       only when signed (400 otherwise), kept
                                       once by id
 
-Who may pay is who may change the workspace: its owners and admins. A plan,
-or credits, come only from a verified Stripe event — never from the browser
-coming back from Checkout.
+Who may pay is who may change the workspace: its owners and admins. A plan
+comes only from a verified Stripe event — never from the browser coming
+back from Checkout. No AI capacity is sold apart: there is no route for it.
 """
 
 from __future__ import annotations
@@ -30,7 +28,6 @@ from leka.api.dependencies import SessionDep
 from leka.api.errors import ApiError
 from leka.billing import (
     BillingUnavailableError,
-    CapacityCheckoutCreate,
     CheckoutCreate,
     CheckoutRead,
     CheckoutRefusedError,
@@ -39,7 +36,6 @@ from leka.billing import (
     StripeError,
     SubscriptionRead,
     account_of,
-    capacity,
     catalogue,
     checkout,
     launch_eligible,
@@ -100,6 +96,7 @@ async def read_subscription(principal: Reader, session: SessionDep) -> Subscript
         current_period_end=account.current_period_end,
         cancel_at_period_end=account.cancel_at_period_end,
         launch_offer_available=launch_eligible(account, offer, "growth", "month", today),
+        trial_available=not account.launch_offer_used,
         last_invoice=account.last_invoice,
         has_customer=account.stripe_customer_id is not None,
     )
@@ -125,23 +122,6 @@ async def start_checkout(
     except StripeError as error:
         raise _stripe_failed(error) from None
     return CheckoutRead(url=done.url, quote=done.quote)
-
-
-@router.post(
-    "/capacity/checkout", response_model=CheckoutRead, summary="Buy AI capacity, with Stripe"
-)
-async def start_capacity_checkout(
-    body: CapacityCheckoutCreate, principal: Payer, session: SessionDep
-) -> CheckoutRead:
-    try:
-        done = await capacity(session, principal.workspace_id, body.pack, client=stripe())
-    except BillingUnavailableError:
-        raise _unavailable() from None
-    except CheckoutRefusedError as error:
-        raise _refused(error) from None
-    except StripeError as error:
-        raise _stripe_failed(error) from None
-    return CheckoutRead(url=done.url, quote=None)
 
 
 @router.post("/portal", response_model=PortalRead, summary="Stripe's customer portal")

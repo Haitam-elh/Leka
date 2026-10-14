@@ -4,10 +4,10 @@ capability as LEKA offers it, the credits, the verdict, the least it takes.
 What these protect, as the ticket lists them:
 - a need Free can carry through: ready, nothing to buy;
 - a need past the plan's credits: the cheapest plan that is enough — never
-  the dearest by default — a capacity pack first when one is enough, and
-  Enterprise by contract past Business; anything bought asked first;
-- a need for a specialist agent: in beta, usable, its future price said —
-  never blocked, never sold before it is on sale;
+  the dearest by default, never a capacity pack: none is sold (LEKA-446) —
+  and Enterprise by contract past Business; anything bought asked first;
+- a need for an agent: in beta, usable, its future price said — never
+  blocked, never sold before it is on sale, never included in a plan;
 - a need several specialist agents meet: a bundle when it costs less than
   them one by one, each otherwise;
 - a need nothing LEKA has meets: said impossible, never promised;
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from leka.billing.catalogue import Bundle, Pack, Words
+from leka.billing.catalogue import Bundle, Words
 from leka.billing.catalogue import catalogue as sold_now
 from leka.capabilities import find
 from leka.capabilities.definition import Lifecycle
@@ -100,25 +100,13 @@ def test_past_its_credits_the_cheapest_plan_that_is_enough_asked_first() -> None
     assert [(s.kind, s.consent) for s in path] == [("contact_sales", False)]
 
 
-def test_a_capacity_pack_that_is_enough_comes_before_a_plan() -> None:
-    with_packs = sold_now().model_copy(
-        update={
-            "capacity": sold_now().capacity.model_copy(
-                update={
-                    "packs": (
-                        Pack(key="small", credits=500, price=900),
-                        Pack(key="large", credits=5000, price=7900),
-                    )
-                }
-            )
-        }
-    )
+def test_past_the_credits_a_plan_never_a_pack() -> None:
     verdict, path = path_of(
-        [need("x", cost=400)], month("free", 100), 400, with_packs, CREDITS, expected="answer"
+        [need("x", cost=400)], month("free", 100), 400, sold_now(), CREDITS, expected="answer"
     )
     assert verdict == "over_quota"
     [step] = path
-    assert (step.kind, step.detail["pack"], step.consent) == ("buy_pack", "small", True)
+    assert (step.kind, step.detail["plan"], step.consent) == ("change_plan", "starter", True)
 
 
 def test_a_specialist_agent_is_in_beta_usable_never_sold_before_it_is_on_sale() -> None:
@@ -127,7 +115,8 @@ def test_a_specialist_agent_is_in_beta_usable_never_sold_before_it_is_on_sale() 
     assert offer_of(security, sold_now()) == "beta"
     architect = find("application-architecture")
     assert architect is not None
-    assert offer_of(architect, sold_now()) == "included"
+    # No plan includes an agent (LEKA-446): the architect too is in beta.
+    assert offer_of(architect, sold_now()) == "beta"
     verdict, path = path_of(
         [ANALYSIS, need("security-review", offer="beta")],
         month("free"),
