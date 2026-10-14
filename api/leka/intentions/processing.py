@@ -58,7 +58,7 @@ from leka.capabilities import (
     SkillRuntime,
     permitted,
 )
-from leka.connectors import Source, SourceRepository
+from leka.connectors import Source, SourceRepository, manifests
 from leka.context import AssembledContext, ContextRepository, ContextService
 from leka.db import hidden_entities, session_factory, system_scope, workspace_scope
 from leka.governance import hidden_on_behalf
@@ -78,6 +78,7 @@ from leka.intentions.analysis import (
     StepOutcome,
     Subject,
     assemble,
+    relevant,
     strength_of,
 )
 from leka.intentions.analysis import (
@@ -578,6 +579,7 @@ async def _analyse_intention(
                 readiness=ready.status if ready is not None else "limited",
                 now=moment,
                 background=frozenset(c.name for c in rules if c.always),
+                kinds=relevant(rules),
             )
             return await _finish(
                 workspace_id,
@@ -929,6 +931,7 @@ async def _explained(
     readiness: str,
     now: datetime,
     background: frozenset[str],
+    kinds: frozenset[str] | None = None,
 ) -> Result:
     """The result with what it rests on — held to it (explain.py)."""
     ids = [s.source_id for s in context.sources] if context is not None else []
@@ -946,19 +949,24 @@ async def _explained(
             )
             for row in rows
         }
-    # Connected, never read: it may hold the answer — said as a limit (LEKA-444).
+    # Connected, never read: it may hold the answer — said as a limit
+    # (LEKA-444), when it is of a kind the answer reads (LEKA-448).
     with workspace_scope(workspace_id):
         async with session_factory() as session:
-            unread = (
-                await session.scalars(
-                    select(Source.name).where(
-                        Source.workspace_id == workspace_id,
-                        Source.status.in_(("active", "degraded", "error")),
-                        Source.last_synced_at.is_(None),
-                        Source.id.not_in(ids),
-                    )
+            never = await session.execute(
+                select(Source.name, Source.kind).where(
+                    Source.workspace_id == workspace_id,
+                    Source.status.in_(("active", "degraded", "error")),
+                    Source.last_synced_at.is_(None),
+                    Source.id.not_in(ids),
                 )
-            ).all()
+            )
+    category = {m.key.value: m.category.value for m in manifests()}
+    unread = [
+        name
+        for name, kind in never.tuples().all()
+        if kinds is None or category.get(str(kind), "custom") in kinds
+    ]
     read = (
         ContextRead(
             version=context.version,
