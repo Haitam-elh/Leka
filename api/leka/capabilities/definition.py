@@ -185,6 +185,8 @@ class Definition:
     # An agent's: what LEKA draws of what it delivers — "architecture_deck":
     # its PowerPoint and PDF (capabilities/deliverables).
     renders: str | None = None
+    # An agent's: its rounds of tool calls, when not the runtime's default.
+    rounds: int | None = None
 
     def fingerprint(self) -> str:
         """What it is and does, hashed: everything but where it stands in
@@ -208,6 +210,9 @@ class Definition:
         # Added with the architect's deliverables: none, it says nothing new.
         if self.renders is None:
             said.pop("renders")
+        # Added with the architect's collection (2026-10-14): none, nothing new.
+        if self.rounds is None:
+            said.pop("rounds")
         said["goals"] = sorted(self.goals)
         said["kinds"] = sorted(self.kinds)
         canonical = json.dumps(said, sort_keys=True, ensure_ascii=False, default=str)

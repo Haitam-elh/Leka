@@ -97,6 +97,7 @@ def agent_definition(agent: Agent, lifecycle: Lifecycle) -> Definition:
         tools=head.tools,
         skills=head.skills,
         renders=head.renders,
+        rounds=head.rounds,
     )
 
 

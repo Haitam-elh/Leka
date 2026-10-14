@@ -87,7 +87,7 @@ async def test_the_catalogue_for_a_workspace_and_a_person(
     assert (architect["kind"], architect["lifecycle"], architect["version"]) == (
         "agent",
         "active",
-        "19.0.0",
+        "19.1.0",
     )
     assert [i["name"] for i in architect["inputs"]] == [
         "parcours",
@@ -131,7 +131,7 @@ async def test_the_catalogue_for_a_workspace_and_a_person(
     assert names == sorted(names, key=str.lower)
 
     detail = (await client.get(f"{API}/{ARCHITECT}")).json()
-    assert detail["history"][0]["version"] == "19.0.0"
+    assert detail["history"][0]["version"] == "19.1.0"
     assert detail["events"][0]["kind"] == "registered"
     assert "instructions" not in detail
     assert (await client.get(f"{API}/nothing-like-this")).status_code == 404

@@ -10,6 +10,9 @@ is about (runtime.in_scope).
     what_happened     what happened around one thing in a period — an
                       incident, a deployment, a change, a release, a merge
                       (LEKA-400)
+    read_content      what one thing's records say — a page's text, a
+                      ticket's description, a README — the latest first
+                      (2026-10-14: the architect drew without reading)
 
 An agent is offered only the tools its front matter declares (`tools`),
 when it declares any (LEKA-400): least privilege, said in its file.
@@ -23,7 +26,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -131,10 +134,28 @@ HAPPENED = AgentTool(
     permission="workspace:read",
 )
 
-TOOLS: tuple[AgentTool, ...] = (SEARCH, READ, DEPENDENCIES, HAPPENED)
+CONTENT = AgentTool(
+    name="read_content",
+    description=(
+        "What one thing's records say — a page's text, a ticket's description, a "
+        "document's body, a repository's README — the latest first, each cut when long. "
+        "Read it before you describe the thing: its name alone says little."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {"id": {"type": "string", "description": "Its id, as given."}},
+        "required": ["id"],
+    },
+    permission="workspace:read",
+)
+
+TOOLS: tuple[AgentTool, ...] = (SEARCH, READ, DEPENDENCIES, HAPPENED, CONTENT)
 NAMES = frozenset(t.name for t in TOOLS)
 
 Handler = Callable[[Mapping[str, Any]], Awaitable[Answer]]
+# What a thing's records say (read_content): given by the runtime, which
+# reads the ingestion's content — this module reads the model only.
+Reader = Callable[[uuid.UUID], Awaitable[Sequence[Mapping[str, object]]]]
 
 
 def _types(definition: Definition, asked: object) -> list[EntityType] | None:
@@ -163,8 +184,32 @@ def handlers(
     knowledge: KnowledgeService | None = None,
     *,
     now: datetime | None = None,
+    content: Reader | None = None,
 ) -> dict[str, Handler]:
     """Each tool, bound to the agent it serves and the workspace's model."""
+
+    async def read_content(arguments: Mapping[str, Any]) -> Answer:
+        try:
+            wanted = uuid.UUID(str(arguments.get("id")))
+        except ValueError:
+            return _refused("not_an_id")
+        brief = (await graph.briefs([wanted])).get(wanted)
+        if brief is None:
+            return _refused("not_found")
+        if not in_scope(definition, brief.type.value):
+            return _refused("out_of_scope")
+        records = list(await content(wanted)) if content is not None else []
+        return Answer(
+            _said(
+                {
+                    "id": str(brief.id),
+                    "type": brief.type.value,
+                    "name": brief.name,
+                    "records": records,
+                }
+            ),
+            "ok",
+        )
 
     async def search(arguments: Mapping[str, Any]) -> Answer:
         words = str(arguments.get("query") or "").strip()
@@ -330,4 +375,5 @@ def handlers(
         READ.name: read,
         DEPENDENCIES.name: depends,
         HAPPENED.name: happened,
+        CONTENT.name: read_content,
     }

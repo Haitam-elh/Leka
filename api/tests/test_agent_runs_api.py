@@ -67,6 +67,7 @@ from leka.capabilities import (
 )
 from leka.capabilities.deliverables.layout import deck_slides
 from leka.capabilities.gateway import service
+from leka.capabilities.registry import catalogue
 from leka.capabilities.runs import TOOL_ROUNDS
 from leka.core.config import settings
 from leka.db import session_factory, system_scope, workspace_scope
@@ -77,6 +78,12 @@ from tests.test_context_engine import model
 from tests.test_deliverables import deck as drawn_deck
 from tests.test_knowledge_graph import BILLING, INVOICING
 from tests.test_sources_api import _as, acme, fake_connector  # noqa: F401 — fixtures
+
+# The architect asks for its rounds (2026-10-14: it reads a whole
+# documentation before it draws); the runtime's default otherwise.
+# Every read-only tool, as an agent that declares none is offered them.
+TOOL_NAMES = ["search_entities", "read_entity", "dependencies", "what_happened", "read_content"]
+ROUNDS = {d.key: d for d in catalogue()}["application-architecture"].rounds or TOOL_ROUNDS
 
 pytestmark = pytest.mark.integration
 
@@ -237,7 +244,7 @@ async def test_the_architect_runs_end_to_end(
     )
     assert (started["title"], started["version"], started["mine"]) == (
         "Architecte applicatif",
-        "19.0.0",
+        "19.1.0",
         True,
     )
     assert started["deliverables"] == []
@@ -294,7 +301,7 @@ async def test_the_architect_runs_end_to_end(
     system = script.asked[0]["systemInstruction"]["parts"][0]["text"]
     assert system.index("read-only") < system.index("PRINCIPE ABSOLU")
     # It declares none: every read-only tool (LEKA-400).
-    assert script.declared() == ["search_entities", "read_entity", "dependencies", "what_happened"]
+    assert script.declared() == TOOL_NAMES
     given = json.loads(script.asked[0]["contents"][0]["parts"][0]["text"])
     assert given["inputs"] == ASKED
     assert all(e["type"] != "business_capability" for e in given["context"])
@@ -381,26 +388,26 @@ async def test_an_agent_that_keeps_reading_answers_with_what_it_read(
     store: LocalObjectStore,
 ) -> None:
     """The architect's instructions ask it to look brick by brick: it may
-    read for TOOL_ROUNDS rounds; the last is offered no tool, and it answers
+    read for its rounds (ROUNDS); the last is offered no tool, and it answers
     with what it read — never a failed run for having looked too much."""
     await _ready(acme)
     asking = gemini(call={"name": "search_entities", "args": {"query": "billing"}})
     analysis = "# Architecture — Billing API\n\nCe que les sources disent."
     script = leka_gemini(
-        *[asking] * (TOOL_ROUNDS - 1),
+        *[asking] * (ROUNDS - 1),
         gemini(analysis),
         gemini(drawn_deck(app_view=False).model_dump_json()),
     )
     started = await _start(client)
     assert await _run(acme, started["id"]) == {"status": "succeeded"}
     done = await _detail(client, started["id"])
-    assert (done["output"], done["tool_calls"]) == (analysis, TOOL_ROUNDS - 1)
+    assert (done["output"], done["tool_calls"]) == (analysis, ROUNDS - 1)
     # Offered tools every round but the last, which must answer.
     modes = [
         a.get("toolConfig", {}).get("functionCallingConfig", {}).get("mode") for a in script.asked
     ]
-    assert modes[: TOOL_ROUNDS - 1].count("NONE") == 0
-    assert modes[TOOL_ROUNDS - 1] == "NONE"
+    assert modes[: ROUNDS - 1].count("NONE") == 0
+    assert modes[ROUNDS - 1] == "NONE"
     assert [d["format"] for d in done["deliverables"]] == ["pptx", "pdf"]
 
 
@@ -419,15 +426,15 @@ async def test_a_model_that_ignores_no_more_tools_is_asked_with_none_declared(
     asking = gemini(call={"name": "search_entities", "args": {"query": "billing"}})
     analysis = "# Architecture — Billing API\n\nCe que les sources disent."
     script = leka_gemini(
-        *[asking] * TOOL_ROUNDS,
+        *[asking] * ROUNDS,
         gemini(analysis),
         gemini(drawn_deck(app_view=False).model_dump_json()),
     )
     started = await _start(client)
     assert await _run(acme, started["id"]) == {"status": "succeeded"}
     done = await _detail(client, started["id"])
-    assert (done["output"], done["tool_calls"]) == (analysis, TOOL_ROUNDS - 1)
-    final = script.asked[TOOL_ROUNDS]
+    assert (done["output"], done["tool_calls"]) == (analysis, ROUNDS - 1)
+    final = script.asked[ROUNDS]
     assert "tools" not in final and "toolConfig" not in final
     # What it was given, then what it read — one turn, no tool exchange.
     [turn] = final["contents"]
@@ -519,14 +526,14 @@ async def test_its_tools_follow_who_asked_and_never_act(
         {"name": "restart_service", "why": "acts"},
         {"name": "read_sources", "why": "not_permitted"},
     ]
-    assert script.declared() == ["search_entities", "read_entity", "dependencies", "what_happened"]
+    assert script.declared() == TOOL_NAMES
 
     _as(identity, acme, "admin")
     script = leka_gemini(gemini("# Rien à dire."))
     asked = await _start(client)
     await _run(acme, asked["id"], tools=tools)
     assert script.declared() == [
-        *["search_entities", "read_entity", "dependencies", "what_happened"],
+        *TOOL_NAMES,
         "read_sources",
     ]
 
@@ -587,11 +594,11 @@ async def test_failures_are_said(
     # A model asking for tools, and never answering — not even when its last
     # round offers none, nor when it is asked once more with none declared.
     asking = gemini(call={"name": "search_entities", "args": {"query": "billing"}})
-    leka_gemini(*[asking] * (TOOL_ROUNDS + 1))
+    leka_gemini(*[asking] * (ROUNDS + 1))
     endless = await _start(client)
     assert await _run(acme, endless["id"]) == {"status": "failed", "error": "tool_rounds"}
     # What it asked on its last round is never run.
-    assert (await _detail(client, endless["id"]))["tool_calls"] == TOOL_ROUNDS - 1
+    assert (await _detail(client, endless["id"]))["tool_calls"] == ROUNDS - 1
 
     # Longer than a run may take.
     async def slow(request: httpx.Request) -> httpx.Response:

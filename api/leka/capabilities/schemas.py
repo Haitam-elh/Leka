@@ -99,6 +99,14 @@ class AgentFrontMatter(BaseModel):
         description="The skills it may be offered (LEKA-401): none unless named, each within "
         "the kinds of things it may read",
     )
+    rounds: int | None = Field(
+        default=None,
+        ge=1,
+        le=40,
+        description="How many rounds of tool calls it may take before it must answer — the "
+        "runtime's default (16) when none: an agent that gathers a whole documentation asks "
+        "for more (2026-10-14)",
+    )
     renders: Literal["architecture_deck", "code_change"] | None = Field(
         default=None,
         description="What LEKA makes of what it delivers: architecture_deck — the editable "
