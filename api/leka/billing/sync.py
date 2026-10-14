@@ -121,40 +121,6 @@ async def sync(stripe: Stripe, offer: Catalogue, *, today: date) -> Synced:
         )
         prices[key] = str(made["id"])
         created.append(key)
-    for pack in offer.capacity.packs:
-        product = f"leka_core_pack_{pack.key}"
-        try:
-            await stripe.get(f"/v1/products/{product}")
-        except StripeError as error:
-            if error.status != 404:
-                raise
-            await stripe.post(
-                "/v1/products",
-                {
-                    "id": product,
-                    "name": f"LEKA CORE — {pack.credits} AI credits",
-                    "metadata": {"leka_pack": pack.key, "leka_credits": str(pack.credits)},
-                },
-            )
-            created.append(product)
-        key = f"leka_core_pack_{pack.key}_{pack.price}"
-        found = await stripe.get("/v1/prices", [("lookup_keys[]", key), ("active", "true")])
-        if found.get("data"):
-            prices[key] = str(found["data"][0]["id"])
-            continue
-        made = await stripe.post(
-            "/v1/prices",
-            {
-                "product": product,
-                "currency": offer.currency.lower(),
-                "unit_amount": pack.price,
-                "lookup_key": key,
-                "tax_behavior": "exclusive",
-                "metadata": {"leka_pack": pack.key, "leka_credits": str(pack.credits)},
-            },
-        )
-        prices[key] = str(made["id"])
-        created.append(key)
     coupon = coupon_id(offer)
     try:
         await stripe.get(f"/v1/coupons/{coupon}")

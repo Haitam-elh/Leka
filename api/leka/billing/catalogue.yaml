@@ -1,7 +1,12 @@
-# LEKA CORE's commercial catalogue (LEKA-431) — the ONE source of truth for
-# its plans, their prices and discounts, what each includes, and the AI
-# capacity that can be added. The pricing page, the API and checkout read it;
-# nothing else states a price.
+# LEKA CORE's commercial catalogue (LEKA-431, LEKA-446) — the ONE source of
+# truth for its plans, their prices, discounts and trial, and what each
+# includes. The pricing page, the API and checkout read it; nothing else
+# states a price.
+#
+# Decided by the founder (LEKA-446, 2026-10-12/13): no agent is included in
+# a plan — agents and bundles are bought apart, once on sale; the AI
+# capacity is the plan's and is never sold apart — no pack, no top-up, no
+# overage: at the limit, what is billable stops and a higher plan is offered.
 #
 # Prices are in euro cents, excluding VAT. `provisional: true` marks a launch
 # hypothesis — the AI-credit allowances above all — to be revisited once
@@ -10,7 +15,7 @@
 # follows, nothing else to edit.
 #
 # Values not decided yet are absent, never guessed: seats, sources and
-# workspaces per plan; specialist add-on and capacity-pack prices.
+# workspaces per plan; agent and bundle prices.
 #
 # Monitoring (LEKA-442, decided 2026-10-13, provisional): every plan sees its
 # environment's states, their freshness and coverage; proactive alerts —
@@ -21,7 +26,7 @@
 # so what the page promises is what a workspace gets. Enterprise's are per
 # contract.
 
-version: "2026-10-10"
+version: "2026-10-14"
 currency: EUR
 
 # 20% off when billed yearly.
@@ -36,13 +41,6 @@ launch_offer:
   # Until when a new subscription may take it; empty: until further notice.
   ends_on: null
 
-# The core agents every plan includes, within its AI capacity.
-core_agents:
-  - key: application-architecture
-    name: { fr: "Architecte applicatif", en: "Application architect" }
-  - key: test-analysis
-    name: { fr: "QA — analyse des tests", en: "QA — test analysis" }
-
 plans:
   - key: free
     name: Free
@@ -52,8 +50,8 @@ plans:
       fr: "Découvrir LEKA sur un premier périmètre."
       en: "Try LEKA on a first scope."
     value:
-      fr: "Connectez vos premières sources et posez vos premières intentions, avec l'Architecte et la QA."
-      en: "Connect your first sources and ask your first intentions, with the Architect and QA."
+      fr: "Connectez vos premières sources et posez vos premières intentions."
+      en: "Connect your first sources and ask your first intentions."
     ai_credits_per_month: { provisional: true }
     managed_llm: true
     own_llm: false
@@ -70,8 +68,8 @@ plans:
       fr: "Une petite équipe technique qui veut une vue claire de son SI."
       en: "A small engineering team that wants a clear view of its systems."
     value:
-      fr: "Le modèle de votre environnement tenu à jour, et l'Architecte et la QA pour vos premiers livrables."
-      en: "A continuously updated model of your environment, and the Architect and QA for your first deliverables."
+      fr: "Le modèle de votre environnement tenu à jour, et les alertes quand quelque chose ne va pas."
+      en: "A continuously updated model of your environment, and alerts when something goes wrong."
     ai_credits_per_month: { provisional: true }
     managed_llm: true
     own_llm: false
@@ -84,6 +82,9 @@ plans:
     monthly_price: 17900
     self_service: true
     recommended: true
+    # 14 days, a card required; then the subscription starts and the card is
+    # charged, unless cancelled before (decided 2026-10-12). Once a workspace.
+    trial_days: 14
     audience:
       fr: "Les équipes qui pilotent leur SI au quotidien avec LEKA."
       en: "Teams that run their systems with LEKA every day."
@@ -132,11 +133,15 @@ plans:
     annual: false
     monitoring: { proactive: true, alerts: [in_app, email], contractual: true }
 
-# Specialist agents: optional, sold individually or in bundles — listed
-# only once available; never a purchase flow before.
+# Every agent: none in a plan, each sold individually or in bundles — listed
+# only once available and tested, priced once its margin is shown (LEKA-446);
+# never a purchase flow before. Reference prices (Standard 9 €, Specialized
+# 15 €, Expert 25 € a month) are not set here until then.
 add_ons:
   available: false
   agents:
+    - application-architecture
+    - test-analysis
     - security-review
     - incident-investigation
     - infrastructure-analysis
@@ -149,11 +154,8 @@ add_ons:
     - architecture-analysis
   bundles: []
 
-# AI capacity bought on top of a plan, at any time — before the allowance
-# runs out too — without changing plan. Never an automatic overage charge:
-# at the limit, billable usage pauses until capacity is bought or the plan
-# upgraded. Pack sizes and prices: decided after LEKA-430's data.
+# The AI capacity is the plan's: never sold apart, never an overage charge.
+# At the limit, billable usage pauses; a higher plan is offered, chosen
+# explicitly.
 capacity:
-  purchase_any_time: true
   automatic_overage: false
-  packs: []

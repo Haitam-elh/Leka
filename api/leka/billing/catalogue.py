@@ -1,11 +1,12 @@
-"""LEKA CORE's commercial catalogue (LEKA-431): its plans, their prices and
-discounts, what each includes, the AI capacity that can be added — read
-from catalogue.yaml, the one source of truth, and checked when it is read.
+"""LEKA CORE's commercial catalogue (LEKA-431, LEKA-446): its plans, their
+prices, discounts and trial, what each includes — read from catalogue.yaml,
+the one source of truth, and checked when it is read.
 
     quote(plan, interval)   what a plan costs on an interval, the discount
                             that applies — the annual one, or the launch
                             offer, never both — what is charged each period
-                            and what it comes to per month
+                            and what it comes to per month; with a trial,
+                            when the first charge falls
 
 Pure: no database, no network. Amounts are integer cents, rounded half up
 per unit price, so what the page shows is what checkout charges.
@@ -13,7 +14,7 @@ per unit price, so what the page shows is what checkout charges.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from functools import cache
 from pathlib import Path
@@ -86,9 +87,14 @@ class Plan(_Model):
     launch_offer: bool
     annual: bool
     monitoring: Monitoring = Monitoring(proactive=False)
+    # Days free before the first charge, a card required; None: none.
+    trial_days: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _coherent(self) -> Plan:
+        if self.trial_days and not (self.self_service and self.monthly_price):
+            msg = f"{self.key}: a trial needs a plan bought online"
+            raise ValueError(msg)
         if self.self_service and self.monthly_price is None:
             msg = f"{self.key}: a self-service plan has a price"
             raise ValueError(msg)
@@ -111,11 +117,6 @@ class LaunchOffer(_Model):
     ends_on: date | None = None
 
 
-class CoreAgent(_Model):
-    key: str
-    name: Words
-
-
 class Bundle(_Model):
     """Specialist agents sold together (LEKA-439): cheaper than each alone."""
 
@@ -126,7 +127,7 @@ class Bundle(_Model):
 
 
 class AddOns(_Model):
-    """Specialist agents: optional — offered only once available."""
+    """Every agent: none in a plan — offered only once available."""
 
     available: bool
     agents: tuple[str, ...]
@@ -135,18 +136,11 @@ class AddOns(_Model):
     bundles: tuple[Bundle, ...] = ()
 
 
-class Pack(_Model):
-    key: str
-    credits: int = Field(gt=0)
-    price: int = Field(gt=0)
-    provisional: bool = True
-
-
 class Capacity(_Model):
-    purchase_any_time: bool
-    # Never: at the limit, billable usage pauses until capacity is bought.
+    """The plan's, never sold apart (LEKA-446): no pack, no top-up."""
+
+    # Never: at the limit, billable usage pauses until the plan is upgraded.
     automatic_overage: Literal[False]
-    packs: tuple[Pack, ...] = ()
 
 
 class Catalogue(_Model):
@@ -154,7 +148,6 @@ class Catalogue(_Model):
     currency: Literal["EUR"]
     annual_discount_percent: int = Field(gt=0, lt=100)
     launch_offer: LaunchOffer
-    core_agents: tuple[CoreAgent, ...]
     plans: tuple[Plan, ...]
     add_ons: AddOns
     capacity: Capacity
@@ -217,15 +210,40 @@ class Quote(_Model):
     # The launch offer: for how many months, then the list price.
     for_months: int | None
     then_monthly: int | None
+    # A trial: its days, and the day `charged` is first charged — unless
+    # cancelled before. None: charged the day it is bought.
+    trial_days: int | None = None
+    first_charge_on: date | None = None
 
 
 def quote(
-    plan: Plan, interval: Interval, offer: Catalogue, *, today: date, launch: bool = True
+    plan: Plan,
+    interval: Interval,
+    offer: Catalogue,
+    *,
+    today: date,
+    launch: bool = True,
+    trial: bool = True,
 ) -> Quote:
     """What `plan` costs billed every `interval`: the annual discount on a
     year, the launch offer on a month when the plan and the date allow it
-    and `launch` (the customer is eligible) — never both. Raises ValueError
-    for a plan with no price, or an interval it is not sold on."""
+    and `launch` (the customer is eligible) — never both — and its trial
+    when it has one and `trial` (the customer is eligible). Raises
+    ValueError for a plan with no price, or an interval it is not sold on."""
+    priced = _priced(plan, interval, offer, today=today, launch=launch)
+    if not (trial and plan.trial_days):
+        return priced
+    return priced.model_copy(
+        update={
+            "trial_days": plan.trial_days,
+            "first_charge_on": today + timedelta(days=plan.trial_days),
+        }
+    )
+
+
+def _priced(
+    plan: Plan, interval: Interval, offer: Catalogue, *, today: date, launch: bool
+) -> Quote:
     if plan.monthly_price is None:
         msg = f"{plan.key} is priced per contract"
         raise ValueError(msg)
@@ -287,10 +305,8 @@ __all__ = [
     "Allowance",
     "Capacity",
     "Catalogue",
-    "CoreAgent",
     "Interval",
     "LaunchOffer",
-    "Pack",
     "Plan",
     "Quote",
     "Words",

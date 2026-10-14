@@ -1,5 +1,5 @@
-"""Paying for LEKA CORE with Stripe (LEKA-431) — on a Stripe whose API is
-faked, its webhooks signed as Stripe signs them.
+"""Paying for LEKA CORE with Stripe (LEKA-431, LEKA-446) — on a Stripe whose
+API is faked, its webhooks signed as Stripe signs them.
 
 What these protect:
 - A webhook is believed only when its signature holds: another secret, a
@@ -9,13 +9,18 @@ What these protect:
 - Checkout: only who may change the workspace pays; nothing without Stripe
   configured; the price the page shows — found by its key — the launch
   coupon on the first monthly subscription only, never on a year, never
-  twice; a workspace already subscribed goes to the portal.
+  twice; a workspace already subscribed goes to the portal. Growth's trial:
+  14 days, a card required, ended without one; said with its first charge
+  before paying; once a workspace — never on a second subscription.
 - The plan comes only from a verified event: checkout completed puts the
   workspace on its plan, once — the same event delivered again changes
   nothing; past_due keeps it while Stripe retries; deleted, back to Free;
   an older event delivered late never undoes a newer one.
-- AI capacity, bought at any time: credited once on a paid checkout, never
-  twice however many deliveries; a pack not on sale cannot be bought.
+- The trial: trialing is Growth; converted at its end, Growth still;
+  cancelled before, back to Free. A renewal that fails holds the plan while
+  Stripe retries, then, unpaid, back to Free.
+- No AI capacity is sold: no route for it, a one-time payment credits
+  nothing.
 """
 
 # ruff: noqa: F811 — fixtures imported to be requested by name.
@@ -37,7 +42,6 @@ from sqlalchemy import func, select
 from leka.api import subscriptions as subscriptions_api
 from leka.billing import Stripe, catalogue, sync
 from leka.billing import subscriptions as billing
-from leka.billing.catalogue import Catalogue, load
 from leka.billing.stripe import SignatureError, form, sign, verify
 from leka.core.config import settings
 from leka.db import session_factory, workspace_scope
@@ -410,35 +414,122 @@ async def test_the_plan_comes_from_verified_events_once_never_undone_by_an_older
     assert "discounts[0][coupon]" not in stripe.posted("/v1/checkout/sessions")[-1]
 
 
-# ── AI capacity ─────────────────────────────────────────────────────────────
+# ── the trial ───────────────────────────────────────────────────────────────
 
 
 @pytest.mark.integration
-async def test_capacity_is_credited_once_after_a_verified_payment(
+async def test_growth_s_trial_takes_a_card_says_its_first_charge_and_is_had_once(
     client: AsyncClient,
     identity: FakeIdentity,
     acme: dict[str, uuid.UUID],
     stripe: FakeStripe,
-    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = acme["acme"]
+    await _synced(stripe)
+    _as(identity, acme, "admin")
+    assert (await client.get(f"{API}/subscription")).json()["trial_available"] is True
+
+    opened = await client.post(f"{API}/checkout", json={"plan": "growth", "interval": "month"})
+    quote = opened.json()["quote"]
+    # Said before paying: 14 days, then the launch price on that day.
+    assert (quote["trial_days"], quote["charged"], quote["then_monthly"]) == (14, 12530, 17900)
+    assert quote["first_charge_on"] is not None
+    [session] = stripe.posted("/v1/checkout/sessions")
+    assert session["subscription_data[trial_period_days]"] == "14"
+    assert session["payment_method_collection"] == "always"
+    assert session["subscription_data[trial_settings][end_behavior][missing_payment_method]"] == (
+        "cancel"
+    )
+    # Starter has none.
+    await client.post(f"{API}/checkout", json={"plan": "starter", "interval": "month"})
+    assert "subscription_data[trial_period_days]" not in stripe.posted("/v1/checkout/sessions")[-1]
+
+    # Trialing: Growth, from the verified event only.
+    stripe.subscriptions["sub_1"] = subscription("growth", "trialing")
+    completed = _event(
+        "checkout.session.completed",
+        {
+            "id": "cs_1",
+            "mode": "subscription",
+            "subscription": "sub_1",
+            "customer": "cus_1",
+            "client_reference_id": str(workspace),
+        },
+        created=1_800_000_100,
+    )
+    assert (await _deliver(client, completed)).json() == {"received": "plan:growth"}
+    assert (await client.get(f"{API}/subscription")).json()["status"] == "trialing"
+    # Converted at its end: paid, Growth still.
+    converted = _event(
+        "customer.subscription.updated", subscription("growth", "active"), created=1_800_000_200
+    )
+    assert (await _deliver(client, converted)).json() == {"received": "plan:growth"}
+    paid = _event("invoice.paid", {"customer": "cus_1", "id": "in_1"}, created=1_800_000_210)
+    assert (await _deliver(client, paid)).json() == {"received": "paid"}
+    # A renewal that fails: held while Stripe retries, then unpaid — Free.
+    retrying = _event(
+        "customer.subscription.updated", subscription("growth", "past_due"), created=1_800_000_300
+    )
+    assert (await _deliver(client, retrying)).json() == {"received": "plan:growth"}
+    unpaid = _event(
+        "customer.subscription.updated", subscription("growth", "unpaid"), created=1_800_000_400
+    )
+    assert (await _deliver(client, unpaid)).json() == {"received": "plan:free"}
+    assert await _plan(workspace) == "free"
+
+    # Subscribed once: no second trial.
+    said = (await client.get(f"{API}/subscription")).json()
+    assert said["trial_available"] is False
+    again = await client.post(f"{API}/checkout", json={"plan": "growth", "interval": "month"})
+    assert again.json()["quote"]["trial_days"] is None
+    assert "subscription_data[trial_period_days]" not in stripe.posted("/v1/checkout/sessions")[-1]
+
+
+@pytest.mark.integration
+async def test_a_trial_cancelled_before_its_end_is_never_paid_for(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    stripe: FakeStripe,
+) -> None:
+    workspace = acme["acme"]
+    await _synced(stripe)
+    _as(identity, acme, "admin")
+    await client.post(f"{API}/checkout", json={"plan": "growth", "interval": "month"})
+    trialing = _event(
+        "customer.subscription.created",
+        {**subscription("growth", "trialing"), "metadata": {"workspace_id": str(workspace)}},
+        created=1_800_000_100,
+    )
+    assert (await _deliver(client, trialing)).json() == {"received": "plan:growth"}
+    # Cancelled in the portal before the 14 days: ended, never charged — Free.
+    ended = _event(
+        "customer.subscription.deleted", subscription("growth", "canceled"), created=1_800_000_200
+    )
+    assert (await _deliver(client, ended)).json() == {"received": "plan:free"}
+    assert await _plan(workspace) == "free"
+    # A checkout cancelled, or a browser back from it: nothing changes.
+    assert (await client.get(f"{API}/subscription")).json()["plan"] == "free"
+
+
+# ── no AI capacity sold ─────────────────────────────────────────────────────
+
+
+@pytest.mark.integration
+async def test_no_ai_capacity_is_sold_a_one_time_payment_credits_nothing(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    acme: dict[str, uuid.UUID],
+    stripe: FakeStripe,
 ) -> None:
     workspace = acme["acme"]
     _as(identity, acme, "admin")
-    # None on sale: none bought.
-    refused = await client.post(f"{API}/capacity/checkout", json={"pack": "s"})
-    assert refused.status_code == 422
-    assert refused.json()["error"]["details"][0]["message"] == "unknown_pack"
-
-    raw = load().model_dump(mode="json")
-    raw["capacity"]["packs"] = [{"key": "s", "credits": 500, "price": 2500, "provisional": True}]
-    with_pack = Catalogue.model_validate(raw)
-    monkeypatch.setattr(billing, "catalogue", lambda: with_pack)
-    await sync(stripe.client(), with_pack, today=datetime.now(UTC).date())
-    opened = await client.post(f"{API}/capacity/checkout", json={"pack": "s"})
-    assert opened.status_code == 200, opened.text
-    session = stripe.posted("/v1/checkout/sessions")[-1]
-    assert session["mode"] == "payment"
-    assert session["line_items[0][price]"] == stripe.prices["leka_core_pack_s_2500"]
-
+    # No route sells it.
+    assert (await client.post(f"{API}/capacity/checkout", json={"pack": "s"})).status_code in (
+        404,
+        405,
+    )
+    # Nor a payment made outside it: told, ignored, nothing credited.
     paid = {
         "id": "cs_pack",
         "mode": "payment",
@@ -447,14 +538,9 @@ async def test_capacity_is_credited_once_after_a_verified_payment(
         "client_reference_id": str(workspace),
         "metadata": {"leka_pack": "s", "leka_credits": "500", "workspace_id": str(workspace)},
     }
-    # Not paid yet: nothing.
-    pending = _event("checkout.session.completed", {**paid, "payment_status": "unpaid"}, created=1)
-    assert (await _deliver(client, pending)).json() == {"received": "not_paid"}
+    told = _event("checkout.session.completed", paid, created=2)
+    assert (await _deliver(client, told)).json() == {"received": "ignored"}
     assert await _count(workspace, CreditPack) == 0
-    # Paid: credited once — the same payment told twice, under two event ids.
-    first = _event("checkout.session.completed", paid, created=2)
-    assert (await _deliver(client, first)).json() == {"received": "credited:500"}
-    second = _event("checkout.session.completed", paid, created=3)
-    assert (await _deliver(client, second)).json() == {"received": "already_credited"}
-    assert (await _deliver(client, first)).json() == {"received": "duplicate"}
-    assert await _count(workspace, CreditPack) == 1
+    # Nothing in Stripe sells it either: the catalogue makes plans only.
+    await _synced(stripe)
+    assert not [p for p in stripe.posted("/v1/products") if "pack" in p["id"]]

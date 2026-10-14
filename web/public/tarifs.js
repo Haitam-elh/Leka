@@ -1,5 +1,5 @@
 /* ==========================================================================
-   LEKA, la page Tarifs (LEKA-431)
+   LEKA, la page Tarifs (LEKA-431, LEKA-446)
    Aucun prix n'est ecrit ici : tout vient de GET /api/v1/pricing, calcule
    par le serveur a partir du catalogue (api/leka/billing/catalogue.yaml),
    tel que le paiement le facturera. Cette page ne fait qu'afficher, et
@@ -27,10 +27,9 @@
       credits: '{n} crédits IA / mois',
       creditsContract: 'Capacité IA définie au contrat',
       provisional: 'valeur de lancement',
-      core: '{agents} inclus',
+      trial: 'Essai gratuit de {days} jours, carte requise',
       managed: 'Modèle de langage géré par LEKA',
       ownLlm: 'Connexion de votre propre modèle de langage',
-      anyTime: 'Capacité IA supplémentaire à tout moment',
       start: 'Commencer',
       startFree: 'Commencer gratuitement',
       book: 'Réserver un rendez-vous avec notre équipe',
@@ -38,6 +37,7 @@
       orWrite: 'ou nous écrire',
       launchNote: 'Offre de lancement : −{percent} % pendant {months} mois en facturation mensuelle.',
       launchTerms: 'Offre de lancement : −{percent} % sur les {months} premiers mois d\'un abonnement mensuel souscrit pendant l\'offre, puis le prix catalogue. Non cumulable avec la remise annuelle de {annual} %.',
+      trialTerms: 'Essai Growth : {days} jours gratuits, carte bancaire requise, une fois par espace. À la fin de l\'essai, l\'abonnement démarre et la carte est débitée du prix affiché, puis à chaque échéance, sauf annulation avant la fin de l\'essai. Les abonnements se renouvellent automatiquement jusqu\'à résiliation.',
       save: '−{percent} %',
     },
     en: {
@@ -51,10 +51,9 @@
       credits: '{n} AI credits / month',
       creditsContract: 'AI capacity set by contract',
       provisional: 'launch value',
-      core: '{agents} included',
+      trial: '{days}-day free trial, card required',
       managed: 'Language model managed by LEKA',
       ownLlm: 'Connect your own language model',
-      anyTime: 'Extra AI capacity at any time',
       start: 'Get started',
       startFree: 'Start for free',
       book: 'Book a meeting with our team',
@@ -62,6 +61,7 @@
       orWrite: 'or write to us',
       launchNote: 'Launch offer: −{percent}% for {months} months on monthly billing.',
       launchTerms: 'Launch offer: −{percent}% for the first {months} months of a monthly subscription taken during the offer, then the list price. Not combined with the {annual}% annual discount.',
+      trialTerms: 'Growth trial: {days} free days, card required, once per workspace. When the trial ends, the subscription starts and the card is charged the price shown, then at each renewal, unless cancelled before the trial ends. Subscriptions renew automatically until cancelled.',
       save: '−{percent}%',
     },
   };
@@ -165,8 +165,6 @@
   }
 
   function card(plan) {
-    const pricing = state.pricing;
-    const agents = pricing.core_agents.map((a) => words(a.name)).join(lang() === 'fr' ? ' et ' : ' and ');
     const credits = plan.ai_credits_contractual
       ? t('creditsContract')
       : t('credits', { n: new Intl.NumberFormat(lang() === 'fr' ? 'fr-FR' : 'en-GB').format(plan.ai_credits_per_month) });
@@ -175,9 +173,8 @@
         el('span', { text: credits }),
         plan.ai_credits_provisional ? el('span', { class: 'plan__note', text: ` (${t('provisional')})` }) : null,
       ]),
-      el('li', { text: t('core', { agents }) }),
+      plan.trial_days ? el('li', { class: 'plan__trial', text: t('trial', { days: plan.trial_days }) }) : null,
       el('li', { text: plan.own_llm ? t('ownLlm') : t('managed') }),
-      pricing.capacity_any_time ? el('li', { text: t('anyTime') }) : null,
     ];
     const head = [el('h2', { class: 'plan__name', text: plan.name })];
     if (plan.recommended) head.push(el('span', { class: 'plan__badge', text: t('recommended') }));
@@ -205,6 +202,9 @@
     const terms = $('launchTerms');
     terms.hidden = !launch.open;
     terms.textContent = t('launchTerms', { percent: launch.percent, months: launch.months, annual: pricing.annual_discount_percent });
+    const trial = pricing.plans.find((plan) => plan.trial_days);
+    $('trialTerms').hidden = !trial;
+    if (trial) $('trialTerms').textContent = t('trialTerms', { days: trial.trial_days });
     document.querySelectorAll('.pricing-toggle [data-interval]').forEach((button) => {
       button.setAttribute('aria-checked', String(button.dataset.interval === state.interval));
     });

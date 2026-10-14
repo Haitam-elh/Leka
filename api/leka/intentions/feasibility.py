@@ -5,12 +5,12 @@ connected, who asks — and, when it cannot, the least it takes to.
     the capabilities   what the router sends it to (LEKA-398) — LEKA's own
                        analysis always — for this person, as the catalogue
                        stands; each said
-                         included     LEKA's own, and the core agents every
-                                      plan has (billing/catalogue.yaml)
-                         beta         a specialist agent while it is not on
-                                      sale: usable, its future price said
+                         included     LEKA's own analysis — never an agent:
+                                      no plan includes one (LEKA-446)
+                         beta         an agent while it is not on sale:
+                                      usable, its future price said
                                       (decided 2026-10-13)
-                         add_on       a specialist agent on sale: bought
+                         add_on       an agent on sale: bought
                          planned      not ready yet: never offered as usable
                        and, usable or not here, why: a source to connect, a
                        language model, a permission, turned off
@@ -21,9 +21,10 @@ connected, who asks — and, when it cannot, the least it takes to.
                        first) · over_quota (credits spent, or too few) ·
                        impossible (what it expects, nothing LEKA has makes)
     the path           the least it takes, cheapest first: what to connect or
-                       allow; a capacity pack; an add-on, or a bundle when it
-                       costs less than its agents one by one; the cheapest
-                       plan that is enough — never the dearest by default;
+                       allow; an add-on, or a bundle when it costs less than
+                       its agents one by one; the cheapest plan whose AI
+                       capacity is enough — never the dearest by default, and
+                       never a capacity pack: none is sold (LEKA-446);
                        Enterprise by contract. Anything bought is consented
                        to first: nothing here buys.
 
@@ -84,7 +85,7 @@ class Needed:
 class Step:
     """One thing it takes, cheapest first."""
 
-    kind: str  # connect_source, ask_admin, configure_model, enable, buy_pack,
+    kind: str  # connect_source, ask_admin, configure_model, enable,
     # buy_add_on, buy_bundle, change_plan, contact_sales, rephrase
     detail: Mapping[str, object] = field(default_factory=dict)
     # It costs money or changes a plan: never done without a yes.
@@ -116,11 +117,9 @@ def offer_of(definition: Definition, sold: Catalogue) -> str:
         return "included"
     if definition.kind is not Kind.AGENT:
         return "included"
-    if definition.key in {agent.key for agent in sold.core_agents}:
-        return "included"
-    if definition.key in sold.add_ons.agents:
-        return "add_on" if sold.add_ons.available else "beta"
-    return "included"
+    # No plan includes an agent (LEKA-446): on sale, bought; until then, beta.
+    on_sale = sold.add_ons.available and definition.key in sold.add_ons.agents
+    return "add_on" if on_sale else "beta"
 
 
 def _steps(definition: Definition) -> list[Definition | None]:
@@ -228,39 +227,25 @@ def path_of(
         steps += _bought(add_ons, sold)
     short = month.state == "exhausted" or (estimate is not None and month.remaining < estimate)
     if short:
-        missing = (estimate or 0) - month.remaining
-        pack = next(
-            (p for p in sorted(sold.capacity.packs, key=lambda p: p.price) if p.credits >= missing),
-            None,
-        )
-        if pack is not None and missing > 0:
-            steps.append(
-                Step(
-                    "buy_pack",
-                    {"pack": pack.key, "credits": pack.credits, "price": pack.price},
-                    consent=True,
-                )
-            )
-        else:
-            # A month that is enough: what it used and what it needs.
-            need = month.used + (estimate or 1)
-            plan = _plan_enough(sold, plan_credits, need)
-            current = PLANS.index(month.plan)
-            if plan is not None and PLANS.index(plan) > current:
-                offered = sold.plan(plan)
-                detail: dict[str, object] = {
-                    "plan": plan,
-                    "monthly_price": offered.monthly_price,
-                    "credits": plan_credits.get(plan),
+        # A month that is enough: what it used and what it needs.
+        need = month.used + (estimate or 1)
+        plan = _plan_enough(sold, plan_credits, need)
+        current = PLANS.index(month.plan)
+        if plan is not None and PLANS.index(plan) > current:
+            offered = sold.plan(plan)
+            detail: dict[str, object] = {
+                "plan": plan,
+                "monthly_price": offered.monthly_price,
+                "credits": plan_credits.get(plan),
+            }
+            if offered.launch_offer and sold.launch_open(month.period_end.date()):
+                detail |= {
+                    "launch_percent": sold.launch_offer.percent,
+                    "launch_months": sold.launch_offer.months,
                 }
-                if offered.launch_offer and sold.launch_open(month.period_end.date()):
-                    detail |= {
-                        "launch_percent": sold.launch_offer.percent,
-                        "launch_months": sold.launch_offer.months,
-                    }
-                steps.append(Step("change_plan", detail, consent=True))
-            else:
-                steps.append(Step("contact_sales", {"plan": "enterprise"}))
+            steps.append(Step("change_plan", detail, consent=True))
+        else:
+            steps.append(Step("contact_sales", {"plan": "enterprise"}))
         return "over_quota", tuple(steps)
     if steps:
         return "prerequisites", tuple(steps)

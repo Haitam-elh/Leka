@@ -992,6 +992,11 @@ const fr = {
       launch: "pendant {months} mois, puis {price} / mois",
       yearly: "facturé {price} / an HT",
       credits: "{n} crédits IA / mois",
+      provisional: "valeur de lancement",
+      trial:
+        "Essai de {days} jours, carte requise : premier paiement de {price} le {date}, puis {every}. Annulez avant cette date, depuis cette page : rien n'est débité.",
+      everyMonth: "chaque mois",
+      everyYear: "chaque année",
       choose: "Choisir {plan}",
       terms:
         "Paiement sécurisé par Stripe. Votre formule s'active à la confirmation du paiement ; jamais de dépassement facturé automatiquement.",
@@ -6224,7 +6229,6 @@ const fr = {
         configure_model: "Configurer un modèle de langage",
         ask_admin: "Demander l'accès à un administrateur",
         enable: "Réactiver la capacité « {capability} »",
-        buy_pack: "Ajouter {credits} crédits ({price})",
         buy_add_on: "Ajouter l'option « {agent} » ({price} / mois)",
         buy_bundle: "Ajouter le pack « {bundle} » ({price} / mois)",
         change_plan: "Passer à {plan} ({price} / mois)",
@@ -8027,6 +8031,11 @@ const en: Dictionary = {
       launch: "for {months} months, then {price} / month",
       yearly: "billed {price} / year excl. VAT",
       credits: "{n} AI credits / month",
+      provisional: "launch value",
+      trial:
+        "{days}-day trial, card required: first payment of {price} on {date}, then {every}. Cancel before that date, from this page: nothing is charged.",
+      everyMonth: "every month",
+      everyYear: "every year",
       choose: "Choose {plan}",
       terms:
         "Secure payment by Stripe. Your plan starts once the payment is confirmed; never an automatic overage charge.",
@@ -13107,7 +13116,6 @@ const en: Dictionary = {
         configure_model: "Set up a language model",
         ask_admin: "Ask an administrator for access",
         enable: "Turn « {capability} » back on",
-        buy_pack: "Add {credits} credits ({price})",
         buy_add_on: "Add « {agent} » ({price} / month)",
         buy_bundle: "Add the « {bundle} » bundle ({price} / month)",
         change_plan: "Move to {plan} ({price} / month)",

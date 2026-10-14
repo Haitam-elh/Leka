@@ -11,7 +11,6 @@ from leka.billing.models import SiteEvent
 from leka.billing.repository import SiteEventRepository
 from leka.billing.schemas import (
     BookingRead,
-    CoreAgentRead,
     LaunchOfferRead,
     PlanRead,
     PricingRead,
@@ -54,6 +53,7 @@ def pricing(
                 ai_credits_contractual=allowance.contractual,
                 managed_llm=plan.managed_llm,
                 own_llm=plan.own_llm,
+                trial_days=plan.trial_days,
             )
         )
     launch = offer.launch_offer
@@ -67,11 +67,8 @@ def pricing(
             open=offer.launch_open(today),
             ends_on=launch.ends_on.isoformat() if launch.ends_on else None,
         ),
-        core_agents=[CoreAgentRead(key=a.key, name=a.name) for a in offer.core_agents],
         plans=plans,
         add_ons_available=offer.add_ons.available,
-        capacity_any_time=offer.capacity.purchase_any_time,
-        capacity_packs_available=bool(offer.capacity.packs),
         booking=BookingRead(url=booking_url, contact_url=contact_url),
     )
 

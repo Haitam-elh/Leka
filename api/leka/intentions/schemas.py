@@ -459,7 +459,6 @@ PathKind = Literal[
     "configure_model",
     "ask_admin",
     "enable",
-    "buy_pack",
     "buy_add_on",
     "buy_bundle",
     "change_plan",

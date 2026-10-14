@@ -422,10 +422,10 @@ preview). It reads; it never buys nor changes anything.
 - **The capabilities** it needs: what the router sends it to (LEKA-398),
   what always runs with an analysis, and — a document expected — what makes
   one. Each **offered**:
-  - included: LEKA's own, and the core agents every plan has
-    (`billing/catalogue.yaml`);
-  - beta: a specialist agent while it is not on sale — usable by every
-    plan, its future price said (decided 2026-10-13);
+  - included: LEKA's own analysis — never an agent: no plan includes one
+    (LEKA-446);
+  - beta: an agent while it is not on sale — usable by every plan, its
+    future price said (decided 2026-10-13);
   - add_on: on sale, bought;
   - planned: not ready, never offered as usable.
 
@@ -442,11 +442,10 @@ preview). It reads; it never buys nor changes anything.
     still analyse and answer.
 - **The least it takes**, cheapest first:
   1. what to connect or allow;
-  2. a capacity pack that is enough;
-  3. an add-on, or a bundle when it costs less than its agents one by one;
-  4. the cheapest plan whose credits are enough — never the dearest by
-     default;
-  5. past Business, Enterprise by contract.
+  2. an add-on, or a bundle when it costs less than its agents one by one;
+  3. the cheapest plan whose credits are enough — never the dearest by
+     default, and never a capacity pack: none is sold (LEKA-446);
+  4. past Business, Enterprise by contract.
 
   Anything that costs money is consented to first. In the app, changing plan
   says its price, its credits and its launch offer, then opens the secure
@@ -485,7 +484,7 @@ through the API (`tests/test_intention_brief_api.py`), on screen
 | Free, credits spent | over_quota → Starter (not Business), asked first |
 | A run that costs more than Starter's month | over_quota → Growth |
 | Past Business | Enterprise by contract, no checkout |
-| A capacity pack that is enough | buy_pack before any plan |
+| Past the credits | a higher plan, never a pack (none is sold) |
 | A security review (specialist agent) | beta, usable, nothing to buy |
 | Two specialist agents on sale, a bundle cheaper | buy_bundle; one alone cheaper → buy_add_on |
 | A document nothing makes | impossible, rephrase |

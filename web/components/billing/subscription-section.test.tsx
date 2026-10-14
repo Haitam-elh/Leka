@@ -38,6 +38,9 @@ const quote = (plan: string, interval: "month" | "year", list: number, monthly: 
   charged,
   for_months: discount === "launch" ? 12 : null,
   then_monthly: discount === "launch" ? list : null,
+  // Growth's trial (LEKA-446): 14 days, then the first charge.
+  trial_days: plan === "growth" ? 14 : null,
+  first_charge_on: plan === "growth" ? "2026-10-31" : null,
 });
 
 const words = { fr: "x", en: "x" };
@@ -62,6 +65,7 @@ const plan = (key: string, name: string, list: number, credits: number | null, r
   ai_credits_contractual: key === "enterprise",
   managed_llm: true,
   own_llm: key === "enterprise",
+  trial_days: key === "growth" ? 14 : null,
 });
 
 const PRICING = {
@@ -69,7 +73,6 @@ const PRICING = {
   currency: "EUR",
   annual_discount_percent: 20,
   launch_offer: { percent: 30, months: 12, open: true, ends_on: null, stacks_with_annual: false },
-  core_agents: [],
   plans: [
     plan("free", "Free", 0, 100),
     plan("starter", "Starter", 5900, 500),
@@ -78,9 +81,7 @@ const PRICING = {
     plan("enterprise", "Enterprise", 0, null),
   ],
   add_ons_available: false,
-  capacity_any_time: true,
   automatic_overage: false,
-  capacity_packs_available: false,
   booking: { url: null, contact_url: "https://leka-core.com/demo.html?type=enterprise" },
 } as unknown as Pricing;
 
@@ -93,6 +94,7 @@ function account(overrides: Partial<Subscription> = {}): Subscription {
     current_period_end: null,
     cancel_at_period_end: false,
     launch_offer_available: true,
+    trial_available: true,
     last_invoice: null,
     has_customer: false,
     ...overrides,
@@ -134,6 +136,13 @@ describe("your plan", () => {
     expect(screen.getAllByTestId("billing-plan").map((li) => li.dataset.plan)).toEqual(["starter", "growth", "business"]);
     expect(growth).toHaveTextContent("125,30");
     expect(growth).toHaveTextContent("pendant 12 mois, puis 179");
+    // Its trial, said before paying: how much, when, then each month.
+    expect(within(growth).getByTestId("billing-trial")).toHaveTextContent(
+      "Essai de 14 jours, carte requise : premier paiement de 125,30 € le 31 octobre 2026, puis chaque mois.",
+    );
+    expect(growth).toHaveTextContent("(valeur de lancement)");
+    const starter = screen.getAllByTestId("billing-plan")[0];
+    expect(within(starter).queryByTestId("billing-trial")).toBeNull();
     await user.click(screen.getByRole("radio", { name: /Annuelle/ }));
     expect(growth).toHaveTextContent("143,20");
     expect(growth).toHaveTextContent("1 718,40");
