@@ -1,0 +1,313 @@
+GET	/api/v1/health	health	-	Health
+GET	/api/v1/jobs	jobs	job:read	List Job Runs
+GET	/api/v1/jobs/{run_id}	jobs	job:read	Get Job Run
+POST	/api/v1/auth/register	auth	-	Register
+POST	/api/v1/auth/verify/resend	auth	-	Resend Verification
+POST	/api/v1/auth/verify/{token}	auth	-	Verify Email
+POST	/api/v1/auth/login	auth	-	Login
+POST	/api/v1/auth/logout	auth	-	Logout
+POST	/api/v1/auth/logout-all	auth	-	Logout Everywhere
+GET	/api/v1/auth/me	auth	-	Read Me
+DELETE	/api/v1/auth/me	auth	-	Delete Me
+PATCH	/api/v1/auth/me	auth	-	Update Me
+POST	/api/v1/auth/password/forgot	auth	-	Forgot Password
+POST	/api/v1/auth/password/reset	auth	-	Reset Password
+POST	/api/v1/auth/password/change	auth	-	Change Password
+GET	/api/v1/auth/sessions	auth	-	List My Sessions
+DELETE	/api/v1/auth/sessions/{session_id}	auth	-	Revoke Session
+POST	/api/v1/workspaces	workspaces	-	Create Workspace
+GET	/api/v1/workspaces	workspaces	-	List My Workspaces
+GET	/api/v1/workspaces/current	workspaces	-	Read Current Workspace
+DELETE	/api/v1/workspaces/current	workspaces	workspace:delete	Request Workspace Deletion
+PATCH	/api/v1/workspaces/current	workspaces	workspace:update	Configure Current Workspace
+POST	/api/v1/workspaces/{workspace_id}/switch	workspaces	-	Switch Workspace
+GET	/api/v1/members	members	-	List Members
+POST	/api/v1/members/invite	members	member:invite	Invite Member
+GET	/api/v1/team/members	members	workspace:read	Team
+GET	/api/v1/invitations	members	member:invite	Invitations
+DELETE	/api/v1/invitations/{invitation_id}	members	member:invite	Revoke
+PATCH	/api/v1/members/{membership_id}	members	member:update_role	Change Member Role
+DELETE	/api/v1/members/{membership_id}	members	member:remove	Remove Member
+POST	/api/v1/invitations/{token}/accept	members	-	Accept Invitation
+GET	/api/v1/governance/access	governance	workspace:read	Who may do what here
+GET	/api/v1/governance/restrictions	governance	access:read	The restricted entities
+PUT	/api/v1/governance/restrictions/{entity_id}	governance	entity:restrict	Restrict an entity to the administrators
+DELETE	/api/v1/governance/restrictions/{entity_id}	governance	entity:restrict	Lift a restriction
+GET	/api/v1/governance/decisions	governance	access:read,intention:read	The access decisions kept
+GET	/api/v1/governance/roles	governance	workspace:read	The workspace's own roles
+PUT	/api/v1/governance/roles/{key}	governance	policy:manage	Create or change a role
+DELETE	/api/v1/governance/roles/{key}	governance	policy:manage	Delete a role
+GET	/api/v1/governance/assignments	governance	workspace:read	Who holds which role
+PUT	/api/v1/governance/assignments/{user_id}	governance	policy:manage	Give a person a role
+GET	/api/v1/governance/policies	governance	workspace:read	The workspace's policies
+POST	/api/v1/governance/policies	governance	policy:manage	Create a policy
+PUT	/api/v1/governance/policies/{policy_id}	governance	policy:manage	Change a policy
+DELETE	/api/v1/governance/policies/{policy_id}	governance	policy:manage	Delete a policy
+GET	/api/v1/governance/history	governance	access:read,intention:read	Roles and policies, changed
+POST	/api/v1/governance/evaluate	governance	access:read	Ask a decision, without acting
+GET	/api/v1/governance/ai/controls	governance	workspace:read	The workspace's AI controls
+POST	/api/v1/governance/ai/controls	governance	policy:manage	Create an AI control
+PUT	/api/v1/governance/ai/controls/{control_id}	governance	policy:manage	Change an AI control
+DELETE	/api/v1/governance/ai/controls/{control_id}	governance	policy:manage	Remove an AI control
+GET	/api/v1/governance/ai/events	governance	access:read	What the AI controls did
+GET	/api/v1/governance/ai/calls	governance	access:read	The model calls, whom each was for
+GET	/api/v1/governance/audit	governance	audit:read,workspace:read	Search the audit trail
+GET	/api/v1/governance/audit/export	governance	audit:read	The audit trail, as CSV
+GET	/api/v1/governance/audit/settings	governance	audit:read	How long the trail is kept
+PUT	/api/v1/governance/audit/settings	governance	audit:manage	Keep the trail so long
+GET	/api/v1/governance/audit/{event_id}	governance	audit:read	One audit event
+GET	/api/v1/monitoring	monitoring	source:read	Monitoring
+GET	/api/v1/governance/data-protection	governance	access:read	Data Protection
+PUT	/api/v1/governance/data-protection/policy	governance	policy:manage,workspace:update	Set Policy
+GET	/api/v1/ops/metrics	operations	-	Every metric, as Prometheus reads them
+GET	/api/v1/ops/health	operations	-	How every component stands
+GET	/api/v1/connectors/catalog	connectors	source:read	Catalog
+GET	/api/v1/sources	connectors	source:read	List Sources
+POST	/api/v1/sources	connectors	source:manage	Create Source
+GET	/api/v1/sources/{source_id}	connectors	source:read	Get Source
+PATCH	/api/v1/sources/{source_id}	connectors	source:manage	Update Source
+DELETE	/api/v1/sources/{source_id}	connectors	source:manage	Delete Source
+PUT	/api/v1/sources/{source_id}/credentials	connectors	source:manage	Rotate Credentials
+POST	/api/v1/sources/{source_id}/test	connectors	source:manage	Test Source
+GET	/api/v1/sources/{source_id}/scope/options	connectors	source:manage	Source Scope Options
+POST	/api/v1/sources/{source_id}/activate	connectors	source:manage	Activate Source
+POST	/api/v1/sources/{source_id}/disable	connectors	source:manage	Disable Source
+POST	/api/v1/sources/{source_id}/health-check	connectors	source:manage	Check Source Health
+GET	/api/v1/sources/{source_id}/health	connectors	source:read	Source Health
+GET	/api/v1/sources/{source_id}/events	connectors	source:read	Source Events
+GET	/api/v1/sources/{source_id}/settings	connectors	source:read	Source Settings
+PUT	/api/v1/sources/{source_id}/settings	connectors	source:manage	Save Source Settings
+POST	/api/v1/sources/{source_id}/settings/check	connectors	source:manage	Check Source Settings
+GET	/api/v1/sources/{source_id}/settings/versions	connectors	source:read	Source Settings Versions
+POST	/api/v1/ingestion/sources/{source_id}/sync	ingestion	source:manage	Sync Now
+GET	/api/v1/ingestion/sources/{source_id}/syncs	ingestion	source:read	Source Syncs
+GET	/api/v1/ingestion/syncs	ingestion	source:read	Sync Summaries
+GET	/api/v1/ingestion/sources/{source_id}/runs	ingestion	source:read	Source Runs
+GET	/api/v1/ingestion/sources/{source_id}/deliveries	ingestion	source:read	Source Deliveries
+GET	/api/v1/ingestion/sources/{source_id}/extraction	ingestion	source:read	Source Extraction
+GET	/api/v1/ingestion/sources/{source_id}/parsing	ingestion	source:read	Source Parsing
+GET	/api/v1/ingestion/sources/{source_id}/normalisation	ingestion	source:read	Source Normalisation
+GET	/api/v1/ingestion/sources/{source_id}/validation	ingestion	source:read	Source Validation
+GET	/api/v1/ingestion/quality	ingestion	source:read,workspace:read	Quality
+GET	/api/v1/ingestion/sources/{source_id}/pipeline	ingestion	source:read	Source Pipeline
+GET	/api/v1/ingestion/sources/{source_id}/processing-runs	ingestion	source:read	Source Processing Runs
+POST	/api/v1/ingestion/sources/{source_id}/pipeline/resume	ingestion	source:manage	Resume Pipeline
+POST	/api/v1/ingestion/sources/{source_id}/pipeline/reprocess	ingestion	source:manage	Reprocess Pipeline
+GET	/api/v1/ingestion/resolution	ingestion	source:read	Resolution Status
+GET	/api/v1/ingestion/resolution/entities	ingestion	source:read	Resolved Entities
+GET	/api/v1/ingestion/resolution/entities/{entity_id}	ingestion	source:read	Resolved Entity
+GET	/api/v1/ingestion/resolution/lookup	ingestion	source:read	Lookup
+GET	/api/v1/ingestion/enrichment	ingestion	source:read	Enrichment Status
+GET	/api/v1/ingestion/enrichment/entities/{entity_id}	ingestion	source:read	Enriched Entity
+GET	/api/v1/ingestion/enrichment/environment	ingestion	source:read	Environment
+GET	/api/v1/ingestion/enrichment/environment/{entity_id}	ingestion	source:read	Environment Entity
+GET	/api/v1/ingestion/enrichment/environment/{entity_id}/activity	ingestion	source:read	Environment Entity Activity
+GET	/api/v1/ingestion/enrichment/relationships	ingestion	source:read	Enriched Relationships
+POST	/api/v1/webhooks/sources/{source_id}	webhooks	-	Deliver
+GET	/api/v1/knowledge/model	knowledge	workspace:read	Model Status
+GET	/api/v1/knowledge/registry	knowledge	workspace:read	Registry
+GET	/api/v1/knowledge/entities	knowledge	workspace:read	Entities
+GET	/api/v1/knowledge/entities/{entity_id}	knowledge	workspace:read	Entity
+GET	/api/v1/knowledge/entities/{entity_id}/versions	knowledge	workspace:read	Versions
+GET	/api/v1/knowledge/entities/{entity_id}/neighbourhood	knowledge	workspace:read	Neighbourhood
+GET	/api/v1/knowledge/services	knowledge	workspace:read	Services
+GET	/api/v1/knowledge/applications	knowledge	workspace:read	Applications
+GET	/api/v1/knowledge/services/{entity_id}	knowledge	workspace:read	Service
+GET	/api/v1/knowledge/applications/{entity_id}	knowledge	workspace:read	Application
+GET	/api/v1/knowledge/entities/{entity_id}/dependencies	knowledge	workspace:read	Dependencies
+GET	/api/v1/knowledge/infrastructure	knowledge	workspace:read	Infrastructure
+GET	/api/v1/knowledge/infrastructure/{entity_id}	knowledge	workspace:read	Resource
+GET	/api/v1/knowledge/cloud-accounts	knowledge	workspace:read	Cloud Accounts
+GET	/api/v1/knowledge/cloud-accounts/{entity_id}	knowledge	workspace:read	Cloud Account
+GET	/api/v1/knowledge/databases	knowledge	workspace:read	Databases
+GET	/api/v1/knowledge/databases/{entity_id}	knowledge	workspace:read	Database
+GET	/api/v1/knowledge/data-objects	knowledge	workspace:read	Data Objects
+GET	/api/v1/knowledge/data-objects/{entity_id}	knowledge	workspace:read	Data Object
+GET	/api/v1/knowledge/data-objects/{entity_id}/lineage	knowledge	workspace:read	Lineage
+GET	/api/v1/knowledge/teams	knowledge	workspace:read	Teams
+GET	/api/v1/knowledge/teams/{entity_id}	knowledge	workspace:read	Team
+GET	/api/v1/knowledge/people	knowledge	workspace:read	People
+GET	/api/v1/knowledge/people/{entity_id}	knowledge	workspace:read	Person
+GET	/api/v1/knowledge/entities/{entity_id}/responsibility	knowledge	workspace:read	Responsibility
+GET	/api/v1/knowledge/documents	knowledge	workspace:read	Documents
+GET	/api/v1/knowledge/documents/{entity_id}	knowledge	workspace:read	Document
+GET	/api/v1/knowledge/knowledge-spaces	knowledge	workspace:read	Knowledge Spaces
+GET	/api/v1/knowledge/knowledge-spaces/{entity_id}	knowledge	workspace:read	Knowledge Space
+GET	/api/v1/knowledge/documentation/coverage	knowledge	workspace:read	Documentation Coverage
+GET	/api/v1/knowledge/documentation/gaps	knowledge	workspace:read	Documentation Gaps
+GET	/api/v1/knowledge/business-capabilities	knowledge	workspace:read	Business Capabilities
+GET	/api/v1/knowledge/business-processes	knowledge	workspace:read	Business Processes
+GET	/api/v1/knowledge/business-capabilities/{entity_id}	knowledge	workspace:read	Business Capability
+GET	/api/v1/knowledge/business-processes/{entity_id}	knowledge	workspace:read	Business Process
+GET	/api/v1/knowledge/entities/{entity_id}/business	knowledge	workspace:read	Business Context
+GET	/api/v1/knowledge/incidents	knowledge	workspace:read	Incidents
+GET	/api/v1/knowledge/incidents/{entity_id}	knowledge	workspace:read	Incident
+GET	/api/v1/knowledge/changes	knowledge	workspace:read	Changes
+GET	/api/v1/knowledge/changes/{entity_id}	knowledge	workspace:read	Change
+GET	/api/v1/knowledge/deployments	knowledge	workspace:read	Deployments
+GET	/api/v1/knowledge/deployments/{entity_id}	knowledge	workspace:read	Deployment
+GET	/api/v1/knowledge/timeline	knowledge	workspace:read	Timeline
+GET	/api/v1/knowledge/relationships	knowledge	workspace:read	Relationships
+GET	/api/v1/knowledge/relationships/changes	knowledge	workspace:read	Relationship Changes
+GET	/api/v1/knowledge/relationships/issues	knowledge	workspace:read	Relationship Issues
+GET	/api/v1/knowledge/evolution	knowledge	workspace:read	Evolution
+GET	/api/v1/knowledge/evolution/summary	knowledge	workspace:read	Evolution Summary
+GET	/api/v1/knowledge/entities/{entity_id}/history	knowledge	workspace:read	Entity History
+GET	/api/v1/knowledge/entities/{entity_id}/at	knowledge	workspace:read	Entity At
+GET	/api/v1/knowledge/snapshots	knowledge	workspace:read	Snapshots
+GET	/api/v1/knowledge/snapshots/at	knowledge	workspace:read	Snapshot At
+GET	/api/v1/knowledge/operations	knowledge	workspace:read	Operations
+POST	/api/v1/knowledge/entities/{entity_id}/restore	knowledge	intention:approve,intention:create	Restore
+POST	/api/v1/knowledge/operations/{operation_id}/undo	knowledge	intention:approve	Undo
+POST	/api/v1/knowledge/model/rebuild	knowledge	intention:approve	Rebuild
+GET	/api/v1/knowledge/search	knowledge	audit:read,workspace:read	Search
+GET	/api/v1/knowledge/graph	knowledge	workspace:read	Graph
+GET	/api/v1/knowledge/graph/paths	knowledge	workspace:read	Paths
+GET	/api/v1/knowledge/views/{view}	knowledge	workspace:read	View
+GET	/api/v1/knowledge/architecture	knowledge	workspace:read	Architecture
+GET	/api/v1/knowledge/coverage	knowledge	workspace:read	Coverage
+POST	/api/v1/context/intents/plan	context	intention:read	Plan Intent
+POST	/api/v1/context/intents	context	intention:create	Assemble Intent
+POST	/api/v1/context	context	intention:create	Create Context
+GET	/api/v1/context	context	intention:read	Contexts
+GET	/api/v1/context/feedback	context	intention:read	Retrieval Feedback
+GET	/api/v1/context/contract	context	intention:read	Context Contract
+GET	/api/v1/context/{context_id}	context	intention:read	Context
+PATCH	/api/v1/context/{context_id}	context	intention:create	Update Context
+POST	/api/v1/context/{context_id}/refresh	context	intention:create	Refresh Context
+POST	/api/v1/context/{context_id}/expand	context	intention:create	Expand Context
+POST	/api/v1/context/{context_id}/compress	context	intention:create	Compress Context
+POST	/api/v1/context/{context_id}/intent	context	intention:create	Reask Context
+GET	/api/v1/context/{context_id}/checks	context	intention:read	Context Checks
+POST	/api/v1/context/{context_id}/archive	context	intention:create	Archive Context
+GET	/api/v1/context/{context_id}/versions	context	intention:read	Context Versions
+GET	/api/v1/context/{context_id}/assembled	context	intention:read	Assembled Context
+GET	/api/v1/context/{context_id}/diff	context	intention:read	Context Diff
+GET	/api/v1/context/{context_id}/quality	context	intention:read	Context Quality
+POST	/api/v1/context/{context_id}/feedback	context	intention:create	Give Feedback
+GET	/api/v1/context/{context_id}/elements/{ref_id}	context	intention:read	Inspect Element
+GET	/api/v1/context/{context_id}/elements/{ref_id}/evidence	context	intention:read,source:read	Element Evidence
+GET	/api/v1/context/{context_id}/events	context	intention:read	Context Events
+GET	/api/v1/intelligence/analyzers	intelligence	workspace:read	Analyzers
+POST	/api/v1/intelligence/runs	intelligence	intention:create,workspace:read	Request Run
+GET	/api/v1/intelligence/runs	intelligence	workspace:read	Runs
+GET	/api/v1/intelligence/runs/{run_id}	intelligence	workspace:read	Run
+GET	/api/v1/intelligence/findings	intelligence	workspace:read	Findings
+GET	/api/v1/intelligence/findings/{finding_id}	intelligence	workspace:read	Finding
+GET	/api/v1/intelligence/summary	intelligence	intention:read,workspace:read	Summary
+GET	/api/v1/intelligence/changes	intelligence	workspace:read	Changes
+GET	/api/v1/intelligence/changes/{change_id}	intelligence	workspace:read	Change
+GET	/api/v1/intelligence/enrichment/candidates	intelligence	workspace:read	Candidates
+GET	/api/v1/intelligence/enrichment/summary	intelligence	workspace:read	Enrichment Summary
+GET	/api/v1/intelligence/enrichment/candidates/{candidate_id}	intelligence	workspace:read	Candidate
+POST	/api/v1/intelligence/enrichment/candidates/{candidate_id}/accept	intelligence	intention:approve,workspace:read	Accept
+POST	/api/v1/intelligence/enrichment/candidates/{candidate_id}/reject	intelligence	intention:approve,workspace:read	Reject
+POST	/api/v1/intelligence/enrichment/candidates/{candidate_id}/reprocess	intelligence	intention:approve,workspace:read	Reprocess
+GET	/api/v1/intelligence/conflicts	intelligence	workspace:read	Conflicts
+GET	/api/v1/intelligence/conflicts/summary	intelligence	workspace:read	Conflict Summary
+GET	/api/v1/intelligence/conflicts/{conflict_id}	intelligence	workspace:read	Conflict
+POST	/api/v1/intelligence/conflicts/{conflict_id}/resolve	intelligence	intention:approve,workspace:read	Resolve
+POST	/api/v1/intelligence/conflicts/{conflict_id}/dismiss	intelligence	intention:approve,workspace:read	Dismiss
+POST	/api/v1/intelligence/conflicts/{conflict_id}/reopen	intelligence	intention:approve,workspace:read	Reopen
+GET	/api/v1/intelligence/authority-rules	intelligence	workspace:read	Authority Rules
+POST	/api/v1/intelligence/authority-rules	intelligence	intention:approve,workspace:read	Add Authority Rule
+DELETE	/api/v1/intelligence/authority-rules/{rule_id}	intelligence	intention:approve,workspace:read	Delete Authority Rule
+GET	/api/v1/intelligence/quality	intelligence	source:read,workspace:read	Quality
+GET	/api/v1/intelligence/quality/scores	intelligence	workspace:read	Quality Scores
+GET	/api/v1/intelligence/quality/scores/{key}	intelligence	workspace:read	Quality Score
+GET	/api/v1/intelligence/activity	intelligence	workspace:read	Activity
+GET	/api/v1/capabilities	capabilities	workspace:read	Capabilities
+GET	/api/v1/capabilities/summary	capabilities	intention:read,workspace:read	Summary
+POST	/api/v1/capabilities/discover	capabilities	workspace:read	Discover
+POST	/api/v1/capabilities/route	capabilities	workspace:read	Route
+GET	/api/v1/capabilities/{key}	capabilities	workspace:read	Capability
+PUT	/api/v1/capabilities/{key}/settings	capabilities	workspace:update	Settings
+PUT	/api/v1/capabilities/{key}/favourite	capabilities	workspace:read	Favourite
+DELETE	/api/v1/capabilities/{key}/favourite	capabilities	workspace:read	Unfavourite
+POST	/api/v1/agent-runs	capabilities	intention:create	Run an agent
+GET	/api/v1/agent-runs	capabilities	intention:read,workspace:read	The workspace's agent runs
+GET	/api/v1/agent-runs/{run_id}	capabilities	intention:read	One agent run, every step
+GET	/api/v1/agent-runs/{run_id}/deliverables/{fmt}	capabilities	intention:read	A file an agent run delivered: its PowerPoint or its PDF
+POST	/api/v1/agent-runs/{run_id}/cancel	capabilities	intention:create	Cancel an agent run
+POST	/api/v1/agent-runs/{run_id}/approve	capabilities	intention:approve	Approve an agent run held for it
+POST	/api/v1/agent-runs/{run_id}/reject	capabilities	intention:approve	Reject an agent run held for it
+GET	/api/v1/code-changes	capabilities	intention:read	The code changes agents proposed
+GET	/api/v1/code-changes/{change_id}	capabilities	intention:read	One code change, its diffs
+POST	/api/v1/code-changes/{change_id}/accept	capabilities	intention:approve	Accept a code change: LEKA opens its pull request
+POST	/api/v1/code-changes/{change_id}/reject	capabilities	intention:approve	Reject a code change
+GET	/api/v1/workflows	workflows	intention:read	Every workflow
+GET	/api/v1/workflows/{key}	workflows	intention:read	One workflow
+POST	/api/v1/workflow-runs	workflows	intention:create	Run a workflow
+GET	/api/v1/workflow-runs	workflows	intention:read,workspace:read	Workflow runs
+GET	/api/v1/workflow-runs/{run_id}	workflows	intention:read	One workflow run
+POST	/api/v1/workflow-runs/{run_id}/cancel	workflows	intention:create	Cancel a run
+POST	/api/v1/workflow-runs/{run_id}/retry	workflows	intention:create	Retry a failed run from where it failed
+GET	/api/v1/skills	capabilities	workspace:read	Every skill LEKA has
+GET	/api/v1/skills/runs	capabilities	intention:read,workspace:read	The workspace's skill runs
+GET	/api/v1/skills/{key}	capabilities	workspace:read	One skill, every version of it
+POST	/api/v1/skills/{key}/run	capabilities	workspace:read	Run a skill
+GET	/api/v1/models	models	workspace:read	Gateway
+PUT	/api/v1/models/settings	models	workspace:update	Save
+DELETE	/api/v1/models/settings	models	workspace:update	Remove
+POST	/api/v1/models/settings/test	models	workspace:update	Test
+GET	/api/v1/models/usage	models	workspace:read	Usage
+POST	/api/v1/intentions	intentions	intention:create	Create
+GET	/api/v1/intentions	intentions	intention:read	Intentions
+POST	/api/v1/intentions/understand	intentions	intention:create	Understand
+POST	/api/v1/intentions/brief	intentions	intention:create	Brief
+GET	/api/v1/intentions/counts	intentions	intention:read	Counts
+GET	/api/v1/intentions/{intention_id}	intentions	intention:read	Intention
+GET	/api/v1/intentions/{intention_id}/history	intentions	access:read,intention:read	History
+GET	/api/v1/intentions/{intention_id}/context	intentions	intention:read	Context
+GET	/api/v1/intentions/{intention_id}/routing	intentions	intention:read	Routing
+POST	/api/v1/intentions/{intention_id}/routing	intentions	intention:create	Route Again
+POST	/api/v1/intentions/{intention_id}/ask	intentions	intention:create	Ask Again
+POST	/api/v1/intentions/{intention_id}/answers	intentions	intention:create	Answer
+GET	/api/v1/intentions/{intention_id}/feasibility	intentions	intention:create,intention:read	Feasibility
+POST	/api/v1/intentions/{intention_id}/cancel	intentions	intention:approve,intention:create	Cancel
+POST	/api/v1/intentions/{intention_id}/stop	intentions	intention:create	Stop
+POST	/api/v1/intentions/{intention_id}/archive	intentions	intention:create	Archive
+POST	/api/v1/intentions/{intention_id}/restore	intentions	intention:approve,intention:create	Restore
+POST	/api/v1/intentions/{intention_id}/links	intentions	intention:create	Link
+DELETE	/api/v1/intentions/{intention_id}/links/{link_id}	intentions	intention:create	Unlink
+GET	/api/v1/intentions/{intention_id}/analyses	intentions	intention:read	Analyses
+GET	/api/v1/intentions/{intention_id}/analysis	intentions	intention:read	Analysis
+POST	/api/v1/intentions/{intention_id}/analyse	intentions	intention:create	Analyse
+GET	/api/v1/decisions	decisions	intention:read	Queue
+GET	/api/v1/decisions/summary	decisions	intention:read,workspace:read	Summary
+GET	/api/v1/decisions/policy	decisions	intention:read	Policy
+PUT	/api/v1/decisions/policy	decisions	policy:manage,workspace:update	Set Policy
+POST	/api/v1/decisions/policy/evaluate	decisions	intention:read	Evaluate Policy
+GET	/api/v1/decisions/exceptions	decisions	intention:read	Exceptions
+POST	/api/v1/decisions/exceptions	decisions	workspace:update	Grant Exception
+POST	/api/v1/decisions/exceptions/{exception_id}/revoke	decisions	workspace:update	Revoke Exception
+GET	/api/v1/decisions/delegations	decisions	intention:read	Delegations
+POST	/api/v1/decisions/delegations	decisions	intention:approve	Delegate
+POST	/api/v1/decisions/delegations/{delegation_id}/revoke	decisions	intention:read	Revoke Delegation
+GET	/api/v1/decisions/governance-history	decisions	intention:read	Governance History
+GET	/api/v1/intentions/{intention_id}/decisions	decisions	access:read,intention:read	Decisions
+POST	/api/v1/intentions/{intention_id}/decision/{verdict}	decisions	intention:create	Vote
+GET	/api/v1/action-endpoints	actions	intention:read	Endpoints
+POST	/api/v1/action-endpoints	actions	workspace:update	Authorize
+PATCH	/api/v1/action-endpoints/{endpoint_id}	actions	workspace:update	Change
+DELETE	/api/v1/action-endpoints/{endpoint_id}	actions	workspace:update	Remove
+GET	/api/v1/intentions/{intention_id}/plans	actions	intention:read	Plans
+POST	/api/v1/intentions/{intention_id}/plan	actions	intention:approve	Plan
+POST	/api/v1/intentions/{intention_id}/plan/start	actions	intention:approve	Start
+POST	/api/v1/intentions/{intention_id}/plan/cancel	actions	intention:approve,intention:create	Cancel
+POST	/api/v1/intentions/{intention_id}/plan/steps/{step_id}/report	actions	intention:approve	Report
+PUT	/api/v1/intentions/{intention_id}/plan/expectations	outcomes	intention:approve	Set Expectations
+GET	/api/v1/intentions/{intention_id}/verifications	outcomes	intention:read	Verifications
+POST	/api/v1/intentions/{intention_id}/verification/check	outcomes	intention:approve	Check
+POST	/api/v1/intentions/{intention_id}/verification/expectations/{expectation_id}/report	outcomes	intention:approve	Report
+POST	/api/v1/intentions/{intention_id}/verification/conclude	outcomes	intention:approve	Conclude
+GET	/api/v1/intentions/{intention_id}/timeline	outcomes	intention:read	Intention Timeline
+GET	/api/v1/intention-history	outcomes	access:read,intention:read	History
+GET	/api/v1/billing/usage	billing	workspace:read	Usage
+GET	/api/v1/billing/credits	billing	workspace:read	Ai Credits
+GET	/api/v1/pricing	pricing	-	LEKA CORE's plans and prices
+POST	/api/v1/pricing/events	pricing	-	What a visitor of the pricing page chose or clicked
+GET	/api/v1/billing/subscription	billing	workspace:read	The subscription
+POST	/api/v1/billing/checkout	billing	workspace:update	Pay for a plan, with Stripe
+POST	/api/v1/billing/portal	billing	workspace:update	Stripe's customer portal
+POST	/api/v1/billing/stripe/webhook	billing	-	Stripe's events, verified by their signature
