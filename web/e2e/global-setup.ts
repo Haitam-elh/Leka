@@ -26,8 +26,14 @@ export default function globalSetup() {
     stdio: "inherit",
   });
 
+  clearRateLimits();
+}
+
+/** Forget the throttling counters — here, and before a spec that registers
+ * one account more than the hourly allowance leaves (activation.spec.ts). */
+export function clearRateLimits(): void {
   execFileSync(
-    python,
+    pythonExecutable(),
     [
       "-c",
       [
@@ -41,6 +47,6 @@ export default function globalSetup() {
         "asyncio.run(clear())",
       ].join("\n"),
     ],
-    { cwd: path.join(root, "api"), stdio: "inherit" },
+    { cwd: path.join(repositoryRoot(), "api"), stdio: "inherit" },
   );
 }

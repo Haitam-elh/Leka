@@ -20,6 +20,7 @@ import { CATEGORY_TONE, CHIP, KIND_ICON } from "@/components/activity/activity";
 import { wordActivity } from "@/components/activity/items";
 import { LekaInsights } from "@/components/insights/leka-insights";
 import { CompactIntentionComposer } from "@/components/intentions/compact-composer";
+import { FirstStepsCard } from "@/components/overview/first-steps";
 import { PageContainer } from "@/components/shell/page-container";
 import { useCurrentUser } from "@/components/shell/shell-provider";
 import { exactDate, shortWhen } from "@/components/knowledge/time";
@@ -42,11 +43,7 @@ import { useIntentions } from "@/lib/intentions/queries";
 import { byState, TROUBLE } from "@/lib/twin";
 import { useActivity } from "@/lib/evolution-queries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
-import {
-  type Source,
-  sourceTone,
-  sources as sourcesApi,
-} from "@/lib/sources";
+import { type Source, sourceTone, sources as sourcesApi } from "@/lib/sources";
 
 /**
  * The overview, laid out as docs/product/mockups/01-vue-ensemble.jpeg.
@@ -68,7 +65,6 @@ type Load =
   | { status: "loading" }
   | { status: "failed" }
   | { status: "ready"; sources: Source[] };
-
 
 function useOverviewData(): Load {
   const [load, setLoad] = useState<Load>({ status: "loading" });
@@ -121,7 +117,10 @@ function Card({
 }) {
   return (
     <section
-      className={cn("flex flex-col rounded-xl border border-shell-line bg-white p-3.5", className)}
+      className={cn(
+        "flex flex-col rounded-xl border border-shell-line bg-white p-3.5",
+        className,
+      )}
     >
       <div className="mb-3 flex items-center gap-3">
         {titleIcon}
@@ -134,7 +133,10 @@ function Card({
             className="flex items-center gap-1 rounded text-[0.8125rem] font-medium text-shell-nav-active outline-none hover:underline focus-visible:ring-2 focus-visible:ring-brand-violet/40"
           >
             {action.label}
-            <ArrowRight className="rtl:-scale-x-100 size-3.5" aria-hidden="true" />
+            <ArrowRight
+              className="rtl:-scale-x-100 size-3.5"
+              aria-hidden="true"
+            />
           </Link>
         ) : null}
       </div>
@@ -178,12 +180,22 @@ function IconTile({
   );
 }
 
-function Empty({ icon, title, body }: { icon: LucideIcon; title: string; body?: string }) {
+function Empty({
+  icon,
+  title,
+  body,
+}: {
+  icon: LucideIcon;
+  title: string;
+  body?: string;
+}) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 px-4 py-8 text-center">
       <IconTile icon={icon} tone="violet" />
       <p className="text-sm font-medium text-brand-navy">{title}</p>
-      {body ? <p className="max-w-xs text-[0.8125rem] text-shell-muted">{body}</p> : null}
+      {body ? (
+        <p className="max-w-xs text-[0.8125rem] text-shell-muted">{body}</p>
+      ) : null}
     </div>
   );
 }
@@ -196,7 +208,8 @@ function Greeting({ load }: { load: Load }) {
   const user = useCurrentUser();
   // The first name given at registration; an account made before it was
   // asked is greeted by the first part of its address until it gives one.
-  const name = user?.first_name?.trim() || capitalise(user?.email.split("@")[0] ?? "");
+  const name =
+    user?.first_name?.trim() || capitalise(user?.email.split("@")[0] ?? "");
   const today = capitalise(
     new Intl.DateTimeFormat(intlLocale(locale), {
       weekday: "long",
@@ -214,12 +227,15 @@ function Greeting({ load }: { load: Load }) {
     const needing = load.sources.filter((source) =>
       ["attention", "error"].includes(sourceTone(source)),
     ).length;
-    const trouble = (env?.states?.unavailable ?? 0) + (env?.states?.degraded ?? 0);
+    const trouble =
+      (env?.states?.unavailable ?? 0) + (env?.states?.degraded ?? 0);
     if (load.sources.length === 0) status = t.overview.statusNoSources;
     // What is in trouble first, then late reads, then sources: the twin's word.
-    else if (trouble > 0) status = fill(t.overview.twin.statusTrouble, { count: trouble });
+    else if (trouble > 0)
+      status = fill(t.overview.twin.statusTrouble, { count: trouble });
     else if (env?.freshness?.late) status = t.overview.twin.statusLate;
-    else if (needing > 0) status = fill(t.overview.statusAttention, { count: needing });
+    else if (needing > 0)
+      status = fill(t.overview.statusAttention, { count: needing });
     else status = t.overview.statusSynced;
   }
 
@@ -236,7 +252,9 @@ function Greeting({ load }: { load: Load }) {
       >
         {status}
       </p>
-      <p className="mt-1 text-[0.9375rem] text-shell-muted">{t.overview.tagline}</p>
+      <p className="mt-1 text-[0.9375rem] text-shell-muted">
+        {t.overview.tagline}
+      </p>
     </div>
   );
 }
@@ -257,7 +275,6 @@ function InsightsCard() {
     </section>
   );
 }
-
 
 /** Mockup 01's "Activité récente": the last of what Activité tells — the
  * same events, worded the same way. It read the sources' sync history
@@ -342,7 +359,11 @@ function ApprovalsCard() {
   const proposed = useCandidates("proposed");
   const open = useConflicts("open");
   const waiting = useDecisionQueue("proposed");
-  const all = items(proposed.data?.data ?? [], open.data?.data ?? [], waiting.data?.data ?? []);
+  const all = items(
+    proposed.data?.data ?? [],
+    open.data?.data ?? [],
+    waiting.data?.data ?? [],
+  );
   const shown = all.slice(0, 3);
   return (
     <Card
@@ -363,11 +384,16 @@ function ApprovalsCard() {
         />
       ) : (
         <>
-          <ul className="divide-y divide-shell-line/60" data-testid="approvals-waiting">
+          <ul
+            className="divide-y divide-shell-line/60"
+            data-testid="approvals-waiting"
+          >
             {shown.map((item) => {
               const { title, why } = wordItem(t, item);
               const sure =
-                item.kind === "candidate" ? ` · ${Math.round(item.data.confidence * 100)} %` : "";
+                item.kind === "candidate"
+                  ? ` · ${Math.round(item.data.confidence * 100)} %`
+                  : "";
               return (
                 <li key={`${item.kind}:${item.id}`}>
                   <Link
@@ -426,7 +452,9 @@ function TroubleCard() {
   const environment = useEnvironment();
   const monitoring = useMonitoring();
   const env = environment.data;
-  const trouble = byState((env?.nodes ?? []).filter((n) => n.twin && TROUBLE.has(n.twin.state)));
+  const trouble = byState(
+    (env?.nodes ?? []).filter((n) => n.twin && TROUBLE.has(n.twin.state)),
+  );
   const silent = (env?.states?.unknown ?? 0) + (env?.states?.not_covered ?? 0);
   const entitlement = monitoring.data?.entitlement;
   return (
@@ -435,7 +463,10 @@ function TroubleCard() {
       action={{ label: t.overview.seeAll, href: routes.environment() }}
     >
       {!env ? (
-        <div className="h-24 animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />
+        <div
+          className="h-24 animate-pulse rounded-lg bg-shell-canvas"
+          aria-hidden="true"
+        />
       ) : (
         <div className="flex flex-col gap-2" data-testid="overview-trouble">
           {trouble.length === 0 ? (
@@ -443,13 +474,22 @@ function TroubleCard() {
           ) : (
             <ul className="divide-y divide-shell-line">
               {trouble.slice(0, 4).map((node) => (
-                <li key={node.id} className="flex items-center gap-3 py-2" data-state={node.twin?.state}>
-                  {node.twin ? <TwinBadge state={node.twin.state} size="sm" /> : null}
+                <li
+                  key={node.id}
+                  className="flex items-center gap-3 py-2"
+                  data-state={node.twin?.state}
+                >
+                  {node.twin ? (
+                    <TwinBadge state={node.twin.state} size="sm" />
+                  ) : null}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-brand-navy">
                       {node.entity_id ? (
                         <Link
-                          href={entityHref({ id: node.entity_id, type: node.type })}
+                          href={entityHref({
+                            id: node.entity_id,
+                            type: node.type,
+                          })}
                           className="hover:underline"
                         >
                           {node.name}
@@ -466,7 +506,9 @@ function TroubleCard() {
                   </span>
                   {node.twin ? (
                     <Link
-                      href={intentionHref(askAbout(t, node.name, node.twin.state))}
+                      href={intentionHref(
+                        askAbout(t, node.name, node.twin.state),
+                      )}
                       className="shrink-0 text-xs font-medium text-shell-nav-active hover:underline"
                     >
                       {w.analyse}
@@ -477,21 +519,37 @@ function TroubleCard() {
             </ul>
           )}
           {silent > 0 ? (
-            <p className="text-xs text-shell-muted" data-testid="overview-silent">
+            <p
+              className="text-xs text-shell-muted"
+              data-testid="overview-silent"
+            >
               {fill(w.silent, { count: silent })}
             </p>
           ) : null}
           {entitlement ? (
             entitlement.proactive ? (
-              <p className="text-xs text-shell-muted" data-testid="overview-alerts">
-                {fill(w.alertsOpen, { count: monitoring.data?.open.length ?? 0 })}
+              <p
+                className="text-xs text-shell-muted"
+                data-testid="overview-alerts"
+              >
+                {fill(w.alertsOpen, {
+                  count: monitoring.data?.open.length ?? 0,
+                })}
               </p>
             ) : (
-              <p className="text-xs text-shell-muted" data-testid="overview-alerts-limit">
+              <p
+                className="text-xs text-shell-muted"
+                data-testid="overview-alerts-limit"
+              >
                 {fill(w.alertsFrom, {
-                  plan: (entitlement.alerts_from ?? "").replace(/^./, (c) => c.toUpperCase()),
+                  plan: (entitlement.alerts_from ?? "").replace(/^./, (c) =>
+                    c.toUpperCase(),
+                  ),
                 })}{" "}
-                <Link href={routes.billing()} className="text-shell-nav-active underline underline-offset-2">
+                <Link
+                  href={routes.billing()}
+                  className="text-shell-nav-active underline underline-offset-2"
+                >
                   {w.seePlans}
                 </Link>
               </p>
@@ -509,13 +567,21 @@ function IntentionsCard() {
   const t = useDictionary();
   const w = t.overview.twin;
   const list = useIntentions("active", "");
-  const rows = (list.data?.pages ?? []).flatMap((page) => page.data).slice(0, 4);
+  const rows = (list.data?.pages ?? [])
+    .flatMap((page) => page.data)
+    .slice(0, 4);
   return (
-    <Card title={w.intentionsTitle} action={{ label: t.overview.seeAll, href: routes.intentions() }}>
+    <Card
+      title={w.intentionsTitle}
+      action={{ label: t.overview.seeAll, href: routes.intentions() }}
+    >
       {list.data && rows.length === 0 ? (
         <Empty icon={Sparkle} title={w.intentionsNone} />
       ) : (
-        <ul className="divide-y divide-shell-line" data-testid="overview-intentions">
+        <ul
+          className="divide-y divide-shell-line"
+          data-testid="overview-intentions"
+        >
           {rows.map((intention) => (
             <li key={intention.id}>
               <Link
@@ -543,33 +609,57 @@ function FreshnessCard() {
   const w = t.overview.twin;
   const environment = useEnvironment();
   const env = environment.data;
-  const unwell = (env?.sources ?? []).filter((s) => s.state !== "read" && s.state !== "syncing");
+  const unwell = (env?.sources ?? []).filter(
+    (s) => s.state !== "read" && s.state !== "syncing",
+  );
   const uncovered = (env?.coverage ?? []).filter((c) => !c.covered);
   const parts = t.environment.twin.coverage.parts;
   return (
-    <Card title={w.freshnessTitle} action={{ label: t.overview.seeAllSources, href: routes.sources() }}>
+    <Card
+      title={w.freshnessTitle}
+      action={{ label: t.overview.seeAllSources, href: routes.sources() }}
+    >
       {!env ? (
-        <div className="h-24 animate-pulse rounded-lg bg-shell-canvas" aria-hidden="true" />
+        <div
+          className="h-24 animate-pulse rounded-lg bg-shell-canvas"
+          aria-hidden="true"
+        />
       ) : (
-        <div className="flex flex-col gap-2 text-[0.8125rem]" data-testid="overview-freshness">
+        <div
+          className="flex flex-col gap-2 text-[0.8125rem]"
+          data-testid="overview-freshness"
+        >
           {(env.sources ?? []).length === 0 ? (
             // Nothing connected: nothing read, nothing covered — said once.
             <p className="text-shell-muted">{t.overview.sourcesEmpty}</p>
           ) : (
             <FreshnessLine freshness={env.freshness} />
           )}
-          {(env.sources ?? []).length > 0 && unwell.length === 0 && uncovered.length === 0 ? (
+          {(env.sources ?? []).length > 0 &&
+          unwell.length === 0 &&
+          uncovered.length === 0 ? (
             <p className="text-shell-muted">{w.allRead}</p>
           ) : null}
           {unwell.length ? (
             <ul className="space-y-1">
               {unwell.slice(0, 4).map((source) => (
-                <li key={source.id} className="flex items-center gap-2" data-state={source.state}>
-                  <TriangleAlert className="size-4 shrink-0 text-state-warning" aria-hidden="true" />
+                <li
+                  key={source.id}
+                  className="flex items-center gap-2"
+                  data-state={source.state}
+                >
+                  <TriangleAlert
+                    className="size-4 shrink-0 text-state-warning"
+                    aria-hidden="true"
+                  />
                   <span className="min-w-0 truncate">
-                    <span className="font-medium text-brand-navy">{source.name}</span>{" "}
+                    <span className="font-medium text-brand-navy">
+                      {source.name}
+                    </span>{" "}
                     <span className="text-shell-muted">
-                      {t.environment.twin.coverage.states[source.state].toLowerCase()}
+                      {t.environment.twin.coverage.states[
+                        source.state
+                      ].toLowerCase()}
                     </span>
                   </span>
                 </li>
@@ -578,7 +668,9 @@ function FreshnessCard() {
           ) : null}
           {uncovered.length && (env.sources ?? []).length > 0 ? (
             <p className="text-shell-muted">
-              {fill(w.notCovered, { parts: uncovered.map((c) => parts[c.part]).join(", ") })}
+              {fill(w.notCovered, {
+                parts: uncovered.map((c) => parts[c.part]).join(", "),
+              })}
             </p>
           ) : null}
         </div>
@@ -601,12 +693,21 @@ export function Overview() {
       <div className="mt-5">
         <CompactIntentionComposer />
       </div>
-      <div className="mt-4 grid gap-4 xl:grid-cols-3" data-testid="overview-now">
+      {load.status === "ready" ? (
+        <FirstStepsCard sources={load.sources} />
+      ) : null}
+      <div
+        className="mt-4 grid gap-4 xl:grid-cols-3"
+        data-testid="overview-now"
+      >
         <ApprovalsCard />
         <TroubleCard />
         <IntentionsCard />
       </div>
-      <div className="mt-4 grid gap-4 xl:grid-cols-3" data-testid="overview-context">
+      <div
+        className="mt-4 grid gap-4 xl:grid-cols-3"
+        data-testid="overview-context"
+      >
         <ActivityCard />
         <FreshnessCard />
         <InsightsCard />
