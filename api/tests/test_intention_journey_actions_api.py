@@ -20,19 +20,25 @@ What these protect:
     said, the error's code kept for diagnosis, and retried by a new plan;
   - executed, it is to be verified, never done;
   - verified short of what was expected: the action failed, said so.
+- A step left running past its deadline — a worker that died mid-call — is
+  said interrupted, what the system did unknown: the action failed, never
+  left running.
 """
 
 # ruff: noqa: F811 — the fixtures of test_sources_api are imported to be requested by name.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 from httpx import AsyncClient
 
 from leka.connectors import PublicTransport
-from leka.intentions.actions import execute_plan
+from leka.db import session_factory, workspace_scope
+from leka.intentions.actions import STEP_DEADLINE, execute_plan, interrupt_overdue_steps
+from leka.intentions.models import IntentionPlanStep
 from tests.conftest import FakeIdentity
 from tests.test_context_engine import model
 from tests.test_intention_actions_api import (  # noqa: F401 — `jobs` is a fixture
@@ -199,3 +205,45 @@ async def test_run_waited_on_failed_timed_out_retried_and_verified_short(
         assert said["state"] == "done"
     else:
         assert (said["state"], said["reason"]) == ("action_failed", "expected_not_met")
+
+
+async def test_a_step_left_running_past_its_deadline_is_said_interrupted(
+    client: AsyncClient,
+    identity: FakeIdentity,
+    model: dict[str, uuid.UUID],
+    acme: dict[str, uuid.UUID],
+) -> None:
+    _as(identity, acme, "admin")
+    await _authorize(client)
+    intention = await _approved(client, identity, acme)
+    plan = await _plan(client, intention)
+    await _start(client, intention)
+    # A worker that died while calling the system: the step said running.
+    started = datetime.now(UTC)
+    with workspace_scope(acme["acme"]):
+        async with session_factory() as session:
+            step = await session.get(IntentionPlanStep, uuid.UUID(plan["steps"][0]["id"]))
+            assert step is not None
+            step.status, step.started_at = "running", started
+            await session.commit()
+    said = await _journey(client, intention)
+    assert said["state"] == "action_running"
+
+    assert await interrupt_overdue_steps(now=started + timedelta(minutes=1)) == 0
+    assert await interrupt_overdue_steps(now=started + STEP_DEADLINE + timedelta(seconds=1)) == 1
+    latest = await _latest(client, intention)
+    assert (latest["status"], latest["steps"][0]["status"], latest["steps"][0]["error"]) == (
+        "failed",
+        "failed",
+        "interrupted",
+    )
+    assert "not known" in latest["steps"][0]["evidence"]["interrupted"]["said"]
+    assert latest["controls"] == ["plan"]
+    said = await _journey(client, intention)
+    assert (said["state"], said["reason"], said["technical"]) == (
+        "action_failed",
+        "step_failed",
+        "interrupted",
+    )
+    # Idempotent.
+    assert await interrupt_overdue_steps(now=started + STEP_DEADLINE * 2) == 0

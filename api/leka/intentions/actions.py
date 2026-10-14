@@ -27,7 +27,7 @@ import secrets
 import time as clock
 import uuid
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -1130,5 +1130,74 @@ async def start_due(*, now: datetime | None = None) -> dict[str, int]:
 
 
 def run_due_plans() -> dict[str, int]:
-    """Entry point for the schedule."""
-    return asyncio.run(start_due())
+    """Entry point for the schedule: the steps left running past their
+    deadline said interrupted (LEKA-443), then the plans due."""
+
+    async def both() -> dict[str, int]:
+        interrupted = await interrupt_overdue_steps()
+        return {**await start_due(), "interrupted": interrupted}
+
+    return asyncio.run(both())
+
+
+# A call takes at most its timeout (TIMEOUT); a step still running well past
+# it, the worker died mid-call — what the system did is not known (LEKA-443).
+STEP_DEADLINE = timedelta(minutes=10)
+
+
+async def interrupt_overdue_steps(*, now: datetime | None = None, limit: int = 100) -> int:
+    """Steps left running past their deadline — a worker that died during a
+    call (LEKA-443): said failed, `interrupted`, what the system did said
+    unknown; the plan finished failed and its intention failed — to be
+    checked, then retried. Never left running. Idempotent."""
+    moment = _now(now)
+    with system_scope():
+        async with session_factory() as session:
+            overdue = (
+                (
+                    await session.execute(
+                        select(
+                            IntentionPlanStep.workspace_id,
+                            IntentionPlanStep.plan_id,
+                            IntentionPlanStep.id,
+                        )
+                        .where(
+                            IntentionPlanStep.status == "running",
+                            IntentionPlanStep.started_at < moment - STEP_DEADLINE,
+                        )
+                        .limit(limit)
+                    )
+                )
+                .tuples()
+                .all()
+            )
+    interrupted = 0
+    for workspace_id, plan_id, step_id in overdue:
+        with workspace_scope(workspace_id):
+            async with session_factory() as session:
+                service = ActionService(session, workspace_id)
+                plan = await session.scalar(
+                    select(IntentionPlan).where(IntentionPlan.id == plan_id).with_for_update()
+                )
+                step = await session.get(IntentionPlanStep, step_id, with_for_update=True)
+                if plan is None or step is None or step.status != "running":
+                    continue
+                step.status = "failed"
+                step.error = "interrupted"
+                step.finished_at = moment
+                step.evidence = {
+                    **step.evidence,
+                    "interrupted": {
+                        "at": moment.isoformat(),
+                        "said": "No answer was recorded: what the system did is not known.",
+                    },
+                }
+                service._event(
+                    plan, "step_failed", at=moment, step=step, detail={"error": "interrupted"}
+                )
+                await service.advance(plan, now=moment)
+                await session.commit()
+                interrupted += 1
+    if interrupted:
+        logger.warning("intention_steps_interrupted", count=interrupted)
+    return interrupted

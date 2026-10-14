@@ -45,7 +45,7 @@ MATRIX says, for each state:
 - what a person may do;
 - the errors it can say.
 
-docs/intentions.md § 13 is the same table, in words. The tests hold both
+docs/intentions.md § 2 bis is the same table, in words. The tests hold both
 to the lifecycle (tests/test_intention_journey.py).
 
 Pure: no database, no clock but the one given.

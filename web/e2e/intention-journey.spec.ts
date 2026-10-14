@@ -15,7 +15,7 @@ import { signIn } from "./sign-in";
  * - stopped while it was being analysed;
  * - read again — a page refreshed, come back to later — while its actions
  *   run.
- * The others are proven by the API's tests (docs/intentions.md § 13):
+ * The others are proven by the API's tests (docs/intentions.md § 2 bis):
  * - a source failing during an analysis;
  * - several actions, part approved, refused;
  * - a run failed, timed out, retried, verified.
