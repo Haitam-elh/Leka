@@ -73,6 +73,7 @@ import {
 } from "@/lib/intentions/queries";
 import { modelTitle } from "@/lib/models";
 import { notify } from "@/lib/notify";
+import { SPINNING } from "@/lib/motion";
 
 type AnalysisAnswer = components["schemas"]["AnalysisAnswer"];
 
@@ -414,7 +415,7 @@ function StepsCard({ analysis }: { analysis: IntentionAnalysis }) {
                             "mt-0.5 size-4 shrink-0",
                             step
                               ? undefined
-                              : "text-shell-nav-active motion-safe:animate-spin",
+                              : cn("text-shell-nav-active", SPINNING),
                             look?.tone === "success" && "text-state-success",
                             look?.tone === "danger" && "text-state-danger",
                             look?.tone === "warning" && "text-state-warning",
@@ -552,6 +553,7 @@ function Head({
     >
       <IconTile
         icon={running ? LoaderCircle : ShieldCheck}
+        spin={running}
         tone={tone}
         className="size-11"
       />

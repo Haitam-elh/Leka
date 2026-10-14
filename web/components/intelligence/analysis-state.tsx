@@ -14,6 +14,7 @@ import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { useDictionary } from "@/lib/i18n/locale-provider";
 import type { AnalysisStatus } from "@/lib/intelligence";
+import { SPINNING } from "@/lib/motion";
 
 /**
  * How an analysis went, said before what it found (LEKA-341): running —
@@ -52,7 +53,7 @@ export function AnalysisState({
       data-status={status}
     >
       <Icon
-        className={cn("mt-0.5 size-4 shrink-0", status === "running" && "motion-safe:animate-spin")}
+        className={cn("mt-0.5 size-4 shrink-0", status === "running" && SPINNING)}
         aria-hidden="true"
       />
       <div className="min-w-0 flex-1 text-brand-navy">

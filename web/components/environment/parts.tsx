@@ -40,6 +40,7 @@ import { fill } from "@/lib/i18n/dictionaries";
 import { useDictionary, useLocale } from "@/lib/i18n/locale-provider";
 import type { EntityType } from "@/lib/knowledge";
 import type { SourceKind } from "@/lib/sources";
+import { SPINNING } from "@/lib/motion";
 
 /**
  * What the "Mon environnement" screens (mockups 10 and 11) are made of:
@@ -62,10 +63,13 @@ export function IconTile({
   icon: Icon,
   tone,
   className,
+  spin = false,
 }: {
   icon: LucideIcon;
   tone: TileTone;
   className?: string;
+  /** A spinner: LEKA is working — it turns. */
+  spin?: boolean;
 }) {
   return (
     <span
@@ -75,7 +79,7 @@ export function IconTile({
         className,
       )}
     >
-      <Icon className="size-5" aria-hidden="true" />
+      <Icon className={cn("size-5", spin && SPINNING)} aria-hidden="true" />
     </span>
   );
 }
