@@ -47,6 +47,7 @@ async def _sync() -> int:
 async def _grant(workspace: uuid.UUID, *, by: str, reason: str, take_back: bool) -> int:
     with workspace_scope(workspace):
         async with session_factory() as session:
+            said: dict[str, object]
             if take_back:
                 said = {"ended": await end(session, workspace, key=EVERY)}
             else:

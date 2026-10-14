@@ -12,7 +12,13 @@ the customer portal, and what Stripe's verified events change.
                                 first charge when it ends unless cancelled
                                 before. Already subscribed: the portal.
     portal()                    Stripe's customer portal: card, invoices, plan
-                                change, cancellation — as its settings say
+                                change, cancellation — as its settings say —
+                                in the person's language, never English by
+                                default (2026-10-14: « Cancel subscription »)
+    renewal(renew)              « Ne pas renouveler » / « Réactiver le
+                                renouvellement »: the subscription kept until
+                                its period's end, then not renewed — or renewed
+                                again; nothing stops before that day
     receive(payload, signature) a webhook: believed only when its signature
                                 holds; kept once by its id — a delivery
                                 repeated is never applied twice; then:
@@ -139,6 +145,54 @@ async def _customer(client: Stripe, account: BillingAccount) -> str:
     return account.stripe_customer_id
 
 
+def stripe_locale(language: str | None) -> str:
+    """The language Stripe's pages are shown in: the person's, when Stripe
+    has it; else Stripe's own guess."""
+    said = (language or "").split("-")[0].lower()
+    return said if said in STRIPE_LOCALES else "auto"
+
+
+# The languages Stripe's Checkout and portal speak.
+STRIPE_LOCALES = frozenset(
+    [
+        "bg",
+        "cs",
+        "da",
+        "de",
+        "el",
+        "en",
+        "es",
+        "et",
+        "fi",
+        "fil",
+        "fr",
+        "hr",
+        "hu",
+        "id",
+        "it",
+        "ja",
+        "ko",
+        "lt",
+        "lv",
+        "ms",
+        "mt",
+        "nb",
+        "nl",
+        "pl",
+        "pt",
+        "ro",
+        "ru",
+        "sk",
+        "sl",
+        "sv",
+        "th",
+        "tr",
+        "vi",
+        "zh",
+    ]
+)
+
+
 async def checkout(
     session: AsyncSession,
     workspace_id: uuid.UUID,
@@ -147,6 +201,7 @@ async def checkout(
     *,
     client: Stripe,
     today: date,
+    locale: str = "auto",
 ) -> Checkout:
     """A Stripe Checkout session for a self-service plan, at the price the
     catalogue says — CheckoutRefusedError otherwise."""
@@ -196,6 +251,7 @@ async def checkout(
             },
             "payment_method_collection": "always",
             "metadata": marks,
+            "locale": locale,
             "success_url": f"{settings.web_url}/billing?checkout=success",
             "cancel_url": f"{settings.web_url}/billing?checkout=cancelled",
         },
@@ -204,7 +260,9 @@ async def checkout(
     return Checkout(str(made["url"]), priced)
 
 
-async def portal(session: AsyncSession, workspace_id: uuid.UUID, *, client: Stripe) -> str:
+async def portal(
+    session: AsyncSession, workspace_id: uuid.UUID, *, client: Stripe, locale: str = "auto"
+) -> str:
     account = await account_of(session, workspace_id)
     if not account.stripe_customer_id:
         raise CheckoutRefusedError("no_customer", "Nothing was ever bought here.")
@@ -215,9 +273,28 @@ async def portal(session: AsyncSession, workspace_id: uuid.UUID, *, client: Stri
             "return_url": f"{settings.web_url}/billing",
             # LEKA's own settings (sync.py), when they were made.
             "configuration": await portal_configuration(client),
+            "locale": locale,
         },
     )
     return str(made["url"])
+
+
+async def renewal(
+    session: AsyncSession, workspace_id: uuid.UUID, *, renew: bool, client: Stripe
+) -> BillingAccount:
+    """Renewed at its period's end, or not: the subscription kept until then
+    either way — what Stripe answers kept at once, its event confirming it."""
+    account = await account_of(session, workspace_id)
+    if not account.stripe_subscription_id or account.status not in PAYING:
+        raise CheckoutRefusedError("not_subscribed", "No subscription to renew or not.")
+    made = await client.post(
+        f"/v1/subscriptions/{account.stripe_subscription_id}",
+        {"cancel_at_period_end": not renew},
+    )
+    account.cancel_at_period_end = bool(made.get("cancel_at_period_end"))
+    account.current_period_end = _period_end(made) or account.current_period_end
+    await session.commit()
+    return account
 
 
 # ── what Stripe says ────────────────────────────────────────────────────────
@@ -225,6 +302,17 @@ async def portal(session: AsyncSession, workspace_id: uuid.UUID, *, client: Stri
 
 def _moment(seconds: object) -> datetime | None:
     return datetime.fromtimestamp(int(str(seconds)), UTC) if seconds else None
+
+
+def _period_end(subscription: dict[str, Any]) -> datetime | None:
+    """When its period ends: the subscription's word, or — Stripe's API from
+    2025-03-31 on — its first item's (2026-10-14: a webhook endpoint on a
+    newer version than LEKA's requests)."""
+    said = subscription.get("current_period_end")
+    if not said:
+        items = (subscription.get("items") or {}).get("data") or []
+        said = items[0].get("current_period_end") if items else None
+    return _moment(said)
 
 
 def _plan_of(subscription: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -250,7 +338,7 @@ async def _apply_subscription(
     )
     account.status = status
     account.interval = interval if paying else None
-    account.current_period_end = _moment(subscription.get("current_period_end"))
+    account.current_period_end = _period_end(subscription)
     account.cancel_at_period_end = bool(subscription.get("cancel_at_period_end"))
     # Subscribed once: the launch offer is had.
     account.launch_offer_used = True

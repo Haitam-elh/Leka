@@ -8,6 +8,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
+import { ConfirmProvider } from "@/components/interactions/confirm";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { makeQueryClient } from "@/lib/query";
 
@@ -62,7 +63,9 @@ function screenOf() {
   render(
     <QueryClientProvider client={makeQueryClient()}>
       <LocaleProvider>
-        <BillingScreen />
+        <ConfirmProvider>
+          <BillingScreen />
+        </ConfirmProvider>
       </LocaleProvider>
     </QueryClientProvider>,
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { subscription } from "@/lib/subscription";
 
@@ -26,3 +26,13 @@ export function usePayment() {
     }),
   };
 }
+
+/** Renewed at its period's end, or not — said at once. */
+export function useRenewal() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (renew: boolean) => subscription.renewal(renew),
+    onSuccess: (said) => client.setQueryData(["billing", "subscription"], said),
+  });
+}
+

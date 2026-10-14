@@ -74,7 +74,7 @@ async def checkout_add_on(
     client: Stripe,
     intention_id: uuid.UUID | None = None,
     launch: Sequence[Mapping[str, Any]] = (),
-    locale: str = "fr",
+    locale: str = "auto",
 ) -> str:
     """A Checkout for an agent or a bundle — its URL. CheckoutRefusedError
     when it cannot be bought here."""
