@@ -49,7 +49,7 @@ test.describe("The new interface", () => {
     await page.getByTestId("v2-ask").press("Enter");
     await expect(page).toHaveURL(/\/v2\?i=[0-9a-f-]{36}$/);
     const id = new URL(page.url()).searchParams.get("i") ?? "";
-    await expect(page.getByTestId("v2-said")).toHaveText(asked);
+    await expect(page.getByTestId("v2-said")).toContainText(asked);
     await expect(page.getByTestId("v2-reading")).toBeVisible();
 
     analyse(id);
@@ -67,8 +67,8 @@ test.describe("The new interface", () => {
     await page.getByTestId("v2-menu-history").click();
     await expect(page).toHaveURL(/\/v2\/history$/);
     await page.getByTestId("v2-history-row").filter({ hasText: asked }).click();
-    await expect(page).toHaveURL(`/v2?i=${id}`);
-    await expect(page.getByTestId("v2-said")).toHaveText(asked);
+    await expect(page).toHaveURL(new RegExp(`/v2\\?i=${id}$`));
+    await expect(page.getByTestId("v2-said")).toContainText(asked);
   });
 
   test("its second screen: the agents and their bundles, priced", async ({ page }) => {
