@@ -116,6 +116,7 @@ async def get_current_principal(
             workspace_id=workspace_id,
             role=membership.role,
             workspace_status=workspace.status,
+            workspace_demo=workspace.demo,
             custom_role=held.custom_role,
             granted=held.granted,
             policies=held.policies,

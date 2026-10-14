@@ -30,6 +30,7 @@ from leka.connectors.base import (
     Connector,
     ScopeListing,
 )
+from leka.connectors.demo import replayed
 from leka.connectors.errors import ConnectorError, Diagnostic, DiagnosticCode, diagnose
 from leka.connectors.lifecycle import LifecycleEvent, fingerprint, next_status
 from leka.connectors.models import (
@@ -49,6 +50,7 @@ from leka.connectors.repository import (
 )
 from leka.connectors.secrets import DatabaseFernetSecretStore, SecretStore
 from leka.connectors.settings import Finding, SourceSettings, check
+from leka.platform import Workspace
 
 logger = structlog.get_logger(__name__)
 
@@ -396,6 +398,10 @@ class SourceService:
                 DiagnosticCode.CONFIG_INVALID,
                 message="Aucun connecteur n'est disponible pour ce type de source.",
             ) from error
+        workspace = await self._session.get(Workspace, source.workspace_id)
+        if workspace is not None and workspace.demo:
+            # A demonstration's: Nova Retail's records, replayed (LEKA-449).
+            return replayed(cls, cls.manifest.config_schema.model_validate(source.config))
         opened = await self._secrets.open(source.id)
         if opened is None:
             raise diagnose(
