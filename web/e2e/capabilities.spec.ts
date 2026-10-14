@@ -23,6 +23,15 @@ test.describe("Capabilities", () => {
     await expect(page.getByTestId("catalogue-grid")).toBeVisible();
     await expect(page.getByTestId("catalogue-wide")).toHaveCount(0);
 
+    // One box per domain, its agents apart (2026-10-14): code first, its
+    // agents — the code review among them — never mixed with LEKA's own.
+    const code = page.locator('[data-testid="catalogue-domain"][data-domain="development"]');
+    await expect(page.getByTestId("catalogue-domain").first()).toHaveAttribute("data-domain", "development");
+    await expect(
+      code.getByTestId("catalogue-domain-agents").locator('[data-testid="capability-card"][data-key="code-review"]'),
+    ).toContainText("Revue de code");
+    await expect(code.getByTestId("catalogue-domain-agents").locator('[data-kind]:not([data-kind="agent"])')).toHaveCount(0);
+
     const owner = page.locator('[data-testid="capability-card"][data-key="ownership"]');
     await expect(owner).toContainText("Responsabilités");
     await expect(owner).toHaveAttribute("data-available", "true");

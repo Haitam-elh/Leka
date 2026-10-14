@@ -254,55 +254,127 @@ function Favourite({ capability }: { capability: Capability }) {
   );
 }
 
-function Card({ capability }: { capability: Capability }) {
+/** One of them, a line of its domain: what it is, what it does, whether it
+ * can be used here. Its sheet one click away. */
+function Row({ capability }: { capability: Capability }) {
   const t = useDictionary();
-  const Icon = capability.kind === "agent" ? Bot : (CATEGORY_ICON[capability.category] ?? Lightbulb);
-  // Available and nothing to say: the card says nothing about it.
+  const agent = capability.kind === "agent";
+  const Icon = agent ? Bot : (CATEGORY_ICON[capability.category] ?? Lightbulb);
+  // Available and nothing to say: the line says nothing about it.
   const plain = capability.available && !capability.notes.length;
   return (
     <li
-      className="flex flex-col gap-3 rounded-xl border border-shell-line bg-white p-4"
+      className="flex items-start gap-3 py-2.5"
       data-testid="capability-card"
       data-key={capability.key}
+      data-kind={capability.kind}
       data-available={capability.available ? "true" : "false"}
     >
-      <div className="flex items-start gap-3">
-        <IconTile icon={Icon} tone={CATEGORY_TONE[capability.category] ?? "neutral"} />
-        <div className="min-w-0 flex-1">
-          <Link
-            href={routes.capability(capability.key)}
-            className="line-clamp-2 text-[0.9375rem] leading-snug font-semibold text-brand-navy hover:underline"
-            title={titleOf(t, capability)}
-          >
-            {titleOf(t, capability)}
-          </Link>
-          <p className="mt-0.5 line-clamp-2 text-[0.8125rem] leading-snug text-shell-muted">
-            {summaryOf(t, capability)}
-          </p>
+      <IconTile
+        icon={Icon}
+        tone={agent ? "violet" : (CATEGORY_TONE[capability.category] ?? "neutral")}
+        className="size-9"
+      />
+      <div className="min-w-0 flex-1">
+        <Link
+          href={routes.capability(capability.key)}
+          className="line-clamp-1 text-[0.9375rem] leading-snug font-semibold text-brand-navy hover:underline"
+          title={titleOf(t, capability)}
+        >
+          {titleOf(t, capability)}
+        </Link>
+        <p className="line-clamp-2 text-[0.8125rem] leading-snug text-shell-muted">
+          {summaryOf(t, capability)}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {capability.usage.runs ? (
+            <span className="text-xs text-shell-muted">
+              {fill(t.catalogue.runs, { count: capability.usage.runs })}
+            </span>
+          ) : null}
+          {plain ? (
+            <span className="sr-only">{t.catalogue.available}</span>
+          ) : (
+            <Availability capability={capability} />
+          )}
         </div>
-        <Favourite capability={capability} />
       </div>
-      <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <Pill tone={CATEGORY_TONE[capability.category] ?? "neutral"}>
-          {categorySaid(t, capability.category)}
-        </Pill>
-        {capability.kind === "agent" || capability.usage.runs ? (
-          <span className="text-xs text-shell-muted">
-            {[
-              capability.kind === "agent" ? t.catalogue.kinds.agent : null,
-              capability.usage.runs ? fill(t.catalogue.runs, { count: capability.usage.runs }) : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-        ) : null}
-        {plain ? (
-          <span className="sr-only">{t.catalogue.available}</span>
-        ) : (
-          <Availability capability={capability} />
-        )}
-      </div>
+      <Favourite capability={capability} />
     </li>
+  );
+}
+
+/** The domains, in the order a team reads its work: code first. */
+const DOMAINS = [
+  "development",
+  "architecture",
+  "operations",
+  "security",
+  "compliance",
+  "infrastructure",
+  "data",
+  "documentation",
+  "knowledge",
+  "project_management",
+  "business",
+] as const;
+
+type Shown = "all" | "agents" | "capabilities";
+
+/** One box per domain (2026-10-14: « une case avec les agents et capacités
+ * sur le code, pareil pour les autres ») — its agents first, then LEKA's own
+ * capabilities, never mixed. */
+function Domain({ category, items }: { category: string; items: Capability[] }) {
+  const t = useDictionary();
+  const w = t.catalogue;
+  const agents = items.filter((c) => c.kind === "agent");
+  const own = items.filter((c) => c.kind !== "agent");
+  const Icon = CATEGORY_ICON[category] ?? Lightbulb;
+  return (
+    <section
+      className="flex flex-col overflow-hidden rounded-xl border border-shell-line bg-white"
+      aria-labelledby={`domain-${category}`}
+      data-testid="catalogue-domain"
+      data-domain={category}
+    >
+      <header className="flex items-center gap-2.5 border-b border-shell-line bg-shell-canvas/60 px-4 py-3">
+        <IconTile icon={Icon} tone={CATEGORY_TONE[category] ?? "neutral"} className="size-8" />
+        <h2 id={`domain-${category}`} className="min-w-0 flex-1 text-[1rem] font-semibold text-brand-navy">
+          {(w.domains as Record<string, string>)[category] ?? categorySaid(t, category)}
+        </h2>
+        <span className="text-xs text-shell-muted" data-testid="catalogue-domain-count">
+          {[
+            agents.length ? fill(w.agentsCount, { count: agents.length }) : null,
+            own.length ? fill(w.ownCount, { count: own.length }) : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
+      </header>
+      {agents.length ? (
+        <div className="px-4 pt-3" data-testid="catalogue-domain-agents">
+          <p className="text-xs font-semibold tracking-wide text-shell-nav-active uppercase">{w.agentsTitle}</p>
+          <ul className="divide-y divide-shell-line/70">
+            {agents.map((capability) => (
+              <Row key={capability.key} capability={capability} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {own.length ? (
+        <div
+          className={cn("px-4 pb-1", agents.length ? "border-t border-shell-line pt-3" : "pt-3")}
+          data-testid="catalogue-domain-own"
+        >
+          <p className="text-xs font-semibold tracking-wide text-shell-nav uppercase">{w.ownTitle}</p>
+          <ul className="divide-y divide-shell-line/70">
+            {own.map((capability) => (
+              <Row key={capability.key} capability={capability} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -448,16 +520,16 @@ function Latest({ summary }: { summary: CatalogueSummary }) {
   );
 }
 
-function Grid({
+function Domains({
   list,
   goal,
+  shown,
   empty,
-  roomy,
 }: {
   list: ReturnType<typeof useCapabilities>;
   goal: string | null;
+  shown: Shown;
   empty: string;
-  roomy: boolean;
 }) {
   const t = useDictionary();
   if (list.isError) {
@@ -471,20 +543,30 @@ function Grid({
     );
   }
   if (!list.data) return <div className="h-80 animate-pulse rounded-xl bg-shell-canvas" aria-hidden="true" />;
-  const shown = goal ? list.data.filter((capability) => capability.goals.includes(goal)) : list.data;
-  if (!shown.length) {
+  const kept = list.data.filter(
+    (capability) =>
+      (!goal || capability.goals.includes(goal)) &&
+      (shown === "all" || (shown === "agents") === (capability.kind === "agent")),
+  );
+  if (!kept.length) {
     return (
       <p className="rounded-xl border border-shell-line bg-white px-5 py-6 text-[0.875rem] text-shell-muted" data-testid="catalogue-empty">
         {empty}
       </p>
     );
   }
+  const known = DOMAINS as readonly string[];
+  const order = [
+    ...known,
+    ...[...new Set(kept.map((c) => c.category))].filter((c) => !known.includes(c)).sort(),
+  ];
   return (
-    <ul className={cn("grid gap-3 md:grid-cols-2", roomy ? "xl:grid-cols-3" : "2xl:grid-cols-3")} data-testid="catalogue-grid">
-      {shown.map((capability) => (
-        <Card key={capability.key} capability={capability} />
-      ))}
-    </ul>
+    <div className="grid items-start gap-4 xl:grid-cols-2" data-testid="catalogue-grid">
+      {order.map((category) => {
+        const items = kept.filter((c) => c.category === category);
+        return items.length ? <Domain key={category} category={category} items={items} /> : null;
+      })}
+    </div>
   );
 }
 
@@ -532,22 +614,20 @@ const GOALS = [
 
 function Filters({
   capabilities,
-  summary,
   goal,
   setGoal,
-  category,
-  setCategory,
+  shown,
+  setShown,
   q,
   setQ,
   sort,
   setSort,
 }: {
   capabilities: Capability[] | undefined;
-  summary: CatalogueSummary | undefined;
   goal: string | null;
   setGoal: (next: string | null) => void;
-  category: string | null;
-  setCategory: (next: string | null) => void;
+  shown: Shown;
+  setShown: (next: Shown) => void;
   q: string;
   setQ: (next: string) => void;
   sort: NonNullable<CatalogueQuery["sort"]>;
@@ -559,10 +639,6 @@ function Filters({
     need,
     count: (capabilities ?? []).filter((c) => c.goals.includes(need)).length,
   })).filter((n) => n.count);
-  const categories = [
-    { value: "all", label: w.allCategories },
-    ...(summary?.categories ?? []).map((c) => ({ value: c.category, label: categorySaid(t, c.category) })),
-  ];
   const chip = (active: boolean) =>
     cn(
       "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[0.75rem] font-medium whitespace-nowrap",
@@ -585,22 +661,25 @@ function Filters({
           />
         </label>
         <div className="flex items-center gap-2">
-          <Select
-            value={category ?? "all"}
-            onValueChange={(next) => setCategory(!next || next === "all" ? null : String(next))}
-            items={categories}
-          >
-            <SelectTrigger className="min-w-44 bg-white" aria-label={w.category} data-testid="catalogue-category">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((c) => (
-                <SelectItem key={c.value} value={c.value}>
-                  {c.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Agents, or LEKA's own capabilities, or both: the domains are the
+              boxes below (2026-10-14). */}
+          <div role="group" aria-label={w.show} className="flex rounded-lg border border-shell-line bg-white p-0.5">
+            {(["all", "agents", "capabilities"] as const).map((each) => (
+              <button
+                key={each}
+                type="button"
+                aria-pressed={shown === each}
+                onClick={() => setShown(each)}
+                data-testid={`catalogue-show-${each}`}
+                className={cn(
+                  "h-8 rounded-md px-2.5 text-[0.8125rem] font-medium whitespace-nowrap",
+                  shown === each ? "bg-brand-violet-soft text-shell-nav-active" : "text-shell-nav hover:bg-shell-canvas",
+                )}
+              >
+                {w.shows[each]}
+              </button>
+            ))}
+          </div>
           <Select
             value={sort}
             onValueChange={(next) => setSort((next ?? sort) as NonNullable<CatalogueQuery["sort"]>)}
@@ -730,12 +809,12 @@ export function CatalogueScreen() {
   const w = t.catalogue;
   const [view, setView] = useView();
   const summary = useCatalogueSummary();
-  const [category, setCategory] = useState<string | null>(null);
+  const [shown, setShown] = useState<Shown>("all");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<NonNullable<CatalogueQuery["sort"]>>("relevant");
   const [goal, setGoal] = useState<string | null>(null);
-  const list = useCapabilities({ view: view === "mine" ? "mine" : "all", category, q, sort });
-  const empty = view === "mine" && !category && !q && !goal ? w.mineEmpty : w.empty;
+  const list = useCapabilities({ view: view === "mine" ? "mine" : "all", q, sort });
+  const empty = view === "mine" && shown === "all" && !q && !goal ? w.mineEmpty : w.empty;
 
   return (
     <PageContainer>
@@ -778,29 +857,25 @@ export function CatalogueScreen() {
           {list.data ? <WideReasons capabilities={list.data} /> : null}
           <Filters
             capabilities={list.data}
-            summary={summary.data}
             goal={goal}
             setGoal={setGoal}
-            category={category}
-            setCategory={setCategory}
+            shown={shown}
+            setShown={setShown}
             q={q}
             setQ={setQ}
             sort={sort}
             setSort={setSort}
           />
-          {/* Nothing ran this week: the usage column would only say so. */}
+          <Domains list={list} goal={goal} shown={shown} empty={empty} />
+          {/* What ran this week, under what there is — nothing ran, nothing
+              said. */}
           {summary.data?.runs ? (
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-              <Grid list={list} goal={goal} empty={empty} roomy={false} />
-              <div className="flex min-w-0 flex-col gap-4">
-                <UsageChart summary={summary.data} />
-                <Top summary={summary.data} />
-                <Latest summary={summary.data} />
-              </div>
+            <div className="grid gap-4 lg:grid-cols-3" data-testid="catalogue-usage">
+              <UsageChart summary={summary.data} />
+              <Top summary={summary.data} />
+              <Latest summary={summary.data} />
             </div>
-          ) : (
-            <Grid list={list} goal={goal} empty={empty} roomy />
-          )}
+          ) : null}
         </div>
       )}
     </PageContainer>
